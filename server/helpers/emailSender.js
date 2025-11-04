@@ -2,20 +2,31 @@
 import nodemailer from 'nodemailer';
 
 const sendWelcomeEmail = async (email, name, password) => {
-  // Create a transporter
+  // Create a transporter - support both Gmail and Outlook/Office 365
+  const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
+  const emailPort = process.env.EMAIL_PORT || 587;
+  const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com');
+  
   const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_HOST || 'Gmail',
+    host: isOutlook ? emailHost : undefined,
+    port: isOutlook ? emailPort : undefined,
+    secure: false, // true for 465, false for other ports (587 uses STARTTLS)
+    requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
+    service: isOutlook ? undefined : (process.env.EMAIL_HOST || 'Gmail'),
     auth: {
       user: process.env.EMAIL_USER || process.env.EMAIL_USERNAME,
       pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD,
     },
+    tls: isOutlook ? {
+      rejectUnauthorized: false // Allow self-signed certificates if needed
+    } : undefined
   });
 
   // Email options
   const displayPassword = password || process.env.DEFAULT_EMPLOYEE_PASSWORD || 'Please contact your administrator';
   
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@paarsiv.com',
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.EMAIL_USERNAME || 'kunal.pareek@Paarsiv.com',
     to: email,
     subject: 'Welcome to Paarsiv HR System!',
     html: `

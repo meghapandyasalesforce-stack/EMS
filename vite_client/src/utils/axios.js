@@ -72,19 +72,41 @@ instance.interceptors.request.use(
       console.error('Error adding Authorization header:', error);
     }
 
-    // Add CSRF header for state-changing requests if token cookie exists
+    // Add CSRF header for state-changing requests
+    // Check both cookie (for same-site) and localStorage (for cross-site)
     try {
       const method = (config.method || 'get').toLowerCase();
       if (typeof document !== 'undefined' && ['post','put','patch','delete'].includes(method)) {
-        const csrfCookie = document.cookie.split('; ').find(c => c.startsWith('csrfToken='));
-        const csrf = csrfCookie ? csrfCookie.split('=')[1] : undefined;
+        // First try to get from cookie (same-site)
+        let csrf = undefined;
+        try {
+          const csrfCookie = document.cookie.split('; ').find(c => c.startsWith('csrfToken='));
+          csrf = csrfCookie ? csrfCookie.split('=')[1] : undefined;
+        } catch {
+          // Cookie parsing failed
+        }
+        
+        // If not in cookie, try localStorage (cross-site scenario)
+        if (!csrf && typeof window !== 'undefined') {
+          try {
+            csrf = localStorage.getItem('csrfToken');
+          } catch {
+            // localStorage access failed
+          }
+        }
+        
         if (csrf) {
           config.headers = config.headers || {};
           config.headers['x-csrf-token'] = csrf;
+        } else {
+          // Debug: Log when CSRF token is missing for state-changing requests
+          if (import.meta.env.DEV || import.meta.env.PROD) {
+            console.warn('⚠️ CSRF token not found in cookies or localStorage for', method.toUpperCase(), 'request to:', config.url);
+          }
         }
       }
-    } catch {
-      // intentionally ignored
+    } catch (error) {
+      console.error('Error adding CSRF token:', error);
     }
 
     // Log request details (both dev and prod for troubleshooting)

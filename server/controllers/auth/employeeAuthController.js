@@ -149,9 +149,11 @@ export const loginEmployee = async (req, res) => {
         }
 
         // ✅ Pass `res` and `role` so cookie gets set
-        const token = generateToken(employee._id, "employee", res);
+        const tokenResult = generateToken(employee._id, "employee", res);
+        const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+        const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 
-        res.status(200).json({
+        const response = {
             success: true,
             message: 'Login successful',
             token,
@@ -169,7 +171,14 @@ export const loginEmployee = async (req, res) => {
                 profilePhoto: employee.profilePhoto,
                 mustResetPassword: employee.mustResetPassword
             },
-        });
+        };
+        
+        // Include CSRF token in response for cross-site scenarios
+        if (csrfToken) {
+            response.csrfToken = csrfToken;
+        }
+
+        res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ message: 'Login failed', error: error.message });
     }

@@ -31,16 +31,28 @@ export const forgotPassword = async (req, res) => {
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // Email configuration
+    // Email configuration - support both Gmail and Outlook/Office 365
+    const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
+    const emailPort = process.env.EMAIL_PORT || 587;
+    const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com');
+    
     const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'Gmail',
+      host: isOutlook ? emailHost : undefined,
+      port: isOutlook ? emailPort : undefined,
+      secure: false, // true for 465, false for other ports (587 uses STARTTLS)
+      requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
+      service: isOutlook ? undefined : (process.env.EMAIL_SERVICE || 'Gmail'),
       auth: {
-        user: process.env.EMAIL_USERNAME,
-        pass: process.env.EMAIL_PASSWORD,
+        user: process.env.EMAIL_USERNAME || process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS,
       },
+      tls: isOutlook ? {
+        rejectUnauthorized: false // Allow self-signed certificates if needed
+      } : undefined
     });
 
     await transporter.sendMail({
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME || process.env.EMAIL_USER || 'kunal.pareek@Paarsiv.com',
       to: employee.email,
       subject: 'Password Reset Request',
       html: `

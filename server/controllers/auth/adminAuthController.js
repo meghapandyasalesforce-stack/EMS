@@ -95,7 +95,10 @@ export const loginUser = async (req, res) => {
         }
 
         // Generate token and prepare user data
-        const token = generateToken(user._id, role, res);
+        const tokenResult = generateToken(user._id, role, res);
+        const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+        const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
+        
         const userData = {
             id: user._id,
             name: user.name,
@@ -110,12 +113,19 @@ export const loginUser = async (req, res) => {
         }
 
         // Successful response - return both token and user data
-        return res.status(200).json({
+        const response = {
             success: true,
             message: 'Login successful',
             token, // Return token in response for Authorization header
             user: userData
-        });
+        };
+        
+        // Include CSRF token in response for cross-site scenarios
+        if (csrfToken) {
+            response.csrfToken = csrfToken;
+        }
+        
+        return res.status(200).json(response);
 
     } catch (error) {
         console.error('Login error:', error);

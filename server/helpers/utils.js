@@ -40,6 +40,8 @@ export const generateToken = (userId, role = null, res = null) => {
                 path: '/',
             };
             res.cookie('csrfToken', csrfToken, csrfCookieOptions);
+            // Return both token and CSRF token for frontend storage (cross-site scenarios)
+            return { token, csrfToken };
         }
 
         return token;

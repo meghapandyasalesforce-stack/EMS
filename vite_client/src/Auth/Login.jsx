@@ -77,6 +77,10 @@ function Login() {
                 if (data.token) {
                     localStorage.setItem('token', data.token);
                 }
+                // Store CSRF token in localStorage for cross-site scenarios
+                if (data.csrfToken) {
+                    localStorage.setItem('csrfToken', data.csrfToken);
+                }
                 // Store UI-related data
                 localStorage.setItem('role', userRole);
                 localStorage.setItem('email', form.email);
