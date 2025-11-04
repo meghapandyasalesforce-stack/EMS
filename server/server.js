@@ -83,12 +83,41 @@ app.use(
   })
 );
 
+// ✅ Static files (before rate limiting/CSRF to avoid unnecessary checks)
+// Add CORS headers for static file serving - images need CORS to be loaded cross-origin
+app.use("/uploads", (req, res, next) => {
+  const origin = req.headers.origin;
+  const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+  
+  // Set CORS headers for static files
+  // When credentials are true, Access-Control-Allow-Origin must match the request origin exactly
+  if (origin) {
+    // In development, allow any origin; in production, only allow configured origin
+    if (process.env.NODE_ENV === "development" || origin === allowedOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+    // If origin doesn't match and we're in production, don't set CORS headers (request will be blocked)
+  }
+  // If no origin header (same-origin request), the browser won't check CORS
+  
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Type");
+  
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // ✅ Rate limiting + CSRF
 app.use(apiLimiter);
 app.use(csrfProtection);
-
-// ✅ Static files
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // =================== ROUTES ===================
 app.use("/api/v1/admin/auth", adminRouter);
