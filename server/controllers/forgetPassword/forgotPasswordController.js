@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import Employee from '../../models/employee.model.js';
+import User from '../../models/user.model.js';
 import bcrypt from 'bcryptjs';
 
 // Helper function to generate reset token
@@ -14,20 +15,30 @@ export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     
-    // Case-insensitive email search
-    const employee = await Employee.findOne({ 
+    // Case-insensitive email search - check both Employee and User (Admin) collections
+    let user = await Employee.findOne({ 
       email: { $regex: new RegExp(`^${email}$`, 'i') }
     });
+    
+    let userType = 'employee';
+    
+    // If not found in Employee, check User (Admin) collection
+    if (!user) {
+      user = await User.findOne({ 
+        email: { $regex: new RegExp(`^${email}$`, 'i') }
+      });
+      userType = 'admin';
+    }
 
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const { resetToken, hashedToken } = generateResetToken();
     
-    employee.resetPasswordToken = hashedToken;
-    employee.resetPasswordExpire = Date.now() + 1000 * 60 * 15; // 15 mins
-    await employee.save();
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpire = Date.now() + 1000 * 60 * 15; // 15 mins
+    await user.save();
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
@@ -43,8 +54,8 @@ export const forgotPassword = async (req, res) => {
       requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
       service: isOutlook ? undefined : (process.env.EMAIL_SERVICE || 'Gmail'),
       auth: {
-        user: process.env.EMAIL_USERNAME || process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS,
+        user: process.env.EMAIL_USERNAME || process.env.EMAIL_USER || 'kunal.pareek@Paarsiv.com',
+        pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS || 'Kunika@637',
       },
       tls: isOutlook ? {
         rejectUnauthorized: false // Allow self-signed certificates if needed
@@ -53,14 +64,114 @@ export const forgotPassword = async (req, res) => {
 
     await transporter.sendMail({
       from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME || process.env.EMAIL_USER || 'kunal.pareek@Paarsiv.com',
-      to: employee.email,
-      subject: 'Password Reset Request',
+      to: user.email,
+      subject: 'Password Reset Request - Paarsiv HR System',
       html: `
-        <p>Hello ${employee.name},</p>
-        <p>You requested a password reset. Click the link below to proceed:</p>
-        <a href="${resetUrl}">Reset Password</a>
-        <p>This link will expire in 15 minutes.</p>
-        <p>If you didn't request this, please ignore this email.</p>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>Password Reset Request</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              background-color: #f4f4f4;
+              margin: 0;
+              padding: 0;
+              color: #333333;
+            }
+            .container {
+              max-width: 600px;
+              margin: 40px auto;
+              background-color: #ffffff;
+              padding: 30px;
+              border-radius: 10px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            }
+            .header {
+              text-align: center;
+              color: #7c9eff;
+              margin-bottom: 20px;
+            }
+            .message {
+              font-size: 16px;
+              color: #555555;
+              line-height: 1.6;
+              margin-bottom: 20px;
+            }
+            .button-container {
+              text-align: center;
+              margin: 30px 0;
+            }
+            .reset-button {
+              display: inline-block;
+              padding: 14px 30px;
+              background-color: #7c9eff;
+              color: #ffffff;
+              text-decoration: none;
+              border-radius: 6px;
+              font-weight: bold;
+              font-size: 16px;
+            }
+            .reset-button:hover {
+              background-color: #6b8eef;
+            }
+            .url-box {
+              background-color: #f8f9fa;
+              padding: 14px;
+              font-size: 12px;
+              color: #666666;
+              text-align: center;
+              border-radius: 6px;
+              margin: 20px 0;
+              word-break: break-all;
+            }
+            .warning {
+              background-color: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 12px;
+              margin: 20px 0;
+              border-radius: 4px;
+            }
+            .footer {
+              font-size: 14px;
+              color: #888888;
+              text-align: center;
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #eeeeee;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2 class="header">Password Reset Request</h2>
+            <p class="message">
+              Hello <strong>${user.name}</strong>,
+            </p>
+            <p class="message">
+              You requested a password reset for your Paarsiv HR System account. Click the button below to reset your password:
+            </p>
+            <div class="button-container">
+              <a href="${resetUrl}" class="reset-button">Reset Password</a>
+            </div>
+            <p class="message">
+              Or copy and paste this URL into your browser:
+            </p>
+            <div class="url-box">${resetUrl}</div>
+            <div class="warning">
+              <strong>⚠️ Important:</strong> This link will expire in <strong>15 minutes</strong>. If you didn't request this password reset, please ignore this email and your password will remain unchanged.
+            </div>
+            <p class="message">
+              For security reasons, if you continue to receive password reset emails you didn't request, please contact your administrator immediately.
+            </p>
+            <div class="footer">
+              <p>&copy; 2025 Paarsiv. All rights reserved.</p>
+              <p>This is an automated message. Please do not reply to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
       `,
     });
 
@@ -77,12 +188,24 @@ export const resetPassword = async (req, res) => {
       .update(req.params.token)
       .digest('hex');
 
-    const employee = await Employee.findOne({
+    // Check both Employee and User (Admin) collections for the reset token
+    let user = await Employee.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() },
     });
+    
+    let userType = 'employee';
+    
+    // If not found in Employee, check User (Admin) collection
+    if (!user) {
+      user = await User.findOne({
+        resetPasswordToken: hashedToken,
+        resetPasswordExpire: { $gt: Date.now() },
+      });
+      userType = 'admin';
+    }
 
-    if (!employee) {
+    if (!user) {
       return res.status(400).json({ 
         message: 'Invalid or expired token. Please request a new password reset.' 
       });
@@ -90,13 +213,38 @@ export const resetPassword = async (req, res) => {
 
     // Hash new password before saving
     const salt = await bcrypt.genSalt(10);
-    employee.password = await bcrypt.hash(req.body.password, salt);
-    employee.resetPasswordToken = undefined;
-    employee.resetPasswordExpire = undefined;
-    employee.mustResetPassword = false; // Reset the forced password change flag
-    await employee.save();
+    user.password = await bcrypt.hash(req.body.password, salt);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    
+    // Only set mustResetPassword for employees (User model doesn't have this field)
+    if (userType === 'employee' && user.mustResetPassword !== undefined) {
+      user.mustResetPassword = false; // Reset the forced password change flag
+    }
+    
+    await user.save();
 
-    res.status(200).json({ message: 'Password has been reset successfully' });
+    // Clear authentication cookies to force logout (in case user is logged in)
+    const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
+    const cookieOptions = {
+        httpOnly: true,
+        sameSite: crossSite ? 'none' : 'lax',
+        secure: crossSite || process.env.NODE_ENV === 'production',
+        path: '/',
+    };
+
+    res.clearCookie('jwt', cookieOptions);
+    res.clearCookie('csrfToken', {
+        httpOnly: false,
+        sameSite: cookieOptions.sameSite,
+        secure: cookieOptions.secure,
+        path: '/',
+    });
+
+    res.status(200).json({ 
+        message: 'Password has been reset successfully. Please login with your new password.',
+        logout: true 
+    });
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ message: 'Error resetting password', error: error.message });

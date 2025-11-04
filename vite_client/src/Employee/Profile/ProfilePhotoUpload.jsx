@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { FiCamera, FiUpload, FiX, FiUser } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import { getUploadUrl } from '../../utils/axios';
 
 const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -158,9 +159,14 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
               />
             ) : user?.profilePhoto ? (
               <img
-                src={user.profilePhoto.url || user.profilePhoto}
+                src={getUploadUrl(user.profilePhoto.url || user.profilePhoto)}
                 alt="Current Profile"
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fallback if image fails to load
+                  e.target.style.display = 'none';
+                  e.target.nextSibling?.classList.remove('hidden');
+                }}
               />
             ) : (
               <FiUser className="w-16 h-16 text-gray-400" />

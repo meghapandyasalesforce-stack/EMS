@@ -169,28 +169,25 @@ function Login() {
         </div>
         {showReset && (
             <PasswordResetPopup 
-                onClose={() => setShowReset(false)} 
-                onSuccess={async (newPassword) => {
-                    // Attempt to logout the existing session; ignore failures
-                    try {
-                        await axios.get('/v1/employee/auth/logout', { withCredentials: true });
-                    } catch {
-                        // Ignore logout errors
-                    }
-
-                    // Attempt to login with the new password; if it fails, inform and close popup
-                    try {
-                        await axios.post(
-                            '/v1/employee/auth/login',
-                            { email: form.email, password: newPassword },
-                            { withCredentials: true }
-                        );
-                        toast.success('Password updated and logged in.');
-                        window.location.href = '/dashboard-employee';
-                    } catch {
-                        toast.info('Password updated. Please login with your new password.');
-                        setShowReset(false);
-                    }
+                onClose={() => {
+                    // Clear form and redirect to login
+                    setForm({ email: '', password: '' });
+                    setShowReset(false);
+                    toast.info('Password reset. Please login with your new password.');
+                    // Force reload to clear any cached state
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 500);
+                }} 
+                onSuccess={(newPassword) => {
+                    // Password reset successful - user is logged out
+                    setShowReset(false);
+                    setForm({ email: '', password: '' });
+                    toast.success('Password reset successful! Please login with your new password.');
+                    // Redirect to login page
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1000);
                 }}
             />
         )}

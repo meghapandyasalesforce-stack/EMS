@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getUploadUrl } from '../utils/axios';
 
 const EmployeePayroll = () => {
   const [payrollData, setPayrollData] = useState(null);
@@ -78,12 +79,7 @@ const EmployeePayroll = () => {
           <div className="flex justify-center">
             {employeeData.profileImage ? (
               <img
-                src={
-                  import.meta.env.VITE_API_URL?.replace('/api', '') || 
-                  (import.meta.env.PROD || import.meta.env.MODE === 'production' 
-                    ? 'https://ems-te2n.onrender.com' 
-                    : 'http://localhost:5000')
-                + `/${employeeData.profileImage}`}
+                src={getUploadUrl(employeeData.profileImage)}
                 alt="Profile"
                 className="w-40 h-40 rounded-xl object-cover"
               />

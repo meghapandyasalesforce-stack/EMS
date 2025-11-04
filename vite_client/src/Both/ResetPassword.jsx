@@ -21,11 +21,33 @@ const ResetPassword = () => {
   useEffect(() => {
     if (success) {
       toast.success(message || 'Password reset successful!');
+      
+      // Clear local storage and logout
+      localStorage.removeItem('token');
+      localStorage.removeItem('csrfToken');
+      localStorage.removeItem('role');
+      localStorage.removeItem('email');
+      
+      // Clear cookies by calling logout (if logged in)
+      const logoutUser = async () => {
+        try {
+          const { default: axiosInstance } = await import('../utils/axios');
+          await axiosInstance.get('/v1/employee/auth/logout', { withCredentials: true });
+        } catch (err) {
+          // Ignore errors - cookies will be cleared by backend anyway
+        }
+      };
+      logoutUser();
+      
+      // Redirect to login after a delay
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
     }
     if (error) {
       toast.error(error);
     }
-  }, [success, error, message]);
+  }, [success, error, message, navigate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

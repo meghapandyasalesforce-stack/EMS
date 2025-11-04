@@ -14,8 +14,8 @@ const sendWelcomeEmail = async (email, name, password) => {
     requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
     service: isOutlook ? undefined : (process.env.EMAIL_HOST || 'Gmail'),
     auth: {
-      user: process.env.EMAIL_USER || process.env.EMAIL_USERNAME,
-      pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD,
+      user: process.env.EMAIL_USER || process.env.EMAIL_USERNAME || 'kunal.pareek@Paarsiv.com',
+      pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || 'Kunika@637',
     },
     tls: isOutlook ? {
       rejectUnauthorized: false // Allow self-signed certificates if needed

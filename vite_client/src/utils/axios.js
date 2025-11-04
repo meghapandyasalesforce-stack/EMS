@@ -16,6 +16,42 @@ const getBaseURL = () => {
   return '/api';
 };
 
+// Helper function to get backend base URL (without /api) for static files like uploads
+export const getBackendBaseURL = () => {
+  if (import.meta.env.VITE_API_URL) {
+    // Remove /api if present
+    return import.meta.env.VITE_API_URL.replace('/api', '');
+  }
+  const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
+  if (isProduction) {
+    return 'https://ems-te2n.onrender.com';
+  }
+  return 'http://localhost:5000';
+};
+
+// Helper function to convert relative upload paths to full URLs
+export const getUploadUrl = (relativePath) => {
+  if (!relativePath) return null;
+  
+  // If already a full URL, return as is
+  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+    return relativePath;
+  }
+  
+  // If it's a relative path starting with /uploads, prepend backend URL
+  if (relativePath.startsWith('/uploads')) {
+    return `${getBackendBaseURL()}${relativePath}`;
+  }
+  
+  // If it's just a filename or path without leading slash, add /uploads
+  if (relativePath.startsWith('uploads')) {
+    return `${getBackendBaseURL()}/${relativePath}`;
+  }
+  
+  // Default: assume it's a relative path
+  return `${getBackendBaseURL()}/uploads/${relativePath}`;
+};
+
 // Debug logging (both dev and prod for troubleshooting)
 if (import.meta.env.DEV || import.meta.env.PROD) {
   console.log('🔧 API Base URL:', getBaseURL());

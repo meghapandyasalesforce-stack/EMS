@@ -23,6 +23,14 @@ export const registerUser = async (req, res) => {
         const newUser = new User({ name, email, password });
         await newUser.save();
 
+        // Send welcome email with the password
+        try {
+            await sendWelcomeEmail(email, name, password);
+        } catch (emailError) {
+            console.error('Error sending welcome email:', emailError);
+            // Don't fail registration if email fails
+        }
+
         // Generate JWT token
         generateToken(newUser._id, newUser.role, res);
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { FiCamera } from 'react-icons/fi';
+import { getUploadUrl } from '../utils/axios';
 
 const ProfilePicture = ({ 
   user, 
@@ -24,7 +25,9 @@ const ProfilePicture = ({
     '2xl': 'w-16 h-16'
   };
 
-  const imageUrl = user?.profilePhoto?.url || user?.profilePhoto || user?.profilePicture;
+  // Get the profile photo URL and convert relative paths to full URLs
+  const rawImageUrl = user?.profilePhoto?.url || user?.profilePhoto || user?.profilePicture;
+  const imageUrl = rawImageUrl ? getUploadUrl(rawImageUrl) : null;
   
   // Get initial for avatar
   const getInitials = () => {

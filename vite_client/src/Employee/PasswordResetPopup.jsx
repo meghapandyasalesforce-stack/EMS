@@ -30,11 +30,28 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
         withCredentials: true
       });
 
-      if (response.data.message === 'Password reset successful.') {
+      if (response.data.message && response.data.message.includes('Password reset successful')) {
         setSuccess(true);
-        // notify parent with new password to re-login
+        
+        // Clear local storage and cookies
+        localStorage.removeItem('token');
+        localStorage.removeItem('csrfToken');
+        localStorage.removeItem('role');
+        localStorage.removeItem('email');
+        
+        // Clear any cookies by calling logout endpoint
+        try {
+          await axios.get('/v1/employee/auth/logout', { withCredentials: true });
+        } catch (err) {
+          // Ignore logout errors, cookies will be cleared by backend anyway
+          console.log('Logout cleanup:', err.message);
+        }
+        
+        // Notify parent that logout is required
         if (onSuccess) {
-          setTimeout(() => onSuccess(passwords.newPassword), 300);
+          setTimeout(() => {
+            onSuccess(null); // Pass null to indicate logout required
+          }, 1500);
         }
       }
     } catch (err) {
@@ -55,8 +72,16 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
 
         {success ? (
           <div className="text-center">
-            <h2 className="text-xl font-bold mb-2">✅ Password Updated!</h2>
-            <p>You can now continue using the app.</p>
+            <h2 className="text-xl font-bold mb-2">✅ Password Reset Successful!</h2>
+            <p className="mb-4">You have been logged out. Please login with your new password.</p>
+            <button
+              onClick={() => {
+                window.location.href = '/login';
+              }}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Go to Login
+            </button>
           </div>
         ) : (
           <>

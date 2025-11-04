@@ -292,7 +292,27 @@ export const resetEmployeePassword = async (req, res) => {
             return res.status(404).json({ message: 'Employee not found.' });
         }
 
-        res.status(200).json({ message: 'Password reset successful.' });
+        // Clear authentication cookies to force logout
+        const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
+        const cookieOptions = {
+            httpOnly: true,
+            sameSite: crossSite ? 'none' : 'lax',
+            secure: crossSite || process.env.NODE_ENV === 'production',
+            path: '/',
+        };
+
+        res.clearCookie('jwt', cookieOptions);
+        res.clearCookie('csrfToken', {
+            httpOnly: false,
+            sameSite: cookieOptions.sameSite,
+            secure: cookieOptions.secure,
+            path: '/',
+        });
+
+        res.status(200).json({ 
+            message: 'Password reset successful. Please login with your new password.',
+            logout: true 
+        });
     } catch (error) {
         console.error('Reset error:', error);
         res.status(500).json({ message: 'Failed to reset password', error: error.message });
