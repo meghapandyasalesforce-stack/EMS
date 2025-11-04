@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out forwards;
+}
+
+/* Fix for ID Card layout issues */
+.id-card-details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.id-card-label {
+  min-width: 6rem;
+  flex-shrink: 0;
+}
+
+.id-card-value {
+  flex: 1;
+  margin-left: 0.5rem;
+}
+
+/* Ensure proper container spacing */
+.container-safe {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-safe {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-safe {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
