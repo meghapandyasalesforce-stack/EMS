@@ -1,7 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
+import { ADMIN_PAYROLL_ENDPOINT } from '../utils/constant';
 
-const API_BASE_URL = 'http://localhost:5000/api/v1/admin/payroll';
+const API_BASE_URL = ADMIN_PAYROLL_ENDPOINT;
 
 // Async thunks
 export const fetchAdminEmployeePayrollHistory = createAsyncThunk(
@@ -9,8 +10,7 @@ export const fetchAdminEmployeePayrollHistory = createAsyncThunk(
     async ({ employeeId, page = 1, limit = 12 }, { rejectWithValue }) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/admin-employee-payroll/${employeeId}`, {
-                params: { page, limit },
-                withCredentials: true
+                params: { page, limit }
             });
             return response.data;
         } catch (error) {

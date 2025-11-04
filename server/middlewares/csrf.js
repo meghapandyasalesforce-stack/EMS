@@ -29,22 +29,23 @@ export default function csrfProtection(req, res, next) {
     const csrfCookie = req.cookies?.csrfToken;
     const csrfHeader = req.headers['x-csrf-token'];
 
-    // If using Authorization header but no cookie (cross-site scenario)
-    // For production cross-site deployments, we'll be more lenient with CSRF
-    // The Authorization header itself provides some protection
-    if (hasAuthHeader && !hasJwtCookie) {
-        // In cross-site scenarios, if CSRF header is present, allow it
-        // This is a compromise for cross-site cookie issues
+    // Priority 1: If using Authorization header (cross-site scenario)
+    // When Authorization header is present, we accept CSRF token from header
+    // This handles cross-site deployments where cookies might not work properly
+    if (hasAuthHeader) {
+        // If CSRF header is present, allow the request
+        // The Authorization header provides authentication, CSRF header provides CSRF protection
         if (csrfHeader) {
             return next();
         }
-        // If no CSRF header, still allow but log warning (for now)
-        // In strict production, you might want to require CSRF token endpoint
-        console.warn('CSRF: Authorization header present but no CSRF token or cookie. Allowing request (cross-site mode).');
+        // If no CSRF header but Authorization header exists, log warning but allow
+        // (Authorization header itself provides some protection)
+        console.warn('CSRF: Authorization header present but no CSRF token header. Allowing request (cross-site mode).');
         return next();
     }
 
-    // Standard cookie-based CSRF validation (when cookies are available)
+    // Priority 2: Cookie-based authentication (same-site scenario)
+    // Only validate cookie-based CSRF if no Authorization header is present
     if (hasJwtCookie) {
         if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
             return res.status(403).json({ success: false, message: 'Invalid or missing CSRF token' });

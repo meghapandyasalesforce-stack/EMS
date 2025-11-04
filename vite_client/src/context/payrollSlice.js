@@ -1,6 +1,6 @@
 // redux/slices/payrollSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { ADMIN_PAYROLL_ENDPOINT } from '../utils/constant';
 
 // Helper to read and decode cookie values (non-HTTPOnly only)
@@ -21,8 +21,7 @@ export const fetchPayrolls = createAsyncThunk(
   async ({ month, year }, thunkAPI) => {
     try {
       const response = await axios.get(
-        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${month}&year=${year}`,
-        { withCredentials: true }
+        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${month}&year=${year}`
       );
       // Assuming the API returns an array directly
       return Array.isArray(response.data) ? response.data : [response.data];

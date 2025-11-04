@@ -2,7 +2,8 @@
 
 // Base API URL from environment or default
 // Use relative paths so axios instance baseURL is used (includes Authorization header)
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+// Note: axios baseURL already includes '/api', so we use '/v1' here
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/v1';
 
 //==================Admin===================//
 

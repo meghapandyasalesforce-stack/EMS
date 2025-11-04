@@ -1,5 +1,5 @@
 import { setAllProjects } from '../context/projectSlice'
-import axios from 'axios'
+import axios from '../utils/axios'
 import { useEffect,useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { ADMIN_PROJECT_ENDPOINT } from './../utils/constant';
@@ -13,7 +13,7 @@ const useGetAllProjects = () => {
         const fetchAllProjects = async () => {
              console.log("Fetching projects..."); // ✅ Add this
             try {
-                const res = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/get-all-project`, { withCredentials: true });
+                const res = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/get-all-project`);
 
                 if (res.data.success && Array.isArray(res.data.projects)) {
                     const flatProjects = res.data.projects.flat(); // Flatten nested array
