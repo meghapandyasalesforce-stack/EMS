@@ -51,16 +51,25 @@ instance.interceptors.request.use(
     }
 
     // Add Authorization header from localStorage if available
+    // Works with both relative paths and full URLs
     try {
       if (typeof window !== 'undefined') {
         const token = localStorage.getItem('token');
-        if (token && !config.headers.Authorization) {
+        if (token) {
           config.headers = config.headers || {};
-          config.headers.Authorization = `Bearer ${token}`;
+          // Only add if not already set (allows manual override if needed)
+          if (!config.headers.Authorization) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        } else {
+          // Debug: Log when token is missing
+          if (import.meta.env.DEV || import.meta.env.PROD) {
+            console.warn('⚠️ No token found in localStorage for request:', config.url);
+          }
         }
       }
-    } catch {
-      // intentionally ignored
+    } catch (error) {
+      console.error('Error adding Authorization header:', error);
     }
 
     // Add CSRF header for state-changing requests if token cookie exists

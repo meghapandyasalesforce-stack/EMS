@@ -95,7 +95,7 @@ export const loginUser = async (req, res) => {
         }
 
         // Generate token and prepare user data
-        generateToken(user._id, role, res);
+        const token = generateToken(user._id, role, res);
         const userData = {
             id: user._id,
             name: user.name,
@@ -109,10 +109,11 @@ export const loginUser = async (req, res) => {
             userData.department = user.department;
         }
 
-        // Successful response
+        // Successful response - return both token and user data
         return res.status(200).json({
             success: true,
             message: 'Login successful',
+            token, // Return token in response for Authorization header
             user: userData
         });
 

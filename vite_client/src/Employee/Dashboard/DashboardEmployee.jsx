@@ -20,7 +20,7 @@ import PasswordResetPopup from '../PasswordResetPopup';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { format } from 'date-fns';
-import axios from 'axios';
+import axios from '../../utils/axios';
 
 import { 
     BOTH_ATTENDANCE_ENDPOINT, 
@@ -55,6 +55,18 @@ function DashboardEmployee() {
     useEffect(() => {
         const fetchData = async () => {
             if (hasFetched) {
+                return;
+            }
+            
+            // Check if token exists, if not and no cookie, redirect to login
+            const token = localStorage.getItem('token');
+            const hasCookie = document.cookie.includes('jwt=');
+            if (!token && !hasCookie) {
+                console.warn('⚠️ No token found - user needs to log in again');
+                setError('Session expired. Please log in again.');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
                 return;
             }
             
@@ -102,8 +114,7 @@ function DashboardEmployee() {
                 // Fetch current month payroll
                 let payrollAmount = 0;
                 try {
-                    const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
-                    const payrollRes = await axios.get(`${BASE_URL}/employee/payroll/current`, {
+                    const payrollRes = await axios.get('/v1/employee/payroll/current', {
                         withCredentials: true
                     });
                     if (payrollRes.data?.inHandSalary) {
@@ -140,8 +151,7 @@ function DashboardEmployee() {
                 // Fetch upcoming birthdays
                 let birthdays = [];
                 try {
-                    const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
-                    const birthdaysRes = await axios.get(`${BASE_URL}/both/profile-details/upcoming-birthdays`, {
+                    const birthdaysRes = await axios.get('/v1/both/profile-details/upcoming-birthdays', {
                         withCredentials: true
                     });
                     if (birthdaysRes.data?.birthdays) {

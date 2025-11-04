@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { BOTH_PROFILE_ENDPOINT } from '../utils/constant';
 // Base URL - use environment variable or default to relative path
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
