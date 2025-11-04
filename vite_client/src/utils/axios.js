@@ -33,7 +33,7 @@ const instance = axios.create({
   withCredentials: true, // Essential for cookies
 });
 
-// Request interceptor to add debugging (only in development)
+// Request interceptor to add Authorization header and CSRF token
 instance.interceptors.request.use(
   (config) => {
     // Normalize URL to avoid double /api when baseURL ends with /api
@@ -48,6 +48,19 @@ instance.interceptors.request.use(
       }
     } catch {
       // ignore
+    }
+
+    // Add Authorization header from localStorage if available
+    try {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('token');
+        if (token && !config.headers.Authorization) {
+          config.headers = config.headers || {};
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+    } catch {
+      // intentionally ignored
     }
 
     // Add CSRF header for state-changing requests if token cookie exists

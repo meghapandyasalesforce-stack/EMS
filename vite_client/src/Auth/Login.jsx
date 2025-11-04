@@ -73,8 +73,11 @@ function Login() {
                 console.log('User data:', userData);
                 
                 dispatch(setUser(userData));
-                // Token is stored in httpOnly cookie, no need for localStorage (XSS risk)
-                // Only storing UI-related data
+                // Store token in localStorage for Authorization header (backup to cookie)
+                if (data.token) {
+                    localStorage.setItem('token', data.token);
+                }
+                // Store UI-related data
                 localStorage.setItem('role', userRole);
                 localStorage.setItem('email', form.email);
 
