@@ -6,7 +6,9 @@ const getBaseURL = () => {
     return import.meta.env.VITE_API_URL;
   }
   // In production, use full backend URL (different domain)
-  if (import.meta.env.PROD) {
+  // Check both PROD and MODE to handle Vercel deployments correctly
+  const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
+  if (isProduction) {
     return 'https://ems-te2n.onrender.com/api';
   }
   // In development, use relative path (vite proxy handles it)
@@ -44,7 +46,9 @@ instance.interceptors.request.use(
           config.url = config.url.replace(/^\/api\//, '/');
         }
       }
-    } catch (_) {}
+    } catch {
+      // ignore
+    }
 
     // Add CSRF header for state-changing requests if token cookie exists
     try {
@@ -57,7 +61,9 @@ instance.interceptors.request.use(
           config.headers['x-csrf-token'] = csrf;
         }
       }
-    } catch (_) {}
+    } catch {
+      // intentionally ignored
+    }
 
     // Log request details (both dev and prod for troubleshooting)
     if (import.meta.env.DEV || import.meta.env.PROD) {

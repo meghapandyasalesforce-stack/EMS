@@ -2,9 +2,10 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 // Use environment variable or default based on environment
+const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL 
   ? `${import.meta.env.VITE_API_BASE_URL}/employee/payroll`
-  : (import.meta.env.PROD 
+  : (isProduction 
     ? 'https://ems-te2n.onrender.com/api/v1/employee/payroll'
     : 'http://localhost:5000/api/v1/employee/payroll');
 

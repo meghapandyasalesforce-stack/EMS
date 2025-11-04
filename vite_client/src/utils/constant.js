@@ -3,8 +3,9 @@
 // Base API URL from environment or default
 // Production: https://ems-te2n.onrender.com/api/v1
 // Development: http://localhost:5000/api/v1
+const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? 'https://ems-te2n.onrender.com/api/v1' : 'http://localhost:5000/api/v1');
+  (isProduction ? 'https://ems-te2n.onrender.com/api/v1' : 'http://localhost:5000/api/v1');
 
 //==================Admin===================//
 
