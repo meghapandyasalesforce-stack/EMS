@@ -1,5 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
-import axios from "axios";
+import axios from "../utils/axios";
 import { toast } from "react-toastify";
 import { BOTH_TASK_ENDPOINT } from "../utils/constant";
 
@@ -62,9 +62,7 @@ export const fetchProjectTasks = (projectId, filters = {}) => async (dispatch) =
   try {
     dispatch(setLoading());
     const queryString = new URLSearchParams(filters).toString();
-    const res = await axios.get(`${BOTH_TASK_ENDPOINT}/admin/projects/${projectId}/tasks?${queryString}`, {
-      withCredentials: true
-    });
+    const res = await axios.get(`${BOTH_TASK_ENDPOINT}/admin/projects/${projectId}/tasks?${queryString}`);
     dispatch(setProjectTasks(res.data.tasks));
     dispatch(setError(null));
   } catch (error) {

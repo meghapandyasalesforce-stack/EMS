@@ -34,7 +34,13 @@ const isAdminAuthenticated = async (req, res, next) => {
 
         // Restrict access to admins only
         if (decoded.role !== "admin") {
-            return res.status(403).json({ message: "Access restricted to admins only", success: false });
+            // Log the actual role for debugging
+            console.warn(`Admin access denied. Token role: ${decoded.role}, userId: ${decoded.userId}`);
+            return res.status(403).json({ 
+                message: "Access restricted to admins only", 
+                success: false,
+                debug: process.env.NODE_ENV === 'development' ? { role: decoded.role } : undefined
+            });
         }
 
         // Set user object with role info

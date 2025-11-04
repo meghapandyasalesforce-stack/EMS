@@ -7,14 +7,25 @@ import NotificationSender from "./NotificationSender";
 
 function DashboardAdmin() {
   const dispatch = useDispatch();
-  const { employees = [] } = useSelector((state) => state.employees || {});
-  const { projects = [] } = useSelector((state) => state.projects || {});
-  const { payrolls = [] } = useSelector((state) => state.payrolls || {});
+  const { employees = [], error: employeesError, status: employeesStatus } = useSelector((state) => state.employees || {});
+  const { projects = [] } = useSelector((state) => state.projects?.allProjects || []);
+  const { data: payrolls = [] } = useSelector((state) => state.payroll || {});
   const employeeCount = employees?.length || 0;
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const navigate = useNavigate();
+  const { user } = useSelector((state) => state.auth || {});
 
   useEffect(() => {
+    // Check if user is logged in and has admin role
+    const userRole = localStorage.getItem('role');
+    const token = localStorage.getItem('token');
+    
+    if (!token || userRole !== 'admin') {
+      console.warn('⚠️ Admin access required. Please log out and log back in as admin.');
+      return;
+    }
+    
+    // Fetch employees
     dispatch(fetchEmployees());
   }, [dispatch]);
 
@@ -40,6 +51,19 @@ function DashboardAdmin() {
         {/* Mobile Header is now in Header component */}
 
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 md:mb-8">Admin Dashboard</h1>
+
+        {/* Error Messages */}
+        {employeesError && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
+            <p className="font-bold">Error Loading Data</p>
+            <p className="text-sm">{employeesError}</p>
+            {employeesError.includes('403') || employeesError.includes('Forbidden') ? (
+              <p className="text-sm mt-2">
+                <strong>Solution:</strong> Please log out and log back in as admin to refresh your authentication token.
+              </p>
+            ) : null}
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">

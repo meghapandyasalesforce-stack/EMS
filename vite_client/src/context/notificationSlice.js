@@ -1,6 +1,6 @@
 // redux/slices/notificationSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 
 // Create new notification (admin only)
@@ -10,8 +10,7 @@ export const createNotification = createAsyncThunk(
     try {
       const res = await axios.post(
         `${BOTH_NOTIFICATION_ENDPOINT}/create-notification`,
-        { message },
-        { withCredentials: true }
+        { message }
       );
       return res.data;
     } catch (error) {

@@ -9,7 +9,7 @@ const Notifications = () => {
   const load = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/v1/both/notification/user-notifications?limit=50&unreadOnly=true', { withCredentials: true });
+      const res = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications?limit=50&unreadOnly=true`);
       if (res.data?.success) setNotifications(res.data.notifications || []);
     } finally {
       setLoading(false);
@@ -20,7 +20,7 @@ const Notifications = () => {
 
   const markAll = async () => {
     try {
-      await axios.patch('/api/v1/both/notification/mark-all-read', {}, { withCredentials: true });
+      await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/mark-all-read`, {});
       // Do not batch-delete to avoid noisy 404s for legacy items; just clear UI
       setNotifications([]);
     } catch {}
@@ -28,15 +28,15 @@ const Notifications = () => {
 
   const markOne = async (id) => {
     try {
-      await axios.patch(`/api/v1/both/notification/${id}/read`, {}, { withCredentials: true });
-      try { await axios.delete(`/api/v1/both/notification/${id}`, { withCredentials: true }); } catch {}
+      await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/${id}/read`, {});
+      try { await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${id}`); } catch {}
       setNotifications(prev => prev.filter(n => n._id !== id));
     } catch {}
   };
 
   const removeOne = async (id) => {
     try {
-      await axios.delete(`/api/v1/both/notification/${id}`, { withCredentials: true });
+      await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${id}`);
       setNotifications(prev => prev.filter(n => n._id !== id));
     } catch {}
   };

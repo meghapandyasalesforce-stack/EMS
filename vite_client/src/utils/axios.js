@@ -153,6 +153,15 @@ instance.interceptors.response.use(
       }
     }
     
+    // Handle 403 errors - log helpful message
+    if (error.response?.status === 403) {
+      const message = error.response?.data?.message || 'Access forbidden';
+      if (message.includes('admin') || message.includes('Access restricted')) {
+        console.error('⚠️ 403 Forbidden: Admin role required. Please log out and log back in as admin.');
+        // Don't auto-redirect for 403, let user see the error message
+      }
+    }
+    
     return Promise.reject(error);
   }
 );

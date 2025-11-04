@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaBell, FaTimes, FaCheck, FaTrash } from 'react-icons/fa';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 
 const NotificationDropdown = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -76,9 +77,7 @@ const NotificationDropdown = () => {
     const fetchNotifications = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('/api/v1/both/notification/user-notifications?limit=10&unreadOnly=true', {
-                withCredentials: true
-            });
+            const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications?limit=10&unreadOnly=true`);
 
             if (response.data.success) {
                 setNotifications(response.data.notifications);
@@ -96,9 +95,7 @@ const NotificationDropdown = () => {
 
     const fetchUnreadCount = async () => {
         try {
-            const response = await axios.get('/api/v1/both/notification/unread-count', {
-                withCredentials: true
-            });
+            const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/unread-count`);
 
             if (response.data.success) {
                 setUnreadCount(response.data.unreadCount);
@@ -115,12 +112,10 @@ const NotificationDropdown = () => {
 
     const markAsRead = async (notificationId) => {
         try {
-            await axios.patch(`/api/v1/both/notification/${notificationId}/read`, {}, {
-                withCredentials: true
-            });
+            await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}/read`, {});
             // Auto-delete after reading
             try {
-                await axios.delete(`/api/v1/both/notification/${notificationId}`, { withCredentials: true });
+                await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}`);
             } catch {}
             setNotifications(prev => prev.filter(notification => notification._id !== notificationId));
             setUnreadCount(prev => Math.max(0, prev - 1));
@@ -134,9 +129,7 @@ const NotificationDropdown = () => {
 
     const markAllAsRead = async () => {
         try {
-            await axios.patch('/api/v1/both/notification/mark-all-read', {}, {
-                withCredentials: true
-            });
+            await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/mark-all-read`, {});
             // Do not batch-delete to avoid 404 noise for legacy items
             setNotifications([]);
             setUnreadCount(0);
@@ -151,9 +144,7 @@ const NotificationDropdown = () => {
 
     const deleteNotification = async (notificationId) => {
         try {
-            await axios.delete(`/api/v1/both/notification/${notificationId}`, {
-                withCredentials: true
-            });
+            await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}`);
 
             setNotifications(prev => 
                 prev.filter(notification => notification._id !== notificationId)

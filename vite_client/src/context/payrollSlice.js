@@ -52,11 +52,9 @@ export const updatePayroll = createAsyncThunk(
   'payroll/updatePayroll',
   async ({ payrollId, updatedData }, thunkAPI) => {
     try {
-      const csrf = getCookie('csrfToken');
       const response = await axios.put(
         `${ADMIN_PAYROLL_ENDPOINT}/update-payroll/${payrollId}`,
-        updatedData,
-        { withCredentials: true, headers: { 'x-csrf-token': csrf } }
+        updatedData
       );
       return response.data;
     } catch (error) {
@@ -69,12 +67,9 @@ export const generatePayrolls = createAsyncThunk(
   'payroll/generatePayrolls',
   async ({ month, year }, thunkAPI) => {
     try {
-      const csrf = getCookie('csrfToken');
-
       const response = await axios.post(
         `${ADMIN_PAYROLL_ENDPOINT}/generate-bulk`,
-        { month, year },
-        { withCredentials: true, headers: { 'x-csrf-token': csrf } }
+        { month, year }
       );
       return response.data;
     } catch (error) {

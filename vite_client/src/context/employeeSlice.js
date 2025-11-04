@@ -19,9 +19,22 @@ export const fetchEmployees = createAsyncThunk(
   'employees/fetchEmployees',
   async (_, thunkAPI) => {
     try {
-      const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, {withCredentials: true});
-      return response.data.employees;
+      const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`);
+      // Handle different response structures
+      if (response.data.employees) {
+        return response.data.employees;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      return [];
     } catch (err) {
+      console.error('Error fetching employees:', err.response?.data || err.message);
+      // Log the error details for debugging
+      if (err.response?.status === 403) {
+        console.error('403 Forbidden - Admin role required. Please log out and log back in.');
+      }
       return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to fetch employees');
     }
   }
@@ -32,9 +45,7 @@ export const deleteEmployee = createAsyncThunk(
   'employees/deleteEmployee',
   async (employeeId, thunkAPI) => {
     try {
-      const response = await axios.delete(`${EMPLOYEE_AUTH_ENDPOINT}/delete-employee/${employeeId}`, {
-        withCredentials: true
-      });
+      const response = await axios.delete(`${EMPLOYEE_AUTH_ENDPOINT}/delete-employee/${employeeId}`);
       return employeeId; // Return the deleted employee's ID
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to delete employee');
