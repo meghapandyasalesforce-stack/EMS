@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ems-backend
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        fromService:
+          name: ems-backend
+          type: web
+          property: port
+
