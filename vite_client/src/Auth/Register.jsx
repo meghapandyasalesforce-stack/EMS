@@ -53,26 +53,25 @@ const Register = () => {
         }
 
         try {
-            const response = await fetch('http://localhost:5000/api/v1/admin/auth/register', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: formData.name,
-                    email: formData.email,
-                    password: formData.password
-                }),
+            // Use configured axios instance instead of fetch with hardcoded URL
+            const { default: axiosInstance } = await import('../utils/axios');
+            const response = await axiosInstance.post('/v1/admin/auth/register', {
+                name: formData.name,
+                email: formData.email,
+                password: formData.password
             });
 
-            const data = await response.json();
-            toast.success("Registration successfull");
-            navigate('/login');
+            const data = response.data;
             
-            if (!response.ok) {
-                throw new Error(data.message || 'Registration failed');
+            if (!data || !data.message) {
+                throw new Error(data?.message || 'Registration failed');
             }
+            
+            toast.success(data.message || "Registration successful!");
+            setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+            setTimeout(() => {
+                navigate('/login');
+            }, 2000);
 
             // Registration successful
         } catch (error) {

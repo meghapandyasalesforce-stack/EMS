@@ -1,22 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-
-// Use environment variable or default based on environment
-const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL 
-  ? `${import.meta.env.VITE_API_BASE_URL}/employee/payroll`
-  : (isProduction 
-    ? 'https://ems-te2n.onrender.com/api/v1/employee/payroll'
-    : 'http://localhost:5000/api/v1/employee/payroll');
+import axios from '../utils/axios'; // Use configured axios instance
 
 // Async thunks
 export const fetchPayrollHistory = createAsyncThunk(
     'employeePayroll/fetchPayrollHistory',
     async ({ page = 1, limit = 12 }, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/history`, {
-                params: { page, limit },
-                withCredentials: true
+            const response = await axios.get(`/v1/employee/payroll/history`, {
+                params: { page, limit }
             });
             return response.data;
         } catch (error) {
@@ -29,9 +20,7 @@ export const fetchCurrentMonthPayroll = createAsyncThunk(
     'employeePayroll/fetchCurrentMonthPayroll',
     async (_, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/current`, {
-                withCredentials: true
-            });
+            const response = await axios.get(`/v1/employee/payroll/current`);
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to fetch current month payroll');
@@ -43,7 +32,7 @@ export const fetchPayrollDetails = createAsyncThunk(
     'employeePayroll/fetchPayrollDetails',
     async (payrollId, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/details/${payrollId}`, {
+            const response = await axios.get(`/v1/employee/payroll/details/${payrollId}`, {
                 withCredentials: true
             });
             return response.data;
@@ -57,8 +46,8 @@ export const downloadPayslip = createAsyncThunk(
     'employeePayroll/downloadPayslip',
     async (payrollId, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/download/${payrollId}`, {
-                withCredentials: true
+            const response = await axios.get(`/v1/employee/payroll/download/${payrollId}`, {
+                responseType: 'blob' // For file downloads
             });
             return response.data;
         } catch (error) {

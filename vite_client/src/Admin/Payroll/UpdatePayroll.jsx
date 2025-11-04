@@ -128,34 +128,25 @@ const UpdatePayroll = () => {
             monthName = months[0];
           }
 
-          const response = await fetch(`http://localhost:5000/api/v1/admin/payroll/admin-payroll/${employeeId}/${encodeURIComponent(monthName)}/${year}`, {
-            credentials: 'include',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          });
+          // Use configured axios instance instead of fetch
+          const { default: axiosInstance } = await import('../../utils/axios');
+          const response = await axiosInstance.get(`/v1/admin/payroll/admin-payroll/${employeeId}/${encodeURIComponent(monthName)}/${year}`);
           
-          if (response.ok) {
-            const payroll = await response.json();
-            
-            // Check if response has data property (new API format) or is direct object
-            const payrollData = payroll.data || payroll;
-            
-            if (payrollData._id) {
-              setFormData({
-                employeeId: payrollData.employeeId?._id || payrollData.employeeId,
-                payrollId: payrollData._id,
-                month: months.indexOf(payrollData.month),
-                year: payrollData.year,
-                earnings: payrollData.earnings || {},
-                deductions: payrollData.deductions || {},
-                status: payrollData.status || 'Pending',
-              });
-              setError(null);
-            } else {
-              setError('Payroll data structure is invalid');
-            }
-          } else if (response.status === 404) {
+          // Check if response has data property (new API format) or is direct object
+          const payrollData = response.data?.data || response.data;
+          
+          if (payrollData?._id) {
+            setFormData({
+              employeeId: payrollData.employeeId?._id || payrollData.employeeId,
+              payrollId: payrollData._id,
+              month: months.indexOf(payrollData.month),
+              year: payrollData.year,
+              earnings: payrollData.earnings || {},
+              deductions: payrollData.deductions || {},
+              status: payrollData.status || 'Pending',
+            });
+            setError(null);
+          } else {
             // Payroll doesn't exist yet - that's okay, user can create it
             setFormData(prev => ({
               ...prev,
@@ -165,14 +156,21 @@ const UpdatePayroll = () => {
               payrollId: '', // No existing payroll, will create on update
             }));
             setError(null);
-          } else {
-            const errorData = await response.json();
-            setError(errorData.message || 'Failed to fetch payroll data');
           }
         } catch (error) {
           console.error('Error loading payroll data:', error);
-          if (!error.message.includes('Failed to fetch') || !error.message.includes('ERR_INSUFFICIENT')) {
-            setError('Failed to load payroll data. Please check your connection.');
+          if (error.response?.status === 404) {
+            // Payroll doesn't exist yet - that's okay, user can create it
+            setFormData(prev => ({
+              ...prev,
+              employeeId,
+              month: parseInt(month),
+              year: parseInt(year),
+              payrollId: '', // No existing payroll, will create on update
+            }));
+            setError(null);
+          } else if (!error.message?.includes('Failed to fetch') && !error.message?.includes('ERR_INSUFFICIENT')) {
+            setError(error.response?.data?.message || 'Failed to load payroll data. Please check your connection.');
           } else {
             setError(null); // Silently ignore network errors to prevent infinite loops
           }

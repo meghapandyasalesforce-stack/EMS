@@ -25,19 +25,15 @@ const EmployeePayroll = () => {
           headers: { Authorization: `Bearer ${token}` },
         };
 
-        const employeeResponse = await axios.get(
-          'http://localhost:5000/api/employees/me',
-          config
-        );
+        // Use configured axios instance instead of direct axios with hardcoded URLs
+        const { default: axiosInstance } = await import('../utils/axios');
+        
+        const employeeResponse = await axiosInstance.get('/v1/employee/auth/get-my-details');
         setEmployeeData(employeeResponse.data);
 
-        const payrollResponse = await axios.get(
-          'http://localhost:5000/api/payroll/employee',
-          {
-            ...config,
-            params: { month: currentMonth, year: currentYear },
-          }
-        );
+        const payrollResponse = await axiosInstance.get('/v1/employee/payroll/current', {
+          params: { month: currentMonth, year: currentYear },
+        });
         setPayrollData(payrollResponse.data);
         setLoading(false);
       } catch (err) {
@@ -82,7 +78,12 @@ const EmployeePayroll = () => {
           <div className="flex justify-center">
             {employeeData.profileImage ? (
               <img
-                src={`http://localhost:5000/${employeeData.profileImage}`}
+                src={
+                  import.meta.env.VITE_API_URL?.replace('/api', '') || 
+                  (import.meta.env.PROD || import.meta.env.MODE === 'production' 
+                    ? 'https://ems-te2n.onrender.com' 
+                    : 'http://localhost:5000')
+                + `/${employeeData.profileImage}`}
                 alt="Profile"
                 className="w-40 h-40 rounded-xl object-cover"
               />

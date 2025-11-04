@@ -28,8 +28,6 @@ import {
     EMPLOYEE_LEAVE_ENDPOINT 
 } from '../../utils/constant';
 
-const BOTH_PAYROLL_ENDPOINT = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1'}/employee/payroll`;
-
 function DashboardEmployee() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);

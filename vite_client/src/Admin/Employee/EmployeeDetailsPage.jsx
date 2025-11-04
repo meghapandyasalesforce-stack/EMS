@@ -245,16 +245,11 @@ const EmployeeDetailsPage = () => {
   // Fetch employee statistics
   const fetchEmployeeStats = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/v1/admin/employee/${employeeId}/stats`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
+      const { default: axiosInstance } = await import('../../utils/axios');
+      const response = await axiosInstance.get(`/v1/admin/employee/${employeeId}/stats`);
+      
+      if (response.data) {
+        const data = response.data;
         // The stats are already updated in the employee object via the API
         console.log('Employee stats updated:', data.stats);
       }
@@ -1193,7 +1188,14 @@ const EmployeeDetailsPage = () => {
                             <Tooltip title="View Document">
                               <IconButton 
                                 size="small"
-                                onClick={() => window.open(`http://localhost:5000${doc.filePath}`, '_blank')}
+                                onClick={() => {
+                                  // Use environment-based URL for file paths
+                                  const backendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 
+                                    (import.meta.env.PROD || import.meta.env.MODE === 'production' 
+                                      ? 'https://ems-te2n.onrender.com' 
+                                      : 'http://localhost:5000');
+                                  window.open(`${backendUrl}${doc.filePath}`, '_blank');
+                                }}
                                 color="secondary"
                               >
                                 <FiEye size={16} />
