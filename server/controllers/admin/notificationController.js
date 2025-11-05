@@ -3,6 +3,7 @@ import { sendBroadcastNotification, markNotificationAsRead, getUnreadNotificatio
 import Notification from "../../models/notification.model.js";
 import User from "../../models/user.model.js";
 import Employee from "../../models/employee.model.js";
+import jwt from "jsonwebtoken";
 
 export const createNotification = async (req, res) => {
   try {
@@ -29,55 +30,145 @@ export const createNotification = async (req, res) => {
   }
 };
 
-// Get notifications for current user (including broadcasts)
+// Get notifications for current user (including broadcasts) - SSE endpoint
 export const getNotifications = async (req, res) => {
-  try {
-    // Set headers for Server-Sent Events (SSE)
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-
-    // Function to send notifications
-    const sendNotifications = async () => {
-      try {
-        const notifications = await Notification.find({
-          $or: [
-            { isBroadcast: true },
-            { recipient: req.employee?._id }
-          ],
-          // Only get notifications created since last check
-          createdAt: { $gt: lastCheck }
-        }).sort({ createdAt: -1 });
-
-        if (notifications.length > 0) {
-          res.write(`data: ${JSON.stringify(notifications)}\n\n`);
-          lastCheck = new Date(); // Update last check time
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-    };
-
-   let lastCheck = new Date(Date.now() - 1000 * 60 * 5); // last 5 minutes
-
-    
-    // Initial send
-    await sendNotifications();
-
-    // Set up polling interval
-    const intervalId = setInterval(sendNotifications, 3000);
-
-    // Clean up on client disconnect
-    req.on('close', () => {
-      clearInterval(intervalId);
-      res.end();
-    });
-
-  } catch (err) {
-    console.error('Initial error:', err);
-    res.status(500).json({ error: err.message });
+  // Set CORS headers FIRST (before any other headers or errors)
+  const origin = req.headers.origin;
+  const allowedOrigins = getAllowedOrigins();
+  
+  if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development")) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
+  
+  // Set headers for Server-Sent Events (SSE) - MUST be text/event-stream
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx/proxy
+  
+  // Flush headers immediately to establish SSE connection
+  res.flushHeaders();
+
+  // Try to authenticate user (optional - for personalized notifications)
+  let userId = null;
+  let userRole = null;
+  
+  try {
+    // Check for token in cookie or Authorization header
+    let token = req.cookies?.jwt;
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
+    
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      userId = decoded.userId;
+      userRole = decoded.role;
+    }
+  } catch (authError) {
+    // Authentication failed - continue without user ID (will only get broadcasts)
+    console.log('SSE: Authentication failed, continuing with broadcasts only:', authError.message);
+  }
+
+  let lastCheck = new Date(Date.now() - 1000 * 60 * 5); // last 5 minutes
+  let intervalId = null;
+
+  // Function to send notifications
+  const sendNotifications = async () => {
+    try {
+      // Build query: broadcasts OR user-specific notifications
+      const query = {
+        $or: [
+          { isBroadcast: true }
+        ]
+      };
+      
+      // Add user-specific notifications if authenticated
+      if (userId) {
+        query.$or.push({ recipient: userId });
+      }
+      
+      // Only get notifications created since last check
+      query.createdAt = { $gt: lastCheck };
+      
+      const notifications = await Notification.find(query)
+        .sort({ createdAt: -1 })
+        .limit(50); // Limit to prevent huge responses
+
+      if (notifications.length > 0) {
+        res.write(`data: ${JSON.stringify(notifications)}\n\n`);
+        lastCheck = new Date(); // Update last check time
+      }
+      
+      // Send keepalive ping every 30 seconds to prevent connection timeout
+      res.write(': keepalive\n\n');
+    } catch (error) {
+      console.error('SSE Polling error:', error);
+      // Send error as SSE event (not JSON response)
+      res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to fetch notifications' })}\n\n`);
+    }
+  };
+
+  // Send initial connection confirmation
+  res.write(`event: connected\ndata: ${JSON.stringify({ message: 'SSE connection established' })}\n\n`);
+
+  // Initial send
+  try {
+    await sendNotifications();
+  } catch (initialError) {
+    console.error('SSE Initial error:', initialError);
+    // Send error as SSE event, don't return JSON
+    res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to initialize notifications' })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Set up polling interval (every 3 seconds)
+  intervalId = setInterval(sendNotifications, 3000);
+
+  // Clean up on client disconnect
+  req.on('close', () => {
+    if (intervalId) {
+      clearInterval(intervalId);
+    }
+    res.end();
+  });
+
+  // Handle errors that occur after connection is established
+  req.on('error', (error) => {
+    console.error('SSE Request error:', error);
+    if (intervalId) {
+      clearInterval(intervalId);
+    }
+    res.end();
+  });
+};
+
+// Helper function to get allowed origins (same as in server.js)
+const getAllowedOrigins = () => {
+  const origins = [];
+  
+  if (process.env.FRONTEND_URL) {
+    origins.push(process.env.FRONTEND_URL);
+  }
+  
+  if (process.env.ALLOWED_ORIGINS) {
+    origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()));
+  }
+  
+  if (process.env.NODE_ENV === 'development') {
+    origins.push('http://localhost:5173', 'http://localhost:3000');
+  }
+  
+  if (process.env.NODE_ENV === 'production') {
+    origins.push('https://paarsiv.vercel.app');
+  }
+  
+  return origins.length > 0 ? origins : ['http://localhost:5173'];
 };
 
 // Get notifications for current user (regular API endpoint)

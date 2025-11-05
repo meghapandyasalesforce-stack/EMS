@@ -135,33 +135,69 @@ app.use("/uploads", (req, res, next) => {
   const origin = req.headers.origin;
   const allowedOrigins = getAllowedOrigins();
   
-  // Set CORS headers for static files
+  // Set CORS headers for static files BEFORE serving
   // When credentials are true, Access-Control-Allow-Origin must match the request origin exactly
   if (origin) {
     // Check if origin is allowed
     if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      // Origin not allowed - but we still need to set CORS headers for the response
+      // Use wildcard but without credentials (browser will accept this for images)
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
-    // If origin doesn't match and we're in production, don't set CORS headers (request will be blocked)
   } else {
-    // No origin header (same-origin request), allow it
+    // No origin header (e.g., direct image load via <img> tag)
+    // Use wildcard for images (browsers allow this for images)
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
   
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin");
-  res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Type");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition");
+  res.setHeader("Access-Control-Max-Age", "86400"); // Cache preflight for 24 hours
   
   // Handle preflight requests
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
   
+  // Continue to static file serving
   next();
 });
 
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Serve static files with CORS headers applied
+app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
+  setHeaders: (res, filePath) => {
+    // Ensure CORS headers are set on the actual file response
+    const origin = res.req?.headers?.origin;
+    const allowedOrigins = getAllowedOrigins();
+    
+    // Set CORS headers for the file response
+    if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      // For images loaded via <img> tag (no origin header), use wildcard
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    
+    // Set appropriate content type for images
+    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.setHeader("Content-Type", "image/jpeg");
+    } else if (filePath.endsWith('.png')) {
+      res.setHeader("Content-Type", "image/png");
+    } else if (filePath.endsWith('.gif')) {
+      res.setHeader("Content-Type", "image/gif");
+    } else if (filePath.endsWith('.webp')) {
+      res.setHeader("Content-Type", "image/webp");
+    }
+    
+    // Cache control for images
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  }
+}));
 
 // ✅ Rate limiting + CSRF
 app.use(apiLimiter);

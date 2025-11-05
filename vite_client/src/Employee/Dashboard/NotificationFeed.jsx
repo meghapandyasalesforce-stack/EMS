@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { addNotification } from '../../context/notificationSlice';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../../utils/constant';
+import { getBackendBaseURL } from '../../utils/axios';
 
 const NotificationFeed = () => {
   const dispatch = useDispatch();
@@ -18,12 +19,37 @@ const NotificationFeed = () => {
   }
 });
 
+  // Construct SSE URL - EventSource needs full URL, not relative path
+  const getSSEUrl = () => {
+    const backendUrl = getBackendBaseURL();
+    // SSE endpoint: /api/v1/both/notification/get-all-notification
+    return `${backendUrl}/api/v1/both/notification/get-all-notification`;
+  };
 
   useEffect(() => {
-    const eventSource = new EventSource(`${BOTH_NOTIFICATION_ENDPOINT}/get-all-notification`, {
+    const sseUrl = getSSEUrl();
+    console.log('Connecting to SSE:', sseUrl);
+    
+    const eventSource = new EventSource(sseUrl, {
       withCredentials: true,
     });
 
+    // Handle connection established
+    eventSource.addEventListener('connected', (event) => {
+      console.log('SSE connected:', JSON.parse(event.data));
+    });
+
+    // Handle errors from server
+    eventSource.addEventListener('error', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.error('SSE server error:', data);
+      } catch (err) {
+        console.error('SSE error event:', event);
+      }
+    });
+
+    // Handle notification messages
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -48,9 +74,15 @@ const NotificationFeed = () => {
       }
     };
 
+    // Handle connection errors
     eventSource.onerror = (err) => {
       console.error('SSE connection error:', err);
-      eventSource.close();
+      // Don't close immediately - EventSource will auto-retry
+      // Only close if it's a critical error
+      if (eventSource.readyState === EventSource.CLOSED) {
+        console.log('SSE connection closed, will not retry');
+        eventSource.close();
+      }
     };
 
     return () => eventSource.close();

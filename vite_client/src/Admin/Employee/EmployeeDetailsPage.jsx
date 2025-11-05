@@ -21,6 +21,7 @@ import {
 } from '../../context/employeeDetailsSlice';
 import { deleteEmployee } from '../../context/employeeSlice';
 import { BOTH_DOCUMENT_ENDPOINT } from '../../utils/constant';
+import { getBackendBaseURL } from '../../utils/axios';
 import { 
   FiUser, 
   FiMail, 
@@ -1190,10 +1191,7 @@ const EmployeeDetailsPage = () => {
                                 size="small"
                                 onClick={() => {
                                   // Use environment-based URL for file paths
-                                  const backendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 
-                                    (import.meta.env.PROD || import.meta.env.MODE === 'production' 
-                                      ? 'https://ems-te2n.onrender.com' 
-                                      : 'http://localhost:5000');
+                                  const backendUrl = getBackendBaseURL();
                                   window.open(`${backendUrl}${doc.filePath}`, '_blank');
                                 }}
                                 color="secondary"
