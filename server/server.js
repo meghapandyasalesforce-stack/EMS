@@ -71,10 +71,56 @@ app.use(
 app.use(mongoSanitize());
 app.use(xss());
 
-// ✅ CORS configuration - production ready
+// ✅ CORS configuration - production ready (supports multiple origins)
+const getAllowedOrigins = () => {
+  const origins = [];
+  
+  // Add FRONTEND_URL if set
+  if (process.env.FRONTEND_URL) {
+    origins.push(process.env.FRONTEND_URL);
+  }
+  
+  // Add additional allowed origins from environment (comma-separated)
+  if (process.env.ALLOWED_ORIGINS) {
+    origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()));
+  }
+  
+  // Default origins
+  if (process.env.NODE_ENV === 'development') {
+    origins.push('http://localhost:5173', 'http://localhost:3000');
+  }
+  
+  // Production defaults (Vercel + Render)
+  if (process.env.NODE_ENV === 'production') {
+    origins.push('https://paarsiv.vercel.app');
+  }
+  
+  return origins.length > 0 ? origins : ['http://localhost:5173'];
+};
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: (origin, callback) => {
+      const allowedOrigins = getAllowedOrigins();
+      
+      // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // In development, allow any origin
+      if (process.env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      
+      // Reject origin
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token", "X-Requested-With", "Accept", "Origin"],
@@ -87,19 +133,21 @@ app.use(
 // Add CORS headers for static file serving - images need CORS to be loaded cross-origin
 app.use("/uploads", (req, res, next) => {
   const origin = req.headers.origin;
-  const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+  const allowedOrigins = getAllowedOrigins();
   
   // Set CORS headers for static files
   // When credentials are true, Access-Control-Allow-Origin must match the request origin exactly
   if (origin) {
-    // In development, allow any origin; in production, only allow configured origin
-    if (process.env.NODE_ENV === "development" || origin === allowedOrigin) {
+    // Check if origin is allowed
+    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
     }
     // If origin doesn't match and we're in production, don't set CORS headers (request will be blocked)
+  } else {
+    // No origin header (same-origin request), allow it
+    res.setHeader("Access-Control-Allow-Origin", "*");
   }
-  // If no origin header (same-origin request), the browser won't check CORS
   
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin");

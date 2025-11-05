@@ -2,30 +2,52 @@ import axios from 'axios';
 
 // Determine base URL: use env var, or default to backend URL in production, or relative path in dev
 const getBaseURL = () => {
+  // Priority 1: Use explicit environment variable
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+    const apiUrl = import.meta.env.VITE_API_URL;
+    // Ensure it ends with /api for consistency
+    return apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
   }
-  // In production, use full backend URL (different domain)
+  
+  // Priority 2: Check if we have a backend URL without /api
+  if (import.meta.env.VITE_BACKEND_URL) {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    return `${backendUrl}/api`;
+  }
+  
+  // Priority 3: In production, use Render backend URL (default)
   // Check both PROD and MODE to handle Vercel deployments correctly
   const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
   if (isProduction) {
+    // Default to Render backend, but can be overridden via env vars
     return 'https://ems-te2n.onrender.com/api';
   }
-  // In development, use relative path (vite proxy handles it)
+  
+  // Priority 4: In development, use relative path (vite proxy handles it)
   // This will be proxied to http://localhost:5000 by vite.config.js
   return '/api';
 };
 
 // Helper function to get backend base URL (without /api) for static files like uploads
 export const getBackendBaseURL = () => {
+  // Priority 1: Use explicit backend URL
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL;
+  }
+  
+  // Priority 2: Derive from API URL
   if (import.meta.env.VITE_API_URL) {
     // Remove /api if present
-    return import.meta.env.VITE_API_URL.replace('/api', '');
+    return import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
   }
+  
+  // Priority 3: Production default
   const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
   if (isProduction) {
     return 'https://ems-te2n.onrender.com';
   }
+  
+  // Priority 4: Development default
   return 'http://localhost:5000';
 };
 
