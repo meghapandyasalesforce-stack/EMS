@@ -1,7 +1,7 @@
 // useDeleteProject.js
 import { useDispatch } from 'react-redux';
 import { deleteProject } from '../context/projectSlice';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { ADMIN_PROJECT_ENDPOINT } from '../utils/constant';
 
 const useDeleteProject = () => {

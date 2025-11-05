@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaBell, FaEnvelope, FaTasks, FaUsers, FaProjectDiagram, FaSave, FaUndo } from 'react-icons/fa';
-import axios from 'axios';
+import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 
 const NotificationSettings = () => {
@@ -32,7 +32,7 @@ const NotificationSettings = () => {
 
     const fetchNotificationSettings = async () => {
         try {
-            const response = await axios.get('/api/v1/admin/notification-settings/settings', {
+            const response = await axios.get('/v1/admin/notification-settings/settings', {
                 withCredentials: true
             });
 
@@ -65,7 +65,7 @@ const NotificationSettings = () => {
     const handleSave = async () => {
         try {
             setSaving(true);
-            const response = await axios.patch('/api/v1/admin/notification-settings/settings', settings, {
+            const response = await axios.patch('/v1/admin/notification-settings/settings', settings, {
                 withCredentials: true
             });
 
@@ -82,7 +82,7 @@ const NotificationSettings = () => {
 
     const handleReset = async () => {
         try {
-            const response = await axios.post('/api/v1/admin/notification-settings/settings/reset', {}, {
+            const response = await axios.post('/v1/admin/notification-settings/settings/reset', {}, {
                 withCredentials: true
             });
 

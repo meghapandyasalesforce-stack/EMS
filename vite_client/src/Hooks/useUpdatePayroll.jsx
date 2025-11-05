@@ -1,5 +1,5 @@
 import { useSelector, useDispatch } from 'react-redux';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { updatePayroll } from '../context/payrollSlice'; // Ensure this exists
 import { ADMIN_PAYROLL_ENDPOINT } from './../utils/constant';
 

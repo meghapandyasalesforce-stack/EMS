@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axiosInstance from '../utils/axios';
 import { getUploadUrl } from '../utils/axios';
 
 const EmployeePayroll = () => {
@@ -26,9 +26,6 @@ const EmployeePayroll = () => {
           headers: { Authorization: `Bearer ${token}` },
         };
 
-        // Use configured axios instance instead of direct axios with hardcoded URLs
-        const { default: axiosInstance } = await import('../utils/axios');
-        
         const employeeResponse = await axiosInstance.get('/v1/employee/auth/get-my-details');
         setEmployeeData(employeeResponse.data);
 

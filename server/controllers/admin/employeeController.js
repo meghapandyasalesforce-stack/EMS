@@ -37,11 +37,18 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
 
     // Update employee work information
+    // Explicitly include salary field in the response
     const updatedEmployee = await Employee.findByIdAndUpdate(
       employeeId,
       updateData,
       { new: true, runValidators: true }
-    ).select('-password');
+    ).select('-password -role').lean();
+
+    // Ensure salary is explicitly included in the response
+    if (updatedEmployee && updatedEmployee.salary === undefined) {
+      const employeeWithSalary = await Employee.findById(employeeId).select('salary').lean();
+      updatedEmployee.salary = employeeWithSalary?.salary ?? 0;
+    }
 
     res.status(200).json({
       success: true,

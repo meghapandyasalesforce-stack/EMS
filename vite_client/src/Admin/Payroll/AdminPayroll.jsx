@@ -60,9 +60,8 @@ const AdminPayroll = () => {
                 month: months[selectedMonth].label,
                 year: selectedYear
             };
-            const base = typeof axios.defaults.baseURL === 'string' ? axios.defaults.baseURL : '';
-            const path = base.includes('/api') ? '/v1/admin/payroll/disburse' : '/api/v1/admin/payroll/disburse';
-            const res = await axios.post(path, payload);
+            // Use configured axios instance - baseURL already includes /api
+            const res = await axios.post('/v1/admin/payroll/disburse', payload);
             setDisburseResult(res.data);
             // Refresh list to reflect Paid statuses
             dispatch(fetchPayrolls(payload));

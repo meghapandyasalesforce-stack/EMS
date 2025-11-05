@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../utils/axios';
+import { BOTH_ATTENDANCE_ENDPOINT } from '../utils/constant';
 
 const AttendanceDashboard = () => {
     const [attendanceStats, setAttendanceStats] = useState({
@@ -18,12 +19,31 @@ const AttendanceDashboard = () => {
 
     const fetchAttendanceData = async () => {
         try {
-            const [statsRes, logsRes] = await Promise.all([
-                axios.get('/attendance/stats'),
-                axios.get('/attendance/logs')
-            ]);
-            setAttendanceStats(statsRes.data);
-            setAttendanceLogs(logsRes.data);
+            // Get attendance logs and calculate stats from them
+            const logsRes = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/get-logs`);
+            const logs = logsRes.data?.logs || logsRes.data || [];
+            setAttendanceLogs(logs);
+            
+            // Calculate stats from logs
+            if (logs.length > 0) {
+                const totalHours = logs.reduce((sum, log) => {
+                    if (log.clockIn && log.clockOut) {
+                        const hours = (new Date(log.clockOut) - new Date(log.clockIn)) / (1000 * 60 * 60);
+                        return sum + hours;
+                    }
+                    return sum;
+                }, 0);
+                const avgHours = logs.length > 0 ? totalHours / logs.length : 0;
+                const onTimeCount = logs.filter(log => log.status === 'on-time' || !log.status).length;
+                const onTimePercentage = logs.length > 0 ? (onTimeCount / logs.length) * 100 : 0;
+                
+                setAttendanceStats({
+                    avgHoursPerDay: avgHours,
+                    onTimePercentage: onTimePercentage
+                });
+            } else {
+                setAttendanceStats({ avgHoursPerDay: 0, onTimePercentage: 0 });
+            }
             setIsLoading(false);
         } catch (error) {
             console.error('Error fetching attendance data:', error);
@@ -55,7 +75,7 @@ const AttendanceDashboard = () => {
                 new Date(log.date).toDateString() === new Date().toDateString()
             );
             if (todayLog && !todayLog.clockOut) {
-                await axios.patch(`/api/attendance/clock-out/${todayLog._id}`);
+                await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/clock-out`, { logId: todayLog._id });
                 fetchAttendanceData();
             }
         } catch (error) {

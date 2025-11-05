@@ -5,6 +5,7 @@ import { clockIn, clockOut, breakIn, breakOut, fetchLogs, fetchMyTodayStatus } f
 import { format } from 'date-fns';
 import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import axios from '../../utils/axios';
 
 const AttendanceBox = () => {
   const dispatch = useDispatch();
@@ -355,7 +356,7 @@ const AttendanceBox = () => {
               onClick={async () => {
                 try {
                   // Fire-and-forget notify admins about back action
-                  axios.post('/api/v1/both/notification/employee-back', {}, { withCredentials: true }).catch(() => {});
+                  axios.post('/v1/both/notification/employee-back', {}, { withCredentials: true }).catch(() => {});
                 } catch {}
                 navigate('/dashboard-employee');
               }}

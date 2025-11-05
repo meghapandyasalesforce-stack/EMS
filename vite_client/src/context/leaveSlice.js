@@ -1,6 +1,6 @@
 // features/leave/leaveSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { ADMIN_LEAVE_ENDPOINT } from '../utils/constant';
 
 // Async thunk to get all leaves

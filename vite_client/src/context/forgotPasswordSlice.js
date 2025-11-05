@@ -1,6 +1,6 @@
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { BOTH_PASSWORD_ENDPOINT } from '../utils/constant';
 
 export const requestPasswordReset = createAsyncThunk(

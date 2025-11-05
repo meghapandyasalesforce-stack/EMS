@@ -164,7 +164,7 @@ const EmployeeDetailsPage = () => {
       department: employee.department || '',
       position: employee.position || '',
       manager: employee.manager || '',
-      salary: employee.salary || '',
+      salary: employee.salary !== undefined && employee.salary !== null ? employee.salary : '',
       joiningDate: employee.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : ''
     });
     setOpenEditWorkDialog(true);
@@ -179,12 +179,26 @@ const EmployeeDetailsPage = () => {
 
   const handleSaveWorkInfo = async () => {
     try {
+      // Validate salary - ensure it's a valid number
+      const salaryValue = editWorkForm.salary === '' || editWorkForm.salary === null || editWorkForm.salary === undefined
+        ? 0
+        : parseFloat(editWorkForm.salary);
+      
+      if (isNaN(salaryValue) || salaryValue < 0) {
+        setSnackbar({
+          open: true,
+          message: 'Please enter a valid salary (must be a positive number)',
+          severity: 'error'
+        });
+        return;
+      }
+
       const updateData = {
         jobTitle: editWorkForm.jobTitle,
         department: editWorkForm.department,
         position: editWorkForm.position,
         manager: editWorkForm.manager,
-        salary: parseFloat(editWorkForm.salary) || 0,
+        salary: salaryValue,
         joiningDate: editWorkForm.joiningDate ? new Date(editWorkForm.joiningDate).toISOString() : null
       };
 

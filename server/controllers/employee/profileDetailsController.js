@@ -360,12 +360,29 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Invalid employee ID' });
     }
 
-    // Fetch employee and include active status
+    // Fetch employee and include active status and salary
+    // Use lean() to get plain object and explicitly ensure salary is included
     const employee = await Employee.findById(employeeId)
-      .select('-password -role'); // ❗Keep active field by NOT excluding it
+      .select('-password -role') // Exclude only password and role
+      .lean(); // Get plain JavaScript object (no Mongoose document methods)
 
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Ensure salary field is explicitly included (even if it's 0 or null)
+    // The select should already include it, but we verify it's present
+    if (employee.salary === undefined) {
+      // If somehow salary is missing, fetch it separately
+      const employeeWithSalary = await Employee.findById(employeeId)
+        .select('salary')
+        .lean();
+      employee.salary = employeeWithSalary?.salary || 0;
+    }
+
+    // Debug log (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Admin fetched employee ${employeeId}: salary = ${employee.salary}`);
     }
 
     res.status(200).json({ employee });

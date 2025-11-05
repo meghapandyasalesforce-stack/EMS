@@ -29,7 +29,7 @@ const AttendanceRules = () => {
     const fetchAttendanceRule = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('/api/v1/admin/attendance-rules/current');
+            const response = await axios.get('/v1/admin/attendance-rules/current');
 
             if (response.data.success && response.data.rule) {
                 console.log('=== Loading Attendance Rule ===');
@@ -134,7 +134,7 @@ const AttendanceRules = () => {
         try {
             setSaving(true);
             const response = await axios.post(
-                '/api/v1/admin/attendance-rules/create-or-update',
+                '/v1/admin/attendance-rules/create-or-update',
                 dataToSend
             );
 

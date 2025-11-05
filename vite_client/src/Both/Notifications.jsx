@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import axios from '../utils/axios';
+import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 import { FaCheck, FaTrash } from 'react-icons/fa';
 
 const Notifications = () => {

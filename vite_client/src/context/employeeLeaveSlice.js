@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import axios from '../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../utils/constant'; // You'll define this
 
 // Submit leave request
