@@ -691,7 +691,7 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
                 <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-8">
                   <div className="w-24 h-24 rounded-full border-4 border-white shadow-xl overflow-hidden">
                     {card.employeeId?.profilePhoto ? (
-                      <img src={getUploadUrl(card.employeeId.profilePhoto?.url || card.employeeId.profilePhoto)} alt="Profile" className="w-full h-full object-cover"/>
+                      <img src={getUploadUrl(card.employeeId.profilePhoto?.url || card.employeeId.profilePhoto)} alt="Profile" className="w-full h-full object-cover" crossOrigin="anonymous"/>
                     ) : (
                       <FiUser className="w-full h-full p-2 bg-gray-200 text-gray-400" />
                     )}

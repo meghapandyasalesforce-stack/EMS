@@ -162,6 +162,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
                 src={getUploadUrl(typeof user.profilePhoto === 'string' ? user.profilePhoto : (user.profilePhoto.url || user.profilePhoto.filename))}
                 alt="Current Profile"
                 className="w-full h-full object-cover"
+                crossOrigin="anonymous"
                 onError={(e) => {
                   // Fallback if image fails to load
                   e.target.style.display = 'none';

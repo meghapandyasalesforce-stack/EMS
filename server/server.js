@@ -136,21 +136,31 @@ app.use("/uploads", (req, res, next) => {
   const allowedOrigins = getAllowedOrigins();
   
   // Set CORS headers for static files BEFORE serving
-  // When credentials are true, Access-Control-Allow-Origin must match the request origin exactly
+  // CRITICAL: Always set CORS headers for images to work with html2canvas and other CORS contexts
   if (origin) {
-    // Check if origin is allowed
+    // Check if origin is allowed (including Vercel in production)
     if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      // Origin not allowed - but we still need to set CORS headers for the response
-      // Use wildcard but without credentials (browser will accept this for images)
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      // In production, if origin is not explicitly allowed but is Vercel, allow it
+      if (process.env.NODE_ENV === "production" && origin === "https://paarsiv.vercel.app") {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      } else {
+        // Use wildcard for other cases (but never with credentials)
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
     }
   } else {
-    // No origin header (e.g., direct image load via <img> tag)
-    // Use wildcard for images (browsers allow this for images)
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // No origin header - but in production, allow Vercel explicitly for CORS requests
+    // This handles cases where img tag loads without origin, but later CORS request needs it
+    if (process.env.NODE_ENV === "production") {
+      // Don't set credentials with wildcard - they're incompatible
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
   }
   
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD");
@@ -169,17 +179,28 @@ app.use("/uploads", (req, res, next) => {
 
 // Serve static files with CORS headers applied
 app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
-  setHeaders: (res, filePath) => {
-    // Ensure CORS headers are set on the actual file response
-    const origin = res.req?.headers?.origin;
+  setHeaders: (res, filePath, stat) => {
+    // CRITICAL: Get origin from request - this is essential for CORS
+    const req = res.req || res.locals?.req;
+    const origin = req?.headers?.origin || req?.get?.('origin');
     const allowedOrigins = getAllowedOrigins();
     
-    // Set CORS headers for the file response
-    if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development")) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
+    // Set CORS headers for the file response - MUST match what middleware set
+    if (origin) {
+      // Check if origin is allowed
+      if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      } else if (process.env.NODE_ENV === "production" && origin === "https://paarsiv.vercel.app") {
+        // Explicitly allow Vercel origin in production
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      } else {
+        // Use wildcard for other cases (no credentials)
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
     } else {
-      // For images loaded via <img> tag (no origin header), use wildcard
+      // No origin header - use wildcard (no credentials)
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
     

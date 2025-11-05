@@ -60,6 +60,7 @@ const ProfilePicture = ({
             src={imageUrl}
             alt="Profile Picture"
             className="w-full h-full object-cover"
+            crossOrigin="anonymous"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-inner">

@@ -63,7 +63,7 @@ const IdCardView = () => {
           <div style="text-align: center; margin-bottom: 15px;">
             <div style="width: 80px; height: 80px; border-radius: 50%; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center;">
               ${idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto 
-                ? `<img src="${getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}" alt="Photo" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
+                ? `<img src="${getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}" alt="Photo" crossOrigin="anonymous" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
                 : '<div style="width: 40px; height: 40px; background: #d1d5db; border-radius: 50%;"></div>'}
             </div>
           </div>
@@ -277,6 +277,7 @@ const IdCardView = () => {
                           src={getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}
                           alt="Employee Photo"
                           className="w-20 h-20 rounded-full object-cover"
+                          crossOrigin="anonymous"
                         />
                       ) : (
                         <FiUser className="w-8 h-8 text-gray-400" />
