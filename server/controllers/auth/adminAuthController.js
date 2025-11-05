@@ -70,12 +70,19 @@ export const loginUser = async (req, res) => {
             });
         }
 
-        // Look up user across collections
-        let user = await User.findOne({ email }).select('+password');
+        // Normalize email (lowercase and trim) for case-insensitive lookup
+        const normalizedEmail = email.toLowerCase().trim();
+        
+        // Look up user across collections with case-insensitive email match
+        let user = await User.findOne({ 
+            email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+        }).select('+password');
         let role = 'admin';
         let isEmployee = false;
         if (!user) {
-            const employee = await Employee.findOne({ email }).select('+password');
+            const employee = await Employee.findOne({ 
+                email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+            }).select('+password');
             if (employee) {
                 user = employee;
                 role = 'employee';

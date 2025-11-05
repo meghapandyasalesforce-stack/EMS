@@ -32,8 +32,13 @@ export const registerEmployee = async (req, res) => {
             return res.status(400).json({ message: 'Invalid position value' });
         }
 
-        // Check if employee already exists
-        const existingEmployee = await Employee.findOne({ email });
+        // Normalize email (lowercase and trim) for case-insensitive check
+        const normalizedEmail = email.toLowerCase().trim();
+        
+        // Check if employee already exists (case-insensitive)
+        const existingEmployee = await Employee.findOne({ 
+            email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+        });
         if (existingEmployee) {
             return res.status(400).json({ message: 'Email already registered' });
         }
@@ -57,11 +62,11 @@ export const registerEmployee = async (req, res) => {
             }
         }
 
-        // Create the employee
+        // Create the employee (normalize email to lowercase)
         const employee = new Employee({
             name,
             lastName,
-            email,
+            email: normalizedEmail, // Use normalized email
             password, // Will be hashed automatically by model's pre-save hook
             position,
             department,
@@ -163,7 +168,14 @@ export const loginEmployee = async (req, res) => {
             });
         }
 
-        const employee = await Employee.findOne({ email });
+        // Normalize email (lowercase and trim) for case-insensitive lookup
+        const normalizedEmail = email.toLowerCase().trim();
+        
+        // Find employee with case-insensitive email match
+        const employee = await Employee.findOne({ 
+            email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+        });
+        
         if (!employee) {
             return res.status(401).json({ 
                 success: false,
@@ -315,22 +327,28 @@ export const resetEmployeePassword = async (req, res) => {
         const { newPassword } = req.body;
 
         if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ message: 'Password must be at least 8 characters long.' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Password must be at least 8 characters long.' 
+            });
         }
 
-        // Password will be hashed automatically by the model's pre-save hook
-        const employee = await Employee.findByIdAndUpdate(
-            employeeId,
-            {
-                password: newPassword, // Will be hashed by pre-save hook
-                mustResetPassword: false
-            },
-            { new: true }
-        );
-
+        // Find the employee first
+        const employee = await Employee.findById(employeeId);
         if (!employee) {
-            return res.status(404).json({ message: 'Employee not found.' });
+            return res.status(404).json({ 
+                success: false,
+                message: 'Employee not found.' 
+            });
         }
+
+        // Set the new password and mustResetPassword flag
+        // The pre-save hook will automatically hash the password when we call save()
+        employee.password = newPassword;
+        employee.mustResetPassword = false;
+        
+        // Save the employee - this will trigger the pre-save hook to hash the password
+        await employee.save();
 
         // Clear authentication cookies to force logout
         const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
@@ -350,12 +368,17 @@ export const resetEmployeePassword = async (req, res) => {
         });
 
         res.status(200).json({ 
+            success: true,
             message: 'Password reset successful. Please login with your new password.',
             logout: true 
         });
     } catch (error) {
         logger.error('Reset employee password error', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: 'Failed to reset password', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to reset password', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
