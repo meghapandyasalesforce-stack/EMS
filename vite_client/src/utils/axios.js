@@ -137,6 +137,15 @@ instance.interceptors.request.use(
     try {
       if (typeof window !== 'undefined') {
         const token = localStorage.getItem('token');
+        
+        // Check if this is an auth endpoint (login/register) - tokens are expected to be missing
+        const isAuthEndpoint = config.url && (
+          config.url.includes('/auth/login') || 
+          config.url.includes('/auth/register') ||
+          config.url.includes('/password/forgot-password') ||
+          config.url.includes('/password/reset-password')
+        );
+        
         if (token) {
           config.headers = config.headers || {};
           // Only add if not already set (allows manual override if needed)
@@ -144,8 +153,8 @@ instance.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
           }
         } else {
-          // Debug: Log when token is missing (development only)
-          if (isDevelopment) {
+          // Only warn if it's NOT an auth endpoint (login/register don't need tokens)
+          if (isDevelopment && !isAuthEndpoint) {
             console.warn('⚠️ No token found in localStorage for request:', config.url);
           }
         }
@@ -159,31 +168,44 @@ instance.interceptors.request.use(
     try {
       const method = (config.method || 'get').toLowerCase();
       if (typeof document !== 'undefined' && ['post','put','patch','delete'].includes(method)) {
-        // First try to get from cookie (same-site)
-        let csrf = undefined;
-        try {
-          const csrfCookie = document.cookie.split('; ').find(c => c.startsWith('csrfToken='));
-          csrf = csrfCookie ? csrfCookie.split('=')[1] : undefined;
-        } catch {
-          // Cookie parsing failed
-        }
+        // Check if this is an auth endpoint that doesn't require CSRF (login/register/password reset)
+        const isAuthEndpoint = config.url && (
+          config.url.includes('/auth/login') || 
+          config.url.includes('/auth/register') ||
+          config.url.includes('/password/forgot-password') ||
+          config.url.includes('/password/reset-password')
+        );
         
-        // If not in cookie, try localStorage (cross-site scenario)
-        if (!csrf && typeof window !== 'undefined') {
+        // CSRF tokens are not required for login/register/password reset endpoints
+        // These are allowlisted in the backend CSRF middleware
+        if (!isAuthEndpoint) {
+          // First try to get from cookie (same-site)
+          let csrf = undefined;
           try {
-            csrf = localStorage.getItem('csrfToken');
+            const csrfCookie = document.cookie.split('; ').find(c => c.startsWith('csrfToken='));
+            csrf = csrfCookie ? csrfCookie.split('=')[1] : undefined;
           } catch {
-            // localStorage access failed
+            // Cookie parsing failed
           }
-        }
-        
-        if (csrf) {
-          config.headers = config.headers || {};
-          config.headers['x-csrf-token'] = csrf;
-        } else {
-          // Debug: Log when CSRF token is missing for state-changing requests (development only)
-          if (isDevelopment) {
-            console.warn('⚠️ CSRF token not found in cookies or localStorage for', method.toUpperCase(), 'request to:', config.url);
+          
+          // If not in cookie, try localStorage (cross-site scenario)
+          if (!csrf && typeof window !== 'undefined') {
+            try {
+              csrf = localStorage.getItem('csrfToken');
+            } catch {
+              // localStorage access failed
+            }
+          }
+          
+          if (csrf) {
+            config.headers = config.headers || {};
+            config.headers['x-csrf-token'] = csrf;
+          } else {
+            // Debug: Log when CSRF token is missing for state-changing requests (development only)
+            // Don't warn for auth endpoints as they don't need CSRF
+            if (isDevelopment && !isAuthEndpoint) {
+              console.warn('⚠️ CSRF token not found in cookies or localStorage for', method.toUpperCase(), 'request to:', config.url);
+            }
           }
         }
       }

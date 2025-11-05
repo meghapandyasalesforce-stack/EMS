@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { resetPassword, resetForgotPasswordState } from '../context/forgotPasswordSlice.js';
+import { setUser } from '../context/Auth/authSlice.js';
+import { persistor } from '../context/store.js';
 import { toast } from 'react-toastify';
 
 const ResetPassword = () => {
@@ -22,32 +24,48 @@ const ResetPassword = () => {
     if (success) {
       toast.success(message || 'Password reset successful!');
       
-      // Clear local storage and logout
+      // Clear Redux state first
+      dispatch(setUser(null));
+      
+      // Clear local storage
       localStorage.removeItem('token');
       localStorage.removeItem('csrfToken');
       localStorage.removeItem('role');
       localStorage.removeItem('email');
       
+      // Purge Redux Persist store
+      persistor.purge().catch(err => {
+        console.error('Error purging Redux store:', err);
+      });
+      
       // Clear cookies by calling logout (if logged in)
       const logoutUser = async () => {
         try {
           const { default: axiosInstance } = await import('../utils/axios');
-          await axiosInstance.post('/v1/employee/auth/logout', {}, { withCredentials: true });
+          // Try both admin and employee logout endpoints
+          try {
+            await axiosInstance.post('/v1/admin/auth/logout', {}, { withCredentials: true });
+          } catch {
+            await axiosInstance.post('/v1/employee/auth/logout', {}, { withCredentials: true });
+          }
         } catch (err) {
           // Ignore errors - cookies will be cleared by backend anyway
         }
       };
       logoutUser();
       
+      // Reset forgot password state
+      dispatch(resetForgotPasswordState());
+      
       // Redirect to login after a delay
       setTimeout(() => {
-        navigate('/login');
+        window.location.href = '/login';
       }, 2000);
     }
     if (error) {
       toast.error(error);
     }
-  }, [success, error, message, navigate]);
+  }, [success, error, message, dispatch]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

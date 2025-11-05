@@ -189,21 +189,16 @@ function Login() {
                     // Clear form and redirect to login
                     setForm({ email: '', password: '' });
                     setShowReset(false);
-                    toast.info('Password reset. Please login with your new password.');
-                    // Force reload to clear any cached state
-                    setTimeout(() => {
-                        window.location.href = '/login';
-                    }, 500);
+                    toast.info('Password reset cancelled. Please login with your current password.');
                 }} 
                 onSuccess={(newPassword) => {
                     // Password reset successful - user is logged out
+                    // The PasswordResetPopup component will handle the redirect
                     setShowReset(false);
                     setForm({ email: '', password: '' });
-                    toast.success('Password reset successful! Please login with your new password.');
-                    // Redirect to login page
-                    setTimeout(() => {
-                        window.location.href = '/login';
-                    }, 1000);
+                    // Clear Redux state
+                    dispatch(setUser(null));
+                    // PasswordResetPopup will redirect, so we don't need to do it here
                 }}
             />
         )}

@@ -155,19 +155,36 @@ export const loginEmployee = async (req, res) => {
     try {
         const { email, password } = req.body;
 
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Email and password are required' 
+            });
+        }
+
         const employee = await Employee.findOne({ email });
         if (!employee) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+            return res.status(401).json({ 
+                success: false,
+                message: 'Invalid email or password' 
+            });
         }
 
         if (!employee.active) {
-            return res.status(403).json({ message: 'Your account is inactive. Please contact HR or Admin.' });
+            return res.status(403).json({ 
+                success: false,
+                message: 'Your account is inactive. Please contact HR or Admin.' 
+            });
         }
 
         // Use the model's comparePassword method for consistency
         const isPasswordValid = await employee.comparePassword(password);
         if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+            return res.status(401).json({ 
+                success: false,
+                message: 'Invalid email or password' 
+            });
         }
 
         // ✅ Pass `res` and `role` so cookie gets set
@@ -202,7 +219,8 @@ export const loginEmployee = async (req, res) => {
 
         res.status(200).json(response);
     } catch (error) {
-        res.status(500).json({ message: 'Login failed', error: error.message });
+        logger.error('Login employee error', { error: error.message, stack: error.stack });
+        res.status(500).json({ message: 'Login failed', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
     }
 };
 
@@ -336,8 +354,8 @@ export const resetEmployeePassword = async (req, res) => {
             logout: true 
         });
     } catch (error) {
-        console.error('Reset error:', error);
-        res.status(500).json({ message: 'Failed to reset password', error: error.message });
+        logger.error('Reset employee password error', { error: error.message, stack: error.stack });
+        res.status(500).json({ message: 'Failed to reset password', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
     }
 };
 

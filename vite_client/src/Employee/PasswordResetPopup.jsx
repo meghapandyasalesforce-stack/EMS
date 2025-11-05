@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import axios from '../utils/axios';
 import { EMPLOYEE_AUTH_ENDPOINT } from '../utils/constant';
+import { setUser } from '../context/Auth/authSlice.js';
+import { persistor } from '../context/store.js';
 import { FaTimes } from 'react-icons/fa'; // Using react-icons which is already installed
 
 export default function PasswordResetPopup({ onClose, onSuccess }) {
+  const dispatch = useDispatch();
   const [passwords, setPasswords] = useState({
     newPassword: '',
     confirmPassword: ''
@@ -33,11 +37,19 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
       if (response.data.message && response.data.message.includes('Password reset successful')) {
         setSuccess(true);
         
-        // Clear local storage and cookies
+        // Clear Redux state first
+        dispatch(setUser(null));
+        
+        // Clear local storage
         localStorage.removeItem('token');
         localStorage.removeItem('csrfToken');
         localStorage.removeItem('role');
         localStorage.removeItem('email');
+        
+        // Purge Redux Persist store
+        persistor.purge().catch(err => {
+          console.error('Error purging Redux store:', err);
+        });
         
         // Clear any cookies by calling logout endpoint
         try {
@@ -47,10 +59,17 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
           console.log('Logout cleanup:', err.message);
         }
         
-        // Notify parent that logout is required
+        // Notify parent that logout is required and redirect to login
         if (onSuccess) {
           setTimeout(() => {
             onSuccess(null); // Pass null to indicate logout required
+            // Force redirect to login
+            window.location.href = '/login';
+          }, 1500);
+        } else {
+          // If no onSuccess callback, redirect directly
+          setTimeout(() => {
+            window.location.href = '/login';
           }, 1500);
         }
       }
@@ -73,14 +92,19 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
         {success ? (
           <div className="text-center">
             <h2 className="text-xl font-bold mb-2">✅ Password Reset Successful!</h2>
-            <p className="mb-4">You have been logged out. Please login with your new password.</p>
+            <p className="mb-4">You have been logged out. Redirecting to login page...</p>
             <button
               onClick={() => {
+                // Clear Redux state
+                dispatch(setUser(null));
+                // Purge persisted state
+                persistor.purge();
+                // Force redirect to login
                 window.location.href = '/login';
               }}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
-              Go to Login
+              Go to Login Now
             </button>
           </div>
         ) : (

@@ -8,14 +8,18 @@ export default function csrfProtection(req, res, next) {
     }
 
     // Allowlist unauthenticated/auth endpoints (e.g., login, register, password flows)
-    const url = req.originalUrl || req.url;
+    const url = req.originalUrl || req.url || '';
+    // Normalize URL - remove query strings and ensure consistent format
+    const normalizedUrl = url.split('?')[0];
+    
     const allowlisted = [
         '/api/v1/employee/auth/login',
         '/api/v1/admin/auth/login',
         '/api/v1/employee/auth/register',
         '/api/v1/admin/auth/register',
         '/api/v1/both/password', // forgot/reset password endpoints under this prefix
-    ].some((path) => url.startsWith(path));
+    ].some((path) => normalizedUrl.startsWith(path));
+    
     if (allowlisted) {
         return next();
     }
