@@ -65,7 +65,7 @@ const NotificationDropdown = () => {
                 }
             } catch (error) {
                 // Fallback positioning if calculation fails
-                console.error('Error calculating dropdown position:', error);
+                // Removed console.error for production
                 setDropdownPosition({
                     top: 0,
                     right: 0
@@ -86,7 +86,7 @@ const NotificationDropdown = () => {
             // Gracefully ignore auth errors; avoid noisy console in UI
             const status = error?.response?.status;
             if (status !== 401 && status !== 403) {
-                console.error('Error fetching notifications:', error);
+                // Removed console.error for production
             }
         } finally {
             setLoading(false);
@@ -106,7 +106,7 @@ const NotificationDropdown = () => {
                 setUnreadCount(0);
                 return; // silently ignore
             }
-            console.error('Error fetching unread count:', error);
+            // Removed console.error for production
         }
     };
 
@@ -122,7 +122,7 @@ const NotificationDropdown = () => {
         } catch (error) {
             const status = error?.response?.status;
             if (status !== 401 && status !== 403) {
-                console.error('Error marking notification as read:', error);
+                // Removed console.error for production
             }
         }
     };
@@ -137,7 +137,7 @@ const NotificationDropdown = () => {
         } catch (error) {
             const status = error?.response?.status;
             if (status !== 401 && status !== 403) {
-                console.error('Error marking all notifications as read:', error);
+                // Removed console.error for production
             }
         }
     };
@@ -158,7 +158,7 @@ const NotificationDropdown = () => {
         } catch (error) {
             const status = error?.response?.status;
             if (status !== 401 && status !== 403) {
-                console.error('Error deleting notification:', error);
+                // Removed console.error for production
             }
         }
     };

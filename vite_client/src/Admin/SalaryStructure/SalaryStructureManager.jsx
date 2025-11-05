@@ -81,7 +81,7 @@ const SalaryStructureManager = () => {
       const response = await axios.get('/v1/admin/salary-structure');
       setStructures(response.data);
     } catch (error) {
-      console.error('Error fetching structures:', error);
+      // Removed console.error for production
       toast.error('Failed to fetch salary structures');
     } finally {
       setLoading(false);
@@ -93,7 +93,7 @@ const SalaryStructureManager = () => {
       const response = await axios.get('/v1/employee/auth/get-all-employees');
       setEmployees(response.data);
     } catch (error) {
-      console.error('Error fetching employees:', error);
+      // Removed console.error for production
       toast.error('Failed to fetch employees');
     }
   };
@@ -107,7 +107,7 @@ const SalaryStructureManager = () => {
       resetForm();
       fetchStructures();
     } catch (error) {
-      console.error('Error creating structure:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to create salary structure');
     }
   };
@@ -121,7 +121,7 @@ const SalaryStructureManager = () => {
       resetForm();
       fetchStructures();
     } catch (error) {
-      console.error('Error updating structure:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to update salary structure');
     }
   };
@@ -133,7 +133,7 @@ const SalaryStructureManager = () => {
         toast.success('Salary structure deleted successfully');
         fetchStructures();
       } catch (error) {
-        console.error('Error deleting structure:', error);
+        // Removed console.error for production
         toast.error(error.response?.data?.message || 'Failed to delete salary structure');
       }
     }
@@ -151,7 +151,7 @@ const SalaryStructureManager = () => {
       setSelectedEmployee(null);
       setSelectedStructure(null);
     } catch (error) {
-      console.error('Error applying structure:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to apply salary structure');
     }
   };
@@ -166,7 +166,7 @@ const SalaryStructureManager = () => {
       setCalculatedSalary(response.data);
       setShowCalculateModal(true);
     } catch (error) {
-      console.error('Error calculating salary:', error);
+      // Removed console.error for production
       toast.error('Failed to calculate salary');
     }
   };

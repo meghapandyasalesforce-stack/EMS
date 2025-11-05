@@ -40,7 +40,7 @@ const NotificationSettings = () => {
                 setSettings(response.data.settings);
             }
         } catch (error) {
-            console.error('Error fetching notification settings:', error);
+            // Removed console.error for production
             toast.error('Failed to load notification settings');
         } finally {
             setLoading(false);
@@ -73,7 +73,7 @@ const NotificationSettings = () => {
                 toast.success('Notification settings saved successfully!');
             }
         } catch (error) {
-            console.error('Error saving notification settings:', error);
+            // Removed console.error for production
             toast.error('Failed to save notification settings');
         } finally {
             setSaving(false);
@@ -91,7 +91,7 @@ const NotificationSettings = () => {
                 toast.success('Notification settings reset to default');
             }
         } catch (error) {
-            console.error('Error resetting notification settings:', error);
+            // Removed console.error for production
             toast.error('Failed to reset notification settings');
         }
     };

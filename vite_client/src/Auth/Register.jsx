@@ -75,7 +75,7 @@ const Register = () => {
 
             // Registration successful
         } catch (error) {
-            console.error('Registration error:', error);
+            // Removed console.error for production
             setError(error.message || 'An unexpected error occurred');
         } finally {
             setLoading(false);

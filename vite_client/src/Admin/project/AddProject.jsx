@@ -56,12 +56,10 @@ function AddProject() {
         // Check authentication status
         const userRole = localStorage.getItem('role');
         const userToken = localStorage.getItem('token');
-        console.log('AddProject - Current user role:', userRole);
-        console.log('AddProject - Current user token:', userToken);
-        console.log('AddProject - Current cookies:', document.cookie);
+        // Removed console.log statements for production
         
         if (userRole !== 'admin') {
-            console.error('User is not logged in as admin. Current role:', userRole);
+            // Removed console.error for production
             setError('You must be logged in as an admin to access this feature');
             return;
         }
@@ -127,7 +125,7 @@ function AddProject() {
             projectMembers: form.projectMembers
         };
 
-        console.log('Sending project data:', projectData);
+        // Removed console.log for production
 
         const result = await addProject(projectData);
 
@@ -158,10 +156,7 @@ function AddProject() {
         `${employee.name} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Debug: Log employee positions
-    console.log('All employees:', employees.map(emp => ({ name: emp.name, position: emp.position, status: emp.status })));
-    console.log('Active employees:', activeEmployees.map(emp => ({ name: emp.name, position: emp.position, status: emp.status })));
-    console.log('Selected project members:', form.projectMembers);
+    // Removed console.log statements for production
 
     if (status === 'loading') {
         return (

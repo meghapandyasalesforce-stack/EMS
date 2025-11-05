@@ -25,7 +25,6 @@ import {
     FiPlus,
     FiX
 } from 'react-icons/fi';
-import { format } from 'date-fns';
 
 const AdminEmployeePayroll = () => {
     const dispatch = useDispatch();
@@ -77,14 +76,7 @@ const AdminEmployeePayroll = () => {
     };
 
     const handleEditPayroll = (payroll) => {
-        console.log('Edit Payroll clicked - Full context:', { 
-            selectedEmployee, 
-            payroll, 
-            employeeId,
-            payrollMonth: payroll?.month,
-            payrollYear: payroll?.year,
-            payrollEmployeeId: payroll?.employeeId
-        });
+        // Removed console.log for production
         
         // Get employee ID from various sources - employeeId from URL param is most reliable
         let empId = employeeId || selectedEmployee?._id;
@@ -94,20 +86,14 @@ const AdminEmployeePayroll = () => {
             empId = typeof payroll.employeeId === 'object' ? payroll.employeeId._id : payroll.employeeId;
         }
         
-        console.log('Resolved employee ID:', empId);
+        // Removed console.log for production
         
         if (empId && payroll?.month && payroll?.year) {
             const url = `/add-payroll/${empId}/${encodeURIComponent(payroll.month)}/${payroll.year}`;
-            console.log('Navigating to:', url);
+            // Removed console.log for production
             navigate(url);
         } else {
-            console.error('Cannot edit payroll - Missing data:', { 
-                hasEmpId: !!empId,
-                hasPayroll: !!payroll,
-                hasMonth: !!payroll?.month,
-                hasYear: !!payroll?.year,
-                fullContext: { selectedEmployee, employeeId, payroll }
-            });
+            // Removed console.error for production
             
             const missingFields = [];
             if (!empId) missingFields.push('Employee ID');

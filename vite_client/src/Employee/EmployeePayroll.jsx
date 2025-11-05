@@ -35,7 +35,7 @@ const EmployeePayroll = () => {
         setPayrollData(payrollResponse.data);
         setLoading(false);
       } catch (err) {
-        console.error('Error fetching data:', err);
+        // Removed console.error for production
         setError(err.response?.data?.message || 'Error fetching payroll data');
         setLoading(false);
       }

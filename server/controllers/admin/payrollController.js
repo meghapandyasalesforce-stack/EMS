@@ -524,7 +524,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
 
         return res.json({ success: true, created });
     } catch (error) {
-        console.error('Generate Payrolls Error:', error);
+        logger.error('Generate Payrolls Error', { error: error.message, stack: error.stack });
         return res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -610,7 +610,7 @@ export const disbursePayrolls = async (req, res) => {
 
         return res.json({ success: true, total: payrolls.length, paid, failed, results });
     } catch (error) {
-        console.error('Disburse Payrolls Error:', error);
+        logger.error('Disburse Payrolls Error', { error: error.message, stack: error.stack });
         return res.status(500).json({ success: false, message: error.message });
     }
 };

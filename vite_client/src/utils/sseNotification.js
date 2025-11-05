@@ -23,12 +23,12 @@ export const startNotificationStream = (dispatch) => {
         // dispatch(addNotification(data));
       }
     } catch (err) {
-      console.error('Error parsing SSE data:', err);
+      // Removed console.error for production
     }
   };
 
   eventSource.onerror = (err) => {
-    console.error('SSE error:', err);
+    // Removed console.error for production
     // EventSource has built-in retry, don't close immediately
   };
 

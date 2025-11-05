@@ -21,7 +21,7 @@ const IdCardView = () => {
       const response = await axios.get('/v1/admin/id-cards/employee/my-card');
       setIdCard(response.data.idCard);
     } catch (error) {
-      console.error('Error fetching ID card:', error);
+      // Removed console.error for production
       setError('Failed to fetch ID card');
       if (error.response?.status === 404) {
         setError('No ID card found. Please contact your administrator to generate one.');
@@ -156,7 +156,7 @@ const IdCardView = () => {
       }, 'image/png', 0.95);
       
     } catch (error) {
-      console.error('Error downloading ID card:', error);
+      // Removed console.error for production
       toast.error('Failed to download ID card');
     }
   };

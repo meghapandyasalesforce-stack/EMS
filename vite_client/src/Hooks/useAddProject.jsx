@@ -7,13 +7,10 @@ const useAddProject = () => {
   const dispatch = useDispatch();
 
 const addNewProject = async (projectData) => {
-  console.log("Adding project...", projectData);
-  console.log("Current user role:", localStorage.getItem('role'));
-  console.log("Current user token:", localStorage.getItem('token'));
-  console.log("Current cookies:", document.cookie);
+  // Removed console.log statements for production
 
   try {
-    console.log("Sending project data:", projectData);
+    // Removed console.log for production
     const res = await axios.post(`${ADMIN_PROJECT_ENDPOINT}/create-project`, projectData, {
       withCredentials: true,
     });
@@ -27,14 +24,11 @@ const addNewProject = async (projectData) => {
       dispatch(addProject(normalizedProject));
       return { success: true, project: normalizedProject };
     } else {
-      console.error("Unexpected response:", res.data);
+      // Removed console.error for production
       return { success: false, error: "Invalid response structure" };
     }
   } catch (error) {
-    console.error("Error adding project:", error);
-    console.error("Error response:", error.response?.data);
-    console.error("Error status:", error.response?.status);
-    console.error("Full error:", error);
+    // Removed console.error statements for production
     
     // Extract specific error message from response
     const errorMessage = error.response?.data?.error || 

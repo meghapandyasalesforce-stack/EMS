@@ -107,7 +107,7 @@ const CalendarManagement = () => {
         }));
       }
     } catch (error) {
-      console.error('Error fetching calendar:', error);
+      // Removed console.error for production
       toast.error('Failed to fetch calendar');
     } finally {
       setLoading(false);
@@ -119,7 +119,7 @@ const CalendarManagement = () => {
       const response = await axios.get(`/v1/admin/calendar/${currentYear}/upload-history`);
       setUploadHistory(response.data.uploads || []);
     } catch (error) {
-      console.error('Error fetching upload history:', error);
+      // Removed console.error for production
     }
   }, [currentYear]);
 
@@ -137,7 +137,7 @@ const CalendarManagement = () => {
       resetHolidayForm();
       fetchCalendar();
     } catch (error) {
-      console.error('Error adding holiday:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to add holiday');
     }
   };
@@ -151,7 +151,7 @@ const CalendarManagement = () => {
       resetHolidayForm();
       fetchCalendar();
     } catch (error) {
-      console.error('Error updating holiday:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to update holiday');
     }
   };
@@ -163,7 +163,7 @@ const CalendarManagement = () => {
         toast.success('Holiday deleted successfully');
         fetchCalendar();
       } catch (error) {
-        console.error('Error deleting holiday:', error);
+        // Removed console.error for production
         toast.error(error.response?.data?.message || 'Failed to delete holiday');
       }
     }
@@ -180,7 +180,7 @@ const CalendarManagement = () => {
       setShowSettingsModal(false);
       fetchCalendar();
     } catch (error) {
-      console.error('Error updating settings:', error);
+      // Removed console.error for production
       toast.error('Failed to update settings');
     }
   };
@@ -261,7 +261,7 @@ const CalendarManagement = () => {
       fetchCalendar();
       fetchUploadHistory();
     } catch (error) {
-      console.error('Error uploading calendar file:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to upload calendar file');
     } finally {
       setUploading(false);

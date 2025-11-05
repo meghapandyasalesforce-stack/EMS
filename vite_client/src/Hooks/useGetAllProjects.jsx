@@ -11,7 +11,7 @@ const useGetAllProjects = () => {
 
     useEffect(() => {
         const fetchAllProjects = async () => {
-             console.log("Fetching projects..."); // ✅ Add this
+             // Removed console.log for production
             try {
                 const res = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/get-all-project`);
 
@@ -24,15 +24,13 @@ const useGetAllProjects = () => {
                 } else if (res.data.data && Array.isArray(res.data.data)) {
                     dispatch(setAllProjects(res.data.data));
                 } else {
-                    console.error("Unexpected structure:", res.data);
+                    // Removed console.error for production
                     dispatch(setAllProjects([]));
                 }
 
             } catch (error) {
-                console.error("Failed to fetch projects:", error);
-                if (error.response?.status === 403) {
-                    console.error('403 Forbidden - Admin role required. Please log out and log back in.');
-                }
+                // Removed console.error for production
+                // Removed console.error for production
                 dispatch(setAllProjects([]));
             }
         };

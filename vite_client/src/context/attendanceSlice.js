@@ -19,7 +19,7 @@ export const clockIn = createAsyncThunk(
       );
       return res.data;
     } catch (err) {
-      console.error("Clock-in error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Clock-in failed",
         status: err.response?.status,
@@ -36,7 +36,7 @@ export const clockOut = createAsyncThunk(
       const res = await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/clock-out`, clockOutData);
       return res.data;
     } catch (err) {
-      console.error("Clock-out error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Clock-out failed",
         status: err.response?.status,
@@ -53,7 +53,7 @@ export const breakIn = createAsyncThunk(
       const res = await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/break-in`, null);
       return res.data;
     } catch (err) {
-      console.error("Break-in error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Break-in failed",
         status: err.response?.status,
@@ -70,7 +70,7 @@ export const breakOut = createAsyncThunk(
       const res = await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/break-out`, null);
       return res.data;
     } catch (err) {
-      console.error("Break-out error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Break-out failed",
         status: err.response?.status,
@@ -89,7 +89,7 @@ export const fetchLogs = createAsyncThunk(
       });
       return res.data;
     } catch (err) {
-      console.error("Fetch logs error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to fetch logs",
         status: err.response?.status,
@@ -106,7 +106,7 @@ export const fetchTodayStatus = createAsyncThunk(
       const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/today-status`);
       return res.data;
     } catch (err) {
-      console.error("Today status fetch error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to get today status",
         status: err.response?.status,
@@ -142,7 +142,7 @@ export const fetchAllAttendanceStats = createAsyncThunk(
       });
       return res.data;
     } catch (err) {
-      console.error("Stats fetch error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to get stats",
         status: err.response?.status,
@@ -164,7 +164,7 @@ export const fetchEmployeeList = createAsyncThunk(
       });
       return res.data;
     } catch (err) {
-      console.error("Employee list fetch error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to get employee list",
         status: err.response?.status,
@@ -186,7 +186,7 @@ export const fetchEmployeeAttendanceDetails = createAsyncThunk(
       });
       return res.data;
     } catch (err) {
-      console.error("Employee details fetch error:", err.response?.data);
+      // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to get employee details",
         status: err.response?.status,
@@ -255,10 +255,10 @@ const attendanceSlice = createSlice({
         state.error = action.payload;
         // If the error includes a session (already checked in), use it
         if (action.payload?.data?.session) {
-          console.log('Clock-in rejected with session data:', action.payload.data.session);
+          // Removed console.log for production
           state.sessions = [action.payload.data.session];
         } else {
-          console.log('Clock-in rejected without session data');
+          // Removed console.log for production
         }
       })
 
@@ -299,11 +299,11 @@ const attendanceSlice = createSlice({
         // Always update sessions if we got data from API
         // Only keep existing sessions if API returns empty array AND we have existing sessions
         if (newSessions.length > 0) {
-          console.log('Updating sessions from API:', newSessions);
+          // Removed console.log for production
           state.sessions = newSessions;
         } else if (state.sessions.length === 0) {
           // Only clear if we have no existing sessions and no new data
-          console.log('No sessions from API and no existing sessions');
+          // Removed console.log for production
         }
         
         // Find current session and break session from sessions state

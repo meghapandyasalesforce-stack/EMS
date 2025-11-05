@@ -121,7 +121,7 @@ const EmployeeDetailsPage = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading document:', error);
+      // Removed console.error for production
       alert('Failed to download document. Please try again.');
     }
   };
@@ -149,7 +149,7 @@ const EmployeeDetailsPage = () => {
         navigate('/employees');
       })
       .catch((error) => {
-        console.error('Error deleting employee:', error);
+        // Removed console.error for production
       });
     setOpenDeleteDialog(false);
   };
@@ -219,7 +219,7 @@ const EmployeeDetailsPage = () => {
       }
       
     } catch (error) {
-      console.error('Error updating work information:', error);
+      // Removed console.error for production
       setSnackbar({
         open: true,
         message: error.message || 'Failed to update work information. Please try again.',
@@ -266,10 +266,10 @@ const EmployeeDetailsPage = () => {
       if (response.data) {
         const data = response.data;
         // The stats are already updated in the employee object via the API
-        console.log('Employee stats updated:', data.stats);
+        // Removed console.log for production
       }
     } catch (error) {
-      console.error('Error fetching employee stats:', error);
+      // Removed console.error for production
     }
   }, [employeeId]);
 
@@ -318,7 +318,7 @@ const EmployeeDetailsPage = () => {
       }
       
     } catch (error) {
-      console.error('Error updating performance score:', error);
+      // Removed console.error for production
       setSnackbar({
         open: true,
         message: error.message || 'Failed to update performance score. Please try again.',

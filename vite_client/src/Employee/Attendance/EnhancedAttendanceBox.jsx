@@ -59,7 +59,7 @@ const EnhancedAttendanceBox = () => {
           resolve(locationData);
         },
         (error) => {
-          console.error('Error getting location:', error);
+          // Removed console.error for production
           reject(error);
         },
         {
@@ -127,7 +127,7 @@ const EnhancedAttendanceBox = () => {
       }
       setIsCapturing(true);
     } catch (error) {
-      console.error('Error accessing camera:', error);
+      // Removed console.error for production
       toast.error('Camera access denied or not available');
     }
   };

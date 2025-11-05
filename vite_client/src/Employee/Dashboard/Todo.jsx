@@ -22,7 +22,7 @@ const Todo = () => {
             setTodos(parsed);
             setStorageStatus('Todos loaded successfully');
           } else {
-            console.warn('Invalid todos format - resetting');
+            // Removed console.warn for production
             localStorage.removeItem('todos');
             setStorageStatus('Reset invalid todo data');
           }
@@ -30,7 +30,7 @@ const Todo = () => {
           setStorageStatus('No saved todos found');
         }
       } catch (error) {
-        console.error('Initialization error:', error);
+        // Removed console.error for production
         setStorageStatus(`Error: ${error.message}`);
         localStorage.removeItem('todos');
       }
@@ -44,7 +44,7 @@ const Todo = () => {
         localStorage.removeItem(testKey);
         initializeTodos();
       } catch (e) {
-        console.error('localStorage unavailable:', e);
+        // Removed console.error for production
         setStorageStatus('localStorage not available - using in-memory storage');
       }
     };
@@ -62,7 +62,7 @@ const Todo = () => {
       localStorage.setItem('todos', JSON.stringify(todos));
       setStorageStatus(`Saved ${todos.length} todos`);
     } catch (error) {
-      console.error('Save error:', error);
+      // Removed console.error for production
       setStorageStatus(`Save failed: ${error.message}`);
     }
   }, [todos]);

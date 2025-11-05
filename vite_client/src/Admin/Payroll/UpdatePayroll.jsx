@@ -158,7 +158,7 @@ const UpdatePayroll = () => {
             setError(null);
           }
         } catch (error) {
-          console.error('Error loading payroll data:', error);
+          // Removed console.error for production
           if (error.response?.status === 404) {
             // Payroll doesn't exist yet - that's okay, user can create it
             setFormData(prev => ({
@@ -243,7 +243,7 @@ const UpdatePayroll = () => {
       }
     } catch (error) {
       setError('Failed to update payroll');
-      console.error('Update error:', error);
+      // Removed console.error for production
     } finally {
       setLoading(false);
     }

@@ -57,7 +57,7 @@ const Header = () => {
             toast.success('Logged out successfully');
             navigate('/login');
         } catch (error) {
-            console.error("Logout failed:", error); // Log the error for debugging
+            // Removed console.error for production
             toast.error(error.message || 'Logout failed. Please try again.'); // Display a user-friendly error message
             
             // Clear attendance even if logout API fails

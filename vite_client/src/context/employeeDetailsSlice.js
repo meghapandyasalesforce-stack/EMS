@@ -96,7 +96,7 @@ export const addAcademicRecord = createAsyncThunk(
         academicRecords: response.data.academicRecords // Changed from response.data.record
       };
     } catch (error) {
-      console.error('API Error:', error.response?.data);
+      // Removed console.error for production
       return rejectWithValue(error.response?.data?.message || 'Failed to add academic record');
     }
   }
@@ -131,7 +131,7 @@ export const addProfessionalQualification = createAsyncThunk(
   'employeeDetails/addProfessionalQualification',
   async (qualificationData, { rejectWithValue, getState }) => {
     try {
-      console.log('Sending professional qualification:', qualificationData);
+      // Removed console.log for production
       const response = await axios.post(
         `${BOTH_PROFILE_ENDPOINT}/add-professional-qualification`,
         qualificationData,
@@ -143,14 +143,10 @@ export const addProfessionalQualification = createAsyncThunk(
           }
         }
       );
-      console.log('API Response:', response.data);
+      // Removed console.log for production
       return response.data.professionalQualifications;
     } catch (error) {
-      console.error('API Error Details:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        headers: error.response?.headers
-      });
+      // Removed console.error for production
       return rejectWithValue(
         error.response?.data?.message ||
         error.message ||
@@ -200,17 +196,17 @@ export const addFamilyDetail = createAsyncThunk(
       const addedFamilyDetails = response.data.familyDetails;
       if (!addedFamilyDetails || !Array.isArray(addedFamilyDetails) || addedFamilyDetails.length === 0) {
         return rejectWithValue('Family detail not returned from server');
-      }
-console.log('Server response:', response.data);
+        }
+        // Removed console.log for production
 
       return {
         ...employee,
         familyDetails: [...(employee.familyDetails || []), addedFamilyDetails.at(-1)]
       };
     } catch (error) {
-  console.error('Thunk error:', error);
-  return rejectWithValue(error.response?.data?.message || error.message || 'Failed to add family detail');
-}
+      // Removed console.error for production
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to add family detail');
+    }
 
   }
 );
@@ -240,16 +236,16 @@ export const updateFinancialDetails = createAsyncThunk(
 export const fetchEmployeeOwnInfo = createAsyncThunk(
   'employeeDetails/fetchEmployeeOwnInfo',
   async (_, { rejectWithValue }) => {
-    try {
-      console.log('fetchEmployeeOwnInfo: Making request to', `${BOTH_PROFILE_ENDPOINT}/get-my-details`);
-      const response = await axios.get(
-        `${BOTH_PROFILE_ENDPOINT}/get-my-details`,
-        { withCredentials: true }
-      );
-      console.log('fetchEmployeeOwnInfo: Response received', response.data);
-      return response.data.employee;
-    } catch (error) {
-      console.error('fetchEmployeeOwnInfo: Error occurred', error);
+      try {
+        // Removed console.log for production
+        const response = await axios.get(
+          `${BOTH_PROFILE_ENDPOINT}/get-my-details`,
+          { withCredentials: true }
+        );
+        // Removed console.log for production
+        return response.data.employee;
+      } catch (error) {
+        // Removed console.error for production
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch your information');
     }
   }

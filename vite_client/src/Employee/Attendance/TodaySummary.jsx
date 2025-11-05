@@ -48,7 +48,7 @@ const TodaySummary = () => {
           endDate: today
         })).unwrap();
       } catch (error) {
-        console.error('Failed to fetch attendance data:', error);
+        // Removed console.error for production
       } finally {
         setInitialLoading(false);
       }

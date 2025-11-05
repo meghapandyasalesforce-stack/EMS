@@ -33,7 +33,7 @@ const RoleHierarchy = () => {
       setRoles(response.data);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching roles:', error);
+      // Removed console.error for production
       toast.error('Failed to fetch roles');
       setLoading(false);
     }
@@ -48,7 +48,7 @@ const RoleHierarchy = () => {
       resetForm();
       fetchRoles();
     } catch (error) {
-      console.error('Error creating role:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to create role');
     }
   };
@@ -62,7 +62,7 @@ const RoleHierarchy = () => {
       resetForm();
       fetchRoles();
     } catch (error) {
-      console.error('Error updating role:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to update role');
     }
   };
@@ -74,7 +74,7 @@ const RoleHierarchy = () => {
         toast.success('Role deleted successfully');
         fetchRoles();
       } catch (error) {
-        console.error('Error deleting role:', error);
+        // Removed console.error for production
         toast.error(error.response?.data?.message || 'Failed to delete role');
       }
     }

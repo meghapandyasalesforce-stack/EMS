@@ -135,20 +135,19 @@ const ProjectDetailPage = () => {
         projectMembers: editedProject.projectMembers
       };
 
-      console.log('Updating project with data:', projectData);
-      console.log('Project ID:', project?._id);
+      // Removed console.log statements for production
 
       const result = await updateProject(project?._id, projectData);
       if (result.success) {
         toast.success('Project updated successfully!');
         setIsEditing(false);
       } else {
-        console.error('Update failed:', result.error);
+        // Removed console.error for production
         toast.error(result.error || 'Failed to update project');
       }
     } catch (error) {
       toast.error('An error occurred while updating the project');
-      console.error('Update error:', error);
+      // Removed console.error for production
     }
   }, [editedProject, employees, updateProject, project?._id]);
 
@@ -164,7 +163,7 @@ const ProjectDetailPage = () => {
         }
       } catch (error) {
         toast.error('An error occurred while deleting the project');
-        console.error('Delete error:', error);
+        // Removed console.error for production
       }
     }
   }, [deleteProject, project?._id, navigate]);

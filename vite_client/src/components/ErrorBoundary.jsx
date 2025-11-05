@@ -15,7 +15,7 @@ class ErrorBoundary extends React.Component {
       error: error,
       errorInfo: errorInfo
     });
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    // Removed console.error for production - errors are logged to state
   }
 
   render() {

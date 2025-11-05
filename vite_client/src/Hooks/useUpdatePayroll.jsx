@@ -11,7 +11,7 @@ const employees = employeesObj ? Object.values(employeesObj) : [];
 
 
   const updateEmployeePayroll = async (payrollId, payrollData) => {
-    console.log(`Updating payroll for payroll ID: ${payrollId}`, payrollData);
+    // Removed console.log for production
 
     try {
       const res = await axios.put(
@@ -36,11 +36,11 @@ const employees = employeesObj ? Object.values(employeesObj) : [];
         dispatch(updatePayroll(res.data));
         return { success: true, payroll: res.data };
       } else {
-        console.error("Unexpected response:", res.data);
+        // Removed console.error for production
         return { success: false, error: "Invalid response structure" };
       }
     } catch (error) {
-      console.error("Error updating payroll:", error);
+      // Removed console.error for production
       return { 
         success: false, 
         error: error.response?.data?.message || error.message || "Failed to update payroll" 

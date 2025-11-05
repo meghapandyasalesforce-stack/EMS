@@ -22,7 +22,7 @@ const useUpdateProject = () => {
         return { success: false, error: res.data.error || 'Failed to update project' };
       }
     } catch (error) {
-      console.error("Error updating project:", error);
+      // Removed console.error for production
       return { 
         success: false, 
         error: error.response?.data?.error || 'Failed to update project' 

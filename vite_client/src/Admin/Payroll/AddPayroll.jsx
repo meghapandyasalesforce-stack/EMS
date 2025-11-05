@@ -156,7 +156,7 @@ const AddPayroll = () => {
             
             navigate('/admin-payroll');
         } catch (error) {
-            console.error('Error saving payroll:', error);
+            // Removed console.error for production
         }
     };
 

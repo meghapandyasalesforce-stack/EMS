@@ -85,7 +85,7 @@ const CheckInOut = () => {
             setLocation(locationData);
             resolve(locationData);
           } catch (err) {
-            console.log('Geocoding error:', err);
+            // Removed console.log for production
             const locationData = {
               latitude,
               longitude,
@@ -137,7 +137,7 @@ const CheckInOut = () => {
       }
       setShowCamera(true);
     } catch (error) {
-      console.error('Error accessing camera:', error);
+      // Removed console.error for production
       showNotification('Camera access denied. Please allow camera permission.', 'error');
     }
   };
@@ -173,7 +173,7 @@ const CheckInOut = () => {
         setInitialLoading(true);
         getNetworkInfo();
       } catch (error) {
-        console.error('Failed to fetch attendance data:', error);
+        // Removed console.error for production
       } finally {
         setInitialLoading(false);
       }
@@ -239,7 +239,7 @@ const CheckInOut = () => {
       try {
         locationData = await getCurrentLocation();
       } catch (error) {
-        console.warn('Location access denied or failed:', error);
+        // Removed console.warn for production
         showNotification('Location access denied. Clocking in without location data.', 'warning');
       }
 
@@ -277,7 +277,7 @@ const CheckInOut = () => {
       try {
         locationData = await getCurrentLocation();
       } catch (error) {
-        console.warn('Location access denied or failed:', error);
+        // Removed console.warn for production
         showNotification('Location access denied. Clocking out without location data.', 'warning');
       }
 

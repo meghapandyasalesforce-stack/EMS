@@ -34,13 +34,12 @@ const AttendanceBox = () => {
       try {
         setInitialLoading(true);
         const today = format(new Date(), 'yyyy-MM-dd');
-        console.log('Fetching logs for:', today);
+        // Removed console.log for production
         const result = await dispatch(fetchLogs({
           startDate: today,
           endDate: today
         })).unwrap();
-        console.log('Fetched logs result:', result);
-        console.log('Sessions after fetch:', result.sessions);
+        // Removed console.log statements for production
 
         // Fallback: if no sessions returned but user is already checked in, try today-status
         if (!result?.sessions || result.sessions.length === 0) {
@@ -53,8 +52,8 @@ const AttendanceBox = () => {
             // swallow - optional enrichment
           }
         }
-      } catch (error) {
-        console.error('Failed to fetch today\'s logs:', error);
+        } catch (error) {
+        // Removed console.error for production
         // If fetch fails, don't show error - might be page refresh issue
       } finally {
         setInitialLoading(false);
@@ -68,9 +67,7 @@ const AttendanceBox = () => {
 
   // Find current active session and check break status
   useEffect(() => {
-    console.log('Sessions updated:', sessions);
-    console.log('Number of sessions:', sessions?.length);
-    console.log('Current user ID:', currentUser?.id);
+    // Removed console.log statements for production
     
     if (sessions && sessions.length > 0) {
       // Find open session that belongs to the current user
@@ -151,7 +148,7 @@ const AttendanceBox = () => {
 
       if (openSession) {
         // User already checked in - just refresh logs silently
-        console.log('Already checked in, refreshing...');
+        // Removed console.log for production
         const today = format(new Date(), 'yyyy-MM-dd');
         await dispatch(fetchLogs({
           startDate: today,
@@ -173,10 +170,10 @@ const AttendanceBox = () => {
           endDate: today
         }));
         toast.success('Checked in successfully!');
-      } else if (result.type === 'attendance/clockIn/rejected') {
-        // Handle the rejected case - might be already checked in
-        console.log('Clock-in rejected, fetching logs...');
-        const today = format(new Date(), 'yyyy-MM-dd');
+        } else if (result.type === 'attendance/clockIn/rejected') {
+          // Handle the rejected case - might be already checked in
+          // Removed console.log for production
+          const today = format(new Date(), 'yyyy-MM-dd');
         await dispatch(fetchLogs({
           startDate: today,
           endDate: today
@@ -184,7 +181,7 @@ const AttendanceBox = () => {
       }
       
     } catch (err) {
-      console.error('Check in error:', err);
+      // Removed console.error for production
       // If already checked in, try to fetch logs anyway
       const today = format(new Date(), 'yyyy-MM-dd');
       try {
@@ -193,7 +190,7 @@ const AttendanceBox = () => {
           endDate: today
         })).unwrap();
       } catch (fetchErr) {
-        console.error('Failed to fetch logs:', fetchErr);
+        // Removed console.error for production
       }
     }
   };
@@ -237,7 +234,7 @@ const AttendanceBox = () => {
     } catch (err) {
       const errorMessage = err?.message || 'Failed to check out';
       toast.error(errorMessage);
-      console.error('Clock out error details:', err);
+      // Removed console.error for production
       
       // If already clocked out, fetch fresh state
       if (errorMessage.includes('Already clocked out')) {

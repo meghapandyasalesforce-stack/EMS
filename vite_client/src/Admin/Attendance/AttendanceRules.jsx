@@ -32,8 +32,7 @@ const AttendanceRules = () => {
             const response = await axios.get('/v1/admin/attendance-rules/current');
 
             if (response.data.success && response.data.rule) {
-                console.log('=== Loading Attendance Rule ===');
-                console.log('Server response:', response.data.rule);
+                // Removed console.log statements for production
                 
                 const newFormData = {
                     location: response.data.rule.location || '',
@@ -46,7 +45,7 @@ const AttendanceRules = () => {
                     enablePenaltyRules: response.data.rule.enablePenaltyRules !== undefined ? response.data.rule.enablePenaltyRules : true
                 };
                 
-                console.log('Setting form data:', newFormData);
+                // Removed console.log for production
                 setFormData(newFormData);
                 setHasAddress(!!response.data.rule.address);
             }
@@ -81,7 +80,7 @@ const AttendanceRules = () => {
             // In production, replace this with actual geocoding service
             toast.info('Map location will be set when you provide coordinates');
         } catch (error) {
-            console.error('Geocoding error:', error);
+            // Removed console.error for production
         }
     };
 
@@ -128,8 +127,7 @@ const AttendanceRules = () => {
             }
         };
 
-        console.log('=== Saving Attendance Rule ===');
-        console.log('Sending data:', dataToSend);
+        // Removed console.log statements for production
 
         try {
             setSaving(true);
@@ -143,7 +141,7 @@ const AttendanceRules = () => {
                 fetchAttendanceRule();
             }
         } catch (error) {
-            console.error('Error saving attendance rules:', error);
+            // Removed console.error for production
             toast.error(error.response?.data?.message || 'Failed to save attendance rules');
         } finally {
             setSaving(false);

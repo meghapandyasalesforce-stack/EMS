@@ -21,7 +21,7 @@ const useDeleteProject = () => {
         return { success: false, error: res.data.error || 'Failed to delete project' };
       }
     } catch (error) {
-      console.error("Error deleting project:", error);
+      // Removed console.error for production
       return { 
         success: false, 
         error: error.response?.data?.error || 'Failed to delete project' 

@@ -49,7 +49,7 @@ const FamilyDetails = () => {
       setFormData(initialFormData); // Clear the form
       setIsEditing(false);
     } catch (error) {
-      console.error('Error updating family details:', error);
+      // Removed console.error for production
      toast.success('Family detail added successfully!');
      setFormData(initialFormData); // Clear the form
       setIsEditing(false);

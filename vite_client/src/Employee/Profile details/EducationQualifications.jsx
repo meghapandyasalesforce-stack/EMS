@@ -87,10 +87,7 @@ const EducationQualifications = () => {
         throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error('Detailed error:', {
-        message: error.message,
-        stack: error.stack
-      });
+      // Removed console.error for production
       setApiError(error.message);
     }
   };

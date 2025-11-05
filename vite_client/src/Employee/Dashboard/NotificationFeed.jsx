@@ -28,7 +28,7 @@ const NotificationFeed = () => {
 
   useEffect(() => {
     const sseUrl = getSSEUrl();
-    console.log('Connecting to SSE:', sseUrl);
+    // Removed console.log for production
     
     const eventSource = new EventSource(sseUrl, {
       withCredentials: true,
@@ -36,16 +36,16 @@ const NotificationFeed = () => {
 
     // Handle connection established
     eventSource.addEventListener('connected', (event) => {
-      console.log('SSE connected:', JSON.parse(event.data));
+      // Removed console.log for production
     });
 
     // Handle errors from server
     eventSource.addEventListener('error', (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.error('SSE server error:', data);
+        // Removed console.error for production
       } catch (err) {
-        console.error('SSE error event:', event);
+        // Removed console.error for production
       }
     });
 
@@ -70,17 +70,17 @@ const NotificationFeed = () => {
           }, 3000);
         }
       } catch (err) {
-        console.error('Error parsing SSE data:', err);
+        // Removed console.error for production
       }
     };
 
     // Handle connection errors
     eventSource.onerror = (err) => {
-      console.error('SSE connection error:', err);
+      // Removed console.error for production
       // Don't close immediately - EventSource will auto-retry
       // Only close if it's a critical error
       if (eventSource.readyState === EventSource.CLOSED) {
-        console.log('SSE connection closed, will not retry');
+        // Removed console.log for production
         eventSource.close();
       }
     };

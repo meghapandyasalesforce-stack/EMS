@@ -52,7 +52,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       }
       setCameraMode(true);
     } catch (error) {
-      console.error('Error accessing camera:', error);
+      // Removed console.error for production
       toast.error('Camera access denied or not available');
     }
   };
@@ -124,7 +124,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       setSelectedFile(null);
       setPreview(null);
     } catch (error) {
-      console.error('Upload error:', error);
+      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to upload photo');
     } finally {
       setUploading(false);

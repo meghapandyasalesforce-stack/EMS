@@ -1,10 +1,10 @@
 // Quick import test to validate errorHandler -> logger import resolution
 import('./middlewares/errorHandler.js')
   .then(mod => {
-    console.log('Import succeeded:', Object.keys(mod));
+    // Removed console.log for production
     process.exit(0);
   })
   .catch(err => {
-    console.error('Import failed:', err);
+    // Removed console.error for production
     process.exit(1);
   });
