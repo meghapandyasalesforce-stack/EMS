@@ -23,24 +23,42 @@ export const registerEmployee = async (req, res) => {
         // Validate required fields
         if (!name || !lastName || !email || !password || !position ||
             !department || !manager || !jobTitle || !jobCategory || !salary) {
-            return res.status(400).json({ message: 'All fields are required' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'All fields are required' 
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Invalid email format' 
+            });
         }
 
         // Validate position value
         const validPositions = ["Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager", "Director", "VP", "CTO", "CFO", "CEO", "Developer"];
         if (!validPositions.includes(position)) {
-            return res.status(400).json({ message: 'Invalid position value' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Invalid position value' 
+            });
         }
 
         // Normalize email (lowercase and trim) for case-insensitive check
         const normalizedEmail = email.toLowerCase().trim();
         
-        // Check if employee already exists (case-insensitive)
+        // Check if employee already exists (use direct query for better performance)
         const existingEmployee = await Employee.findOne({ 
-            email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+            email: normalizedEmail 
         });
         if (existingEmployee) {
-            return res.status(400).json({ message: 'Email already registered' });
+            return res.status(409).json({ 
+                success: false,
+                message: 'An employee with this email already exists. Please use a different email address.' 
+            });
         }
 
         // Password will be hashed automatically by the model's pre-save hook
@@ -51,15 +69,25 @@ export const registerEmployee = async (req, res) => {
         const joiningYear = new Date().getFullYear();
         let employeeId;
         let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
         
         // Ensure unique employee ID
-        while (!isUnique) {
+        while (!isUnique && attempts < maxAttempts) {
             const random = Math.floor(1000 + Math.random() * 9000);
             employeeId = `EMP-${namePrefix}-${joiningYear}-${random}`;
             const existing = await Employee.findOne({ employeeId });
             if (!existing) {
                 isUnique = true;
             }
+            attempts++;
+        }
+        
+        if (!isUnique) {
+            return res.status(500).json({ 
+                success: false,
+                message: 'Failed to generate unique employee ID. Please try again.' 
+            });
         }
 
         // Create the employee (normalize email to lowercase)
@@ -79,65 +107,89 @@ export const registerEmployee = async (req, res) => {
             employeeId: employeeId // Set the auto-generated ID
         });
 
-        await employee.save();
+        // Save employee - this will trigger password hashing
+        try {
+            await employee.save();
+        } catch (saveError) {
+            // Handle MongoDB duplicate key error (E11000)
+            if (saveError.code === 11000) {
+                const duplicateField = Object.keys(saveError.keyPattern || {})[0] || 'email';
+                logger.error('Duplicate employee creation attempt', {
+                    email: normalizedEmail,
+                    duplicateField,
+                    error: saveError.message
+                });
+                return res.status(409).json({ 
+                    success: false,
+                    message: `An employee with this ${duplicateField} already exists. Please use a different ${duplicateField}.` 
+                });
+            }
+            // Re-throw other errors
+            throw saveError;
+        }
         
-        // Send welcome email with the original password
-        // Use normalizedEmail to ensure consistency with what's saved in database
-        // Wrap in try-catch so registration doesn't fail if email fails
+        // Send welcome email BEFORE creating payroll (so if email fails, we can still rollback)
         let emailSent = false;
         let emailErrorMessage = null;
         try {
-            // Use normalizedEmail for consistency, but display the original email format
-            await sendWelcomeEmail(normalizedEmail, name, password);
+            await sendWelcomeEmail(normalizedEmail, `${name} ${lastName}`, password);
             emailSent = true;
             logger.info('Welcome email sent successfully', { 
                 email: normalizedEmail, 
                 employeeId: employee._id,
-                employeeName: name 
+                employeeName: `${name} ${lastName}` 
             });
         } catch (emailError) {
-            // Log error but don't fail registration - employee is already created
             logger.error('Failed to send welcome email', { 
                 email: normalizedEmail, 
                 employeeId: employee._id,
-                employeeName: name,
+                employeeName: `${name} ${lastName}`,
                 error: emailError.message,
                 stack: emailError.stack,
                 errorCode: emailError.code,
                 errorResponse: emailError.response 
             });
             emailErrorMessage = emailError.message || 'Email service unavailable';
-            // Continue with registration even if email fails
+            // Don't fail registration - employee is already created
         }
         
-        // Create associated default payroll
-        const currentDate = new Date();
-        const defaultPayroll = {
-            employeeId: employee._id,
-            month: currentDate.toLocaleString('default', { month: 'long' }),
-            year: currentDate.getFullYear(),
-            basicSalary: salary,
-            earnings: {
-                basicWage: salary,
-                houseRentAllowance: 0,
-                overtime: 0,
-                gratuity: 0,
-                specialAllowance: 0,
-                pfEmployer: 0,
-                esiEmployer: 0
-            },
-            deductions: {
-                pfEmployee: 0,
-                esiEmployee: 0,
-                tax: 0,
-                otherDeductions: 0
-            },
-            ctc: 0,
-            inHandSalary: 0,
-            status: 'Pending'
-        };
+        // Create associated default payroll (only if employee was created)
+        try {
+            const currentDate = new Date();
+            const defaultPayroll = {
+                employeeId: employee._id,
+                month: currentDate.toLocaleString('default', { month: 'long' }),
+                year: currentDate.getFullYear(),
+                basicSalary: salary,
+                earnings: {
+                    basicWage: salary,
+                    houseRentAllowance: 0,
+                    overtime: 0,
+                    gratuity: 0,
+                    specialAllowance: 0,
+                    pfEmployer: 0,
+                    esiEmployer: 0
+                },
+                deductions: {
+                    pfEmployee: 0,
+                    esiEmployee: 0,
+                    tax: 0,
+                    otherDeductions: 0
+                },
+                ctc: 0,
+                inHandSalary: 0,
+                status: 'Pending'
+            };
 
-        await Payroll.create(defaultPayroll);
+            await Payroll.create(defaultPayroll);
+        } catch (payrollError) {
+            // Log payroll creation error but don't fail - employee is already created
+            logger.error('Failed to create default payroll', {
+                employeeId: employee._id,
+                error: payrollError.message,
+                stack: payrollError.stack
+            });
+        }
 
         // Generate token and send response
         const token = generateToken(employee._id);
@@ -153,6 +205,7 @@ export const registerEmployee = async (req, res) => {
             employee: {
                 _id: employee._id,
                 name: employee.name,
+                lastName: employee.lastName,
                 email: employee.email,
                 position: employee.position,
                 jobTitle: employee.jobTitle,
@@ -160,10 +213,25 @@ export const registerEmployee = async (req, res) => {
             }
         });
     } catch (error) {
-        logger.error('Registration error', { error: error.message, stack: error.stack });
+        logger.error('Registration error', { 
+            error: error.message, 
+            stack: error.stack,
+            errorCode: error.code,
+            errorName: error.name
+        });
+        
+        // Handle specific error types
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: 'An employee with this email already exists. Please use a different email address.'
+            });
+        }
+        
         res.status(500).json({
+            success: false,
             message: 'Registration failed',
-            error: error.message,
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
             ...(error.errors && { detailedErrors: error.errors })
         });
     }

@@ -62,19 +62,33 @@ function AddEmployee() {
             const { emailSent, emailWarning, emailError } = resultAction.payload;
             
             if (emailSent) {
-                toast.success('Employee created successfully! Welcome email sent.');
+                toast.success('Employee created successfully! Welcome email sent.', {
+                    autoClose: 3000
+                });
             } else if (emailWarning || emailError) {
-                toast.warning('Employee created successfully, but welcome email could not be sent.');
-                toast.error(emailWarning || emailError);
+                // Show warning first
+                toast.warning('Employee created, but welcome email failed!', {
+                    autoClose: 5000
+                });
+                // Then show detailed error
+                setTimeout(() => {
+                    toast.error(emailWarning || emailError || 'Email service unavailable', {
+                        autoClose: 7000
+                    });
+                }, 500);
             } else {
-                toast.success('Employee created successfully!');
+                toast.success('Employee created successfully!', {
+                    autoClose: 3000
+                });
             }
             
             navigate('/dashboard-admin');
         } else {
             const errorMsg = resultAction.payload || 'Failed to create employee';
             setError(errorMsg);
-            toast.error(errorMsg);
+            toast.error(errorMsg, {
+                autoClose: 5000
+            });
         }
     };
 
