@@ -41,7 +41,7 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
         
         // Clear any cookies by calling logout endpoint
         try {
-          await axios.get('/v1/employee/auth/logout', { withCredentials: true });
+          await axios.post('/v1/employee/auth/logout', {}, { withCredentials: true });
         } catch (err) {
           // Ignore logout errors, cookies will be cleared by backend anyway
           console.log('Logout cleanup:', err.message);

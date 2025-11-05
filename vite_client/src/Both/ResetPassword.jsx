@@ -32,7 +32,7 @@ const ResetPassword = () => {
       const logoutUser = async () => {
         try {
           const { default: axiosInstance } = await import('../utils/axios');
-          await axiosInstance.get('/v1/employee/auth/logout', { withCredentials: true });
+          await axiosInstance.post('/v1/employee/auth/logout', {}, { withCredentials: true });
         } catch (err) {
           // Ignore errors - cookies will be cleared by backend anyway
         }

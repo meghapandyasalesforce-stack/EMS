@@ -14,6 +14,6 @@ const registerMiddleware = process.env.NODE_ENV === 'production'
 
 router.route("/register").post(...registerMiddleware, registerUser);
 router.route("/login").post(loginLimiter, loginUser);
-router.route("/logout").get(logoutUser);
+router.route("/logout").post(logoutUser); // Changed to POST for state-changing operation
 
 export default router;

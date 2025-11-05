@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.route("/register").post(loginLimiter, registerEmployee); // Rate limited registration
 router.route("/login").post(loginLimiter, loginEmployee);
-router.route("/logout").get(logoutEmployee);
+router.route("/logout").post(logoutEmployee); // Changed to POST for state-changing operation
 router.route("/reset-password").patch(loginLimiter, isAuthenticated, resetEmployeePassword); // Rate limited password reset
 router.route("/get-all-employees").get(isAdminAuthenticated,getAllEmployees);
 router.route("/delete-employee/:employeeId").delete(isAdminAuthenticated,deleteEmployee)
