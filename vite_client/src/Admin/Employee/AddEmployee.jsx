@@ -66,11 +66,11 @@ function AddEmployee() {
     return (
         <div className="min-h-screen bg-gray-100">
             {/* Main Content - responsive to sidebar state */}
-            <div className="transition-all duration-300 ease-in-out lg:ml-64 lg:pl-8 p-4 lg:p-8">
+            <div className="transition-all duration-300 ease-in-out ml-0 lg:ml-64 p-4 sm:p-6 lg:p-8">
                 {/* Mobile header would go here if needed */}
                 
-                <div className="bg-white rounded-lg shadow-md p-4 lg:p-8">
-                    <h1 className="text-xl lg:text-2xl font-semibold text-gray-800 mb-6">➕ Add Employee</h1>
+                <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 lg:p-8">
+                    <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-800 mb-4 sm:mb-6">➕ Add Employee</h1>
                     
                     {(error || employeeError) && (
                         <p className="text-red-500 mb-4">{error || employeeError}</p>

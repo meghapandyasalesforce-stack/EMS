@@ -313,12 +313,12 @@ const AdminPayroll = () => {
                         <table className="w-full table-auto border-collapse">
                             <thead>
                                 <tr className="bg-gray-100">
-                                    <th className="text-left py-3 px-4 font-semibold text-sm">Name</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-sm">Allowance</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-sm">Leaves</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-sm">Net Salary</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-sm">Status</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-sm">Actions</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Name</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Allowance</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Leaves</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Net Salary</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Status</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -326,12 +326,12 @@ const AdminPayroll = () => {
                                     const status = getPayrollStatus(employee);
                                     return (
                                         <tr key={employee.employeeId} className="hover:bg-gray-50">
-                                            <td className="py-2 px-4">{employee.name}</td>
-                                            <td className="py-2 px-4">${employee.totalEarnings}</td>
-                                            <td className="py-2 px-4">{employee.leaves}</td>
-                                            <td className="py-2 px-4">${employee.inHandSalary}</td>
-                                            <td className="py-2 px-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.name}</td>
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">${employee.totalEarnings}</td>
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">${employee.inHandSalary}</td>
+                                            <td className="py-2 px-2 sm:px-4">
+                                                <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full text-xs font-medium ${
                                                     status === 'Generated' 
                                                         ? 'bg-green-100 text-green-800' 
                                                         : 'bg-red-100 text-red-800'
@@ -339,7 +339,7 @@ const AdminPayroll = () => {
                                                     {status}
                                                 </span>
                                             </td>
-                                            <td className="py-2 px-4">
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">
                                                 <div className="flex space-x-2">
                                                     <button
                                                         className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"

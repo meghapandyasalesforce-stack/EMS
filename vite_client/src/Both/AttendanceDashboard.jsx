@@ -94,19 +94,19 @@ const AttendanceDashboard = () => {
     }
 
     return (
-        <div className="p-8 bg-gray-900 min-h-screen text-white">
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-2xl font-bold">Attendance Dashboard</h1>
+        <div className="p-4 sm:p-6 md:p-8 bg-gray-900 min-h-screen text-white">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+                <h1 className="text-xl sm:text-2xl font-bold">Attendance Dashboard</h1>
                 <div className="text-right">
-                    <div className="text-2xl font-bold">{formatTime(currentTime)}</div>
-                    <div className="text-sm text-gray-400 mt-2">{formatDate(currentTime)}</div>
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold">{formatTime(currentTime)}</div>
+                    <div className="text-xs sm:text-sm text-gray-400 mt-2">{formatDate(currentTime)}</div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-8 mb-8">
-                <div className="col-span-2 bg-gray-800 rounded-xl p-6">
-                    <h2 className="text-xl font-semibold mb-4">Attendance Stats</h2>
-                    <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8">
+                <div className="lg:col-span-2 bg-gray-800 rounded-xl p-4 sm:p-6">
+                    <h2 className="text-lg sm:text-xl font-semibold mb-4">Attendance Stats</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
                         <div>
                             <label className="text-sm text-gray-400 block mb-2">AVG HRS / DAY</label>
                             <div className="text-xl font-bold">{formatDuration(attendanceStats.avgHoursPerDay)}</div>
@@ -118,32 +118,32 @@ const AttendanceDashboard = () => {
                     </div>
                 </div>
 
-                <div className="bg-gray-800 rounded-xl p-6 flex flex-col justify-center items-center gap-4">
+                <div className="bg-gray-800 rounded-xl p-4 sm:p-6 flex flex-col justify-center items-center gap-4">
                     <button 
-                        className="bg-red-400 hover:bg-red-500 text-white py-3 px-8 rounded-lg transition-colors duration-200"
+                        className="bg-red-400 hover:bg-red-500 text-white py-2 sm:py-3 px-6 sm:px-8 rounded-lg transition-colors duration-200 text-sm sm:text-base w-full sm:w-auto"
                         onClick={handleClockOut}
                     >
                         Web Clock-out
                     </button>
-                    <div className="flex gap-4">
-                        <span className="text-blue-400 text-sm flex items-center gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-blue-400">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
+                        <span className="text-blue-400 text-xs sm:text-sm flex items-center justify-center sm:justify-start gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-blue-400">
                             Work From Home
                         </span>
-                        <span className="text-blue-400 text-sm flex items-center gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-blue-400">
+                        <span className="text-blue-400 text-xs sm:text-sm flex items-center justify-center sm:justify-start gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-blue-400">
                             On Duty
                         </span>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold mb-4">Attendance Log</h2>
-                <div className="flex gap-4 mb-8 mt-4">
-                    <button className="bg-blue-500 text-white px-4 py-2 rounded text-sm">30 DAYS</button>
-                    <button className="text-gray-400 hover:text-white px-4 py-2 rounded text-sm">FEB</button>
-                    <button className="text-gray-400 hover:text-white px-4 py-2 rounded text-sm">JAN</button>
-                    <button className="text-gray-400 hover:text-white px-4 py-2 rounded text-sm">DEC</button>
-                    <button className="text-gray-400 hover:text-white px-4 py-2 rounded text-sm">NOV</button>
+            <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold mb-4">Attendance Log</h2>
+                <div className="flex flex-wrap gap-2 sm:gap-4 mb-6 sm:mb-8 mt-4">
+                    <button className="bg-blue-500 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">30 DAYS</button>
+                    <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">FEB</button>
+                    <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">JAN</button>
+                    <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">DEC</button>
+                    <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">NOV</button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full border-collapse min-w-full">

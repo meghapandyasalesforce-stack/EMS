@@ -74,7 +74,7 @@ const JobDetails = () => {
     };
 
     return (
-        <div className="lg:ml-74 xl:ml-74 md:ml-64 sm:ml-0 p-4 md:p-6 bg-gray-50 min-h-screen flex justify-center">
+        <div className="ml-0 lg:ml-64 p-4 md:p-6 bg-gray-50 min-h-screen flex justify-center transition-all duration-300">
             <div className="w-full max-w-4xl">
                 <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-6 text-center md:text-left">Job Details / Upload Documents</h2>
                 <div className="space-y-4 md:space-y-6">

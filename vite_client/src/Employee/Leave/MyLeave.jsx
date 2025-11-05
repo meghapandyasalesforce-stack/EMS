@@ -118,7 +118,7 @@ const MyLeavePage = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'pt-16' : 'ml-64'}`}>
+    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 ml-0 lg:ml-64 transition-all duration-300">
       <div className="p-4 md:p-8 max-w-screen-2xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">My Leave Dashboard</h1>

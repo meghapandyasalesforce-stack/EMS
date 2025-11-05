@@ -58,10 +58,10 @@ const EmployeeProjects = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-5 ml-64">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-5 mb-5 border border-gray-200">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold text-gray-900">Projects Dashboard</h1>
@@ -79,7 +79,7 @@ const EmployeeProjects = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
           <SummaryCard 
             title="Total Projects" 
             count={projects.length} 

@@ -116,10 +116,10 @@ const EmployeeTasks = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-5 ml-64">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
       <div className="max-w-6xl mx-auto">
         {/* Header Section */}
-        <div className="bg-white rounded-lg shadow-md p-5 mb-5 border border-gray-200">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <button 
@@ -157,7 +157,7 @@ const EmployeeTasks = () => {
       )}
 
       {/* Task Input Form */}
-      <div className="bg-white rounded-lg shadow-md p-5 mb-5 border border-gray-200">
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 bg-blue-500 rounded-lg flex items-center justify-center">
             {editingTaskId ? <FiEdit3 size={18} className="text-white" /> : <FiPlus size={18} className="text-white" />}
@@ -259,7 +259,7 @@ const EmployeeTasks = () => {
       </div>
 
       {/* Tasks List Section */}
-      <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200">
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 border border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center">

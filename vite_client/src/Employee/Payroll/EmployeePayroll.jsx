@@ -108,12 +108,12 @@ const EmployeePayroll = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-5 ml-64">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-900 mb-1">Payroll</h1>
-                    <p className="text-sm text-gray-600">View your payroll details and download payslips</p>
+                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-1">Payroll</h1>
+                    <p className="text-xs sm:text-sm text-gray-600">View your payroll details and download payslips</p>
                 </div>
 
                 {/* Error Message */}
@@ -128,15 +128,15 @@ const EmployeePayroll = () => {
 
                 {/* Current Month Payroll Card */}
                 {currentMonthPayroll && (
-                    <div className="bg-white rounded-lg shadow-md p-5 mb-6 border border-gray-200">
-                        <div className="flex items-center justify-between mb-5">
+                    <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-6 border border-gray-200">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-5">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
                                     <FiDollarSign className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-semibold text-gray-900">Current Month</h2>
-                                    <p className="text-sm text-gray-600">
+                                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">Current Month</h2>
+                                    <p className="text-xs sm:text-sm text-gray-600">
                                         {currentMonthPayroll.month} {currentMonthPayroll.year}
                                     </p>
                                 </div>
@@ -152,7 +152,7 @@ const EmployeePayroll = () => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-xs text-gray-600 mb-1">In-Hand Salary</p>
-                                        <p className="text-xl font-semibold text-green-600">
+                                        <p className="text-lg sm:text-xl font-semibold text-green-600">
                                             {formatCurrency(currentMonthPayroll.inHandSalary)}
                                         </p>
                                     </div>
@@ -164,7 +164,7 @@ const EmployeePayroll = () => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-xs text-gray-600 mb-1">Total Earnings</p>
-                                        <p className="text-xl font-semibold text-blue-600">
+                                        <p className="text-lg sm:text-xl font-semibold text-blue-600">
                                             {formatCurrency(currentMonthPayroll.earnings?.totalEarnings)}
                                         </p>
                                     </div>
@@ -176,7 +176,7 @@ const EmployeePayroll = () => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-xs text-gray-600 mb-1">Total Deductions</p>
-                                        <p className="text-xl font-semibold text-red-600">
+                                        <p className="text-lg sm:text-xl font-semibold text-red-600">
                                             {formatCurrency(currentMonthPayroll.deductions?.total)}
                                         </p>
                                     </div>
@@ -303,8 +303,8 @@ const EmployeePayroll = () => {
             {/* Payroll Details Modal */}
             {showPayrollDetails && selectedPayroll && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-5 border-b border-gray-200">
+                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto mx-4">
+                        <div className="p-4 sm:p-5 border-b border-gray-200">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-semibold text-gray-900">Payroll Details</h3>
                                 <button

@@ -59,7 +59,7 @@ const ContactDetails = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8 ml-0 md:ml-64 lg:ml-64 transition-all duration-300">
-            <div className="max-w-xl mx-auto lg:mx-4 lg:ml-32 xl:mx-auto my-5 p-5 bg-white rounded-lg shadow-md font-sans">
+            <div className="max-w-xl mx-auto lg:mx-4 lg:ml-32 xl:mx-auto my-4 sm:my-5 p-4 sm:p-5 bg-white rounded-lg shadow-md font-sans">
                 <h2 className="text-xl md:text-2xl mb-5 text-gray-700 font-bold">Contact Details</h2>
 
                 {isEditing ? (

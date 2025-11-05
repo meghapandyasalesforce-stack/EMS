@@ -132,7 +132,7 @@ const EmployeeCalendar = () => {
   const workingHours = getWorkingHoursInfo();
 
   return (
-    <div className="min-h-screen bg-gray-50 p-5 ml-64">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
       <div className="max-w-6xl mx-auto space-y-5">
         {/* Error Display */}
         {error && (
@@ -155,11 +155,11 @@ const EmployeeCalendar = () => {
         )}
 
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Company Calendar</h2>
-              <p className="text-sm text-gray-600">Holidays and working days for {currentYear}</p>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Company Calendar</h2>
+              <p className="text-xs sm:text-sm text-gray-600">Holidays and working days for {currentYear}</p>
             </div>
             <select
               value={currentYear}
@@ -277,9 +277,9 @@ const EmployeeCalendar = () => {
         </div>
 
         {/* Calendar Legend */}
-        <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200">
-          <h3 className="text-base font-semibold text-gray-900 mb-3">Holiday Types</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 border border-gray-200">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Holiday Types</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div className="flex items-center space-x-3">
               <div className="w-4 h-4 bg-red-100 border border-red-200 rounded-full"></div>
               <span className="text-sm text-gray-600 font-medium">National</span>

@@ -120,7 +120,7 @@ const AttendanceStats = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'pt-16' : 'ml-64'}`}>
+    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 ml-0 lg:ml-64 transition-all duration-300">
       <div className="mx-auto p-4 max-w-screen-2xl">
         <div className="flex items-center gap-4 mb-6">
           <button
@@ -130,7 +130,7 @@ const AttendanceStats = () => {
           >
             <FiArrowLeft className="w-6 h-6 text-gray-700" />
           </button>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Attendance Statistics</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Attendance Statistics</h1>
         </div>
 
         {/* Summary Cards */}
@@ -141,7 +141,7 @@ const AttendanceStats = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Days</p>
-              <p className="text-xl font-bold text-gray-800">{summary.totalDays}</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-800">{summary.totalDays}</p>
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4 flex items-center">
@@ -150,7 +150,7 @@ const AttendanceStats = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Effective Hours</p>
-              <p className="text-xl font-bold text-gray-800">{summary.totalEffectiveHours.toFixed(2)}</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-800">{summary.totalEffectiveHours.toFixed(2)}</p>
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4 flex items-center">
@@ -159,7 +159,7 @@ const AttendanceStats = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Overtime</p>
-              <p className="text-xl font-bold text-gray-800">{summary.totalOvertime.toFixed(2)}</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-800">{summary.totalOvertime.toFixed(2)}</p>
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4 flex items-center">
@@ -168,7 +168,7 @@ const AttendanceStats = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">Attendance Issues</p>
-              <p className="text-xl font-bold text-gray-800">
+              <p className="text-lg sm:text-xl font-bold text-gray-800">
                 {summary.totalLateArrivals + summary.totalEarlyDepartures}
               </p>
             </div>

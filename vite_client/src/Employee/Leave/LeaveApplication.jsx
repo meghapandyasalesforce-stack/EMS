@@ -108,8 +108,8 @@ const LeaveApplication = () => {
   }, [success, error, dispatch, user]);
 
   return (
-    <div className={`bg-white p-4 md:p-8 rounded-xl shadow-md ${isMobile ? 'mt-4' : 'ml-64 mt-10'} transition-all duration-300`}>
-      <div className={`mx-auto ${isMobile ? 'w-full' : 'max-w-2xl'}`}>
+    <div className="bg-white p-4 md:p-8 rounded-xl shadow-md mt-4 lg:mt-10 ml-0 lg:ml-64 transition-all duration-300">
+      <div className="mx-auto w-full lg:max-w-2xl">
         <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6 text-gray-800">Leave Application Form</h2>
         <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 md:space-y-6">
           {/* Name and Email */}

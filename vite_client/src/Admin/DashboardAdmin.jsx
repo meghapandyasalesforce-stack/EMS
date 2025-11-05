@@ -41,13 +41,10 @@ function DashboardAdmin() {
 
   useGetAllProjects();
 
-  // Calculate main content margin - fixed sidebar is always 64 (w-64)
-  const mainContentMargin = isMobile ? 'ml-0' : 'ml-64';
-
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Main Content - responsive to sidebar width */}
-      <div className={`flex-1 p-4 md:p-8 transition-all duration-300 ${mainContentMargin}`}>
+      <div className="flex-1 p-4 md:p-8 transition-all duration-300 ml-0 lg:ml-64">
         {/* Mobile Header is now in Header component */}
 
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 md:mb-8">Admin Dashboard</h1>

@@ -67,7 +67,7 @@ const GuarantorDetails = () => {
   };
 
   return (
-    <div className="lg:ml-64 xl:ml-64 md:ml-64 sm:ml-0 p-4 md:p-6 bg-gray-50 min-h-screen">
+    <div className="ml-0 lg:ml-64 p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
       <div className="max-w-4xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow">
         <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-800">Guarantor Details</h2>
 
@@ -121,7 +121,7 @@ const GuarantorDetails = () => {
           </div>
         ) : (
           <form className="space-y-4" onSubmit={handleSubmit}>
-            <h3 className="text-lg font-medium">
+            <h3 className="text-base sm:text-lg font-medium">
               {isEditing ? 'Edit Guarantor' : 'Add New Guarantor'}
             </h3>
 

@@ -51,3 +51,31 @@
     padding-right: 2rem;
   }
 }
+
+/* Additional responsive utilities */
+@media (max-width: 640px) {
+  /* Ensure tables don't break layout */
+  table {
+    font-size: 0.875rem;
+  }
+  
+  /* Improve button touch targets */
+  button, a {
+    min-height: 44px; /* iOS recommended touch target */
+  }
+}
+
+/* Improve form inputs on mobile */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Ensure modals are responsive */
+@media (max-width: 640px) {
+  .modal-content {
+    margin: 1rem;
+    max-width: calc(100% - 2rem);
+  }
+}
