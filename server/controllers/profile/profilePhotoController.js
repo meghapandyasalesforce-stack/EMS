@@ -61,6 +61,25 @@ export const uploadEmployeePhoto = async (req, res) => {
             }
         }
 
+        // Verify file was actually saved
+        const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
+        if (!fs.existsSync(savedFilePath)) {
+            console.error('❌ File was not saved:', savedFilePath);
+            return res.status(500).json({ 
+                message: 'File upload failed - file not found on disk',
+                error: 'File system error'
+            });
+        }
+
+        // Log successful upload with file details
+        const fileStats = fs.statSync(savedFilePath);
+        console.log('✅ Profile photo uploaded successfully:', {
+            filename: req.file.filename,
+            path: savedFilePath,
+            size: fileStats.size,
+            employeeId: employeeId.toString()
+        });
+
         // Update employee profile photo
         employee.profilePhoto = {
             url: `/uploads/profile-photos/${req.file.filename}`,
@@ -72,7 +91,8 @@ export const uploadEmployeePhoto = async (req, res) => {
 
         res.json({
             message: 'Profile photo uploaded successfully',
-            profilePhoto: employee.profilePhoto
+            profilePhoto: employee.profilePhoto,
+            fileSize: fileStats.size
         });
     } catch (error) {
         console.error('Upload error:', error);
@@ -102,6 +122,25 @@ export const uploadAdminPhoto = async (req, res) => {
             }
         }
 
+        // Verify file was actually saved
+        const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
+        if (!fs.existsSync(savedFilePath)) {
+            console.error('❌ File was not saved:', savedFilePath);
+            return res.status(500).json({ 
+                message: 'File upload failed - file not found on disk',
+                error: 'File system error'
+            });
+        }
+
+        // Log successful upload with file details
+        const fileStats = fs.statSync(savedFilePath);
+        console.log('✅ Profile photo uploaded successfully:', {
+            filename: req.file.filename,
+            path: savedFilePath,
+            size: fileStats.size,
+            userId: userId.toString()
+        });
+
         // Update user profile photo
         user.profilePhoto = {
             url: `/uploads/profile-photos/${req.file.filename}`,
@@ -113,7 +152,8 @@ export const uploadAdminPhoto = async (req, res) => {
 
         res.json({
             message: 'Profile photo uploaded successfully',
-            profilePhoto: user.profilePhoto
+            profilePhoto: user.profilePhoto,
+            fileSize: fileStats.size
         });
     } catch (error) {
         console.error('Upload error:', error);
@@ -143,7 +183,27 @@ export const getProfilePhoto = async (req, res) => {
             return res.status(404).json({ message: 'No profile photo found' });
         }
 
-        res.json({ profilePhoto: user.profilePhoto });
+        // Check if file actually exists on disk
+        const photoPath = path.join(__dirname, '../../uploads/profile-photos', user.profilePhoto.filename);
+        if (!fs.existsSync(photoPath)) {
+            console.warn('⚠️ Profile photo file not found on disk:', {
+                filename: user.profilePhoto.filename,
+                path: photoPath,
+                userId: userId,
+                userType: userType
+            });
+            // Return 404 but with helpful message
+            return res.status(404).json({ 
+                message: 'Profile photo file not found on server (may have been lost during restart)',
+                profilePhoto: user.profilePhoto,
+                fileExists: false
+            });
+        }
+
+        res.json({ 
+            profilePhoto: user.profilePhoto,
+            fileExists: true
+        });
     } catch (error) {
         console.error('Get photo error:', error);
         res.status(500).json({ message: 'Failed to get profile photo', error: error.message });

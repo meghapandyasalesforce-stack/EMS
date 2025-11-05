@@ -177,8 +177,25 @@ app.use("/uploads", (req, res, next) => {
   next();
 });
 
-// Serve static files with CORS headers applied
-app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
+// Serve static files with CORS headers applied and file existence check
+app.use("/uploads", (req, res, next) => {
+  // Check if file exists before serving (helps debug 404s for profile photos)
+  const requestedPath = req.path;
+  if (requestedPath.includes('profile-photos')) {
+    const fullPath = path.join(__dirname, "uploads", requestedPath);
+    if (!fs.existsSync(fullPath)) {
+      console.warn('⚠️ File not found:', {
+        requestedPath,
+        fullPath,
+        url: req.url,
+        timestamp: new Date().toISOString()
+      });
+      // Don't return 404 here - let express.static handle it
+      // But log it for debugging Render ephemeral filesystem issues
+    }
+  }
+  next();
+}, express.static(path.join(__dirname, "uploads"), {
   setHeaders: (res, filePath, stat) => {
     // CRITICAL: Get origin from request - this is essential for CORS
     const req = res.req || res.locals?.req;
@@ -217,7 +234,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
     
     // Cache control for images
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-  }
+  },
+  // Add fallthrough to handle missing files gracefully
+  fallthrough: true
 }));
 
 // ✅ Rate limiting + CSRF
@@ -258,6 +277,107 @@ app.get("/api", (req, res) => {
     message: "API is running...",
     version: "1.0.0",
   });
+});
+
+// ✅ Diagnostic endpoint to check uploads directory
+app.get("/api/debug/uploads", (req, res) => {
+  try {
+    const uploadsBasePath = path.join(__dirname, "uploads");
+    const profilePhotosPath = path.join(uploadsBasePath, "profile-photos");
+    
+    // Check if directories exist
+    const baseExists = fs.existsSync(uploadsBasePath);
+    const photosExists = fs.existsSync(profilePhotosPath);
+    
+    let files = [];
+    let fileCount = 0;
+    
+    if (photosExists) {
+      files = fs.readdirSync(profilePhotosPath);
+      fileCount = files.length;
+      
+      // Get details for first 10 files
+      const fileDetails = files.slice(0, 10).map(filename => {
+        const filePath = path.join(profilePhotosPath, filename);
+        try {
+          const stats = fs.statSync(filePath);
+          return {
+            filename,
+            size: stats.size,
+            created: stats.birthtime,
+            modified: stats.mtime
+          };
+        } catch (err) {
+          return { filename, error: err.message };
+        }
+      });
+      
+      return res.json({
+        success: true,
+        uploadsBasePath,
+        profilePhotosPath,
+        baseExists,
+        photosExists,
+        fileCount,
+        sampleFiles: fileDetails,
+        message: fileCount > 0 
+          ? `Found ${fileCount} files in profile-photos directory`
+          : "No files found in profile-photos directory"
+      });
+    }
+    
+    res.json({
+      success: true,
+      uploadsBasePath,
+      profilePhotosPath,
+      baseExists,
+      photosExists,
+      fileCount: 0,
+      message: "Profile photos directory does not exist"
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// ✅ Check specific file existence
+app.get("/api/debug/file/:filename", (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = path.join(__dirname, "uploads", "profile-photos", filename);
+    const exists = fs.existsSync(filePath);
+    
+    if (exists) {
+      const stats = fs.statSync(filePath);
+      res.json({
+        success: true,
+        exists: true,
+        filename,
+        path: filePath,
+        size: stats.size,
+        created: stats.birthtime,
+        modified: stats.mtime,
+        url: `/uploads/profile-photos/${filename}`
+      });
+    } else {
+      res.json({
+        success: true,
+        exists: false,
+        filename,
+        path: filePath,
+        message: "File not found on server"
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // ✅ Error handlers
