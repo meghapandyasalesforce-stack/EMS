@@ -26,7 +26,19 @@ const ProfilePicture = ({
   };
 
   // Get the profile photo URL and convert relative paths to full URLs
-  const rawImageUrl = user?.profilePhoto?.url || user?.profilePhoto || user?.profilePicture;
+  // Handle both object format {url: "...", filename: "..."} and string format
+  let rawImageUrl = null;
+  if (user?.profilePhoto) {
+    if (typeof user.profilePhoto === 'string') {
+      rawImageUrl = user.profilePhoto;
+    } else if (user.profilePhoto.url) {
+      rawImageUrl = user.profilePhoto.url;
+    } else if (user.profilePhoto.filename) {
+      rawImageUrl = user.profilePhoto.filename;
+    }
+  } else if (user?.profilePicture) {
+    rawImageUrl = typeof user.profilePicture === 'string' ? user.profilePicture : user.profilePicture.url;
+  }
   const imageUrl = rawImageUrl ? getUploadUrl(rawImageUrl) : null;
   
   // Get initial for avatar

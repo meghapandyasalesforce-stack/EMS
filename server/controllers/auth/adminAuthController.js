@@ -90,10 +90,9 @@ export const loginUser = async (req, res) => {
             });
         }
 
-        // Verify password
-        const isPasswordValid = role === 'admin'
-            ? await user.comparePassword(password)
-            : await bcrypt.compare(password, user.password);
+        // Verify password - use comparePassword method for both admin and employee
+        // This ensures consistent security practices across all user types
+        const isPasswordValid = await user.comparePassword(password);
 
         if (!isPasswordValid) {
             return res.status(401).json({ 

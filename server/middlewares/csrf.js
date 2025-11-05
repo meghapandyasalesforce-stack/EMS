@@ -30,17 +30,18 @@ export default function csrfProtection(req, res, next) {
     const csrfHeader = req.headers['x-csrf-token'];
 
     // Priority 1: If using Authorization header (cross-site scenario)
-    // When Authorization header is present, we accept CSRF token from header
+    // When Authorization header is present, we still require CSRF token from header
     // This handles cross-site deployments where cookies might not work properly
+    // Security: CSRF protection is mandatory for all authenticated state-changing requests
     if (hasAuthHeader) {
-        // If CSRF header is present, allow the request
-        // The Authorization header provides authentication, CSRF header provides CSRF protection
-        if (csrfHeader) {
-            return next();
+        // CSRF header is required - Authorization header alone is not sufficient
+        if (!csrfHeader) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'CSRF token required for authenticated requests' 
+            });
         }
-        // If no CSRF header but Authorization header exists, log warning but allow
-        // (Authorization header itself provides some protection)
-        console.warn('CSRF: Authorization header present but no CSRF token header. Allowing request (cross-site mode).');
+        // CSRF token present, allow the request
         return next();
     }
 

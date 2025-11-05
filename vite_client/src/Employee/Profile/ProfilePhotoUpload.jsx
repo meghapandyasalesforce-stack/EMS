@@ -159,7 +159,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
               />
             ) : user?.profilePhoto ? (
               <img
-                src={getUploadUrl(user.profilePhoto.url || user.profilePhoto)}
+                src={getUploadUrl(typeof user.profilePhoto === 'string' ? user.profilePhoto : (user.profilePhoto.url || user.profilePhoto.filename))}
                 alt="Current Profile"
                 className="w-full h-full object-cover"
                 onError={(e) => {

@@ -31,29 +31,53 @@ export const getBackendBaseURL = () => {
 
 // Helper function to convert relative upload paths to full URLs
 export const getUploadUrl = (relativePath) => {
+  // Handle null, undefined, or empty values
   if (!relativePath) return null;
   
+  // Convert to string if it's not already (handles objects, numbers, etc.)
+  let path = relativePath;
+  if (typeof relativePath !== 'string') {
+    // If it's an object with a url property, use that
+    if (relativePath && typeof relativePath === 'object' && relativePath.url) {
+      path = relativePath.url;
+    } else if (relativePath && typeof relativePath === 'object' && relativePath.filename) {
+      // If it has filename, construct path
+      path = `/uploads/${relativePath.filename}`;
+    } else {
+      // Try to convert to string
+      path = String(relativePath);
+    }
+  }
+  
+  // Ensure it's a string at this point
+  if (typeof path !== 'string' || !path) {
+    return null;
+  }
+  
   // If already a full URL, return as is
-  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
-    return relativePath;
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
   }
   
   // If it's a relative path starting with /uploads, prepend backend URL
-  if (relativePath.startsWith('/uploads')) {
-    return `${getBackendBaseURL()}${relativePath}`;
+  if (path.startsWith('/uploads')) {
+    return `${getBackendBaseURL()}${path}`;
   }
   
   // If it's just a filename or path without leading slash, add /uploads
-  if (relativePath.startsWith('uploads')) {
-    return `${getBackendBaseURL()}/${relativePath}`;
+  if (path.startsWith('uploads')) {
+    return `${getBackendBaseURL()}/${path}`;
   }
   
   // Default: assume it's a relative path
-  return `${getBackendBaseURL()}/uploads/${relativePath}`;
+  return `${getBackendBaseURL()}/uploads/${path}`;
 };
 
-// Debug logging (both dev and prod for troubleshooting)
-if (import.meta.env.DEV || import.meta.env.PROD) {
+// Debug logging (development only - removed from production for security)
+// Check multiple conditions to ensure we're truly in development
+// In production builds, PROD should be true, DEV should be false, and MODE should be 'production'
+const isDevelopment = import.meta.env.MODE === 'development' || (import.meta.env.DEV && !import.meta.env.PROD);
+if (isDevelopment) {
   console.log('🔧 API Base URL:', getBaseURL());
   console.log('🔧 Environment:', {
     MODE: import.meta.env.MODE,
@@ -98,8 +122,8 @@ instance.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
           }
         } else {
-          // Debug: Log when token is missing
-          if (import.meta.env.DEV || import.meta.env.PROD) {
+          // Debug: Log when token is missing (development only)
+          if (isDevelopment) {
             console.warn('⚠️ No token found in localStorage for request:', config.url);
           }
         }
@@ -135,8 +159,8 @@ instance.interceptors.request.use(
           config.headers = config.headers || {};
           config.headers['x-csrf-token'] = csrf;
         } else {
-          // Debug: Log when CSRF token is missing for state-changing requests
-          if (import.meta.env.DEV || import.meta.env.PROD) {
+          // Debug: Log when CSRF token is missing for state-changing requests (development only)
+          if (isDevelopment) {
             console.warn('⚠️ CSRF token not found in cookies or localStorage for', method.toUpperCase(), 'request to:', config.url);
           }
         }
@@ -145,8 +169,8 @@ instance.interceptors.request.use(
       console.error('Error adding CSRF token:', error);
     }
 
-    // Log request details (both dev and prod for troubleshooting)
-    if (import.meta.env.DEV || import.meta.env.PROD) {
+    // Log request details (development only - removed from production for security)
+    if (isDevelopment) {
       const fullUrl = config.baseURL && config.url ? `${config.baseURL}${config.url}` : config.url;
       console.log('Making request to:', fullUrl);
       // Never log cookies or sensitive headers
