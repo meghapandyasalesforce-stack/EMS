@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { createEmployee } from '../../context/employeeSlice';
+import { toast } from 'react-toastify';
 
 function AddEmployee() {
     const [form, setForm] = useState({
@@ -57,9 +58,23 @@ function AddEmployee() {
         const resultAction = await dispatch(createEmployee(form));
 
         if (createEmployee.fulfilled.match(resultAction)) {
+            // Check email status and show appropriate notifications
+            const { emailSent, emailWarning, emailError } = resultAction.payload;
+            
+            if (emailSent) {
+                toast.success('Employee created successfully! Welcome email sent.');
+            } else if (emailWarning || emailError) {
+                toast.warning('Employee created successfully, but welcome email could not be sent.');
+                toast.error(emailWarning || emailError);
+            } else {
+                toast.success('Employee created successfully!');
+            }
+            
             navigate('/dashboard-admin');
         } else {
-            setError(resultAction.payload || 'Failed to create employee');
+            const errorMsg = resultAction.payload || 'Failed to create employee';
+            setError(errorMsg);
+            toast.error(errorMsg);
         }
     };
 

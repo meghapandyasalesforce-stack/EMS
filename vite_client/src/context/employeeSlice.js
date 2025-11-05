@@ -8,9 +8,15 @@ export const createEmployee = createAsyncThunk(
   async (employeeData, thunkAPI) => {
     try {
       const response = await axios.post(`${EMPLOYEE_AUTH_ENDPOINT}/register`, employeeData);
-      return response.data.employee;
+      // Return both employee data and email status
+      return {
+        employee: response.data.employee,
+        emailSent: response.data.emailSent || false,
+        emailWarning: response.data.emailWarning || null,
+        emailError: response.data.emailError || null
+      };
     } catch (err) {
-      return thunkAPI.rejectWithValue(err.response.data.message || 'Failed to create employee');
+      return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to create employee');
     }
   }
 );
@@ -69,7 +75,12 @@ const employeeSlice = createSlice({
       })
       .addCase(createEmployee.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.employees.push(action.payload);
+        // Handle both old format (just employee) and new format (with email status)
+        if (action.payload.employee) {
+          state.employees.push(action.payload.employee);
+        } else {
+          state.employees.push(action.payload);
+        }
       })
       .addCase(createEmployee.rejected, (state, action) => {
         state.status = 'failed';

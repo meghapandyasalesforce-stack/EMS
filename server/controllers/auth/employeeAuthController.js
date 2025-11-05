@@ -82,22 +82,31 @@ export const registerEmployee = async (req, res) => {
         await employee.save();
         
         // Send welcome email with the original password
+        // Use normalizedEmail to ensure consistency with what's saved in database
         // Wrap in try-catch so registration doesn't fail if email fails
         let emailSent = false;
         let emailErrorMessage = null;
         try {
-            await sendWelcomeEmail(email, name, password);
+            // Use normalizedEmail for consistency, but display the original email format
+            await sendWelcomeEmail(normalizedEmail, name, password);
             emailSent = true;
-            logger.info('Welcome email sent successfully', { email, employeeId: employee._id });
+            logger.info('Welcome email sent successfully', { 
+                email: normalizedEmail, 
+                employeeId: employee._id,
+                employeeName: name 
+            });
         } catch (emailError) {
             // Log error but don't fail registration - employee is already created
             logger.error('Failed to send welcome email', { 
-                email, 
+                email: normalizedEmail, 
                 employeeId: employee._id,
+                employeeName: name,
                 error: emailError.message,
-                stack: emailError.stack 
+                stack: emailError.stack,
+                errorCode: emailError.code,
+                errorResponse: emailError.response 
             });
-            emailErrorMessage = emailError.message;
+            emailErrorMessage = emailError.message || 'Email service unavailable';
             // Continue with registration even if email fails
         }
         
@@ -133,16 +142,21 @@ export const registerEmployee = async (req, res) => {
         // Generate token and send response
         const token = generateToken(employee._id);
         res.status(201).json({
+            success: true,
             message: 'Employee registered successfully',
             emailSent: emailSent, // Indicate if welcome email was sent
-            ...(emailErrorMessage && { emailWarning: `Welcome email could not be sent: ${emailErrorMessage}` }),
+            ...(emailErrorMessage && { 
+                emailWarning: `Welcome email could not be sent: ${emailErrorMessage}`,
+                emailError: emailErrorMessage 
+            }),
             token,
             employee: {
                 _id: employee._id,
                 name: employee.name,
                 email: employee.email,
                 position: employee.position,
-                jobTitle: employee.jobTitle
+                jobTitle: employee.jobTitle,
+                employeeId: employee.employeeId
             }
         });
     } catch (error) {

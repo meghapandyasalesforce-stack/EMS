@@ -133,17 +133,47 @@ const sendWelcomeEmail = async (email, name, password) => {
 
   // Send email
   try {
-    await transporter.sendMail(mailOptions);
-    logger.info('Welcome email sent successfully', { email });
+    // Verify transporter configuration before sending
+    await transporter.verify();
+    logger.info('Email transporter verified successfully', { emailHost, emailPort });
+    
+    // Send the email
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Welcome email sent successfully', { 
+      email, 
+      messageId: info.messageId,
+      response: info.response 
+    });
   } catch (error) {                              
-    // Log error without exposing sensitive data
+    // Log detailed error information for debugging
     logger.error('Error sending welcome email', { 
       email, 
+      emailHost,
+      emailPort,
       error: error.message,
+      errorCode: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
       stack: error.stack 
     });
-    // Re-throw error so caller can handle it
-    throw error;
+    
+    // Provide more user-friendly error messages
+    let errorMessage = 'Failed to send welcome email';
+    if (error.code === 'EAUTH') {
+      errorMessage = 'Email authentication failed. Please check email credentials.';
+    } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+      errorMessage = 'Email server connection failed. Please check email server configuration.';
+    } else if (error.responseCode === 535) {
+      errorMessage = 'Email authentication failed. Invalid email credentials.';
+    } else if (error.message) {
+      errorMessage = `Email sending failed: ${error.message}`;
+    }
+    
+    // Re-throw error with improved message
+    const enhancedError = new Error(errorMessage);
+    enhancedError.originalError = error;
+    throw enhancedError;
   }
 };
 
