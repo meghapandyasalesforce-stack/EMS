@@ -9,6 +9,7 @@ import connectDB from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import requestLogger from "./middlewares/requestLogger.js";
 import { apiLimiter } from "./middlewares/rateLimiter.js";
+import validateEnvironment from "./helpers/envValidator.js";
 import adminRouter from "./routes/Auth/AdminRoutes.js";
 import employeeRouter from "./routes/Auth/EmployeeRoutes.js";
 import leaveEmployeeRouter from "./routes/Employee/LeaveEmployeeRoutes.js";
@@ -42,12 +43,11 @@ const app = express();
 
 dotenv.config();
 
-// ✅ Don't crash if missing env vars (Render-safe)
-const requiredEnvVars = ["MONGO_URI", "JWT_SECRET"];
-const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
-if (missingVars.length > 0) {
-  console.warn("⚠️ Missing env variables:", missingVars.join(", "));
-  console.warn("Continuing startup (Render-safe mode)...");
+// ✅ Validate environment variables
+const isValid = validateEnvironment();
+if (!isValid && process.env.NODE_ENV === 'production') {
+  console.error("❌ Critical environment variables missing. Exiting...");
+  process.exit(1);
 }
 
 const PORT = process.env.PORT || 10000;
@@ -103,6 +103,29 @@ app.use(
     origin: (origin, callback) => {
       const allowedOrigins = getAllowedOrigins();
       
+      // In production, be strict about origins
+      if (process.env.NODE_ENV === 'production') {
+        // In production, reject requests with no origin (except for mobile apps with proper headers)
+        if (!origin) {
+          // Allow only if it's a mobile app or internal service (check for custom header)
+          const isMobileApp = req.headers['x-mobile-app'] === 'true';
+          if (!isMobileApp) {
+            return callback(new Error('Origin header required in production'));
+          }
+        }
+        
+        // Check if origin is in allowed list (strict matching)
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        
+        // Log rejected origins for security monitoring
+        console.warn(`[CORS] Rejected origin in production: ${origin} from IP: ${req.ip}`);
+        callback(new Error('Not allowed by CORS'));
+        return;
+      }
+      
+      // Development mode: more lenient
       // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)
       if (!origin) {
         return callback(null, true);
@@ -114,12 +137,7 @@ app.use(
       }
       
       // In development, allow any origin
-      if (process.env.NODE_ENV === 'development') {
-        return callback(null, true);
-      }
-      
-      // Reject origin
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],

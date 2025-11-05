@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 // Configure allowed file types
 const ALLOWED_FILE_TYPES = {
@@ -25,12 +26,36 @@ export const validateFileType = (allowedTypes, file, res) => {
         });
     }
 
+    // Check MIME type
     if (!allowedTypes.includes(file.mimetype)) {
         return res.status(400).json({
             success: false,
             message: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}`,
             receivedType: file.mimetype
         });
+    }
+
+    // Additional security: Validate file extension matches MIME type
+    const allowedExtensions = {
+        'image/jpeg': ['.jpg', '.jpeg'],
+        'image/png': ['.png'],
+        'image/gif': ['.gif'],
+        'image/webp': ['.webp'],
+        'application/pdf': ['.pdf'],
+        'application/msword': ['.doc'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    };
+
+    const expectedExtensions = allowedExtensions[file.mimetype];
+    if (expectedExtensions) {
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        if (!expectedExtensions.includes(fileExtension)) {
+            return res.status(400).json({
+                success: false,
+                message: `File extension does not match MIME type. Expected: ${expectedExtensions.join(', ')}, received: ${fileExtension}`,
+                code: 'MIME_MISMATCH'
+            });
+        }
     }
 
     return true;
@@ -66,25 +91,54 @@ const storage = multer.diskStorage({
         // Create directory if it doesn't exist (synchronously to avoid race conditions)
         if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
+            // Set directory permissions (readable/writable by owner only)
+            fs.chmodSync(uploadPath, 0o700);
         }
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-        const ext = path.extname(file.originalname);
-        const name = path.basename(file.originalname, ext);
-        cb(null, `${name}-${uniqueSuffix}${ext}`);
+        // Use cryptographically secure random bytes instead of Math.random()
+        const randomBytes = crypto.randomBytes(8).toString('hex');
+        const timestamp = Date.now();
+        const ext = path.extname(file.originalname).toLowerCase();
+        
+        // Sanitize filename to prevent directory traversal and special characters
+        const sanitizedName = path.basename(file.originalname, ext)
+            .replace(/[^a-zA-Z0-9_-]/g, '_')
+            .substring(0, 50); // Limit length
+        
+        // Use secure filename: timestamp-random-sanitizedname.extension
+        cb(null, `${timestamp}-${randomBytes}-${sanitizedName}${ext}`);
     }
 });
 
-// File filter function
+// File filter function with enhanced validation
 const fileFilter = (allowedTypes) => {
     return (req, file, cb) => {
-        if (allowedTypes.includes(file.mimetype)) {
-            cb(null, true);
-        } else {
-            cb(new Error(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`));
+        // Check if file has a name
+        if (!file.originalname || file.originalname.trim().length === 0) {
+            return cb(new Error('File name is required'));
         }
+
+        // Prevent directory traversal attacks
+        const filename = path.basename(file.originalname);
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return cb(new Error('Invalid file name: directory traversal not allowed'));
+        }
+
+        // Check MIME type
+        if (!allowedTypes.includes(file.mimetype)) {
+            return cb(new Error(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`));
+        }
+
+        // Check file extension matches MIME type (basic validation)
+        const ext = path.extname(file.originalname).toLowerCase();
+        const suspiciousExtensions = ['.exe', '.bat', '.cmd', '.sh', '.php', '.js', '.jsp', '.asp', '.aspx'];
+        if (suspiciousExtensions.includes(ext)) {
+            return cb(new Error('File type not allowed for security reasons'));
+        }
+
+        cb(null, true);
     };
 };
 

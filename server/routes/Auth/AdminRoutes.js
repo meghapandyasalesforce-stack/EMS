@@ -1,11 +1,18 @@
 import express from "express";
 import { loginUser,logoutUser,registerUser } from "../../controllers/auth/adminAuthController.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
+import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 
 const router = express.Router();
 
-// Apply rate limiting to prevent abuse
-router.route("/register").post(loginLimiter, registerUser); // Rate limited registration
+// Registration endpoint - secure in production
+// In production, require admin authentication to prevent unauthorized admin creation
+// In development, allow open registration for testing
+const registerMiddleware = process.env.NODE_ENV === 'production' 
+  ? [isAdminAuthenticated, loginLimiter] 
+  : [loginLimiter];
+
+router.route("/register").post(...registerMiddleware, registerUser);
 router.route("/login").post(loginLimiter, loginUser);
 router.route("/logout").get(logoutUser);
 

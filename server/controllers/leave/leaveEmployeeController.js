@@ -1,10 +1,11 @@
 import Employee from "../../models/employee.model.js"
 import Leave from "../../models/leave.model.js"
+import logger from "../../helpers/logger.js";
 
 
 // Create a leave request
 export const createLeave = async (req, res) => {
-    console.log("Authenticated Employee:", req.employee);
+    logger.debug("Creating leave request", { employeeId: req.employee?._id });
 
     try {
         const { startDate, endDate, leaveType, reason } = req.body;
@@ -25,7 +26,7 @@ export const createLeave = async (req, res) => {
         }
 
         const employee = await Employee.findById(employeeId);
-        console.log("Employee found:", employee); // Debug log
+        logger.debug("Employee found", { employeeId, hasEmployee: !!employee });
 
         if (!employee) {
             return res.status(404).json({ message: "Employee not found" });
@@ -50,7 +51,7 @@ export const createLeave = async (req, res) => {
         res.status(201).json({ message: "Leave application submitted successfully", leave });
 
     } catch (error) {
-        console.error("Create Leave Error:", error);
+        logger.error("Create Leave Error", { error: error.message, stack: error.stack });
         res.status(500).json({
             message: "Error submitting leave application",
             error: error.message,

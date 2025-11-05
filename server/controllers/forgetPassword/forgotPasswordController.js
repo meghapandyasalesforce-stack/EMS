@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import Employee from '../../models/employee.model.js';
 import User from '../../models/user.model.js';
 import bcrypt from 'bcryptjs';
+import logger from '../../helpers/logger.js';
 
 // Helper function to generate reset token
 const generateResetToken = () => {
@@ -30,8 +31,23 @@ export const forgotPassword = async (req, res) => {
       userType = 'admin';
     }
 
+    // Always return same message to prevent email enumeration
+    // Don't reveal whether email exists or not
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      // Return success to prevent email enumeration attacks
+      // Still return 200 but don't send email
+      return res.status(200).json({ 
+        message: 'If the email exists, a password reset link has been sent.' 
+      });
+    }
+
+    // Check if there's already a valid reset token (prevent spam)
+    if (user.resetPasswordToken && user.resetPasswordExpire > Date.now()) {
+      // Don't create new token if one already exists and is valid
+      // Return success to prevent information leakage
+      return res.status(200).json({ 
+        message: 'If the email exists, a password reset link has been sent.' 
+      });
     }
 
     const { resetToken, hashedToken } = generateResetToken();
@@ -47,6 +63,16 @@ export const forgotPassword = async (req, res) => {
     const emailPort = process.env.EMAIL_PORT || 587;
     const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com');
     
+    // Validate email credentials are configured
+    const emailUser = process.env.EMAIL_USERNAME || process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
+    
+    if (!emailUser || !emailPass) {
+      return res.status(500).json({ 
+        message: 'Email service not configured. Please contact administrator.' 
+      });
+    }
+    
     const transporter = nodemailer.createTransport({
       host: isOutlook ? emailHost : undefined,
       port: isOutlook ? emailPort : undefined,
@@ -54,16 +80,26 @@ export const forgotPassword = async (req, res) => {
       requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
       service: isOutlook ? undefined : (process.env.EMAIL_SERVICE || 'Gmail'),
       auth: {
-        user: process.env.EMAIL_USERNAME || process.env.EMAIL_USER || 'kunal.pareek@Paarsiv.com',
-        pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS || 'Kunika@637',
+        user: emailUser,
+        pass: emailPass,
       },
       tls: isOutlook ? {
-        rejectUnauthorized: false // Allow self-signed certificates if needed
+        // Only disable certificate validation in development
+        // In production, always validate certificates to prevent MITM attacks
+        rejectUnauthorized: process.env.NODE_ENV === 'production'
       } : undefined
     });
 
+    const emailFrom = process.env.EMAIL_FROM || process.env.EMAIL_USERNAME || process.env.EMAIL_USER;
+    
+    if (!emailFrom) {
+      return res.status(500).json({ 
+        message: 'Email service not configured. Please contact administrator.' 
+      });
+    }
+
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME || process.env.EMAIL_USER || 'kunal.pareek@Paarsiv.com',
+      from: emailFrom,
       to: user.email,
       subject: 'Password Reset Request - Paarsiv HR System',
       html: `
@@ -177,8 +213,8 @@ export const forgotPassword = async (req, res) => {
 
     res.status(200).json({ message: 'Reset link sent to your email' });
   } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({ message: 'Error processing request', error: error.message });
+    logger.error('Forgot password error', { error: error.message, stack: error.stack });
+    res.status(500).json({ message: 'Error processing request', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
   }
 };
 
@@ -214,6 +250,7 @@ export const resetPassword = async (req, res) => {
     // Hash new password before saving
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(req.body.password, salt);
+    // Invalidate reset token immediately after use (prevents reuse)
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     
@@ -222,7 +259,15 @@ export const resetPassword = async (req, res) => {
       user.mustResetPassword = false; // Reset the forced password change flag
     }
     
+    // Save the updated user
     await user.save();
+    
+    // Additional security: Log password reset event (for audit trail)
+    logger.info('Password reset completed', { 
+      userEmail: user.email, 
+      userType,
+      timestamp: new Date().toISOString() 
+    });
 
     // Clear authentication cookies to force logout (in case user is logged in)
     const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
@@ -246,7 +291,7 @@ export const resetPassword = async (req, res) => {
         logout: true 
     });
   } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ message: 'Error resetting password', error: error.message });
+    logger.error('Reset password error', { error: error.message, stack: error.stack });
+    res.status(500).json({ message: 'Error resetting password', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
   }
 };

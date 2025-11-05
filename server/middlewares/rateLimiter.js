@@ -20,9 +20,34 @@ export const apiLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // Don't skip rate limiting - it's still useful in development
-    // skip: (req) => {
-    //     return process.env.NODE_ENV === 'development';
-    // }
+    // Skip successful requests from rate limiting (only count errors)
+    skipSuccessfulRequests: false,
+    // Skip failed requests from rate limiting (count all requests)
+    skipFailedRequests: false,
+});
+
+// Rate limiter specifically for password reset endpoints
+export const passwordResetLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 3, // Limit to 3 password reset requests per hour per IP
+    message: {
+        success: false,
+        message: 'Too many password reset attempts. Please try again after 1 hour.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false,
+});
+
+// Rate limiter for general API endpoints (more lenient)
+export const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: process.env.NODE_ENV === 'production' ? 200 : 2000,
+    message: {
+        success: false,
+        message: 'Too many requests, please try again later'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
 });
 

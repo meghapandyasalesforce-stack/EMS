@@ -7,6 +7,14 @@ const sendWelcomeEmail = async (email, name, password) => {
   const emailPort = process.env.EMAIL_PORT || 587;
   const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com');
   
+  // Validate email credentials are configured
+  const emailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
+  const emailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
+  
+  if (!emailUser || !emailPass) {
+    throw new Error('Email credentials not configured. Please set EMAIL_USER/EMAIL_USERNAME and EMAIL_PASS/EMAIL_PASSWORD environment variables.');
+  }
+
   const transporter = nodemailer.createTransport({
     host: isOutlook ? emailHost : undefined,
     port: isOutlook ? emailPort : undefined,
@@ -14,19 +22,27 @@ const sendWelcomeEmail = async (email, name, password) => {
     requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
     service: isOutlook ? undefined : (process.env.EMAIL_HOST || 'Gmail'),
     auth: {
-      user: process.env.EMAIL_USER || process.env.EMAIL_USERNAME || 'kunal.pareek@Paarsiv.com',
-      pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || 'Kunika@637',
+      user: emailUser,
+      pass: emailPass,
     },
     tls: isOutlook ? {
-      rejectUnauthorized: false // Allow self-signed certificates if needed
+      // Only disable certificate validation in development
+      // In production, always validate certificates to prevent MITM attacks
+      rejectUnauthorized: process.env.NODE_ENV === 'production'
     } : undefined
   });
 
   // Email options
   const displayPassword = password || process.env.DEFAULT_EMPLOYEE_PASSWORD || 'Please contact your administrator';
   
+  const emailFrom = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured. Please set EMAIL_FROM environment variable.');
+  }
+
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.EMAIL_USERNAME || 'kunal.pareek@Paarsiv.com',
+    from: emailFrom,
     to: email,
     subject: 'Welcome to Paarsiv HR System!',
     html: `

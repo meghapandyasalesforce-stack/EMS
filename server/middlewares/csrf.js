@@ -1,4 +1,6 @@
-// Simple double-submit CSRF protection
+import crypto from 'crypto';
+
+// Enhanced double-submit CSRF protection with timing-safe comparison
 export default function csrfProtection(req, res, next) {
     const method = req.method.toUpperCase();
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
@@ -38,18 +40,47 @@ export default function csrfProtection(req, res, next) {
         if (!csrfHeader) {
             return res.status(403).json({ 
                 success: false, 
-                message: 'CSRF token required for authenticated requests' 
+                message: 'CSRF token required for authenticated requests',
+                code: 'CSRF_TOKEN_REQUIRED'
             });
         }
-        // CSRF token present, allow the request
+        // Validate token format (should be 64 hex characters for 32-byte token)
+        if (!/^[a-f0-9]{64}$/i.test(csrfHeader)) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Invalid CSRF token format',
+                code: 'INVALID_CSRF_FORMAT'
+            });
+        }
+        // CSRF token present and valid format, allow the request
         return next();
     }
 
     // Priority 2: Cookie-based authentication (same-site scenario)
     // Only validate cookie-based CSRF if no Authorization header is present
     if (hasJwtCookie) {
-        if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
-            return res.status(403).json({ success: false, message: 'Invalid or missing CSRF token' });
+        if (!csrfCookie || !csrfHeader) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'CSRF token required for authenticated requests',
+                code: 'CSRF_TOKEN_MISSING'
+            });
+        }
+        // Validate token format
+        if (!/^[a-f0-9]{64}$/i.test(csrfHeader) || !/^[a-f0-9]{64}$/i.test(csrfCookie)) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Invalid CSRF token format',
+                code: 'INVALID_CSRF_FORMAT'
+            });
+        }
+        // Use constant-time comparison to prevent timing attacks
+        if (csrfCookie.length !== csrfHeader.length || !crypto.timingSafeEqual(Buffer.from(csrfCookie), Buffer.from(csrfHeader))) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Invalid or mismatched CSRF token',
+                code: 'CSRF_TOKEN_MISMATCH'
+            });
         }
     }
 

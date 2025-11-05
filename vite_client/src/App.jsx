@@ -83,7 +83,10 @@ function App() {
                 <div className="flex-1 overflow-auto">
                     <Routes>
                         <Route path="/" element={<Login />} /> {/* Set Login as the default route */}
-                        <Route path="/register" element={<Register />} /> {/*Please comment this line to block the register page usage*/}
+                        {/* Registration route - only available in development or if explicitly enabled */}
+                        {import.meta.env.MODE === 'development' || import.meta.env.VITE_ALLOW_REGISTRATION === 'true' ? (
+                            <Route path="/register" element={<Register />} />
+                        ) : null}
                         <Route path="/login" element={<Login />} />
                         <Route path="/dashboard-admin" element={<DashboardAdmin />} />
                         <Route path="/dashboard-employee" element={<DashboardEmployee />} />
