@@ -1,5 +1,5 @@
-
 import nodemailer from 'nodemailer';
+import logger from './logger.js';
 
 const sendWelcomeEmail = async (email, name, password) => {
   // Create a transporter - support both Gmail and Outlook/Office 365
@@ -134,13 +134,16 @@ const sendWelcomeEmail = async (email, name, password) => {
   // Send email
   try {
     await transporter.sendMail(mailOptions);
-    // Only log in development mode, never log actual passwords
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Welcome email sent to ${email}`);
-    }
+    logger.info('Welcome email sent successfully', { email });
   } catch (error) {                              
     // Log error without exposing sensitive data
-    console.error(`Error sending welcome email to ${email}:`, error.message);
+    logger.error('Error sending welcome email', { 
+      email, 
+      error: error.message,
+      stack: error.stack 
+    });
+    // Re-throw error so caller can handle it
+    throw error;
   }
 };
 

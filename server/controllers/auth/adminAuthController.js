@@ -2,6 +2,8 @@ import User from "../../models/user.model.js"
 import Employee from '../../models/employee.model.js';
 import bcrypt from 'bcryptjs';
 import { generateToken } from "../../helpers/utils.js";
+import logger from "../../helpers/logger.js";
+import sendWelcomeEmail from "../../helpers/emailSender.js";
 
 
 export const registerUser = async (req, res) => {
@@ -24,10 +26,17 @@ export const registerUser = async (req, res) => {
         await newUser.save();
 
         // Send welcome email with the password
+        let emailSent = false;
         try {
             await sendWelcomeEmail(email, name, password);
+            emailSent = true;
+            logger.info('Welcome email sent to admin user', { email });
         } catch (emailError) {
-            console.error('Error sending welcome email:', emailError);
+            logger.error('Error sending welcome email to admin', { 
+                email, 
+                error: emailError.message,
+                stack: emailError.stack 
+            });
             // Don't fail registration if email fails
         }
 
@@ -37,6 +46,7 @@ export const registerUser = async (req, res) => {
         // Return success response with user data
         res.status(201).json({
             message: 'Registration successful',
+            emailSent: emailSent, // Indicate if welcome email was sent
             _id: newUser._id,
             name: newUser.name,
             email: newUser.email,

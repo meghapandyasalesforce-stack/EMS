@@ -3,6 +3,7 @@ import { generateToken } from '../../helpers/utils.js';
 import bcrypt from 'bcryptjs';
 import mongoose from "mongoose";
 import sendWelcomeEmail from '../../helpers/emailSender.js';
+import logger from '../../helpers/logger.js';
 
 
 // Generate token with employeeId instead of email
@@ -74,8 +75,27 @@ export const registerEmployee = async (req, res) => {
         });
 
         await employee.save();
+        
         // Send welcome email with the original password
-        await sendWelcomeEmail(email, name, password);
+        // Wrap in try-catch so registration doesn't fail if email fails
+        let emailSent = false;
+        let emailErrorMessage = null;
+        try {
+            await sendWelcomeEmail(email, name, password);
+            emailSent = true;
+            logger.info('Welcome email sent successfully', { email, employeeId: employee._id });
+        } catch (emailError) {
+            // Log error but don't fail registration - employee is already created
+            logger.error('Failed to send welcome email', { 
+                email, 
+                employeeId: employee._id,
+                error: emailError.message,
+                stack: emailError.stack 
+            });
+            emailErrorMessage = emailError.message;
+            // Continue with registration even if email fails
+        }
+        
         // Create associated default payroll
         const currentDate = new Date();
         const defaultPayroll = {
@@ -109,6 +129,8 @@ export const registerEmployee = async (req, res) => {
         const token = generateToken(employee._id);
         res.status(201).json({
             message: 'Employee registered successfully',
+            emailSent: emailSent, // Indicate if welcome email was sent
+            ...(emailErrorMessage && { emailWarning: `Welcome email could not be sent: ${emailErrorMessage}` }),
             token,
             employee: {
                 _id: employee._id,
@@ -119,7 +141,7 @@ export const registerEmployee = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Registration error:', error);
+        logger.error('Registration error', { error: error.message, stack: error.stack });
         res.status(500).json({
             message: 'Registration failed',
             error: error.message,
