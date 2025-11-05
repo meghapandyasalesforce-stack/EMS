@@ -3,6 +3,8 @@
  * Validates required environment variables at startup
  */
 
+import logger from './logger.js';
+
 const validateEnvironment = () => {
   const errors = [];
   const warnings = [];
@@ -61,20 +63,18 @@ const validateEnvironment = () => {
 
   // Display errors and warnings
   if (errors.length > 0) {
-    console.error('\n❌ Environment Validation Errors:');
-    errors.forEach((error) => console.error(`  - ${error}`));
-    console.error('\nPlease fix these errors before starting the server.\n');
+    logger.error('Environment Validation Errors:');
+    errors.forEach((error) => logger.error(`  - ${error}`));
+    logger.error('Please fix these errors before starting the server.');
     return false;
   }
 
   if (warnings.length > 0) {
-    console.warn('\n⚠️  Environment Validation Warnings:');
-    warnings.forEach((warning) => console.warn(`  - ${warning}`));
-    console.warn('');
+    warnings.forEach((warning) => logger.warn(`  - ${warning}`));
   }
 
   if (errors.length === 0 && warnings.length === 0) {
-    console.log('✅ Environment variables validated successfully\n');
+    logger.info('Environment variables validated successfully');
   }
 
   return true;

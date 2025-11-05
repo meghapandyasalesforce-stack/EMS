@@ -3,6 +3,7 @@ import Employee from"../../models/employee.model.js"
 import Attendance from "../../models/attendance.model.js";
 import Leave from "../../models/leave.model.js";
 import { transferToBank } from "../../helpers/paymentService.js";
+import logger from "../../helpers/logger.js";
 
 
 
@@ -78,7 +79,7 @@ export const updatePayroll = async (req, res) => {
             data: payroll
         });
     } catch (error) {
-        console.error('Update Payroll Error:', error);
+        logger.error('Update Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             success: false,
             message: error.message 
@@ -152,7 +153,7 @@ export const getEmployeePayroll = async (req, res) => {
 
         res.json(payroll);
     } catch (error) {
-        console.error('Payroll Error:', error);
+        logger.error('Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -175,7 +176,7 @@ export const getAllPayrolls = async (req, res) => {
 
         res.json(payrolls);
     } catch (error) {
-        console.error('Get All Payrolls Error:', error);
+        logger.error('Get All Payrolls Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -210,7 +211,7 @@ export const createPayroll = async (req, res) => {
         
         res.status(201).json(populatedPayroll);
     } catch (error) {
-        console.error('Create Payroll Error:', error);
+        logger.error('Create Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -238,7 +239,7 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
             total
         });
     } catch (error) {
-        console.error('Get Employee Payroll for Admin Error:', error);
+        logger.error('Get Employee Payroll for Admin Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -260,7 +261,7 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
 
         res.json(payroll);
     } catch (error) {
-        console.error('Get Payroll by Employee Month Year Error:', error);
+        logger.error('Get Payroll by Employee Month Year Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -338,7 +339,7 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
 
         res.json(payroll);
     } catch (error) {
-        console.error('Get Current Month Payroll for Admin Error:', error);
+        logger.error('Get Current Month Payroll for Admin Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -383,7 +384,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
 
         res.json(payrollSummaries);
     } catch (error) {
-        console.error('Admin Payroll Error:', error);
+        logger.error('Admin Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
 };
@@ -413,7 +414,7 @@ export const togglePayrollVisibility = async (req, res) => {
             data: payroll
         });
     } catch (error) {
-        console.error('Toggle Visibility Error:', error);
+        logger.error('Toggle Visibility Error', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             success: false,
             message: error.message 

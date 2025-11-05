@@ -36,6 +36,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import csrfProtection from "./middlewares/csrf.js";
+import logger from "./helpers/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,7 +47,7 @@ dotenv.config();
 // ✅ Validate environment variables
 const isValid = validateEnvironment();
 if (!isValid && process.env.NODE_ENV === 'production') {
-  console.error("❌ Critical environment variables missing. Exiting...");
+  logger.error("Critical environment variables missing. Exiting...");
   process.exit(1);
 }
 
@@ -120,7 +121,7 @@ app.use(
         }
         
         // Log rejected origins for security monitoring
-        console.warn(`[CORS] Rejected origin in production: ${origin} from IP: ${req.ip}`);
+        logger.warn('CORS rejected origin in production', { origin, ip: req.ip });
         callback(new Error('Not allowed by CORS'));
         return;
       }
@@ -202,7 +203,7 @@ app.use("/uploads", (req, res, next) => {
   if (requestedPath.includes('profile-photos')) {
     const fullPath = path.join(__dirname, "uploads", requestedPath);
     if (!fs.existsSync(fullPath)) {
-      console.warn('⚠️ File not found:', {
+      logger.warn('File not found', {
         requestedPath,
         fullPath,
         url: req.url,
@@ -407,19 +408,19 @@ const startServer = async () => {
   try {
     if (process.env.MONGO_URI) {
       await connectDB();
-      console.log("✅ MongoDB connected successfully");
+      logger.info("MongoDB connected successfully");
     } else {
-      console.warn("⚠️ No MONGO_URI found — skipping DB connection");
+      logger.warn("No MONGO_URI found — skipping DB connection");
     }
 
     // ✅ Important for Render
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log(`🌍 Mode: ${process.env.NODE_ENV || "development"}`);
-      console.log(`🔗 Frontend: ${process.env.FRONTEND_URL || "Not set"}`);
+      logger.info(`Server running on port ${PORT}`);
+      logger.info(`Mode: ${process.env.NODE_ENV || "development"}`);
+      logger.info(`Frontend: ${process.env.FRONTEND_URL || "Not set"}`);
     });
   } catch (err) {
-    console.error("❌ Server startup failed:", err.message);
+    logger.error("Server startup failed", { error: err.message, stack: err.stack });
   }
 };
 

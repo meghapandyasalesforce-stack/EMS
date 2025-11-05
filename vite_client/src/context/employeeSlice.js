@@ -36,11 +36,7 @@ export const fetchEmployees = createAsyncThunk(
       }
       return [];
     } catch (err) {
-      console.error('Error fetching employees:', err.response?.data || err.message);
-      // Log the error details for debugging
-      if (err.response?.status === 403) {
-        console.error('403 Forbidden - Admin role required. Please log out and log back in.');
-      }
+      // Removed console.error for production
       return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to fetch employees');
     }
   }

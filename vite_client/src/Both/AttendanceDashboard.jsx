@@ -46,7 +46,7 @@ const AttendanceDashboard = () => {
             }
             setIsLoading(false);
         } catch (error) {
-            console.error('Error fetching attendance data:', error);
+            // Removed console.error for production
             setIsLoading(false);
         }
     };
@@ -79,7 +79,7 @@ const AttendanceDashboard = () => {
                 fetchAttendanceData();
             }
         } catch (error) {
-            console.error('Error clocking out:', error);
+            // Removed console.error for production
         }
     };
 

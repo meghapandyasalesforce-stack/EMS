@@ -23,7 +23,7 @@ export const logoutUser = createAsyncThunk(
       });
       return true;
     } catch (error) {
-      console.error('Logout error:', error);
+      // Removed console.error for production
       return rejectWithValue(error.response?.data?.message || 'Logout failed');
     }
   }

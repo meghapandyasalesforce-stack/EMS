@@ -4,6 +4,7 @@ import Notification from "../../models/notification.model.js";
 import User from "../../models/user.model.js";
 import Employee from "../../models/employee.model.js";
 import jwt from "jsonwebtoken";
+import logger from "../../helpers/logger.js";
 
 export const createNotification = async (req, res) => {
   try {
@@ -71,7 +72,7 @@ export const getNotifications = async (req, res) => {
     }
   } catch (authError) {
     // Authentication failed - continue without user ID (will only get broadcasts)
-    console.log('SSE: Authentication failed, continuing with broadcasts only:', authError.message);
+    logger.warn('SSE: Authentication failed, continuing with broadcasts only', { error: authError.message });
   }
 
   let lastCheck = new Date(Date.now() - 1000 * 60 * 5); // last 5 minutes
@@ -107,7 +108,7 @@ export const getNotifications = async (req, res) => {
       // Send keepalive ping every 30 seconds to prevent connection timeout
       res.write(': keepalive\n\n');
     } catch (error) {
-      console.error('SSE Polling error:', error);
+      logger.error('SSE Polling error', { error: error.message, stack: error.stack });
       // Send error as SSE event (not JSON response)
       res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to fetch notifications' })}\n\n`);
     }
@@ -120,7 +121,7 @@ export const getNotifications = async (req, res) => {
   try {
     await sendNotifications();
   } catch (initialError) {
-    console.error('SSE Initial error:', initialError);
+    logger.error('SSE Initial error', { error: initialError.message, stack: initialError.stack });
     // Send error as SSE event, don't return JSON
     res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to initialize notifications' })}\n\n`);
     res.end();
@@ -140,7 +141,7 @@ export const getNotifications = async (req, res) => {
 
   // Handle errors that occur after connection is established
   req.on('error', (error) => {
-    console.error('SSE Request error:', error);
+    logger.error('SSE Request error', { error: error.message, stack: error.stack });
     if (intervalId) {
       clearInterval(intervalId);
     }

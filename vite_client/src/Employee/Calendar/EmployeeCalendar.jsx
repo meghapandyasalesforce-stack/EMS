@@ -43,7 +43,7 @@ const EmployeeCalendar = () => {
         });
       }
     } catch (error) {
-      console.error('Error fetching calendar:', error);
+      // Removed console.error for production
       setError('Failed to fetch calendar data');
       toast.error('Failed to fetch calendar');
       

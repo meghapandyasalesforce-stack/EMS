@@ -60,7 +60,7 @@ function DashboardEmployee() {
             const token = localStorage.getItem('token');
             const hasCookie = document.cookie.includes('jwt=');
             if (!token && !hasCookie) {
-                console.warn('⚠️ No token found - user needs to log in again');
+                // Removed console.warn for production
                 setError('Session expired. Please log in again.');
                 setTimeout(() => {
                     window.location.href = '/login';
@@ -119,7 +119,7 @@ function DashboardEmployee() {
                         payrollAmount = payrollRes.data.inHandSalary;
                     }
                 } catch (err) {
-                    console.log('No payroll data for current month');
+                    // Removed console.log for production
                 }
 
                 // Fetch leave balance from Leave data
@@ -132,7 +132,7 @@ function DashboardEmployee() {
                         leaveBalance = leaveRes.data.statistics.remainingLeaves;
                     }
                 } catch (err) {
-                    console.log('No leave data available');
+                    // Removed console.log for production
                 }
 
                 // Fetch tasks count
@@ -143,7 +143,7 @@ function DashboardEmployee() {
                     });
                     tasksCount = tasksRes.data?.tasks?.length || 0;
                 } catch (err) {
-                    console.log('No tasks data');
+                    // Removed console.log for production
                 }
 
                 // Fetch upcoming birthdays
@@ -156,7 +156,7 @@ function DashboardEmployee() {
                         birthdays = birthdaysRes.data.birthdays;
                     }
                 } catch (err) {
-                    console.log('No birthdays data available');
+                    // Removed console.log for production
                 }
 
                 // Calculate today's hours
@@ -186,7 +186,7 @@ function DashboardEmployee() {
                     birthdays: birthdays
                 });
             } catch (error) {
-                console.error('Failed to fetch dashboard stats:', error);
+                // Removed console.error for production
                 // Keep default values
             } finally {
                 setStatsLoading(false);

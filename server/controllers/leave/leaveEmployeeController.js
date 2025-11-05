@@ -86,7 +86,7 @@ export const getMyLeaves = async (req, res) => {
 
         res.json({ leaves, statistics });
     } catch (error) {
-        console.error('Get My Leaves Error:', error);
+        logger.error('Get My Leaves Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Error fetching your leaves', error: error.message });
     }
 };

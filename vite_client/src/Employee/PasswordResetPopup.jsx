@@ -47,8 +47,8 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
         localStorage.removeItem('email');
         
         // Purge Redux Persist store
-        persistor.purge().catch(err => {
-          console.error('Error purging Redux store:', err);
+        persistor.purge().catch(() => {
+          // Silently handle purge error
         });
         
         // Clear any cookies by calling logout endpoint
@@ -56,7 +56,6 @@ export default function PasswordResetPopup({ onClose, onSuccess }) {
           await axios.post('/v1/employee/auth/logout', {}, { withCredentials: true });
         } catch (err) {
           // Ignore logout errors, cookies will be cleared by backend anyway
-          console.log('Logout cleanup:', err.message);
         }
         
         // Notify parent that logout is required and redirect to login

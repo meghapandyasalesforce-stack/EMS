@@ -1,5 +1,6 @@
 import Employee from '../../models/employee.model.js';
 import mongoose from 'mongoose';
+import logger from '../../helpers/logger.js';
 
 // Employee updates their additional information
 // Employee updates their additional information
@@ -72,7 +73,7 @@ export const updateEmployeeInfo = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error updating employee info:', error);
+        logger.error('Error updating employee info', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to update employee information',
             error: error.message,
@@ -113,7 +114,7 @@ export const addAcademicRecord = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error adding academic record:', error);
+        logger.error('Error adding academic record', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to add academic record',
             error: error.message
@@ -163,7 +164,7 @@ export const addGuarantorDetails = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error adding guarantor details:', error);
+        logger.error('Error adding guarantor details', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to update guarantor details',
             error: error.message
@@ -200,7 +201,7 @@ export const addGuarantorDetails = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error adding professional qualification:', error);
+        logger.error('Error adding professional qualification', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to add professional qualification',
             error: error.message
@@ -250,7 +251,7 @@ export const addNextOfKin = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error adding next of kin:', error);
+        logger.error('Error adding next of kin', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to update next of kin',
             error: error.message
@@ -296,7 +297,7 @@ export const addFamilyDetail = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error adding family detail:', error);
+        logger.error('Error adding family detail', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to add family detail',
             error: error.message
@@ -337,7 +338,7 @@ export const updateFinancialDetails = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error updating financial details:', error);
+        logger.error('Error updating financial details', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to update financial details',
             error: error.message
@@ -382,13 +383,13 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
 
     // Debug log (only in development)
     if (process.env.NODE_ENV === 'development') {
-      console.log(`Admin fetched employee ${employeeId}: salary = ${employee.salary}`);
+      logger.info('Admin fetched employee', { employeeId, salary: employee.salary });
     }
 
     res.status(200).json({ employee });
 
   } catch (error) {
-    console.error('Error fetching employee info:', error);
+    logger.error('Error fetching employee info', { error: error.message, stack: error.stack });
     res.status(500).json({ 
       message: 'Failed to fetch employee information',
       error: error.message
@@ -429,7 +430,7 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching employee info:', error);
+        logger.error('Error fetching employee info', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to fetch employee data.',
             error: error.message,
@@ -490,7 +491,7 @@ export const getUpcomingBirthdays = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching upcoming birthdays:', error);
+        logger.error('Error fetching upcoming birthdays', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to fetch upcoming birthdays',
             error: error.message,

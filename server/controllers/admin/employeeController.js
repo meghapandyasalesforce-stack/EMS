@@ -2,6 +2,7 @@ import Employee from '../../models/employee.model.js';
 import mongoose from 'mongoose';
 import Attendance from '../../models/attendance.model.js';
 import Project from '../../models/project.model.js';
+import logger from '../../helpers/logger.js';
 
 // Update employee work information (Admin only)
 export const updateEmployeeWorkInfo = async (req, res) => {
@@ -57,7 +58,7 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating employee work information:', error);
+    logger.error('Error updating employee work information', { error: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Failed to update employee work information',
@@ -97,7 +98,7 @@ export const getEmployeeWorkInfo = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching employee work information:', error);
+    logger.error('Error fetching employee work information', { error: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch employee work information',
@@ -177,7 +178,7 @@ export const calculateEmployeeStats = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error calculating employee statistics:', error);
+    logger.error('Error calculating employee statistics', { error: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Failed to calculate employee statistics',

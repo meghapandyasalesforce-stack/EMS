@@ -354,7 +354,7 @@ export const getAllEmployees = async (req, res) => {
         const employees = await Employee.find().select('-password');
         res.status(200).json({ employees });
     } catch (error) {
-        console.error('Error fetching employees:', error);
+        logger.error('Error fetching employees', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to fetch employees', error: error.message });
     }
 };
@@ -396,7 +396,7 @@ export const updateEmployeeStatus = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error updating employee status:', error);
+        logger.error('Error updating employee status', { error: error.message, stack: error.stack });
         res.status(500).json({
             message: 'Failed to update employee status',
             error: error.message
@@ -489,7 +489,7 @@ export const deleteEmployee = async (req, res) => {
 
         res.status(200).json({ message: 'Employee deleted successfully' });
     } catch (error) {
-        console.error('Error deleting employee:', error);
+        logger.error('Error deleting employee', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to delete employee', error: error.message });
     }
 };

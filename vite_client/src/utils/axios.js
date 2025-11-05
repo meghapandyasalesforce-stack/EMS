@@ -99,16 +99,7 @@ export const getUploadUrl = (relativePath) => {
 // Check multiple conditions to ensure we're truly in development
 // In production builds, PROD should be true, DEV should be false, and MODE should be 'production'
 const isDevelopment = import.meta.env.MODE === 'development' || (import.meta.env.DEV && !import.meta.env.PROD);
-if (isDevelopment) {
-  console.log('🔧 API Base URL:', getBaseURL());
-  console.log('🔧 Environment:', {
-    MODE: import.meta.env.MODE,
-    DEV: import.meta.env.DEV,
-    PROD: import.meta.env.PROD,
-    VITE_API_URL: import.meta.env.VITE_API_URL,
-    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL
-  });
-}
+// Removed console.log statements for production
 
 const instance = axios.create({
   baseURL: getBaseURL(),
@@ -153,14 +144,11 @@ instance.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
           }
         } else {
-          // Only warn if it's NOT an auth endpoint (login/register don't need tokens)
-          if (isDevelopment && !isAuthEndpoint) {
-            console.warn('⚠️ No token found in localStorage for request:', config.url);
-          }
+          // Removed console.warn for production
         }
       }
     } catch (error) {
-      console.error('Error adding Authorization header:', error);
+      // Silently handle error
     }
 
     // Add CSRF header for state-changing requests
@@ -201,29 +189,15 @@ instance.interceptors.request.use(
             config.headers = config.headers || {};
             config.headers['x-csrf-token'] = csrf;
           } else {
-            // Debug: Log when CSRF token is missing for state-changing requests (development only)
-            // Don't warn for auth endpoints as they don't need CSRF
-            if (isDevelopment && !isAuthEndpoint) {
-              console.warn('⚠️ CSRF token not found in cookies or localStorage for', method.toUpperCase(), 'request to:', config.url);
-            }
+            // Removed console.warn for production
           }
         }
       }
     } catch (error) {
-      console.error('Error adding CSRF token:', error);
+      // Silently handle error
     }
 
-    // Log request details (development only - removed from production for security)
-    if (isDevelopment) {
-      const fullUrl = config.baseURL && config.url ? `${config.baseURL}${config.url}` : config.url;
-      console.log('Making request to:', fullUrl);
-      // Never log cookies or sensitive headers
-      const safeHeaders = { ...config.headers };
-      if (safeHeaders.Authorization) {
-        safeHeaders.Authorization = '[REDACTED]';
-      }
-      console.log('Request headers:', safeHeaders);
-    }
+    // Removed console.log statements for production
     return config;
   },
   (error) => {
@@ -235,19 +209,8 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle network errors
-    if (error.code === 'ERR_NETWORK') {
-      console.error('Network error: Server might not be running or CORS issue');
-      console.error('Request URL:', error.config?.url);
-      console.error('Base URL:', error.config?.baseURL);
-      console.error('Full URL:', error.config?.baseURL && error.config?.url ? `${error.config.baseURL}${error.config.url}` : 'Unknown');
-    }
-    
-    // Handle CORS errors
-    if (error.message && error.message.includes('CORS')) {
-      console.error('CORS error: Check backend CORS configuration');
-      console.error('Frontend origin:', window.location.origin);
-    }
+    // Removed console.error statements for production
+    // Network and CORS errors are handled silently
     
     // Handle 401 errors
     if (error.response?.status === 401) {
@@ -261,7 +224,7 @@ instance.interceptors.response.use(
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || 'Access forbidden';
       if (message.includes('admin') || message.includes('Access restricted')) {
-        console.error('⚠️ 403 Forbidden: Admin role required. Please log out and log back in as admin.');
+        // Removed console.error for production
         // Don't auto-redirect for 403, let user see the error message
       }
     }

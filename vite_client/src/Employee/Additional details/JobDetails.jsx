@@ -66,7 +66,7 @@ const JobDetails = () => {
                     break;
             }
         } catch (error) {
-            console.error(`Error uploading ${documentType}:`, error);
+            // Removed console.error for production
             alert(`Error: ${error.message}`);
         } finally {
             setIsLoading(false);

@@ -152,7 +152,7 @@ export const loginUser = async (req, res) => {
         return res.status(200).json(response);
 
     } catch (error) {
-        console.error('Login error:', error);
+        logger.error('Login error', { error: error.message, stack: error.stack });
         return res.status(500).json({ 
             success: false,
             message: 'Authentication failed',
@@ -188,7 +188,7 @@ export const logoutUser = async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Logout error:', error);
+        logger.error('Logout error', { error: error.message, stack: error.stack });
         res.status(500).json({
             success: false,
             message: 'Logout failed',

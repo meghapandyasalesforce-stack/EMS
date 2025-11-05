@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import logger from "./logger.js";
 
 export const generateToken = (userId, role = null, res = null) => {
     try {
@@ -46,7 +47,7 @@ export const generateToken = (userId, role = null, res = null) => {
 
         return token;
     } catch (error) {
-        console.error("Token generation error:", error);
+        logger.error("Token generation error", { error: error.message, stack: error.stack });
         throw new Error("Failed to generate authentication token");
     }
 };

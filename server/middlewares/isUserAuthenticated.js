@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import logger from "../helpers/logger.js";
 
 const isUserAuthenticated = async (req, res, next) => {
     try {
@@ -41,7 +42,7 @@ const isUserAuthenticated = async (req, res, next) => {
 
         next();
     } catch (error) {
-        console.error("Auth Middleware Error:", error.message);
+        logger.error("Auth Middleware Error", { error: error.message, stack: error.stack });
         return res.status(500).json({ message: "Server authentication error", success: false });
     }
 };

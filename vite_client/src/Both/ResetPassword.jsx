@@ -34,9 +34,9 @@ const ResetPassword = () => {
       localStorage.removeItem('email');
       
       // Purge Redux Persist store
-      persistor.purge().catch(err => {
-        console.error('Error purging Redux store:', err);
-      });
+        persistor.purge().catch(() => {
+          // Silently handle purge error
+        });
       
       // Clear cookies by calling logout (if logged in)
       const logoutUser = async () => {

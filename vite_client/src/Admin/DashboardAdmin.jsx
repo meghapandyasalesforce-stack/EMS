@@ -21,7 +21,7 @@ function DashboardAdmin() {
     const token = localStorage.getItem('token');
     
     if (!token || userRole !== 'admin') {
-      console.warn('⚠️ Admin access required. Please log out and log back in as admin.');
+      // Removed console.warn for production
       return;
     }
     

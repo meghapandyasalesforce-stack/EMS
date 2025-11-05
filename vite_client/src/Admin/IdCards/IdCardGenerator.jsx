@@ -79,7 +79,7 @@ const IdCardGenerator = () => {
       const cardsData = response.data?.data || response.data || [];
       setIdCards(cardsData);
     } catch (error) {
-      console.error('Error fetching ID cards:', error);
+      // Removed console.error for production
       toast.error('Failed to fetch ID cards');
     } finally {
       setLoading(false);
@@ -90,17 +90,17 @@ const IdCardGenerator = () => {
     try {
       setEmployeesLoading(true);
       const response = await axios.get('/v1/employee/auth/get-all-employees');
-      console.log('Employees API response:', response.data);
+      // Removed console.log for production
       
       // Ensure we always have an array
       const employeesData = Array.isArray(response.data) ? response.data : 
                            Array.isArray(response.data?.data) ? response.data.data : 
                            Array.isArray(response.data?.employees) ? response.data.employees : [];
       
-      console.log('Processed employees data:', employeesData);
+      // Removed console.log for production
       setEmployees(employeesData);
     } catch (error) {
-      console.error('Error fetching employees:', error);
+      // Removed console.error for production
       toast.error('Failed to fetch employees');
       setEmployees([]); // Set empty array on error
     } finally {
@@ -112,12 +112,10 @@ const IdCardGenerator = () => {
     // Check authentication status
     const userRole = localStorage.getItem('role');
     const userToken = localStorage.getItem('token');
-    console.log('Current user role:', userRole);
-    console.log('Current user token:', userToken);
-    console.log('Current cookies:', document.cookie);
+    // Removed console.log statements for production
     
     if (userRole !== 'admin') {
-      console.error('User is not logged in as admin. Current role:', userRole);
+      // Removed console.error for production
       toast.error('You must be logged in as an admin to access this feature');
       return;
     }
@@ -129,9 +127,7 @@ const IdCardGenerator = () => {
   const handleGenerateCard = async (e) => {
     e.preventDefault();
     try {
-      console.log('Sending form data:', generateForm);
-      console.log('Current user role:', localStorage.getItem('role'));
-      console.log('Current user token:', localStorage.getItem('token'));
+      // Removed console.log statements for production
       
       // Validate required fields
       if (!generateForm.employeeId) {
@@ -154,14 +150,13 @@ const IdCardGenerator = () => {
       }
       
       const response = await axios.post('/v1/admin/id-cards/generate', generateForm);
-      console.log('Response:', response.data);
+      // Removed console.log for production
       toast.success('ID card generated successfully');
       setShowGenerateModal(false);
       resetGenerateForm();
       fetchIdCards();
     } catch (error) {
-      console.error('Error generating ID card:', error);
-      console.error('Error response:', error.response?.data);
+      // Removed console.error statements for production
       toast.error(error.response?.data?.message || 'Failed to generate ID card');
     }
   };
@@ -183,7 +178,7 @@ const IdCardGenerator = () => {
       
       toast.success('ID card downloaded successfully');
     } catch (error) {
-      console.error('Error downloading ID card:', error);
+      // Removed console.error for production
       toast.error('Failed to download ID card');
     }
   };
@@ -197,7 +192,7 @@ const IdCardGenerator = () => {
         toast.success('ID card deactivated successfully');
         fetchIdCards();
       } catch (error) {
-        console.error('Error deactivating ID card:', error);
+        // Removed console.error for production
         toast.error('Failed to deactivate ID card');
       }
     }
@@ -513,8 +508,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
               <select
                 value={formData.employeeId}
                 onChange={(e) => {
-                  console.log('Employee selected:', e.target.value);
-                  console.log('Available employees:', employees);
+                  // Removed console.log statements for production
                   setFormData({ ...formData, employeeId: e.target.value });
                 }}
                 className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"

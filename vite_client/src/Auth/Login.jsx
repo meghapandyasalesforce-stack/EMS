@@ -16,12 +16,9 @@ function Login() {
     const { loading, user } = useSelector(state => state.auth);
 
     useEffect(() => {
-        console.log('useEffect triggered - user:', user);
         if (user) {
             const role = localStorage.getItem('role');
-            console.log('User exists, role:', role);
             const redirectPath = role === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
-            console.log('useEffect navigating to:', redirectPath);
             navigate(redirectPath);
         }
     }, [user, navigate]);
@@ -62,7 +59,6 @@ function Login() {
             });
 
             const data = response.data;
-            console.log('Login response:', { status: response.status, data, userRole });
 
             if (response.status === 401) {
                 toast.error(data.message || 'Invalid credentials.');
@@ -72,7 +68,6 @@ function Login() {
             // Check for successful login - either success property or status 200 with user data
             if (response.status === 200 && (data.success === true || data.employee || data.admin || data.user)) {
                 const userData = data.employee || data.admin || data.user;
-                console.log('User data:', userData);
                 
                 dispatch(setUser(userData));
                 // Store token in localStorage for Authorization header (backup to cookie)
@@ -98,11 +93,9 @@ function Login() {
                 const redirectPath = userRole === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
                 setTimeout(() => { window.location.href = redirectPath; }, 500);
             } else {
-                console.log('Login failed:', { status: response.status, success: data.success, message: data.message });
                 toast.error(data.message || 'Login failed');
             }
         } catch (err) {
-            console.error('Login failed:', err);
             
             // Handle different types of errors
             if (err.code === 'ERR_NETWORK') {

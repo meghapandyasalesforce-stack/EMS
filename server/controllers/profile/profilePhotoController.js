@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import logger from '../../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,7 @@ export const uploadEmployeePhoto = async (req, res) => {
         // Verify file was actually saved
         const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
         if (!fs.existsSync(savedFilePath)) {
-            console.error('❌ File was not saved:', savedFilePath);
+            logger.error('File was not saved', { savedFilePath });
             return res.status(500).json({ 
                 message: 'File upload failed - file not found on disk',
                 error: 'File system error'
@@ -73,7 +74,7 @@ export const uploadEmployeePhoto = async (req, res) => {
 
         // Log successful upload with file details
         const fileStats = fs.statSync(savedFilePath);
-        console.log('✅ Profile photo uploaded successfully:', {
+        logger.info('Profile photo uploaded successfully', {
             filename: req.file.filename,
             path: savedFilePath,
             size: fileStats.size,
@@ -95,7 +96,7 @@ export const uploadEmployeePhoto = async (req, res) => {
             fileSize: fileStats.size
         });
     } catch (error) {
-        console.error('Upload error:', error);
+        logger.error('Upload error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to upload profile photo', error: error.message });
     }
 };
@@ -125,7 +126,7 @@ export const uploadAdminPhoto = async (req, res) => {
         // Verify file was actually saved
         const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
         if (!fs.existsSync(savedFilePath)) {
-            console.error('❌ File was not saved:', savedFilePath);
+            logger.error('File was not saved', { savedFilePath });
             return res.status(500).json({ 
                 message: 'File upload failed - file not found on disk',
                 error: 'File system error'
@@ -134,7 +135,7 @@ export const uploadAdminPhoto = async (req, res) => {
 
         // Log successful upload with file details
         const fileStats = fs.statSync(savedFilePath);
-        console.log('✅ Profile photo uploaded successfully:', {
+        logger.info('Profile photo uploaded successfully', {
             filename: req.file.filename,
             path: savedFilePath,
             size: fileStats.size,
@@ -156,7 +157,7 @@ export const uploadAdminPhoto = async (req, res) => {
             fileSize: fileStats.size
         });
     } catch (error) {
-        console.error('Upload error:', error);
+        logger.error('Upload error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to upload profile photo', error: error.message });
     }
 };
@@ -186,7 +187,7 @@ export const getProfilePhoto = async (req, res) => {
         // Check if file actually exists on disk
         const photoPath = path.join(__dirname, '../../uploads/profile-photos', user.profilePhoto.filename);
         if (!fs.existsSync(photoPath)) {
-            console.warn('⚠️ Profile photo file not found on disk:', {
+            logger.warn('Profile photo file not found on disk', {
                 filename: user.profilePhoto.filename,
                 path: photoPath,
                 userId: userId,
@@ -205,7 +206,7 @@ export const getProfilePhoto = async (req, res) => {
             fileExists: true
         });
     } catch (error) {
-        console.error('Get photo error:', error);
+        logger.error('Get photo error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to get profile photo', error: error.message });
     }
 };
@@ -244,7 +245,7 @@ export const deleteProfilePhoto = async (req, res) => {
 
         res.json({ message: 'Profile photo deleted successfully' });
     } catch (error) {
-        console.error('Delete photo error:', error);
+        logger.error('Delete photo error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to delete profile photo', error: error.message });
     }
 };

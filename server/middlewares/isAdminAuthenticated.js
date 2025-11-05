@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import logger from "../helpers/logger.js";
 
 const isAdminAuthenticated = async (req, res, next) => {
     try {
@@ -35,7 +36,7 @@ const isAdminAuthenticated = async (req, res, next) => {
         // Restrict access to admins only
         if (decoded.role !== "admin") {
             // Log the actual role for debugging
-            console.warn(`Admin access denied. Token role: ${decoded.role}, userId: ${decoded.userId}`);
+            logger.warn('Admin access denied', { role: decoded.role, userId: decoded.userId });
             return res.status(403).json({ 
                 message: "Access restricted to admins only", 
                 success: false,
@@ -51,7 +52,7 @@ const isAdminAuthenticated = async (req, res, next) => {
 
         next();
     } catch (error) {
-        console.error("Admin Auth Middleware Error:", error.message);
+        logger.error("Admin Auth Middleware Error", { error: error.message, stack: error.stack });
         return res.status(500).json({ message: "Server authentication error", success: false });
     }
 };
