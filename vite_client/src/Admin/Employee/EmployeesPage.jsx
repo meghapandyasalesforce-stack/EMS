@@ -47,7 +47,7 @@ const EmployeesPage = () => {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-100 p-5 ml-0 lg:ml-64 transition-all duration-300">
+      <div className="min-h-screen bg-gray-100 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
@@ -57,7 +57,7 @@ const EmployeesPage = () => {
 
   if (status === 'failed') {
     return (
-      <div className="min-h-screen bg-gray-100 p-5 ml-0 lg:ml-64 transition-all duration-300">
+      <div className="min-h-screen bg-gray-100 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           Error loading employees: {error || 'Unknown error occurred'}
         </div>
@@ -66,7 +66,7 @@ const EmployeesPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-5 ml-0 lg:ml-64 transition-all duration-300">
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-6">Employees Management</h1>

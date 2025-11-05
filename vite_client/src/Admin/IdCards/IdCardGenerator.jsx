@@ -671,7 +671,7 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
           {/* Card Preview */}
           <div className="mb-6 flex justify-center">
             {/* Vertical ID Card - Matching the design shown */}
-            <div className="w-80 h-[500px] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
+            <div className="w-full max-w-80 sm:w-80 h-[400px] sm:h-[500px] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
               {/* Top Section - Dark Blue with Angular Design */}
               <div className="h-32 bg-gradient-to-br from-blue-700 to-blue-900 relative overflow-hidden">
                 <div className="absolute inset-0 opacity-20">

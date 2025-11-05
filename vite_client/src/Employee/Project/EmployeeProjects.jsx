@@ -34,7 +34,7 @@ const EmployeeProjects = () => {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 p-5 ml-64 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading projects...</p>
@@ -45,7 +45,7 @@ const EmployeeProjects = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-5 ml-64 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
         <div className="max-w-lg bg-white rounded-lg shadow-md border border-gray-200 p-5 text-center">
           <div className="flex justify-center mb-3">
             <FiAlertCircle className="w-8 h-8 text-red-500" />

@@ -263,7 +263,7 @@ const UpdatePayroll = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-5 ml-64">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Update Payroll</h2>
 

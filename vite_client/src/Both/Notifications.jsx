@@ -43,13 +43,13 @@ const Notifications = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-5 ml-64 transition-all duration-300">
-      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+      <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-semibold text-gray-800">Notifications</h1>
-          <div className="flex gap-2">
-            <button onClick={load} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded">Refresh</button>
-            <button onClick={markAll} className="px-3 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded">Mark all read</button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={load} className="px-3 py-2 text-sm sm:text-base bg-gray-100 hover:bg-gray-200 rounded transition">Refresh</button>
+            <button onClick={markAll} className="px-3 py-2 text-sm sm:text-base bg-blue-500 hover:bg-blue-600 text-white rounded transition">Mark all read</button>
           </div>
         </div>
 

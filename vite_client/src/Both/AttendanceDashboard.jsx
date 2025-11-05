@@ -145,48 +145,50 @@ const AttendanceDashboard = () => {
                     <button className="text-gray-400 hover:text-white px-4 py-2 rounded text-sm">DEC</button>
                     <button className="text-gray-400 hover:text-white px-4 py-2 rounded text-sm">NOV</button>
                 </div>
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr>
-                            <th className="text-left p-4 text-gray-400 font-normal border-b border-gray-700">DATE</th>
-                            <th className="text-left p-4 text-gray-400 font-normal border-b border-gray-700">ATTENDANCE VISUAL</th>
-                            <th className="text-left p-4 text-gray-400 font-normal border-b border-gray-700">EFFECTIVE HOURS</th>
-                            <th className="text-left p-4 text-gray-400 font-normal border-b border-gray-700">GROSS HOURS</th>
-                            <th className="text-left p-4 text-gray-400 font-normal border-b border-gray-700">ARRIVAL</th>
-                            <th className="text-left p-4 text-gray-400 font-normal border-b border-gray-700">STATUS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {attendanceLogs.map(log => (
-                            <tr key={log._id}>
-                                <td className="p-4 border-b border-gray-700">{formatDate(new Date(log.date))}</td>
-                                <td className="p-4 border-b border-gray-700">
-                                    <div className="bg-gray-700 h-2 rounded relative w-full">
-                                        <div 
-                                            className="absolute h-full bg-blue-400 rounded"
-                                            style={{
-                                                left: '30%',
-                                                width: '40%'
-                                            }}
-                                        />
-                                    </div>
-                                </td>
-                                <td className="p-4 border-b border-gray-700">{formatDuration(log.effectiveHours)}</td>
-                                <td className="p-4 border-b border-gray-700">{formatDuration(log.grossHours)}</td>
-                                <td className={`p-4 border-b border-gray-700 ${log.isOnTime ? 'text-green-400' : 'text-red-400'}`}>
-                                    {log.isOnTime ? 'On Time' : 'Late'}
-                                </td>
-                                <td className="p-4 border-b border-gray-700">
-                                    <span className={`inline-block w-2 h-2 rounded-full ${
-                                        log.status === 'present' ? 'bg-green-400' : 
-                                        log.status === 'absent' ? 'bg-red-400' : 
-                                        'bg-yellow-400'
-                                    }`} />
-                                </td>
+                <div className="overflow-x-auto">
+                    <table className="w-full border-collapse min-w-full">
+                        <thead>
+                            <tr>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">DATE</th>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">ATTENDANCE VISUAL</th>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">EFFECTIVE HOURS</th>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">GROSS HOURS</th>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">ARRIVAL</th>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">STATUS</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {attendanceLogs.map(log => (
+                                <tr key={log._id}>
+                                    <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDate(new Date(log.date))}</td>
+                                    <td className="p-3 sm:p-4 border-b border-gray-700">
+                                        <div className="bg-gray-700 h-2 rounded relative w-full">
+                                            <div 
+                                                className="absolute h-full bg-blue-400 rounded"
+                                                style={{
+                                                    left: '30%',
+                                                    width: '40%'
+                                                }}
+                                            />
+                                        </div>
+                                    </td>
+                                    <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDuration(log.effectiveHours)}</td>
+                                    <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDuration(log.grossHours)}</td>
+                                    <td className={`p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm ${log.isOnTime ? 'text-green-400' : 'text-red-400'}`}>
+                                        {log.isOnTime ? 'On Time' : 'Late'}
+                                    </td>
+                                    <td className="p-3 sm:p-4 border-b border-gray-700">
+                                        <span className={`inline-block w-2 h-2 rounded-full ${
+                                            log.status === 'present' ? 'bg-green-400' : 
+                                            log.status === 'absent' ? 'bg-red-400' : 
+                                            'bg-yellow-400'
+                                        }`} />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
