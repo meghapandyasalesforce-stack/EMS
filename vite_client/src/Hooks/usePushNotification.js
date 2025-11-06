@@ -167,22 +167,11 @@ export const usePushNotification = () => {
     return permission === 'granted';
   }, []);
 
-  // Initialize on mount
+  // Don't auto-initialize on mount - wait for user to enable in settings
+  // This prevents automatic permission requests on page load
   useEffect(() => {
-    // Check if notifications are supported
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      // Request permission first
-      requestPermission().then((granted) => {
-        if (granted) {
-          initializePush();
-        } else {
-          setIsLoading(false);
-        }
-      });
-    } else {
-      setIsLoading(false);
-    }
-  }, [initializePush, requestPermission]);
+    setIsLoading(false);
+  }, []);
 
   return {
     subscription,

@@ -111,8 +111,12 @@ const TodayStatusComponent = () => {
                 <tbody className="divide-y divide-gray-200">
                   {presentEmployees.map((emp, index) => {
                     const deviceType = emp.clockInNetwork?.deviceType || 'unknown';
-                    const locationMatch = emp.clockInLocation?.latitude && emp.clockInLocation?.longitude;
+                    // Check if location is verified (either locationMatch flag or coordinates exist if no rule)
+                    const locationMatch = emp.clockInLocation?.locationMatch !== undefined 
+                      ? emp.clockInLocation.locationMatch 
+                      : (emp.clockInLocation?.latitude && emp.clockInLocation?.longitude);
                     const locationAddress = emp.clockInLocation?.address || 'Not provided';
+                    const locationDistance = emp.clockInLocation?.locationDistance;
                     
                     return (
                       <tr key={index}>
@@ -141,12 +145,12 @@ const TodayStatusComponent = () => {
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {locationMatch ? (
-                            <div className="flex items-center space-x-1 text-green-600" title={locationAddress}>
+                            <div className="flex items-center space-x-1 text-green-600" title={locationDistance ? `${locationAddress} (${Math.round(locationDistance)}m away)` : locationAddress}>
                               <FiCheckCircle className="w-4 h-4" />
                               <span className="text-xs">Verified</span>
                             </div>
                           ) : (
-                            <div className="flex items-center space-x-1 text-yellow-600">
+                            <div className="flex items-center space-x-1 text-yellow-600" title={locationAddress}>
                               <FiAlertCircle className="w-4 h-4" />
                               <span className="text-xs">Not verified</span>
                             </div>

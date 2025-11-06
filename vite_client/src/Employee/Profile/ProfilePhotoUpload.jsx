@@ -4,6 +4,7 @@ import { FiCamera, FiUpload, FiX, FiUser } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { getUploadUrl } from '../../utils/axios';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -16,6 +17,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
   const canvasRef = useRef(null);
 
   const user = useSelector((state) => state.auth.user);
+  const { isPermissionGranted, isPermissionDenied, requestCameraPermission } = usePermissions();
 
   // Handle file selection
   const handleFileSelect = (event) => {
@@ -36,8 +38,28 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
     }
   };
 
-  // Start camera
+  // Start camera with permission check
   const startCamera = async () => {
+    // Check if permission is denied
+    if (isPermissionDenied('camera')) {
+      toast.error('Camera permission denied. Please enable it in browser settings.');
+      return;
+    }
+
+    // Request permission if not granted
+    if (!isPermissionGranted('camera')) {
+      try {
+        const result = await requestCameraPermission();
+        if (!result.granted) {
+          toast.warning('Camera permission is required to take a photo.');
+          return;
+        }
+      } catch (error) {
+        toast.error('Failed to request camera permission.');
+        return;
+      }
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -52,8 +74,11 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       }
       setCameraMode(true);
     } catch (error) {
-      // Removed console.error for production
-      toast.error('Camera access denied or not available');
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        toast.error('Camera access denied. Please enable it in browser settings.');
+      } else {
+        toast.error('Camera access denied or not available');
+      }
     }
   };
 

@@ -22,6 +22,9 @@ import {
   FiAlertCircle,
   FiLoader
 } from 'react-icons/fi';
+import { usePermissions } from '../../hooks/usePermissions';
+import PermissionRequestDialog from '../../components/PermissionRequestDialog';
+import PermissionStatusIndicator from '../../components/PermissionStatusIndicator';
 
 const CheckInOut = () => {
   const dispatch = useDispatch();
@@ -46,6 +49,17 @@ const CheckInOut = () => {
   const [showCamera, setShowCamera] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // Permission management
+  const {
+    isPermissionGranted,
+    isPermissionDenied,
+    requestLocationPermission,
+    requestCameraPermission,
+    checkAllPermissions
+  } = usePermissions();
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  
   // Refs
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -56,10 +70,29 @@ const CheckInOut = () => {
   const canTakeBreak = currentSession && !isOnBreak;
   const canEndBreak = isOnBreak;
 
-  // Get current location
-  const getCurrentLocation = () => {
+  // Get current location with permission check
+  const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
       return Promise.reject('Geolocation not supported');
+    }
+
+    // Check if permission is denied
+    if (isPermissionDenied('location')) {
+      showNotification('Location permission denied. Please enable it in browser settings.', 'error');
+      return Promise.reject('Location permission denied');
+    }
+
+    // Request permission if not granted
+    if (!isPermissionGranted('location')) {
+      try {
+        const result = await requestLocationPermission();
+        if (!result.granted) {
+          showNotification('Location permission is required for attendance tracking.', 'warning');
+          return Promise.reject('Location permission not granted');
+        }
+      } catch (error) {
+        return Promise.reject(error);
+      }
     }
 
     return new Promise((resolve, reject) => {
@@ -97,6 +130,9 @@ const CheckInOut = () => {
           }
         },
         (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            showNotification('Location permission denied. Please enable it in browser settings.', 'error');
+          }
           reject(error);
         },
         {
@@ -133,8 +169,28 @@ const CheckInOut = () => {
     return networkData;
   };
 
-  // Camera functions
+  // Camera functions with permission check
   const startCamera = async () => {
+    // Check if permission is denied
+    if (isPermissionDenied('camera')) {
+      showNotification('Camera permission denied. Please enable it in browser settings.', 'error');
+      return;
+    }
+
+    // Request permission if not granted
+    if (!isPermissionGranted('camera')) {
+      try {
+        const result = await requestCameraPermission();
+        if (!result.granted) {
+          showNotification('Camera permission is required to capture your photo.', 'warning');
+          return;
+        }
+      } catch (error) {
+        showNotification('Failed to request camera permission.', 'error');
+        return;
+      }
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -149,8 +205,11 @@ const CheckInOut = () => {
       }
       setShowCamera(true);
     } catch (error) {
-      // Removed console.error for production
-      showNotification('Camera access denied. Please allow camera permission.', 'error');
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        showNotification('Camera access denied. Please allow camera permission in browser settings.', 'error');
+      } else {
+        showNotification('Camera access denied. Please allow camera permission.', 'error');
+      }
     }
   };
 
@@ -177,6 +236,11 @@ const CheckInOut = () => {
     setCapturedImage(imageDataUrl);
     stopCamera();
   };
+
+  // Check permissions on mount
+  useEffect(() => {
+    checkAllPermissions();
+  }, [checkAllPermissions]);
 
   // Fetch attendance data on component mount
   useEffect(() => {
@@ -247,6 +311,20 @@ const CheckInOut = () => {
           `You have an open session since ${formatTime(openSession.clockIn)}. Please clock out first.`,
           'error'
         );
+        return;
+      }
+
+      // Check permissions before proceeding
+      const needsLocation = !isPermissionGranted('location');
+      const needsCamera = !isPermissionGranted('camera');
+      
+      if (needsLocation || needsCamera) {
+        const needed = [];
+        if (needsLocation) needed.push('location');
+        if (needsCamera) needed.push('camera');
+        
+        setPendingAction(() => handleClockIn);
+        setShowPermissionDialog(true);
         return;
       }
 
@@ -438,6 +516,50 @@ const CheckInOut = () => {
         </div>
       ) : (
         <div className="p-8">
+          {/* Permission Status Indicators */}
+          <div className="mb-6 bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">Required Permissions</h3>
+              <button
+                onClick={() => {
+                  const needed = [];
+                  if (!isPermissionGranted('location')) needed.push('location');
+                  if (!isPermissionGranted('camera')) needed.push('camera');
+                  if (needed.length > 0) {
+                    setPendingAction(null);
+                    setShowPermissionDialog(true);
+                  } else {
+                    showNotification('All permissions are granted!', 'success');
+                  }
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Request Permissions
+              </button>
+            </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              <PermissionStatusIndicator type="location" size="sm" />
+              <PermissionStatusIndicator type="camera" size="sm" />
+            </div>
+          </div>
+
+          {/* Permission Request Dialog */}
+          <PermissionRequestDialog
+            isOpen={showPermissionDialog}
+            onClose={() => {
+              setShowPermissionDialog(false);
+              checkAllPermissions();
+            }}
+            requestedPermissions={['location', 'camera']}
+            onPermissionsGranted={() => {
+              showNotification('Permissions granted successfully!', 'success');
+              if (pendingAction) {
+                pendingAction();
+                setPendingAction(null);
+              }
+            }}
+          />
+
           {currentSession ? (
             <div className="space-y-6">
               {/* Enhanced Status Card */}

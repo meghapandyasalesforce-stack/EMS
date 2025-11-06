@@ -108,7 +108,9 @@ export const clockIn = async (req, res) => {
       latitude: req.body.latitude,
       longitude: req.body.longitude,
       address: req.body.address,
-      accuracy: req.body.accuracy
+      accuracy: req.body.accuracy,
+      locationMatch: false,
+      locationDistance: null
     };
 
     let locationMatch = false;
@@ -141,6 +143,8 @@ export const clockIn = async (req, res) => {
           });
         }
         locationMatch = true;
+        locationInfo.locationMatch = true;
+        locationInfo.locationDistance = locationDistance;
       }
     } else if (activeRule && activeRule.enableSimplePunches) {
       // Even with simple punches, check if location matches (for admin info)
@@ -152,7 +156,13 @@ export const clockIn = async (req, res) => {
           activeRule.coordinates.longitude
         );
         locationMatch = locationDistance <= (activeRule.maximumRadius || 500);
+        locationInfo.locationMatch = locationMatch;
+        locationInfo.locationDistance = locationDistance;
       }
+    } else if (!activeRule && typeof locationInfo.latitude === 'number' && typeof locationInfo.longitude === 'number') {
+      // If no rule is configured but location is provided, mark as verified
+      locationMatch = true;
+      locationInfo.locationMatch = true;
     }
 
     // Handle image upload

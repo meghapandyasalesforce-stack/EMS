@@ -403,7 +403,14 @@ const NotificationSettings = () => {
                                         onChange={async (e) => {
                                             handleToggle('pushNotifications', e.target.checked);
                                             if (e.target.checked) {
-                                                await subscribe();
+                                                // Request permission first, then subscribe
+                                                const granted = await requestPermission();
+                                                if (granted) {
+                                                    await subscribe();
+                                                } else {
+                                                    // Revert toggle if permission denied
+                                                    handleToggle('pushNotifications', false);
+                                                }
                                             } else {
                                                 await unsubscribe();
                                             }

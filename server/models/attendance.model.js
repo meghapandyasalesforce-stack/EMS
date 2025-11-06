@@ -70,7 +70,9 @@ const attendanceSchema = new mongoose.Schema({
         latitude: { type: Number },
         longitude: { type: Number },
         address: { type: String },
-        accuracy: { type: Number }
+        accuracy: { type: Number },
+        locationMatch: { type: Boolean, default: false },
+        locationDistance: { type: Number }
     },
     clockOutLocation: {
         latitude: { type: Number },

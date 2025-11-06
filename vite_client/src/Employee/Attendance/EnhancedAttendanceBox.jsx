@@ -9,6 +9,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { FiClock, FiHome, FiMapPin, FiCalendar, FiCoffee, FiPause, FiPlay, FiCamera, FiWifi } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const EnhancedAttendanceBox = () => {
   const dispatch = useDispatch();
@@ -29,6 +30,14 @@ const EnhancedAttendanceBox = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  
+  // Permission management
+  const {
+    isPermissionGranted,
+    isPermissionDenied,
+    requestLocationPermission,
+    requestCameraPermission
+  } = usePermissions();
 
   useEffect(() => {
     if (sessions && sessions.length > 0) {
@@ -39,14 +48,32 @@ const EnhancedAttendanceBox = () => {
     }
   }, [sessions]);
 
-  // Get user's current location
-  const getCurrentLocation = () => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported by this browser.'));
-        return;
-      }
+  // Get user's current location with permission check
+  const getCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      return Promise.reject(new Error('Geolocation is not supported by this browser.'));
+    }
 
+    // Check if permission is denied
+    if (isPermissionDenied('location')) {
+      toast.error('Location permission denied. Please enable it in browser settings.');
+      return Promise.reject(new Error('Location permission denied'));
+    }
+
+    // Request permission if not granted
+    if (!isPermissionGranted('location')) {
+      try {
+        const result = await requestLocationPermission();
+        if (!result.granted) {
+          toast.warning('Location permission is required for attendance tracking.');
+          return Promise.reject(new Error('Location permission not granted'));
+        }
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const locationData = {
@@ -59,7 +86,9 @@ const EnhancedAttendanceBox = () => {
           resolve(locationData);
         },
         (error) => {
-          // Removed console.error for production
+          if (error.code === error.PERMISSION_DENIED) {
+            toast.error('Location permission denied. Please enable it in browser settings.');
+          }
           reject(error);
         },
         {
@@ -112,8 +141,28 @@ const EnhancedAttendanceBox = () => {
     });
   };
 
-  // Start camera
+  // Start camera with permission check
   const startCamera = async () => {
+    // Check if permission is denied
+    if (isPermissionDenied('camera')) {
+      toast.error('Camera permission denied. Please enable it in browser settings.');
+      return;
+    }
+
+    // Request permission if not granted
+    if (!isPermissionGranted('camera')) {
+      try {
+        const result = await requestCameraPermission();
+        if (!result.granted) {
+          toast.warning('Camera permission is required to capture your photo.');
+          return;
+        }
+      } catch (error) {
+        toast.error('Failed to request camera permission.');
+        return;
+      }
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -127,8 +176,11 @@ const EnhancedAttendanceBox = () => {
       }
       setIsCapturing(true);
     } catch (error) {
-      // Removed console.error for production
-      toast.error('Camera access denied or not available');
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        toast.error('Camera access denied. Please enable it in browser settings.');
+      } else {
+        toast.error('Camera access denied or not available');
+      }
     }
   };
 
