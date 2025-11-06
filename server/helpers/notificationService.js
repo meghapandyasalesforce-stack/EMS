@@ -149,10 +149,15 @@ export const sendTaskUpdateNotification = async (task, employee, updateType = 'u
  */
 export const sendNotificationToUsers = async (recipientIds, sender, message, type = 'general', metadata = {}) => {
   try {
+    // Determine sender type based on sender model
+    const senderType = sender.constructor.modelName === 'Employee' ? 'Employee' : 'User';
+    
     const notificationPromises = recipientIds.map(recipientId => {
       return Notification.create({
         recipient: recipientId,
+        recipientType: 'User', // Assuming recipients are Users for now
         sender: sender._id,
+        senderType: senderType,
         message,
         type,
         metadata
@@ -175,8 +180,12 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
  */
 export const sendBroadcastNotification = async (sender, message, type = 'general', metadata = {}) => {
   try {
+    // Determine sender type based on sender model
+    const senderType = sender.constructor.modelName === 'Employee' ? 'Employee' : 'User';
+    
     await Notification.create({
       sender: sender._id,
+      senderType: senderType,
       message,
       type,
       isBroadcast: true,
@@ -221,5 +230,46 @@ export const getUnreadNotificationCount = async (userId) => {
   } catch (error) {
     console.error('Error getting unread notification count:', error);
     return 0;
+  }
+};
+
+/**
+ * Send break notification to all admins when employee goes on break
+ * @param {Object} employee - Employee object who went on break
+ */
+export const sendBreakNotification = async (employee) => {
+  try {
+    // Get all admins
+    const admins = await User.find({ role: 'admin' });
+    
+    if (admins.length === 0) {
+      console.log('No admins found to notify about break');
+      return;
+    }
+
+    const message = `☕ ${employee.name} ${employee.lastName || ''} is now on break`;
+    
+    // Create notifications for each admin
+    const notificationPromises = admins.map(admin => {
+      return Notification.create({
+        recipient: admin._id,
+        recipientType: 'User',
+        sender: employee._id,
+        senderType: 'Employee',
+        message,
+        type: 'break',
+        priority: 'medium',
+        metadata: {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          breakTime: new Date()
+        }
+      });
+    });
+
+    await Promise.all(notificationPromises);
+    console.log(`Break notification sent to ${admins.length} admins for ${employee.name}`);
+  } catch (error) {
+    console.error('Error sending break notification:', error);
   }
 };

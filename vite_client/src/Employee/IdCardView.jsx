@@ -86,7 +86,7 @@ const IdCardView = () => {
           ` : ''}
         </div>
         <div style="background: ${accentColor}; color: white; padding: 10px; text-align: center; font-size: 11px; border-radius: 0 0 6px 6px;">
-          Valid until: ${new Date(idCard.expiryDate).toLocaleDateString()}
+          Employee ID Card
         </div>
       `;
       
@@ -171,16 +171,7 @@ const IdCardView = () => {
     return colors[status] || 'text-gray-600 bg-gray-100';
   };
 
-  const isExpired = (expiryDate) => {
-    return new Date(expiryDate) < new Date();
-  };
-
-  const isExpiringSoon = (expiryDate) => {
-    const expiry = new Date(expiryDate);
-    const now = new Date();
-    const daysUntilExpiry = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-    return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
-  };
+  // Expiry date functions removed - cards no longer expire
 
   if (loading) {
     return (
@@ -356,7 +347,7 @@ const IdCardView = () => {
                     color: '#ffffff'
                   }}
                 >
-                  Valid until: {new Date(idCard.expiryDate).toLocaleDateString()}
+                  Employee ID Card
                 </div>
               </div>
 
@@ -398,21 +389,6 @@ const IdCardView = () => {
                   <span className="text-gray-600">Issue Date</span>
                   <span className="text-sm">
                     {new Date(idCard.issueDate).toLocaleDateString()}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between py-2 border-b border-gray-200">
-                  <span className="text-gray-600">Expiry Date</span>
-                  <span className={`text-sm ${
-                    isExpired(idCard.expiryDate) 
-                      ? 'text-red-600 font-medium' 
-                      : isExpiringSoon(idCard.expiryDate)
-                      ? 'text-yellow-600 font-medium'
-                      : 'text-gray-900'
-                  }`}>
-                    {new Date(idCard.expiryDate).toLocaleDateString()}
-                    {isExpired(idCard.expiryDate) && ' (Expired)'}
-                    {isExpiringSoon(idCard.expiryDate) && ' (Expiring Soon)'}
                   </span>
                 </div>
                 

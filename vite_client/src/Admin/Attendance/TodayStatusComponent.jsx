@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTodayStatus } from '../../context/attendanceSlice';
 import { useNavigate } from 'react-router-dom';
+import { FiSmartphone, FiMonitor, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 
 const TodayStatusComponent = () => {
   const dispatch = useDispatch();
@@ -41,6 +42,20 @@ const TodayStatusComponent = () => {
     if (!timeString) return '-';
     const time = new Date(timeString);
     return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Get device icon
+  const getDeviceIcon = (deviceType) => {
+    switch (deviceType) {
+      case 'mobile':
+        return <FiSmartphone className="w-4 h-4 text-blue-600" />;
+      case 'tablet':
+        return <FiSmartphone className="w-4 h-4 text-purple-600" />;
+      case 'desktop':
+        return <FiMonitor className="w-4 h-4 text-green-600" />;
+      default:
+        return <FiMonitor className="w-4 h-4 text-gray-400" />;
+    }
   };
 
   return (
@@ -88,36 +103,63 @@ const TodayStatusComponent = () => {
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
                     )}
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Clock In</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {presentEmployees.map((emp, index) => (
-                    <tr key={index}>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="font-medium text-sm sm:text-base">{emp.employee.name}</div>
-                        {!isMobile && (
-                          <div className="text-xs sm:text-sm text-gray-500">{emp.employee.position}</div>
-                        )}
-                      </td>
-                      {!isMobile && (
-                        <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm text-gray-500">
-                          {emp.employee.department}
+                  {presentEmployees.map((emp, index) => {
+                    const deviceType = emp.clockInNetwork?.deviceType || 'unknown';
+                    const locationMatch = emp.clockInLocation?.latitude && emp.clockInLocation?.longitude;
+                    const locationAddress = emp.clockInLocation?.address || 'Not provided';
+                    
+                    return (
+                      <tr key={index}>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="font-medium text-sm sm:text-base">{emp.employee.name}</div>
+                          {!isMobile && (
+                            <div className="text-xs sm:text-sm text-gray-500">{emp.employee.position}</div>
+                          )}
                         </td>
-                      )}
-                      <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">
-                        {formatTime(emp.clockIn)}
-                        {emp.isLateArrival && (
-                          <span className="ml-1 sm:ml-2 text-xs text-red-500">(Late)</span>
+                        {!isMobile && (
+                          <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm text-gray-500">
+                            {emp.employee.department}
+                          </td>
                         )}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                          Present
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">
+                          {formatTime(emp.clockIn)}
+                          {emp.isLateArrival && (
+                            <span className="ml-1 sm:ml-2 text-xs text-red-500">(Late)</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="flex items-center space-x-1">
+                            {getDeviceIcon(deviceType)}
+                            <span className="text-xs text-gray-600 capitalize">{deviceType}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {locationMatch ? (
+                            <div className="flex items-center space-x-1 text-green-600" title={locationAddress}>
+                              <FiCheckCircle className="w-4 h-4" />
+                              <span className="text-xs">Verified</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-1 text-yellow-600">
+                              <FiAlertCircle className="w-4 h-4" />
+                              <span className="text-xs">Not verified</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                            Present
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -214,7 +214,7 @@ const AddPayroll = () => {
                                     disabled={!!employeeId} // Disable if employee is pre-selected
                                 >
                                     <option value="">Choose an employee...</option>
-                                    {employees.map(employee => (
+                                    {(Array.isArray(employees) ? employees : []).map(employee => (
                                         <option key={employee._id} value={employee._id}>
                                             {employee.name} {employee.lastName} - {employee.jobTitle}
                                         </option>

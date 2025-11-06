@@ -21,7 +21,6 @@ const IdCardGenerator = () => {
   const [generateForm, setGenerateForm] = useState({
     employeeId: '',
     cardType: 'employee',
-    expiryDate: '',
     cardDesign: {
       template: 'standard'
     },
@@ -134,20 +133,6 @@ const IdCardGenerator = () => {
         toast.error('Please select an employee');
         return;
       }
-      if (!generateForm.expiryDate) {
-        toast.error('Please select an expiry date');
-        return;
-      }
-      
-      // Ensure expiry date is in the future
-      const expiryDate = new Date(generateForm.expiryDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (expiryDate <= today) {
-        toast.error('Expiry date must be in the future');
-        return;
-      }
       
       const response = await axios.post('/v1/admin/id-cards/generate', generateForm);
       // Removed console.log for production
@@ -211,7 +196,6 @@ const IdCardGenerator = () => {
     setGenerateForm({
       employeeId: '',
       cardType: 'employee',
-      expiryDate: '',
       cardDesign: {
         template: 'standard'
       },
@@ -240,16 +224,7 @@ const IdCardGenerator = () => {
     return colors[type] || 'bg-gray-100 text-gray-800';
   };
 
-  const isExpiringSoon = (expiryDate) => {
-    const expiry = new Date(expiryDate);
-    const now = new Date();
-    const daysUntilExpiry = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-    return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
-  };
-
-  const isExpired = (expiryDate) => {
-    return new Date(expiryDate) < new Date();
-  };
+  // Expiry date functions removed - cards no longer expire
 
   useEffect(() => {
     fetchIdCards();
@@ -419,16 +394,6 @@ const IdCardGenerator = () => {
                           </span>
                         </div>
                       </div>
-
-                      {(isExpired(card.expiryDate) || isExpiringSoon(card.expiryDate)) && (
-                        <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${
-                          isExpired(card.expiryDate) 
-                            ? 'bg-red-50 text-red-700 border border-red-200' 
-                            : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-                        }`}>
-                          {isExpired(card.expiryDate) ? '⚠️ Card has expired' : '⚠️ Card expires soon'}
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -564,7 +529,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
             </div>
 
             {/* Card Details */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
                   Card Type
@@ -579,19 +544,6 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
                   <option value="contractor">Contractor</option>
                   <option value="temporary">Temporary</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Expiry Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.expiryDate}
-                  onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                  className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
-                  required
-                />
               </div>
 
               <div>
@@ -774,10 +726,6 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
                 <span className="text-sm font-medium text-gray-600">Issue Date</span>
                 <p className="text-lg font-bold text-gray-900">{new Date(card.issueDate).toLocaleDateString()}</p>
               </div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <span className="text-sm font-medium text-gray-600">Expiry Date</span>
-              <p className="text-lg font-bold text-gray-900">{new Date(card.expiryDate).toLocaleDateString()}</p>
             </div>
           </div>
 

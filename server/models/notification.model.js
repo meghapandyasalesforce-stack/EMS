@@ -3,13 +3,23 @@ import mongoose from 'mongoose';
 const notificationSchema = new mongoose.Schema({
   recipient: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User',
+    refPath: 'recipientType',
     required: false // Now optional
+  },
+  recipientType: {
+    type: String,
+    enum: ['User', 'Employee'],
+    default: 'User'
   },
   sender: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
+    refPath: 'senderType',
     required: true 
+  },
+  senderType: {
+    type: String,
+    enum: ['User', 'Employee'],
+    default: 'User'
   },
   message: { 
     type: String, 
@@ -17,7 +27,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['task_update', 'task_created', 'task_completed', 'general', 'system'],
+    enum: ['task_update', 'task_created', 'task_completed', 'general', 'system', 'break', 'announcement'],
     default: 'general'
   },
   relatedEntity: {

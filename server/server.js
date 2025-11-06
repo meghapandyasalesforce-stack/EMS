@@ -106,13 +106,10 @@ app.use(
       
       // In production, be strict about origins
       if (process.env.NODE_ENV === 'production') {
-        // In production, reject requests with no origin (except for mobile apps with proper headers)
+        // In production, reject requests with no origin
+        // Note: Mobile apps should send a proper origin header or use a different authentication method
         if (!origin) {
-          // Allow only if it's a mobile app or internal service (check for custom header)
-          const isMobileApp = req.headers['x-mobile-app'] === 'true';
-          if (!isMobileApp) {
-            return callback(new Error('Origin header required in production'));
-          }
+          return callback(new Error('Origin header required in production'));
         }
         
         // Check if origin is in allowed list (strict matching)
@@ -121,7 +118,7 @@ app.use(
         }
         
         // Log rejected origins for security monitoring
-        logger.warn('CORS rejected origin in production', { origin, ip: req.ip });
+        logger.warn('CORS rejected origin in production', { origin });
         callback(new Error('Not allowed by CORS'));
         return;
       }

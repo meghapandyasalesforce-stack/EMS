@@ -8,7 +8,7 @@ import logger from "../../helpers/logger.js";
 
 export const createNotification = async (req, res) => {
   try {
-    const { message, type = 'general', priority = 'medium' } = req.body;
+    const { message, type = 'announcement', priority = 'medium' } = req.body;
 
     // Simple validation
     if (!message) {
@@ -20,11 +20,12 @@ export const createNotification = async (req, res) => {
       return res.status(404).json({ error: "Sender not found" });
     }
 
-    await sendBroadcastNotification(sender, message, type, { priority });
+    // Use 'announcement' type for admin announcements
+    await sendBroadcastNotification(sender, message, 'announcement', { priority });
     
     res.status(201).json({ 
       success: true, 
-      message: "Notification sent successfully" 
+      message: "Announcement sent successfully to all employees" 
     });
   } catch (err) {
     res.status(400).json({ error: err.message });

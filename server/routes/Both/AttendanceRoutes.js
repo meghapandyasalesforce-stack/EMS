@@ -9,7 +9,8 @@ import {
   getMyTodayStatus,
   getEmployeeList,
   getEmployeeAttendanceDetails,
-  forceEndBreak
+  forceEndBreak,
+  getEmployeesOnBreak
 } from '../../controllers/attendance/attendanceController.js';
 
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
@@ -34,6 +35,7 @@ router.route("/employee/:employeeId/attendance")
 
 // Admin-only endpoints
 router.route("/today-status").get(isAdminAuthenticated, getTodayStatus);
+router.route("/employees-on-break").get(isAdminAuthenticated, getEmployeesOnBreak);
 
 // Employee-only helper endpoint
 router.route("/my-today-status").get(isAuthenticated, getMyTodayStatus);

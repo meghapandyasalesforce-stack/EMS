@@ -246,7 +246,7 @@ const AdminPayroll = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {disburseResult.results.map((r, idx) => (
+                                    {(Array.isArray(disburseResult?.results) ? disburseResult.results : []).map((r, idx) => (
                                         <tr key={idx} className="border-t">
                                             <td className="px-2 py-1">{r.employeeName || r.employee}</td>
                                             <td className="px-2 py-1">{r.employeeEmail || '-'}</td>
@@ -322,7 +322,7 @@ const AdminPayroll = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {payrollData.map((employee) => {
+                                {(Array.isArray(payrollData) ? payrollData : []).map((employee) => {
                                     const status = getPayrollStatus(employee);
                                     return (
                                         <tr key={employee.employeeId} className="hover:bg-gray-50">
@@ -420,7 +420,7 @@ const AdminPayroll = () => {
                             <div className="mb-6">
                                 <h4 className="font-medium text-gray-700 mb-2">Allowances</h4>
                                 <div className="bg-gray-50 p-3 rounded">
-                                    {selectedEmployee.allowances && selectedEmployee.allowances.length > 0 ? (
+                                    {Array.isArray(selectedEmployee.allowances) && selectedEmployee.allowances.length > 0 ? (
                                         <ul className="divide-y divide-gray-200">
                                             {selectedEmployee.allowances.map((allowance, index) => (
                                                 <li key={index} className="py-2 flex justify-between">
@@ -438,7 +438,7 @@ const AdminPayroll = () => {
                             <div className="mb-6">
                                 <h4 className="font-medium text-gray-700 mb-2">Deductions</h4>
                                 <div className="bg-gray-50 p-3 rounded">
-                                    {selectedEmployee.deductions && selectedEmployee.deductions.length > 0 ? (
+                                    {Array.isArray(selectedEmployee.deductions) && selectedEmployee.deductions.length > 0 ? (
                                         <ul className="divide-y divide-gray-200">
                                             {selectedEmployee.deductions.map((deduction, index) => (
                                                 <li key={index} className="py-2 flex justify-between">

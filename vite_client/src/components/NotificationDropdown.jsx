@@ -173,6 +173,10 @@ const NotificationDropdown = () => {
                 return '⚙️';
             case 'general':
                 return '📢';
+            case 'break':
+                return '☕';
+            case 'announcement':
+                return '📢';
             default:
                 return '🔔';
         }
@@ -188,6 +192,10 @@ const NotificationDropdown = () => {
                 return 'text-yellow-600';
             case 'system':
                 return 'text-purple-600';
+            case 'break':
+                return 'text-orange-600';
+            case 'announcement':
+                return 'text-indigo-600';
             default:
                 return 'text-gray-600';
         }

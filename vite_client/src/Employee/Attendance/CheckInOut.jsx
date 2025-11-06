@@ -108,6 +108,18 @@ const CheckInOut = () => {
     });
   };
 
+  // Detect device type
+  const detectDeviceType = () => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(userAgent)) {
+      return 'mobile';
+    }
+    if (/tablet|ipad|playbook|silk/i.test(userAgent)) {
+      return 'tablet';
+    }
+    return 'desktop';
+  };
+
   // Get network information
   const getNetworkInfo = () => {
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -258,6 +270,7 @@ const CheckInOut = () => {
         accuracy: locationData?.accuracy,
         networkType: networkData?.networkType,
         connectionSpeed: networkData?.connectionSpeed,
+        deviceType: detectDeviceType(),
         imageUrl: capturedImage,
         imageFilename: capturedImage ? `clockin_${Date.now()}.jpg` : null
       };
@@ -303,8 +316,17 @@ const CheckInOut = () => {
       showNotification('Checked out successfully!', 'success');
       setCapturedImage(null);
     } catch (err) {
-      const errorMessage = err?.message || 'Failed to check out';
-      showNotification(errorMessage, 'error');
+      const errorMessage = err?.message || err?.payload?.message || 'Failed to check out. Please try again.';
+      
+      // Check if it's an IP mismatch error
+      if (errorMessage.includes('IP address mismatch')) {
+        showNotification(
+          `Cannot check out: ${errorMessage}. Please use the same device/network you used for check-in.`,
+          'error'
+        );
+      } else {
+        showNotification(errorMessage, 'error');
+      }
     } finally {
       setIsProcessing(false);
     }

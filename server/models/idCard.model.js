@@ -20,10 +20,6 @@ const idCardSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
-    expiryDate: {
-        type: Date,
-        required: true
-    },
     status: {
         type: String,
         enum: ['active', 'expired', 'suspended', 'cancelled'],
@@ -105,14 +101,12 @@ const idCardSchema = new mongoose.Schema({
 // Index for efficient queries
 idCardSchema.index({ employeeId: 1 });
 idCardSchema.index({ status: 1 });
-idCardSchema.index({ expiryDate: 1 });
 
 // Note: cardNumber generation moved to controller to avoid validation issues
 
 // Method to check if card is valid
 idCardSchema.methods.isValid = function() {
-    const now = new Date();
-    return this.status === 'active' && this.expiryDate > now;
+    return this.status === 'active';
 };
 
 // Method to update usage
@@ -122,16 +116,8 @@ idCardSchema.methods.updateUsage = function() {
     return this.save();
 };
 
-// Static method to get cards expiring soon
-idCardSchema.statics.getExpiringSoon = function(days = 30) {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + days);
-    
-    return this.find({
-        status: 'active',
-        expiryDate: { $lte: futureDate }
-    }).populate('employeeId', 'name email employeeId');
-};
+// Static method removed - expiry date no longer used
+// Cards are managed by status only (active, suspended, cancelled)
 
 const IdCard = mongoose.model("IdCard", idCardSchema, "idcards");
 export default IdCard;

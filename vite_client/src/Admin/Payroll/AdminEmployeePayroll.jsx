@@ -311,7 +311,7 @@ const AdminEmployeePayroll = () => {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {payrollHistory.payrolls.map((payroll) => (
+                            {(Array.isArray(payrollHistory?.payrolls) ? payrollHistory.payrolls : []).map((payroll) => (
                                 <div key={payroll._id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-4">

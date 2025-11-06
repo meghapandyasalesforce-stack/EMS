@@ -1,11 +1,37 @@
 import Attendance from "../../models/attendance.model.js";
 import Employee from "../../models/employee.model.js"
 import AttendanceRule from "../../models/attendanceRule.model.js";
+import User from "../../models/user.model.js";
 import mongoose from 'mongoose';
+import logger from "../../helpers/logger.js";
+import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/notificationService.js";
 
 
 const OFFICE_START_TIME = 9;  // 9 AM
 const OFFICE_END_TIME = 17;   // 5 PM (24-hour format)
+
+// Helper function to detect device type from user agent
+const detectDeviceType = (userAgent) => {
+  if (!userAgent) return 'unknown';
+  const ua = userAgent.toLowerCase();
+  if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(ua)) {
+    return 'mobile';
+  }
+  if (/tablet|ipad|playbook|silk/i.test(ua)) {
+    return 'tablet';
+  }
+  return 'desktop';
+};
+
+// Helper function to get real IP address (handles proxies)
+const getClientIP = (req) => {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+         req.headers['x-real-ip'] ||
+         req.ip ||
+         req.connection?.remoteAddress ||
+         req.socket?.remoteAddress ||
+         'unknown';
+};
 
 function calculateWorkingDays(startDate, endDate) {
   let count = 0;
@@ -63,12 +89,18 @@ export const clockIn = async (req, res) => {
     }
     const isLateArrival = clockInTime > effectiveStartTime;
 
+    // Get real IP address
+    const clientIP = getClientIP(req);
+    const userAgent = req.get('User-Agent') || '';
+    const deviceType = detectDeviceType(userAgent);
+
     // Extract network information
     const networkInfo = {
-      ipAddress: req.ip || req.connection.remoteAddress,
-      userAgent: req.get('User-Agent'),
+      ipAddress: clientIP,
+      userAgent: userAgent,
       networkType: req.body.networkType || 'unknown',
-      connectionSpeed: req.body.connectionSpeed || 'unknown'
+      connectionSpeed: req.body.connectionSpeed || 'unknown',
+      deviceType: req.body.deviceType || deviceType // Use client-provided or detected
     };
 
     // Extract geolocation information
@@ -78,6 +110,9 @@ export const clockIn = async (req, res) => {
       address: req.body.address,
       accuracy: req.body.accuracy
     };
+
+    let locationMatch = false;
+    let locationDistance = null;
 
     // Enforce geofence if rule present and simple punches disabled
     if (activeRule && !activeRule.enableSimplePunches) {
@@ -94,17 +129,29 @@ export const clockIn = async (req, res) => {
             message: 'Location is required to clock in at this site'
           });
         }
-        const dist = distanceInMeters(
+        locationDistance = distanceInMeters(
           locationInfo.latitude,
           locationInfo.longitude,
           activeRule.coordinates.latitude,
           activeRule.coordinates.longitude
         );
-        if (dist > (activeRule.maximumRadius || 500)) {
+        if (locationDistance > (activeRule.maximumRadius || 500)) {
           return res.status(400).json({
-            message: `Outside allowed radius (${Math.round(dist)}m > ${activeRule.maximumRadius}m)`
+            message: `Outside allowed radius (${Math.round(locationDistance)}m > ${activeRule.maximumRadius}m)`
           });
         }
+        locationMatch = true;
+      }
+    } else if (activeRule && activeRule.enableSimplePunches) {
+      // Even with simple punches, check if location matches (for admin info)
+      if (typeof locationInfo.latitude === 'number' && typeof locationInfo.longitude === 'number') {
+        locationDistance = distanceInMeters(
+          locationInfo.latitude,
+          locationInfo.longitude,
+          activeRule.coordinates.latitude,
+          activeRule.coordinates.longitude
+        );
+        locationMatch = locationDistance <= (activeRule.maximumRadius || 500);
       }
     }
 
@@ -127,6 +174,43 @@ export const clockIn = async (req, res) => {
       clockInLocation: locationInfo,
       clockInNetwork: networkInfo
     });
+
+    // Send notification to admins about check-in
+    try {
+      const employee = await Employee.findById(userId).select('name lastName email department position');
+      const admins = await User.find({ role: 'admin' }).select('_id');
+      
+      if (admins.length > 0 && employee) {
+        const locationStatus = locationMatch 
+          ? `✅ At office location (${Math.round(locationDistance || 0)}m away)` 
+          : activeRule ? '⚠️ Location not verified' : '📍 Location not required';
+        
+        const deviceEmoji = networkInfo.deviceType === 'mobile' ? '📱' : 
+                           networkInfo.deviceType === 'tablet' ? '📱' : '💻';
+        
+        const message = `${deviceEmoji} ${employee.name} ${employee.lastName || ''} checked in from ${networkInfo.deviceType} device. ${locationStatus}`;
+        
+        const adminIds = admins.map(admin => admin._id);
+        await sendNotificationToUsers(
+          adminIds,
+          employee,
+          message,
+          'system',
+          {
+            employeeId: employee._id,
+            employeeName: `${employee.name} ${employee.lastName || ''}`,
+            deviceType: networkInfo.deviceType,
+            locationMatch: locationMatch,
+            locationDistance: locationDistance,
+            checkInTime: clockInTime,
+            attendanceId: attendance._id
+          }
+        );
+      }
+    } catch (notifError) {
+      logger.error('Error sending check-in notification to admins', { error: notifError.message });
+      // Don't fail the check-in if notification fails
+    }
 
     res.status(201).json(attendance);
   } catch (error) {
@@ -160,7 +244,7 @@ export const breakIn = async (req, res) => {
         const breakDurationMs = now - breakStartTime;
         attendance.totalBreakDuration = (attendance.totalBreakDuration || 0) + breakDurationMs;
         cleanedBreaks = true;
-        console.log(`Auto-closed orphaned break (duration: ${breakDuration.toFixed(2)} hours)`);
+        logger.info(`Auto-closed orphaned break (duration: ${breakDuration.toFixed(2)} hours)`);
       }
     }
     
@@ -197,6 +281,18 @@ export const breakIn = async (req, res) => {
     attendance.status = "onBreak";
 
     await attendance.save();
+    
+    // Get employee details and send notification to admins
+    try {
+      const employee = await Employee.findById(req.employee._id).select('name lastName email');
+      if (employee) {
+        await sendBreakNotification(employee);
+      }
+    } catch (notifError) {
+      logger.error('Error sending break notification', { error: notifError.message });
+      // Don't fail the break request if notification fails
+    }
+    
     res.json(attendance);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -259,6 +355,33 @@ export const clockOut = async (req, res) => {
       return res.status(400).json({ message: "Please end your break before clocking out" });
     }
 
+    // Get real IP address for check-out
+    const clientIP = getClientIP(req);
+    const checkInIP = attendance.clockInNetwork?.ipAddress;
+
+    // Validate IP address matches check-in IP
+    if (checkInIP && checkInIP !== 'unknown') {
+      // Normalize IPs (remove port if present, handle IPv6)
+      const normalizeIP = (ip) => {
+        if (!ip) return '';
+        // Remove port if present
+        const ipOnly = ip.split(':')[0];
+        // Handle IPv4-mapped IPv6 addresses
+        return ipOnly.replace(/^::ffff:/, '');
+      };
+
+      const normalizedCheckInIP = normalizeIP(checkInIP);
+      const normalizedCheckOutIP = normalizeIP(clientIP);
+
+      if (normalizedCheckInIP !== normalizedCheckOutIP) {
+        return res.status(400).json({ 
+          message: `IP address mismatch. You checked in from IP: ${checkInIP}, but you're trying to check out from IP: ${clientIP}. Please use the same device/network you used for check-in.`,
+          checkInIP: checkInIP,
+          checkOutIP: clientIP
+        });
+      }
+    }
+
     // Helper: distance in meters between two lat/lng points (Haversine)
     const distanceInMeters = (lat1, lon1, lat2, lon2) => {
       const toRad = (v) => (v * Math.PI) / 180;
@@ -316,7 +439,7 @@ export const clockOut = async (req, res) => {
 
     // Extract network information for clock out
     const networkInfo = {
-      ipAddress: req.ip || req.connection.remoteAddress,
+      ipAddress: clientIP,
       userAgent: req.get('User-Agent'),
       networkType: req.body.networkType || 'unknown',
       connectionSpeed: req.body.connectionSpeed || 'unknown'
@@ -442,6 +565,55 @@ export const getLogs = async (req, res) => {
   }
 };
 
+// Get employees currently on break
+export const getEmployeesOnBreak = async (req, res) => {
+  try {
+    const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+    
+    // Get all attendance records for today with status 'onBreak'
+    const attendanceRecords = await Attendance.find({ 
+      date: startOfDay,
+      status: 'onBreak'
+    })
+    .populate('userId', 'name lastName email employeeId department position profilePhoto')
+    .lean();
+
+    // Filter to only those with active breaks
+    const employeesOnBreak = attendanceRecords
+      .filter(record => {
+        if (!record.breaks || record.breaks.length === 0) return false;
+        // Check if there's at least one break without breakOut
+        return record.breaks.some(breakEntry => breakEntry.breakIn && !breakEntry.breakOut);
+      })
+      .map(record => {
+        // Find the active break
+        const activeBreak = record.breaks.find(b => b.breakIn && !b.breakOut);
+        const breakStartTime = new Date(activeBreak.breakIn);
+        const breakDuration = Math.floor((new Date() - breakStartTime) / 1000 / 60); // minutes
+        
+        return {
+          employee: record.userId,
+          attendanceId: record._id,
+          breakStartTime: breakStartTime,
+          breakDuration: breakDuration, // in minutes
+          clockIn: record.clockIn,
+          workLocation: record.workLocation
+        };
+      });
+
+    res.json({
+      success: true,
+      count: employeesOnBreak.length,
+      employees: employeesOnBreak
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
 export const getTodayStatus = async (req, res) => {
   const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
   const now = new Date();
@@ -524,7 +696,9 @@ export const getTodayStatus = async (req, res) => {
         isOnBreak: isOnBreak,
         currentBreakDuration: isOnBreak ? 
           Math.floor((now - new Date(record.breaks[record.breaks.length - 1].breakIn)) / (1000 * 60)) : 
-          null
+          null,
+        clockInNetwork: record.clockInNetwork,
+        clockInLocation: record.clockInLocation
       });
     });
 

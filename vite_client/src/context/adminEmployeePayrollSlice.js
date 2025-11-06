@@ -98,7 +98,14 @@ const adminEmployeePayrollSlice = createSlice({
             })
             .addCase(fetchAdminEmployeePayrollHistory.fulfilled, (state, action) => {
                 state.loading = false;
-                state.payrollHistory = action.payload;
+                // Normalize the response to ensure payrolls is always an array
+                const payload = action.payload || {};
+                state.payrollHistory = {
+                    payrolls: Array.isArray(payload.payrolls) ? payload.payrolls : (Array.isArray(payload) ? payload : []),
+                    totalPages: payload.totalPages || 0,
+                    currentPage: payload.currentPage || 1,
+                    total: payload.total || 0
+                };
             })
             .addCase(fetchAdminEmployeePayrollHistory.rejected, (state, action) => {
                 state.loading = false;

@@ -4,6 +4,8 @@ import useGetAllProjects from "../Hooks/useGetAllProjects";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees } from "../context/employeeSlice";
 import NotificationSender from "./NotificationSender";
+import axios from "../utils/axios";
+import { FiCoffee, FiClock, FiUser } from "react-icons/fi";
 
 function DashboardAdmin() {
   const dispatch = useDispatch();
@@ -14,6 +16,32 @@ function DashboardAdmin() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth || {});
+  const [employeesOnBreak, setEmployeesOnBreak] = useState([]);
+  const [loadingBreaks, setLoadingBreaks] = useState(true);
+  
+  const fetchEmployeesOnBreak = async () => {
+    try {
+      setLoadingBreaks(true);
+      const response = await axios.get('/v1/both/attendance/employees-on-break');
+      if (response.data.success) {
+        setEmployeesOnBreak(response.data.employees || []);
+      }
+    } catch (error) {
+      // Removed console.error for production
+      setEmployeesOnBreak([]);
+    } finally {
+      setLoadingBreaks(false);
+    }
+  };
+  
+  const formatBreakDuration = (minutes) => {
+    if (minutes < 60) {
+      return `${minutes}m`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
 
   useEffect(() => {
     // Check if user is logged in and has admin role
@@ -27,6 +55,14 @@ function DashboardAdmin() {
     
     // Fetch employees
     dispatch(fetchEmployees());
+    
+    // Fetch employees on break
+    fetchEmployeesOnBreak();
+    
+    // Set up polling to refresh break status every 30 seconds
+    const breakInterval = setInterval(fetchEmployeesOnBreak, 30000);
+    
+    return () => clearInterval(breakInterval);
   }, [dispatch]);
 
   useEffect(() => {
@@ -183,6 +219,88 @@ function DashboardAdmin() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Employees on Break Section */}
+        <div className="bg-white p-4 md:p-6 rounded-xl shadow-md mb-6 md:mb-8 border-l-4 border-orange-500">
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 md:p-3 rounded-full bg-orange-100 text-orange-600">
+                <FiCoffee className="w-5 h-5 md:w-6 md:h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Employees on Break</h2>
+                <p className="text-xs md:text-sm text-gray-500">Currently on break ({employeesOnBreak.length})</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchEmployeesOnBreak}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              disabled={loadingBreaks}
+            >
+              {loadingBreaks ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          
+          {loadingBreaks ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
+              <p className="text-gray-500 mt-2 text-sm">Loading...</p>
+            </div>
+          ) : employeesOnBreak.length === 0 ? (
+            <div className="text-center py-8">
+              <FiCoffee className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <p className="text-gray-500 text-sm">No employees on break at the moment</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {employeesOnBreak.map((item, index) => (
+                <div 
+                  key={item.attendanceId || index} 
+                  className="flex items-center justify-between p-3 md:p-4 bg-orange-50 rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors"
+                >
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0">
+                      {item.employee?.profilePhoto ? (
+                        <img 
+                          src={item.employee.profilePhoto.url || item.employee.profilePhoto} 
+                          alt={item.employee.name}
+                          className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border-2 border-orange-300"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-orange-200 flex items-center justify-center">
+                          <FiUser className="w-5 h-5 md:w-6 md:h-6 text-orange-600" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm md:text-base truncate">
+                        {item.employee?.name} {item.employee?.lastName || ''}
+                      </h3>
+                      <div className="flex items-center space-x-2 text-xs md:text-sm text-gray-600">
+                        <span>{item.employee?.department || 'N/A'}</span>
+                        <span>•</span>
+                        <span>{item.employee?.position || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
+                    <div className="text-right">
+                      <div className="flex items-center space-x-1 text-orange-600">
+                        <FiClock className="w-4 h-4" />
+                        <span className="font-semibold text-sm md:text-base">
+                          {formatBreakDuration(item.breakDuration)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Started {new Date(item.breakStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Attendance Section */}

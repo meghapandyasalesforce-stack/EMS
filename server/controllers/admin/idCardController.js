@@ -51,7 +51,6 @@ export const generateIdCard = async (req, res) => {
         console.log('User info:', req.user);
         const { 
             employeeId, 
-            expiryDate, 
             cardDesign = {},
             cardType = 'employee',
             accessLevel = 'basic',
@@ -124,7 +123,6 @@ export const generateIdCard = async (req, res) => {
         const idCardData = {
             employeeId: employee._id,
             cardNumber: cardNumber, // Add cardNumber explicitly
-            expiryDate: new Date(expiryDate),
             cardType,
             cardDesign: defaultCardDesign,
             accessLevel,

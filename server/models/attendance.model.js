@@ -84,7 +84,8 @@ const attendanceSchema = new mongoose.Schema({
         ipAddress: { type: String },
         userAgent: { type: String },
         networkType: { type: String },
-        connectionSpeed: { type: String }
+        connectionSpeed: { type: String },
+        deviceType: { type: String, enum: ['mobile', 'desktop', 'tablet', 'unknown'] }
     },
     clockOutNetwork: {
         ipAddress: { type: String },
