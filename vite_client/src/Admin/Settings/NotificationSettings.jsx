@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaBell, FaEnvelope, FaTasks, FaUsers, FaProjectDiagram, FaSave, FaUndo } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
+import { usePushNotification } from '../../hooks/usePushNotification';
 
 const NotificationSettings = () => {
     const [settings, setSettings] = useState({
@@ -25,6 +26,14 @@ const NotificationSettings = () => {
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const { 
+        isSupported, 
+        isSubscribed, 
+        isLoading: pushLoading, 
+        error: pushError,
+        subscribe,
+        unsubscribe 
+    } = usePushNotification();
 
     useEffect(() => {
         fetchNotificationSettings();
@@ -354,20 +363,56 @@ const NotificationSettings = () => {
                 {/* Push Notifications */}
                 <div className="bg-gray-50 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Push Notifications</h3>
-                    <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-                        <div>
-                            <h4 className="font-medium text-gray-900">Enable Push Notifications</h4>
-                            <p className="text-sm text-gray-600">Receive real-time push notifications in the browser</p>
+                    
+                    {!isSupported && (
+                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p className="text-sm text-yellow-800">
+                                Your browser does not support push notifications. Please use a modern browser like Chrome, Firefox, or Edge.
+                            </p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={settings.pushNotifications}
-                                onChange={(e) => handleToggle('pushNotifications', e.target.checked)}
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
+                    )}
+
+                    {pushError && (
+                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm text-red-800">{pushError}</p>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
+                            <div>
+                                <h4 className="font-medium text-gray-900">Enable Push Notifications</h4>
+                                <p className="text-sm text-gray-600">Receive real-time push notifications in the browser</p>
+                                {isSubscribed && (
+                                    <p className="text-xs text-green-600 mt-1">✓ Push notifications are active</p>
+                                )}
+                                {!isSubscribed && isSupported && !pushLoading && (
+                                    <p className="text-xs text-gray-500 mt-1">Click to enable browser push notifications</p>
+                                )}
+                            </div>
+                            <div className="flex items-center space-x-3">
+                                {pushLoading && (
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                )}
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={settings.pushNotifications && isSubscribed}
+                                        disabled={!isSupported || pushLoading}
+                                        onChange={async (e) => {
+                                            handleToggle('pushNotifications', e.target.checked);
+                                            if (e.target.checked) {
+                                                await subscribe();
+                                            } else {
+                                                await unsubscribe();
+                                            }
+                                        }}
+                                    />
+                                    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${!isSupported || pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

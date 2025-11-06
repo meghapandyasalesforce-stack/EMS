@@ -21,6 +21,7 @@ import profileDetailsRouter from "./routes/Employee/ProfileDetailsRoutes.js";
 import employeeCalendarRouter from "./routes/Employee/EmployeeCalendarRoutes.js";
 import employeePayrollRouter from "./routes/Employee/EmployeePayrollRoutes.js";
 import notificationRouter from "./routes/Admin/NotificationRoutes.js";
+import pushSubscriptionRouter from "./routes/Admin/PushSubscriptionRoutes.js";
 import uploadRouter from "./routes/Both/UploadRoutes.js";
 import forgotPasswordRouter from "./routes/Both/ForgotPasswordRoutes.js";
 import taskRouter from "./routes/Both/TaskRoutes.js";
@@ -273,6 +274,7 @@ app.use("/api/v1/employee/payroll", employeePayrollRouter);
 
 app.use("/api/v1/both/attendance", attendanceRouter);
 app.use("/api/v1/both/notification", notificationRouter);
+app.use("/api/v1/both/notification", pushSubscriptionRouter);
 app.use("/api/v1/both/profile-details", profileDetailsRouter);
 app.use("/api/v1/both/document", uploadRouter);
 app.use("/api/v1/both/password", forgotPasswordRouter);

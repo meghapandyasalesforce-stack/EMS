@@ -3,6 +3,11 @@ import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
 import Project from '../models/project.model.js';
 import NotificationSettings from '../models/notificationSettings.model.js';
+import { 
+  sendPushNotification, 
+  sendBroadcastPushNotification,
+  createPushPayload 
+} from './pushNotificationService.js';
 
 /**
  * Send task update notification to relevant stakeholders
@@ -164,8 +169,33 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
       });
     });
 
-    await Promise.all(notificationPromises);
+    const notifications = await Promise.all(notificationPromises);
     console.log(`Notification sent to ${recipientIds.length} recipients`);
+
+    // Send push notifications if enabled
+    try {
+      for (let i = 0; i < recipientIds.length; i++) {
+        const recipientId = recipientIds[i];
+        const notification = notifications[i];
+        
+        // Check user's push notification settings
+        const settings = await NotificationSettings.findOne({ user: recipientId });
+        if (settings && settings.pushNotifications === false) {
+          continue; // Skip if user disabled push notifications
+        }
+
+        // Send push notification
+        const pushPayload = createPushPayload(message, type, {
+          ...metadata,
+          notificationId: notification._id
+        });
+        
+        await sendPushNotification(recipientId, 'User', pushPayload);
+      }
+    } catch (pushError) {
+      console.error('Error sending push notifications:', pushError);
+      // Don't fail the main notification if push fails
+    }
   } catch (error) {
     console.error('Error sending notification to users:', error);
   }
@@ -183,7 +213,7 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
     // Determine sender type based on sender model
     const senderType = sender.constructor.modelName === 'Employee' ? 'Employee' : 'User';
     
-    await Notification.create({
+    const notification = await Notification.create({
       sender: sender._id,
       senderType: senderType,
       message,
@@ -192,6 +222,19 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
       metadata
     });
     console.log('Broadcast notification sent');
+
+    // Send push notification to all subscribers
+    try {
+      const pushPayload = createPushPayload(message, type, {
+        ...metadata,
+        notificationId: notification._id
+      });
+      
+      await sendBroadcastPushNotification(pushPayload);
+    } catch (pushError) {
+      console.error('Error sending broadcast push notification:', pushError);
+      // Don't fail the main notification if push fails
+    }
   } catch (error) {
     console.error('Error sending broadcast notification:', error);
   }
@@ -267,8 +310,35 @@ export const sendBreakNotification = async (employee) => {
       });
     });
 
-    await Promise.all(notificationPromises);
+    const notifications = await Promise.all(notificationPromises);
     console.log(`Break notification sent to ${admins.length} admins for ${employee.name}`);
+
+    // Send push notifications to admins
+    try {
+      for (let i = 0; i < admins.length; i++) {
+        const admin = admins[i];
+        const notification = notifications[i];
+        
+        // Check admin's push notification settings
+        const settings = await NotificationSettings.findOne({ user: admin._id });
+        if (settings && settings.pushNotifications === false) {
+          continue; // Skip if admin disabled push notifications
+        }
+
+        // Send push notification
+        const pushPayload = createPushPayload(message, 'break', {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          breakTime: new Date(),
+          notificationId: notification._id
+        });
+        
+        await sendPushNotification(admin._id, 'User', pushPayload);
+      }
+    } catch (pushError) {
+      console.error('Error sending break push notifications:', pushError);
+      // Don't fail the main notification if push fails
+    }
   } catch (error) {
     console.error('Error sending break notification:', error);
   }
