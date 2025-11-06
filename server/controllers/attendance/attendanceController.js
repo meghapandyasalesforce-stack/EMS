@@ -259,6 +259,57 @@ export const clockOut = async (req, res) => {
       return res.status(400).json({ message: "Please end your break before clocking out" });
     }
 
+    // Helper: distance in meters between two lat/lng points (Haversine)
+    const distanceInMeters = (lat1, lon1, lat2, lon2) => {
+      const toRad = (v) => (v * Math.PI) / 180;
+      const R = 6371000; // meters
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    // Extract geolocation information for clock out
+    const locationInfo = {
+      latitude: req.body.latitude,
+      longitude: req.body.longitude,
+      address: req.body.address,
+      accuracy: req.body.accuracy
+    };
+
+    // Enforce geofence if rule present and simple punches disabled
+    if (activeRule && !activeRule.enableSimplePunches) {
+      const empDept = req.employee?.department;
+      const appliesToDept = !activeRule.applicableDepartments?.length ||
+        (empDept && activeRule.applicableDepartments.includes(empDept));
+
+      if (appliesToDept) {
+        if (
+          typeof locationInfo.latitude !== 'number' ||
+          typeof locationInfo.longitude !== 'number'
+        ) {
+          return res.status(400).json({
+            message: 'Location is required to clock out at this site'
+          });
+        }
+        const dist = distanceInMeters(
+          locationInfo.latitude,
+          locationInfo.longitude,
+          activeRule.coordinates.latitude,
+          activeRule.coordinates.longitude
+        );
+        if (dist > (activeRule.maximumRadius || 500)) {
+          return res.status(400).json({
+            message: `Outside allowed radius for checkout (${Math.round(dist)}m > ${activeRule.maximumRadius}m)`
+          });
+        }
+      }
+    }
+
     const now = new Date();
     attendance.clockOut = now;
     attendance.status = "loggedOut";
@@ -269,14 +320,6 @@ export const clockOut = async (req, res) => {
       userAgent: req.get('User-Agent'),
       networkType: req.body.networkType || 'unknown',
       connectionSpeed: req.body.connectionSpeed || 'unknown'
-    };
-
-    // Extract geolocation information for clock out
-    const locationInfo = {
-      latitude: req.body.latitude,
-      longitude: req.body.longitude,
-      address: req.body.address,
-      accuracy: req.body.accuracy
     };
 
     // Handle image upload for clock out

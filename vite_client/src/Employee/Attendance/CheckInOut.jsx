@@ -200,16 +200,23 @@ const CheckInOut = () => {
     return () => clearInterval(timeInterval);
   }, []);
 
-  // Calculate elapsed time when checked in
+  // Calculate elapsed time when checked in (stop when clocked out)
   useEffect(() => {
     let interval;
-    if (currentSession && !isOnBreak) {
+    if (currentSession && !currentSession.clockOut && !isOnBreak) {
+      // Only calculate elapsed time if not clocked out and not on break
       interval = setInterval(() => {
         const now = new Date();
         const checkInTime = new Date(currentSession.clockIn);
         const elapsed = (now - checkInTime) / 1000;
         setElapsedTime(elapsed);
       }, 1000);
+    } else if (currentSession && currentSession.clockOut) {
+      // If clocked out, calculate static duration
+      const checkInTime = new Date(currentSession.clockIn);
+      const checkOutTime = new Date(currentSession.clockOut);
+      const elapsed = (checkOutTime - checkInTime) / 1000;
+      setElapsedTime(elapsed);
     } else {
       setElapsedTime(0);
     }
@@ -412,16 +419,34 @@ const CheckInOut = () => {
           {currentSession ? (
             <div className="space-y-6">
               {/* Enhanced Status Card */}
-              <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border border-emerald-200 rounded-3xl p-6 shadow-lg">
+              <div className={`bg-gradient-to-br rounded-3xl p-6 shadow-lg border ${
+                currentSession.clockOut 
+                  ? 'from-blue-50 via-indigo-50 to-purple-50 border-blue-200' 
+                  : 'from-emerald-50 via-green-50 to-teal-50 border-emerald-200'
+              }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${
+                      currentSession.clockOut 
+                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600' 
+                        : 'bg-gradient-to-br from-emerald-500 to-green-600'
+                    }`}>
                       <FiCheckCircle className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-bold text-emerald-800 mb-1">Checked In</h3>
-                      <p className="text-emerald-600 text-sm font-medium">Since {formatTime(currentSession.clockIn)}</p>
-                      {isOnBreak && (
+                      <h3 className={`text-2xl font-bold mb-1 ${
+                        currentSession.clockOut ? 'text-blue-800' : 'text-emerald-800'
+                      }`}>
+                        {currentSession.clockOut ? 'Checked Out' : 'Checked In'}
+                      </h3>
+                      <p className={`text-sm font-medium ${
+                        currentSession.clockOut ? 'text-blue-600' : 'text-emerald-600'
+                      }`}>
+                        {currentSession.clockOut 
+                          ? `Check-Out: ${formatTime(currentSession.clockOut)}` 
+                          : `Since ${formatTime(currentSession.clockIn)}`}
+                      </p>
+                      {isOnBreak && !currentSession.clockOut && (
                         <div className="flex items-center gap-2 mt-2 text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
                           <FiCoffee className="w-4 h-4" />
                           <span className="text-sm font-medium">On break since {formatTime(breakSession.breakIn)}</span>
@@ -430,11 +455,17 @@ const CheckInOut = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-3xl font-bold text-emerald-600 font-mono mb-1">
+                    <div className={`text-3xl font-bold font-mono mb-1 ${
+                      currentSession.clockOut ? 'text-blue-600' : 'text-emerald-600'
+                    }`}>
                       {formatElapsedTime(elapsedTime)}
                     </div>
-                    <div className="text-sm text-emerald-600 font-medium">
-                      {formatHours(elapsedTime)} hours worked
+                    <div className={`text-sm font-medium ${
+                      currentSession.clockOut ? 'text-blue-600' : 'text-emerald-600'
+                    }`}>
+                      {currentSession.clockOut 
+                        ? 'Total work duration' 
+                        : `${formatHours(elapsedTime)} hours worked`}
                     </div>
                   </div>
                 </div>
@@ -526,102 +557,123 @@ const CheckInOut = () => {
                 </div>
               )}
 
-              {/* Enhanced Clock Out Section */}
-              <div className="bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 rounded-3xl p-8 border border-red-200 shadow-xl">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <FiClock className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">End Your Work Session</h3>
-                  <p className="text-gray-600 text-sm">Take a photo for security verification (optional)</p>
-                </div>
-                
-                <div className="flex justify-center mb-6">
-                  {!capturedImage ? (
-                    <button
-                      onClick={startCamera}
-                      className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-6 py-3 rounded-2xl font-semibold flex items-center gap-3 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                    >
-                      <FiCamera className="w-5 h-5" />
-                      Take Photo
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-4">
-                      <div className="relative">
-                        <img
-                          src={capturedImage}
-                          alt="Captured"
-                          className="w-16 h-16 object-cover rounded-2xl border-3 border-red-500 shadow-lg"
-                        />
-                        <button
-                          onClick={() => setCapturedImage(null)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 shadow-lg"
-                        >
-                          <FiXCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <span className="text-red-600 font-semibold flex items-center gap-2 text-sm">
-                        <FiCheckCircle className="w-5 h-5" />
-                        Photo Captured
-                      </span>
+              {/* Checked Out Status */}
+              {currentSession.clockOut ? (
+                <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-3xl p-8 border border-blue-200 shadow-xl">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <FiCheckCircle className="w-8 h-8 text-white" />
                     </div>
-                  )}
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">Checked Out</h3>
+                    <p className="text-gray-600 text-sm mb-4">Check-Out Time: {formatTime(currentSession.clockOut)}</p>
+                    <div className="bg-white rounded-2xl p-4 shadow-md">
+                      <div className="text-2xl font-bold text-emerald-600 font-mono mb-1">
+                        {formatElapsedTime(elapsedTime)}
+                      </div>
+                      <div className="text-sm text-gray-600 font-medium">
+                        Total Work Duration
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleClockOut}
-                    disabled={loading || isOnBreak || isProcessing}
-                    className={`flex-1 py-4 px-6 rounded-2xl text-white font-bold flex items-center justify-center gap-3 text-lg shadow-lg transition-all duration-200 ${
-                      loading || isOnBreak || isProcessing 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 hover:shadow-xl transform hover:scale-105'
-                    }`}
-                  >
-                    {loading || isProcessing ? (
-                      <>
-                        <FiLoader className="animate-spin w-5 h-5" />
-                        Processing...
-                      </>
+              ) : (
+                /* Enhanced Clock Out Section */
+                <div className="bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 rounded-3xl p-8 border border-red-200 shadow-xl">
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <FiClock className="w-8 h-8 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">End Your Work Session</h3>
+                    <p className="text-gray-600 text-sm">Take a photo for security verification (optional)</p>
+                  </div>
+                  
+                  <div className="flex justify-center mb-6">
+                    {!capturedImage ? (
+                      <button
+                        onClick={startCamera}
+                        className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-6 py-3 rounded-2xl font-semibold flex items-center gap-3 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                      >
+                        <FiCamera className="w-5 h-5" />
+                        Take Photo
+                      </button>
                     ) : (
-                      <>
-                        <FiClock className="w-5 h-5" />
-                        Check Out
-                      </>
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          <img
+                            src={capturedImage}
+                            alt="Captured"
+                            className="w-16 h-16 object-cover rounded-2xl border-3 border-red-500 shadow-lg"
+                          />
+                          <button
+                            onClick={() => setCapturedImage(null)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 shadow-lg"
+                          >
+                            <FiXCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <span className="text-red-600 font-semibold flex items-center gap-2 text-sm">
+                          <FiCheckCircle className="w-5 h-5" />
+                          Photo Captured
+                        </span>
+                      </div>
                     )}
-                  </button>
-
-                  {canTakeBreak && (
+                  </div>
+                  
+                  <div className="flex gap-3">
                     <button
-                      onClick={handleBreakIn}
-                      disabled={loading}
-                      className={`py-4 px-6 rounded-2xl text-white font-bold flex items-center gap-2 text-lg shadow-lg transition-all duration-200 ${
-                        loading 
+                      onClick={handleClockOut}
+                      disabled={loading || isOnBreak || isProcessing}
+                      className={`flex-1 py-4 px-6 rounded-2xl text-white font-bold flex items-center justify-center gap-3 text-lg shadow-lg transition-all duration-200 ${
+                        loading || isOnBreak || isProcessing 
                           ? 'bg-gray-400 cursor-not-allowed' 
-                          : 'bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 hover:shadow-xl transform hover:scale-105'
+                          : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 hover:shadow-xl transform hover:scale-105'
                       }`}
                     >
-                      <FiPause className="w-5 h-5" />
-                      {loading ? 'Processing...' : 'Break'}
+                      {loading || isProcessing ? (
+                        <>
+                          <FiLoader className="animate-spin w-5 h-5" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <FiClock className="w-5 h-5" />
+                          Check Out
+                        </>
+                      )}
                     </button>
-                  )}
 
-                  {canEndBreak && (
-                    <button
-                      onClick={handleBreakOut}
-                      disabled={loading}
-                      className={`py-4 px-6 rounded-2xl text-white font-bold flex items-center gap-2 text-lg shadow-lg transition-all duration-200 ${
-                        loading 
-                          ? 'bg-gray-400 cursor-not-allowed' 
-                          : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl transform hover:scale-105'
-                      }`}
-                    >
-                      <FiPlay className="w-5 h-5" />
-                      {loading ? 'Processing...' : 'End Break'}
-                    </button>
-                  )}
+                    {canTakeBreak && (
+                      <button
+                        onClick={handleBreakIn}
+                        disabled={loading}
+                        className={`py-4 px-6 rounded-2xl text-white font-bold flex items-center gap-2 text-lg shadow-lg transition-all duration-200 ${
+                          loading 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 hover:shadow-xl transform hover:scale-105'
+                        }`}
+                      >
+                        <FiPause className="w-5 h-5" />
+                        {loading ? 'Processing...' : 'Break'}
+                      </button>
+                    )}
+
+                    {canEndBreak && (
+                      <button
+                        onClick={handleBreakOut}
+                        disabled={loading}
+                        className={`py-4 px-6 rounded-2xl text-white font-bold flex items-center gap-2 text-lg shadow-lg transition-all duration-200 ${
+                          loading 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl transform hover:scale-105'
+                        }`}
+                      >
+                        <FiPlay className="w-5 h-5" />
+                        {loading ? 'Processing...' : 'End Break'}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">

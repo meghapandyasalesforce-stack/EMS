@@ -113,16 +113,23 @@ const AttendanceBox = () => {
     return () => clearInterval(timeInterval);
   }, []);
 
-  // Calculate elapsed time when checked in
+  // Calculate elapsed time when checked in (stop when clocked out)
   useEffect(() => {
     let interval;
-    if (currentSession) {
+    if (currentSession && !currentSession.clockOut) {
+      // Only calculate elapsed time if not clocked out
       interval = setInterval(() => {
         const now = new Date();
         const checkInTime = new Date(currentSession.clockIn);
         const elapsed = (now - checkInTime) / 1000; // in seconds
         setElapsedTime(elapsed);
       }, 1000);
+    } else if (currentSession && currentSession.clockOut) {
+      // If clocked out, calculate static duration
+      const checkInTime = new Date(currentSession.clockIn);
+      const checkOutTime = new Date(currentSession.clockOut);
+      const elapsed = (checkOutTime - checkInTime) / 1000; // in seconds
+      setElapsedTime(elapsed);
     } else {
       setElapsedTime(0);
     }
@@ -403,24 +410,56 @@ const AttendanceBox = () => {
       <div className="p-6">
           {currentSession ? (
           <div className="space-y-4">
-            {/* Checked In Status */}
-            <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+            {/* Checked In/Out Status */}
+            <div className={`rounded-xl p-6 border ${
+              currentSession.clockOut 
+                ? 'bg-blue-50 border-blue-200' 
+                : 'bg-green-50 border-green-200'
+            }`}>
               <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-green-500 rounded-xl flex items-center justify-center">
+                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+                    currentSession.clockOut 
+                      ? 'bg-blue-500' 
+                      : 'bg-green-500'
+                  }`}>
                     <FiCheckCircle className="w-7 h-7 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-green-800 mb-1">Checked In</h3>
-                    <p className="text-green-600 text-sm font-medium">Check-In Time: {formatTime(currentSession.clockIn)}</p>
+                    <h3 className={`text-xl font-bold mb-1 ${
+                      currentSession.clockOut 
+                        ? 'text-blue-800' 
+                        : 'text-green-800'
+                    }`}>
+                      {currentSession.clockOut ? 'Checked Out' : 'Checked In'}
+                    </h3>
+                    <p className={`text-sm font-medium ${
+                      currentSession.clockOut 
+                        ? 'text-blue-600' 
+                        : 'text-green-600'
+                    }`}>
+                      {currentSession.clockOut 
+                        ? `Check-Out Time: ${formatTime(currentSession.clockOut)}` 
+                        : `Check-In Time: ${formatTime(currentSession.clockIn)}`}
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-600 font-mono mb-1">
+                  <div className={`text-2xl font-bold font-mono mb-1 ${
+                    currentSession.clockOut 
+                      ? 'text-blue-600' 
+                      : 'text-green-600'
+                  }`}>
                     {formatElapsedTime(elapsedTime)}
                   </div>
-                  <div className="text-sm text-green-600 font-medium">
-                    {formatHours(elapsedTime)} hours
+                  <div className={`text-sm font-medium ${
+                    currentSession.clockOut 
+                      ? 'text-blue-600' 
+                      : 'text-green-600'
+                  }`}>
+                    {currentSession.clockOut 
+                      ? 'Total work duration' 
+                      : `${formatHours(elapsedTime)} hours`}
                   </div>
                 </div>
               </div>
@@ -449,72 +488,74 @@ const AttendanceBox = () => {
               )}
                 </div>
                 
-            {/* Break Buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              {isOnBreak ? (
-                    <button
-                  onClick={handleBreakOut}
-                  disabled={loading}
-                  className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
-                    loading 
-                      ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-green-500 hover:bg-green-600'
-                  }`}
-                >
-                  {loading ? (
-                    <FiLoader className="animate-spin w-4 h-4" />
-                  ) : (
-                    <>
-                      <FiCoffee className="w-4 h-4" />
-                      End Break
-                    </>
-                  )}
-                </button>
-              ) : (
-                  <button
-                  onClick={handleBreakIn}
-                  disabled={loading || breakCount >= 4}
-                  className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
-                    loading || breakCount >= 4
+            {/* Break Buttons - Only show when not clocked out */}
+            {!currentSession.clockOut && (
+              <div className="grid grid-cols-2 gap-3">
+                {isOnBreak ? (
+                      <button
+                    onClick={handleBreakOut}
+                    disabled={loading}
+                    className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
+                      loading 
                         ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-blue-500 hover:bg-blue-600'
+                        : 'bg-green-500 hover:bg-green-600'
                     }`}
                   >
-                  {loading ? (
-                    <FiLoader className="animate-spin w-4 h-4" />
-                  ) : breakCount >= 4 ? (
+                    {loading ? (
+                      <FiLoader className="animate-spin w-4 h-4" />
+                    ) : (
                       <>
-                      <FiCoffee className="w-4 h-4" />
-                      Max Reached
+                        <FiCoffee className="w-4 h-4" />
+                        End Break
+                      </>
+                    )}
+                  </button>
+                ) : (
+                    <button
+                    onClick={handleBreakIn}
+                    disabled={loading || breakCount >= 4}
+                    className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
+                      loading || breakCount >= 4
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-blue-500 hover:bg-blue-600'
+                      }`}
+                    >
+                    {loading ? (
+                      <FiLoader className="animate-spin w-4 h-4" />
+                    ) : breakCount >= 4 ? (
+                      <>
+                        <FiCoffee className="w-4 h-4" />
+                        Max Reached
                       </>
                     ) : (
                       <>
-                      <FiCoffee className="w-4 h-4" />
-                      Start Break
+                        <FiCoffee className="w-4 h-4" />
+                        Start Break
                       </>
                     )}
-                    </button>
-                  )}
+                      </button>
+                    )}
 
-                    <button
-                onClick={handleClockOut}
-                disabled={loading || isOnBreak}
-                className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
-                  loading || isOnBreak
-                          ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-red-500 hover:bg-red-600'
-                }`}
-              >
-                {loading ? (
-                  <FiLoader className="animate-spin w-4 h-4" />
-                ) : (
-                  <>
-                    <FiClock className="w-4 h-4" />
-                    Check Out
-                  </>
-                )}
-                    </button>
-            </div>
+                      <button
+                        onClick={handleClockOut}
+                        disabled={loading || isOnBreak}
+                        className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
+                          loading || isOnBreak
+                                  ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-red-500 hover:bg-red-600'
+                        }`}
+                      >
+                        {loading ? (
+                          <FiLoader className="animate-spin w-4 h-4" />
+                        ) : (
+                          <>
+                            <FiClock className="w-4 h-4" />
+                            Check Out
+                          </>
+                        )}
+                      </button>
+              </div>
+            )}
                 </div>
         ) : (
           <div className="text-center py-6">
