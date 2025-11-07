@@ -52,6 +52,8 @@ import SalaryStructureManager from './Admin/SalaryStructure/SalaryStructureManag
 import AttendanceRules from './Admin/Attendance/AttendanceRules';
 import AdminSettings from './Admin/Settings/AdminSettings';
 import Notifications from './Both/Notifications';
+import InstallPrompt from './components/InstallPrompt';
+
 function App() {
     const location = useLocation();
     const hideHeaderRoutes = ['/', '/login', '/register']; // Routes where Header and Sidebar should not be shown
@@ -71,6 +73,7 @@ function App() {
     return (
         <div className="min-h-screen bg-gray-100">
             {!hideHeaderRoutes.includes(location.pathname) && <Header />} {/* Conditionally render Header */}
+            <InstallPrompt /> {/* PWA Install Prompt */}
             <div className="flex min-h-[calc(100vh-64px)]">
                 {showSidebarRoutes.includes(location.pathname) && (
                     <div className="w-64 bg-white shadow-sm">
