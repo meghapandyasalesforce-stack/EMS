@@ -8,6 +8,10 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { PersistGate } from 'redux-persist/integration/react';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { initCapacitor } from './utils/capacitor.js';
+
+// Initialize Capacitor for mobile app
+initCapacitor();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

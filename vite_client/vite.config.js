@@ -79,7 +79,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',              // ⬅️ build frontend into dist folder
     emptyOutDir: true,           // cleans before build
+    // Ensure assets are properly handled for Capacitor
+    assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
+  // Set base path for Capacitor
+  base: './',
   optimizeDeps: {
     exclude: [
       'html2canvas',
