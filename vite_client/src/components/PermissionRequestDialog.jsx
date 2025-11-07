@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FiMapPin, FiCamera, FiBell, FiX, FiCheckCircle, FiAlertCircle, FiInfo } from 'react-icons/fi';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '../Hooks/usePermissions';
 
 const PermissionRequestDialog = ({ 
   isOpen, 

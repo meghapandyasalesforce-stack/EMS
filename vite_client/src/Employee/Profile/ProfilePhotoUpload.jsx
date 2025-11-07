@@ -4,7 +4,7 @@ import { FiCamera, FiUpload, FiX, FiUser } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { getUploadUrl } from '../../utils/axios';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '../../Hooks/usePermissions';
 
 const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) => {
   const [selectedFile, setSelectedFile] = useState(null);

@@ -9,7 +9,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { FiClock, FiHome, FiMapPin, FiCalendar, FiCoffee, FiPause, FiPlay, FiCamera, FiWifi } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '../../Hooks/usePermissions';
 
 const EnhancedAttendanceBox = () => {
   const dispatch = useDispatch();

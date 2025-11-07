@@ -22,7 +22,7 @@ import {
   FiAlertCircle,
   FiLoader
 } from 'react-icons/fi';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '../../Hooks/usePermissions';
 import PermissionRequestDialog from '../../components/PermissionRequestDialog';
 import PermissionStatusIndicator from '../../components/PermissionStatusIndicator';
 

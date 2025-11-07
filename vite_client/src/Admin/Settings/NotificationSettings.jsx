@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaBell, FaEnvelope, FaTasks, FaUsers, FaProjectDiagram, FaSave, FaUndo } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
-import { usePushNotification } from '../../hooks/usePushNotification';
+import { usePushNotification } from '../../Hooks/usePushNotification';
 
 const NotificationSettings = () => {
     const [settings, setSettings] = useState({

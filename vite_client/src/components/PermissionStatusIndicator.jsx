@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiMapPin, FiCamera, FiBell, FiCheckCircle, FiAlertCircle, FiXCircle } from 'react-icons/fi';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '../Hooks/usePermissions';
 
 const PermissionStatusIndicator = ({ type, showLabel = true, size = 'md' }) => {
   const { getPermissionStatus, isPermissionGranted, isPermissionDenied } = usePermissions();
