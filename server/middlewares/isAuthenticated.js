@@ -1,48 +1,47 @@
-import jwt from "jsonwebtoken";
 import logger from "../helpers/logger.js";
+import { extractToken, verifyToken, handleAuthError, attachUserToRequest } from "./authHelpers.js";
 
 const isAuthenticated = async (req, res, next) => {
     try {
-        // Accept token from Authorization header OR cookie
-        let token = req.cookies?.jwt;
-        if (!token && req.headers.authorization) {
-            const authHeader = req.headers.authorization;
-            if (authHeader.startsWith('Bearer ')) {
-                token = authHeader.substring(7);
-            }
-        }
+        // Extract token from request
+        const token = extractToken(req);
         
         if (!token) {
-            return res.status(401).json({ message: "User not authenticated", success: false });
+            return res.status(401).json({ 
+                success: false,
+                message: "User not authenticated",
+                code: 'NO_TOKEN'
+            });
         }
 
+        // Verify token
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET);
+            decoded = verifyToken(token);
         } catch (error) {
-            if (error.name === "TokenExpiredError") {
-                return res.status(401).json({ message: "Session expired, please log in again", success: false });
-            }
-            if (error.name === "JsonWebTokenError") {
-                return res.status(401).json({ message: "Invalid token", success: false });
-            }
-            return res.status(401).json({ message: "Authentication failed", success: false });
-        }
-
-        if (!decoded || !decoded.userId) {
-            return res.status(401).json({ message: "Invalid or missing user data in token", success: false });
+            return handleAuthError(error, res);
         }
 
         // Restrict access to employees ONLY (Admins blocked)
         if (decoded.role !== "employee") {
-            return res.status(403).json({ message: "Access restricted to employees only", success: false });
+            return res.status(403).json({ 
+                success: false,
+                message: "Access restricted to employees only",
+                code: 'EMPLOYEE_ONLY'
+            });
         }
 
-        req.employee = { _id: decoded.userId }; 
+        // Attach employee to request
+        attachUserToRequest(req, decoded);
+
         next();
     } catch (error) {
         logger.error("Auth Middleware Error", { error: error.message, stack: error.stack });
-        return res.status(500).json({ message: "Server authentication error", success: false });
+        return res.status(500).json({ 
+            success: false,
+            message: "Server authentication error",
+            code: 'SERVER_ERROR'
+        });
     }
 };
 

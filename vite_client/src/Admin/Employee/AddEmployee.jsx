@@ -70,11 +70,24 @@ function AddEmployee() {
                 toast.warning('Employee created, but welcome email failed!', {
                     autoClose: 5000
                 });
-                // Then show detailed error
+                // Then show detailed error with troubleshooting
                 setTimeout(() => {
-                    toast.error(emailWarning || emailError || 'Email service unavailable', {
-                        autoClose: 7000
-                    });
+                    const errorMsg = emailWarning || emailError || 'Email service unavailable';
+                    const isGmailError = errorMsg.includes('Gmail') || errorMsg.includes('App Password');
+                    const troubleshooting = isGmailError 
+                        ? ' For Gmail, use an App Password. Generate one at: https://myaccount.google.com/apppasswords'
+                        : ' Check your email server configuration in environment variables.';
+                    
+                    toast.error(
+                        <div>
+                            <div className="font-semibold">{errorMsg}</div>
+                            <div className="text-sm mt-1">{troubleshooting}</div>
+                        </div>,
+                        {
+                            autoClose: 10000,
+                            className: 'toast-error-with-details'
+                        }
+                    );
                 }, 500);
             } else {
                 toast.success('Employee created successfully!', {

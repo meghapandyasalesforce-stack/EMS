@@ -50,8 +50,32 @@ const validateEnvironment = () => {
   // Check email configuration
   const hasEmailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
   const hasEmailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
+  const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
+  
   if ((hasEmailUser && !hasEmailPass) || (hasEmailPass && !hasEmailUser)) {
     warnings.push('Email configuration is incomplete. Both EMAIL_USER and EMAIL_PASS must be set for email functionality.');
+  }
+  
+  // Check for Gmail and provide specific guidance
+  if (hasEmailUser && hasEmailUser.includes('@gmail.com')) {
+    // Check if EMAIL_HOST is set (shouldn't be for Gmail)
+    if (process.env.EMAIL_HOST && !emailHost.includes('gmail')) {
+      warnings.push('Gmail detected: EMAIL_HOST should not be set for Gmail. The system will auto-detect Gmail service.');
+    }
+    // Check if password looks like an App Password (16 chars, may have spaces)
+    if (hasEmailPass) {
+      const cleanPass = hasEmailPass.replace(/\s/g, '');
+      if (cleanPass.length !== 16) {
+        warnings.push('Gmail requires an App Password (16 characters). Your password may not be an App Password. Generate one at: https://myaccount.google.com/apppasswords');
+      }
+    }
+  }
+  
+  // Check for Outlook configuration
+  if (hasEmailUser && (hasEmailUser.includes('@outlook.com') || hasEmailUser.includes('@hotmail.com'))) {
+    if (!emailHost.includes('office365.com') && !emailHost.includes('outlook.com')) {
+      warnings.push('Outlook detected: EMAIL_HOST should be set to smtp.office365.com for Outlook/Office365 accounts.');
+    }
   }
 
   // Check CORS configuration

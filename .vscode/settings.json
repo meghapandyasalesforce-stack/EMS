@@ -1,0 +1,20 @@
+{
+  "typescript.validate.enable": false,
+  "typescript.tsserver.enable": false,
+  "typescript.disableAutomaticTypeAcquisition": true,
+  "javascript.validate.enable": true,
+  "files.associations": {
+    "*.js": "javascript",
+    "*.jsx": "javascriptreact"
+  },
+  "files.exclude": {
+    "**/tsconfig.json": false
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/dev-dist": true,
+    "**/coverage": true
+  }
+}
+

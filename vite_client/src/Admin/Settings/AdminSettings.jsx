@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine } from 'react-icons/fa';
 import AttendanceRules from '../Attendance/AttendanceRules';
 import NotificationSettings from './NotificationSettings';
+import EmailSettings from './EmailSettings';
 
 const AdminSettings = () => {
-    const [activeTab, setActiveTab] = useState('attendance-rules');
+    const [activeTab, setActiveTab] = useState('email'); // Default to email settings for troubleshooting
 
     const settingsTabs = [
         {
@@ -18,6 +19,12 @@ const AdminSettings = () => {
             name: 'Notification Settings',
             icon: <FaBell />,
             component: <NotificationSettings />
+        },
+        {
+            id: 'email',
+            name: 'Email Configuration',
+            icon: <FaEnvelope />,
+            component: <EmailSettings />
         },
         {
             id: 'security',

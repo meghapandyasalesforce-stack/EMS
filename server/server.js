@@ -94,6 +94,27 @@ const startServer = async () => {
       logger.warn("No MONGO_URI found — skipping DB connection");
     }
 
+    // Validate email configuration (non-blocking)
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { validateEmailConfig } = await import('./helpers/emailValidator.js');
+        const emailValidation = await validateEmailConfig();
+        if (emailValidation.valid) {
+          logger.info('Email configuration validated successfully', emailValidation.details);
+        } else {
+          logger.warn('Email configuration validation failed', {
+            message: emailValidation.message,
+            recommendation: emailValidation.recommendation,
+            error: emailValidation.error
+          });
+          logger.warn('Welcome emails will not be sent until email configuration is fixed.');
+          logger.warn('See EMAIL_TROUBLESHOOTING.md for help.');
+        }
+      } catch (emailError) {
+        logger.warn('Could not validate email configuration', { error: emailError.message });
+      }
+    }
+
     // ✅ Important for Render - listen on 0.0.0.0 to accept connections from all interfaces
     app.listen(PORT, "0.0.0.0", () => {
       logger.info(`Server running on port ${PORT}`);

@@ -10,7 +10,8 @@
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=tests/unit",
     "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=tests/integration",
-    "build": "cd ../vite_client && npm install && npm run build:deploy"
+    "build": "cd ../vite_client && npm install && npm run build:deploy",
+    "check-email": "node scripts/check-email-config.js"
   },
   "keywords": [],
   "author": "",

@@ -13,7 +13,7 @@ import {
 } from "../../controllers/employee/profileDetailsController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
-import { updateEmployeeStatus } from "../../controllers/auth/employeeAuthController.js";
+import { updateEmployeeStatus } from "../../controllers/admin/employeeManagementController.js";
 
 
 

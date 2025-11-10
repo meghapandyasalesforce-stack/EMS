@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import mongoose from "mongoose";
 import sendWelcomeEmail from '../../helpers/emailSender.js';
 import logger from '../../helpers/logger.js';
+import { sendSuccess, sendError, sendValidationError, sendInternalError, sendNotFound } from '../../helpers/responseHelper.js';
 
 
 // Generate token with employeeId instead of email
@@ -23,10 +24,9 @@ export const registerEmployee = async (req, res) => {
         // Validate required fields (password is optional - will be generated if not provided)
         if (!name || !lastName || !email || !position ||
             !department || !manager || !jobTitle || !jobCategory || !salary) {
-            return res.status(400).json({ 
-                success: false,
-                message: 'All fields are required (password will be auto-generated if not provided)' 
-            });
+            return sendValidationError(res, 
+                'All fields are required (password will be auto-generated if not provided)'
+            );
         }
         
         // Generate secure password if not provided
@@ -40,19 +40,13 @@ export const registerEmployee = async (req, res) => {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return res.status(400).json({ 
-                success: false,
-                message: 'Invalid email format' 
-            });
+            return sendValidationError(res, { email: 'Invalid email format' });
         }
 
         // Validate position value
         const validPositions = ["Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager", "Director", "VP", "CTO", "CFO", "CEO", "Developer"];
         if (!validPositions.includes(position)) {
-            return res.status(400).json({ 
-                success: false,
-                message: 'Invalid position value' 
-            });
+            return sendValidationError(res, { position: `Invalid position. Must be one of: ${validPositions.join(', ')}` });
         }
 
         // Normalize email (lowercase and trim) for case-insensitive check
@@ -63,10 +57,11 @@ export const registerEmployee = async (req, res) => {
             email: normalizedEmail 
         });
         if (existingEmployee) {
-            return res.status(409).json({ 
-                success: false,
-                message: 'An employee with this email already exists. Please use a different email address.' 
-            });
+            return sendError(res, 
+                'An employee with this email already exists. Please use a different email address.',
+                409,
+                'DUPLICATE_EMAIL'
+            );
         }
 
         // Password will be hashed automatically by the model's pre-save hook
@@ -92,10 +87,7 @@ export const registerEmployee = async (req, res) => {
         }
         
         if (!isUnique) {
-            return res.status(500).json({ 
-                success: false,
-                message: 'Failed to generate unique employee ID. Please try again.' 
-            });
+            return sendInternalError(res, 'Failed to generate unique employee ID. Please try again.');
         }
 
         // Create the employee (normalize email to lowercase)
@@ -127,10 +119,11 @@ export const registerEmployee = async (req, res) => {
                     duplicateField,
                     error: saveError.message
                 });
-                return res.status(409).json({ 
-                    success: false,
-                    message: `An employee with this ${duplicateField} already exists. Please use a different ${duplicateField}.` 
-                });
+                return sendError(res, 
+                    `An employee with this ${duplicateField} already exists. Please use a different ${duplicateField}.`,
+                    409,
+                    'DUPLICATE_FIELD'
+                );
             }
             // Re-throw other errors
             throw saveError;
@@ -201,10 +194,8 @@ export const registerEmployee = async (req, res) => {
 
         // Generate token and send response
         const token = generateToken(employee._id);
-        res.status(201).json({
-            success: true,
-            message: 'Employee registered successfully',
-            emailSent: emailSent, // Indicate if welcome email was sent
+        return sendSuccess(res, {
+            emailSent,
             ...(emailErrorMessage && { 
                 emailWarning: `Welcome email could not be sent: ${emailErrorMessage}`,
                 emailError: emailErrorMessage 
@@ -219,7 +210,7 @@ export const registerEmployee = async (req, res) => {
                 jobTitle: employee.jobTitle,
                 employeeId: employee.employeeId
             }
-        });
+        }, 'Employee registered successfully', 201);
     } catch (error) {
         logger.error('Registration error', { 
             error: error.message, 
@@ -230,18 +221,14 @@ export const registerEmployee = async (req, res) => {
         
         // Handle specific error types
         if (error.code === 11000) {
-            return res.status(409).json({
-                success: false,
-                message: 'An employee with this email already exists. Please use a different email address.'
-            });
+            return sendError(res, 
+                'An employee with this email already exists. Please use a different email address.',
+                409,
+                'DUPLICATE_EMAIL'
+            );
         }
         
-        res.status(500).json({
-            success: false,
-            message: 'Registration failed',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
-            ...(error.errors && { detailedErrors: error.errors })
-        });
+        return sendInternalError(res, 'Registration failed', error);
     }
 };
 
@@ -252,9 +239,9 @@ export const loginEmployee = async (req, res) => {
 
         // Validate input
         if (!email || !password) {
-            return res.status(400).json({ 
-                success: false,
-                message: 'Email and password are required' 
+            return sendValidationError(res, { 
+                email: email ? undefined : 'Email is required',
+                password: password ? undefined : 'Password is required'
             });
         }
 
@@ -267,26 +254,17 @@ export const loginEmployee = async (req, res) => {
         });
         
         if (!employee) {
-            return res.status(401).json({ 
-                success: false,
-                message: 'Invalid email or password' 
-            });
+            return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
         }
 
         if (!employee.active) {
-            return res.status(403).json({ 
-                success: false,
-                message: 'Your account is inactive. Please contact HR or Admin.' 
-            });
+            return sendError(res, 'Your account is inactive. Please contact HR or Admin.', 403, 'ACCOUNT_INACTIVE');
         }
 
         // Use the model's comparePassword method for consistency
         const isPasswordValid = await employee.comparePassword(password);
         if (!isPasswordValid) {
-            return res.status(401).json({ 
-                success: false,
-                message: 'Invalid email or password' 
-            });
+            return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
         }
 
         // ✅ Pass `res` and `role` so cookie gets set
@@ -319,10 +297,10 @@ export const loginEmployee = async (req, res) => {
             response.csrfToken = csrfToken;
         }
 
-        res.status(200).json(response);
+        return sendSuccess(res, response, 'Login successful');
     } catch (error) {
         logger.error('Login employee error', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: 'Login failed', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
+        return sendInternalError(res, 'Login failed', error);
     }
 };
 
@@ -344,92 +322,28 @@ export const logoutEmployee = (req, res) => {
             path: '/',
         });
 
-        res.status(200).json({ message: 'Logout successful' });
+        return sendSuccess(res, null, 'Logout successful');
     } catch (error) {
-        res.status(500).json({ message: 'Logout failed', error: error.message });
+        logger.error('Logout error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Logout failed', error);
     }
 };
 
-//get all employees
-export const getAllEmployees = async (req, res) => {
-    try {
-        const user = req.user || req.employee;
-
-        if (!user || user.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Admins only.' });
-        }
-
-        const employees = await Employee.find().select('-password');
-        res.status(200).json({ employees });
-    } catch (error) {
-        logger.error('Error fetching employees', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: 'Failed to fetch employees', error: error.message });
-    }
-};
-
-// Update employee active status (Admin only)
-export const updateEmployeeStatus = async (req, res) => {
-    try {
-        // Check if requester is admin
-        if (req.user?.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Admins only.' });
-        }
-
-        const { employeeId } = req.params;
-        const { active } = req.body;
-
-        // Validate input
-        if (typeof active !== 'boolean') {
-            return res.status(400).json({ message: 'Invalid status. Must be true/false.' });
-        }
-
-        if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-            return res.status(400).json({ message: 'Invalid employee ID' });
-        }
-
-        // Update status
-        const updatedEmployee = await Employee.findByIdAndUpdate(
-            employeeId,
-            { active },
-            { new: true, runValidators: true }
-        ).select('-password');
-
-        if (!updatedEmployee) {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
-
-        res.status(200).json({
-            message: `Employee ${active ? 'activated' : 'deactivated'} successfully`,
-            employee: updatedEmployee
-        });
-
-    } catch (error) {
-        logger.error('Error updating employee status', { error: error.message, stack: error.stack });
-        res.status(500).json({
-            message: 'Failed to update employee status',
-            error: error.message
-        });
-    }
-};
+// Note: getAllEmployees and updateEmployeeStatus have been moved to 
+// controllers/admin/employeeManagementController.js for better organization
 export const resetEmployeePassword = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
         const { newPassword } = req.body;
 
         if (!newPassword || newPassword.length < 8) {
-            return res.status(400).json({ 
-                success: false,
-                message: 'Password must be at least 8 characters long.' 
-            });
+            return sendValidationError(res, { password: 'Password must be at least 8 characters long' });
         }
 
         // Find the employee first
         const employee = await Employee.findById(employeeId);
         if (!employee) {
-            return res.status(404).json({ 
-                success: false,
-                message: 'Employee not found.' 
-            });
+            return sendNotFound(res, 'Employee');
         }
 
         // Set the new password and mustResetPassword flag
@@ -457,47 +371,12 @@ export const resetEmployeePassword = async (req, res) => {
             path: '/',
         });
 
-        res.status(200).json({ 
-            success: true,
-            message: 'Password reset successful. Please login with your new password.',
-            logout: true 
-        });
+        return sendSuccess(res, { logout: true }, 'Password reset successful. Please login with your new password.');
     } catch (error) {
         logger.error('Reset employee password error', { error: error.message, stack: error.stack });
-        res.status(500).json({ 
-            success: false,
-            message: 'Failed to reset password', 
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
-        });
+        return sendInternalError(res, 'Failed to reset password', error);
     }
 };
 
-// Delete employee (Admin only)
-export const deleteEmployee = async (req, res) => {
-    try {
-        // Ensure requester is an admin
-        if (req.user?.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Admins only.' });
-        }
-
-        const { employeeId } = req.params;
-
-        if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-            return res.status(400).json({ message: 'Invalid employee ID' });
-        }
-
-        const employee = await Employee.findByIdAndDelete(employeeId);
-
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
-
-        // Optionally delete associated payroll data (if needed)
-        await Payroll.deleteMany({ employeeId: employee._id });
-
-        res.status(200).json({ message: 'Employee deleted successfully' });
-    } catch (error) {
-        logger.error('Error deleting employee', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: 'Failed to delete employee', error: error.message });
-    }
-};
+// Note: deleteEmployee has been moved to 
+// controllers/admin/employeeManagementController.js for better organization

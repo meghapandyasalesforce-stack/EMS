@@ -15,12 +15,21 @@ const getBaseURL = () => {
     return `${backendUrl}/api`;
   }
   
-  // Priority 3: In production, use Render backend URL (default)
+  // Priority 3: In production, require explicit environment variable
   // Check both PROD and MODE to handle Vercel deployments correctly
   const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
   if (isProduction) {
-    // Default to Render backend, but can be overridden via env vars
-    return 'https://ems-te2n.onrender.com/api';
+    // In production, environment variables MUST be set
+    // This prevents hardcoded URLs and makes deployments flexible
+    const fallbackUrl = import.meta.env.VITE_PRODUCTION_API_URL || import.meta.env.VITE_PRODUCTION_BACKEND_URL;
+    if (fallbackUrl) {
+      return fallbackUrl.endsWith('/api') ? fallbackUrl : `${fallbackUrl}/api`;
+    }
+    // If no env var is set, log warning and use relative path (may work if same domain)
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('⚠️ VITE_API_URL or VITE_BACKEND_URL not set in production. Using relative path.');
+    }
+    return '/api';
   }
   
   // Priority 4: In development, use relative path (vite proxy handles it)
@@ -41,10 +50,19 @@ export const getBackendBaseURL = () => {
     return import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
   }
   
-  // Priority 3: Production default
+  // Priority 3: Production - require explicit environment variable
   const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
   if (isProduction) {
-    return 'https://ems-te2n.onrender.com';
+    // Use environment variable if set
+    const prodUrl = import.meta.env.VITE_PRODUCTION_BACKEND_URL || import.meta.env.VITE_PRODUCTION_API_URL;
+    if (prodUrl) {
+      return prodUrl.replace(/\/api\/?$/, '');
+    }
+    // Fallback to relative path (may work if frontend and backend are on same domain)
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('⚠️ VITE_BACKEND_URL or VITE_API_URL not set in production. Using relative path.');
+    }
+    return ''; // Empty string means relative path
   }
   
   // Priority 4: Development default

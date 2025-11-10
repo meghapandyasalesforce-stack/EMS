@@ -19,6 +19,7 @@ import uploadRouter from "../routes/Both/UploadRoutes.js";
 import forgotPasswordRouter from "../routes/Both/ForgotPasswordRoutes.js";
 import taskRouter from "../routes/Both/TaskRoutes.js";
 import profilePhotoRouter from "../routes/Both/ProfilePhotoRoutes.js";
+import emailTestRouter from "../routes/Both/EmailTestRoutes.js";
 import roleRouter from "../routes/Admin/RoleRoutes.js";
 import calendarRouter from "../routes/Admin/CalendarRoutes.js";
 import idCardRouter from "../routes/Admin/IdCardRoutes.js";
@@ -60,5 +61,6 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/password", forgotPasswordRouter);
   app.use("/api/v1/both/project-task", taskRouter);
   app.use("/api/v1/both/profile-photo", profilePhotoRouter);
+  app.use("/api/v1/both/email", emailTestRouter);
 };
 
