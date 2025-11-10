@@ -1,6 +1,13 @@
+/**
+ * EMS-Paarsiv Server
+ * Main entry point for the Employee Management System backend
+ * 
+ * @module server
+ * @description Express server with security middleware, route registration, and database connection
+ */
+
 import express from "express";
 import dotenv from "dotenv";
-import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
@@ -10,37 +17,17 @@ import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import requestLogger from "./middlewares/requestLogger.js";
 import { apiLimiter } from "./middlewares/rateLimiter.js";
 import validateEnvironment from "./helpers/envValidator.js";
-import adminRouter from "./routes/Auth/AdminRoutes.js";
-import employeeRouter from "./routes/Auth/EmployeeRoutes.js";
-import leaveEmployeeRouter from "./routes/Employee/LeaveEmployeeRoutes.js";
-import leaveAdminRouter from "./routes/Admin/LeaveAdminRoutes.js";
-import projectRouter from "./routes/Admin/ProjectsRoutes.js";
-import attendanceRouter from "./routes/Both/AttendanceRoutes.js";
-import payrollRouter from "./routes/Admin/PayrollRoutes.js";
-import profileDetailsRouter from "./routes/Employee/ProfileDetailsRoutes.js";
-import employeeCalendarRouter from "./routes/Employee/EmployeeCalendarRoutes.js";
-import employeePayrollRouter from "./routes/Employee/EmployeePayrollRoutes.js";
-import notificationRouter from "./routes/Admin/NotificationRoutes.js";
-import pushSubscriptionRouter from "./routes/Admin/PushSubscriptionRoutes.js";
-import uploadRouter from "./routes/Both/UploadRoutes.js";
-import forgotPasswordRouter from "./routes/Both/ForgotPasswordRoutes.js";
-import taskRouter from "./routes/Both/TaskRoutes.js";
-import profilePhotoRouter from "./routes/Both/ProfilePhotoRoutes.js";
-import roleRouter from "./routes/Admin/RoleRoutes.js";
-import calendarRouter from "./routes/Admin/CalendarRoutes.js";
-import idCardRouter from "./routes/Admin/IdCardRoutes.js";
-import salaryStructureRouter from "./routes/Admin/SalaryStructureRoutes.js";
-import employeeAdminRouter from "./routes/Admin/EmployeeRoutes.js";
-import attendanceRuleRouter from "./routes/Admin/AttendanceRuleRoutes.js";
-import notificationSettingsRouter from "./routes/Admin/NotificationSettingsRoutes.js";
-import path from "path";
-import { fileURLToPath } from "url";
-import fs from "fs";
+import { corsMiddleware } from "./middlewares/corsConfig.js";
+import { 
+  staticFilesCorsMiddleware, 
+  staticFilesCheckMiddleware, 
+  staticFilesConfig 
+} from "./middlewares/staticFiles.js";
+import { registerRoutes } from "./config/routes.js";
+import { registerDiagnosticRoutes } from "./config/diagnosticRoutes.js";
 import csrfProtection from "./middlewares/csrf.js";
 import logger from "./helpers/logger.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const app = express();
 
 dotenv.config();
@@ -73,336 +60,31 @@ app.use(
 app.use(mongoSanitize());
 app.use(xss());
 
-// ✅ CORS configuration - production ready (supports multiple origins)
-const getAllowedOrigins = () => {
-  const origins = [];
-  
-  // Add FRONTEND_URL if set
-  if (process.env.FRONTEND_URL) {
-    origins.push(process.env.FRONTEND_URL);
-  }
-  
-  // Add additional allowed origins from environment (comma-separated)
-  if (process.env.ALLOWED_ORIGINS) {
-    origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()));
-  }
-  
-  // Default origins
-  if (process.env.NODE_ENV === 'development') {
-    origins.push('http://localhost:5173', 'http://localhost:3000');
-  }
-  
-  // Production defaults (Vercel + Render)
-  if (process.env.NODE_ENV === 'production') {
-    origins.push('https://paarsiv.vercel.app');
-  }
-  
-  return origins.length > 0 ? origins : ['http://localhost:5173'];
-};
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = getAllowedOrigins();
-      
-      // In production, be strict about origins
-      if (process.env.NODE_ENV === 'production') {
-        // In production, reject requests with no origin
-        // Note: Mobile apps should send a proper origin header or use a different authentication method
-        if (!origin) {
-          return callback(new Error('Origin header required in production'));
-        }
-        
-        // Check if origin is in allowed list (strict matching)
-        if (allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-        
-        // Log rejected origins for security monitoring
-        logger.warn('CORS rejected origin in production', { origin });
-        callback(new Error('Not allowed by CORS'));
-        return;
-      }
-      
-      // Development mode: more lenient
-      // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)
-      if (!origin) {
-        return callback(null, true);
-      }
-      
-      // Check if origin is in allowed list
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      // In development, allow any origin
-      return callback(null, true);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token", "X-Requested-With", "Accept", "Origin"],
-    exposedHeaders: ["Set-Cookie"],
-    optionsSuccessStatus: 200
-  })
-);
+// ✅ CORS configuration
+app.use(corsMiddleware);
 
 // ✅ Static files (before rate limiting/CSRF to avoid unnecessary checks)
-// Add CORS headers for static file serving - images need CORS to be loaded cross-origin
-app.use("/uploads", (req, res, next) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = getAllowedOrigins();
-  
-  // Set CORS headers for static files BEFORE serving
-  // CRITICAL: Always set CORS headers for images to work with html2canvas and other CORS contexts
-  if (origin) {
-    // Check if origin is allowed (including Vercel in production)
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-      // In production, if origin is not explicitly allowed but is Vercel, allow it
-      if (process.env.NODE_ENV === "production" && origin === "https://paarsiv.vercel.app") {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else {
-        // Use wildcard for other cases (but never with credentials)
-        res.setHeader("Access-Control-Allow-Origin", "*");
-      }
-    }
-  } else {
-    // No origin header - but in production, allow Vercel explicitly for CORS requests
-    // This handles cases where img tag loads without origin, but later CORS request needs it
-    if (process.env.NODE_ENV === "production") {
-      // Don't set credentials with wildcard - they're incompatible
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    }
-  }
-  
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin");
-  res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition");
-  res.setHeader("Access-Control-Max-Age", "86400"); // Cache preflight for 24 hours
-  
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  
-  // Continue to static file serving
-  next();
-});
-
-// Serve static files with CORS headers applied and file existence check
-app.use("/uploads", (req, res, next) => {
-  // Check if file exists before serving (helps debug 404s for profile photos)
-  const requestedPath = req.path;
-  if (requestedPath.includes('profile-photos')) {
-    const fullPath = path.join(__dirname, "uploads", requestedPath);
-    if (!fs.existsSync(fullPath)) {
-      logger.warn('File not found', {
-        requestedPath,
-        fullPath,
-        url: req.url,
-        timestamp: new Date().toISOString()
-      });
-      // Don't return 404 here - let express.static handle it
-      // But log it for debugging Render ephemeral filesystem issues
-    }
-  }
-  next();
-}, express.static(path.join(__dirname, "uploads"), {
-  setHeaders: (res, filePath, stat) => {
-    // CRITICAL: Get origin from request - this is essential for CORS
-    const req = res.req || res.locals?.req;
-    const origin = req?.headers?.origin || req?.get?.('origin');
-    const allowedOrigins = getAllowedOrigins();
-    
-    // Set CORS headers for the file response - MUST match what middleware set
-    if (origin) {
-      // Check if origin is allowed
-      if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else if (process.env.NODE_ENV === "production" && origin === "https://paarsiv.vercel.app") {
-        // Explicitly allow Vercel origin in production
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else {
-        // Use wildcard for other cases (no credentials)
-        res.setHeader("Access-Control-Allow-Origin", "*");
-      }
-    } else {
-      // No origin header - use wildcard (no credentials)
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    }
-    
-    // Set appropriate content type for images
-    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
-      res.setHeader("Content-Type", "image/jpeg");
-    } else if (filePath.endsWith('.png')) {
-      res.setHeader("Content-Type", "image/png");
-    } else if (filePath.endsWith('.gif')) {
-      res.setHeader("Content-Type", "image/gif");
-    } else if (filePath.endsWith('.webp')) {
-      res.setHeader("Content-Type", "image/webp");
-    }
-    
-    // Cache control for images
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-  },
-  // Add fallthrough to handle missing files gracefully
-  fallthrough: true
-}));
+app.use("/uploads", staticFilesCorsMiddleware);
+app.use("/uploads", staticFilesCheckMiddleware, staticFilesConfig);
 
 // ✅ Rate limiting + CSRF
 app.use(apiLimiter);
 app.use(csrfProtection);
 
 // =================== ROUTES ===================
-app.use("/api/v1/admin/auth", adminRouter);
-app.use("/api/v1/admin/leave", leaveAdminRouter);
-app.use("/api/v1/admin/project", projectRouter);
-app.use("/api/v1/admin/payroll", payrollRouter);
-app.use("/api/v1/admin/employee", employeeAdminRouter);
-
-app.use("/api/v1/employee/auth", employeeRouter);
-app.use("/api/v1/employee/leave", leaveEmployeeRouter);
-app.use("/api/v1/employee/calendar", employeeCalendarRouter);
-app.use("/api/v1/employee/payroll", employeePayrollRouter);
-
-app.use("/api/v1/both/attendance", attendanceRouter);
-app.use("/api/v1/both/notification", notificationRouter);
-app.use("/api/v1/both/notification", pushSubscriptionRouter);
-app.use("/api/v1/both/profile-details", profileDetailsRouter);
-app.use("/api/v1/both/document", uploadRouter);
-app.use("/api/v1/both/password", forgotPasswordRouter);
-app.use("/api/v1/both/project-task", taskRouter);
-app.use("/api/v1/both/profile-photo", profilePhotoRouter);
-
-app.use("/api/v1/admin/roles", roleRouter);
-app.use("/api/v1/admin/calendar", calendarRouter);
-app.use("/api/v1/admin/id-cards", idCardRouter);
-app.use("/api/v1/admin/salary-structure", salaryStructureRouter);
-app.use("/api/v1/admin/attendance-rules", attendanceRuleRouter);
-app.use("/api/v1/admin/notification-settings", notificationSettingsRouter);
-
-// ✅ API health check
-app.get("/api", (req, res) => {
-  res.json({
-    success: true,
-    message: "API is running...",
-    version: "1.0.0",
-  });
-});
-
-// ✅ Diagnostic endpoint to check uploads directory
-app.get("/api/debug/uploads", (req, res) => {
-  try {
-    const uploadsBasePath = path.join(__dirname, "uploads");
-    const profilePhotosPath = path.join(uploadsBasePath, "profile-photos");
-    
-    // Check if directories exist
-    const baseExists = fs.existsSync(uploadsBasePath);
-    const photosExists = fs.existsSync(profilePhotosPath);
-    
-    let files = [];
-    let fileCount = 0;
-    
-    if (photosExists) {
-      files = fs.readdirSync(profilePhotosPath);
-      fileCount = files.length;
-      
-      // Get details for first 10 files
-      const fileDetails = files.slice(0, 10).map(filename => {
-        const filePath = path.join(profilePhotosPath, filename);
-        try {
-          const stats = fs.statSync(filePath);
-          return {
-            filename,
-            size: stats.size,
-            created: stats.birthtime,
-            modified: stats.mtime
-          };
-        } catch (err) {
-          return { filename, error: err.message };
-        }
-      });
-      
-      return res.json({
-        success: true,
-        uploadsBasePath,
-        profilePhotosPath,
-        baseExists,
-        photosExists,
-        fileCount,
-        sampleFiles: fileDetails,
-        message: fileCount > 0 
-          ? `Found ${fileCount} files in profile-photos directory`
-          : "No files found in profile-photos directory"
-      });
-    }
-    
-    res.json({
-      success: true,
-      uploadsBasePath,
-      profilePhotosPath,
-      baseExists,
-      photosExists,
-      fileCount: 0,
-      message: "Profile photos directory does not exist"
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
-
-// ✅ Check specific file existence
-app.get("/api/debug/file/:filename", (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filePath = path.join(__dirname, "uploads", "profile-photos", filename);
-    const exists = fs.existsSync(filePath);
-    
-    if (exists) {
-      const stats = fs.statSync(filePath);
-      res.json({
-        success: true,
-        exists: true,
-        filename,
-        path: filePath,
-        size: stats.size,
-        created: stats.birthtime,
-        modified: stats.mtime,
-        url: `/uploads/profile-photos/${filename}`
-      });
-    } else {
-      res.json({
-        success: true,
-        exists: false,
-        filename,
-        path: filePath,
-        message: "File not found on server"
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
+registerRoutes(app);
+registerDiagnosticRoutes(app);
 
 // ✅ Error handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// ✅ Start server safely
+/**
+ * Start the Express server
+ * Connects to MongoDB and starts listening on the configured port
+ * @async
+ * @function startServer
+ */
 const startServer = async () => {
   try {
     if (process.env.MONGO_URI) {
@@ -412,7 +94,7 @@ const startServer = async () => {
       logger.warn("No MONGO_URI found — skipping DB connection");
     }
 
-    // ✅ Important for Render
+    // ✅ Important for Render - listen on 0.0.0.0 to accept connections from all interfaces
     app.listen(PORT, "0.0.0.0", () => {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Mode: ${process.env.NODE_ENV || "development"}`);
@@ -420,7 +102,9 @@ const startServer = async () => {
     });
   } catch (err) {
     logger.error("Server startup failed", { error: err.message, stack: err.stack });
+    process.exit(1);
   }
 };
 
+// Start the server
 startServer();

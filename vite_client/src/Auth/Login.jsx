@@ -30,33 +30,35 @@ function Login() {
     const handleSubmit = async e => {
         e.preventDefault();
 
-        const emailDomain = form.email.split('@')[1];
-
-        if (!form.email.includes('@') || !emailDomain) {
+        if (!form.email || !form.email.includes('@')) {
             toast.error('Please enter a valid email address');
-            return;
-        }
-
-        let apiEndpoint = '';
-        let userRole = '';
-
-        if (emailDomain === 'gmail.com') {
-            apiEndpoint = '/v1/admin/auth/login';
-            userRole = 'admin';
-        } else if (emailDomain === 'paarsiv.com') {
-            apiEndpoint = '/v1/employee/auth/login';
-            userRole = 'employee';
-        } else {
-            toast.error('Only @gmail.com and @paarsiv.com domains are allowed.');
             return;
         }
 
         try {
             dispatch(setLoading(true));
 
-            const response = await axios.post(apiEndpoint, form, {
-                withCredentials: true
-            });
+            // Try admin login first, then employee login if admin fails
+            let response;
+            let apiEndpoint = '/v1/admin/auth/login';
+            let userRole = 'admin';
+            
+            try {
+                response = await axios.post(apiEndpoint, form, {
+                    withCredentials: true
+                });
+            } catch (adminError) {
+                // If admin login fails with 401, try employee login
+                if (adminError.response?.status === 401) {
+                    apiEndpoint = '/v1/employee/auth/login';
+                    userRole = 'employee';
+                    response = await axios.post(apiEndpoint, form, {
+                        withCredentials: true
+                    });
+                } else {
+                    throw adminError;
+                }
+            }
 
             const data = response.data;
 
@@ -69,6 +71,9 @@ function Login() {
             if (response.status === 200 && (data.success === true || data.employee || data.admin || data.user)) {
                 const userData = data.employee || data.admin || data.user;
                 
+                // Get role from response data (most reliable) or fallback to userRole
+                const actualRole = data.user?.role || data.employee?.role || data.admin?.role || userRole;
+                
                 dispatch(setUser(userData));
                 // Store token in localStorage for Authorization header (backup to cookie)
                 if (data.token) {
@@ -78,19 +83,19 @@ function Login() {
                 if (data.csrfToken) {
                     localStorage.setItem('csrfToken', data.csrfToken);
                 }
-                // Store UI-related data
-                localStorage.setItem('role', userRole);
+                // Store UI-related data - use actual role from response
+                localStorage.setItem('role', actualRole);
                 localStorage.setItem('email', form.email);
 
                 // If employee must reset password, show popup and pause navigation
-                if (userRole === 'employee' && userData?.mustResetPassword) {
+                if (actualRole === 'employee' && userData?.mustResetPassword) {
                     toast.info('Please reset your password to continue.');
                     setShowReset(true);
                     return;
                 }
 
                 toast.success('Login successful!');
-                const redirectPath = userRole === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
+                const redirectPath = actualRole === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
                 setTimeout(() => { window.location.href = redirectPath; }, 500);
             } else {
                 toast.error(data.message || 'Login failed');

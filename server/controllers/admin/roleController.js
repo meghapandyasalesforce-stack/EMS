@@ -1,6 +1,7 @@
 import Role from '../../models/role.model.js';
 import Employee from '../../models/employee.model.js';
 import User from '../../models/user.model.js';
+import logger from '../../helpers/logger.js';
 
 // Create a new role
 export const createRole = async (req, res) => {
@@ -44,8 +45,12 @@ export const createRole = async (req, res) => {
             role
         });
     } catch (error) {
-        console.error('Create role error:', error);
-        res.status(500).json({ message: 'Failed to create role', error: error.message });
+        logger.error('Create role error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to create role', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -59,8 +64,12 @@ export const getAllRoles = async (req, res) => {
 
         res.json(roles);
     } catch (error) {
-        console.error('Get roles error:', error);
-        res.status(500).json({ message: 'Failed to get roles', error: error.message });
+        logger.error('Get roles error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to get roles', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -78,8 +87,12 @@ export const getRoleById = async (req, res) => {
 
         res.json(role);
     } catch (error) {
-        console.error('Get role error:', error);
-        res.status(500).json({ message: 'Failed to get role', error: error.message });
+        logger.error('Get role error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to get role', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -119,8 +132,12 @@ export const updateRole = async (req, res) => {
             role: updatedRole
         });
     } catch (error) {
-        console.error('Update role error:', error);
-        res.status(500).json({ message: 'Failed to update role', error: error.message });
+        logger.error('Update role error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to update role', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -162,8 +179,12 @@ export const deleteRole = async (req, res) => {
 
         res.json({ message: 'Role deleted successfully' });
     } catch (error) {
-        console.error('Delete role error:', error);
-        res.status(500).json({ message: 'Failed to delete role', error: error.message });
+        logger.error('Delete role error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to delete role', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -197,8 +218,12 @@ export const assignRoleToEmployee = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Assign role error:', error);
-        res.status(500).json({ message: 'Failed to assign role', error: error.message });
+        logger.error('Assign role error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to assign role', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -208,8 +233,12 @@ export const getRoleHierarchy = async (req, res) => {
         const hierarchy = await Role.getHierarchy();
         res.json(hierarchy);
     } catch (error) {
-        console.error('Get hierarchy error:', error);
-        res.status(500).json({ message: 'Failed to get role hierarchy', error: error.message });
+        logger.error('Get hierarchy error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to get role hierarchy', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };
 
@@ -251,7 +280,11 @@ export const checkPermissions = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Check permissions error:', error);
-        res.status(500).json({ message: 'Failed to check permissions', error: error.message });
+        logger.error('Check permissions error', { error: error.message, stack: error.stack });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to check permissions', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
+        });
     }
 };

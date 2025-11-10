@@ -1,5 +1,5 @@
 import Employee from '../../models/employee.model.js';
-import { generateToken } from '../../helpers/utils.js';
+import { generateToken, generateSecurePassword } from '../../helpers/utils.js';
 import bcrypt from 'bcryptjs';
 import mongoose from "mongoose";
 import sendWelcomeEmail from '../../helpers/emailSender.js';
@@ -20,14 +20,22 @@ export const registerEmployee = async (req, res) => {
             jobTitle, jobCategory, salary
         } = req.body;
 
-        // Validate required fields
-        if (!name || !lastName || !email || !password || !position ||
+        // Validate required fields (password is optional - will be generated if not provided)
+        if (!name || !lastName || !email || !position ||
             !department || !manager || !jobTitle || !jobCategory || !salary) {
             return res.status(400).json({ 
                 success: false,
-                message: 'All fields are required' 
+                message: 'All fields are required (password will be auto-generated if not provided)' 
             });
         }
+        
+        // Generate secure password if not provided
+        const employeePassword = password || generateSecurePassword(16);
+        logger.info('Password generation', { 
+            provided: !!password, 
+            generated: !password,
+            email: email.toLowerCase().trim()
+        });
 
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -95,7 +103,7 @@ export const registerEmployee = async (req, res) => {
             name,
             lastName,
             email: normalizedEmail, // Use normalized email
-            password, // Will be hashed automatically by model's pre-save hook
+            password: employeePassword, // Will be hashed automatically by model's pre-save hook
             position,
             department,
             manager,
@@ -132,7 +140,7 @@ export const registerEmployee = async (req, res) => {
         let emailSent = false;
         let emailErrorMessage = null;
         try {
-            await sendWelcomeEmail(normalizedEmail, `${name} ${lastName}`, password);
+            await sendWelcomeEmail(normalizedEmail, `${name} ${lastName}`, employeePassword);
             emailSent = true;
             logger.info('Welcome email sent successfully', { 
                 email: normalizedEmail, 

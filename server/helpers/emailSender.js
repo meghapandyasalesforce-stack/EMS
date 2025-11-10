@@ -33,7 +33,11 @@ const sendWelcomeEmail = async (email, name, password) => {
   });
 
   // Email options
-  const displayPassword = password || process.env.DEFAULT_EMPLOYEE_PASSWORD || 'Please contact your administrator';
+  // SECURITY: Never use default passwords. Password must be provided or generated securely.
+  if (!password) {
+    throw new Error('Password is required for welcome email. Employee password must be generated securely during account creation.');
+  }
+  const displayPassword = password;
   
   const emailFrom = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
   

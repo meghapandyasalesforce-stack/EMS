@@ -83,9 +83,44 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        // Optimize chunk splitting for better code splitting
+        manualChunks: (id) => {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            // React and React DOM
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            // Redux
+            if (id.includes('@reduxjs/toolkit') || id.includes('react-redux') || id.includes('redux-persist')) {
+              return 'redux-vendor';
+            }
+            // Material UI
+            if (id.includes('@mui')) {
+              return 'mui-vendor';
+            }
+            // Charts
+            if (id.includes('chart.js') || id.includes('recharts') || id.includes('react-chartjs-2')) {
+              return 'charts-vendor';
+            }
+            // Other large libraries
+            if (id.includes('axios') || id.includes('date-fns')) {
+              return 'utils-vendor';
+            }
+            // Everything else from node_modules
+            return 'vendor';
+          }
+        },
+        // Optimize chunk file names
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
       },
     },
+    // Enable source maps in development
+    sourcemap: process.env.NODE_ENV === 'development',
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
   },
   // Set base path for Capacitor
   base: './',

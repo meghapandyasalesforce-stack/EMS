@@ -44,9 +44,7 @@ const validateEnvironment = () => {
       errors.push('JWT_SECRET must be changed from default value in production');
     }
 
-    if (process.env.DEFAULT_EMPLOYEE_PASSWORD && process.env.DEFAULT_EMPLOYEE_PASSWORD === 'ChangeThisInProduction!123') {
-      warnings.push('DEFAULT_EMPLOYEE_PASSWORD should be changed from default value in production');
-    }
+    // DEFAULT_EMPLOYEE_PASSWORD has been removed for security - passwords are now auto-generated
   }
 
   // Check email configuration

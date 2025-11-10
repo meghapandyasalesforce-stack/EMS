@@ -1,58 +1,76 @@
-import React, { useState } from 'react';
-import { HashRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
-import Register from './Auth/Register';
-import Login from './Auth/Login';
-import DashboardAdmin from './Admin/DashboardAdmin';
-import DashboardEmployee from './Employee/Dashboard/DashboardEmployee';
-import Header from './Shared/Header'; // Import Header component
-import AddEmployee from './Admin/Employee/AddEmployee'; // Import AddEmployee component
-import AddProject from './Admin/project/AddProject'; // Import AddProject component
-import ProjectCard from './Admin/project/ProjectCard'; // Import AddProject component
-// import EmployeeDetails from './Admin/EmployeeDetail'; // Import EmployeeDetails component
-import ProfileDetails from './Employee/Profile details/ProfileDetails'; // Import ProfileDetails component
-import ContactDetails from './Employee/Profile details/ContactDetails';
-import ProfileSidebar from './Employee/ProfileSidebar'; // Import ProfileSidebar component
-import NextOfKinDetails from './Employee/Additional details/NextOfKinDetails';
-import EducationQualifications from './Employee/Profile details/EducationQualifications';
-import GuarantorDetails from './Employee/Additional details/GuarantorDetails';
-import FamilyDetails from './Employee/Additional details/FamilyDetails';
-import JobDetails from "./Employee/Additional details/JobDetails"
-import FinancialDetails from './Employee/Profile details/FinancialDetails';
-import DailyReport from './Others/DailyReport'; // Import DailyReport component
-import AttendanceDashboard from './Both/AttendanceDashboard';
-import EmployeePayroll from './Employee/Payroll/EmployeePayroll';
-import Leave from './Employee/Leave/LeaveApplication';
-import LeaveManagement from './Admin/LeaveManagement';
-import AdminPayroll from './Admin/Payroll/AdminPayroll';
-import ProjectsPage from './Admin/project/ProjectPage';
-import ProjectDetailPage from './Admin/project/ProjectDetailPage';
-import EmployeesPage from './Admin/Employee/EmployeesPage';
-import UpdatePayroll from './Admin/Payroll/UpdatePayroll';
-import AddPayroll from './Admin/Payroll/AddPayroll';
-import AdminEmployeePayroll from './Admin/Payroll/AdminEmployeePayroll';
-import MyLeavePage from './Employee/Leave/MyLeave';
-import AttendanceStats from './Employee/Attendance/AttendanceStats';
-import EmployeeDetailsPage from './Admin/Employee/EmployeeDetailsPage';
-import ViewProfile from './Employee/Profile details/ViewProfile';
-import TodayStatusComponent from './Admin/Attendance/TodayStatusComponent';
-import AllAttendanceStatsComponent from './Admin/Attendance/AllAttendanceStatsComponent';
-import ForgotPasswordEmail from './Both/ForgotPasswordEmail';
-import ResetPassword from './Both/ResetPassword';
-import NotFound from './Others/NotFound';
-import EmployeeTasks from './Employee/Project/EmployeeTasks';
-import EmployeeProjects from './Employee/Project/EmployeeProjects';
-// import EnhancedAttendanceBox from './Employee/Attendance/EnhancedAttendanceBox';
-
-import RoleHierarchy from './Admin/RoleManagement/RoleHierarchy';
-import CalendarManagement from './Admin/Calendar/CalendarManagement';
-import EmployeeCalendar from './Employee/Calendar/EmployeeCalendar';
-import IdCardGenerator from './Admin/IdCards/IdCardGenerator';
-import IdCardView from './Employee/IdCardView';
-import SalaryStructureManager from './Admin/SalaryStructure/SalaryStructureManager';
-import AttendanceRules from './Admin/Attendance/AttendanceRules';
-import AdminSettings from './Admin/Settings/AdminSettings';
-import Notifications from './Both/Notifications';
+import React, { useState, Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import Header from './Shared/Header';
+import ProfileSidebar from './Employee/ProfileSidebar';
 import InstallPrompt from './components/InstallPrompt';
+import LoadingSpinner from './components/LoadingSpinner';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
+import LazyRoute from './components/LazyRoute';
+
+// Helper to create lazy route element
+const createLazyRoute = (Component, message) => (
+  <RouteErrorBoundary>
+    <Suspense fallback={<LoadingSpinner message={message} />}>
+      <Component />
+    </Suspense>
+  </RouteErrorBoundary>
+);
+
+// Lazy load authentication components
+const Login = lazy(() => import('./Auth/Login'));
+const Register = lazy(() => import('./Auth/Register'));
+
+// Lazy load dashboard components
+const DashboardAdmin = lazy(() => import('./Admin/DashboardAdmin'));
+const DashboardEmployee = lazy(() => import('./Employee/Dashboard/DashboardEmployee'));
+
+// Lazy load admin components
+const AddEmployee = lazy(() => import('./Admin/Employee/AddEmployee'));
+const EmployeesPage = lazy(() => import('./Admin/Employee/EmployeesPage'));
+const EmployeeDetailsPage = lazy(() => import('./Admin/Employee/EmployeeDetailsPage'));
+const AddProject = lazy(() => import('./Admin/project/AddProject'));
+const ProjectsPage = lazy(() => import('./Admin/project/ProjectPage'));
+const ProjectDetailPage = lazy(() => import('./Admin/project/ProjectDetailPage'));
+const LeaveManagement = lazy(() => import('./Admin/LeaveManagement'));
+const AdminPayroll = lazy(() => import('./Admin/Payroll/AdminPayroll'));
+const AddPayroll = lazy(() => import('./Admin/Payroll/AddPayroll'));
+const UpdatePayroll = lazy(() => import('./Admin/Payroll/UpdatePayroll'));
+const AdminEmployeePayroll = lazy(() => import('./Admin/Payroll/AdminEmployeePayroll'));
+const TodayStatusComponent = lazy(() => import('./Admin/Attendance/TodayStatusComponent'));
+const AllAttendanceStatsComponent = lazy(() => import('./Admin/Attendance/AllAttendanceStatsComponent'));
+const RoleHierarchy = lazy(() => import('./Admin/RoleManagement/RoleHierarchy'));
+const CalendarManagement = lazy(() => import('./Admin/Calendar/CalendarManagement'));
+const IdCardGenerator = lazy(() => import('./Admin/IdCards/IdCardGenerator'));
+const SalaryStructureManager = lazy(() => import('./Admin/SalaryStructure/SalaryStructureManager'));
+const AttendanceRules = lazy(() => import('./Admin/Attendance/AttendanceRules'));
+const AdminSettings = lazy(() => import('./Admin/Settings/AdminSettings'));
+
+// Lazy load employee components
+const ProfileDetails = lazy(() => import('./Employee/Profile details/ProfileDetails'));
+const ContactDetails = lazy(() => import('./Employee/Profile details/ContactDetails'));
+const NextOfKinDetails = lazy(() => import('./Employee/Additional details/NextOfKinDetails'));
+const EducationQualifications = lazy(() => import('./Employee/Profile details/EducationQualifications'));
+const GuarantorDetails = lazy(() => import('./Employee/Additional details/GuarantorDetails'));
+const FamilyDetails = lazy(() => import('./Employee/Additional details/FamilyDetails'));
+const JobDetails = lazy(() => import('./Employee/Additional details/JobDetails'));
+const FinancialDetails = lazy(() => import('./Employee/Profile details/FinancialDetails'));
+const ViewProfile = lazy(() => import('./Employee/Profile details/ViewProfile'));
+const EmployeePayroll = lazy(() => import('./Employee/Payroll/EmployeePayroll'));
+const Leave = lazy(() => import('./Employee/Leave/LeaveApplication'));
+const MyLeavePage = lazy(() => import('./Employee/Leave/MyLeave'));
+const AttendanceStats = lazy(() => import('./Employee/Attendance/AttendanceStats'));
+const EmployeeCalendar = lazy(() => import('./Employee/Calendar/EmployeeCalendar'));
+const IdCardView = lazy(() => import('./Employee/IdCardView'));
+const EmployeeTasks = lazy(() => import('./Employee/Project/EmployeeTasks'));
+const EmployeeProjects = lazy(() => import('./Employee/Project/EmployeeProjects'));
+
+// Lazy load shared components
+const AttendanceDashboard = lazy(() => import('./Both/AttendanceDashboard'));
+const ForgotPasswordEmail = lazy(() => import('./Both/ForgotPasswordEmail'));
+const ResetPassword = lazy(() => import('./Both/ResetPassword'));
+const Notifications = lazy(() => import('./Both/Notifications'));
+const DailyReport = lazy(() => import('./Others/DailyReport'));
+const NotFound = lazy(() => import('./Others/NotFound'));
 
 function App() {
     const location = useLocation();
@@ -85,69 +103,104 @@ function App() {
                 )}
                 <div className="flex-1 overflow-auto">
                     <Routes>
-                        <Route path="/" element={<Login />} /> {/* Set Login as the default route */}
+                        <Route 
+                            path="/" 
+                            element={
+                                <RouteErrorBoundary>
+                                    <Suspense fallback={<LoadingSpinner message="Loading login..." />}>
+                                        <Login />
+                                    </Suspense>
+                                </RouteErrorBoundary>
+                            } 
+                        />
                         {/* Registration route - only available in development or if explicitly enabled */}
                         {import.meta.env.MODE === 'development' || import.meta.env.VITE_ALLOW_REGISTRATION === 'true' ? (
-                            <Route path="/register" element={<Register />} />
+                            <Route 
+                                path="/register" 
+                                element={
+                                    <RouteErrorBoundary>
+                                        <Suspense fallback={<LoadingSpinner message="Loading registration..." />}>
+                                            <Register />
+                                        </Suspense>
+                                    </RouteErrorBoundary>
+                                } 
+                            />
                         ) : null}
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/dashboard-admin" element={<DashboardAdmin />} />
-                        <Route path="/dashboard-employee" element={<DashboardEmployee />} />
+                        <Route 
+                            path="/login" 
+                            element={
+                                <RouteErrorBoundary>
+                                    <Suspense fallback={<LoadingSpinner message="Loading login..." />}>
+                                        <Login />
+                                    </Suspense>
+                                </RouteErrorBoundary>
+                            } 
+                        />
+                        <Route 
+                            path="/dashboard-admin" 
+                            element={
+                                <RouteErrorBoundary>
+                                    <Suspense fallback={<LoadingSpinner message="Loading admin dashboard..." />}>
+                                        <DashboardAdmin />
+                                    </Suspense>
+                                </RouteErrorBoundary>
+                            } 
+                        />
+                        <Route 
+                            path="/dashboard-employee" 
+                            element={
+                                <RouteErrorBoundary>
+                                    <Suspense fallback={<LoadingSpinner message="Loading employee dashboard..." />}>
+                                        <DashboardEmployee />
+                                    </Suspense>
+                                </RouteErrorBoundary>
+                            } 
+                        />
 
 
-                        <Route path="/add" element={<AddEmployee />} /> {/* Add route for AddEmployee */}
-                        <Route path="/employees" element={<EmployeesPage />} /> {/* Add route for AddEmployee */}
-
-
-
-                        <Route path="/add-employee" element={<AddEmployee />} /> {/* Add route for AddEmployee */}
-                        <Route path="/add-project" element={<AddProject />} /> {/* Add route for AddProject */}
-                        <Route path="/projects" element={<ProjectsPage />} /> {/* Add route for AddProject */}
-                        <Route path="/projects/:id" element={<ProjectDetailPage />} />
-                        <Route path="/view-profile" element={<ViewProfile />} />
-                        <Route path="/employees/:employeeId" element={<EmployeeDetailsPage />} /> {/* Add route for EmployeeDetails */}
-                        <Route path="/contact-details" element={<ContactDetails />} /> {/* Add route for ContactDetails */}
-                        <Route path="/profile-details" element={<ProfileDetails />} /> {/* Add route for ProfileDetails */}
-                        <Route path="/next-of-kin-details" element={<NextOfKinDetails />} />
-                        <Route path="/education-qualifications" element={<EducationQualifications />} />
-                        <Route path="/guarantor-details" element={<GuarantorDetails />} />
-                        <Route path="/family-details" element={<FamilyDetails />} />
-                        <Route path="/job-details" element={<JobDetails />} />
-                        <Route path="/financial-details" element={<FinancialDetails />} />
-                        <Route path="/leave" element={<Leave />} />
-                        <Route path="/my-leave" element={<MyLeavePage />} />
-                        <Route path="/attendance-stats" element={<AttendanceStats />} />
-
-                        <Route path="/leave-management" element={<LeaveManagement />} />
-                        <Route path="/daily-report" element={<DailyReport />} /> {/* Add route for DailyReport */}
-                        <Route path="/attendance" element={<AttendanceDashboard />} />
-                        <Route path="/employee-payroll" element={<EmployeePayroll />} />
-                        <Route path="/admin-payroll" element={<AdminPayroll />} />
-                        <Route path="/admin-employee-payroll/:employeeId" element={<AdminEmployeePayroll />} />
-                        <Route path="/add-payroll" element={<AddPayroll />} />
-                        <Route path="/add-payroll/:employeeId/:month/:year" element={<UpdatePayroll />} />
-                        <Route path="/today-attendance" element={<TodayStatusComponent />} />
-                        <Route path="/all-attendance-history" element={<AllAttendanceStatsComponent />} />
-                        <Route path="/forgot-password" element={<ForgotPasswordEmail />} />
-                        <Route path="/reset-password/:token" element={<ResetPassword />} />
-
-                        <Route path="/employee/projects" element={<EmployeeProjects />} />
-                        <Route path="/employee/projects/:projectId" element={<EmployeeTasks />} />
-                        <Route path="/employee/calendar" element={<EmployeeCalendar />} />
-                        <Route path="/employee/id-card" element={<IdCardView />} />
-                        <Route path="/notifications" element={<Notifications />} />
-                        
-                        {/* Enhanced Features */}
-                        {/* <Route path="/enhanced-attendance" element={<EnhancedAttendanceBox />} /> */}
-                        
-                        <Route path="/role-hierarchy" element={<RoleHierarchy />} />
-                        <Route path="/calendar-management" element={<CalendarManagement />} />
-                        <Route path="/id-card-generator" element={<IdCardGenerator />} />
-                        <Route path="/salary-structure" element={<SalaryStructureManager />} />
-                        <Route path="/attendance-rules" element={<AttendanceRules />} />
-                        <Route path="/admin-settings" element={<AdminSettings />} />
-                        
-                        <Route path="*" element={<NotFound />} />
+                        <Route path="/add" element={createLazyRoute(AddEmployee, "Loading...")} />
+                        <Route path="/employees" element={createLazyRoute(EmployeesPage, "Loading employees...")} />
+                        <Route path="/add-employee" element={createLazyRoute(AddEmployee, "Loading...")} />
+                        <Route path="/add-project" element={createLazyRoute(AddProject, "Loading...")} />
+                        <Route path="/projects" element={createLazyRoute(ProjectsPage, "Loading projects...")} />
+                        <Route path="/projects/:id" element={createLazyRoute(ProjectDetailPage, "Loading project details...")} />
+                        <Route path="/view-profile" element={createLazyRoute(ViewProfile, "Loading profile...")} />
+                        <Route path="/employees/:employeeId" element={createLazyRoute(EmployeeDetailsPage, "Loading employee details...")} />
+                        <Route path="/contact-details" element={createLazyRoute(ContactDetails, "Loading contact details...")} />
+                        <Route path="/profile-details" element={createLazyRoute(ProfileDetails, "Loading profile details...")} />
+                        <Route path="/next-of-kin-details" element={createLazyRoute(NextOfKinDetails, "Loading...")} />
+                        <Route path="/education-qualifications" element={createLazyRoute(EducationQualifications, "Loading...")} />
+                        <Route path="/guarantor-details" element={createLazyRoute(GuarantorDetails, "Loading...")} />
+                        <Route path="/family-details" element={createLazyRoute(FamilyDetails, "Loading...")} />
+                        <Route path="/job-details" element={createLazyRoute(JobDetails, "Loading...")} />
+                        <Route path="/financial-details" element={createLazyRoute(FinancialDetails, "Loading...")} />
+                        <Route path="/leave" element={createLazyRoute(Leave, "Loading leave application...")} />
+                        <Route path="/my-leave" element={createLazyRoute(MyLeavePage, "Loading leave history...")} />
+                        <Route path="/attendance-stats" element={createLazyRoute(AttendanceStats, "Loading attendance stats...")} />
+                        <Route path="/leave-management" element={createLazyRoute(LeaveManagement, "Loading leave management...")} />
+                        <Route path="/daily-report" element={createLazyRoute(DailyReport, "Loading daily report...")} />
+                        <Route path="/attendance" element={createLazyRoute(AttendanceDashboard, "Loading attendance...")} />
+                        <Route path="/employee-payroll" element={createLazyRoute(EmployeePayroll, "Loading payroll...")} />
+                        <Route path="/admin-payroll" element={createLazyRoute(AdminPayroll, "Loading admin payroll...")} />
+                        <Route path="/admin-employee-payroll/:employeeId" element={createLazyRoute(AdminEmployeePayroll, "Loading employee payroll...")} />
+                        <Route path="/add-payroll" element={createLazyRoute(AddPayroll, "Loading...")} />
+                        <Route path="/add-payroll/:employeeId/:month/:year" element={createLazyRoute(UpdatePayroll, "Loading payroll update...")} />
+                        <Route path="/today-attendance" element={createLazyRoute(TodayStatusComponent, "Loading today's attendance...")} />
+                        <Route path="/all-attendance-history" element={createLazyRoute(AllAttendanceStatsComponent, "Loading attendance history...")} />
+                        <Route path="/forgot-password" element={createLazyRoute(ForgotPasswordEmail, "Loading...")} />
+                        <Route path="/reset-password/:token" element={createLazyRoute(ResetPassword, "Loading password reset...")} />
+                        <Route path="/employee/projects" element={createLazyRoute(EmployeeProjects, "Loading projects...")} />
+                        <Route path="/employee/projects/:projectId" element={createLazyRoute(EmployeeTasks, "Loading tasks...")} />
+                        <Route path="/employee/calendar" element={createLazyRoute(EmployeeCalendar, "Loading calendar...")} />
+                        <Route path="/employee/id-card" element={createLazyRoute(IdCardView, "Loading ID card...")} />
+                        <Route path="/notifications" element={createLazyRoute(Notifications, "Loading notifications...")} />
+                        <Route path="/role-hierarchy" element={createLazyRoute(RoleHierarchy, "Loading role hierarchy...")} />
+                        <Route path="/calendar-management" element={createLazyRoute(CalendarManagement, "Loading calendar management...")} />
+                        <Route path="/id-card-generator" element={createLazyRoute(IdCardGenerator, "Loading ID card generator...")} />
+                        <Route path="/salary-structure" element={createLazyRoute(SalaryStructureManager, "Loading salary structure...")} />
+                        <Route path="/attendance-rules" element={createLazyRoute(AttendanceRules, "Loading attendance rules...")} />
+                        <Route path="/admin-settings" element={createLazyRoute(AdminSettings, "Loading admin settings...")} />
+                        <Route path="*" element={createLazyRoute(NotFound, "Loading...")} />
 
 
 

@@ -4,17 +4,17 @@ import { ADMIN_AUTH_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT } from './../../utils/const
 
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
-  async (userEmail, { rejectWithValue }) => {
+  async (userRole, { rejectWithValue }) => {
     try {
       let endpoint = '';
       
-      // Determine endpoint based on user email
-      if (userEmail && userEmail.endsWith('@gmail.com')) {
+      // Determine endpoint based on user role from localStorage or parameter
+      // SECURITY: Use role from JWT token or localStorage, not email domain
+      const role = userRole || localStorage.getItem('role') || 'employee';
+      
+      if (role === 'admin') {
         endpoint = `${ADMIN_AUTH_ENDPOINT}/logout`;
-      } else if (userEmail && userEmail.endsWith('@paarsiv.com')) {
-        endpoint = `${EMPLOYEE_AUTH_ENDPOINT}/logout`;
       } else {
-        // Default fallback
         endpoint = `${EMPLOYEE_AUTH_ENDPOINT}/logout`;
       }
 

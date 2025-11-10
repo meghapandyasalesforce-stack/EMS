@@ -107,29 +107,47 @@ describe('User Model Tests', () => {
     });
 
     describe('Role Assignment', () => {
-        it('should assign admin role for @gmail.com email', async () => {
+        it('should default to admin role when not specified', async () => {
             const userData = {
                 name: 'Test User',
-                email: 'test@gmail.com',
+                email: 'test@example.com',
                 password: 'TestPassword123!'
             };
 
             const user = new User(userData);
             await user.save();
 
+            // Role should default to 'admin' as per schema default
             expect(user.role).toBe('admin');
         });
 
-        it('should assign employee role for non-gmail email', async () => {
+        it('should use explicitly set role', async () => {
             const userData = {
                 name: 'Test User',
-                email: 'test@paarsiv.com',
-                password: 'TestPassword123!'
+                email: 'test@example.com',
+                password: 'TestPassword123!',
+                role: 'employee'
             };
 
             const user = new User(userData);
             await user.save();
 
+            expect(user.role).toBe('employee');
+        });
+
+        it('should not change role based on email domain', async () => {
+            // SECURITY: Role assignment is no longer based on email domain
+            const userData = {
+                name: 'Test User',
+                email: 'test@gmail.com',
+                password: 'TestPassword123!',
+                role: 'employee' // Explicitly set to employee
+            };
+
+            const user = new User(userData);
+            await user.save();
+
+            // Should use explicitly set role, not email domain
             expect(user.role).toBe('employee');
         });
     });
