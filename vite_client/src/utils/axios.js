@@ -2,38 +2,46 @@ import axios from 'axios';
 
 // Determine base URL: use env var, or default to backend URL in production, or relative path in dev
 const getBaseURL = () => {
-  // Priority 1: Use explicit environment variable
-  if (import.meta.env.VITE_API_URL) {
-    const apiUrl = import.meta.env.VITE_API_URL;
-    // Ensure it ends with /api for consistency
-    return apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
+  // Priority 1: In development mode, always use relative path (Vite proxy)
+  // This ensures local development uses localhost:5000 via Vite proxy
+  const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+  if (isDevelopment) {
+    // In development, always use relative path which Vite proxies to localhost:5000
+    // This allows local backend development without CORS issues
+    return '/api';
   }
   
-  // Priority 2: Check if we have a backend URL without /api
-  if (import.meta.env.VITE_BACKEND_URL) {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL;
-    return `${backendUrl}/api`;
-  }
-  
-  // Priority 3: In production, require explicit environment variable
+  // Priority 2: In production, use explicit environment variable
   // Check both PROD and MODE to handle Vercel deployments correctly
   const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
   if (isProduction) {
-    // In production, environment variables MUST be set
-    // This prevents hardcoded URLs and makes deployments flexible
+    // Priority 2a: Use explicit API URL
+    if (import.meta.env.VITE_API_URL) {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      // Ensure it ends with /api for consistency
+      return apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
+    }
+    
+    // Priority 2b: Use backend URL and append /api
+    if (import.meta.env.VITE_BACKEND_URL) {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      return `${backendUrl}/api`;
+    }
+    
+    // Priority 2c: Try production-specific env vars
     const fallbackUrl = import.meta.env.VITE_PRODUCTION_API_URL || import.meta.env.VITE_PRODUCTION_BACKEND_URL;
     if (fallbackUrl) {
       return fallbackUrl.endsWith('/api') ? fallbackUrl : `${fallbackUrl}/api`;
     }
-    // If no env var is set, log warning and use relative path (may work if same domain)
+    
+    // Priority 2d: Fallback to relative path (may work if same domain)
     if (typeof console !== 'undefined' && console.warn) {
       console.warn('⚠️ VITE_API_URL or VITE_BACKEND_URL not set in production. Using relative path.');
     }
     return '/api';
   }
   
-  // Priority 4: In development, use relative path (vite proxy handles it)
-  // This will be proxied to http://localhost:5000 by vite.config.js
+  // Fallback: use relative path
   return '/api';
 };
 
