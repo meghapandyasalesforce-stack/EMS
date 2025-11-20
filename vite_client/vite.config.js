@@ -101,9 +101,12 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunks
           if (id.includes('node_modules')) {
-            // React, React DOM, and React-Redux (they're tightly coupled)
-            // react-redux directly depends on React's internals, so it must be with React
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-redux')) {
+            // React, React DOM, React-Redux, and use-sync-external-store (they're tightly coupled)
+            // react-redux and use-sync-external-store directly depend on React's internals
+            if (id.includes('react') || 
+                id.includes('react-dom') || 
+                id.includes('react-redux') ||
+                id.includes('use-sync-external-store')) {
               return 'react-vendor';
             }
             // Redux core (without react-redux)
@@ -141,7 +144,8 @@ export default defineConfig({
   // IMPORTANT: Vercel requires '/' for proper asset and routing resolution
   // For Capacitor builds, override this in the build script or use environment variable
   // Default to '/' for web, can be overridden with VITE_BASE_PATH env var
-  // Note: Use process.env in vite.config.js, not import.meta.env
+  // Note: In vite.config.js, we can use process.env for build-time variables
+  // import.meta.env is only available in application code, not in config files
   base: process.env.VITE_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
