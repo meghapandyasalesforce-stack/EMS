@@ -1,5 +1,6 @@
 import express from "express";
 import { loginUser,logoutUser,registerUser } from "../../controllers/auth/adminAuthController.js";
+import { refreshToken } from "../../controllers/auth/refreshTokenController.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 
@@ -15,5 +16,6 @@ const registerMiddleware = process.env.NODE_ENV === 'production'
 router.route("/register").post(...registerMiddleware, registerUser);
 router.route("/login").post(loginLimiter, loginUser);
 router.route("/logout").post(logoutUser); // Changed to POST for state-changing operation
+router.route("/refresh-token").post(refreshToken); // Refresh access token
 
 export default router;

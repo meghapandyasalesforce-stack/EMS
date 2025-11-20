@@ -6,9 +6,12 @@ import bcrypt from 'bcryptjs';
 import logger from '../../helpers/logger.js';
 
 // Helper function to generate reset token
-const generateResetToken = () => {
+// SECURITY: Use bcrypt to hash tokens instead of SHA-256 to prevent brute force attacks
+const generateResetToken = async () => {
   const resetToken = crypto.randomBytes(20).toString('hex');
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  // Use bcrypt to hash the token (slower, more secure against brute force)
+  const salt = await bcrypt.genSalt(10);
+  const hashedToken = await bcrypt.hash(resetToken, salt);
   return { resetToken, hashedToken };
 };
 
@@ -50,7 +53,7 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    const { resetToken, hashedToken } = generateResetToken();
+    const { resetToken, hashedToken } = await generateResetToken();
     
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpire = Date.now() + 1000 * 60 * 15; // 15 mins
@@ -220,25 +223,46 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const hashedToken = crypto.createHash('sha256')
-      .update(req.params.token)
-      .digest('hex');
+    const resetToken = req.params.token;
 
-    // Check both Employee and User (Admin) collections for the reset token
-    let user = await Employee.findOne({
-      resetPasswordToken: hashedToken,
+    // SECURITY: Find users with valid (non-expired) reset tokens
+    // We need to check all users and compare tokens using bcrypt.compare
+    // This is necessary because we're using bcrypt hashing (not SHA-256)
+    
+    // First, find all employees with non-expired reset tokens
+    const employees = await Employee.find({
+      resetPasswordToken: { $exists: true, $ne: null },
       resetPasswordExpire: { $gt: Date.now() },
     });
     
-    let userType = 'employee';
+    // Then, find all admins with non-expired reset tokens
+    const admins = await User.find({
+      resetPasswordToken: { $exists: true, $ne: null },
+      resetPasswordExpire: { $gt: Date.now() },
+    });
     
-    // If not found in Employee, check User (Admin) collection
+    // Try to find matching user by comparing tokens
+    let user = null;
+    let userType = null;
+    
+    // Check employees first
+    for (const employee of employees) {
+      if (await bcrypt.compare(resetToken, employee.resetPasswordToken)) {
+        user = employee;
+        userType = 'employee';
+        break;
+      }
+    }
+    
+    // If not found, check admins
     if (!user) {
-      user = await User.findOne({
-        resetPasswordToken: hashedToken,
-        resetPasswordExpire: { $gt: Date.now() },
-      });
-      userType = 'admin';
+      for (const admin of admins) {
+        if (await bcrypt.compare(resetToken, admin.resetPasswordToken)) {
+          user = admin;
+          userType = 'admin';
+          break;
+        }
+      }
     }
 
     if (!user) {

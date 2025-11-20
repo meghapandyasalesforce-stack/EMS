@@ -121,6 +121,7 @@ export const loginUser = async (req, res) => {
         // Generate token and prepare user data
         const tokenResult = generateToken(user._id, role, res);
         const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+        const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
         const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
         
         const userData = {
@@ -144,7 +145,10 @@ export const loginUser = async (req, res) => {
             user: userData
         };
         
-        // Include CSRF token in response for cross-site scenarios
+        // Include refresh token and CSRF token in response for cross-site scenarios
+        if (refreshToken) {
+            response.refreshToken = refreshToken;
+        }
         if (csrfToken) {
             response.csrfToken = csrfToken;
         }
@@ -173,6 +177,7 @@ export const logoutUser = async (req, res) => {
         };
 
         res.clearCookie('jwt', cookieOptions);
+        res.clearCookie('refreshToken', cookieOptions);
         // Clear CSRF helper cookie as well (not httpOnly by design)
         res.clearCookie('csrfToken', {
             httpOnly: false,

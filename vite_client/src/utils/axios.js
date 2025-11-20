@@ -223,18 +223,169 @@ instance.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Track if we're currently refreshing to avoid multiple refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
+// Response interceptor to handle errors and token refresh
 instance.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Removed console.error statements for production
-    // Network and CORS errors are handled silently
+  (response) => {
+    // Store refresh token if present in response
+    if (response.data?.refreshToken && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('refreshToken', response.data.refreshToken);
+      } catch (e) {
+        // Silently handle localStorage errors
+      }
+    }
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
     
-    // Handle 401 errors
-    if (error.response?.status === 401) {
-      // Only redirect if not already on login page
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+    // Handle 401 errors - attempt token refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Don't attempt refresh for auth endpoints (login, register, password reset)
+      const isAuthEndpoint = originalRequest.url && (
+        originalRequest.url.includes('/auth/login') ||
+        originalRequest.url.includes('/auth/register') ||
+        originalRequest.url.includes('/auth/refresh-token') ||
+        originalRequest.url.includes('/password/forgot-password') ||
+        originalRequest.url.includes('/password/reset-password')
+      );
+
+      if (isAuthEndpoint) {
+        // For auth endpoints, redirect to login
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+
+      // If we're already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(token => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return instance(originalRequest);
+          })
+          .catch(err => {
+            return Promise.reject(err);
+          });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Get refresh token from localStorage or cookie
+        let refreshToken = null;
+        if (typeof window !== 'undefined') {
+          refreshToken = localStorage.getItem('refreshToken');
+        }
+
+        // If no refresh token in localStorage, try to get from cookie
+        // (cookies are automatically sent with withCredentials: true)
+        if (!refreshToken) {
+          // Check if we have a refresh token cookie
+          const cookies = document.cookie.split('; ');
+          const refreshCookie = cookies.find(c => c.startsWith('refreshToken='));
+          if (refreshCookie) {
+            refreshToken = refreshCookie.split('=')[1];
+          }
+        }
+
+        if (!refreshToken) {
+          // No refresh token available, redirect to login
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            // Clear any stored tokens
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('token');
+              localStorage.removeItem('refreshToken');
+              localStorage.removeItem('csrfToken');
+            }
+            window.location.href = '/login';
+          }
+          processQueue(error, null);
+          isRefreshing = false;
+          return Promise.reject(error);
+        }
+
+        // Determine which refresh endpoint to use based on role
+        const role = localStorage.getItem('role') || 'employee';
+        const refreshEndpoint = role === 'admin' 
+          ? '/v1/admin/auth/refresh-token'
+          : '/v1/employee/auth/refresh-token';
+
+        // Call refresh token endpoint using the same base URL as the instance
+        const refreshResponse = await axios.post(
+          `${instance.defaults.baseURL}${refreshEndpoint}`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${refreshToken}`,
+            },
+            withCredentials: true,
+          }
+        );
+
+        const { token: newToken, csrfToken: newCsrfToken } = refreshResponse.data;
+
+        // Update stored tokens
+        if (typeof window !== 'undefined') {
+          if (newToken) {
+            localStorage.setItem('token', newToken);
+          }
+          if (newCsrfToken) {
+            localStorage.setItem('csrfToken', newCsrfToken);
+          }
+          if (refreshResponse.data.refreshToken) {
+            localStorage.setItem('refreshToken', refreshResponse.data.refreshToken);
+          }
+        }
+
+        // Update the original request with new token
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        if (newCsrfToken && ['post', 'put', 'patch', 'delete'].includes(originalRequest.method?.toLowerCase())) {
+          originalRequest.headers['x-csrf-token'] = newCsrfToken;
+        }
+
+        // Process queued requests
+        processQueue(null, newToken);
+        isRefreshing = false;
+
+        // Retry the original request
+        return instance(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed, clear tokens and redirect to login
+        processQueue(refreshError, null);
+        isRefreshing = false;
+
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('csrfToken');
+          
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            window.location.href = '/login';
+          }
+        }
+
+        return Promise.reject(refreshError);
       }
     }
     
@@ -242,7 +393,6 @@ instance.interceptors.response.use(
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || 'Access forbidden';
       if (message.includes('admin') || message.includes('Access restricted')) {
-        // Removed console.error for production
         // Don't auto-redirect for 403, let user see the error message
       }
     }

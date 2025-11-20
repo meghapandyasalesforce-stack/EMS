@@ -79,6 +79,10 @@ function Login() {
                 if (data.token) {
                     localStorage.setItem('token', data.token);
                 }
+                // Store refresh token for token refresh mechanism
+                if (data.refreshToken) {
+                    localStorage.setItem('refreshToken', data.refreshToken);
+                }
                 // Store CSRF token in localStorage for cross-site scenarios
                 if (data.csrfToken) {
                     localStorage.setItem('csrfToken', data.csrfToken);

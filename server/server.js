@@ -10,6 +10,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import compression from "compression";
 import mongoSanitize from "express-mongo-sanitize";
 import xss from "xss-clean";
 import connectDB from "./db/database.js";
@@ -44,6 +45,20 @@ const PORT = process.env.PORT || 10000;
 // ✅ Logger (except tests)
 if (process.env.NODE_ENV !== "test") app.use(requestLogger);
 app.set("trust proxy", 1);
+
+// ✅ Compression middleware (should be early in the middleware stack)
+app.use(compression({
+  filter: (req, res) => {
+    // Don't compress responses if client doesn't support it
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Use compression for all other requests
+    return compression.filter(req, res);
+  },
+  level: 6, // Compression level (0-9, 6 is a good balance)
+  threshold: 1024, // Only compress responses larger than 1KB
+}));
 
 // ✅ Basic middleware
 app.use(express.json({ limit: "10mb" }));

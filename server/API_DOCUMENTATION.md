@@ -6,9 +6,23 @@
 
 ## Authentication
 
-All protected endpoints require authentication via JWT token. The token can be provided in two ways:
+All protected endpoints require authentication via JWT access token. The token can be provided in two ways:
 1. **Cookie:** `jwt` cookie (for same-site requests)
-2. **Header:** `Authorization: Bearer <token>` (for cross-site requests)
+2. **Header:** `Authorization: Bearer <access-token>` (for cross-site requests)
+
+**Token Expiration:**
+- **Access Token:** Expires after 1 hour (configurable via `JWT_ACCESS_EXPIRE` environment variable)
+- **Refresh Token:** Expires after 30 days (configurable via `JWT_REFRESH_EXPIRE` environment variable)
+
+**Token Refresh:**
+When an access token expires (401 error), clients should automatically refresh it using the refresh token endpoint:
+- **Employee:** `POST /api/v1/employee/auth/refresh-token`
+- **Admin:** `POST /api/v1/admin/auth/refresh-token`
+
+The frontend axios interceptor handles token refresh automatically. Refresh tokens can be provided via:
+- **Cookie:** `refreshToken` cookie (HttpOnly, secure)
+- **Header:** `Authorization: Bearer <refresh-token>`
+- **localStorage:** `refreshToken` (for cross-site scenarios)
 
 For state-changing requests (POST, PUT, PATCH, DELETE), a CSRF token is also required:
 - **Header:** `X-CSRF-Token: <csrf-token>`
@@ -79,7 +93,9 @@ All API responses follow a standardized format:
   "success": true,
   "message": "Employee registered successfully",
   "emailSent": true,
-  "token": "jwt_token",
+  "token": "jwt_access_token",
+  "refreshToken": "jwt_refresh_token",
+  "csrfToken": "csrf_token",
   "employee": { ... }
 }
 ```
@@ -100,11 +116,33 @@ All API responses follow a standardized format:
 {
   "success": true,
   "message": "Login successful",
-  "token": "jwt_token",
+  "token": "jwt_access_token",
+  "refreshToken": "jwt_refresh_token",
   "csrfToken": "csrf_token",
   "employee": { ... }
 }
 ```
+
+#### Refresh Access Token
+**POST** `/api/v1/employee/auth/refresh-token`
+
+**Headers:** `Authorization: Bearer <refresh-token>` (optional, can also use `refreshToken` cookie)
+
+**Description:** Refreshes the access token using a valid refresh token. Access tokens expire after 1 hour (configurable), while refresh tokens last 30 days.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Token refreshed successfully",
+  "token": "new_jwt_access_token",
+  "csrfToken": "new_csrf_token"
+}
+```
+
+**Error Responses:**
+- `401` - Refresh token expired or invalid
+- `403` - Account inactive
 
 #### Logout Employee
 **POST** `/api/v1/employee/auth/logout`
@@ -164,6 +202,39 @@ All API responses follow a standardized format:
   "password": "securePassword123"
 }
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "token": "jwt_access_token",
+  "refreshToken": "jwt_refresh_token",
+  "csrfToken": "csrf_token",
+  "user": { ... }
+}
+```
+
+#### Refresh Access Token
+**POST** `/api/v1/admin/auth/refresh-token`
+
+**Headers:** `Authorization: Bearer <refresh-token>` (optional, can also use `refreshToken` cookie)
+
+**Description:** Refreshes the access token using a valid refresh token. Access tokens expire after 1 hour (configurable), while refresh tokens last 30 days.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Token refreshed successfully",
+  "token": "new_jwt_access_token",
+  "csrfToken": "new_csrf_token"
+}
+```
+
+**Error Responses:**
+- `401` - Refresh token expired or invalid
+- `403` - Account inactive
 
 ---
 
@@ -338,6 +409,8 @@ All errors follow the standardized format:
 - `EMAIL_PORT` - SMTP port (default: 587)
 - `FRONTEND_URL` - Frontend URL for CORS
 - `CROSS_SITE_COOKIES` - Set to "true" for cross-site cookie support
+- `JWT_ACCESS_EXPIRE` - Access token expiration time (default: "1h"). Examples: "15m", "1h", "2h"
+- `JWT_REFRESH_EXPIRE` - Refresh token expiration time (default: "30d"). Examples: "7d", "30d", "90d"
 
 ---
 

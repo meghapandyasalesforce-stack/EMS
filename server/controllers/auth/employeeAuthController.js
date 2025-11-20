@@ -193,8 +193,12 @@ export const registerEmployee = async (req, res) => {
         }
 
         // Generate token and send response
-        const token = generateToken(employee._id);
-        return sendSuccess(res, {
+        const tokenResult = generateToken(employee._id, "employee", res);
+        const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+        const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
+        const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
+        
+        const response = {
             emailSent,
             ...(emailErrorMessage && { 
                 emailWarning: `Welcome email could not be sent: ${emailErrorMessage}`,
@@ -210,7 +214,16 @@ export const registerEmployee = async (req, res) => {
                 jobTitle: employee.jobTitle,
                 employeeId: employee.employeeId
             }
-        }, 'Employee registered successfully', 201);
+        };
+        
+        if (refreshToken) {
+            response.refreshToken = refreshToken;
+        }
+        if (csrfToken) {
+            response.csrfToken = csrfToken;
+        }
+        
+        return sendSuccess(res, response, 'Employee registered successfully', 201);
     } catch (error) {
         logger.error('Registration error', { 
             error: error.message, 
@@ -270,6 +283,7 @@ export const loginEmployee = async (req, res) => {
         // ✅ Pass `res` and `role` so cookie gets set
         const tokenResult = generateToken(employee._id, "employee", res);
         const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+        const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
         const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 
         const response = {
@@ -292,7 +306,10 @@ export const loginEmployee = async (req, res) => {
             },
         };
         
-        // Include CSRF token in response for cross-site scenarios
+        // Include refresh token and CSRF token in response for cross-site scenarios
+        if (refreshToken) {
+            response.refreshToken = refreshToken;
+        }
         if (csrfToken) {
             response.csrfToken = csrfToken;
         }
@@ -364,6 +381,7 @@ export const resetEmployeePassword = async (req, res) => {
         };
 
         res.clearCookie('jwt', cookieOptions);
+        res.clearCookie('refreshToken', cookieOptions);
         res.clearCookie('csrfToken', {
             httpOnly: false,
             sameSite: cookieOptions.sameSite,
