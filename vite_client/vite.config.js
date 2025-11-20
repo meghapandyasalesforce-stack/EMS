@@ -44,6 +44,15 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 5000000, // 5 MB limit
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Fix navigation routing for SPA
+        // Use index.html for all navigation requests (SPA routing)
+        // Must match the base path - use absolute path for web deployment
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/_/, /\/[^/?]+\.[^/]+$/],
+        // Ensure proper caching
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\./i,
@@ -122,8 +131,11 @@ export default defineConfig({
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
   },
-  // Set base path for Capacitor
-  base: './',
+  // Set base path - use '/' for web deployment (Vercel)
+  // IMPORTANT: Vercel requires '/' for proper asset and routing resolution
+  // For Capacitor builds, override this in the build script or use environment variable
+  // Default to '/' for web, can be overridden with VITE_BASE_PATH env var
+  base: process.env.VITE_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
       'html2canvas',

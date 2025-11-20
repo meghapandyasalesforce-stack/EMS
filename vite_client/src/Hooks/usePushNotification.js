@@ -46,12 +46,17 @@ export const usePushNotification = () => {
 
       setIsSupported(true);
 
-      // Register service worker
+      // Get service worker registration (VitePWA registers it automatically)
       let registration;
       try {
-        registration = await navigator.serviceWorker.register('/sw.js', {
-          scope: '/'
-        });
+        // Wait for any existing service worker to be ready
+        if (navigator.serviceWorker.controller) {
+          registration = await navigator.serviceWorker.ready;
+        } else {
+          // Wait a bit for VitePWA to register, then get registration
+          await new Promise(resolve => setTimeout(resolve, 100));
+          registration = await navigator.serviceWorker.ready;
+        }
       } catch (swError) {
         console.error('Service Worker registration failed:', swError);
         setError('Failed to register service worker');
@@ -59,8 +64,11 @@ export const usePushNotification = () => {
         return;
       }
 
-      // Wait for service worker to be ready
-      await navigator.serviceWorker.ready;
+      if (!registration) {
+        setError('Service worker not available');
+        setIsLoading(false);
+        return;
+      }
 
       // Get VAPID public key from server
       let vapidPublicKey;
