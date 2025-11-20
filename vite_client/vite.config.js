@@ -140,7 +140,8 @@ export default defineConfig({
   // IMPORTANT: Vercel requires '/' for proper asset and routing resolution
   // For Capacitor builds, override this in the build script or use environment variable
   // Default to '/' for web, can be overridden with VITE_BASE_PATH env var
-  base: import.meta.env.VITE_BASE_PATH || '/',
+  // Note: Use process.env in vite.config.js, not import.meta.env
+  base: process.env.VITE_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
       'html2canvas',

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "cross-env NODE_ENV=production vite build",
+    "build": "vite build",
     "build:deploy": "vite build && npm run copy-to-server",
     "copy-to-server": "node scripts/copy-to-server.mjs",
     "lint": "eslint .",
