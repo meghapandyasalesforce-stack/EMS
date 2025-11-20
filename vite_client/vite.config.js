@@ -101,12 +101,13 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunks
           if (id.includes('node_modules')) {
-            // React and React DOM
-            if (id.includes('react') || id.includes('react-dom')) {
+            // React, React DOM, and React-Redux (they're tightly coupled)
+            // react-redux directly depends on React's internals, so it must be with React
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-redux')) {
               return 'react-vendor';
             }
-            // Redux
-            if (id.includes('@reduxjs/toolkit') || id.includes('react-redux') || id.includes('redux-persist')) {
+            // Redux core (without react-redux)
+            if (id.includes('@reduxjs/toolkit') || id.includes('redux-persist')) {
               return 'redux-vendor';
             }
             // Material UI
