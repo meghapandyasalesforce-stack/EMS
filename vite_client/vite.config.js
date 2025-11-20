@@ -6,11 +6,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      // Ensure production build uses production React
+      jsxRuntime: 'automatic',
+    }),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'logo192.png', 'logo512.png'],
+      // Use manifest.webmanifest (default) instead of manifest.json
+      manifestFilename: 'manifest.webmanifest',
       manifest: {
         name: 'Paarsiv - Employee Management System',
         short_name: 'Paarsiv',
@@ -126,8 +131,8 @@ export default defineConfig({
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
       },
     },
-    // Enable source maps in development
-    sourcemap: process.env.NODE_ENV === 'development',
+    // Disable source maps in production for security and performance
+    sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
   },
@@ -135,7 +140,7 @@ export default defineConfig({
   // IMPORTANT: Vercel requires '/' for proper asset and routing resolution
   // For Capacitor builds, override this in the build script or use environment variable
   // Default to '/' for web, can be overridden with VITE_BASE_PATH env var
-  base: process.env.VITE_BASE_PATH || '/',
+  base: import.meta.env.VITE_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
       'html2canvas',
