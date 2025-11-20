@@ -3,6 +3,7 @@ import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
 import Project from '../models/project.model.js';
 import NotificationSettings from '../models/notificationSettings.model.js';
+import logger from './logger.js';
 import { 
   sendPushNotification, 
   sendBroadcastPushNotification,
@@ -24,7 +25,10 @@ export const sendTaskUpdateNotification = async (task, employee, updateType = 'u
       .populate('projectMembers', 'name email');
 
     if (!project) {
-      console.error('Project not found for task notification');
+      logger.error('Project not found for task notification', {
+        projectId: task.project,
+        taskId: task._id
+      });
       return;
     }
 
@@ -138,9 +142,18 @@ export const sendTaskUpdateNotification = async (task, employee, updateType = 'u
 
     await Promise.all(notificationPromises);
 
-    console.log(`Task ${updateType} notification sent to ${recipients.size} recipients`);
+    logger.info('Task update notification sent', {
+      updateType,
+      recipientCount: recipients.size,
+      taskId: task._id
+    });
   } catch (error) {
-    console.error('Error sending task update notification:', error);
+    logger.error('Error sending task update notification', {
+      error: error.message,
+      stack: error.stack,
+      taskId: task._id,
+      updateType
+    });
   }
 };
 
@@ -170,7 +183,10 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
     });
 
     const notifications = await Promise.all(notificationPromises);
-    console.log(`Notification sent to ${recipientIds.length} recipients`);
+    logger.info('Notification sent to users', {
+      recipientCount: recipientIds.length,
+      notificationId: notification._id
+    });
 
     // Send push notifications if enabled
     try {
@@ -193,11 +209,19 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
         await sendPushNotification(recipientId, 'User', pushPayload);
       }
     } catch (pushError) {
-      console.error('Error sending push notifications:', pushError);
+      logger.error('Error sending push notifications', {
+        error: pushError.message,
+        stack: pushError.stack,
+        notificationId: notification._id
+      });
       // Don't fail the main notification if push fails
     }
   } catch (error) {
-    console.error('Error sending notification to users:', error);
+    logger.error('Error sending notification to users', {
+      error: error.message,
+      stack: error.stack,
+      recipientIds
+    });
   }
 };
 
@@ -221,7 +245,10 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
       isBroadcast: true,
       metadata
     });
-    console.log('Broadcast notification sent');
+    logger.info('Broadcast notification sent', {
+      notificationId: notification._id,
+      title
+    });
 
     // Send push notification to all subscribers
     try {
@@ -232,11 +259,19 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
       
       await sendBroadcastPushNotification(pushPayload);
     } catch (pushError) {
-      console.error('Error sending broadcast push notification:', pushError);
+      logger.error('Error sending broadcast push notification', {
+        error: pushError.message,
+        stack: pushError.stack,
+        notificationId: notification._id
+      });
       // Don't fail the main notification if push fails
     }
   } catch (error) {
-    console.error('Error sending broadcast notification:', error);
+    logger.error('Error sending broadcast notification', {
+      error: error.message,
+      stack: error.stack,
+      title
+    });
   }
 };
 
@@ -252,7 +287,12 @@ export const markNotificationAsRead = async (notificationId, userId) => {
       { isRead: true }
     );
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    logger.error('Error marking notification as read', {
+      error: error.message,
+      stack: error.stack,
+      notificationId,
+      userId
+    });
   }
 };
 
@@ -271,7 +311,11 @@ export const getUnreadNotificationCount = async (userId) => {
     });
     return count;
   } catch (error) {
-    console.error('Error getting unread notification count:', error);
+    logger.error('Error getting unread notification count', {
+      error: error.message,
+      stack: error.stack,
+      userId
+    });
     return 0;
   }
 };
@@ -286,7 +330,9 @@ export const sendBreakNotification = async (employee) => {
     const admins = await User.find({ role: 'admin' });
     
     if (admins.length === 0) {
-      console.log('No admins found to notify about break');
+      logger.warn('No admins found to notify about break', {
+        employeeId: employee._id
+      });
       return;
     }
 
@@ -311,7 +357,11 @@ export const sendBreakNotification = async (employee) => {
     });
 
     const notifications = await Promise.all(notificationPromises);
-    console.log(`Break notification sent to ${admins.length} admins for ${employee.name}`);
+    logger.info('Break notification sent', {
+      adminCount: admins.length,
+      employeeId: employee._id,
+      employeeName: employee.name
+    });
 
     // Send push notifications to admins
     try {
@@ -336,10 +386,18 @@ export const sendBreakNotification = async (employee) => {
         await sendPushNotification(admin._id, 'User', pushPayload);
       }
     } catch (pushError) {
-      console.error('Error sending break push notifications:', pushError);
+      logger.error('Error sending break push notifications', {
+        error: pushError.message,
+        stack: pushError.stack,
+        employeeId: employee._id
+      });
       // Don't fail the main notification if push fails
     }
   } catch (error) {
-    console.error('Error sending break notification:', error);
+    logger.error('Error sending break notification', {
+      error: error.message,
+      stack: error.stack,
+      employeeId: employee._id
+    });
   }
 };

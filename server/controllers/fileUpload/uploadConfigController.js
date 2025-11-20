@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import Employee from '../../models/employee.model.js';
+import logger from '../../helpers/logger.js';
 
 // Configure multer storage
 const storage = multer.diskStorage({
@@ -115,14 +116,14 @@ export const addDocument = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error adding document:', error);
+        logger.error('Error adding document', { error: error.message, stack: error.stack, employeeId: req.params.employeeId });
         
         // Clean up uploaded file if error occurred
         if (req.file) {
             try {
                 fs.unlinkSync(req.file.path);
             } catch (err) {
-                console.error('Error deleting uploaded file:', err);
+                logger.error('Error deleting uploaded file', { error: err.message, stack: err.stack, filePath: document.filePath });
             }
         }
 
@@ -162,13 +163,13 @@ export const downloadDocument = async (req, res) => {
 
         res.download(filePath, document.originalName, (err) => {
             if (err) {
-                console.error('Error downloading file:', err);
+                logger.error('Error downloading file', { error: err.message, stack: err.stack, filePath });
                 res.status(500).json({ message: 'Error downloading file' });
             }
         });
 
     } catch (error) {
-        console.error('Error downloading document:', error);
+        logger.error('Error downloading document', { error: error.message, stack: error.stack, documentId: req.params.documentId });
         res.status(500).json({ 
             message: 'Failed to download document',
             error: error.message

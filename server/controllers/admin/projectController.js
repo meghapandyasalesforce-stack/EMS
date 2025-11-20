@@ -1,5 +1,6 @@
 import Project from "../../models/project.model.js";
 import Employee from "../../models/employee.model.js";
+import logger from "../../helpers/logger.js";
 
 // Helper function to get employees with Manager role
 const getManagersOnly = async () => {
@@ -11,7 +12,7 @@ const getManagersOnly = async () => {
 
 // Helper function to validate if employees are managers
 const validateManagers = async (employeeIds) => {
-    console.log('Validating managers for IDs:', employeeIds);
+    logger.debug('Validating managers', { employeeIds });
     
     const managers = await Employee.find({
         _id: { $in: employeeIds },
@@ -19,13 +20,15 @@ const validateManagers = async (employeeIds) => {
         status: 'active'
     }).select('_id name position status');
     
-    console.log('Found managers:', managers);
+    logger.debug('Found managers', { count: managers.length, managerIds: managers.map(m => m._id.toString()) });
     
     const invalidIds = employeeIds.filter(id => 
         !managers.some(manager => manager._id.toString() === id.toString())
     );
     
-    console.log('Invalid IDs:', invalidIds);
+    if (invalidIds.length > 0) {
+        logger.warn('Invalid manager IDs found', { invalidIds });
+    }
     
     return {
         validManagers: managers,
@@ -51,9 +54,11 @@ export const getAllProjects = async (req, res) => {
 // Create a new project with validation
 export const createProject = async (req, res) => {
     try {
-        console.log('=== CREATE PROJECT REQUEST ===');
-        console.log('Request body:', JSON.stringify(req.body, null, 2));
-        console.log('Request headers:', req.headers);
+        logger.info('Create project request', {
+            projectName: req.body.name,
+            projectLeader: req.body.projectLeader,
+            memberCount: req.body.projectMembers?.length || 0
+        });
         
         const { name, projectLeader, projectMembers, status } = req.body;
 
@@ -78,8 +83,10 @@ export const createProject = async (req, res) => {
 
         // Validate that project members exist (allow any active employee)
         if (projectMembers && projectMembers.length > 0) {
-            console.log('=== VALIDATING PROJECT MEMBERS (CREATE) ===');
-            console.log('Project members to validate:', projectMembers);
+            logger.debug('Validating project members', { 
+                memberCount: projectMembers.length,
+                memberIds: projectMembers 
+            });
             
             // Check if all project members exist and are active
             // Check both status field and active field for compatibility
@@ -91,21 +98,22 @@ export const createProject = async (req, res) => {
                 ]
             }).select('_id name email position status active');
             
-            console.log('Existing active members found:', existingMembers);
-            console.log('Existing member IDs:', existingMembers.map(emp => emp._id.toString()));
+            logger.debug('Existing active members found', { 
+                count: existingMembers.length,
+                memberIds: existingMembers.map(emp => emp._id.toString())
+            });
             
             const existingIds = existingMembers.map(emp => emp._id.toString());
             const invalidIds = projectMembers.filter(id => !existingIds.includes(id.toString()));
             
-            console.log('Invalid IDs:', invalidIds);
-            
             if (invalidIds.length > 0) {
+                logger.warn('Invalid project member IDs', { invalidIds });
                 // Get details of invalid employees for better error message
                 const invalidEmployees = await Employee.find({ 
                     _id: { $in: invalidIds } 
                 }).select('_id name email position status');
                 
-                console.log('Invalid employees details:', invalidEmployees);
+                logger.debug('Invalid employees details', { invalidEmployees });
                 
                 return res.status(400).json({ 
                     error: 'Some project members not found or inactive',
@@ -149,27 +157,29 @@ export const updateProject = async (req, res) => {
         const { id } = req.params;
         const { name, projectLeader, projectMembers, status } = req.body;
 
-        console.log('Update project request:', {
-            id,
-            name,
+        logger.info('Update project request', {
+            projectId: id,
+            projectName: name,
             projectLeader,
-            projectMembers,
-            status
+            memberCount: projectMembers?.length || 0
         });
 
         // Validate leader if being updated
         if (projectLeader) {
             const leaderExists = await Employee.exists({ _id: projectLeader });
-            console.log('Leader exists check:', leaderExists);
+            logger.debug('Leader exists check', { leaderExists, projectLeader });
             if (!leaderExists) {
+                logger.warn('New project leader not found', { projectLeader });
                 return res.status(400).json({ error: 'New project leader not found' });
             }
         }
 
         // Validate that project members exist and are active (allow any employee)
         if (projectMembers && projectMembers.length > 0) {
-            console.log('=== VALIDATING PROJECT MEMBERS ===');
-            console.log('Project members to validate:', projectMembers);
+            logger.debug('Validating project members for update', { 
+                memberCount: projectMembers.length,
+                memberIds: projectMembers 
+            });
             
             // Check if all project members exist and are active
             // Check both status field and active field for compatibility
@@ -181,21 +191,22 @@ export const updateProject = async (req, res) => {
                 ]
             }).select('_id name email position status active');
             
-            console.log('Existing active members found:', existingMembers);
-            console.log('Existing member IDs:', existingMembers.map(emp => emp._id.toString()));
+            logger.debug('Existing active members found', { 
+                count: existingMembers.length,
+                memberIds: existingMembers.map(emp => emp._id.toString())
+            });
             
             const existingIds = existingMembers.map(emp => emp._id.toString());
             const invalidIds = projectMembers.filter(id => !existingIds.includes(id.toString()));
             
-            console.log('Invalid IDs:', invalidIds);
-            
             if (invalidIds.length > 0) {
+                logger.warn('Invalid project member IDs', { invalidIds });
                 // Get details of invalid employees for better error message
                 const invalidEmployees = await Employee.find({ 
                     _id: { $in: invalidIds } 
                 }).select('_id name email position status');
                 
-                console.log('Invalid employees details:', invalidEmployees);
+                logger.debug('Invalid employees details', { invalidEmployees });
                 
                 return res.status(400).json({ 
                     error: 'Some project members not found or inactive',

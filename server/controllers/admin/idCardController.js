@@ -4,11 +4,12 @@ import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
+import logger from '../../helpers/logger.js';
 
 // Helper to generate QR code image and save it
 const generateAndSaveQRCode = async (data, employeeCode) => {
     try {
-        console.log('Generating QR code for:', employeeCode);
+        logger.info('Generating QR code', { employeeCode });
         const qrCodeFileName = `qr-${employeeCode}-${Date.now()}.png`;
         const qrCodePath = path.join(process.cwd(), 'public', 'uploads', 'qrcodes', qrCodeFileName);
         const qrCodeUrl = `/uploads/qrcodes/${qrCodeFileName}`;
@@ -16,27 +17,28 @@ const generateAndSaveQRCode = async (data, employeeCode) => {
         // Ensure directory exists
         const qrCodeDir = path.join(process.cwd(), 'public', 'uploads', 'qrcodes');
         if (!fs.existsSync(qrCodeDir)) {
-            console.log('Creating qrcodes directory:', qrCodeDir);
+            logger.info('Creating qrcodes directory', { qrCodeDir });
             fs.mkdirSync(qrCodeDir, { recursive: true });
         }
 
-        console.log('Saving QR code to:', qrCodePath);
+        logger.info('Saving QR code', { qrCodePath });
         await QRCode.toFile(qrCodePath, data, {
             errorCorrectionLevel: 'H',
             width: 200,
             margin: 2
         });
         
-        console.log('QR code saved successfully');
+        logger.info('QR code saved successfully', { qrCodeUrl });
         return { qrCodePath, qrCodeUrl, qrCodeFileName };
     } catch (error) {
-        console.error('QR Code generation error:', error);
-        console.error('Error details:', {
-            message: error.message,
+        logger.error('QR Code generation error', {
+            error: error.message,
+            stack: error.stack,
             code: error.code,
             errno: error.errno,
             syscall: error.syscall,
-            path: error.path
+            path: error.path,
+            employeeCode
         });
         throw new Error(`Failed to generate QR code: ${error.message}`);
     }
@@ -45,10 +47,11 @@ const generateAndSaveQRCode = async (data, employeeCode) => {
 // Generate ID Card
 export const generateIdCard = async (req, res) => {
     try {
-        console.log('=== ID CARD GENERATION REQUEST ===');
-        console.log('Request body:', JSON.stringify(req.body, null, 2));
-        console.log('Request headers:', req.headers);
-        console.log('User info:', req.user);
+        logger.info('ID card generation request', {
+            employeeId: req.body.employeeId,
+            adminId: req.user._id,
+            path: req.path
+        });
         const { 
             employeeId, 
             cardDesign = {},
@@ -58,27 +61,26 @@ export const generateIdCard = async (req, res) => {
         } = req.body;
         const adminId = req.user._id;
 
-        console.log('Looking for employee:', employeeId);
-        console.log('Employee ID type:', typeof employeeId);
+        logger.debug('Looking for employee', { employeeId, employeeIdType: typeof employeeId });
         
         // Check if employeeId is a valid ObjectId
         if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-            console.log('Invalid employee ID format');
+            logger.warn('Invalid employee ID format', { employeeId });
             return res.status(400).json({ message: 'Invalid employee ID format' });
         }
         
         const employee = await Employee.findById(employeeId).select('name lastName employeeId jobTitle department email joiningDate profilePhoto position jobCategory phone1 phone2 address bloodGroup');
         if (!employee) {
-            console.log('Employee not found for ID:', employeeId);
+            logger.warn('Employee not found', { employeeId });
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        console.log('Found employee:', employee.name);
+        logger.info('Found employee', { employeeId: employee._id, name: employee.name });
 
         // Check if an ID card already exists for this employee
         const existingIdCard = await IdCard.findOne({ employeeId });
         if (existingIdCard) {
-            console.log('ID card already exists for employee');
+            logger.warn('ID card already exists for employee', { employeeId });
             return res.status(400).json({ message: 'ID card already exists for this employee. Please update it instead.' });
         }
 
@@ -91,15 +93,19 @@ export const generateIdCard = async (req, res) => {
             jobTitle: employee.jobTitle
         });
 
-        console.log('Generating QR code...');
+        logger.debug('Generating QR code', { employeeId: employee.employeeId });
         let qrCodeUrl, qrCodeFileName;
         try {
             const qrResult = await generateAndSaveQRCode(qrData, employee.employeeId);
             qrCodeUrl = qrResult.qrCodeUrl;
             qrCodeFileName = qrResult.qrCodeFileName;
-            console.log('QR code generated:', qrCodeUrl);
+            logger.info('QR code generated successfully', { qrCodeUrl, employeeId: employee.employeeId });
         } catch (qrError) {
-            console.error('QR Code generation failed:', qrError);
+            logger.error('QR Code generation failed', {
+                error: qrError.message,
+                stack: qrError.stack,
+                employeeId: employee.employeeId
+            });
             // Continue without QR code if it fails
             qrCodeUrl = null;
             qrCodeFileName = null;
@@ -119,7 +125,7 @@ export const generateIdCard = async (req, res) => {
         const random = Math.floor(100000 + Math.random() * 900000);
         const cardNumber = `ID${year}${random}`;
 
-        console.log('Creating ID card with design:', defaultCardDesign);
+        logger.debug('Creating ID card', { cardDesign: defaultCardDesign.template, employeeId: employee._id });
         const idCardData = {
             employeeId: employee._id,
             cardNumber: cardNumber, // Add cardNumber explicitly
@@ -140,7 +146,7 @@ export const generateIdCard = async (req, res) => {
 
         const newIdCard = await IdCard.create(idCardData);
 
-        console.log('ID card created successfully:', newIdCard._id);
+        logger.info('ID card created successfully', { idCardId: newIdCard._id, employeeId: employee._id });
         res.status(201).json({ 
             message: 'ID card generated successfully', 
             idCard: newIdCard,
@@ -148,11 +154,11 @@ export const generateIdCard = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Generate ID Card Error:', error);
-        console.error('Error details:', {
-            message: error.message,
+        logger.error('Generate ID Card Error', {
+            error: error.message,
             stack: error.stack,
-            name: error.name
+            name: error.name,
+            employeeId: req.body.employeeId
         });
         res.status(500).json({ message: 'Failed to generate ID card', error: error.message });
     }
@@ -241,7 +247,11 @@ export const getEmployeeIdCard = async (req, res) => {
         
         res.status(200).json({ success: true, idCard });
     } catch (error) {
-        console.error('Get Employee ID Card Error:', error);
+        logger.error('Get Employee ID Card Error', {
+            error: error.message,
+            stack: error.stack,
+            employeeId: req.employee?._id || req.user?._id
+        });
         res.status(500).json({ message: 'Failed to retrieve ID card', error: error.message });
     }
 };
@@ -268,7 +278,11 @@ export const downloadIdCard = async (req, res) => {
             idCard: idCard
         });
     } catch (error) {
-        console.error('Download ID Card Error:', error);
+        logger.error('Download ID Card Error', {
+            error: error.message,
+            stack: error.stack,
+            idCardId: req.params.id
+        });
         res.status(500).json({ message: 'Failed to download ID card', error: error.message });
     }
 };
@@ -276,19 +290,19 @@ export const downloadIdCard = async (req, res) => {
 // Test endpoint to check database connection and employees
 export const testDatabaseConnection = async (req, res) => {
     try {
-        console.log('Testing database connection...');
+        logger.info('Testing database connection');
         
         // Test database connection
         const dbState = mongoose.connection.readyState;
-        console.log('Database state:', dbState);
+        logger.debug('Database state', { dbState });
         
         // Count employees
         const employeeCount = await Employee.countDocuments();
-        console.log('Employee count:', employeeCount);
+        logger.debug('Employee count', { employeeCount });
         
         // Get a few sample employees
         const sampleEmployees = await Employee.find().limit(5).select('name lastName employeeId email');
-        console.log('Sample employees:', sampleEmployees);
+        logger.debug('Sample employees retrieved', { count: sampleEmployees.length });
         
         res.status(200).json({
             message: 'Database connection test successful',
@@ -297,7 +311,10 @@ export const testDatabaseConnection = async (req, res) => {
             sampleEmployees
         });
     } catch (error) {
-        console.error('Database test error:', error);
+        logger.error('Database test error', {
+            error: error.message,
+            stack: error.stack
+        });
         res.status(500).json({ 
             message: 'Database test failed', 
             error: error.message 

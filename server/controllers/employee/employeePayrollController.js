@@ -1,5 +1,6 @@
 import Payroll from "../../models/payroll.model.js";
 import Employee from "../../models/employee.model.js";
+import logger from "../../helpers/logger.js";
 
 // Get employee's payroll history
 export const getEmployeePayrollHistory = async (req, res) => {
@@ -24,7 +25,7 @@ export const getEmployeePayrollHistory = async (req, res) => {
             total
         });
     } catch (error) {
-        console.error('Get Employee Payroll History Error:', error);
+        logger.error('Get Employee Payroll History Error', { error: error.message, stack: error.stack, employeeId: req.employee?._id });
         res.status(500).json({ message: error.message });
     }
 };
@@ -46,7 +47,7 @@ export const getPayrollDetails = async (req, res) => {
 
         res.json(payroll);
     } catch (error) {
-        console.error('Get Payroll Details Error:', error);
+        logger.error('Get Payroll Details Error', { error: error.message, stack: error.stack, payrollId: req.params.id });
         res.status(500).json({ message: error.message });
     }
 };
@@ -97,7 +98,7 @@ export const downloadPayslip = async (req, res) => {
             downloadUrl: `/api/employee/payroll/download-pdf/${payrollId}`
         });
     } catch (error) {
-        console.error('Download Payslip Error:', error);
+        logger.error('Download Payslip Error', { error: error.message, stack: error.stack, payrollId: req.params.id });
         res.status(500).json({ message: error.message });
     }
 };
@@ -175,7 +176,7 @@ export const getCurrentMonthPayroll = async (req, res) => {
 
         res.json(payroll);
     } catch (error) {
-        console.error('Get Current Month Payroll Error:', error);
+        logger.error('Get Current Month Payroll Error', { error: error.message, stack: error.stack, employeeId: req.employee?._id });
         res.status(500).json({ message: error.message });
     }
 };

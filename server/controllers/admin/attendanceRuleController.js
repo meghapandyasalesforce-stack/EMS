@@ -1,11 +1,13 @@
 import AttendanceRule from '../../models/attendanceRule.model.js';
+import logger from '../../helpers/logger.js';
 
 // Create or update attendance rule
 export const createOrUpdateAttendanceRule = async (req, res) => {
     try {
-        console.log('=== Attendance Rule Request ===');
-        console.log('Body:', JSON.stringify(req.body, null, 2));
-        console.log('User:', req.user);
+        logger.info('Attendance rule request', {
+            location: req.body.location,
+            adminId: req.user._id
+        });
         
         const {
             location,
@@ -100,7 +102,11 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
             });
         }
     } catch (error) {
-        console.error('Error creating/updating attendance rule:', error);
+        logger.error('Error creating/updating attendance rule', {
+            error: error.message,
+            stack: error.stack,
+            adminId: req.user._id
+        });
         return res.status(500).json({
             success: false,
             message: 'Failed to save attendance rule',
@@ -139,7 +145,10 @@ export const getAttendanceRule = async (req, res) => {
             rule: attendanceRule
         });
     } catch (error) {
-        console.error('Error fetching attendance rule:', error);
+        logger.error('Error fetching attendance rule', {
+            error: error.message,
+            stack: error.stack
+        });
         return res.status(500).json({
             success: false,
             message: 'Failed to fetch attendance rule',
@@ -159,7 +168,10 @@ export const getAllAttendanceRules = async (req, res) => {
             rules
         });
     } catch (error) {
-        console.error('Error fetching attendance rules:', error);
+        logger.error('Error fetching attendance rules', {
+            error: error.message,
+            stack: error.stack
+        });
         return res.status(500).json({
             success: false,
             message: 'Failed to fetch attendance rules',
@@ -192,7 +204,11 @@ export const deactivateAttendanceRule = async (req, res) => {
             rule: attendanceRule
         });
     } catch (error) {
-        console.error('Error deactivating attendance rule:', error);
+        logger.error('Error deactivating attendance rule', {
+            error: error.message,
+            stack: error.stack,
+            ruleId: req.params.ruleId
+        });
         return res.status(500).json({
             success: false,
             message: 'Failed to deactivate attendance rule',
@@ -244,7 +260,11 @@ export const checkAttendanceRadius = async (req, res) => {
             location: attendanceRule.location
         });
     } catch (error) {
-        console.error('Error checking attendance radius:', error);
+        logger.error('Error checking attendance radius', {
+            error: error.message,
+            stack: error.stack,
+            employeeId: req.employee?._id || req.user?._id
+        });
         return res.status(500).json({
             success: false,
             message: 'Failed to check attendance radius',

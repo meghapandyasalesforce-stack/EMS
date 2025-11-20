@@ -1,4 +1,5 @@
 import Calendar from '../../models/calendar.model.js';
+import logger from '../../helpers/logger.js';
 
 // Get calendar for a specific year
 export const getCalendar = async (req, res) => {
@@ -42,7 +43,7 @@ export const getCalendar = async (req, res) => {
 
         res.json(calendar);
     } catch (error) {
-        console.error('Get calendar error:', error);
+        logger.error('Get calendar error', { error: error.message, stack: error.stack, year: req.params.year });
         res.status(500).json({ message: 'Failed to get calendar', error: error.message });
     }
 };
@@ -90,7 +91,7 @@ export const addHoliday = async (req, res) => {
             holiday
         });
     } catch (error) {
-        console.error('Add holiday error:', error);
+        logger.error('Add holiday error', { error: error.message, stack: error.stack, year: req.params.year });
         res.status(500).json({ message: 'Failed to add holiday', error: error.message });
     }
 };
@@ -129,7 +130,7 @@ export const updateHoliday = async (req, res) => {
             holiday
         });
     } catch (error) {
-        console.error('Update holiday error:', error);
+        logger.error('Update holiday error', { error: error.message, stack: error.stack, holidayId: req.params.holidayId });
         res.status(500).json({ message: 'Failed to update holiday', error: error.message });
     }
 };
@@ -138,7 +139,7 @@ export const updateHoliday = async (req, res) => {
 export const deleteHoliday = async (req, res) => {
     try {
         const { year, holidayId } = req.params;
-        console.log(`Attempting to delete holiday ${holidayId} for year ${year}`);
+        logger.info('Attempting to delete holiday', { holidayId, year });
 
         const yearNum = parseInt(year);
         if (isNaN(yearNum)) {
@@ -147,30 +148,29 @@ export const deleteHoliday = async (req, res) => {
 
         const calendar = await Calendar.findOne({ year: yearNum });
         if (!calendar) {
-            console.log(`Calendar not found for year ${yearNum}`);
+            logger.warn('Calendar not found', { year: yearNum });
             return res.status(404).json({ message: 'Calendar not found' });
         }
 
-        console.log(`Found calendar with ${calendar.holidays.length} holidays`);
+        logger.debug('Found calendar', { holidayCount: calendar.holidays.length, year: yearNum });
 
         const holiday = calendar.holidays.id(holidayId);
         if (!holiday) {
-            console.log(`Holiday with ID ${holidayId} not found`);
+            logger.warn('Holiday not found', { holidayId, year: yearNum });
             return res.status(404).json({ message: 'Holiday not found' });
         }
 
-        console.log(`Found holiday: ${holiday.name} on ${holiday.date}`);
+        logger.debug('Found holiday', { holidayName: holiday.name, holidayDate: holiday.date, holidayId });
 
         // Use pull method to remove the holiday from the array
         calendar.holidays.pull(holidayId);
         await calendar.save();
 
-        console.log(`Successfully deleted holiday ${holidayId}`);
+        logger.info('Successfully deleted holiday', { holidayId, year: yearNum });
         res.json({ message: 'Holiday deleted successfully' });
     } catch (error) {
-        console.error('Delete holiday error:', error);
-        console.error('Error details:', {
-            message: error.message,
+        logger.error('Delete holiday error', {
+            error: error.message,
             stack: error.stack,
             name: error.name
         });
@@ -199,7 +199,7 @@ export const updateWorkingDays = async (req, res) => {
             workingDays: calendar.workingDays
         });
     } catch (error) {
-        console.error('Update working days error:', error);
+        logger.error('Update working days error', { error: error.message, stack: error.stack, year: req.params.year });
         res.status(500).json({ message: 'Failed to update working days', error: error.message });
     }
 };
@@ -225,7 +225,7 @@ export const updateWorkingHours = async (req, res) => {
             workingHours: calendar.workingHours
         });
     } catch (error) {
-        console.error('Update working hours error:', error);
+        logger.error('Update working hours error', { error: error.message, stack: error.stack, year: req.params.year });
         res.status(500).json({ message: 'Failed to update working hours', error: error.message });
     }
 };
@@ -253,7 +253,7 @@ export const getHolidaysForMonth = async (req, res) => {
 
         res.json({ holidays });
     } catch (error) {
-        console.error('Get holidays error:', error);
+        logger.error('Get holidays error', { error: error.message, stack: error.stack, year: req.params.year });
         res.status(500).json({ message: 'Failed to get holidays', error: error.message });
     }
 };
@@ -298,7 +298,7 @@ export const isWorkingDay = async (req, res) => {
             ) : null
         });
     } catch (error) {
-        console.error('Check working day error:', error);
+        logger.error('Check working day error', { error: error.message, stack: error.stack, date: req.params.date });
         res.status(500).json({ message: 'Failed to check working day', error: error.message });
     }
 };

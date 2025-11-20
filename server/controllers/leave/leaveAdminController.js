@@ -1,5 +1,6 @@
 import Leave from "../../models/leave.model.js"
 import mongoose from "mongoose";
+import logger from "../../helpers/logger.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -31,7 +32,7 @@ export const getAllLeaves = async (req, res) => {
 
         res.json({ leaves, statistics });
     } catch (error) {
-        console.error('Get All Leaves Error:', error);
+        logger.error('Get All Leaves Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Error fetching leaves', error: error.message });
     }
 };
@@ -62,7 +63,7 @@ export const updateLeaveStatus = async (req, res) => {
         await leave.save();
         res.json({ message: 'Leave status updated successfully', leave });
     } catch (error) {
-        console.error('Update Leave Status Error:', error);
+        logger.error('Update Leave Status Error', { error: error.message, stack: error.stack, leaveId: req.params.id });
         res.status(500).json({ message: 'Error updating leave status', error: error.message });
     }
 };
@@ -108,7 +109,7 @@ export const getLeaveStatistics = async (req, res) => {
 
         return res.json(statistics);
     } catch (error) {
-        console.error('Leave Statistics Error:', error);
+        logger.error('Leave Statistics Error', { error: error.message, stack: error.stack });
         return res.status(500).json({ message: 'Error fetching leave statistics', error: error.message });
     }
 };

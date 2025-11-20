@@ -1,4 +1,5 @@
 import Calendar from '../../models/calendar.model.js';
+import logger from '../../helpers/logger.js';
 
 // Get calendar for year (employee view - read-only)
 export const getEmployeeCalendar = async (req, res) => {
@@ -49,7 +50,7 @@ export const getEmployeeCalendar = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get employee calendar error:', error);
+    logger.error('Get employee calendar error', { error: error.message, stack: error.stack, employeeId: req.employee?._id });
     res.status(500).json({ message: 'Failed to fetch calendar', error: error.message });
   }
 };
@@ -84,7 +85,7 @@ export const getHolidaysForMonth = async (req, res) => {
     res.json({ holidays: monthHolidays });
 
   } catch (error) {
-    console.error('Get holidays for month error:', error);
+    logger.error('Get holidays for month error', { error: error.message, stack: error.stack, year: req.params.year, month: req.params.month });
     res.status(500).json({ message: 'Failed to fetch holidays', error: error.message });
   }
 };
@@ -142,7 +143,7 @@ export const isWorkingDay = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Check working day error:', error);
+    logger.error('Check working day error', { error: error.message, stack: error.stack, date: req.params.date });
     res.status(500).json({ message: 'Failed to check working day', error: error.message });
   }
 };

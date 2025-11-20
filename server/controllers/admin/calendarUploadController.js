@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 import Calendar from '../../models/calendar.model.js';
+import logger from '../../helpers/logger.js';
 
 // Helper functions for calculating holiday dates
 const calculateEaster = (year) => {
@@ -99,11 +100,15 @@ const storage = multer.diskStorage({
       const uploadDir = 'uploads/calendar-files';
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
-        console.log('Created upload directory:', uploadDir);
+        logger.info('Created upload directory', { uploadDir });
       }
       cb(null, uploadDir);
     } catch (error) {
-      console.error('Error creating upload directory:', error);
+      logger.error('Error creating upload directory', {
+        error: error.message,
+        stack: error.stack,
+        uploadDir: 'uploads/calendar-files'
+      });
       cb(error, null);
     }
   },
@@ -133,89 +138,112 @@ export const upload = multer({
 // Upload calendar file and extract holidays
 export const uploadCalendarFile = async (req, res) => {
   try {
-    console.log('Upload calendar file request received');
-    console.log('Request file:', req.file);
-    console.log('Request params:', req.params);
-    console.log('Request body:', req.body);
+    logger.info('Upload calendar file request received', {
+      fileName: req.file?.originalname,
+      year: req.params.year,
+      fileSize: req.file?.size
+    });
     
     if (!req.file) {
-      console.log('No file uploaded');
+      logger.warn('No file uploaded in calendar upload request');
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
     const { year } = req.params;
     const yearNum = parseInt(year);
     
-    console.log('Year:', year, 'Parsed year:', yearNum);
+    logger.debug('Parsing year parameter', { year, yearNum });
     
     if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+      logger.warn('Invalid year parameter', { year, yearNum });
       return res.status(400).json({ message: 'Invalid year. Must be between 2020 and 2050' });
     }
 
     const filePath = req.file.path;
     const fileExtension = path.extname(req.file.originalname).toLowerCase();
     
-    console.log('File path:', filePath);
-    console.log('File extension:', fileExtension);
+    logger.debug('File details', { filePath, fileExtension, fileName: req.file.originalname });
     
     let extractedHolidays = [];
 
     if (fileExtension === '.pdf') {
       try {
-        console.log('Processing PDF file...');
+        logger.info('Processing PDF file', { filePath, year: yearNum });
         // Extract text from PDF
         const dataBuffer = fs.readFileSync(filePath);
         const pdfParse = (await import('pdf-parse')).default;
         const pdfData = await pdfParse(dataBuffer);
         
-        console.log(`PDF text extracted: ${pdfData.text.length} characters`);
-        console.log('First 500 characters:', pdfData.text.substring(0, 500));
+        logger.debug('PDF text extracted', { 
+          textLength: pdfData.text.length,
+          preview: pdfData.text.substring(0, 100)
+        });
         
         if (pdfData.text && pdfData.text.trim().length > 0) {
           extractedHolidays = await extractHolidaysFromText(pdfData.text, yearNum);
-          console.log(`Extracted ${extractedHolidays.length} holidays from PDF`);
+          logger.info('Extracted holidays from PDF', { 
+            count: extractedHolidays.length,
+            year: yearNum 
+          });
         } else {
-          console.log('No text found in PDF, using common holidays');
+          logger.warn('No text found in PDF, using common holidays', { year: yearNum });
           extractedHolidays = await getCommonHolidays(yearNum);
         }
       } catch (pdfError) {
-        console.error('PDF parsing error:', pdfError);
-        console.error('PDF error details:', {
-          message: pdfError.message,
-          stack: pdfError.stack
+        logger.error('PDF parsing error', {
+          error: pdfError.message,
+          stack: pdfError.stack,
+          filePath,
+          year: yearNum
         });
         // Fallback to common holidays if PDF parsing fails
         extractedHolidays = await getCommonHolidays(yearNum);
-        console.log(`Using fallback: ${extractedHolidays.length} common holidays`);
+        logger.info('Using fallback holidays', { 
+          count: extractedHolidays.length,
+          year: yearNum 
+        });
       }
     } else if (['.png', '.jpg', '.jpeg'].includes(fileExtension)) {
-      console.log('Processing image file...');
+      logger.info('Processing image file', { filePath, year: yearNum });
       // For images, we'll use OCR-like text extraction
       // For now, we'll create a placeholder that can be enhanced with OCR libraries
       extractedHolidays = await extractHolidaysFromImage(filePath, yearNum);
-      console.log(`Extracted ${extractedHolidays.length} holidays from image`);
+      logger.info('Extracted holidays from image', { 
+        count: extractedHolidays.length,
+        year: yearNum 
+      });
     } else {
-      console.log('Unsupported file type, using common holidays');
+      logger.warn('Unsupported file type, using common holidays', { 
+        fileExtension,
+        year: yearNum 
+      });
       // Fallback for unsupported file types
       extractedHolidays = await getCommonHolidays(yearNum);
     }
 
     // Test database connection
-    console.log('Testing database connection...');
+    logger.debug('Testing database connection', { year: yearNum });
     try {
       await Calendar.findOne({ year: yearNum });
-      console.log('Database connection successful');
+      logger.debug('Database connection successful');
     } catch (dbError) {
-      console.error('Database connection error:', dbError);
+      logger.error('Database connection error', {
+        error: dbError.message,
+        stack: dbError.stack,
+        year: yearNum
+      });
       throw new Error('Database connection failed');
     }
 
     // Get or create calendar for the year
     let calendar = await Calendar.findOne({ year: yearNum });
-    console.log('Found calendar:', calendar ? 'Yes' : 'No');
+    logger.debug('Calendar lookup', { 
+      year: yearNum,
+      found: !!calendar 
+    });
     
     if (!calendar) {
-      console.log('Creating new calendar for year:', yearNum);
+      logger.info('Creating new calendar', { year: yearNum });
       calendar = new Calendar({
         year: yearNum,
         holidays: [],
@@ -249,14 +277,14 @@ export const uploadCalendarFile = async (req, res) => {
       try {
         // Validate holiday data
         if (!holidayData.name || !holidayData.date) {
-          console.log('Skipping invalid holiday data:', holidayData);
+          logger.debug('Skipping invalid holiday data', { holidayData });
           continue;
         }
 
         // Parse and validate date
         const holidayDate = new Date(holidayData.date);
         if (isNaN(holidayDate.getTime())) {
-          console.log('Skipping holiday with invalid date:', holidayData);
+          logger.debug('Skipping holiday with invalid date', { holidayData });
           continue;
         }
 
@@ -273,7 +301,10 @@ export const uploadCalendarFile = async (req, res) => {
             date: holidayData.date,
             reason: 'Already exists'
           });
-          console.log(`Duplicate holiday found: ${holidayData.name} on ${holidayData.date}`);
+          logger.debug('Duplicate holiday found', {
+            name: holidayData.name,
+            date: holidayData.date
+          });
           continue;
         }
 
@@ -290,10 +321,19 @@ export const uploadCalendarFile = async (req, res) => {
         
         calendar.holidays.push(holiday);
         newHolidays.push(holiday);
-        console.log(`Added new holiday: ${holiday.name} on ${holiday.date.toISOString().split('T')[0]}`);
+        logger.info('Added new holiday', {
+          name: holiday.name,
+          date: holiday.date.toISOString().split('T')[0],
+          year: yearNum
+        });
         
       } catch (error) {
-        console.error('Error processing holiday:', holidayData, error);
+        logger.error('Error processing holiday', {
+          error: error.message,
+          stack: error.stack,
+          holidayData,
+          year: yearNum
+        });
       }
     }
 
@@ -318,15 +358,23 @@ export const uploadCalendarFile = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Upload calendar file error:', error);
-    console.error('Error stack:', error.stack);
+    logger.error('Upload calendar file error', {
+      error: error.message,
+      stack: error.stack,
+      year: req.params.year,
+      fileName: req.file?.originalname
+    });
     
     // Clean up file if it exists
     if (req.file && fs.existsSync(req.file.path)) {
       try {
         fs.unlinkSync(req.file.path);
       } catch (cleanupError) {
-        console.error('Error cleaning up file:', cleanupError);
+        logger.error('Error cleaning up file', {
+          error: cleanupError.message,
+          stack: cleanupError.stack,
+          filePath: req.file.path
+        });
       }
     }
     
@@ -340,8 +388,10 @@ export const uploadCalendarFile = async (req, res) => {
 // Extract holidays from text (PDF or OCR text)
 const extractHolidaysFromText = async (text, year) => {
   const holidays = [];
-  console.log(`Extracting holidays from text for year ${year}`);
-  console.log(`Text length: ${text.length} characters`);
+  logger.debug('Extracting holidays from text', {
+    year,
+    textLength: text.length
+  });
   
   // Enhanced holiday patterns with more comprehensive matching
   const holidayPatterns = [
@@ -397,7 +447,11 @@ const extractHolidaysFromText = async (text, year) => {
         type: 'national',
         description: `Auto-detected from calendar file`
       });
-      console.log(`Found holiday: ${pattern.name} on ${holidayDate}`);
+      logger.debug('Found holiday pattern', {
+        name: pattern.name,
+        date: holidayDate,
+        year
+      });
     }
   }
 
@@ -485,7 +539,11 @@ const extractHolidaysFromText = async (text, year) => {
           type: 'national',
           description: `Auto-detected from calendar file`
         });
-        console.log(`Found date-based holiday: ${holidayName || 'Unknown'} on ${dateStr}`);
+        logger.debug('Found date-based holiday', {
+          name: holidayName || 'Unknown',
+          date: dateStr,
+          year
+        });
       }
     }
   }
@@ -548,7 +606,11 @@ export const getCalendarUploadHistory = async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('Get upload history error:', error);
+    logger.error('Get upload history error', {
+      error: error.message,
+      stack: error.stack,
+      year: req.params.year
+    });
     res.status(500).json({ message: 'Failed to get upload history', error: error.message });
   }
 };

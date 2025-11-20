@@ -1,6 +1,7 @@
 import SalaryStructure from '../../models/salaryStructure.model.js';
 import Employee from '../../models/employee.model.js';
 import Payroll from '../../models/payroll.model.js';
+import logger from '../../helpers/logger.js';
 
 // Create salary structure
 export const createSalaryStructure = async (req, res) => {
@@ -35,7 +36,7 @@ export const createSalaryStructure = async (req, res) => {
             salaryStructure
         });
     } catch (error) {
-        console.error('Create salary structure error:', error);
+        logger.error('Create salary structure error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to create salary structure', error: error.message });
     }
 };
@@ -57,7 +58,7 @@ export const getAllSalaryStructures = async (req, res) => {
 
         res.json(structures);
     } catch (error) {
-        console.error('Get salary structures error:', error);
+        logger.error('Get salary structures error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to get salary structures', error: error.message });
     }
 };
@@ -77,7 +78,7 @@ export const getSalaryStructureById = async (req, res) => {
 
         res.json(structure);
     } catch (error) {
-        console.error('Get salary structure error:', error);
+        logger.error('Get salary structure error', { error: error.message, stack: error.stack, structureId: req.params.id });
         res.status(500).json({ message: 'Failed to get salary structure', error: error.message });
     }
 };
@@ -114,7 +115,7 @@ export const updateSalaryStructure = async (req, res) => {
             salaryStructure: updatedStructure
         });
     } catch (error) {
-        console.error('Update salary structure error:', error);
+        logger.error('Update salary structure error', { error: error.message, stack: error.stack, structureId: req.params.id });
         res.status(500).json({ message: 'Failed to update salary structure', error: error.message });
     }
 };
@@ -145,7 +146,7 @@ export const deleteSalaryStructure = async (req, res) => {
 
         res.json({ message: 'Salary structure deleted successfully' });
     } catch (error) {
-        console.error('Delete salary structure error:', error);
+        logger.error('Delete salary structure error', { error: error.message, stack: error.stack, structureId: req.params.id });
         res.status(500).json({ message: 'Failed to delete salary structure', error: error.message });
     }
 };
@@ -205,7 +206,7 @@ export const applySalaryStructure = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Apply salary structure error:', error);
+        logger.error('Apply salary structure error', { error: error.message, stack: error.stack, structureId: req.params.id });
         res.status(500).json({ message: 'Failed to apply salary structure', error: error.message });
     }
 };
@@ -236,7 +237,7 @@ export const calculateEmployeeSalary = async (req, res) => {
             calculatedSalary
         });
     } catch (error) {
-        console.error('Calculate salary error:', error);
+        logger.error('Calculate salary error', { error: error.message, stack: error.stack, employeeId: req.params.employeeId });
         res.status(500).json({ message: 'Failed to calculate salary', error: error.message });
     }
 };
@@ -293,7 +294,7 @@ export const generatePayrollWithStructure = async (req, res) => {
             payroll
         });
     } catch (error) {
-        console.error('Generate payroll error:', error);
+        logger.error('Generate payroll error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: 'Failed to generate payroll', error: error.message });
     }
 };
@@ -336,7 +337,7 @@ export const getApplicableStructures = async (req, res) => {
             applicableStructures
         });
     } catch (error) {
-        console.error('Get applicable structures error:', error);
+        logger.error('Get applicable structures error', { error: error.message, stack: error.stack, employeeId: req.params.employeeId });
         res.status(500).json({ message: 'Failed to get applicable structures', error: error.message });
     }
 };
