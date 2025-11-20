@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_ENV=production vite build",
+    "build": "cross-env NODE_ENV=production vite build",
     "build:deploy": "vite build && npm run copy-to-server",
     "copy-to-server": "node scripts/copy-to-server.mjs",
     "lint": "eslint .",
@@ -24,6 +24,15 @@
     "postinstall": "npm audit fix --force || true"
   },
   "dependencies": {
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/camera": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/haptics": "^6.0.1",
+    "@capacitor/keyboard": "^6.0.1",
+    "@capacitor/network": "^6.0.1",
+    "@capacitor/splash-screen": "^6.0.1",
+    "@capacitor/status-bar": "^6.0.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@headlessui/react": "^2.2.9",
@@ -51,18 +60,12 @@
     "react-toastify": "^11.0.5",
     "recharts": "^2.15.3",
     "redux-persist": "^6.0.0",
-    "tailwindcss": "^4.1.5",
-    "@capacitor/core": "^6.1.2",
-    "@capacitor/app": "^6.0.1",
-    "@capacitor/haptics": "^6.0.1",
-    "@capacitor/keyboard": "^6.0.1",
-    "@capacitor/status-bar": "^6.0.1",
-    "@capacitor/splash-screen": "^6.0.1",
-    "@capacitor/filesystem": "^6.0.1",
-    "@capacitor/camera": "^6.0.1",
-    "@capacitor/network": "^6.0.1"
+    "tailwindcss": "^4.1.5"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
     "@eslint/js": "^9.25.0",
     "@playwright/test": "^1.40.1",
     "@testing-library/jest-dom": "^6.1.5",
@@ -73,6 +76,7 @@
     "@vitejs/plugin-react": "^4.4.1",
     "@vitest/coverage-v8": "^1.0.4",
     "@vitest/ui": "^1.0.4",
+    "cross-env": "^10.1.0",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
@@ -80,9 +84,6 @@
     "jsdom": "^23.0.1",
     "vite": "^6.3.5",
     "vite-plugin-pwa": "^1.1.0",
-    "vitest": "^1.0.4",
-    "@capacitor/cli": "^6.1.2",
-    "@capacitor/android": "^6.1.2",
-    "@capacitor/ios": "^6.1.2"
+    "vitest": "^1.0.4"
   }
 }
