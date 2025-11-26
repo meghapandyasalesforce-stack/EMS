@@ -3,6 +3,8 @@ import { loginUser,logoutUser,registerUser } from "../../controllers/auth/adminA
 import { refreshToken } from "../../controllers/auth/refreshTokenController.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
+import { authValidations } from "../../middlewares/inputValidation.js";
+import logger from "../../helpers/logger.js";
 
 const router = express.Router();
 
@@ -13,8 +15,12 @@ const registerMiddleware = process.env.NODE_ENV === 'production'
   ? [isAdminAuthenticated, loginLimiter] 
   : [loginLimiter];
 
-router.route("/register").post(...registerMiddleware, registerUser);
-router.route("/login").post(loginLimiter, loginUser);
+router.route("/register").post(...registerMiddleware, authValidations.register, registerUser);
+router.route("/login").post(
+    loginLimiter,
+    authValidations.login,
+    loginUser
+);
 router.route("/logout").post(logoutUser); // Changed to POST for state-changing operation
 router.route("/refresh-token").post(refreshToken); // Refresh access token
 

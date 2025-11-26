@@ -47,7 +47,7 @@ class ErrorBoundary extends React.Component {
                   Try Again
                 </button>
               </div>
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {(import.meta.env.DEV || import.meta.env.MODE === 'development') && this.state.error && (
                 <details className="mt-4 text-left">
                   <summary className="cursor-pointer text-sm text-gray-600">Error Details</summary>
                   <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto">

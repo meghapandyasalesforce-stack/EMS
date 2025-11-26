@@ -28,7 +28,8 @@ const ResetPassword = () => {
       dispatch(setUser(null));
       
       // Clear local storage
-      localStorage.removeItem('token');
+      // SECURITY FIX: Tokens are in httpOnly cookies, cleared by server on logout
+      // No need to remove from localStorage (tokens aren't stored there)
       localStorage.removeItem('csrfToken');
       localStorage.removeItem('role');
       localStorage.removeItem('email');

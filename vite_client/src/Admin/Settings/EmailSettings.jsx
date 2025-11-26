@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import logger from '../../utils/logger.js';
 
 /**
  * Email Settings Component
@@ -24,7 +25,7 @@ const EmailSettings = () => {
             setEmailStatus(response.data);
         } catch (error) {
             toast.error('Failed to fetch email configuration status');
-            console.error('Email status error:', error);
+            logger.error('Email status error', error);
         } finally {
             setLoading(false);
         }

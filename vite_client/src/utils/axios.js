@@ -1,12 +1,13 @@
 import axios from 'axios';
+import logger from './logger.js';
 
 // Determine base URL: use env var, or default to backend URL in production, or relative path in dev
 const getBaseURL = () => {
   // Priority 1: In development mode, always use relative path (Vite proxy)
-  // This ensures local development uses localhost:5000 via Vite proxy
+  // This ensures local development uses localhost:10000 via Vite proxy
   const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
   if (isDevelopment) {
-    // In development, always use relative path which Vite proxies to localhost:5000
+    // In development, always use relative path which Vite proxies to localhost:10000
     // This allows local backend development without CORS issues
     return '/api';
   }
@@ -35,9 +36,7 @@ const getBaseURL = () => {
     }
     
     // Priority 2d: Fallback to relative path (may work if same domain)
-    if (typeof console !== 'undefined' && console.warn) {
-      console.warn('⚠️ VITE_API_URL or VITE_BACKEND_URL not set in production. Using relative path.');
-    }
+    logger.warn('VITE_API_URL or VITE_BACKEND_URL not set in production. Using relative path.');
     return '/api';
   }
   
@@ -73,8 +72,8 @@ export const getBackendBaseURL = () => {
     return ''; // Empty string means relative path
   }
   
-  // Priority 4: Development default
-  return 'http://localhost:5000';
+  // Priority 4: Development default (matches backend default port)
+  return 'http://localhost:10000';
 };
 
 // Helper function to convert relative upload paths to full URLs
@@ -149,12 +148,16 @@ instance.interceptors.request.use(
       // ignore
     }
 
-    // Add Authorization header from localStorage if available
-    // Works with both relative paths and full URLs
+    // SECURITY FIX: Tokens are stored in httpOnly cookies by the server
+    // HttpOnly cookies are sent automatically with requests when withCredentials: true
+    // The server's extractToken() function checks cookies first, then Authorization header
+    // We ensure withCredentials is true for all requests to send cookies automatically
+    config.withCredentials = true;
+    
+    // Try to get token from cookie (if non-httpOnly cookie exists) for Authorization header
+    // This is a fallback - httpOnly cookies are sent automatically but can't be read by JS
     try {
-      if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('token');
-        
+      if (typeof document !== 'undefined') {
         // Check if this is an auth endpoint (login/register) - tokens are expected to be missing
         const isAuthEndpoint = config.url && (
           config.url.includes('/auth/login') || 
@@ -163,14 +166,22 @@ instance.interceptors.request.use(
           config.url.includes('/password/reset-password')
         );
         
-        if (token) {
-          config.headers = config.headers || {};
-          // Only add if not already set (allows manual override if needed)
-          if (!config.headers.Authorization) {
-            config.headers.Authorization = `Bearer ${token}`;
+        if (!isAuthEndpoint) {
+          // Try to get token from cookie (if non-httpOnly cookie exists)
+          // Most tokens are httpOnly and can't be read, but we try as fallback
+          const cookies = document.cookie.split('; ');
+          const jwtCookie = cookies.find(c => c.startsWith('jwt='));
+          
+          if (jwtCookie) {
+            const token = jwtCookie.split('=')[1];
+            config.headers = config.headers || {};
+            // Only add if not already set (allows manual override if needed)
+            if (!config.headers.Authorization && token) {
+              config.headers.Authorization = `Bearer ${token}`;
+            }
           }
-        } else {
-          // Removed console.warn for production
+          // If no cookie token found, rely on httpOnly cookie being sent automatically
+          // The server will authenticate via cookie if Authorization header is missing
         }
       }
     } catch (error) {
@@ -202,7 +213,11 @@ instance.interceptors.request.use(
             // Cookie parsing failed
           }
           
-          // If not in cookie, try localStorage (cross-site scenario)
+          // SECURITY NOTE: CSRF tokens in localStorage are acceptable for cross-site scenarios
+          // CSRF tokens are not sensitive secrets - they're meant to be readable by JavaScript
+          // for the double-submit cookie pattern. They cannot be used alone to authenticate.
+          // See SECURITY.md for full documentation.
+          // If not in cookie, try localStorage (cross-site scenario only)
           if (!csrf && typeof window !== 'undefined') {
             try {
               csrf = localStorage.getItem('csrfToken');
@@ -250,18 +265,26 @@ const processQueue = (error, token = null) => {
 // Response interceptor to handle errors and token refresh
 instance.interceptors.response.use(
   (response) => {
-    // Store refresh token if present in response
-    if (response.data?.refreshToken && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('refreshToken', response.data.refreshToken);
-      } catch (e) {
-        // Silently handle localStorage errors
-      }
-    }
+    // SECURITY FIX: Refresh tokens are stored in httpOnly cookies by the server
+    // Do not store tokens in localStorage (XSS vulnerability)
+    // Cookies are automatically sent with withCredentials: true
     return response;
   },
   async (error) => {
     const originalRequest = error.config;
+    
+    // Handle connection errors gracefully (backend not running)
+    const isConnectionError = error.code === 'ECONNREFUSED' || 
+                             error.code === 'ECONNRESET' ||
+                             error.message?.includes('Network Error') ||
+                             error.message?.includes('ERR_CONNECTION_REFUSED') ||
+                             error.message?.includes('ERR_NETWORK');
+    
+    if (isConnectionError) {
+      // Backend is not running - reject silently without logging
+      // This prevents noisy console errors when backend is down
+      return Promise.reject(error);
+    }
     
     // Handle 401 errors - attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -300,16 +323,15 @@ instance.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Get refresh token from localStorage or cookie
+        // SECURITY FIX: Get refresh token from cookie only (not localStorage)
+        // Cookies are automatically sent with withCredentials: true
+        // The server sets refreshToken in httpOnly cookie via generateToken()
+        // Note: httpOnly cookies cannot be read by JavaScript, but they're sent automatically
         let refreshToken = null;
-        if (typeof window !== 'undefined') {
-          refreshToken = localStorage.getItem('refreshToken');
-        }
-
-        // If no refresh token in localStorage, try to get from cookie
-        // (cookies are automatically sent with withCredentials: true)
-        if (!refreshToken) {
-          // Check if we have a refresh token cookie
+        
+        // Try to get from cookie (for non-httpOnly cookies only, if any)
+        // Most refresh tokens should be httpOnly, so this may not be accessible
+        if (typeof document !== 'undefined') {
           const cookies = document.cookie.split('; ');
           const refreshCookie = cookies.find(c => c.startsWith('refreshToken='));
           if (refreshCookie) {
@@ -317,77 +339,93 @@ instance.interceptors.response.use(
           }
         }
 
-        if (!refreshToken) {
-          // No refresh token available, redirect to login
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-            // Clear any stored tokens
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('token');
-              localStorage.removeItem('refreshToken');
-              localStorage.removeItem('csrfToken');
-            }
-            window.location.href = '/login';
-          }
-          processQueue(error, null);
-          isRefreshing = false;
-          return Promise.reject(error);
-        }
+        // Proceed with refresh - httpOnly cookie will be sent automatically even if we can't read it
+        // If refresh fails, we'll redirect to login below
 
         // Determine which refresh endpoint to use based on role
-        const role = localStorage.getItem('role') || 'employee';
+        // SECURITY: Get role from Redux store or cookie, not localStorage
+        // Fallback to 'employee' if role cannot be determined
+        let role = 'employee';
+        try {
+          // Try to get role from Redux store (if available in global scope)
+          if (typeof window !== 'undefined' && window.__REDUX_STORE__) {
+            const state = window.__REDUX_STORE__.getState();
+            role = state?.auth?.user?.role || 'employee';
+          }
+          // Fallback: try to get from cookie (if stored there)
+          if (role === 'employee' && typeof document !== 'undefined') {
+            const cookies = document.cookie.split('; ');
+            const roleCookie = cookies.find(c => c.startsWith('role='));
+            if (roleCookie) {
+              role = roleCookie.split('=')[1];
+            }
+          }
+        } catch {
+          // Fallback to employee if role cannot be determined
+          role = 'employee';
+        }
+        
         const refreshEndpoint = role === 'admin' 
           ? '/v1/admin/auth/refresh-token'
           : '/v1/employee/auth/refresh-token';
 
-        // Call refresh token endpoint using the same base URL as the instance
+        // Call refresh token endpoint
+        // SECURITY FIX: Refresh token is sent automatically via httpOnly cookie
+        // The server will read the refreshToken from the cookie
+        // If we have a readable refresh token (non-httpOnly), include it in header as fallback
+        const refreshConfig = {
+          withCredentials: true,
+        };
+        
+        // Only add Authorization header if we have a readable refresh token
+        // Otherwise, rely on httpOnly cookie being sent automatically
+        if (refreshToken) {
+          refreshConfig.headers = {
+            Authorization: `Bearer ${refreshToken}`,
+          };
+        }
+
         const refreshResponse = await axios.post(
           `${instance.defaults.baseURL}${refreshEndpoint}`,
           {},
-          {
-            headers: {
-              Authorization: `Bearer ${refreshToken}`,
-            },
-            withCredentials: true,
-          }
+          refreshConfig
         );
 
         const { token: newToken, csrfToken: newCsrfToken } = refreshResponse.data;
 
-        // Update stored tokens
-        if (typeof window !== 'undefined') {
-          if (newToken) {
-            localStorage.setItem('token', newToken);
-          }
-          if (newCsrfToken) {
-            localStorage.setItem('csrfToken', newCsrfToken);
-          }
-          if (refreshResponse.data.refreshToken) {
-            localStorage.setItem('refreshToken', refreshResponse.data.refreshToken);
-          }
-        }
+        // SECURITY FIX: Tokens are stored in httpOnly cookies by the server
+        // Do not store tokens in localStorage (XSS vulnerability)
+        // The server sets new tokens in httpOnly cookies automatically
+        // Use the token from response for Authorization header (temporary, in-memory only)
+        // CSRF token is not httpOnly (needs to be readable by JS for double-submit pattern)
+        // See SECURITY.md for documentation on CSRF token storage
 
         // Update the original request with new token
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        if (newToken) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        }
         if (newCsrfToken && ['post', 'put', 'patch', 'delete'].includes(originalRequest.method?.toLowerCase())) {
           originalRequest.headers['x-csrf-token'] = newCsrfToken;
+          // CSRF token is stored in cookie by server, but we also need it in header
+          // This is safe because CSRF tokens are not sensitive (they're meant to be readable)
         }
 
-        // Process queued requests
+        // Process queued requests (pass token for Authorization header, but don't store)
         processQueue(null, newToken);
         isRefreshing = false;
 
         // Retry the original request
         return instance(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, clear tokens and redirect to login
+        // Refresh failed, redirect to login
+        // SECURITY FIX: Tokens are in httpOnly cookies, cleared by server on logout
+        // No need to clear localStorage (tokens aren't stored there anymore)
         processQueue(refreshError, null);
         isRefreshing = false;
 
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('csrfToken');
-          
+          // Clear only non-sensitive localStorage data if needed
+          // Tokens are in cookies and will be cleared by server
           if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
             window.location.href = '/login';
           }

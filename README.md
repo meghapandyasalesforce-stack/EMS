@@ -32,6 +32,9 @@ A comprehensive Employee Management System built with modern web technologies, f
 - **Mongoose** - ODM
 - **JWT** - Authentication
 - **Bcrypt** - Password hashing
+- **Redis** - Caching (optional)
+- **BullMQ** - Job queue system
+- **i18next** - Internationalization
 
 ## 🏗️ Project Structure
 
@@ -152,6 +155,17 @@ EMS-Paarsiv/
 - **Password Hashing**: Bcrypt with salt rounds
 - **JWT Authentication**: Secure token-based auth
 - **CORS Configuration**: Environment-aware CORS settings
+
+## ✨ Recent Improvements
+
+- **Redis Caching**: High-performance caching layer with in-memory fallback
+- **Background Job Queues**: Non-blocking email and notification processing
+- **API Documentation**: Swagger/OpenAPI documentation
+- **Enhanced Testing**: Expanded test coverage
+- **Internationalization**: Multi-language support (i18n)
+- **Improved Error Handling**: Standardized error responses
+
+See `IMPROVEMENTS_SUMMARY.md` and `QUICK_START_IMPROVEMENTS.md` for details.
 
 ## 🧪 Testing
 

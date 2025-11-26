@@ -3,6 +3,7 @@
  * Centralized route registration for better maintainability
  */
 
+import organizationAuthRouter from "../routes/Auth/OrganizationRoutes.js";
 import adminRouter from "../routes/Auth/AdminRoutes.js";
 import employeeRouter from "../routes/Auth/EmployeeRoutes.js";
 import leaveEmployeeRouter from "../routes/Employee/LeaveEmployeeRoutes.js";
@@ -27,12 +28,25 @@ import salaryStructureRouter from "../routes/Admin/SalaryStructureRoutes.js";
 import employeeAdminRouter from "../routes/Admin/EmployeeRoutes.js";
 import attendanceRuleRouter from "../routes/Admin/AttendanceRuleRoutes.js";
 import notificationSettingsRouter from "../routes/Admin/NotificationSettingsRoutes.js";
+import expenseRouter from "../routes/Both/ExpenseRoutes.js";
+import reportRouter from "../routes/Admin/ReportRoutes.js";
+import performanceReviewRouter from "../routes/Both/PerformanceReviewRoutes.js";
+import organizationRouter from "../routes/Admin/OrganizationRoutes.js";
+import subscriptionRouter from "../routes/Organization/SubscriptionRoutes.js";
+import policyRouter from "../routes/Organization/PolicyRoutes.js";
+import dashboardRouter from "../routes/Organization/DashboardRoutes.js";
 
 /**
  * Register all application routes
  * @param {Express} app - Express application instance
  */
 export const registerRoutes = (app) => {
+  // Organization routes (public - for registration and login)
+  app.use("/api/v1/organization/auth", organizationAuthRouter);
+  app.use("/api/v1/organization/subscription", subscriptionRouter);
+  app.use("/api/v1/organization/policies", policyRouter);
+  app.use("/api/v1/organization/dashboard", dashboardRouter);
+  
   // Admin routes
   app.use("/api/v1/admin/auth", adminRouter);
   app.use("/api/v1/admin/leave", leaveAdminRouter);
@@ -45,6 +59,8 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/salary-structure", salaryStructureRouter);
   app.use("/api/v1/admin/attendance-rules", attendanceRuleRouter);
   app.use("/api/v1/admin/notification-settings", notificationSettingsRouter);
+  app.use("/api/v1/admin/reports", reportRouter);
+  app.use("/api/v1/admin/organization", organizationRouter);
 
   // Employee routes
   app.use("/api/v1/employee/auth", employeeRouter);
@@ -62,5 +78,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/project-task", taskRouter);
   app.use("/api/v1/both/profile-photo", profilePhotoRouter);
   app.use("/api/v1/both/email", emailTestRouter);
+  app.use("/api/v1/both/expense", expenseRouter);
+  app.use("/api/v1/both/performance-review", performanceReviewRouter);
 };
 

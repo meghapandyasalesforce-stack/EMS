@@ -103,10 +103,10 @@ const EmployeeDetailsPage = () => {
       const downloadUrl = `${BOTH_DOCUMENT_ENDPOINT}/${employeeId}/documents/${documentId}/download`;
       const response = await fetch(downloadUrl, {
         method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        credentials: 'include', // Cookies (including httpOnly JWT) are sent automatically
+        // SECURITY FIX: Token is in httpOnly cookie, sent automatically with credentials: 'include'
+        // No need for Authorization header if server accepts cookie-based auth
+        // If server requires Authorization header, it should be added by axios interceptor
       });
 
       if (!response.ok) throw new Error('Failed to download document');

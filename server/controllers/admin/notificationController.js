@@ -1,10 +1,10 @@
- 
 import { sendBroadcastNotification, markNotificationAsRead, getUnreadNotificationCount } from "../../helpers/notificationService.js";
 import Notification from "../../models/notification.model.js";
 import User from "../../models/user.model.js";
 import Employee from "../../models/employee.model.js";
 import jwt from "jsonwebtoken";
 import logger from "../../helpers/logger.js";
+import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError, sendUnauthorized } from "../../helpers/responseHelper.js";
 
 export const createNotification = async (req, res) => {
   try {
@@ -12,23 +12,21 @@ export const createNotification = async (req, res) => {
 
     // Simple validation
     if (!message) {
-      return res.status(400).json({ error: "Message is required" });
+      return sendValidationError(res, { message: "Message is required" });
     }
 
     const sender = await User.findById(req.user._id);
     if (!sender) {
-      return res.status(404).json({ error: "Sender not found" });
+      return sendNotFound(res, "Sender");
     }
 
     // Use 'announcement' type for admin announcements
     await sendBroadcastNotification(sender, message, 'announcement', { priority });
     
-    res.status(201).json({ 
-      success: true, 
-      message: "Announcement sent successfully to all employees" 
-    });
+    return sendSuccess(res, null, "Announcement sent successfully to all employees", 201);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error creating notification', { error: err.message, stack: err.stack });
+    return sendInternalError(res, 'Failed to create notification', err);
   }
 };
 
@@ -198,20 +196,17 @@ export const getUserNotifications = async (req, res) => {
 
     const total = await Notification.countDocuments(filter);
 
-    res.json({
-      success: true,
+    return sendSuccess(res, {
       notifications,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
         total
       }
-    });
+    }, 'Notifications retrieved successfully');
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    logger.error('Error getting user notifications', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to get notifications', error);
   }
 };
 
@@ -223,15 +218,10 @@ export const markAsRead = async (req, res) => {
 
     await markNotificationAsRead(notificationId, userId);
 
-    res.json({ 
-      success: true, 
-      message: "Notification marked as read" 
-    });
+    return sendSuccess(res, null, "Notification marked as read");
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    logger.error('Error marking notification as read', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to mark notification as read', error);
   }
 };
 
@@ -251,15 +241,10 @@ export const markAllAsRead = async (req, res) => {
       { isRead: true }
     );
 
-    res.json({ 
-      success: true, 
-      message: "All notifications marked as read" 
-    });
+    return sendSuccess(res, null, "All notifications marked as read");
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    logger.error('Error marking all notifications as read', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to mark all notifications as read', error);
   }
 };
 
@@ -269,15 +254,10 @@ export const getUnreadCount = async (req, res) => {
     const userId = req.user?._id || req.employee?._id;
     const count = await getUnreadNotificationCount(userId);
 
-    res.json({ 
-      success: true, 
-      unreadCount: count 
-    });
+    return sendSuccess(res, { unreadCount: count }, 'Unread count retrieved successfully');
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    logger.error('Error getting unread count', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to get unread count', error);
   }
 };
 
@@ -296,21 +276,13 @@ export const deleteNotification = async (req, res) => {
     });
 
     if (!notification) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Notification not found or unauthorized" 
-      });
+      return sendNotFound(res, "Notification");
     }
 
-    res.json({ 
-      success: true, 
-      message: "Notification deleted successfully" 
-    });
+    return sendSuccess(res, null, "Notification deleted successfully");
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+    logger.error('Error deleting notification', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to delete notification', error);
   }
 };
 
@@ -319,7 +291,7 @@ export const notifyAdminsOnEmployeeBack = async (req, res) => {
   try {
     const employeeId = req.employee?._id;
     if (!employeeId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
+      return sendUnauthorized(res, 'Unauthorized');
     }
 
     const employee = await Employee.findById(employeeId).select('name email');
@@ -336,8 +308,9 @@ export const notifyAdminsOnEmployeeBack = async (req, res) => {
       metadata: { source: 'attendance', action: 'back' }
     })));
 
-    return res.json({ success: true, message: 'Admins notified' });
+    return sendSuccess(res, null, 'Admins notified');
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    logger.error('Error notifying admins', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to notify admins', error);
   }
 };

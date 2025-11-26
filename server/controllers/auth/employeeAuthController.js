@@ -1,10 +1,13 @@
 import Employee from '../../models/employee.model.js';
+import Organization from '../../models/organization.model.js';
 import { generateToken, generateSecurePassword } from '../../helpers/utils.js';
 import bcrypt from 'bcryptjs';
 import mongoose from "mongoose";
 import sendWelcomeEmail from '../../helpers/emailSender.js';
 import logger from '../../helpers/logger.js';
-import { sendSuccess, sendError, sendValidationError, sendInternalError, sendNotFound } from '../../helpers/responseHelper.js';
+import { sendSuccess, sendError, sendValidationError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden } from '../../helpers/responseHelper.js';
+import asyncHandler from '../../helpers/asyncHandler.js';
+import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
 
 
 // Generate token with employeeId instead of email
@@ -49,16 +52,28 @@ export const registerEmployee = async (req, res) => {
             return sendValidationError(res, { position: `Invalid position. Must be one of: ${validPositions.join(', ')}` });
         }
 
+        // Get organizationId from authenticated admin or request body
+        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.body.organizationId;
+        
+        if (!organizationId) {
+            return sendError(res, 
+                'Organization ID is required. Please ensure you are authenticated as an admin.',
+                400,
+                'MISSING_ORGANIZATION_ID'
+            );
+        }
+
         // Normalize email (lowercase and trim) for case-insensitive check
         const normalizedEmail = email.toLowerCase().trim();
         
-        // Check if employee already exists (use direct query for better performance)
+        // Check if employee already exists in this organization (use direct query for better performance)
         const existingEmployee = await Employee.findOne({ 
-            email: normalizedEmail 
+            email: normalizedEmail,
+            organizationId
         });
         if (existingEmployee) {
             return sendError(res, 
-                'An employee with this email already exists. Please use a different email address.',
+                'An employee with this email already exists in this organization. Please use a different email address.',
                 409,
                 'DUPLICATE_EMAIL'
             );
@@ -75,11 +90,11 @@ export const registerEmployee = async (req, res) => {
         let attempts = 0;
         const maxAttempts = 10;
         
-        // Ensure unique employee ID
+        // Ensure unique employee ID within organization
         while (!isUnique && attempts < maxAttempts) {
             const random = Math.floor(1000 + Math.random() * 9000);
             employeeId = `EMP-${namePrefix}-${joiningYear}-${random}`;
-            const existing = await Employee.findOne({ employeeId });
+            const existing = await Employee.findOne({ employeeId, organizationId });
             if (!existing) {
                 isUnique = true;
             }
@@ -92,6 +107,7 @@ export const registerEmployee = async (req, res) => {
 
         // Create the employee (normalize email to lowercase)
         const employee = new Employee({
+            organizationId, // Add organizationId
             name,
             lastName,
             email: normalizedEmail, // Use normalized email
@@ -158,6 +174,7 @@ export const registerEmployee = async (req, res) => {
         try {
             const currentDate = new Date();
             const defaultPayroll = {
+                organizationId, // Add organizationId
                 employeeId: employee._id,
                 month: currentDate.toLocaleString('default', { month: 'long' }),
                 year: currentDate.getFullYear(),
@@ -192,11 +209,24 @@ export const registerEmployee = async (req, res) => {
             });
         }
 
-        // Generate token and send response
-        const tokenResult = generateToken(employee._id, "employee", res);
-        const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
-        const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
-        const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
+        // SECURITY FIX: Do NOT generate tokens when admin creates employee
+        // This prevents overwriting the admin's session cookies
+        // Employee will get tokens when they log in themselves
+        // Only generate tokens if this is self-registration (which shouldn't happen with admin auth)
+        const isAdminCreating = !!req.user; // Check if admin is creating (has req.user from isAdminAuthenticated)
+        
+        let token = undefined;
+        let refreshToken = undefined;
+        let csrfToken = undefined;
+        
+        // Only generate tokens if NOT created by admin (self-registration scenario)
+        // This should rarely happen since the route requires admin auth, but kept for safety
+        if (!isAdminCreating) {
+            const tokenResult = generateToken(employee._id, "employee", organizationId, res);
+            token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+            refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
+            csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
+        }
         
         const response = {
             emailSent,
@@ -204,7 +234,6 @@ export const registerEmployee = async (req, res) => {
                 emailWarning: `Welcome email could not be sent: ${emailErrorMessage}`,
                 emailError: emailErrorMessage 
             }),
-            token,
             employee: {
                 _id: employee._id,
                 name: employee.name,
@@ -216,6 +245,10 @@ export const registerEmployee = async (req, res) => {
             }
         };
         
+        // Only include tokens if they were generated (non-admin registration)
+        if (token) {
+            response.token = token;
+        }
         if (refreshToken) {
             response.refreshToken = refreshToken;
         }
@@ -245,106 +278,189 @@ export const registerEmployee = async (req, res) => {
     }
 };
 
-// Login employee
-export const loginEmployee = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+/**
+ * Login employee
+ * @route POST /api/v1/employee/auth/login
+ * @access Public
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with token and employee data
+ */
+export const loginEmployee = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+    const requestId = req.id;
 
-        // Validate input
-        if (!email || !password) {
-            return sendValidationError(res, { 
-                email: email ? undefined : 'Email is required',
-                password: password ? undefined : 'Password is required'
-            });
-        }
+    // CODE QUALITY FIX: Validation is handled by middleware (authValidations.login)
+    // No need to duplicate validation here - middleware already validates email format and required fields
+    
+    // Normalize email for case-insensitive lookup
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) {
+        // This should rarely happen as middleware validates, but keep as safety check
+        return sendValidationError(res, { email: 'Invalid email format' });
+    }
 
-        // Normalize email (lowercase and trim) for case-insensitive lookup
-        const normalizedEmail = email.toLowerCase().trim();
-        
-        // Find employee with case-insensitive email match
-        const employee = await Employee.findOne({ 
-            email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
-        });
+    logger.debug('Employee login attempt', { requestId, email: normalizedEmail });
+    
+    // SECURITY FIX: Determine organization from email domain first for scoping
+    const emailDomain = normalizedEmail.split('@')[1];
+    
+    // Find organization by domain (if exists)
+    const organization = await Organization.findOne({
+        domain: emailDomain,
+        isActive: true
+    }).select('_id');
+
+    // Find employee with normalized email AND organization scoping
+    // Use .select('+password') to include password field (normally excluded for security)
+    let employee;
+    if (organization) {
+        // SECURITY: Only search for employees within the organization that owns the domain
+        employee = await Employee.findOne({ 
+            email: normalizedEmail,
+            organizationId: organization._id
+        }).select('+password');
         
         if (!employee) {
-            return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
+            logger.warn('Employee login failed: Employee not found in organization', { 
+                requestId, 
+                email: normalizedEmail,
+                organizationId: organization._id,
+                domain: emailDomain
+            });
+            // Don't reveal if employee exists - generic error for security
+            return sendUnauthorized(res, 'Invalid email or password');
         }
-
-        if (!employee.active) {
-            return sendError(res, 'Your account is inactive. Please contact HR or Admin.', 403, 'ACCOUNT_INACTIVE');
-        }
-
-        // Use the model's comparePassword method for consistency
-        const isPasswordValid = await employee.comparePassword(password);
-        if (!isPasswordValid) {
-            return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
-        }
-
-        // ✅ Pass `res` and `role` so cookie gets set
-        const tokenResult = generateToken(employee._id, "employee", res);
-        const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
-        const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
-        const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
-
-        const response = {
-            success: true,
-            message: 'Login successful',
-            token,
-            employee: {
-                id: employee._id,
-                name: employee.name,
-                lastName: employee.lastName,
-                email: employee.email,
-                employeeId: employee.employeeId,
-                position: employee.position,
-                department: employee.department,
-                jobTitle: employee.jobTitle,
-                jobCategory: employee.jobCategory,
-                birthDate: employee.birthDate,
-                profilePhoto: employee.profilePhoto,
-                mustResetPassword: employee.mustResetPassword
-            },
-        };
-        
-        // Include refresh token and CSRF token in response for cross-site scenarios
-        if (refreshToken) {
-            response.refreshToken = refreshToken;
-        }
-        if (csrfToken) {
-            response.csrfToken = csrfToken;
-        }
-
-        return sendSuccess(res, response, 'Login successful');
-    } catch (error) {
-        logger.error('Login employee error', { error: error.message, stack: error.stack });
-        return sendInternalError(res, 'Login failed', error);
-    }
-};
-
-export const logoutEmployee = (req, res) => {
-    try {
-        const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
-        const cookieOptions = {
-            httpOnly: true,
-            sameSite: crossSite ? 'none' : 'lax',
-            secure: crossSite || process.env.NODE_ENV === 'production',
-            path: '/',
-        };
-
-        res.clearCookie('jwt', cookieOptions);
-        res.clearCookie('csrfToken', {
-            httpOnly: false,
-            sameSite: cookieOptions.sameSite,
-            secure: cookieOptions.secure,
-            path: '/',
+    } else {
+        // No organization domain found - search globally but log warning
+        logger.warn('Employee login: No organization found for email domain', { 
+            requestId, 
+            email: normalizedEmail, 
+            domain: emailDomain 
         });
-
-        return sendSuccess(res, null, 'Logout successful');
-    } catch (error) {
-        logger.error('Logout error', { error: error.message, stack: error.stack });
-        return sendInternalError(res, 'Logout failed', error);
+        employee = await Employee.findOne({ 
+            email: normalizedEmail
+        }).select('+password');
+        
+        if (!employee) {
+            logger.warn('Employee login failed: Employee not found', { requestId, email: normalizedEmail });
+            // Don't reveal if employee exists - generic error for security
+            return sendUnauthorized(res, 'Invalid email or password');
+        }
     }
-};
+    
+    // SECURITY: Additional verification - ensure employee's organization matches domain organization
+    if (organization && employee.organizationId.toString() !== organization._id.toString()) {
+        logger.warn('Employee login failed: Organization mismatch', { 
+            requestId, 
+            email: normalizedEmail,
+            employeeOrganizationId: employee.organizationId,
+            expectedOrganizationId: organization._id,
+            domain: emailDomain
+        });
+        return sendUnauthorized(res, 'Invalid email or password');
+    }
+
+    logger.debug('Employee found', { requestId, email: normalizedEmail, employeeId: employee._id, active: employee.active });
+
+    // Check if account is locked
+    if (isAccountLocked(employee)) {
+        const lockoutMessage = getLockoutMessage(employee);
+        logger.warn('Employee login failed: Account locked', { 
+            requestId, 
+            email: normalizedEmail, 
+            employeeId: employee._id,
+            lockUntil: employee.lockUntil 
+        });
+        return sendForbidden(res, lockoutMessage);
+    }
+
+    if (!employee.active) {
+        logger.warn('Employee login failed: Account inactive', { requestId, email: normalizedEmail, employeeId: employee._id });
+        return sendForbidden(res, 'Your account is inactive. Please contact HR or Admin.');
+    }
+
+    // Use the model's comparePassword method for consistency
+    logger.debug('Comparing password', { requestId, employeeId: employee._id });
+    const isPasswordValid = await employee.comparePassword(password);
+    
+    if (!isPasswordValid) {
+        // Handle failed login attempt (account lockout)
+        await handleFailedLogin(employee);
+        logger.warn('Employee login failed: Invalid password', { 
+            requestId, 
+            email: normalizedEmail, 
+            employeeId: employee._id,
+            attempts: employee.loginAttempts 
+        });
+        return sendUnauthorized(res, 'Invalid email or password');
+    }
+    
+    // Reset login attempts on successful login
+    await resetLoginAttempts(employee);
+    
+    logger.info('Employee login successful', { 
+        requestId, 
+        email: normalizedEmail, 
+        employeeId: employee._id, 
+        organizationId: employee.organizationId 
+    });
+
+    // Generate token with organizationId
+    const tokenResult = generateToken(employee._id, "employee", employee.organizationId, res);
+    const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
+    const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
+    const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
+
+    // CODE QUALITY FIX: Unified response structure across all login endpoints
+    // Structure: { token, user/employee, refreshToken?, csrfToken? }
+    const response = {
+        token,
+        employee: {
+            id: employee._id,
+            name: employee.name,
+            lastName: employee.lastName,
+            email: employee.email,
+            employeeId: employee.employeeId,
+            position: employee.position,
+            department: employee.department,
+            jobTitle: employee.jobTitle,
+            jobCategory: employee.jobCategory,
+            birthDate: employee.birthDate,
+            profilePhoto: employee.profilePhoto,
+            mustResetPassword: employee.mustResetPassword
+        }
+    };
+    
+    // Include refresh token and CSRF token in response for cross-site scenarios
+    if (refreshToken) {
+        response.refreshToken = refreshToken;
+    }
+    if (csrfToken) {
+        response.csrfToken = csrfToken;
+    }
+
+    return sendSuccess(res, response, 'Login successful');
+});
+
+/**
+ * Logout employee
+ * @route POST /api/v1/employee/auth/logout
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response
+ */
+export const logoutEmployee = asyncHandler(async (req, res) => {
+    const requestId = req.id;
+    
+    // Clear all authentication cookies
+    clearAuthCookies(res, req);
+
+    logger.info('Employee logout successful', { requestId, employeeId: req.employee?._id });
+    
+    return sendSuccess(res, null, 'Logout successful');
+});
 
 // Note: getAllEmployees and updateEmployeeStatus have been moved to 
 // controllers/admin/employeeManagementController.js for better organization

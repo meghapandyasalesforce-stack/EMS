@@ -78,16 +78,19 @@ export const handleAuthError = (error, res) => {
  * @param {Object} decoded - Decoded JWT token
  */
 export const attachUserToRequest = (req, decoded) => {
+    const userData = {
+        _id: decoded.userId,
+        role: decoded.role || 'employee',
+        organizationId: decoded.organizationId || null
+    };
+    
     if (decoded.role === 'admin') {
-        req.user = {
-            _id: decoded.userId,
-            role: decoded.role
-        };
+        req.user = userData;
     } else {
-        req.employee = {
-            _id: decoded.userId,
-            role: decoded.role || 'employee'
-        };
+        req.employee = userData;
     }
+    
+    // Also set organizationId on request for easy access
+    req.organizationId = decoded.organizationId || null;
 };
 

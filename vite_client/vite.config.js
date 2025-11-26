@@ -3,9 +3,66 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Custom plugin to suppress ECONNREFUSED proxy errors
+const suppressProxyErrors = () => {
+  return {
+    name: 'suppress-proxy-errors',
+    buildStart() {
+      // Intercept console methods to filter proxy errors
+      // This runs early in the build process
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      
+      console.error = (...args) => {
+        const message = args.join(' ');
+        // Suppress ECONNREFUSED proxy errors
+        if (message.includes('http proxy error') && 
+            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
+          return; // Don't log these errors
+        }
+        originalError.apply(console, args);
+      };
+      
+      console.warn = (...args) => {
+        const message = args.join(' ');
+        // Suppress ECONNREFUSED proxy warnings
+        if (message.includes('http proxy error') && 
+            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
+          return; // Don't log these warnings
+        }
+        originalWarn.apply(console, args);
+      };
+    },
+    configureServer(server) {
+      // Also intercept at server level for additional coverage
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      
+      console.error = (...args) => {
+        const message = args.join(' ');
+        if (message.includes('http proxy error') && 
+            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
+          return;
+        }
+        originalError.apply(console, args);
+      };
+      
+      console.warn = (...args) => {
+        const message = args.join(' ');
+        if (message.includes('http proxy error') && 
+            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
+          return;
+        }
+        originalWarn.apply(console, args);
+      };
+    }
+  };
+};
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    suppressProxyErrors(), // Add this plugin first to suppress proxy errors
     react({
       // Ensure production build uses production React
       jsxRuntime: 'automatic',
@@ -167,14 +224,52 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,
         secure: false,
+        // Handle connection errors gracefully - suppress ECONNREFUSED errors
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, req, res) => {
+            // Silently handle connection refused errors (backend not running)
+            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
+              // Send a 503 response instead of logging error
+              if (res && !res.headersSent) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                  success: false, 
+                  message: 'Service unavailable',
+                  code: 'SERVICE_UNAVAILABLE'
+                }));
+              }
+              return;
+            }
+            // For other errors, let them propagate (they'll be logged by Vite)
+          });
+        },
       },
       '/uploads': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,
         secure: false,
+        // Handle connection errors gracefully - suppress ECONNREFUSED errors
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, req, res) => {
+            // Silently handle connection refused errors (backend not running)
+            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
+              // Send a 503 response instead of logging error
+              if (res && !res.headersSent) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                  success: false, 
+                  message: 'Service unavailable',
+                  code: 'SERVICE_UNAVAILABLE'
+                }));
+              }
+              return;
+            }
+            // For other errors, let them propagate (they'll be logged by Vite)
+          });
+        },
       },
     },
   },

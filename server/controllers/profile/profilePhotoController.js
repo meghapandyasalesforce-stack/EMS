@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import logger from '../../helpers/logger.js';
+import { sendSuccess, sendError, sendNotFound, sendInternalError } from '../../helpers/responseHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,14 +45,14 @@ export const upload = multer({
 export const uploadEmployeePhoto = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'No image file provided' });
+            return sendError(res, 'No image file provided', 400, 'NO_FILE');
         }
 
         const employeeId = req.employee._id;
         const employee = await Employee.findById(employeeId);
 
         if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
+            return sendNotFound(res, 'Employee');
         }
 
         // Delete old photo if exists
@@ -66,10 +67,7 @@ export const uploadEmployeePhoto = async (req, res) => {
         const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
         if (!fs.existsSync(savedFilePath)) {
             logger.error('File was not saved', { savedFilePath });
-            return res.status(500).json({ 
-                message: 'File upload failed - file not found on disk',
-                error: 'File system error'
-            });
+            return sendInternalError(res, 'File upload failed - file not found on disk');
         }
 
         // Log successful upload with file details
@@ -90,14 +88,13 @@ export const uploadEmployeePhoto = async (req, res) => {
 
         await employee.save();
 
-        res.json({
-            message: 'Profile photo uploaded successfully',
+        return sendSuccess(res, {
             profilePhoto: employee.profilePhoto,
             fileSize: fileStats.size
-        });
+        }, 'Profile photo uploaded successfully');
     } catch (error) {
         logger.error('Upload error', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: 'Failed to upload profile photo', error: error.message });
+        return sendInternalError(res, 'Failed to upload profile photo', error);
     }
 };
 
@@ -105,14 +102,14 @@ export const uploadEmployeePhoto = async (req, res) => {
 export const uploadAdminPhoto = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'No image file provided' });
+            return sendError(res, 'No image file provided', 400, 'NO_FILE');
         }
 
         const userId = req.user._id;
         const user = await User.findById(userId);
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            return sendNotFound(res, 'User');
         }
 
         // Delete old photo if exists
@@ -127,10 +124,7 @@ export const uploadAdminPhoto = async (req, res) => {
         const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
         if (!fs.existsSync(savedFilePath)) {
             logger.error('File was not saved', { savedFilePath });
-            return res.status(500).json({ 
-                message: 'File upload failed - file not found on disk',
-                error: 'File system error'
-            });
+            return sendInternalError(res, 'File upload failed - file not found on disk');
         }
 
         // Log successful upload with file details
@@ -151,14 +145,13 @@ export const uploadAdminPhoto = async (req, res) => {
 
         await user.save();
 
-        res.json({
-            message: 'Profile photo uploaded successfully',
+        return sendSuccess(res, {
             profilePhoto: user.profilePhoto,
             fileSize: fileStats.size
-        });
+        }, 'Profile photo uploaded successfully');
     } catch (error) {
         logger.error('Upload error', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: 'Failed to upload profile photo', error: error.message });
+        return sendInternalError(res, 'Failed to upload profile photo', error);
     }
 };
 

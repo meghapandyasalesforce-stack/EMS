@@ -26,6 +26,7 @@ import forgotPasswordReducer from "./../context/forgotPasswordSlice"
 import employeeTaskReducer from "./../context/employeeTaskSlice"
 import employeePayrollReducer from "./employeePayrollSlice"
 import adminEmployeePayrollReducer from "./adminEmployeePayrollSlice"
+import organizationReducer from "./organizationSlice"
 
 // Combine reducers
 const rootReducer = combineReducers({
@@ -41,7 +42,8 @@ const rootReducer = combineReducers({
   forgotPassword: forgotPasswordReducer,
   employeeTask: employeeTaskReducer,
   employeePayroll: employeePayrollReducer,
-  adminEmployeePayroll: adminEmployeePayrollReducer
+  adminEmployeePayroll: adminEmployeePayrollReducer,
+  organization: organizationReducer
 });
 
 // Persistence configuration

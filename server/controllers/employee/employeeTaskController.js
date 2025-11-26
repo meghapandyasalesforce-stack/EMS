@@ -2,6 +2,8 @@ import Task from "../../models/task.model.js";
 import Project from "../../models/project.model.js";
 import Employee from "../../models/employee.model.js";
 import { sendTaskUpdateNotification } from "../../helpers/notificationService.js";
+import { sendSuccess, sendError, sendForbidden, sendInternalError } from "../../helpers/responseHelper.js";
+import logger from "../../helpers/logger.js";
 
 // Get all projects for the logged-in employee
 export const getMyProjects = async (req, res) => {
@@ -17,15 +19,10 @@ export const getMyProjects = async (req, res) => {
         .populate('projectLeader', 'name email')
         .populate('projectMembers', 'name email');
 
-        res.json({
-            success: true,
-            projects
-        });
+        return sendSuccess(res, { projects }, 'Projects retrieved successfully');
     } catch (error) {
-        res.status(500).json({ 
-            error: 'Failed to fetch projects', 
-            details: error.message 
-        });
+        logger.error('Error fetching projects', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to fetch projects', error);
     }
 };
 
@@ -45,9 +42,7 @@ export const createTodayTask = async (req, res) => {
         });
 
         if (!project) {
-            return res.status(403).json({ 
-                error: 'You are not part of this project or project does not exist' 
-            });
+            return sendForbidden(res, 'You are not part of this project or project does not exist');
         }
 
         const today = new Date();
@@ -64,9 +59,7 @@ export const createTodayTask = async (req, res) => {
         });
 
         if (existingTask) {
-            return res.status(400).json({ 
-                error: 'You already have a task for today in this project. Please update it instead.' 
-            });
+            return sendError(res, 'You already have a task for today in this project. Please update it instead.', 400, 'TASK_EXISTS');
         }
 
         const newTask = new Task({
@@ -88,12 +81,10 @@ export const createTodayTask = async (req, res) => {
             await sendTaskUpdateNotification(populatedTask, employee, 'created');
         }
 
-        res.status(201).json(populatedTask);
+        return sendSuccess(res, populatedTask, 'Task created successfully', 201);
     } catch (error) {
-        res.status(500).json({ 
-            error: 'Failed to create task', 
-            details: error.message 
-        });
+        logger.error('Error creating task', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to create task', error);
     }
 };
 

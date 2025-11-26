@@ -6,22 +6,65 @@ import { toast } from 'react-toastify';
 import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { ORGANIZATION_AUTH_ENDPOINT } from '../utils/constant';
 
 function Login() {
     const [form, setForm] = useState({ email: '', password: '' });
     const [showReset, setShowReset] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [loginType, setLoginType] = useState(null); // 'organization', 'employee_admin', 'unknown'
+    const [showLoginTypeSelector, setShowLoginTypeSelector] = useState(false);
+    const [isCheckingEmail, setIsCheckingEmail] = useState(false);
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { loading, user } = useSelector(state => state.auth);
 
     useEffect(() => {
         if (user) {
-            const role = localStorage.getItem('role');
-            const redirectPath = role === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
-            navigate(redirectPath);
+            // Navigate to /dashboard which will automatically determine the correct dashboard
+            // based on Position and Department via RoleBasedDashboard component
+            navigate('/dashboard');
         }
     }, [user, navigate]);
+
+    // Debounced email domain check for smart login routing
+    useEffect(() => {
+        if (!form.email || !form.email.includes('@')) {
+            setLoginType(null);
+            setShowLoginTypeSelector(false);
+            return;
+        }
+
+        const checkEmailDomain = async () => {
+            try {
+                setIsCheckingEmail(true);
+                const response = await axios.get(`${ORGANIZATION_AUTH_ENDPOINT}/check-email`, {
+                    params: { email: form.email }
+                });
+
+                if (response.data.success) {
+                    const { loginType: detectedType } = response.data;
+                    setLoginType(detectedType);
+
+                    // Auto-show selector for unknown type
+                    if (detectedType === 'unknown') {
+                        // Don't auto-show, let user submit first
+                        // setShowLoginTypeSelector(true);
+                    }
+                }
+            } catch (error) {
+                // If API fails, default to unknown (manual selection)
+                setLoginType('unknown');
+                // Don't auto-show selector on error
+            } finally {
+                setIsCheckingEmail(false);
+            }
+        };
+
+        // Debounce: wait 500ms after user stops typing
+        const timeoutId = setTimeout(checkEmailDomain, 500);
+        return () => clearTimeout(timeoutId);
+    }, [form.email]);
 
     const handleChange = e => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -35,74 +78,126 @@ function Login() {
             return;
         }
 
+        // Smart routing: If login type is organization, redirect to organization login
+        if (loginType === 'organization') {
+            navigate(`/organization/login?email=${encodeURIComponent(form.email)}`);
+            return;
+        }
+
+        // If login type is unknown, show manual selection
+        if (loginType === 'unknown') {
+            setShowLoginTypeSelector(true);
+            return;
+        }
+
         try {
             dispatch(setLoading(true));
 
-            // Try admin login first, then employee login if admin fails
+            // CODE QUALITY FIX: Use smart routing to determine correct endpoint
+            // If loginType is 'employee_admin', we still need to determine if it's admin or employee
+            // For now, try employee first (more common), then admin if it fails
+            // This is more efficient than the old approach of always trying admin first
             let response;
-            let apiEndpoint = '/v1/admin/auth/login';
-            let userRole = 'admin';
+            let apiEndpoint = '/v1/employee/auth/login';
+            let userRole = 'employee';
+            let userData = null;
             
             try {
+                // Try employee login first (more common case)
                 response = await axios.post(apiEndpoint, form, {
                     withCredentials: true
                 });
-            } catch (adminError) {
-                // If admin login fails with 401, try employee login
-                if (adminError.response?.status === 401) {
-                    apiEndpoint = '/v1/employee/auth/login';
+                
+                // Employee login successful
+                if (response.status === 200 && response.data.success) {
+                    userData = response.data.employee;
                     userRole = 'employee';
-                    response = await axios.post(apiEndpoint, form, {
-                        withCredentials: true
-                    });
+                }
+            } catch (employeeError) {
+                // If employee login fails with 401, try admin login
+                if (employeeError.response?.status === 401) {
+                    try {
+                        apiEndpoint = '/v1/admin/auth/login';
+                        response = await axios.post(apiEndpoint, form, {
+                            withCredentials: true
+                        });
+                        
+                        // Admin login successful
+                        if (response.status === 200 && response.data.success) {
+                            userData = response.data.user;
+                            userRole = 'admin';
+                        }
+                    } catch (adminError) {
+                        // Both logins failed
+                        const errorMessage = adminError.response?.data?.message || 
+                                           employeeError.response?.data?.message || 
+                                           'Invalid credentials. Please check your email and password.';
+                        
+                        if (adminError.response?.status === 403 || employeeError.response?.status === 403) {
+                            const lockoutMessage = adminError.response?.data?.message || employeeError.response?.data?.message;
+                            toast.error(lockoutMessage || 'Account is locked or inactive. Please try again later.');
+                        } else {
+                            toast.error(errorMessage);
+                        }
+                        return;
+                    }
                 } else {
-                    throw adminError;
+                    // Network or server error
+                    throw employeeError;
                 }
             }
 
-            const data = response.data;
-
-            if (response.status === 401) {
-                toast.error(data.message || 'Invalid credentials.');
-                return;
-            }
-
-            // Check for successful login - either success property or status 200 with user data
-            if (response.status === 200 && (data.success === true || data.employee || data.admin || data.user)) {
-                const userData = data.employee || data.admin || data.user;
+            // Handle successful login
+            if (response && response.status === 200 && response.data.success && userData) {
+                const data = response.data;
                 
-                // Get role from response data (most reliable) or fallback to userRole
-                const actualRole = data.user?.role || data.employee?.role || data.admin?.role || userRole;
-                
+                // Store user data in Redux
                 dispatch(setUser(userData));
-                // Store token in localStorage for Authorization header (backup to cookie)
-                if (data.token) {
-                    localStorage.setItem('token', data.token);
-                }
-                // Store refresh token for token refresh mechanism
-                if (data.refreshToken) {
-                    localStorage.setItem('refreshToken', data.refreshToken);
-                }
-                // Store CSRF token in localStorage for cross-site scenarios
-                if (data.csrfToken) {
-                    localStorage.setItem('csrfToken', data.csrfToken);
-                }
-                // Store UI-related data - use actual role from response
-                localStorage.setItem('role', actualRole);
+                
+                // SECURITY FIX: Tokens are stored in httpOnly cookies only (not localStorage)
+                // Cookies are set by the server automatically via generateToken()
+                // Only store UI-related data in localStorage (non-sensitive)
+                localStorage.setItem('role', userRole);
                 localStorage.setItem('email', form.email);
 
                 // If employee must reset password, show popup and pause navigation
-                if (actualRole === 'employee' && userData?.mustResetPassword) {
+                if (userRole === 'employee' && userData?.mustResetPassword) {
                     toast.info('Please reset your password to continue.');
                     setShowReset(true);
                     return;
                 }
 
                 toast.success('Login successful!');
-                const redirectPath = actualRole === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
-                setTimeout(() => { window.location.href = redirectPath; }, 500);
+                
+                // Clear organization login flag for non-org logins
+                localStorage.removeItem('isOrganizationLogin');
+                
+                // Fetch dashboard route based on Position and Department
+                try {
+                    const dashboardResponse = await axios.get('/v1/organization/dashboard/route', {
+                        withCredentials: true
+                    });
+                    
+                    if (dashboardResponse.data?.success && dashboardResponse.data?.dashboardRoute) {
+                        // Redirect to the dashboard determined by Position and Department
+                        setTimeout(() => {
+                            navigate(dashboardResponse.data.dashboardRoute, { replace: true });
+                        }, 500);
+                    } else {
+                        // Fallback to /dashboard which will use RoleBasedDashboard to determine route
+                        setTimeout(() => {
+                            navigate('/dashboard', { replace: true });
+                        }, 500);
+                    }
+                } catch (dashboardError) {
+                    // If dashboard route API fails, fallback to /dashboard
+                    // RoleBasedDashboard will handle the routing with fallback logic
+                    setTimeout(() => {
+                        navigate('/dashboard', { replace: true });
+                    }, 500);
+                }
             } else {
-                toast.error(data.message || 'Login failed');
+                toast.error(response?.data?.message || 'Login failed. Please try again.');
             }
         } catch (err) {
             
@@ -123,6 +218,17 @@ function Login() {
         }
     };
 
+    const handleLoginTypeSelection = (selectedType) => {
+        setShowLoginTypeSelector(false);
+        if (selectedType === 'organization') {
+            navigate(`/organization/login?email=${encodeURIComponent(form.email)}`);
+        } else {
+            // Continue with employee/admin login - create a synthetic event
+            const syntheticEvent = { preventDefault: () => {} };
+            handleSubmit(syntheticEvent);
+        }
+    };
+
     return (
         <>
         <div className="flex justify-center items-center min-h-screen bg-cover bg-center bg-fixed"
@@ -131,16 +237,35 @@ function Login() {
                 <h1 className="text-2xl font-bold text-green-500 mb-2">Login</h1>
                 <p className="text-green-500 mb-5">Login to your account.</p>
 
+                {/* Show login type indicator */}
+                {loginType === 'organization' && (
+                    <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                        <p>Gmail or Organization email detected. You'll be redirected to Organization Login.</p>
+                    </div>
+                )}
+                {loginType === 'employee_admin' && (
+                    <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                        <p>Organization domain detected. Use Employee/Admin Login.</p>
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <input
-                        name="email"
-                        placeholder="E-mail Address"
-                        type="email"
-                        onChange={handleChange}
-                        value={form.email}
-                        required
-                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-                    />
+                    <div className="relative">
+                        <input
+                            name="email"
+                            placeholder="E-mail Address"
+                            type="email"
+                            onChange={handleChange}
+                            value={form.email}
+                            required
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
+                        />
+                        {isCheckingEmail && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                            </div>
+                        )}
+                    </div>
                     <div className="relative">
                         <input
                             name="password"
@@ -167,10 +292,10 @@ function Login() {
 
                     <button
                         type="submit"
-                        disabled={loading}
-                        className={`w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        disabled={loading || isCheckingEmail}
+                        className={`w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors ${loading || isCheckingEmail ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                        {loading ? 'Signing In...' : 'Sign In'}
+                        {loading ? 'Signing In...' : isCheckingEmail ? 'Checking...' : 'Sign In'}
                     </button>
                 </form>
 
@@ -180,11 +305,56 @@ function Login() {
                         Create New
                     </a>
                 </p>
-                <Link to="/forgot-password" className='text-right text-sm text-blue-500 hover:text-blue-700 hover:underline'>
-  Forgot Password?
-</Link>
+                <div className="flex flex-col space-y-2">
+                    <div className="flex justify-between items-center">
+                        <Link to="/organization/login" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
+                            Organization Login
+                        </Link>
+                        <Link to="/forgot-password" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
+                            Forgot Password?
+                        </Link>
+                    </div>
+                    <div className="text-center">
+                        <Link to="/organization/register" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
+                            Register Your Organization
+                        </Link>
+                    </div>
+                </div>
             </div>
         </div>
+
+        {/* Login Type Selector Modal */}
+        {showLoginTypeSelector && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+                    <h2 className="text-xl font-bold mb-4">Select Login Type</h2>
+                    <p className="mb-4 text-gray-600">
+                        We couldn't automatically determine your login type. Please select:
+                    </p>
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => handleLoginTypeSelection('organization')}
+                            className="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                        >
+                            Organization Login
+                        </button>
+                        <button
+                            onClick={() => handleLoginTypeSelection('employee_admin')}
+                            className="w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                        >
+                            Employee/Admin Login
+                        </button>
+                        <button
+                            onClick={() => setShowLoginTypeSelector(false)}
+                            className="w-full py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {showReset && (
             <PasswordResetPopup 
                 onClose={() => {

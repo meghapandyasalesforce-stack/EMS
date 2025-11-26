@@ -53,9 +53,9 @@ function AddProject() {
 
     // Fetch employees when component mounts
     useEffect(() => {
-        // Check authentication status
-        const userRole = localStorage.getItem('role');
-        const userToken = localStorage.getItem('token');
+        // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
+        // Check authentication via role from localStorage (UI state only)
+        const userRole = localStorage.getItem('role'); // UI state only, not sensitive
         // Removed console.log statements for production
         
         if (userRole !== 'admin') {
@@ -212,8 +212,8 @@ function AddProject() {
             <Alert severity="info" sx={{ mb: 2 }}>
                 <strong>Debug Info:</strong><br/>
                 Role: {localStorage.getItem('role') || 'Not set'}<br/>
-                Token: {localStorage.getItem('token') ? 'Present' : 'Missing'}<br/>
-                Cookies: {document.cookie || 'None'}
+                Token: {'In httpOnly cookie (not accessible via JS)'}<br/>
+                Cookies: {document.cookie ? 'Present (httpOnly cookies not shown)' : 'None'}
             </Alert>
             
             {projectStatus === 'loading' && (

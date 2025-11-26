@@ -1,6 +1,13 @@
 import mongoose from 'mongoose';
 
 const leaveSchema = new mongoose.Schema({
+    // Organization reference (multi-tenancy)
+    organizationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Organization',
+        required: true,
+        index: true
+    },
     employee: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',

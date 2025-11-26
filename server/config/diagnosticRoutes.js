@@ -21,6 +21,48 @@ export const registerDiagnosticRoutes = (app) => {
     });
   });
 
+  // Comprehensive health check endpoint for monitoring
+  app.get("/api/health", async (req, res) => {
+    const health = {
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || "development",
+      version: "1.0.0",
+      services: {}
+    };
+
+    // Check database connection
+    try {
+      const mongoose = (await import("mongoose")).default;
+      health.services.database = {
+        status: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+        readyState: mongoose.connection.readyState,
+        dbName: mongoose.connection.db?.databaseName || null
+      };
+    } catch (error) {
+      health.services.database = {
+        status: "error",
+        error: error.message
+      };
+    }
+
+    // Check memory usage
+    const memoryUsage = process.memoryUsage();
+    health.memory = {
+      heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + " MB",
+      heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + " MB",
+      rss: Math.round(memoryUsage.rss / 1024 / 1024) + " MB"
+    };
+
+    // Determine overall health status
+    const isHealthy = health.services.database?.status === "connected";
+    const statusCode = isHealthy ? 200 : 503;
+    health.status = isHealthy ? "ok" : "degraded";
+
+    res.status(statusCode).json(health);
+  });
+
   // Diagnostic endpoint to check uploads directory
   app.get("/api/debug/uploads", (req, res) => {
     try {

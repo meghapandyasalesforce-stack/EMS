@@ -1,0 +1,17 @@
+{
+  "VALIDATION_ERROR": "Validation failed",
+  "UNAUTHORIZED": "Unauthorized access",
+  "FORBIDDEN": "Access forbidden",
+  "NOT_FOUND": "Resource not found",
+  "DUPLICATE_EMAIL": "Email already registered",
+  "INVALID_CREDENTIALS": "Invalid email or password",
+  "ACCOUNT_LOCKED": "Account is locked. Please try again later.",
+  "ACCOUNT_INACTIVE": "Your account is inactive. Please contact administrator.",
+  "TOKEN_EXPIRED": "Authentication token expired",
+  "INVALID_TOKEN": "Invalid authentication token",
+  "INTERNAL_ERROR": "Internal server error",
+  "MISSING_ORGANIZATION_ID": "Organization ID is required",
+  "FILE_TOO_LARGE": "File size exceeds the maximum allowed limit",
+  "INVALID_ID": "Invalid ID format"
+}
+

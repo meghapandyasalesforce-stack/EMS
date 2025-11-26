@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaHome, FaMoneyBill, FaCalendarAlt, FaCog, FaSignOutAlt, FaShieldAlt, FaCreditCard, FaDollarSign, FaCamera, FaRuler } from "react-icons/fa";
 import { FaPeopleGroup } from "react-icons/fa6";
@@ -23,8 +23,11 @@ const Header = () => {
     const dispatch = useDispatch();
     const location = useLocation();
 
-    // Get user data from Redux store
-    const { username, email } = useSelector((state) => state.auth.user || {});
+    // Get user data from Redux store with memoized selector
+    const user = useSelector((state) => state.auth.user);
+    const { username, email } = useMemo(() => {
+        return user ? { username: user.name || user.username, email: user.email } : { username: null, email: null };
+    }, [user]);
 
     // Check screen size for responsive behavior
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -51,9 +54,15 @@ const Header = () => {
             // Purge persisted state
             await persistor.purge();
             
-            localStorage.removeItem('token');
-            localStorage.removeItem('role');
-            localStorage.removeItem('email');
+            // SECURITY FIX: Tokens are stored in httpOnly cookies and cleared by server on logout
+            // Only clear non-sensitive UI-related data from localStorage
+            // CSRF token in localStorage is acceptable (see SECURITY.md)
+            localStorage.removeItem('csrfToken'); // CSRF token is safe to store (not a secret)
+            localStorage.removeItem('role'); // UI state only
+            localStorage.removeItem('email'); // UI state only
+            localStorage.removeItem('organizationId'); // UI state only
+            localStorage.removeItem('userId'); // UI state only
+            localStorage.removeItem('isOrganizationLogin'); // UI state only
             toast.success('Logged out successfully');
             navigate('/login');
         } catch (error) {
@@ -64,9 +73,14 @@ const Header = () => {
             dispatch(resetAttendance());
             await persistor.purge();
             
-            localStorage.removeItem('token');
-            localStorage.removeItem('role');
-            localStorage.removeItem('email');
+            // SECURITY FIX: Tokens are stored in httpOnly cookies and cleared by server on logout
+            // Only clear non-sensitive UI-related data from localStorage
+            localStorage.removeItem('csrfToken'); // CSRF token is safe to store (not a secret)
+            localStorage.removeItem('role'); // UI state only
+            localStorage.removeItem('email'); // UI state only
+            localStorage.removeItem('organizationId'); // UI state only
+            localStorage.removeItem('userId'); // UI state only
+            localStorage.removeItem('isOrganizationLogin'); // UI state only
             navigate('/login'); // Use navigate for consistent routing
         } finally {
             setLogoutModalOpen(false);
@@ -84,7 +98,9 @@ const Header = () => {
 
     // Navigation items based on user role
     const adminNavItems = [
-        { path: "/dashboard-admin", name: "Dashboard", icon: <FaHome /> },
+        { path: "/dashboard", name: "Dashboard", icon: <FaHome /> },
+        { path: "/dashboard-admin", name: "Admin Dashboard", icon: <FaHome /> },
+        { path: "/organization/dashboard", name: "Organization", icon: <FaPeopleGroup /> },
         { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
         { path: "/projects", name: "Projects", icon: <VscProject /> },
         { path: "/employees", name: "Employees", icon: <FaPeopleGroup /> },

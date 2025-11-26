@@ -1,5 +1,5 @@
-import nodemailer from 'nodemailer';
 import logger from './logger.js';
+import { createEmailTransporter, detectEmailProvider, getEmailConfig, validateEmailConfiguration } from '../config/email.config.js';
 
 /**
  * Validate email configuration by attempting to verify SMTP connection
@@ -7,73 +7,24 @@ import logger from './logger.js';
  */
 export const validateEmailConfig = async () => {
   try {
-    const emailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
-    const emailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
-    const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
-    const emailPort = parseInt(process.env.EMAIL_PORT || '587', 10);
-
+    const emailConfig = getEmailConfig();
+    const provider = detectEmailProvider(emailConfig);
+    
     // Check if credentials are configured
-    if (!emailUser || !emailPass) {
+    const validation = validateEmailConfiguration();
+    if (!validation.valid) {
       return {
         valid: false,
-        message: 'Email credentials not configured',
+        message: validation.errors.join(', '),
         details: {
-          hasUser: !!emailUser,
-          hasPass: !!emailPass,
-          recommendation: 'Set EMAIL_USER/EMAIL_USERNAME and EMAIL_PASS/EMAIL_PASSWORD environment variables'
+          hasUser: validation.config.hasUser,
+          hasPass: validation.config.hasPassword,
+          recommendation: validation.errors[0] || 'Set EMAIL_USER/EMAIL_USERNAME and EMAIL_PASS/EMAIL_PASSWORD environment variables'
         }
       };
     }
 
-    // Detect provider
-    const isGmail = emailUser.includes('@gmail.com') || emailHost.includes('gmail');
-    const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com') || 
-                      emailUser.includes('@outlook.com') || emailUser.includes('@hotmail.com');
-
-    // Configure transporter
-    let transporterConfig;
-    if (isGmail) {
-      transporterConfig = {
-        service: 'gmail',
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-        tls: {
-          rejectUnauthorized: process.env.NODE_ENV === 'production'
-        }
-      };
-    } else if (isOutlook) {
-      transporterConfig = {
-        host: emailHost,
-        port: emailPort,
-        secure: false,
-        requireTLS: true,
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-        tls: {
-          ciphers: 'SSLv3',
-          rejectUnauthorized: process.env.NODE_ENV === 'production'
-        }
-      };
-    } else {
-      transporterConfig = {
-        host: emailHost,
-        port: emailPort,
-        secure: emailPort === 465,
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-        tls: {
-          rejectUnauthorized: process.env.NODE_ENV === 'production'
-        }
-      };
-    }
-
-    const transporter = nodemailer.createTransport(transporterConfig);
+    const transporter = createEmailTransporter();
 
     // Verify connection (with timeout)
     const verifyPromise = transporter.verify();
@@ -87,10 +38,10 @@ export const validateEmailConfig = async () => {
       valid: true,
       message: 'Email configuration is valid',
       details: {
-        provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook/Office365' : 'Generic SMTP',
-        emailUser: emailUser.replace(/@.*/, '@***'),
-        emailHost: isGmail ? 'gmail (service)' : emailHost,
-        emailPort: isGmail ? 'N/A' : emailPort
+        provider: provider.type === 'gmail' ? 'Gmail' : provider.type === 'outlook' ? 'Outlook/Office365' : 'Generic SMTP',
+        emailUser: emailConfig.user.replace(/@.*/, '@***'),
+        emailHost: provider.isGmail ? 'gmail (service)' : emailConfig.host,
+        emailPort: provider.isGmail ? 'N/A' : emailConfig.port
       }
     };
   } catch (error) {
@@ -100,8 +51,8 @@ export const validateEmailConfig = async () => {
       responseCode: error.responseCode
     });
 
-    const emailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
-    const isGmail = emailUser?.includes('@gmail.com');
+    const emailConfig = getEmailConfig();
+    const provider = detectEmailProvider(emailConfig);
     
     let message = 'Email configuration validation failed';
     let recommendation = 'Check your email credentials and server configuration';

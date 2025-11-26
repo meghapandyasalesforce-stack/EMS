@@ -83,6 +83,52 @@ const validateEnvironment = () => {
     warnings.push('CORS configuration may be incomplete. Set FRONTEND_URL or ALLOWED_ORIGINS in production.');
   }
 
+  // Check MongoDB connection pool settings
+  if (process.env.MONGODB_MAX_POOL_SIZE) {
+    const maxPoolSize = parseInt(process.env.MONGODB_MAX_POOL_SIZE);
+    if (isNaN(maxPoolSize) || maxPoolSize < 1 || maxPoolSize > 100) {
+      warnings.push('MONGODB_MAX_POOL_SIZE should be a number between 1 and 100');
+    }
+  }
+
+  // Check PORT configuration
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      errors.push('PORT must be a valid number between 1 and 65535');
+    }
+  }
+
+  // Check JWT expiration settings
+  if (process.env.JWT_ACCESS_EXPIRE) {
+    const accessExpire = process.env.JWT_ACCESS_EXPIRE;
+    if (!/^\d+[smhd]$/.test(accessExpire)) {
+      warnings.push('JWT_ACCESS_EXPIRE should be in format like "15m", "1h", "7d"');
+    }
+  }
+
+  if (process.env.JWT_REFRESH_EXPIRE) {
+    const refreshExpire = process.env.JWT_REFRESH_EXPIRE;
+    if (!/^\d+[smhd]$/.test(refreshExpire)) {
+      warnings.push('JWT_REFRESH_EXPIRE should be in format like "15m", "1h", "7d"');
+    }
+  }
+
+  // Check rate limiting configuration
+  if (process.env.RATE_LIMIT_WINDOW_MS) {
+    const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS);
+    if (isNaN(windowMs) || windowMs < 1000) {
+      warnings.push('RATE_LIMIT_WINDOW_MS should be at least 1000 milliseconds');
+    }
+  }
+
+  if (process.env.RATE_LIMIT_MAX_REQUESTS) {
+    const maxRequests = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS);
+    if (isNaN(maxRequests) || maxRequests < 1) {
+      warnings.push('RATE_LIMIT_MAX_REQUESTS should be a positive number');
+    }
+  }
+
   // Display errors and warnings
   if (errors.length > 0) {
     logger.error('Environment Validation Errors:');

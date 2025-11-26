@@ -8,12 +8,15 @@ function DailyReport() {
     useEffect(() => {
         const fetchDailyReport = async () => {
             try {
-                const token = localStorage.getItem('token');
+                // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
+                // Use axios instead of fetch to leverage cookie-based auth
                 const response = await fetch('/api/daily-report', {
                     method: 'GET',
+                    credentials: 'include', // Cookies (including httpOnly JWT) are sent automatically
                     headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                        // Authorization header will be added by server if cookie-based auth is used
+                        // Or use axios which handles this automatically
                     },
                 });
 

@@ -1,11 +1,17 @@
 import mongoose from "mongoose";
 
 const salaryStructureSchema = new mongoose.Schema({
+    // Organization reference (multi-tenancy)
+    organizationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Organization',
+        required: true,
+        index: true
+    },
     name: {
         type: String,
         required: true,
-        trim: true,
-        unique: true
+        trim: true
     },
     description: {
         type: String,
@@ -157,6 +163,9 @@ salaryStructureSchema.methods.calculateSalary = function(baseSalary) {
     result.netSalary = result.totalEarnings - result.totalDeductions;
     return result;
 };
+
+// Add compound unique index: name must be unique per organization
+salaryStructureSchema.index({ name: 1, organizationId: 1 }, { unique: true });
 
 const SalaryStructure = mongoose.model("SalaryStructure", salaryStructureSchema, "salarystructures");
 export default SalaryStructure;

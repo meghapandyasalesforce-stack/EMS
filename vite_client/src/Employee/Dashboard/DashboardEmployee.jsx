@@ -56,17 +56,10 @@ function DashboardEmployee() {
                 return;
             }
             
-            // Check if token exists, if not and no cookie, redirect to login
-            const token = localStorage.getItem('token');
-            const hasCookie = document.cookie.includes('jwt=');
-            if (!token && !hasCookie) {
-                // Removed console.warn for production
-                setError('Session expired. Please log in again.');
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 2000);
-                return;
-            }
+            // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
+            // Note: httpOnly cookies are sent automatically with requests
+            // We proceed with the request and let the server validate authentication
+            // If authentication fails, the server will return 401 and axios interceptor will handle it
             
             try {
                 setLoading(true);
@@ -75,8 +68,17 @@ function DashboardEmployee() {
                 if (fetchEmployeeOwnInfo.rejected.match(result)) {
                     setError(result.payload || 'Failed to load employee information');
                 }
-            } catch {
-                setError('An unexpected error occurred');
+            } catch (error) {
+                // Handle errors gracefully
+                const status = error?.response?.status;
+                if (status === 401 || status === 403) {
+                    // Authentication failed - redirect to login
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                } else {
+                    setError('An unexpected error occurred');
+                }
             } finally {
                 setLoading(false);
             }

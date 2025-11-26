@@ -3,6 +3,9 @@ import { createError } from './errorHandler.js';
 
 /**
  * Middleware to handle validation errors
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
  */
 export const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
@@ -104,7 +107,14 @@ export const authValidations = {
     register: [
         commonValidations.name,
         commonValidations.email,
-        commonValidations.password,
+        // Password is optional for employee registration (will be auto-generated if not provided)
+        body('password')
+            .optional()
+            .isLength({ min: 8, max: 128 }).withMessage('Password must be between 8 and 128 characters')
+            .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
+            .matches(/[a-z]/).withMessage('Password must contain at least one lowercase letter')
+            .matches(/[0-9]/).withMessage('Password must contain at least one number')
+            .matches(/[!@#$%^&*(),.?":{}|<>]/).withMessage('Password must contain at least one special character'),
         body('phone')
             .optional()
             .trim()
@@ -156,8 +166,8 @@ export const employeeValidations = {
             .normalizeEmail()
             .isLength({ max: 255 }).withMessage('Email must be less than 255 characters'),
         body('password')
-            .notEmpty().withMessage('Password is required')
-            .isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+            .optional() // Password is optional - will be auto-generated if not provided
+            .isLength({ min: 8 }).withMessage('Password must be at least 8 characters if provided'),
         body('position')
             .notEmpty().withMessage('Position is required')
             .isIn(['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'VP', 'CTO', 'CFO', 'CEO', 'Developer'])
@@ -249,11 +259,121 @@ export const attendanceValidations = {
     ]
 };
 
+/**
+ * Organization validations
+ */
+export const organizationValidations = {
+    updateProfile: [
+        body('name')
+            .optional()
+            .trim()
+            .isLength({ min: 2, max: 100 }).withMessage('Organization name must be between 2 and 100 characters'),
+        body('email')
+            .optional()
+            .trim()
+            .isEmail().withMessage('Invalid email format')
+            .normalizeEmail(),
+        body('phone')
+            .optional()
+            .trim()
+            .matches(/^\+?[\d\s-()]+$/).withMessage('Invalid phone number format'),
+        body('domain')
+            .optional()
+            .trim()
+            .matches(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i).withMessage('Invalid domain format'),
+        body('address')
+            .optional()
+            .isObject().withMessage('Address must be an object'),
+        body('address.street')
+            .optional()
+            .trim()
+            .isLength({ max: 200 }).withMessage('Street address must be less than 200 characters'),
+        body('address.city')
+            .optional()
+            .trim()
+            .isLength({ max: 100 }).withMessage('City must be less than 100 characters'),
+        body('address.state')
+            .optional()
+            .trim()
+            .isLength({ max: 100 }).withMessage('State must be less than 100 characters'),
+        body('address.zipCode')
+            .optional()
+            .trim()
+            .matches(/^[\d-]+$/).withMessage('Invalid zip code format'),
+        body('address.country')
+            .optional()
+            .trim()
+            .isLength({ max: 100 }).withMessage('Country must be less than 100 characters'),
+        handleValidationErrors
+    ],
+
+    updateSettings: [
+        body('allowEmployeeRegistration')
+            .optional()
+            .isBoolean().withMessage('allowEmployeeRegistration must be a boolean'),
+        body('requireEmailVerification')
+            .optional()
+            .isBoolean().withMessage('requireEmailVerification must be a boolean'),
+        body('allowSelfService')
+            .optional()
+            .isBoolean().withMessage('allowSelfService must be a boolean'),
+        handleValidationErrors
+    ],
+
+    updateSubscription: [
+        body('subscriptionPlan')
+            .optional()
+            .isIn(['free', 'basic', 'premium', 'enterprise']).withMessage('Invalid subscription plan'),
+        body('maxEmployees')
+            .optional()
+            .isInt({ min: 1, max: 10000 }).withMessage('maxEmployees must be between 1 and 10000'),
+        handleValidationErrors
+    ],
+
+    getUsers: [
+        query('page')
+            .optional()
+            .isInt({ min: 1 }).withMessage('Page must be a positive integer')
+            .toInt(),
+        query('limit')
+            .optional()
+            .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+            .toInt(),
+        query('role')
+            .optional()
+            .isIn(['admin', 'employee']).withMessage('Invalid role'),
+        query('search')
+            .optional()
+            .trim()
+            .isLength({ max: 100 }).withMessage('Search term must be less than 100 characters'),
+        handleValidationErrors
+    ],
+
+    getActivity: [
+        query('page')
+            .optional()
+            .isInt({ min: 1 }).withMessage('Page must be a positive integer')
+            .toInt(),
+        query('limit')
+            .optional()
+            .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+            .toInt(),
+        query('startDate')
+            .optional()
+            .isISO8601().withMessage('startDate must be a valid date'),
+        query('endDate')
+            .optional()
+            .isISO8601().withMessage('endDate must be a valid date'),
+        handleValidationErrors
+    ]
+};
+
 export default {
     commonValidations,
     authValidations,
     employeeValidations,
     payrollValidations,
     attendanceValidations,
+    organizationValidations,
     handleValidationErrors
 };

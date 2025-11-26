@@ -1,6 +1,7 @@
 import Employee from "../../models/employee.model.js"
 import Leave from "../../models/leave.model.js"
 import logger from "../../helpers/logger.js";
+import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalError } from "../../helpers/responseHelper.js";
 
 
 // Create a leave request
@@ -13,23 +14,23 @@ export const createLeave = async (req, res) => {
 
         // ✅ Ensure authentication was successful
         if (!employeeId) {
-            return res.status(401).json({ message: "Unauthorized: Employee data missing" });
+            return sendUnauthorized(res, "Unauthorized: Employee data missing");
         }
 
         // ✅ Validate required fields
         if (!startDate || !endDate || isNaN(new Date(startDate)) || isNaN(new Date(endDate))) {
-            return res.status(400).json({ message: "Invalid start or end date format" });
+            return sendError(res, "Invalid start or end date format", 400, 'INVALID_DATE_FORMAT');
         }
 
         if (new Date(endDate) < new Date(startDate)) {
-            return res.status(400).json({ message: "End date cannot be before start date" });
+            return sendError(res, "End date cannot be before start date", 400, 'INVALID_DATE_RANGE');
         }
 
         const employee = await Employee.findById(employeeId);
         logger.debug("Employee found", { employeeId, hasEmployee: !!employee });
 
         if (!employee) {
-            return res.status(404).json({ message: "Employee not found" });
+            return sendNotFound(res, "Employee");
         }
 
         const duration = Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1);
@@ -48,15 +49,11 @@ export const createLeave = async (req, res) => {
         });
 
         await leave.save();
-        res.status(201).json({ message: "Leave application submitted successfully", leave });
+        return sendSuccess(res, { leave }, "Leave application submitted successfully", 201);
 
     } catch (error) {
         logger.error("Create Leave Error", { error: error.message, stack: error.stack });
-        res.status(500).json({
-            message: "Error submitting leave application",
-            error: error.message,
-            suggestion: "Ensure you are logged in and your session hasn't expired."
-        });
+        return sendInternalError(res, "Error submitting leave application", error);
     }
 };
 // Get current user's leaves

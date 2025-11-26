@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FiDownload, FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import logger from '../utils/logger.js';
 
 /**
  * InstallPrompt Component
@@ -72,7 +73,7 @@ const InstallPrompt = () => {
       // Clear the deferred prompt
       setDeferredPrompt(null);
     } catch (error) {
-      console.error('Error showing install prompt:', error);
+      logger.error('Error showing install prompt', error);
       toast.error('Failed to show install prompt');
     }
   };

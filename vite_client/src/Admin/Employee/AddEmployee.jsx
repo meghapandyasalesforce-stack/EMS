@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { createEmployee } from '../../context/employeeSlice';
 import { toast } from 'react-toastify';
+import axios from '../../utils/axios';
 
 function AddEmployee() {
     const [form, setForm] = useState({
@@ -21,6 +22,8 @@ function AddEmployee() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const [error, setError] = useState('');
+    const [managers, setManagers] = useState([]);
+    const [loadingManagers, setLoadingManagers] = useState(false);
     const employeeStatus = useSelector(state => state.employees.status);
     const employeeError = useSelector(state => state.employees.error);
 
@@ -46,6 +49,30 @@ function AddEmployee() {
         "Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager",
         "Director", "VP", "CTO", "CFO", "CEO"
     ];
+
+    // Fetch managers from database on component mount
+    useEffect(() => {
+        const fetchManagers = async () => {
+            try {
+                setLoadingManagers(true);
+                const response = await axios.get('/v1/admin/employee/managers');
+                if (response.data.success && response.data.managers) {
+                    setManagers(response.data.managers);
+                }
+            } catch (error) {
+                // Handle errors gracefully - if backend is unavailable, use empty array
+                const status = error?.response?.status;
+                if (status !== 401 && status !== 403 && status !== 503) {
+                    // Only log non-auth/connection errors
+                }
+                setManagers([]);
+            } finally {
+                setLoadingManagers(false);
+            }
+        };
+        
+        fetchManagers();
+    }, []);
 
     const handleChange = e => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -146,13 +173,32 @@ function AddEmployee() {
                                 <option value="">Select Department</option>
                                 {departments.map(dep => <option key={dep} value={dep}>{dep}</option>)}
                             </select>
-                            <input
+                            <select
                                 className="flex-1 px-4 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
                                 name="manager"
-                                placeholder="Manager"
                                 onChange={handleChange}
+                                value={form.manager}
                                 required
-                            />
+                                disabled={loadingManagers}
+                            >
+                                <option value="">
+                                    {loadingManagers ? 'Loading managers...' : 'Select Manager'}
+                                </option>
+                                {managers.length === 0 && !loadingManagers && (
+                                    <option value="" disabled>No managers found</option>
+                                )}
+                                {managers.map(manager => {
+                                    const fullName = `${manager.name}${manager.lastName ? ' ' + manager.lastName : ''}`.trim();
+                                    return (
+                                        <option 
+                                            key={manager._id || manager.employeeId} 
+                                            value={fullName}
+                                        >
+                                            {fullName} - {manager.position}
+                                        </option>
+                                    );
+                                })}
+                            </select>
                         </div>
                         
                         <div className="flex flex-col lg:flex-row gap-4">

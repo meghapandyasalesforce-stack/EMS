@@ -15,7 +15,7 @@ import mongoSanitize from "express-mongo-sanitize";
 import xss from "xss-clean";
 import connectDB from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
-import requestLogger from "./middlewares/requestLogger.js";
+import { requestIdMiddleware, requestLogger } from "./middlewares/requestLogger.js";
 import { apiLimiter } from "./middlewares/rateLimiter.js";
 import validateEnvironment from "./helpers/envValidator.js";
 import { corsMiddleware } from "./middlewares/corsConfig.js";
@@ -41,6 +41,9 @@ if (!isValid && process.env.NODE_ENV === 'production') {
 }
 
 const PORT = process.env.PORT || 10000;
+
+// ✅ Request ID middleware (must be first to track all requests)
+app.use(requestIdMiddleware);
 
 // ✅ Logger (except tests)
 if (process.env.NODE_ENV !== "test") app.use(requestLogger);
@@ -68,8 +71,28 @@ app.use(cookieParser());
 // ✅ Security Middleware
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    },
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    xssFilter: true,
   })
 );
 app.use(mongoSanitize());
@@ -90,6 +113,18 @@ app.use(csrfProtection);
 registerRoutes(app);
 registerDiagnosticRoutes(app);
 
+// =================== API DOCUMENTATION ===================
+// Swagger/OpenAPI documentation (only in development or if enabled)
+if (process.env.NODE_ENV === 'development' || process.env.ENABLE_SWAGGER === 'true') {
+    try {
+        const { swaggerUiSetup, swaggerUiServe } = await import('./config/swagger.js');
+        app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
+        logger.info('Swagger API documentation available at /api-docs');
+    } catch (error) {
+        logger.warn('Swagger documentation not available', { error: error.message });
+    }
+}
+
 // ✅ Error handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -107,6 +142,34 @@ const startServer = async () => {
       logger.info("MongoDB connected successfully");
     } else {
       logger.warn("No MONGO_URI found — skipping DB connection");
+    }
+
+    // Initialize i18n (non-blocking)
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { initI18n } = await import('./config/i18n.js');
+        await initI18n();
+      } catch (i18nError) {
+        logger.warn('i18n initialization failed - continuing with default language', { error: i18nError.message });
+      }
+    }
+
+    // Initialize Redis (non-blocking)
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { initRedis } = await import('./config/redis.js');
+        await initRedis();
+      } catch (redisError) {
+        logger.warn('Redis initialization failed - continuing without cache', { error: redisError.message });
+      }
+
+      // Initialize job workers
+      try {
+        const { initializeWorkers } = await import('./jobs/index.js');
+        initializeWorkers();
+      } catch (workerError) {
+        logger.warn('Job workers initialization failed - continuing without background jobs', { error: workerError.message });
+      }
     }
 
     // Validate email configuration (non-blocking)
@@ -131,11 +194,75 @@ const startServer = async () => {
     }
 
     // ✅ Important for Render - listen on 0.0.0.0 to accept connections from all interfaces
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Mode: ${process.env.NODE_ENV || "development"}`);
       logger.info(`Frontend: ${process.env.FRONTEND_URL || "Not set"}`);
     });
+
+    // ✅ Graceful shutdown handling
+    const gracefulShutdown = async (signal) => {
+      logger.info(`${signal} received, starting graceful shutdown...`);
+      
+      // Stop accepting new connections
+      server.close(async () => {
+        logger.info('HTTP server closed');
+        
+        // Close job queues and workers
+        try {
+          const { closeAll } = await import('./config/queue.js');
+          await closeAll();
+        } catch (error) {
+          logger.error('Error closing job queues', { error: error.message });
+        }
+
+        // Close Redis connection
+        try {
+          const { closeRedis } = await import('./config/redis.js');
+          await closeRedis();
+        } catch (error) {
+          logger.error('Error closing Redis connection', { error: error.message });
+        }
+        
+        // Close database connection
+        try {
+          const mongoose = (await import("mongoose")).default;
+          if (mongoose.connection.readyState === 1) {
+            await mongoose.connection.close();
+            logger.info('MongoDB connection closed');
+          }
+        } catch (error) {
+          logger.error('Error closing MongoDB connection', { error: error.message });
+        }
+        
+        logger.info('Graceful shutdown completed');
+        process.exit(0);
+      });
+
+      // Force shutdown after 10 seconds
+      setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 10000);
+    };
+
+    // Handle shutdown signals
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
+      gracefulShutdown('uncaughtException');
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error('Unhandled Rejection', { reason, promise });
+      gracefulShutdown('unhandledRejection');
+    });
+
+    return server;
   } catch (err) {
     logger.error("Server startup failed", { error: err.message, stack: err.stack });
     process.exit(1);

@@ -1,11 +1,26 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import logger from "../helpers/logger.js";
+import { BCRYPT_SALT_ROUNDS } from "../config/constants.js";
 
 const employeeSchema = new mongoose.Schema({
+    // Organization reference (multi-tenancy)
+    organizationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Organization',
+        required: true,
+        index: true
+    },
+    
     // Registration required fields
     name: { type: String, required: true },
     lastName: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    email: { 
+        type: String, 
+        required: true,
+        trim: true,
+        lowercase: true
+    },
     password: { type: String, required: true },
     manager: { type: String, required: true },
     salary: { type: Number, required: true },
@@ -59,9 +74,17 @@ const employeeSchema = new mongoose.Schema({
         min: 1,
         max: 10
     },
+    assignedRole: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Role'
+    },
     permissions: [{
         module: { type: String, required: true },
         actions: [{ type: String }] // ['read', 'write', 'delete', 'approve']
+    }],
+    rolePermissions: [{
+        module: { type: String, required: true },
+        actions: [{ type: String }] // Inherited from role
     }],
 
     // Enums (required for registration)
@@ -196,7 +219,15 @@ const employeeSchema = new mongoose.Schema({
     },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
-    active: { type: Boolean, default: true }
+    active: { type: Boolean, default: true },
+    // Account lockout for security
+    loginAttempts: {
+        type: Number,
+        default: 0
+    },
+    lockUntil: {
+        type: Date
+    }
 }, { timestamps: true });
 
 // Hash password before saving
@@ -204,7 +235,7 @@ employeeSchema.pre('save', async function(next) {
     // Only hash password if it's been modified (or is new)
     if (this.isModified('password')) {
         try {
-            const salt = await bcrypt.genSalt(10);
+            const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
             this.password = await bcrypt.hash(this.password, salt);
         } catch (error) {
             return next(new Error('Error hashing password'));
@@ -217,12 +248,23 @@ employeeSchema.pre('save', async function(next) {
 employeeSchema.methods.comparePassword = async function(candidatePassword) {
     try {
         if (!candidatePassword) {
-            throw new Error('Password is required');
+            return false; // Return false instead of throwing for invalid input
+        }
+        if (!this.password) {
+            logger.warn('Password comparison attempted but employee has no password', { 
+                employeeId: this._id 
+            });
+            return false;
         }
         return await bcrypt.compare(candidatePassword, this.password);
     } catch (error) {
-        console.error('Password comparison error:', error);
-        throw new Error('Error comparing passwords');
+        logger.error('Password comparison error', { 
+            error: error.message, 
+            stack: error.stack,
+            employeeId: this._id 
+        });
+        // Return false instead of throwing to allow login controller to handle 401 properly
+        return false;
     }
 };
 
@@ -234,13 +276,17 @@ employeeSchema.methods.toJSON = function() {
 };
 
 // Add database indexes for better query performance
-// Note: email and employeeId indexes are automatically created by unique: true
+// Compound unique index: email must be unique per organization
+employeeSchema.index({ email: 1, organizationId: 1 }, { unique: true });
+// Compound unique index: employeeId must be unique per organization
+employeeSchema.index({ employeeId: 1, organizationId: 1 }, { unique: true });
 employeeSchema.index({ status: 1 });
 employeeSchema.index({ active: 1 });
 employeeSchema.index({ department: 1 });
 employeeSchema.index({ jobTitle: 1 });
 employeeSchema.index({ joiningDate: 1 });
 employeeSchema.index({ status: 1, active: 1 }); // Compound index for common queries
+employeeSchema.index({ organizationId: 1, status: 1 }); // For filtering by org and status
 
 const Employee = mongoose.model("Employee", employeeSchema, "employees");
 

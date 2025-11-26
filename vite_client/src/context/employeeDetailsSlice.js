@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../utils/axios';
-import { BOTH_PROFILE_ENDPOINT } from '../utils/constant';
+import { BOTH_PROFILE_ENDPOINT, ADMIN_EMPLOYEE_ENDPOINT } from '../utils/constant';
 // Base URL - use environment variable or default to relative path
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -61,7 +61,7 @@ export const updateEmployeeWorkInfo = createAsyncThunk(
   async ({ employeeId, workData }, { rejectWithValue }) => {
     try {
       const response = await axios.put(
-        `${BOTH_PROFILE_ENDPOINT}/admin/employee/${employeeId}/work-info`,
+        `${ADMIN_EMPLOYEE_ENDPOINT}/${employeeId}/work-info`,
         workData,
         { withCredentials: true }
       );
@@ -82,10 +82,11 @@ export const addAcademicRecord = createAsyncThunk(
         `${BOTH_PROFILE_ENDPOINT}/add-academic-record`,
         { institution, details },
         {
-          withCredentials: true,
+          withCredentials: true, // Cookies (including httpOnly JWT) are sent automatically
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Content-Type': 'application/json'
+            // SECURITY FIX: Token is in httpOnly cookie, sent automatically with credentials: 'include'
+            // Authorization header will be added by axios interceptor if needed
           }
         }
       );
@@ -136,10 +137,11 @@ export const addProfessionalQualification = createAsyncThunk(
         `${BOTH_PROFILE_ENDPOINT}/add-professional-qualification`,
         qualificationData,
         {
-          withCredentials: true,
+          withCredentials: true, // Cookies (including httpOnly JWT) are sent automatically
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Content-Type': 'application/json'
+            // SECURITY FIX: Token is in httpOnly cookie, sent automatically with credentials: 'include'
+            // Authorization header will be added by axios interceptor if needed
           }
         }
       );

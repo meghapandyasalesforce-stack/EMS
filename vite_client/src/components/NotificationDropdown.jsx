@@ -83,8 +83,21 @@ const NotificationDropdown = () => {
                 setNotifications(response.data.notifications);
             }
         } catch (error) {
-            // Gracefully ignore auth errors; avoid noisy console in UI
+            // Gracefully handle connection errors (backend not running)
             const status = error?.response?.status;
+            const isConnectionError = error.code === 'ECONNREFUSED' || 
+                                     error.code === 'ECONNRESET' ||
+                                     error.message?.includes('Network Error') ||
+                                     error.message?.includes('ERR_CONNECTION_REFUSED') ||
+                                     status === 503; // Service Unavailable (backend not running)
+            
+            if (isConnectionError) {
+                // Backend is not running - silently fail
+                setNotifications([]);
+                return;
+            }
+            
+            // Gracefully ignore auth errors; avoid noisy console in UI
             if (status !== 401 && status !== 403) {
                 // Removed console.error for production
             }
@@ -101,7 +114,20 @@ const NotificationDropdown = () => {
                 setUnreadCount(response.data.unreadCount);
             }
         } catch (error) {
+            // Gracefully handle connection errors (backend not running)
             const status = error?.response?.status;
+            const isConnectionError = error.code === 'ECONNREFUSED' || 
+                                     error.code === 'ECONNRESET' ||
+                                     error.message?.includes('Network Error') ||
+                                     error.message?.includes('ERR_CONNECTION_REFUSED') ||
+                                     status === 503; // Service Unavailable (backend not running)
+            
+            if (isConnectionError) {
+                // Backend is not running - silently fail
+                setUnreadCount(0);
+                return;
+            }
+            
             if (status === 401 || status === 403) {
                 setUnreadCount(0);
                 return; // silently ignore

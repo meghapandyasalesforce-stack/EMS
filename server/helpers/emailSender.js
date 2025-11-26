@@ -1,84 +1,26 @@
-import nodemailer from 'nodemailer';
 import logger from './logger.js';
+import { createEmailTransporter, getEmailFrom, detectEmailProvider, getEmailConfig } from '../config/email.config.js';
 
-const sendWelcomeEmail = async (email, name, password) => {
-  // Validate email credentials are configured
-  const emailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
-  const emailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
-  
-  if (!emailUser || !emailPass) {
-    throw new Error('Email credentials not configured. Please set EMAIL_USER/EMAIL_USERNAME and EMAIL_PASS/EMAIL_PASSWORD environment variables.');
-  }
-
-  // Determine email provider and configure transporter accordingly
-  const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
-  const emailPort = parseInt(process.env.EMAIL_PORT || '587', 10);
-  
-  // Detect email provider
-  const isGmail = emailUser.includes('@gmail.com') || emailHost.includes('gmail');
-  const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com') || emailUser.includes('@outlook.com') || emailUser.includes('@hotmail.com');
-  
-  // Configure transporter based on provider
-  let transporterConfig;
-  
-  if (isGmail) {
-    // Gmail configuration - use service instead of host
-    transporterConfig = {
-      service: 'gmail',
-      auth: {
-        user: emailUser,
-        pass: emailPass, // Must be an App Password, not regular password
-      },
-      // Gmail specific settings
-      tls: {
-        rejectUnauthorized: process.env.NODE_ENV === 'production'
-      }
-    };
-    logger.info('Using Gmail service configuration', { emailUser: emailUser.replace(/@.*/, '@***') });
-  } else if (isOutlook) {
-    // Outlook/Office 365 configuration
-    transporterConfig = {
-      host: emailHost,
-      port: emailPort,
-      secure: false, // Use STARTTLS
-      requireTLS: true,
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-      tls: {
-        ciphers: 'SSLv3',
-        rejectUnauthorized: process.env.NODE_ENV === 'production'
-      }
-    };
-    logger.info('Using Outlook/Office365 configuration', { emailHost, emailPort, emailUser: emailUser.replace(/@.*/, '@***') });
-  } else {
-    // Generic SMTP configuration
-    transporterConfig = {
-      host: emailHost,
-      port: emailPort,
-      secure: emailPort === 465, // true for 465, false for other ports
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-      tls: {
-        rejectUnauthorized: process.env.NODE_ENV === 'production'
-      }
-    };
-    logger.info('Using generic SMTP configuration', { emailHost, emailPort, emailUser: emailUser.replace(/@.*/, '@***') });
-  }
-
-  const transporter = nodemailer.createTransport(transporterConfig);
+/**
+ * Send welcome email to new user
+ * @param {string} email - Recipient email address
+ * @param {string} name - Recipient name
+ * @param {string|null} password - Plain text password (for development only)
+ * @param {string|null} resetUrl - Password reset URL (for production)
+ * @returns {Promise<void>}
+ */
+const sendWelcomeEmail = async (email, name, password = null, resetUrl = null) => {
+  // Get email configuration and create transporter
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const provider = detectEmailProvider(emailConfig);
 
   // Email options
-  // SECURITY: Never use default passwords. Password must be provided or generated securely.
-  if (!password) {
-    throw new Error('Password is required for welcome email. Employee password must be generated securely during account creation.');
-  }
+  // SECURITY: In production, use password reset link instead of plain text password
   const displayPassword = password;
+  const useResetLink = !password && resetUrl;
   
-  const emailFrom = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
+  const emailFrom = getEmailFrom();
   
   if (!emailFrom) {
     throw new Error('EMAIL_FROM not configured. Please set EMAIL_FROM environment variable.');
@@ -86,10 +28,10 @@ const sendWelcomeEmail = async (email, name, password) => {
 
   // Store provider info for error handling
   const providerInfo = {
-    isGmail,
-    isOutlook,
-    emailHost: isGmail ? 'gmail (service)' : emailHost,
-    emailPort: isGmail ? 'N/A (service)' : emailPort
+    isGmail: provider.isGmail,
+    isOutlook: provider.isOutlook,
+    emailHost: provider.isGmail ? 'gmail (service)' : emailConfig.host,
+    emailPort: provider.isGmail ? 'N/A (service)' : emailConfig.port
   };
 
   const mailOptions = {
@@ -161,6 +103,17 @@ const sendWelcomeEmail = async (email, name, password) => {
     <p class="message">
       Your account has been successfully created by the Paarsiv Admin Team. You are now part of our employee network.
     </p>
+    ${useResetLink ? `
+    <p class="message">
+      Click the link below to set your password and activate your account:
+    </p>
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="${resetUrl}" style="background-color: #7c9eff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Set Your Password</a>
+    </div>
+    <p class="message">
+      <strong>Security Notice:</strong> This link will expire in 24 hours. Please set your password immediately.
+    </p>
+    ` : `
     <p class="message">
       Use the default password below to log in for the first time:
     </p>
@@ -168,6 +121,7 @@ const sendWelcomeEmail = async (email, name, password) => {
     <p class="message">
       <strong>Security Notice:</strong> Please reset your password immediately after your first login to ensure account safety.
     </p>
+    `}
     <p class="message">
       Need help? Contact your administrator or reach out to <a href="mailto:support@paarsiv.com">support@paarsiv.com</a>.
     </p>
@@ -256,6 +210,102 @@ const sendWelcomeEmail = async (email, name, password) => {
     enhancedError.code = error.code;
     enhancedError.responseCode = error.responseCode;
     throw enhancedError;
+  }
+};
+
+/**
+ * Send password reset email
+ * @param {string} email - Recipient email address
+ * @param {string} name - Recipient name
+ * @param {string} resetUrl - Password reset URL
+ * @returns {Promise<void>}
+ */
+export const sendPasswordResetEmail = async (email, name, resetUrl) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const mailOptions = {
+    from: emailFrom,
+    to: email,
+    subject: 'Password Reset Request - Paarsiv HR System',
+    html: `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Password Reset</title>
+      <style>
+        body { font-family: Arial, sans-serif; background-color: #1e1e2f; margin: 0; padding: 0; color: #e0e0e0; }
+        .container { max-width: 600px; margin: 40px auto; background-color: #2b2b3c; padding: 30px; border-radius: 10px; }
+        .header { text-align: center; color: #7c9eff; }
+        .message { font-size: 16px; color: #dddddd; line-height: 1.6; }
+        .button { background-color: #7c9eff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; }
+        .footer { font-size: 14px; color: #888888; text-align: center; margin-top: 30px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h2 class="header">Password Reset Request</h2>
+        <p class="message">Hello ${name},</p>
+        <p class="message">You requested to reset your password. Click the button below to reset it:</p>
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${resetUrl}" class="button">Reset Password</a>
+        </div>
+        <p class="message"><strong>Note:</strong> This link will expire in 1 hour.</p>
+        <div class="footer">&copy; 2025 Paarsiv. All rights reserved.</div>
+      </div>
+    </body>
+    </html>
+    `
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Password reset email sent', { email, messageId: info.messageId });
+  } catch (error) {
+    logger.error('Error sending password reset email', { email, error: error.message });
+    throw error;
+  }
+};
+
+/**
+ * Send notification email
+ * @param {string} email - Recipient email address
+ * @param {string} subject - Email subject
+ * @param {string} message - Email message
+ * @param {string} html - HTML content
+ * @returns {Promise<void>}
+ */
+export const sendNotificationEmail = async (email, subject, message, html) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const mailOptions = {
+    from: emailFrom,
+    to: email,
+    subject: subject || 'Notification from Paarsiv HR System',
+    text: message,
+    html: html || `<p>${message}</p>`
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Notification email sent', { email, messageId: info.messageId });
+  } catch (error) {
+    logger.error('Error sending notification email', { email, error: error.message });
+    throw error;
   }
 };
 

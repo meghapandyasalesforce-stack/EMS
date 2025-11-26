@@ -17,6 +17,8 @@ export default function csrfProtection(req, res, next) {
         '/api/v1/admin/auth/login',
         '/api/v1/employee/auth/register',
         '/api/v1/admin/auth/register',
+        '/api/v1/organization/auth/register',
+        '/api/v1/organization/auth/login',
         '/api/v1/both/password', // forgot/reset password endpoints under this prefix
     ].some((path) => normalizedUrl.startsWith(path));
     

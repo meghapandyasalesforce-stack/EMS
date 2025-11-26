@@ -108,9 +108,9 @@ const IdCardGenerator = () => {
   };
 
   useEffect(() => {
-    // Check authentication status
-    const userRole = localStorage.getItem('role');
-    const userToken = localStorage.getItem('token');
+    // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
+    // Check authentication via role from localStorage (UI state only) or Redux store
+    const userRole = localStorage.getItem('role'); // UI state only, not sensitive
     // Removed console.log statements for production
     
     if (userRole !== 'admin') {

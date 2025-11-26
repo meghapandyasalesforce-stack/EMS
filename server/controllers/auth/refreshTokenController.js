@@ -64,9 +64,10 @@ export const refreshToken = async (req, res) => {
             return sendError(res, 'Account is inactive', 403, 'ACCOUNT_INACTIVE');
         }
 
-        // Generate new access token
+        // Generate new access token with organizationId
         const role = decoded.role || userType;
-        const tokenResult = generateToken(user._id, role, res);
+        const organizationId = decoded.organizationId || user.organizationId;
+        const tokenResult = generateToken(user._id, role, organizationId, res);
         const accessToken = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
         const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 

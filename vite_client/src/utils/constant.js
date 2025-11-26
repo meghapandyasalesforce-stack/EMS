@@ -5,12 +5,21 @@
 // Note: axios baseURL already includes '/api', so we use '/v1' here
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/v1';
 
+//==================Organization===================//
+
+export const ORGANIZATION_ENDPOINT = `${BASE_URL}/admin/organization`
+export const ORGANIZATION_AUTH_ENDPOINT = `${BASE_URL}/organization/auth`
+export const ORGANIZATION_SUBSCRIPTION_ENDPOINT = `${BASE_URL}/organization/subscription`
+export const ORGANIZATION_POLICIES_ENDPOINT = `${BASE_URL}/organization/policies`
+export const ORGANIZATION_DASHBOARD_ENDPOINT = `${BASE_URL}/organization/dashboard`
+
 //==================Admin===================//
 
 export const ADMIN_AUTH_ENDPOINT = `${BASE_URL}/admin/auth`
 export const ADMIN_LEAVE_ENDPOINT = `${BASE_URL}/admin/leave`
 export const ADMIN_PROJECT_ENDPOINT = `${BASE_URL}/admin/project`
 export const ADMIN_PAYROLL_ENDPOINT = `${BASE_URL}/admin/payroll`
+export const ADMIN_EMPLOYEE_ENDPOINT = `${BASE_URL}/admin/employee`
 
 
 //==================Employee===================//

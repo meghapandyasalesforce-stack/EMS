@@ -1,6 +1,7 @@
 import express from 'express';
 import sendWelcomeEmail from '../../helpers/emailSender.js';
 import { validateEmailConfig } from '../../helpers/emailValidator.js';
+import { getEmailConfigStatus } from '../../config/email.config.js';
 import logger from '../../helpers/logger.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 
@@ -71,19 +72,11 @@ router.post('/test', isAdminAuthenticated, async (req, res) => {
  */
 router.get('/status', isAdminAuthenticated, async (req, res) => {
   try {
-    const emailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
-    const emailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
-    const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
-    const emailPort = process.env.EMAIL_PORT || 587;
-    const emailFrom = process.env.EMAIL_FROM || emailUser;
-
-    const isConfigured = !!(emailUser && emailPass);
-    const isGmail = emailUser?.includes('@gmail.com') || emailHost.includes('gmail');
-    const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com');
-
-    // Validate email configuration
+    const status = getEmailConfigStatus();
+    
+    // Validate email configuration if configured
     let validation = null;
-    if (isConfigured) {
+    if (status.configured) {
       try {
         validation = await validateEmailConfig();
       } catch (validationError) {
@@ -91,31 +84,33 @@ router.get('/status', isAdminAuthenticated, async (req, res) => {
       }
     }
 
+    const recommendations = status.provider === 'gmail' ? [
+      'Use an App Password instead of your regular Gmail password',
+      'Generate App Password at: https://myaccount.google.com/apppasswords',
+      'Enable 2-Step Verification first if not already enabled'
+    ] : status.provider === 'outlook' ? [
+      'Ensure your account has SMTP access enabled',
+      'Check if your organization allows SMTP connections',
+      'Verify credentials are correct'
+    ] : [
+      'Verify EMAIL_HOST and EMAIL_PORT are correct for your SMTP server',
+      'Check firewall/network allows SMTP connections',
+      'Ensure credentials are correct'
+    ];
+
     res.json({
       success: true,
-      configured: isConfigured,
+      configured: status.configured,
       validated: validation?.valid || false,
-      provider: isGmail ? 'Gmail' : isOutlook ? 'Outlook/Office365' : 'Generic SMTP',
-      emailHost: isGmail ? 'gmail (service)' : emailHost,
-      emailPort: isGmail ? 'N/A (service)' : emailPort,
-      emailFrom: emailFrom ? emailFrom.replace(/@.*/, '@***') : 'Not set',
-      emailUser: emailUser ? emailUser.replace(/@.*/, '@***') : 'Not set',
-      hasPassword: !!emailPass,
+      provider: status.provider === 'gmail' ? 'Gmail' : status.provider === 'outlook' ? 'Outlook/Office365' : 'Generic SMTP',
+      emailHost: status.emailHost,
+      emailPort: status.emailPort,
+      emailFrom: status.emailFrom,
+      emailUser: status.emailUser,
+      hasPassword: status.hasPassword,
       validationMessage: validation?.message,
       validationRecommendation: validation?.recommendation,
-      recommendations: isGmail ? [
-        'Use an App Password instead of your regular Gmail password',
-        'Generate App Password at: https://myaccount.google.com/apppasswords',
-        'Enable 2-Step Verification first if not already enabled'
-      ] : isOutlook ? [
-        'Ensure your account has SMTP access enabled',
-        'Check if your organization allows SMTP connections',
-        'Verify credentials are correct'
-      ] : [
-        'Verify EMAIL_HOST and EMAIL_PORT are correct for your SMTP server',
-        'Check firewall/network allows SMTP connections',
-        'Ensure credentials are correct'
-      ]
+      recommendations
     });
   } catch (error) {
     logger.error('Error getting email status', { error: error.message });

@@ -7,45 +7,75 @@ import logger from '../../helpers/logger.js';
 export const createRole = async (req, res) => {
     try {
         const { name, description, level, permissions, canManageRoles, canAccessReports, canManageSystem, parentRole } = req.body;
-
-        // Check if role with same name exists
-        const existingRole = await Role.findOne({ name });
-        if (existingRole) {
-            return res.status(400).json({ message: 'Role with this name already exists' });
+        
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Create role error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
         }
 
-        // Check if level is already taken
-        const existingLevel = await Role.findOne({ level });
+        // SECURITY: Check if role with same name exists within the same organization
+        const existingRole = await Role.findOne({ name, organizationId });
+        if (existingRole) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Role with this name already exists' 
+            });
+        }
+
+        // SECURITY: Check if level is already taken within the same organization
+        const existingLevel = await Role.findOne({ level, organizationId });
         if (existingLevel) {
-            return res.status(400).json({ message: 'Role level already exists' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Role level already exists' 
+            });
+        }
+
+        // SECURITY: Validate parentRole belongs to the same organization
+        if (parentRole) {
+            const parent = await Role.findOne({ _id: parentRole, organizationId });
+            if (!parent) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: 'Parent role not found or does not belong to your organization' 
+                });
+            }
         }
 
         const role = new Role({
             name,
             description,
             level,
-            permissions,
-            canManageRoles,
-            canAccessReports,
-            canManageSystem,
-            parentRole
+            permissions: permissions || [],
+            canManageRoles: canManageRoles || false,
+            canAccessReports: canAccessReports || false,
+            canManageSystem: canManageSystem || false,
+            parentRole: parentRole || null,
+            organizationId // SECURITY: Set organizationId for multi-tenancy
         });
 
         await role.save();
 
-        // Update parent role's child roles
+        // Update parent role's child roles (scoped to organization)
         if (parentRole) {
-            await Role.findByIdAndUpdate(parentRole, {
-                $push: { childRoles: role._id }
-            });
+            await Role.findOneAndUpdate(
+                { _id: parentRole, organizationId },
+                { $push: { childRoles: role._id } }
+            );
         }
 
         res.status(201).json({
+            success: true,
             message: 'Role created successfully',
             role
         });
     } catch (error) {
-        logger.error('Create role error', { error: error.message, stack: error.stack });
+        logger.error('Create role error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to create role', 
@@ -57,14 +87,25 @@ export const createRole = async (req, res) => {
 // Get all roles
 export const getAllRoles = async (req, res) => {
     try {
-        const roles = await Role.find({ isActive: true })
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Get roles error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
+        }
+
+        // SECURITY: Only get roles for the authenticated user's organization
+        const roles = await Role.find({ isActive: true, organizationId })
             .populate('parentRole', 'name level')
             .populate('childRoles', 'name level')
             .sort({ level: 1 });
 
         res.json(roles);
     } catch (error) {
-        logger.error('Get roles error', { error: error.message, stack: error.stack });
+        logger.error('Get roles error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to get roles', 
@@ -77,17 +118,32 @@ export const getAllRoles = async (req, res) => {
 export const getRoleById = async (req, res) => {
     try {
         const { id } = req.params;
-        const role = await Role.findById(id)
+        
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Get role error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
+        }
+
+        // SECURITY: Only get role if it belongs to the authenticated user's organization
+        const role = await Role.findOne({ _id: id, organizationId })
             .populate('parentRole', 'name level')
             .populate('childRoles', 'name level');
 
         if (!role) {
-            return res.status(404).json({ message: 'Role not found' });
+            return res.status(404).json({ 
+                success: false,
+                message: 'Role not found' 
+            });
         }
 
         res.json(role);
     } catch (error) {
-        logger.error('Get role error', { error: error.message, stack: error.stack });
+        logger.error('Get role error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to get role', 
@@ -102,37 +158,84 @@ export const updateRole = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
-        const role = await Role.findById(id);
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Update role error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
+        }
+
+        // SECURITY: Only get role if it belongs to the authenticated user's organization
+        const role = await Role.findOne({ _id: id, organizationId });
         if (!role) {
-            return res.status(404).json({ message: 'Role not found' });
+            return res.status(404).json({ 
+                success: false,
+                message: 'Role not found' 
+            });
         }
 
-        // Check if new name conflicts with existing role
+        // SECURITY: Check if new name conflicts with existing role within the same organization
         if (updates.name && updates.name !== role.name) {
-            const existingRole = await Role.findOne({ name: updates.name, _id: { $ne: id } });
+            const existingRole = await Role.findOne({ 
+                name: updates.name, 
+                organizationId,
+                _id: { $ne: id } 
+            });
             if (existingRole) {
-                return res.status(400).json({ message: 'Role with this name already exists' });
+                return res.status(400).json({ 
+                    success: false,
+                    message: 'Role with this name already exists' 
+                });
             }
         }
 
-        // Check if new level conflicts with existing role
+        // SECURITY: Check if new level conflicts with existing role within the same organization
         if (updates.level && updates.level !== role.level) {
-            const existingLevel = await Role.findOne({ level: updates.level, _id: { $ne: id } });
+            const existingLevel = await Role.findOne({ 
+                level: updates.level, 
+                organizationId,
+                _id: { $ne: id } 
+            });
             if (existingLevel) {
-                return res.status(400).json({ message: 'Role level already exists' });
+                return res.status(400).json({ 
+                    success: false,
+                    message: 'Role level already exists' 
+                });
             }
         }
 
-        const updatedRole = await Role.findByIdAndUpdate(id, updates, { new: true })
+        // SECURITY: Validate parentRole belongs to the same organization
+        if (updates.parentRole && updates.parentRole !== role.parentRole?.toString()) {
+            const parent = await Role.findOne({ _id: updates.parentRole, organizationId });
+            if (!parent) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: 'Parent role not found or does not belong to your organization' 
+                });
+            }
+        }
+
+        // SECURITY: Prevent changing organizationId
+        delete updates.organizationId;
+
+        const updatedRole = await Role.findOneAndUpdate(
+            { _id: id, organizationId },
+            updates,
+            { new: true }
+        )
             .populate('parentRole', 'name level')
             .populate('childRoles', 'name level');
 
         res.json({
+            success: true,
             message: 'Role updated successfully',
             role: updatedRole
         });
     } catch (error) {
-        logger.error('Update role error', { error: error.message, stack: error.stack });
+        logger.error('Update role error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to update role', 
@@ -146,40 +249,62 @@ export const deleteRole = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const role = await Role.findById(id);
-        if (!role) {
-            return res.status(404).json({ message: 'Role not found' });
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Delete role error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
         }
 
-        // Check if role is being used by any users
-        const usersWithRole = await Employee.countDocuments({ roleLevel: role.level });
+        // SECURITY: Only get role if it belongs to the authenticated user's organization
+        const role = await Role.findOne({ _id: id, organizationId });
+        if (!role) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Role not found' 
+            });
+        }
+
+        // SECURITY: Check if role is being used by any employees in the same organization
+        const usersWithRole = await Employee.countDocuments({ 
+            roleLevel: role.level,
+            organizationId 
+        });
         if (usersWithRole > 0) {
             return res.status(400).json({ 
+                success: false,
                 message: 'Cannot delete role. It is being used by employees.',
                 usersCount: usersWithRole
             });
         }
 
-        // Remove from parent role's child roles
+        // SECURITY: Remove from parent role's child roles (scoped to organization)
         if (role.parentRole) {
-            await Role.findByIdAndUpdate(role.parentRole, {
-                $pull: { childRoles: role._id }
-            });
+            await Role.findOneAndUpdate(
+                { _id: role.parentRole, organizationId },
+                { $pull: { childRoles: role._id } }
+            );
         }
 
-        // Remove child roles' parent reference
+        // SECURITY: Remove child roles' parent reference (scoped to organization)
         if (role.childRoles.length > 0) {
             await Role.updateMany(
-                { _id: { $in: role.childRoles } },
+                { _id: { $in: role.childRoles }, organizationId },
                 { $unset: { parentRole: 1 } }
             );
         }
 
-        await Role.findByIdAndDelete(id);
+        await Role.findOneAndDelete({ _id: id, organizationId });
 
-        res.json({ message: 'Role deleted successfully' });
+        res.json({ 
+            success: true,
+            message: 'Role deleted successfully' 
+        });
     } catch (error) {
-        logger.error('Delete role error', { error: error.message, stack: error.stack });
+        logger.error('Delete role error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to delete role', 
@@ -193,14 +318,32 @@ export const assignRoleToEmployee = async (req, res) => {
     try {
         const { employeeId, roleId } = req.body;
 
-        const employee = await Employee.findById(employeeId);
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Assign role error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
         }
 
-        const role = await Role.findById(roleId);
+        // SECURITY: Only get employee if they belong to the authenticated user's organization
+        const employee = await Employee.findOne({ _id: employeeId, organizationId });
+        if (!employee) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Employee not found' 
+            });
+        }
+
+        // SECURITY: Only get role if it belongs to the authenticated user's organization
+        const role = await Role.findOne({ _id: roleId, organizationId });
         if (!role) {
-            return res.status(404).json({ message: 'Role not found' });
+            return res.status(404).json({ 
+                success: false,
+                message: 'Role not found' 
+            });
         }
 
         employee.roleLevel = role.level;
@@ -209,6 +352,7 @@ export const assignRoleToEmployee = async (req, res) => {
         await employee.save();
 
         res.json({
+            success: true,
             message: 'Role assigned successfully',
             employee: {
                 id: employee._id,
@@ -218,7 +362,7 @@ export const assignRoleToEmployee = async (req, res) => {
             }
         });
     } catch (error) {
-        logger.error('Assign role error', { error: error.message, stack: error.stack });
+        logger.error('Assign role error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to assign role', 
@@ -230,10 +374,25 @@ export const assignRoleToEmployee = async (req, res) => {
 // Get role hierarchy
 export const getRoleHierarchy = async (req, res) => {
     try {
-        const hierarchy = await Role.getHierarchy();
+        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId;
+        if (!organizationId) {
+            logger.error('Get hierarchy error: Missing organizationId', { userId: req.user?._id });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
+        }
+
+        // SECURITY: Only get hierarchy for the authenticated user's organization
+        const hierarchy = await Role.find({ isActive: true, organizationId })
+            .populate('parentRole', 'name level')
+            .populate('childRoles', 'name level')
+            .sort({ level: 1 });
+        
         res.json(hierarchy);
     } catch (error) {
-        logger.error('Get hierarchy error', { error: error.message, stack: error.stack });
+        logger.error('Get hierarchy error', { error: error.message, stack: error.stack, organizationId: req.organizationId });
         res.status(500).json({ 
             success: false,
             message: 'Failed to get role hierarchy', 

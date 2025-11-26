@@ -39,24 +39,28 @@ export const corsMiddleware = cors({
   origin: (origin, callback) => {
     const allowedOrigins = getAllowedOrigins();
     
-    // In production, be strict about origins
-    if (process.env.NODE_ENV === 'production') {
-      // In production, reject requests with no origin
-      // Note: Mobile apps should send a proper origin header or use a different authentication method
-      if (!origin) {
-        return callback(new Error('Origin header required in production'));
-      }
-      
-      // Check if origin is in allowed list (strict matching)
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      // Log rejected origins for security monitoring
-      logger.warn('CORS rejected origin in production', { origin });
-      callback(new Error('Not allowed by CORS'));
-      return;
+  // In production, be strict about origins
+  if (process.env.NODE_ENV === 'production') {
+    // In production, reject requests with no origin
+    // Note: Mobile apps should send a proper origin header or use a different authentication method
+    if (!origin) {
+      logger.warn('CORS: Request with no origin header rejected in production');
+      return callback(new Error('Origin header required in production'));
     }
+    
+    // Check if origin is in allowed list (strict matching)
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Log rejected origins for security monitoring (sanitized by logger)
+    logger.warn('CORS: Origin rejected in production', { 
+      origin,
+      allowedOrigins: allowedOrigins.length > 0 ? '[CONFIGURED]' : '[NONE]'
+    });
+    callback(new Error('Not allowed by CORS'));
+    return;
+  }
     
     // Development mode: more lenient
     // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)

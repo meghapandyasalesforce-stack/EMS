@@ -1,5 +1,6 @@
 import AttendanceRule from '../../models/attendanceRule.model.js';
 import logger from '../../helpers/logger.js';
+import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 
 // Create or update attendance rule
 export const createOrUpdateAttendanceRule = async (req, res) => {
@@ -25,18 +26,12 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
 
         // Validate coordinates - allow default (0,0) for initial setup
         if (!coordinates || coordinates.latitude === undefined || coordinates.longitude === undefined) {
-            return res.status(400).json({
-                success: false,
-                message: 'Coordinates are required'
-            });
+            return sendValidationError(res, { coordinates: 'Coordinates are required' });
         }
 
         // Validate maximum radius
         if (maximumRadius < 50 || maximumRadius > 1000) {
-            return res.status(400).json({
-                success: false,
-                message: 'Maximum radius must be between 50 and 1000 meters'
-            });
+            return sendValidationError(res, { maximumRadius: 'Maximum radius must be between 50 and 1000 meters' });
         }
 
         // Check if a rule already exists
@@ -69,11 +64,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
 
             await attendanceRule.save();
 
-            return res.status(200).json({
-                success: true,
-                message: 'Attendance rule updated successfully',
-                rule: attendanceRule
-            });
+            return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule updated successfully');
         } else {
             // Create new rule
             attendanceRule = await AttendanceRule.create({
@@ -95,11 +86,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 createdBy: req.user?._id || null
             });
 
-            return res.status(201).json({
-                success: true,
-                message: 'Attendance rule created successfully',
-                rule: attendanceRule
-            });
+            return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule created successfully', 201);
         }
     } catch (error) {
         logger.error('Error creating/updating attendance rule', {
@@ -107,11 +94,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
             stack: error.stack,
             adminId: req.user._id
         });
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to save attendance rule',
-            error: error.message
-        });
+        return sendInternalError(res, 'Failed to save attendance rule', error);
     }
 };
 
@@ -122,8 +105,7 @@ export const getAttendanceRule = async (req, res) => {
 
         if (!attendanceRule) {
             // Return a sane default instead of 404 to simplify client UX
-            return res.status(200).json({
-                success: true,
+            return sendSuccess(res, {
                 rule: {
                     location: '',
                     address: '',
@@ -137,23 +119,16 @@ export const getAttendanceRule = async (req, res) => {
                     compOffRules: { allowedPerMonth: 2, maxAccumulation: 5, validity: 90 },
                     applicableDepartments: []
                 }
-            });
+            }, 'Default attendance rule retrieved');
         }
 
-        return res.status(200).json({
-            success: true,
-            rule: attendanceRule
-        });
+        return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule retrieved successfully');
     } catch (error) {
         logger.error('Error fetching attendance rule', {
             error: error.message,
             stack: error.stack
         });
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to fetch attendance rule',
-            error: error.message
-        });
+        return sendInternalError(res, 'Failed to fetch attendance rule', error);
     }
 };
 
@@ -162,21 +137,13 @@ export const getAllAttendanceRules = async (req, res) => {
     try {
         const rules = await AttendanceRule.find().sort({ createdAt: -1 });
 
-        return res.status(200).json({
-            success: true,
-            count: rules.length,
-            rules
-        });
+        return sendSuccess(res, { count: rules.length, rules }, 'Attendance rules retrieved successfully');
     } catch (error) {
         logger.error('Error fetching attendance rules', {
             error: error.message,
             stack: error.stack
         });
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to fetch attendance rules',
-            error: error.message
-        });
+        return sendInternalError(res, 'Failed to fetch attendance rules', error);
     }
 };
 
@@ -192,28 +159,17 @@ export const deactivateAttendanceRule = async (req, res) => {
         );
 
         if (!attendanceRule) {
-            return res.status(404).json({
-                success: false,
-                message: 'Attendance rule not found'
-            });
+            return sendNotFound(res, 'Attendance rule');
         }
 
-        return res.status(200).json({
-            success: true,
-            message: 'Attendance rule deactivated successfully',
-            rule: attendanceRule
-        });
+        return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule deactivated successfully');
     } catch (error) {
         logger.error('Error deactivating attendance rule', {
             error: error.message,
             stack: error.stack,
             ruleId: req.params.ruleId
         });
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to deactivate attendance rule',
-            error: error.message
-        });
+        return sendInternalError(res, 'Failed to deactivate attendance rule', error);
     }
 };
 
@@ -223,19 +179,13 @@ export const checkAttendanceRadius = async (req, res) => {
         const { latitude, longitude } = req.body;
 
         if (!latitude || !longitude) {
-            return res.status(400).json({
-                success: false,
-                message: 'Latitude and longitude are required'
-            });
+            return sendValidationError(res, { coordinates: 'Latitude and longitude are required' });
         }
 
         const attendanceRule = await AttendanceRule.findOne({ isActive: true });
 
         if (!attendanceRule) {
-            return res.status(404).json({
-                success: false,
-                message: 'No attendance rule found'
-            });
+            return sendNotFound(res, 'Attendance rule');
         }
 
         // Calculate distance using Haversine formula
@@ -252,24 +202,19 @@ export const checkAttendanceRadius = async (req, res) => {
 
         const isWithinRadius = distance <= attendanceRule.maximumRadius;
 
-        return res.status(200).json({
-            success: true,
+        return sendSuccess(res, {
             isWithinRadius,
             distance: Math.round(distance),
             maximumRadius: attendanceRule.maximumRadius,
             location: attendanceRule.location
-        });
+        }, 'Radius check completed successfully');
     } catch (error) {
         logger.error('Error checking attendance radius', {
             error: error.message,
             stack: error.stack,
             employeeId: req.employee?._id || req.user?._id
         });
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to check attendance radius',
-            error: error.message
-        });
+        return sendInternalError(res, 'Failed to check attendance radius', error);
     }
 };
 

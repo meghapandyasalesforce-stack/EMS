@@ -15,12 +15,14 @@ const EmployeePayroll = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setError('Please login to view payroll details');
-          setLoading(false);
-          return;
-        }
+        // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
+        // Authentication is handled via cookies automatically
+        // Check if cookies are present (httpOnly cookies won't show in document.cookie)
+        const hasAuthCookie = typeof document !== 'undefined' && 
+          (document.cookie.includes('jwt=') || document.cookie.includes('refreshToken='));
+        
+        // If no cookie visible and we're in browser, still try (httpOnly cookies are sent automatically)
+        // The server will validate authentication via cookies
 
         const config = {
           headers: { Authorization: `Bearer ${token}` },

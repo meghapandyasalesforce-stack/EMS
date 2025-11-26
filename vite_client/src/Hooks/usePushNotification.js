@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from '../utils/axios';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
+import logger from '../utils/logger.js';
 
 /**
  * Hook to manage push notifications
@@ -58,7 +59,7 @@ export const usePushNotification = () => {
           registration = await navigator.serviceWorker.ready;
         }
       } catch (swError) {
-        console.error('Service Worker registration failed:', swError);
+        logger.error('Service Worker registration failed', swError);
         setError('Failed to register service worker');
         setIsLoading(false);
         return;
@@ -79,7 +80,7 @@ export const usePushNotification = () => {
         }
         vapidPublicKey = data.publicKey;
       } catch (keyError) {
-        console.error('Failed to get VAPID public key:', keyError);
+        logger.error('Failed to get VAPID public key', keyError);
         setError('Push notifications not configured on server');
         setIsLoading(false);
         return;
@@ -96,7 +97,7 @@ export const usePushNotification = () => {
             applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
           });
         } catch (subscribeError) {
-          console.error('Failed to subscribe to push:', subscribeError);
+          logger.error('Failed to subscribe to push', subscribeError);
           setError('Failed to subscribe to push notifications');
           setIsLoading(false);
           return;
@@ -118,12 +119,12 @@ export const usePushNotification = () => {
         setSubscription(sub);
         setIsSubscribed(true);
       } catch (serverError) {
-        console.error('Failed to save subscription to server:', serverError);
+        logger.error('Failed to save subscription to server', serverError);
         setError('Failed to save subscription');
         // Don't set isSubscribed to false here, as the subscription exists locally
       }
     } catch (error) {
-      console.error('Error initializing push notifications:', error);
+      logger.error('Error initializing push notifications', error);
       setError(error.message || 'Failed to initialize push notifications');
     } finally {
       setIsLoading(false);
@@ -143,14 +144,14 @@ export const usePushNotification = () => {
             endpoint: subscription.endpoint
           });
         } catch (serverError) {
-          console.error('Failed to remove subscription from server:', serverError);
+          logger.error('Failed to remove subscription from server', serverError);
         }
 
         setSubscription(null);
         setIsSubscribed(false);
       }
     } catch (error) {
-      console.error('Error unsubscribing:', error);
+      logger.error('Error unsubscribing', error);
       setError(error.message || 'Failed to unsubscribe');
     }
   }, [subscription]);

@@ -18,28 +18,33 @@ export const staticFilesCorsMiddleware = (req, res, next) => {
   
   // Set CORS headers for static files BEFORE serving
   // CRITICAL: Always set CORS headers for images to work with html2canvas and other CORS contexts
-  if (origin) {
-    // Check if origin is allowed (including Vercel in production)
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
+  
+  // Development: More permissive CORS for easier local development
+  if (process.env.NODE_ENV === "development") {
+    if (origin) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      // In production, if origin is not explicitly allowed but is Vercel, allow it
-      if (process.env.NODE_ENV === "production" && origin === "https://paarsiv.vercel.app") {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+  } else {
+    // Production: Strict CORS based on allowed origins
+    if (origin) {
+      if (allowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      } else if (origin === "https://paarsiv.vercel.app") {
+        // Explicitly allow Vercel origin in production
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Credentials", "true");
       } else {
-        // Use wildcard for other cases (but never with credentials)
+        // Reject unknown origins in production (no wildcard)
+        logger.warn('CORS rejected origin for static files', { origin });
+        // Still set headers but without credentials
         res.setHeader("Access-Control-Allow-Origin", "*");
       }
-    }
-  } else {
-    // No origin header - but in production, allow Vercel explicitly for CORS requests
-    // This handles cases where img tag loads without origin, but later CORS request needs it
-    if (process.env.NODE_ENV === "production") {
-      // Don't set credentials with wildcard - they're incompatible
-      res.setHeader("Access-Control-Allow-Origin", "*");
     } else {
+      // No origin header - use wildcard but without credentials
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
   }
@@ -92,22 +97,29 @@ export const staticFilesConfig = express.static(path.join(__dirname, "..", "uplo
     const allowedOrigins = getAllowedOrigins();
     
     // Set CORS headers for the file response - MUST match what middleware set
-    if (origin) {
-      // Check if origin is allowed
-      if (allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else if (process.env.NODE_ENV === "production" && origin === "https://paarsiv.vercel.app") {
-        // Explicitly allow Vercel origin in production
+    // Development: More permissive CORS
+    if (process.env.NODE_ENV === "development") {
+      if (origin) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Credentials", "true");
       } else {
-        // Use wildcard for other cases (no credentials)
         res.setHeader("Access-Control-Allow-Origin", "*");
       }
     } else {
-      // No origin header - use wildcard (no credentials)
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      // Production: Strict CORS
+      if (origin) {
+        if (allowedOrigins.includes(origin)) {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else if (origin === "https://paarsiv.vercel.app") {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+        }
+      } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
     }
     
     // Set appropriate content type for images

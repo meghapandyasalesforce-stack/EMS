@@ -1,8 +1,17 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import logger from "../helpers/logger.js";
+import { BCRYPT_SALT_ROUNDS } from "../config/constants.js";
 
 const userSchema = new mongoose.Schema({
+    // Organization reference (multi-tenancy)
+    organizationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Organization',
+        required: true,
+        index: true
+    },
+    
     name: {
         type: String,
         required: [true, 'Name is required'],
@@ -12,7 +21,6 @@ const userSchema = new mongoose.Schema({
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true,
         trim: true,
         lowercase: true,
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
@@ -27,6 +35,14 @@ const userSchema = new mongoose.Schema({
         trim: true,
         match: [/^\+?[\d\s-()]+$/, 'Please enter a valid phone number']
     },
+    title: {
+        type: String,
+        trim: true
+    },
+    position: {
+        type: String,
+        trim: true
+    },
     role: {
         type: String,
         enum: [ 'admin', 'employee'],
@@ -36,8 +52,37 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    // Email verification
+    emailVerified: {
+        type: Boolean,
+        default: false
+    },
+    emailVerificationToken: {
+        type: String,
+        sparse: true
+    },
+    emailVerificationExpires: {
+        type: Date
+    },
+    // Two-factor authentication
+    twoFactorEnabled: {
+        type: Boolean,
+        default: false
+    },
+    twoFactorSecret: {
+        type: String,
+        sparse: true
+    },
     resetPasswordToken: String,
-resetPasswordExpire: Date,
+    resetPasswordExpire: Date,
+    // Account lockout for security
+    loginAttempts: {
+        type: Number,
+        default: 0
+    },
+    lockUntil: {
+        type: Date
+    }
 
 },{ timestamps: true });
 
@@ -50,7 +95,7 @@ userSchema.pre('save', async function(next) {
     // Hash password only when modified
     if (this.isModified('password')) {
         try {
-            const salt = await bcrypt.genSalt(10);
+            const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
             this.password = await bcrypt.hash(this.password, salt);
         } catch (error) {
             return next(new Error('Error hashing password'));
@@ -63,7 +108,13 @@ userSchema.pre('save', async function(next) {
 userSchema.methods.comparePassword = async function(candidatePassword) {
     try {
         if (!candidatePassword) {
-            throw new Error('Password is required');
+            return false; // Return false instead of throwing for invalid input
+        }
+        if (!this.password) {
+            logger.warn('Password comparison attempted but user has no password', { 
+                userId: this._id 
+            });
+            return false;
         }
         return await bcrypt.compare(candidatePassword, this.password);
     } catch (error) {
@@ -72,7 +123,8 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
             stack: error.stack,
             userId: this._id 
         });
-        throw new Error('Error comparing passwords');
+        // Return false instead of throwing to allow login controller to handle 401 properly
+        return false;
     }
 };
 
@@ -84,10 +136,12 @@ userSchema.methods.toJSON = function() {
 };
 
 // Add database indexes for better query performance
-// Note: email index is automatically created by unique: true
+// Compound unique index: email must be unique per organization
+userSchema.index({ email: 1, organizationId: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ role: 1, isActive: 1 }); // Compound index for common queries
+userSchema.index({ organizationId: 1, role: 1 }); // For filtering by org and role
 
 const User= mongoose.model("User", userSchema,"users");
 

@@ -1,9 +1,9 @@
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import Employee from '../../models/employee.model.js';
 import User from '../../models/user.model.js';
 import bcrypt from 'bcryptjs';
 import logger from '../../helpers/logger.js';
+import { createEmailTransporter, getEmailFrom } from '../../config/email.config.js';
 
 // Helper function to generate reset token
 // SECURITY: Use bcrypt to hash tokens instead of SHA-256 to prevent brute force attacks
@@ -61,41 +61,20 @@ export const forgotPassword = async (req, res) => {
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // Email configuration - support both Gmail and Outlook/Office 365
-    const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
-    const emailPort = process.env.EMAIL_PORT || 587;
-    const isOutlook = emailHost.includes('office365.com') || emailHost.includes('outlook.com');
-    
-    // Validate email credentials are configured
-    const emailUser = process.env.EMAIL_USERNAME || process.env.EMAIL_USER;
-    const emailPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
-    
-    if (!emailUser || !emailPass) {
-      return res.status(500).json({ 
-        message: 'Email service not configured. Please contact administrator.' 
-      });
-    }
-    
-    const transporter = nodemailer.createTransport({
-      host: isOutlook ? emailHost : undefined,
-      port: isOutlook ? emailPort : undefined,
-      secure: false, // true for 465, false for other ports (587 uses STARTTLS)
-      requireTLS: isOutlook ? true : false, // Outlook requires STARTTLS
-      service: isOutlook ? undefined : (process.env.EMAIL_SERVICE || 'Gmail'),
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-      tls: isOutlook ? {
-        // Only disable certificate validation in development
-        // In production, always validate certificates to prevent MITM attacks
-        rejectUnauthorized: process.env.NODE_ENV === 'production'
-      } : undefined
-    });
-
-    const emailFrom = process.env.EMAIL_FROM || process.env.EMAIL_USERNAME || process.env.EMAIL_USER;
-    
-    if (!emailFrom) {
+    // Create email transporter using centralized config
+    let transporter;
+    let emailFrom;
+    try {
+      transporter = createEmailTransporter();
+      emailFrom = getEmailFrom();
+      
+      if (!emailFrom) {
+        return res.status(500).json({ 
+          message: 'Email service not configured. Please contact administrator.' 
+        });
+      }
+    } catch (emailConfigError) {
+      logger.error('Email configuration error in password reset', { error: emailConfigError.message });
       return res.status(500).json({ 
         message: 'Email service not configured. Please contact administrator.' 
       });

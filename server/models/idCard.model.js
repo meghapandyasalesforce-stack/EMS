@@ -1,6 +1,13 @@
 import mongoose from "mongoose";
 
 const idCardSchema = new mongoose.Schema({
+    // Organization reference (multi-tenancy)
+    organizationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Organization',
+        required: true,
+        index: true
+    },
     employeeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
@@ -13,8 +20,7 @@ const idCardSchema = new mongoose.Schema({
     },
     cardNumber: {
         type: String,
-        required: true,
-        unique: true
+        required: true
     },
     issueDate: {
         type: Date,
@@ -118,6 +124,9 @@ idCardSchema.methods.updateUsage = function() {
 
 // Static method removed - expiry date no longer used
 // Cards are managed by status only (active, suspended, cancelled)
+
+// Add compound unique index: cardNumber must be unique per organization
+idCardSchema.index({ cardNumber: 1, organizationId: 1 }, { unique: true });
 
 const IdCard = mongoose.model("IdCard", idCardSchema, "idcards");
 export default IdCard;

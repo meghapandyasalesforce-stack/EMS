@@ -1,6 +1,13 @@
 import mongoose from 'mongoose';
 
 const pushSubscriptionSchema = new mongoose.Schema({
+  // Organization reference (multi-tenancy)
+  organizationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
+    required: true,
+    index: true
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     refPath: 'userType',
@@ -29,7 +36,7 @@ const pushSubscriptionSchema = new mongoose.Schema({
 
 // Index for efficient queries
 pushSubscriptionSchema.index({ userId: 1, userType: 1 });
-pushSubscriptionSchema.index({ endpoint: 1 });
+// Note: endpoint already has an index from unique: true, so no need to create duplicate
 
 const PushSubscription = mongoose.model('PushSubscription', pushSubscriptionSchema);
 

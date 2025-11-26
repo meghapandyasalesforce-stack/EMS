@@ -7,35 +7,37 @@
 
 import dotenv from 'dotenv';
 import { validateEmailConfig } from '../helpers/emailValidator.js';
+import { getEmailConfig, detectEmailProvider, validateEmailConfiguration } from '../config/email.config.js';
 
 // Load environment variables
 dotenv.config();
 
 console.log('🔍 Checking Email Configuration...\n');
 
-const emailUser = process.env.EMAIL_USER || process.env.EMAIL_USERNAME;
-const emailPass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
-const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
-const emailPort = process.env.EMAIL_PORT || 587;
+const emailConfig = getEmailConfig();
+const provider = detectEmailProvider(emailConfig);
+const validation = validateEmailConfiguration();
 
 console.log('Configuration:');
-console.log(`  EMAIL_USER: ${emailUser ? emailUser.replace(/@.*/, '@***') : '❌ Not set'}`);
-console.log(`  EMAIL_PASS: ${emailPass ? '✓ Set' : '❌ Not set'}`);
-console.log(`  EMAIL_HOST: ${emailHost}`);
-console.log(`  EMAIL_PORT: ${emailPort}`);
+console.log(`  EMAIL_USER: ${emailConfig.user ? emailConfig.user.replace(/@.*/, '@***') : '❌ Not set'}`);
+console.log(`  EMAIL_PASS: ${emailConfig.password ? '✓ Set' : '❌ Not set'}`);
+console.log(`  EMAIL_HOST: ${emailConfig.host}`);
+console.log(`  EMAIL_PORT: ${emailConfig.port}`);
+console.log(`  Provider: ${provider.type}`);
 console.log('');
 
-if (!emailUser || !emailPass) {
+if (!validation.valid) {
   console.error('❌ Email credentials are not configured!');
-  console.error('   Please set EMAIL_USER/EMAIL_USERNAME and EMAIL_PASS/EMAIL_PASSWORD in your .env file');
+  validation.errors.forEach(error => {
+    console.error(`   ${error}`);
+  });
   process.exit(1);
 }
 
-// Detect provider
-const isGmail = emailUser.includes('@gmail.com') || emailHost.includes('gmail');
-if (isGmail) {
-  const cleanPass = emailPass.replace(/\s/g, '');
-  if (cleanPass.length !== 16) {
+// Gmail-specific validation
+if (provider.isGmail) {
+  const cleanPass = emailConfig.password?.replace(/\s/g, '');
+  if (cleanPass && cleanPass.length !== 16) {
     console.warn('⚠️  WARNING: Gmail requires an App Password (16 characters)');
     console.warn('   Your password may not be an App Password.');
     console.warn('   Generate one at: https://myaccount.google.com/apppasswords\n');

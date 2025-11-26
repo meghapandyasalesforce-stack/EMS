@@ -1,10 +1,16 @@
 import mongoose from "mongoose";
 
 const roleSchema = new mongoose.Schema({
+    // Organization reference (multi-tenancy)
+    organizationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Organization',
+        required: true,
+        index: true
+    },
     name: {
         type: String,
         required: true,
-        unique: true,
         trim: true,
         minlength: 2,
         maxlength: 50
@@ -18,8 +24,7 @@ const roleSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 1,
-        max: 10,
-        unique: true
+        max: 10
     },
     permissions: [{
         module: {
@@ -59,7 +64,25 @@ const roleSchema = new mongoose.Schema({
     childRoles: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Role'
-    }]
+    }],
+    dashboardRoute: {
+        type: String,
+        default: '/dashboard-employee',
+        enum: [
+            '/dashboard-admin',
+            '/dashboard-employee',
+            '/dashboard-hr',
+            '/dashboard-manager',
+            '/dashboard-finance',
+            '/dashboard-executive',
+            '/organization/dashboard'
+        ]
+    },
+    dashboardConfig: {
+        widgets: [String], // Which widgets to show
+        layout: String, // Dashboard layout preference
+        theme: String // Dashboard theme
+    }
 }, {
     timestamps: true
 });
@@ -97,6 +120,10 @@ roleSchema.statics.getHierarchy = async function() {
         .populate('childRoles', 'name level')
         .sort({ level: 1 });
 };
+
+// Add compound unique indexes: name and level must be unique per organization
+roleSchema.index({ name: 1, organizationId: 1 }, { unique: true });
+roleSchema.index({ level: 1, organizationId: 1 }, { unique: true });
 
 const Role = mongoose.model("Role", roleSchema, "roles");
 export default Role;

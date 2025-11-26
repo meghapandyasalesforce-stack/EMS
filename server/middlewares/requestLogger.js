@@ -1,4 +1,15 @@
 import logger from '../helpers/logger.js';
+import { randomUUID } from 'crypto';
+
+/**
+ * Request ID middleware - generates unique ID for each request for tracing
+ */
+export const requestIdMiddleware = (req, res, next) => {
+    // Generate or use existing request ID
+    req.id = req.headers['x-request-id'] || randomUUID();
+    res.setHeader('X-Request-ID', req.id);
+    next();
+};
 
 /**
  * Request logging middleware
@@ -9,6 +20,7 @@ export const requestLogger = (req, res, next) => {
     
     // Log request details
     const logData = {
+        requestId: req.id,
         timestamp: new Date().toISOString(),
         method: req.method,
         path: req.path,
@@ -41,12 +53,25 @@ export const requestLogger = (req, res, next) => {
 
     // Log the request
     logger.info('Incoming request', logData);
+    
+    // Extra logging for login endpoints to debug 401 issues
+    if (req.path === '/login' || req.originalUrl?.includes('/auth/login')) {
+        logger.info('Login request detected', {
+            originalUrl: req.originalUrl,
+            path: req.path,
+            method: req.method,
+            hasBody: !!req.body,
+            bodyKeys: req.body ? Object.keys(req.body) : [],
+            contentType: req.get('content-type')
+        });
+    }
 
     // Track response time
     res.on('finish', () => {
         const duration = Date.now() - startTime;
         
         logger.info('Request completed', {
+            requestId: req.id,
             method: req.method,
             path: req.path,
             statusCode: res.statusCode,
@@ -58,17 +83,21 @@ export const requestLogger = (req, res, next) => {
         // Log security concerns
         if (res.statusCode === 401 || res.statusCode === 403) {
             logger.warn('Security event', {
+                requestId: req.id,
                 method: req.method,
                 path: req.path,
+                originalUrl: req.originalUrl, // Full URL path
                 statusCode: res.statusCode,
                 ip: req.ip,
-                userAgent: req.get('user-agent')
+                userAgent: req.get('user-agent'),
+                body: req.body ? (req.body.email ? { email: req.body.email, hasPassword: !!req.body.password } : '[REDACTED]') : undefined
             });
         }
 
         // Log errors
         if (res.statusCode >= 500) {
             logger.error('Server error', {
+                requestId: req.id,
                 method: req.method,
                 path: req.path,
                 statusCode: res.statusCode,

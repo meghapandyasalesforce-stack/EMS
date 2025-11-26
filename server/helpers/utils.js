@@ -1,21 +1,30 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import logger from "./logger.js";
+import { DEFAULT_JWT_ACCESS_EXPIRE, DEFAULT_JWT_REFRESH_EXPIRE, CSRF_TOKEN_BYTES } from "../config/constants.js";
 
 /**
  * Generate access token (short-lived) and refresh token (long-lived)
  * @param {string} userId - User ID
  * @param {string} role - User role (admin/employee)
+ * @param {string} organizationId - Organization ID (for multi-tenancy)
  * @param {Object} res - Express response object (optional)
  * @returns {Object|string} - Token object with accessToken, refreshToken, csrfToken or just accessToken
  */
-export const generateToken = (userId, role = null, res = null) => {
+export const generateToken = (userId, role = null, organizationId = null, res = null) => {
     try {
+        // Validate JWT_SECRET is set
+        if (!process.env.JWT_SECRET) {
+            logger.error("JWT_SECRET is not defined in environment variables");
+            throw new Error("JWT_SECRET is required but not set. Please configure it in your .env file.");
+        }
+
         const payload = { userId };
         if (role) payload.role = role;
+        if (organizationId) payload.organizationId = organizationId;
 
         // Access token - shorter expiration (1 hour default, configurable)
-        const accessTokenExpiry = process.env.JWT_ACCESS_EXPIRE || "1h";
+        const accessTokenExpiry = process.env.JWT_ACCESS_EXPIRE || DEFAULT_JWT_ACCESS_EXPIRE;
         const accessToken = jwt.sign(
             payload,
             process.env.JWT_SECRET,
@@ -23,9 +32,11 @@ export const generateToken = (userId, role = null, res = null) => {
         );
 
         // Refresh token - longer expiration (30 days default)
-        const refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRE || "30d";
+        const refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRE || DEFAULT_JWT_REFRESH_EXPIRE;
+        const refreshPayload = { userId, role, type: 'refresh' };
+        if (organizationId) refreshPayload.organizationId = organizationId;
         const refreshToken = jwt.sign(
-            { userId, role, type: 'refresh' },
+            refreshPayload,
             process.env.JWT_SECRET,
             { expiresIn: refreshTokenExpiry }
         );
@@ -61,7 +72,7 @@ export const generateToken = (userId, role = null, res = null) => {
             res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
             // Issue CSRF token for double-submit cookie strategy
-            const csrfToken = crypto.randomBytes(32).toString('hex');
+            const csrfToken = crypto.randomBytes(CSRF_TOKEN_BYTES).toString('hex');
             const csrfCookieOptions = {
                 maxAge: cookieOptions.maxAge,
                 httpOnly: false,

@@ -1,6 +1,13 @@
 import mongoose from 'mongoose';
 
 const notificationSchema = new mongoose.Schema({
+  // Organization reference (multi-tenancy)
+  organizationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
+    required: true,
+    index: true
+  },
   recipient: { 
     type: mongoose.Schema.Types.ObjectId, 
     refPath: 'recipientType',

@@ -1,140 +1,157 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import useGetAllProjects from "../Hooks/useGetAllProjects";
-import { useDispatch, useSelector } from "react-redux";
-import { fetchEmployees } from "../context/employeeSlice";
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import NotificationSender from "./NotificationSender";
-import axios from "../utils/axios";
 import { FiCoffee, FiClock, FiUser } from "react-icons/fi";
+import { FaUsers, FaFolder, FaMoneyBillWave } from "react-icons/fa";
+import LoadingSpinner from "../components/LoadingSpinner";
+import StatCard from "../components/StatCard";
+import { 
+  useEmployees, 
+  useProjects, 
+  usePayrolls, 
+  useEmployeesOnBreak 
+} from "../Hooks/useDashboardData";
+import { handleApiError } from "../utils/errorHandler";
+
+// Memoized selectors
+const selectAuth = (state) => state.auth || {};
 
 function DashboardAdmin() {
-  const dispatch = useDispatch();
-  const { employees = [], error: employeesError, status: employeesStatus } = useSelector((state) => state.employees || {});
-  const { projects = [] } = useSelector((state) => state.projects?.allProjects || []);
-  const { data: payrolls = [] } = useSelector((state) => state.payroll || {});
-  const employeeCount = employees?.length || 0;
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const navigate = useNavigate();
-  const { user } = useSelector((state) => state.auth || {});
-  const [employeesOnBreak, setEmployeesOnBreak] = useState([]);
-  const [loadingBreaks, setLoadingBreaks] = useState(true);
-  
-  const fetchEmployeesOnBreak = async () => {
-    try {
-      setLoadingBreaks(true);
-      const response = await axios.get('/v1/both/attendance/employees-on-break');
-      if (response.data.success) {
-        setEmployeesOnBreak(response.data.employees || []);
-      }
-    } catch (error) {
-      // Removed console.error for production
-      setEmployeesOnBreak([]);
-    } finally {
-      setLoadingBreaks(false);
+  const authState = useSelector(selectAuth);
+  const user = authState?.user;
+
+  // Use React Query hooks for data fetching with caching
+  const { 
+    data: employees = [], 
+    isLoading: employeesLoading,
+    error: employeesError 
+  } = useEmployees();
+
+  const { 
+    data: projects = [], 
+    isLoading: projectsLoading 
+  } = useProjects();
+
+  const { 
+    data: payrolls = [], 
+    isLoading: payrollsLoading 
+  } = usePayrolls();
+
+  const { 
+    data: employeesOnBreak = [], 
+    isLoading: breaksLoading,
+    error: breaksError 
+  } = useEmployeesOnBreak();
+
+  const isLoading = employeesLoading || projectsLoading || payrollsLoading;
+  const employeeCount = employees?.length || 0;
+
+  useEffect(() => {
+    // Check authentication
+    const userRole = localStorage.getItem('role');
+    
+    if (!user && userRole !== 'admin') {
+      navigate('/dashboard', { replace: true });
+      return;
     }
-  };
-  
+  }, [user, navigate]);
+
+  // Handle errors
+  useEffect(() => {
+    if (employeesError) {
+      handleApiError(employeesError, { 
+        context: 'Admin Dashboard', 
+        showToast: employeesError.response?.status !== 401 
+      });
+    }
+    if (breaksError) {
+      handleApiError(breaksError, { 
+        context: 'Employees on Break', 
+        showToast: breaksError.response?.status !== 401 
+      });
+    }
+  }, [employeesError, breaksError]);
+
   const formatBreakDuration = (minutes) => {
+    if (!minutes || isNaN(minutes) || minutes < 0) {
+      return '0m';
+    }
     if (minutes < 60) {
-      return `${minutes}m`;
+      return `${Math.round(minutes)}m`;
     }
     const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    const mins = Math.round(minutes % 60);
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
 
-  useEffect(() => {
-    // Check if user is logged in and has admin role
-    const userRole = localStorage.getItem('role');
-    const token = localStorage.getItem('token');
-    
-    if (!token || userRole !== 'admin') {
-      // Removed console.warn for production
-      return;
+  const formatCurrency = (amount) => {
+    if (!amount || isNaN(amount)) {
+      return '$0';
     }
-    
-    // Fetch employees
-    dispatch(fetchEmployees());
-    
-    // Fetch employees on break
-    fetchEmployeesOnBreak();
-    
-    // Set up polling to refresh break status every 30 seconds
-    const breakInterval = setInterval(fetchEmployeesOnBreak, 30000);
-    
-    return () => clearInterval(breakInterval);
-  }, [dispatch]);
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
 
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-    };
+  const formatTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useGetAllProjects();
+  if (isLoading) {
+    return <LoadingSpinner message="Loading admin dashboard..." />;
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Main Content - responsive to sidebar width */}
       <div className="flex-1 p-4 md:p-8 transition-all duration-300 ml-0 lg:ml-64">
-        {/* Mobile Header is now in Header component */}
-
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 md:mb-8">Admin Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 md:mb-8">
+          Admin Dashboard
+        </h1>
 
         {/* Error Messages */}
-        {employeesError && (
+        {employeesError && employeesError.response?.status !== 401 && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
             <p className="font-bold">Error Loading Data</p>
-            <p className="text-sm">{employeesError}</p>
-            {employeesError.includes('403') || employeesError.includes('Forbidden') ? (
-              <p className="text-sm mt-2">
-                <strong>Solution:</strong> Please log out and log back in as admin to refresh your authentication token.
-              </p>
-            ) : null}
+            <p className="text-sm">{employeesError.response?.data?.message || 'Failed to load employees'}</p>
           </div>
         )}
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Using StatCard component */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 rounded-full bg-blue-100 text-blue-600 mr-3 md:mr-4">
-                <span className="text-xl">👥</span>
-              </div>
-              <div>
-                <h3 className="text-gray-500 text-sm font-medium">Employees</h3>
-                <p className="text-gray-800 text-xl md:text-2xl font-bold">{employeeCount}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border-l-4 border-green-500 hover:shadow-lg transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 rounded-full bg-green-100 text-green-600 mr-3 md:mr-4">
-                <span className="text-xl">📋</span>
-              </div>
-              <div>
-                <h3 className="text-gray-500 text-sm font-medium">Projects</h3>
-                <p className="text-gray-800 text-xl md:text-2xl font-bold">{projects.length}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-4 md:p-6 rounded-xl shadow-md border-l-4 border-purple-500 hover:shadow-lg transition-shadow">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 rounded-full bg-purple-100 text-purple-600 mr-3 md:mr-4">
-                <span className="text-xl">💰</span>
-              </div>
-              <div>
-                <h3 className="text-gray-500 text-sm font-medium">Payrolls</h3>
-                <p className="text-gray-800 text-xl md:text-2xl font-bold">{payrolls.length}</p>
-              </div>
-            </div>
-          </div>
+          <StatCard
+            label="Employees"
+            value={employeeCount}
+            icon={<FaUsers className="w-6 h-8" />}
+            color="blue"
+          />
+          
+          <StatCard
+            label="Projects"
+            value={projects.length}
+            icon={<FaFolder className="w-6 h-8" />}
+            color="green"
+          />
+          
+          <StatCard
+            label="Payrolls"
+            value={payrolls.length}
+            icon={<FaMoneyBillWave className="w-6 h-8" />}
+            color="purple"
+          />
         </div>
 
         {/* Announcement Section */}
@@ -157,27 +174,41 @@ function DashboardAdmin() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <tbody>
-                  {projects.slice(0, 5).map((project) => (
-                    <tr key={project._id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-2 md:py-3 px-2">
-                        <div className="font-medium text-sm md:text-base">{project.name}</div>
-                        <div className="text-xs md:text-sm text-gray-500">{project.status}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {projects.length > 5 && (
-                <div className="text-center mt-3 md:mt-4">
-                  <button 
-                    onClick={() => navigate("/projects")}
-                    className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+              {!Array.isArray(projects) || projects.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 text-sm">No projects found</p>
+                  <button
+                    onClick={() => navigate("/add-project")}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
-                    View All Projects →
+                    Create your first project →
                   </button>
                 </div>
+              ) : (
+                <>
+                  <table className="w-full">
+                    <tbody>
+                      {projects.slice(0, 5).map((project) => (
+                        <tr key={project._id || project.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 md:py-3 px-2">
+                            <div className="font-medium text-sm md:text-base">{project.name || 'Unnamed Project'}</div>
+                            <div className="text-xs md:text-sm text-gray-500">{project.status || 'N/A'}</div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {projects.length > 5 && (
+                    <div className="text-center mt-3 md:mt-4">
+                      <button 
+                        onClick={() => navigate("/projects")}
+                        className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+                      >
+                        View All Projects →
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -195,27 +226,48 @@ function DashboardAdmin() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <tbody>
-                  {employees.slice(0, 5)?.map((emp) => (
-                    <tr key={emp._id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-2 md:py-3 px-2">
-                        <div className="font-medium text-sm md:text-base">{emp.name} {emp.lastName}</div>
-                        <div className="text-xs md:text-sm text-gray-500">{emp.position}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {employees.length > 5 && (
-                <div className="text-center mt-3 md:mt-4">
-                  <button 
-                    onClick={() => navigate("/employees")}
-                    className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+              {employeesLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-2 text-sm">Loading employees...</p>
+                </div>
+              ) : !Array.isArray(employees) || employees.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 text-sm">No employees found</p>
+                  <button
+                    onClick={() => navigate("/add-employee")}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
-                    View All Employees →
+                    Add your first employee →
                   </button>
                 </div>
+              ) : (
+                <>
+                  <table className="w-full">
+                    <tbody>
+                      {employees.slice(0, 5).map((emp) => (
+                        <tr key={emp._id || emp.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 md:py-3 px-2">
+                            <div className="font-medium text-sm md:text-base">
+                              {emp.name || ''} {emp.lastName || ''}
+                            </div>
+                            <div className="text-xs md:text-sm text-gray-500">{emp.position || 'N/A'}</div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {employees.length > 5 && (
+                    <div className="text-center mt-3 md:mt-4">
+                      <button 
+                        onClick={() => navigate("/employees")}
+                        className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+                      >
+                        View All Employees →
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -233,16 +285,9 @@ function DashboardAdmin() {
                 <p className="text-xs md:text-sm text-gray-500">Currently on break ({employeesOnBreak.length})</p>
               </div>
             </div>
-            <button
-              onClick={fetchEmployeesOnBreak}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              disabled={loadingBreaks}
-            >
-              {loadingBreaks ? 'Refreshing...' : 'Refresh'}
-            </button>
           </div>
           
-          {loadingBreaks ? (
+          {breaksLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
               <p className="text-gray-500 mt-2 text-sm">Loading...</p>
@@ -293,7 +338,7 @@ function DashboardAdmin() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Started {new Date(item.breakStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        Started {formatTime(item.breakStartTime)}
                       </p>
                     </div>
                   </div>
@@ -328,27 +373,43 @@ function DashboardAdmin() {
         <div className="bg-white p-4 md:p-6 rounded-xl shadow-md">
           <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Recent Payrolls</h2>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <tbody>
-                {(Array.isArray(payrolls) ? payrolls.slice(0, 5) : []).map((payroll) => (
-                  <tr key={payroll._id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-2 md:py-3 px-2">
-                      <div className="font-medium text-sm md:text-base">{payroll.employeeName}</div>
-                      <div className="text-xs md:text-sm text-gray-500">${payroll.amount} • {payroll.status}</div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {payrolls.length > 5 && (
-              <div className="text-center mt-3 md:mt-4">
-                <button 
-                  onClick={() => navigate("/admin-payroll")}
-                  className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+            {!Array.isArray(payrolls) || payrolls.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 text-sm">No payroll records found</p>
+                <button
+                  onClick={() => navigate("/add-payroll")}
+                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
                 >
-                  View All Payrolls →
+                  Create your first payroll →
                 </button>
               </div>
+            ) : (
+              <>
+                <table className="w-full">
+                  <tbody>
+                    {payrolls.slice(0, 5).map((payroll) => (
+                      <tr key={payroll._id || payroll.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-2 md:py-3 px-2">
+                          <div className="font-medium text-sm md:text-base">{payroll.employeeName || 'Unknown Employee'}</div>
+                          <div className="text-xs md:text-sm text-gray-500">
+                            {formatCurrency(payroll.amount || payroll.totalAmount || 0)} • {payroll.status || 'N/A'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {payrolls.length > 5 && (
+                  <div className="text-center mt-3 md:mt-4">
+                    <button 
+                      onClick={() => navigate("/admin-payroll")}
+                      className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+                    >
+                      View All Payrolls →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
