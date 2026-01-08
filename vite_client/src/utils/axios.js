@@ -193,10 +193,11 @@ instance.interceptors.request.use(
     try {
       const method = (config.method || 'get').toLowerCase();
       if (typeof document !== 'undefined' && ['post','put','patch','delete'].includes(method)) {
-        // Check if this is an auth endpoint that doesn't require CSRF (login/register/password reset)
+        // Check if this is an auth endpoint that doesn't require CSRF (login/register/password reset/refresh)
         const isAuthEndpoint = config.url && (
           config.url.includes('/auth/login') || 
           config.url.includes('/auth/register') ||
+          config.url.includes('/auth/refresh-token') ||
           config.url.includes('/password/forgot-password') ||
           config.url.includes('/password/reset-password')
         );
@@ -343,21 +344,32 @@ instance.interceptors.response.use(
         // If refresh fails, we'll redirect to login below
 
         // Determine which refresh endpoint to use based on role
-        // SECURITY: Get role from Redux store or cookie, not localStorage
+        // SECURITY: Get role from cookie (set during login), not localStorage or Redux store
+        // This is more reliable than accessing Redux store from a utility file
         // Fallback to 'employee' if role cannot be determined
         let role = 'employee';
         try {
-          // Try to get role from Redux store (if available in global scope)
-          if (typeof window !== 'undefined' && window.__REDUX_STORE__) {
-            const state = window.__REDUX_STORE__.getState();
-            role = state?.auth?.user?.role || 'employee';
-          }
-          // Fallback: try to get from cookie (if stored there)
-          if (role === 'employee' && typeof document !== 'undefined') {
+          // Get role from cookie (set during login in Auth components)
+          if (typeof document !== 'undefined') {
             const cookies = document.cookie.split('; ');
             const roleCookie = cookies.find(c => c.startsWith('role='));
             if (roleCookie) {
               role = roleCookie.split('=')[1];
+            }
+          }
+          
+          // If no role cookie found, try to infer from token payload (last resort)
+          // Note: This is a fallback - role should always be in cookie after login
+          if (role === 'employee' && refreshToken) {
+            try {
+              // Decode JWT token to get role (without verification, just for endpoint selection)
+              const tokenParts = refreshToken.split('.');
+              if (tokenParts.length === 3) {
+                const payload = JSON.parse(atob(tokenParts[1]));
+                role = payload.role || 'employee';
+              }
+            } catch {
+              // If decoding fails, use default 'employee'
             }
           }
         } catch {

@@ -27,6 +27,9 @@ import {
 import { registerRoutes } from "./config/routes.js";
 import { registerDiagnosticRoutes } from "./config/diagnosticRoutes.js";
 import csrfProtection from "./middlewares/csrf.js";
+import { requestTimeout } from "./middlewares/requestTimeout.js";
+import { staticCacheHeaders } from "./middlewares/cacheHeaders.js";
+import { setOrganizationContext } from "./middlewares/organizationIsolation.js";
 import logger from "./helpers/logger.js";
 
 const app = express();
@@ -37,6 +40,12 @@ dotenv.config();
 const isValid = validateEnvironment();
 if (!isValid && process.env.NODE_ENV === 'production') {
   logger.error("Critical environment variables missing. Exiting...");
+  process.exit(1);
+}
+
+// ✅ CRITICAL SECURITY: Prevent rate limiting from being disabled in production
+if (process.env.NODE_ENV === 'production' && process.env.DISABLE_RATE_LIMIT === 'true') {
+  logger.error("CRITICAL SECURITY ERROR: Rate limiting is disabled in production. Exiting...");
   process.exit(1);
 }
 
@@ -104,18 +113,27 @@ app.use(corsMiddleware);
 // ✅ Static files (before rate limiting/CSRF to avoid unnecessary checks)
 app.use("/uploads", staticFilesCorsMiddleware);
 app.use("/uploads", staticFilesCheckMiddleware, staticFilesConfig);
+app.use(staticCacheHeaders); // Add cache headers for static files
+
+// ✅ Request timeout (prevent hanging requests)
+app.use(requestTimeout(parseInt(process.env.REQUEST_TIMEOUT_MS || '30000')));
 
 // ✅ Rate limiting + CSRF
 app.use(apiLimiter);
 app.use(csrfProtection);
+
+// ✅ Organization isolation (set context for all authenticated requests)
+// This should be after authentication middleware but before routes
+app.use(setOrganizationContext);
 
 // =================== ROUTES ===================
 registerRoutes(app);
 registerDiagnosticRoutes(app);
 
 // =================== API DOCUMENTATION ===================
-// Swagger/OpenAPI documentation (only in development or if enabled)
-if (process.env.NODE_ENV === 'development' || process.env.ENABLE_SWAGGER === 'true') {
+// Swagger/OpenAPI documentation - enabled by default, can be disabled via ENABLE_SWAGGER=false
+const enableSwagger = process.env.ENABLE_SWAGGER !== 'false'; // Default to true unless explicitly disabled
+if (enableSwagger) {
     try {
         const { swaggerUiSetup, swaggerUiServe } = await import('./config/swagger.js');
         app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
@@ -123,6 +141,8 @@ if (process.env.NODE_ENV === 'development' || process.env.ENABLE_SWAGGER === 'tr
     } catch (error) {
         logger.warn('Swagger documentation not available', { error: error.message });
     }
+} else {
+    logger.info('Swagger documentation disabled via ENABLE_SWAGGER=false');
 }
 
 // ✅ Error handlers
@@ -151,6 +171,16 @@ const startServer = async () => {
         await initI18n();
       } catch (i18nError) {
         logger.warn('i18n initialization failed - continuing with default language', { error: i18nError.message });
+      }
+    }
+
+    // Initialize Sentry error tracking (non-blocking)
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { initSentry } = await import('./config/sentry.js');
+        await initSentry();
+      } catch (sentryError) {
+        logger.debug('Sentry initialization skipped', { error: sentryError.message });
       }
     }
 

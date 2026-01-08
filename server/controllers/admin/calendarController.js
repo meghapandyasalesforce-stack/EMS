@@ -1,6 +1,7 @@
 import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
+import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 
 // Get calendar for a specific year
 export const getCalendar = async (req, res) => {
@@ -12,11 +13,20 @@ export const getCalendar = async (req, res) => {
             return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
         }
 
-        let calendar = await Calendar.findOne({ year: yearNum });
+        // Get organizationId from request
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        // Find calendar by year and organizationId
+        const query = addOrganizationFilter(req, { year: yearNum });
+        let calendar = await Calendar.findOne(query);
 
         // Create calendar if it doesn't exist
         if (!calendar) {
             calendar = new Calendar({
+                organizationId: organizationId,
                 year: yearNum,
                 holidays: [],
                 workingDays: {
@@ -42,7 +52,23 @@ export const getCalendar = async (req, res) => {
             await calendar.save();
         }
 
-        return sendSuccess(res, { calendar }, 'Calendar retrieved successfully');
+        // Return calendar data in the format expected by frontend
+        // Frontend expects response.data to contain the calendar object
+        // Since sendSuccess merges object properties, we need to manually construct the response
+        const calendarData = {
+            ...calendar.toObject(),
+            holidays: calendar.holidays || [],
+            workingDays: calendar.workingDays || {},
+            workingHours: calendar.workingHours || {},
+            companySettings: calendar.companySettings || {}
+        };
+        
+        // Return with data property to match frontend expectations
+        return res.status(200).json({
+            success: true,
+            message: 'Calendar retrieved successfully',
+            data: calendarData
+        });
     } catch (error) {
         logger.error('Get calendar error', { error: error.message, stack: error.stack, year: req.params.year });
         return sendInternalError(res, 'Failed to get calendar', error);
@@ -60,9 +86,20 @@ export const addHoliday = async (req, res) => {
             return sendValidationError(res, { year: 'Invalid year' });
         }
 
-        let calendar = await Calendar.findOne({ year: yearNum });
+        // Get organizationId from request
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        // Find calendar by year and organizationId
+        const query = addOrganizationFilter(req, { year: yearNum });
+        let calendar = await Calendar.findOne(query);
         if (!calendar) {
-            calendar = new Calendar({ year: yearNum });
+            calendar = new Calendar({ 
+                organizationId: organizationId,
+                year: yearNum 
+            });
         }
 
         // Check if holiday already exists for this date
@@ -101,7 +138,8 @@ export const updateHoliday = async (req, res) => {
         const updates = req.body;
 
         const yearNum = parseInt(year);
-        const calendar = await Calendar.findOne({ year: yearNum });
+        const query = addOrganizationFilter(req, { year: yearNum });
+        const calendar = await Calendar.findOne(query);
 
         if (!calendar) {
             return sendNotFound(res, 'Calendar');
@@ -141,7 +179,8 @@ export const deleteHoliday = async (req, res) => {
             return sendValidationError(res, { year: 'Invalid year parameter' });
         }
 
-        const calendar = await Calendar.findOne({ year: yearNum });
+        const query = addOrganizationFilter(req, { year: yearNum });
+        const calendar = await Calendar.findOne(query);
         if (!calendar) {
             logger.warn('Calendar not found', { year: yearNum });
             return sendNotFound(res, 'Calendar');
@@ -180,10 +219,19 @@ export const updateWorkingDays = async (req, res) => {
         const { workingDays } = req.body;
 
         const yearNum = parseInt(year);
-        let calendar = await Calendar.findOne({ year: yearNum });
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const query = addOrganizationFilter(req, { year: yearNum });
+        let calendar = await Calendar.findOne(query);
 
         if (!calendar) {
-            calendar = new Calendar({ year: yearNum });
+            calendar = new Calendar({ 
+                organizationId: organizationId,
+                year: yearNum 
+            });
         }
 
         calendar.workingDays = { ...calendar.workingDays, ...workingDays };
@@ -203,10 +251,19 @@ export const updateWorkingHours = async (req, res) => {
         const { workingHours } = req.body;
 
         const yearNum = parseInt(year);
-        let calendar = await Calendar.findOne({ year: yearNum });
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const query = addOrganizationFilter(req, { year: yearNum });
+        let calendar = await Calendar.findOne(query);
 
         if (!calendar) {
-            calendar = new Calendar({ year: yearNum });
+            calendar = new Calendar({ 
+                organizationId: organizationId,
+                year: yearNum 
+            });
         }
 
         calendar.workingHours = { ...calendar.workingHours, ...workingHours };
@@ -230,7 +287,8 @@ export const getHolidaysForMonth = async (req, res) => {
             return sendValidationError(res, { month: 'Invalid year or month' });
         }
 
-        const calendar = await Calendar.findOne({ year: yearNum });
+        const query = addOrganizationFilter(req, { year: yearNum });
+        const calendar = await Calendar.findOne(query);
         if (!calendar) {
             return sendSuccess(res, { holidays: [] }, 'Holidays retrieved successfully');
         }
@@ -258,7 +316,8 @@ export const isWorkingDay = async (req, res) => {
         }
 
         const year = checkDate.getFullYear();
-        const calendar = await Calendar.findOne({ year });
+        const query = addOrganizationFilter(req, { year });
+        const calendar = await Calendar.findOne(query);
 
         if (!calendar) {
             // Default working days if no calendar exists

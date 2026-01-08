@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiCamera } from 'react-icons/fi';
 import { getUploadUrl } from '../utils/axios';
+import logger from '../utils/logger';
 
 const ProfilePicture = ({ 
   user, 
@@ -32,9 +33,12 @@ const ProfilePicture = ({
     if (typeof user.profilePhoto === 'string') {
       rawImageUrl = user.profilePhoto;
     } else if (user.profilePhoto.url) {
+      // Prefer url property if available (contains full path)
       rawImageUrl = user.profilePhoto.url;
     } else if (user.profilePhoto.filename) {
-      rawImageUrl = user.profilePhoto.filename;
+      // If only filename is available, pass the whole object to getUploadUrl
+      // so it can construct the correct path
+      rawImageUrl = user.profilePhoto;
     }
   } else if (user?.profilePicture) {
     rawImageUrl = typeof user.profilePicture === 'string' ? user.profilePicture : user.profilePicture.url;
@@ -52,15 +56,54 @@ const ProfilePicture = ({
     return name.charAt(0).toUpperCase();
   };
 
+  const [imageError, setImageError] = useState(false);
+
+  // Reset error state when profile photo changes
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.profilePhoto?.url, user?.profilePhoto?.filename, imageUrl]);
+
   return (
     <div className={`relative ${className}`}>
       <div className={`${sizeClasses[size]} rounded-full bg-gray-200 overflow-hidden flex items-center justify-center border-2 border-gray-300`}>
-        {imageUrl ? (
+        {imageUrl && !imageError ? (
           <img
             src={imageUrl}
             alt="Profile Picture"
             className="w-full h-full object-cover"
-            crossOrigin="anonymous"
+            loading="lazy"
+            onError={(e) => {
+              // Log error for debugging (both dev and prod to help diagnose Render issues)
+              logger.error('Failed to load profile image', {
+                imageUrl,
+                rawImageUrl,
+                profilePhoto: user?.profilePhoto,
+                error: e.type || 'unknown',
+                timestamp: new Date().toISOString()
+              });
+              
+              // Set error state to show fallback
+              setImageError(true);
+              
+              // Try to fetch the image directly to get more error details
+              if (imageUrl && typeof fetch !== 'undefined') {
+                fetch(imageUrl, { method: 'HEAD', mode: 'no-cors' })
+                  .catch((fetchError) => {
+                    logger.error('Image fetch error details', {
+                      url: imageUrl,
+                      error: fetchError.message,
+                      type: fetchError.name
+                    });
+                  });
+              }
+            }}
+            onLoad={() => {
+              // Image loaded successfully - reset error state and log in development
+              setImageError(false);
+              if (import.meta.env.DEV) {
+                logger.debug('Profile image loaded successfully', { imageUrl });
+              }
+            }}
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-inner">

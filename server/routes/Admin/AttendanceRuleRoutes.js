@@ -7,18 +7,25 @@ import {
     checkAttendanceRadius
 } from '../../controllers/admin/attendanceRuleController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
+import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrExecutiveAuthenticated from '../../middlewares/isAdminOrExecutiveAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
+import { attendanceRadiusCheckLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
-// Admin routes (require admin authentication)
-router.post('/create-or-update', isAdminAuthenticated, createOrUpdateAttendanceRule);
-router.get('/current', isAdminAuthenticated, getAttendanceRule);
-router.get('/all', isAdminAuthenticated, getAllAttendanceRules);
-router.patch('/deactivate/:ruleId', isAdminAuthenticated, deactivateAttendanceRule);
+// Admin, HR, and Executive routes (create/update/deactivate - sensitive operations)
+// Allow HR and Executives to manage attendance rules as they need to configure them
+router.post('/create-or-update', isAdminOrHROrExecutiveAuthenticated, createOrUpdateAttendanceRule);
+router.patch('/deactivate/:ruleId', isAdminOrHROrExecutiveAuthenticated, deactivateAttendanceRule);
+
+// Read routes (allow HR and Executives to view attendance rules)
+router.get('/current', isAdminOrHROrExecutiveAuthenticated, getAttendanceRule);
+router.get('/all', isAdminOrHRAuthenticated, getAllAttendanceRules);
 
 // Both admin and employee can check radius (for attendance marking)
-router.post('/check-radius', isAuthenticated, checkAttendanceRadius);
+router.post('/check-radius', isAuthenticated, attendanceRadiusCheckLimiter, checkAttendanceRadius);
 
 export default router;
 

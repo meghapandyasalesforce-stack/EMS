@@ -4,6 +4,9 @@ import { validateEmailConfig } from '../../helpers/emailValidator.js';
 import { getEmailConfigStatus } from '../../config/email.config.js';
 import logger from '../../helpers/logger.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
+import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrExecutiveAuthenticated from '../../middlewares/isAdminOrExecutiveAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
 
@@ -68,9 +71,9 @@ router.post('/test', isAdminAuthenticated, async (req, res) => {
 /**
  * Get email configuration status (without exposing credentials)
  * GET /api/v1/both/email/status
- * Requires admin authentication
+ * Requires admin, HR, or executive authentication
  */
-router.get('/status', isAdminAuthenticated, async (req, res) => {
+router.get('/status', isAdminOrHROrExecutiveAuthenticated, async (req, res) => {
   try {
     const status = getEmailConfigStatus();
     

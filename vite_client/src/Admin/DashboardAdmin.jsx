@@ -106,7 +106,7 @@ function DashboardAdmin() {
         return 'Invalid Date';
       }
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
+    } catch {
       return 'Invalid Date';
     }
   };
@@ -116,93 +116,127 @@ function DashboardAdmin() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <div className="flex-1 p-4 md:p-8 transition-all duration-300 ml-0 lg:ml-64">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 md:mb-8">
-          Admin Dashboard
-        </h1>
+    <div className="flex bg-gray-50 min-h-screen">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto ml-64">
+        {/* Header - Clean and Professional */}
+        <div className="mb-6 md:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
+                Dashboard
+              </h1>
+              <p className="text-sm md:text-base text-gray-600">
+                Your organization's key metrics and activities
+              </p>
+            </div>
+            {user && (
+              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                  <FiUser className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Welcome back</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {user.name || user.email?.split('@')[0] || 'Admin'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Error Messages */}
         {employeesError && employeesError.response?.status !== 401 && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
-            <p className="font-bold">Error Loading Data</p>
-            <p className="text-sm">{employeesError.response?.data?.message || 'Failed to load employees'}</p>
+          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-sm">
+            <p className="font-semibold">Error Loading Data</p>
+            <p className="text-sm mt-1">{employeesError.response?.data?.message || 'Failed to load employees'}</p>
           </div>
         )}
 
-        {/* Stats Cards - Using StatCard component */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-6 md:mb-8">
           <StatCard
             label="Employees"
             value={employeeCount}
-            icon={<FaUsers className="w-6 h-8" />}
+            icon={<FaUsers className="w-6 h-6" />}
             color="blue"
           />
           
           <StatCard
             label="Projects"
             value={projects.length}
-            icon={<FaFolder className="w-6 h-8" />}
+            icon={<FaFolder className="w-6 h-6" />}
             color="green"
           />
           
           <StatCard
             label="Payrolls"
             value={payrolls.length}
-            icon={<FaMoneyBillWave className="w-6 h-8" />}
+            icon={<FaMoneyBillWave className="w-6 h-6" />}
             color="purple"
           />
         </div>
 
         {/* Announcement Section */}
-        <div className="bg-white p-4 md:p-6 rounded-xl mb-6 md:mb-8">
+        <div className="mb-6 md:mb-8">
           <NotificationSender />
         </div>
 
         {/* Projects and Employees Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5 mb-6 md:mb-8">
           {/* Projects Section */}
-          <div className="bg-white p-4 md:p-6 rounded-xl shadow-md">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-2">
-              <h2 className="text-lg md:text-xl font-semibold text-gray-800">Recent Projects</h2>
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+              <div>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Recent Projects</h2>
+                <p className="text-xs text-gray-500">Latest project activities</p>
+              </div>
               <button
                 onClick={() => navigate("/add-project")}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 flex items-center text-sm md:text-base"
+                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap"
               >
-                <span className="mr-1">+</span> Add Project
+                <span className="mr-1.5">+</span> Add Project
               </button>
             </div>
 
             <div className="overflow-x-auto">
               {!Array.isArray(projects) || projects.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm">No projects found</p>
+                <div className="text-center py-10">
+                  <FaFolder className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm mb-2">No projects found</p>
                   <button
                     onClick={() => navigate("/add-project")}
-                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                   >
                     Create your first project →
                   </button>
                 </div>
               ) : (
                 <>
-                  <table className="w-full">
-                    <tbody>
-                      {projects.slice(0, 5).map((project) => (
-                        <tr key={project._id || project.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-2 md:py-3 px-2">
-                            <div className="font-medium text-sm md:text-base">{project.name || 'Unnamed Project'}</div>
-                            <div className="text-xs md:text-sm text-gray-500">{project.status || 'N/A'}</div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="space-y-2">
+                    {projects.slice(0, 5).map((project) => (
+                      <div 
+                        key={project._id || project.id} 
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
+                        onClick={() => navigate(`/projects/${project._id || project.id}`)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm md:text-base text-gray-800 truncate">
+                            {project.name || 'Unnamed Project'}
+                          </div>
+                          <div className="text-xs md:text-sm text-gray-500 mt-0.5">
+                            {project.status || 'N/A'}
+                          </div>
+                        </div>
+                        <FaFolder className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
                   {projects.length > 5 && (
-                    <div className="text-center mt-3 md:mt-4">
+                    <div className="text-center mt-4 pt-3 border-t border-gray-100">
                       <button 
                         onClick={() => navigate("/projects")}
-                        className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                       >
                         View All Projects →
                       </button>
@@ -214,54 +248,67 @@ function DashboardAdmin() {
           </div>
 
           {/* Employees Section */}
-          <div className="bg-white p-4 md:p-6 rounded-xl shadow-md">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-2">
-              <h2 className="text-lg md:text-xl font-semibold text-gray-800">Recent Employees</h2>
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+              <div>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Recent Employees</h2>
+                <p className="text-xs text-gray-500">Newly added team members</p>
+              </div>
               <button
                 onClick={() => navigate("/add-employee")}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 flex items-center text-sm md:text-base"
+                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap"
               >
-                <span className="mr-1">+</span> Add Employee
+                <span className="mr-1.5">+</span> Add Employee
               </button>
             </div>
 
             <div className="overflow-x-auto">
               {employeesLoading ? (
-                <div className="text-center py-8">
+                <div className="text-center py-10">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="text-gray-500 mt-2 text-sm">Loading employees...</p>
                 </div>
               ) : !Array.isArray(employees) || employees.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm">No employees found</p>
+                <div className="text-center py-10">
+                  <FaUsers className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm mb-2">No employees found</p>
                   <button
                     onClick={() => navigate("/add-employee")}
-                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                   >
                     Add your first employee →
                   </button>
                 </div>
               ) : (
                 <>
-                  <table className="w-full">
-                    <tbody>
-                      {employees.slice(0, 5).map((emp) => (
-                        <tr key={emp._id || emp.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-2 md:py-3 px-2">
-                            <div className="font-medium text-sm md:text-base">
+                  <div className="space-y-2">
+                    {employees.slice(0, 5).map((emp) => (
+                      <div 
+                        key={emp._id || emp.id} 
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
+                        onClick={() => navigate(`/employees/${emp._id || emp.id}`)}
+                      >
+                        <div className="flex items-center flex-1 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                            <FiUser className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm md:text-base text-gray-800 truncate">
                               {emp.name || ''} {emp.lastName || ''}
                             </div>
-                            <div className="text-xs md:text-sm text-gray-500">{emp.position || 'N/A'}</div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <div className="text-xs md:text-sm text-gray-500 mt-0.5">
+                              {emp.position || 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                   {employees.length > 5 && (
-                    <div className="text-center mt-3 md:mt-4">
+                    <div className="text-center mt-4 pt-3 border-t border-gray-100">
                       <button 
                         onClick={() => navigate("/employees")}
-                        className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                       >
                         View All Employees →
                       </button>
@@ -274,15 +321,15 @@ function DashboardAdmin() {
         </div>
 
         {/* Employees on Break Section */}
-        <div className="bg-white p-4 md:p-6 rounded-xl shadow-md mb-6 md:mb-8 border-l-4 border-orange-500">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
+        <div className="bg-white p-5 rounded-lg shadow-sm border-l-4 border-orange-500 mb-6 md:mb-8">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <div className="p-2 md:p-3 rounded-full bg-orange-100 text-orange-600">
-                <FiCoffee className="w-5 h-5 md:w-6 md:h-6" />
+              <div className="p-2.5 rounded-full bg-orange-100 text-orange-600">
+                <FiCoffee className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Employees on Break</h2>
-                <p className="text-xs md:text-sm text-gray-500">Currently on break ({employeesOnBreak.length})</p>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900">Employees on Break</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Currently on break ({employeesOnBreak.length})</p>
               </div>
             </div>
           </div>
@@ -349,19 +396,22 @@ function DashboardAdmin() {
         </div>
 
         {/* Attendance Section */}
-        <div className="bg-white p-4 md:p-6 rounded-xl shadow-md mb-6 md:mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
-            <h2 className="text-lg md:text-xl font-semibold text-gray-800">Attendance</h2>
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 mb-6 md:mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <div>
+              <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Attendance Management</h2>
+              <p className="text-xs text-gray-500">View and manage employee attendance</p>
+            </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
               <button
                 onClick={() => navigate("/today-attendance")}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
+                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap"
               >
                 Today's Attendance
               </button>
               <button
                 onClick={() => navigate("/all-attendance-history")}
-                className="bg-green-600 hover:bg-green-700 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
+                className="bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap"
               >
                 All Attendance Report
               </button>
@@ -370,40 +420,49 @@ function DashboardAdmin() {
         </div>
 
         {/* Payrolls Section */}
-        <div className="bg-white p-4 md:p-6 rounded-xl shadow-md">
-          <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-4 md:mb-6">Recent Payrolls</h2>
+        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+          <div className="mb-4">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Recent Payrolls</h2>
+            <p className="text-xs text-gray-500">Latest payroll transactions</p>
+          </div>
           <div className="overflow-x-auto">
             {!Array.isArray(payrolls) || payrolls.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500 text-sm">No payroll records found</p>
+              <div className="text-center py-10">
+                <FaMoneyBillWave className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm mb-2">No payroll records found</p>
                 <button
                   onClick={() => navigate("/add-payroll")}
-                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                 >
                   Create your first payroll →
                 </button>
               </div>
             ) : (
               <>
-                <table className="w-full">
-                  <tbody>
-                    {payrolls.slice(0, 5).map((payroll) => (
-                      <tr key={payroll._id || payroll.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-2 md:py-3 px-2">
-                          <div className="font-medium text-sm md:text-base">{payroll.employeeName || 'Unknown Employee'}</div>
-                          <div className="text-xs md:text-sm text-gray-500">
-                            {formatCurrency(payroll.amount || payroll.totalAmount || 0)} • {payroll.status || 'N/A'}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="space-y-2">
+                  {payrolls.slice(0, 5).map((payroll) => (
+                    <div 
+                      key={payroll._id || payroll.id} 
+                      className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
+                      onClick={() => navigate(`/admin-payroll/${payroll._id || payroll.id}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm md:text-base text-gray-800">
+                          {payroll.employeeName || 'Unknown Employee'}
+                        </div>
+                        <div className="text-xs md:text-sm text-gray-500 mt-0.5">
+                          {formatCurrency(payroll.amount || payroll.totalAmount || 0)} • {payroll.status || 'N/A'}
+                        </div>
+                      </div>
+                      <FaMoneyBillWave className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+                    </div>
+                  ))}
+                </div>
                 {payrolls.length > 5 && (
-                  <div className="text-center mt-3 md:mt-4">
+                  <div className="text-center mt-4 pt-3 border-t border-gray-100">
                     <button 
                       onClick={() => navigate("/admin-payroll")}
-                      className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium"
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                     >
                       View All Payrolls →
                     </button>

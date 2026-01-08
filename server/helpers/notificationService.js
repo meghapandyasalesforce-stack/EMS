@@ -116,9 +116,22 @@ export const sendTaskUpdateNotification = async (task, employee, updateType = 'u
         message = `${employee.name} updated task "${task.taskDescription}" in project "${project.name}"`;
     }
 
+    // Get organizationId from employee or project
+    const organizationId = employee.organizationId || project.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending task update notification', {
+        employeeId: employee._id,
+        projectId: project._id,
+        taskId: task._id
+      });
+      return; // Don't create notifications without organizationId
+    }
+    
     // Create notifications for each recipient
     const notificationPromises = Array.from(recipients).map(recipientId => {
       return Notification.create({
+        organizationId,
         recipient: recipientId,
         sender: employee._id,
         message,
@@ -170,8 +183,21 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
     // Determine sender type based on sender model
     const senderType = sender.constructor.modelName === 'Employee' ? 'Employee' : 'User';
     
+    // Get organizationId from sender (both User and Employee have organizationId)
+    const organizationId = sender.organizationId || sender.organization || metadata.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending notification', {
+        senderId: sender._id,
+        senderType,
+        message
+      });
+      throw new Error('OrganizationId is required to send notifications');
+    }
+    
     const notificationPromises = recipientIds.map(recipientId => {
       return Notification.create({
+        organizationId,
         recipient: recipientId,
         recipientType: 'User', // Assuming recipients are Users for now
         sender: sender._id,
@@ -237,7 +263,20 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
     // Determine sender type based on sender model
     const senderType = sender.constructor.modelName === 'Employee' ? 'Employee' : 'User';
     
+    // Get organizationId from sender (both User and Employee have organizationId)
+    const organizationId = sender.organizationId || sender.organization || metadata.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending broadcast notification', {
+        senderId: sender._id,
+        senderType,
+        message
+      });
+      throw new Error('OrganizationId is required to send notifications');
+    }
+    
     const notification = await Notification.create({
+      organizationId,
       sender: sender._id,
       senderType: senderType,
       message,
@@ -301,9 +340,15 @@ export const markNotificationAsRead = async (notificationId, userId) => {
  * @param {String} userId - User ID
  * @returns {Number} Unread count
  */
-export const getUnreadNotificationCount = async (userId) => {
+export const getUnreadNotificationCount = async (userId, organizationId) => {
   try {
+    if (!organizationId) {
+      logger.error('OrganizationId is required for getUnreadNotificationCount', { userId });
+      return 0;
+    }
+
     const count = await Notification.countDocuments({
+      organizationId,
       $or: [
         { recipient: userId, isRead: false },
         { isBroadcast: true, isRead: false }
@@ -314,9 +359,112 @@ export const getUnreadNotificationCount = async (userId) => {
     logger.error('Error getting unread notification count', {
       error: error.message,
       stack: error.stack,
-      userId
+      userId,
+      organizationId
     });
     return 0;
+  }
+};
+
+/**
+ * Send notification to a single user
+ * @param {Object} params - Notification parameters
+ * @param {String} params.userId - User/Employee ID
+ * @param {String} params.title - Notification title
+ * @param {String} params.message - Notification message
+ * @param {String} params.type - Notification type
+ * @param {String} params.priority - Notification priority (low, medium, high)
+ * @param {Object} params.metadata - Additional metadata
+ * @param {String} params.organizationId - Organization ID (optional, will try to get from user)
+ */
+export const sendNotification = async ({ userId, title, message, type = 'general', priority = 'medium', metadata = {}, organizationId = null }) => {
+  try {
+    // Get user/employee to determine organizationId
+    let userOrgId = organizationId;
+    let recipientType = 'User';
+    
+    if (!userOrgId) {
+      try {
+        const UserModel = (await import('../models/user.model.js')).default;
+        const EmployeeModel = (await import('../models/employee.model.js')).default;
+        
+        let user = await UserModel.findById(userId).select('organizationId').lean();
+        if (user) {
+          userOrgId = user.organizationId;
+          recipientType = 'User';
+        } else {
+          const employee = await EmployeeModel.findById(userId).select('organizationId').lean();
+          if (employee) {
+            userOrgId = employee.organizationId;
+            recipientType = 'Employee';
+          }
+        }
+      } catch (error) {
+        logger.error('Error getting user/employee for notification', {
+          error: error.message,
+          userId
+        });
+      }
+    }
+    
+    if (!userOrgId) {
+      logger.error('OrganizationId missing when sending notification', {
+        userId,
+        message
+      });
+      throw new Error('OrganizationId is required to send notifications');
+    }
+    
+    // Create notification
+    const notification = await Notification.create({
+      organizationId: userOrgId,
+      recipient: userId,
+      recipientType: recipientType,
+      message: title ? `${title}: ${message}` : message,
+      type,
+      priority,
+      metadata: {
+        ...metadata,
+        title: title || message
+      }
+    });
+    
+    logger.info('Notification sent', {
+      notificationId: notification._id,
+      userId,
+      type
+    });
+    
+    // Send push notification if enabled
+    try {
+      const settings = await NotificationSettings.findOne({ user: userId });
+      if (!settings || settings.pushNotifications !== false) {
+        const pushPayload = createPushPayload(title ? `${title}: ${message}` : message, type, {
+          ...metadata,
+          notificationId: notification._id,
+          title
+        });
+        
+        await sendPushNotification(userId, recipientType, pushPayload);
+      }
+    } catch (pushError) {
+      logger.error('Error sending push notification', {
+        error: pushError.message,
+        userId,
+        notificationId: notification._id
+      });
+      // Don't fail the main notification if push fails
+    }
+    
+    return notification;
+  } catch (error) {
+    logger.error('Error sending notification', {
+      error: error.message,
+      stack: error.stack,
+      userId,
+      type
+    });
+    throw error;
   }
 };
 
@@ -326,12 +474,23 @@ export const getUnreadNotificationCount = async (userId) => {
  */
 export const sendBreakNotification = async (employee) => {
   try {
-    // Get all admins
-    const admins = await User.find({ role: 'admin' });
+    // Get organizationId from employee
+    const organizationId = employee.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending break notification', {
+        employeeId: employee._id
+      });
+      return; // Don't create notifications without organizationId
+    }
+    
+    // Get all admins for this organization
+    const admins = await User.find({ role: 'admin', organizationId });
     
     if (admins.length === 0) {
       logger.warn('No admins found to notify about break', {
-        employeeId: employee._id
+        employeeId: employee._id,
+        organizationId
       });
       return;
     }
@@ -341,6 +500,7 @@ export const sendBreakNotification = async (employee) => {
     // Create notifications for each admin
     const notificationPromises = admins.map(admin => {
       return Notification.create({
+        organizationId,
         recipient: admin._id,
         recipientType: 'User',
         sender: employee._id,

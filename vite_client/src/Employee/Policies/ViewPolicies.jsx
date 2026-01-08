@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FaFileAlt, FaCheckCircle, FaClock } from 'react-icons/fa';
+import DOMPurify from 'dompurify';
 import axios from '../../utils/axios';
 import { ORGANIZATION_POLICIES_ENDPOINT } from '../../utils/constant';
 import { toast } from 'react-toastify';
@@ -77,7 +78,10 @@ const ViewPolicies = () => {
                                     </div>
                                     <p className="text-gray-600 mb-4">{policy.description}</p>
                                     <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                                        <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: policy.content }} />
+                                        <div 
+                                            className="prose max-w-none" 
+                                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(policy.content || '') }} 
+                                        />
                                     </div>
                                     <div className="flex gap-4 text-sm text-gray-500">
                                         <span>Effective: {new Date(policy.effectiveDate).toLocaleDateString()}</span>

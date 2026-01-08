@@ -1,18 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { toast } from 'react-toastify';
 import axios from '../utils/axios';
-import logger from '../utils/logger';
 import LoadingSpinner from './LoadingSpinner';
-import DashboardAdmin from '../Admin/DashboardAdmin';
-import DashboardEmployee from '../Employee/Dashboard/DashboardEmployee';
-import DashboardHR from '../HR/Dashboard/DashboardHR';
-import DashboardManager from '../Manager/Dashboard/DashboardManager';
-import DashboardFinance from '../Finance/Dashboard/DashboardFinance';
-import DashboardExecutive from '../Executive/Dashboard/DashboardExecutive';
-import OrganizationDashboard from '../Admin/Organization/OrganizationDashboard';
 import { handleApiError } from '../utils/errorHandler';
+import FirstLoginPermissionRequest from './FirstLoginPermissionRequest';
 
 const RoleBasedDashboard = () => {
     const navigate = useNavigate();
@@ -58,8 +50,8 @@ const RoleBasedDashboard = () => {
                     });
                 }
                 
-                // Minimal fallback - only for critical cases
-                const fallbackRoute = getMinimalFallback(userRole);
+                // Comprehensive fallback - checks all criteria when server is unavailable
+                const fallbackRoute = getComprehensiveFallback();
                 setDashboardRoute(fallbackRoute);
                 
                 if (location.pathname === '/dashboard' || location.pathname === '/') {
@@ -71,69 +63,213 @@ const RoleBasedDashboard = () => {
         };
         
         fetchDashboardRoute();
-    }, [userRole, navigate, location]);
+    }, [userRole, navigate, location, user, employee]);
     
     /**
-     * Minimal fallback routing - only used when server is unavailable
-     * Server-side routing is authoritative and should be trusted
+     * Comprehensive fallback routing - used when server is unavailable
+     * Checks ALL criteria (position, department, jobTitle, role, assignedRole)
+     * Priority order matches server-side logic
      */
-    const getMinimalFallback = (role) => {
-        if (!role) return '/dashboard-employee';
+    const getComprehensiveFallback = () => {
+        // Get all fields from Redux state
+        const userPosition = (user?.position || employee?.position || '').toLowerCase().trim();
+        const userDepartment = (user?.department || employee?.department || '').toLowerCase().trim();
+        const userJobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
+        const userRole = user?.role || employee?.role;
+        const userAssignedRole = user?.assignedRole || employee?.assignedRole;
         
-        // Check if this is an organization login
+        // Development-only logging
+        if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 [Dashboard Routing] Comprehensive Fallback Check', {
+                allFields: {
+                    position: userPosition || 'NOT SET',
+                    department: userDepartment || 'NOT SET',
+                    jobTitle: userJobTitle || 'NOT SET',
+                    role: userRole || 'NOT SET',
+                    assignedRole: userAssignedRole ? 'exists' : 'none'
+                }
+            });
+        }
+        
+        // PRIORITY 1: Check Assigned Role
+        if (userAssignedRole?.dashboardRoute) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Assigned Role Dashboard', {
+                    assignedRole: userAssignedRole.name,
+                    route: userAssignedRole.dashboardRoute
+                });
+            }
+            return userAssignedRole.dashboardRoute;
+        }
+        
+        // PRIORITY 2: Check Organization Admin
         const isOrganizationLogin = localStorage.getItem('isOrganizationLogin') === 'true';
         const userEmail = user?.email?.toLowerCase() || '';
         const isGmailUser = userEmail.endsWith('@gmail.com');
-        
-        // Organization admins should go to organization dashboard
-        if ((isOrganizationLogin || isGmailUser) && role === 'admin') {
+        if ((isOrganizationLogin || isGmailUser) && userRole === 'admin') {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Organization Dashboard');
+            }
             return '/organization/dashboard';
         }
         
-        // Simple role-based fallback
-        switch(role) {
-            case 'admin':
-                return '/dashboard-admin';
-            case 'hr_manager':
-                return '/dashboard-hr';
-            case 'manager':
-                return '/dashboard-manager';
-            case 'finance':
-                return '/dashboard-finance';
-            case 'employee':
-            default:
-                return '/dashboard-employee';
+        // PRIORITY 3: Check Executive Position (CEO/CTO/CFO/VP)
+        if (
+            userPosition === 'ceo' || 
+            userPosition === 'cto' || 
+            userPosition === 'cfo' || 
+            userPosition === 'vp'
+        ) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Administration Dashboard', {
+                    position: userPosition
+                });
+            }
+            return '/dashboard-administration';
         }
+        
+        // PRIORITY 4: Check HR Department/JobTitle
+        if (
+            userDepartment === 'hr' || 
+            userDepartment.includes('hr') || 
+            userDepartment.includes('human resource') ||
+            userJobTitle.includes('hr manager') ||
+            userJobTitle.includes('human resource') ||
+            userJobTitle.includes('hr')
+        ) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: HR Dashboard', {
+                    department: userDepartment,
+                    jobTitle: userJobTitle
+                });
+            }
+            return '/dashboard-hr';
+        }
+        
+        // PRIORITY 5: Check Tech Department
+        if (
+            userDepartment === 'technology' ||
+            userDepartment === 'tech' ||
+            userDepartment.includes('technology') ||
+            userDepartment === 'it' ||
+            (userDepartment.includes('it') && !userDepartment.includes('support'))
+        ) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Tech Dashboard', {
+                    department: userDepartment
+                });
+            }
+            return '/dashboard/tech';
+        }
+        
+        // PRIORITY 6: Check Finance Department
+        if (
+            userDepartment === 'finance' || 
+            userDepartment.includes('finance')
+        ) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Finance Dashboard', {
+                    department: userDepartment
+                });
+            }
+            return '/dashboard-finance';
+        }
+        
+        // PRIORITY 7: Check Manager/Director Position
+        if (
+            userPosition === 'manager' || 
+            userPosition === 'director'
+        ) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Manager Dashboard', {
+                    position: userPosition
+                });
+            }
+            return '/dashboard-manager';
+        }
+        
+        // PRIORITY 8: Check Admin Role
+        if (userRole === 'admin') {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [Dashboard Routing] MATCH: Admin Dashboard');
+            }
+            return '/dashboard-admin';
+        }
+        
+        // PRIORITY 9: Default → Employee Dashboard
+        if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️ [Dashboard Routing] NO MATCH: Using Employee Dashboard (default)', {
+                checkedFields: {
+                    position: userPosition || 'NOT SET',
+                    department: userDepartment || 'NOT SET',
+                    jobTitle: userJobTitle || 'NOT SET',
+                    role: userRole || 'NOT SET'
+                }
+            });
+        }
+        return '/dashboard-employee';
     };
     
-    // Render appropriate dashboard
+    // Render appropriate dashboard - only redirect, don't render directly
     const renderDashboard = () => {
         if (loading) {
             return <LoadingSpinner message="Loading dashboard..." />;
         }
         
-        const route = dashboardRoute || getMinimalFallback(userRole);
+        const route = dashboardRoute || getComprehensiveFallback();
+        const currentPath = location.pathname;
         
-        switch(route) {
-            case '/dashboard-admin':
-                return <DashboardAdmin />;
-            case '/dashboard-hr':
-                return <DashboardHR />;
-            case '/dashboard-manager':
-                return <DashboardManager />;
-            case '/dashboard-finance':
-                return <DashboardFinance />;
-            case '/dashboard-executive':
-                return <DashboardExecutive />;
-            case '/organization/dashboard':
-                return <OrganizationDashboard />;
-            case '/dashboard-employee':
-            default:
-                return <DashboardEmployee />;
+        // List of all specific dashboard routes that have direct route handlers
+        const specificDashboardRoutes = [
+            '/dashboard-admin',
+            '/dashboard-hr',
+            '/dashboard-manager',
+            '/dashboard-finance',
+            '/dashboard-administration',
+            '/dashboard/tech',
+            '/dashboard/hr',
+            '/dashboard/finance',
+            '/dashboard/manager',
+            '/dashboard/ceo',
+            '/dashboard/cto',
+            '/dashboard/cfo',
+            '/dashboard/vp',
+            '/organization/dashboard',
+            '/dashboard-employee'
+        ];
+        
+        // If already on a specific dashboard route, return null
+        // Let React Router handle it via the direct routes in routes/index.jsx
+        if (specificDashboardRoutes.includes(currentPath)) {
+            return null;
         }
+        
+        // Only handle redirects when on /dashboard or /
+        if (currentPath === '/dashboard' || currentPath === '/') {
+            // Redirect to the determined route
+            navigate(route, { replace: true });
+            return <LoadingSpinner message="Redirecting to dashboard..." />;
+        }
+        
+        // Fallback: if somehow we're on an unknown route, redirect to determined route
+        navigate(route, { replace: true });
+        return <LoadingSpinner message="Redirecting to dashboard..." />;
     };
     
-    return renderDashboard();
+    return (
+        <>
+            {renderDashboard()}
+            {/* Permission request for first-time users */}
+            {user && (
+                <FirstLoginPermissionRequest 
+                    user={user}
+                    onComplete={() => {
+                        // Permissions granted - user can now use attendance features
+                    }}
+                />
+            )}
+        </>
+    );
 };
 
 export default RoleBasedDashboard;

@@ -8,6 +8,7 @@ import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendValidationError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden } from '../../helpers/responseHelper.js';
 import asyncHandler from '../../helpers/asyncHandler.js';
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
+import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
 
 
 // Generate token with employeeId instead of email
@@ -412,10 +413,27 @@ export const loginEmployee = asyncHandler(async (req, res) => {
     const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
     const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 
+    // Get dashboard route based on role, position, and department
+    let dashboardRoute = '/dashboard/employee'; // Default fallback
+    try {
+        dashboardRoute = await getDashboardRouteForUser(
+            employee._id,
+            'employee',
+            employee.organizationId,
+            employee.email
+        );
+    } catch (dashboardError) {
+        logger.warn('Failed to get dashboard route, using default', {
+            employeeId: employee._id,
+            error: dashboardError.message
+        });
+    }
+
     // CODE QUALITY FIX: Unified response structure across all login endpoints
-    // Structure: { token, user/employee, refreshToken?, csrfToken? }
+    // Structure: { token, user/employee, dashboardRoute, refreshToken?, csrfToken? }
     const response = {
         token,
+        dashboardRoute, // Add dashboard route for automatic redirection
         employee: {
             id: employee._id,
             name: employee.name,
@@ -454,8 +472,8 @@ export const loginEmployee = asyncHandler(async (req, res) => {
 export const logoutEmployee = asyncHandler(async (req, res) => {
     const requestId = req.id;
     
-    // Clear all authentication cookies
-    clearAuthCookies(res, req);
+    // Clear all authentication cookies and CSRF tokens
+    await clearAuthCookies(res, req);
 
     logger.info('Employee logout successful', { requestId, employeeId: req.employee?._id });
     

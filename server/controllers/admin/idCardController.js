@@ -1,13 +1,13 @@
 import IdCard from '../../models/idCard.model.js';
 import Employee from '../../models/employee.model.js';
-import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
+import { generateEmployeeQRCode, generateQRCodeBuffer } from '../../helpers/qrCodeGenerator.js';
 
 // Helper to generate QR code image and save it
-const generateAndSaveQRCode = async (data, employeeCode) => {
+const generateAndSaveQRCode = async (employee, employeeCode) => {
     try {
         logger.info('Generating QR code', { employeeCode });
         const qrCodeFileName = `qr-${employeeCode}-${Date.now()}.png`;
@@ -21,12 +21,20 @@ const generateAndSaveQRCode = async (data, employeeCode) => {
             fs.mkdirSync(qrCodeDir, { recursive: true });
         }
 
-        logger.info('Saving QR code', { qrCodePath });
-        await QRCode.toFile(qrCodePath, data, {
-            errorCorrectionLevel: 'H',
+        // Generate QR code buffer using helper
+        const qrCodeBuffer = await generateQRCodeBuffer(JSON.stringify({
+            employeeId: employee.employeeId,
+            email: employee.email,
+            name: `${employee.name} ${employee.lastName}`,
+            department: employee.department,
+            jobTitle: employee.jobTitle
+        }), {
             width: 200,
-            margin: 2
+            errorCorrectionLevel: 'H'
         });
+
+        // Save buffer to file
+        fs.writeFileSync(qrCodePath, qrCodeBuffer);
         
         logger.info('QR code saved successfully', { qrCodeUrl });
         return { qrCodePath, qrCodeUrl, qrCodeFileName };
@@ -34,10 +42,6 @@ const generateAndSaveQRCode = async (data, employeeCode) => {
         logger.error('QR Code generation error', {
             error: error.message,
             stack: error.stack,
-            code: error.code,
-            errno: error.errno,
-            syscall: error.syscall,
-            path: error.path,
             employeeCode
         });
         throw new Error(`Failed to generate QR code: ${error.message}`);
@@ -84,21 +88,23 @@ export const generateIdCard = async (req, res) => {
             return res.status(400).json({ message: 'ID card already exists for this employee. Please update it instead.' });
         }
 
-        // Data to encode in QR code
-        const qrData = JSON.stringify({
-            employeeId: employee.employeeId,
-            email: employee.email,
-            name: `${employee.name} ${employee.lastName}`,
-            department: employee.department,
-            jobTitle: employee.jobTitle
-        });
-
+        // Generate QR code using helper function
         logger.debug('Generating QR code', { employeeId: employee.employeeId });
-        let qrCodeUrl, qrCodeFileName;
+        let qrCodeUrl, qrCodeFileName, qrData;
         try {
-            const qrResult = await generateAndSaveQRCode(qrData, employee.employeeId);
+            const qrResult = await generateAndSaveQRCode(employee, employee.employeeId);
             qrCodeUrl = qrResult.qrCodeUrl;
             qrCodeFileName = qrResult.qrCodeFileName;
+            
+            // Create QR data for storage
+            qrData = JSON.stringify({
+                employeeId: employee.employeeId,
+                email: employee.email,
+                name: `${employee.name} ${employee.lastName}`,
+                department: employee.department,
+                jobTitle: employee.jobTitle
+            });
+            
             logger.info('QR code generated successfully', { qrCodeUrl, employeeId: employee.employeeId });
         } catch (qrError) {
             logger.error('QR Code generation failed', {
@@ -109,6 +115,7 @@ export const generateIdCard = async (req, res) => {
             // Continue without QR code if it fails
             qrCodeUrl = null;
             qrCodeFileName = null;
+            qrData = null;
         }
 
         // Default card design if not provided - merge carefully to avoid undefined values

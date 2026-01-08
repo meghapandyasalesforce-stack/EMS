@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import { usePermissions } from '../../Hooks/usePermissions';
 
 const AttendanceBox = () => {
   const dispatch = useDispatch();
@@ -27,6 +28,16 @@ const AttendanceBox = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [breakCount, setBreakCount] = useState(0);
   const [isOnBreak, setIsOnBreak] = useState(false);
+  const [location, setLocation] = useState(null);
+  const [attendanceRule, setAttendanceRule] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Permission management
+  const {
+    isPermissionGranted,
+    isPermissionDenied,
+    requestLocationPermission
+  } = usePermissions();
 
   // Fetch today's logs on component mount
   useEffect(() => {
@@ -139,6 +150,91 @@ const AttendanceBox = () => {
     };
   }, [currentSession]);
 
+  // Fetch attendance rule on component mount
+  useEffect(() => {
+    const fetchAttendanceRule = async () => {
+      try {
+        const response = await axios.get('/v1/both/attendance/rule');
+        if (response.data.success && response.data.rule) {
+          setAttendanceRule(response.data.rule);
+        }
+      } catch (error) {
+        // Silently fail - location validation will still work
+        if (import.meta.env && import.meta.env.MODE === 'development') {
+          console.warn('Failed to fetch attendance rule:', error);
+        }
+      }
+    };
+    fetchAttendanceRule();
+  }, []);
+
+  // Get current location with permission check
+  const getCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      return Promise.reject(new Error('Geolocation not supported'));
+    }
+
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+      return Promise.reject(new Error('Geolocation requires HTTPS'));
+    }
+
+    if (isPermissionDenied('location')) {
+      return Promise.reject(new Error('Location permission denied'));
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Location request timed out'));
+      }, 30000);
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          clearTimeout(timeoutId);
+          const locationData = {
+            latitude: Number(position.coords.latitude),
+            longitude: Number(position.coords.longitude),
+            accuracy: Number(position.coords.accuracy) || 0,
+            address: 'Location detected'
+          };
+          setLocation(locationData);
+          resolve(locationData);
+        },
+        (error) => {
+          clearTimeout(timeoutId);
+          let errorMessage = 'Location error: ';
+          const errorCode = error?.code;
+          
+          if (errorCode === 1 || errorCode === error?.PERMISSION_DENIED) {
+            errorMessage = 'Location permission denied. Please enable it in browser settings.';
+          } else if (errorCode === 2 || errorCode === error?.POSITION_UNAVAILABLE) {
+            errorMessage = 'GPS position unavailable. Please check your device settings and ensure GPS is enabled.';
+          } else if (errorCode === 3 || errorCode === error?.TIMEOUT) {
+            errorMessage = 'Location request timed out. Please try again or check your GPS settings.';
+          } else {
+            errorMessage += error.message || 'Unknown error';
+          }
+          
+          console.error('❌ Geolocation error:', {
+            code: errorCode,
+            message: errorMessage,
+            error
+          });
+          
+          reject(new Error(errorMessage));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 25000,
+          maximumAge: 0
+        }
+      );
+    });
+  };
+
   const handleClockIn = async () => {
     try {
       // Check if user already has an active session
@@ -155,7 +251,6 @@ const AttendanceBox = () => {
 
       if (openSession) {
         // User already checked in - just refresh logs silently
-        // Removed console.log for production
         const today = format(new Date(), 'yyyy-MM-dd');
         await dispatch(fetchLogs({
           startDate: today,
@@ -166,29 +261,137 @@ const AttendanceBox = () => {
         return; // Don't try to check in again
       }
 
-      // Try to check in
-      const result = await dispatch(clockIn({ workLocation: 'office' }));
+      setIsProcessing(true);
+
+      // Check attendance rule to see if location is required
+      const hasRuleWithCoordinates = attendanceRule && 
+                                      attendanceRule.coordinates && 
+                                      attendanceRule.coordinates.latitude && 
+                                      attendanceRule.coordinates.longitude;
       
-      if (result.type === 'attendance/clockIn/fulfilled') {
-        // Refetch logs to update the state immediately (don't await to avoid blocking)
+      const requiresLocation = hasRuleWithCoordinates && 
+                               !attendanceRule.enableSimplePunches;
+
+      console.info('📍 AttendanceBox clock-in:', {
+        requiresLocation,
+        hasRuleWithCoordinates,
+        enableSimplePunches: attendanceRule?.enableSimplePunches
+      });
+
+      let locationData = null;
+
+      // Get location if required
+      if (requiresLocation || hasRuleWithCoordinates) {
+        try {
+          console.info('📍 Getting location for clock-in...');
+          locationData = await getCurrentLocation();
+          console.info('✅ Location captured:', locationData);
+        } catch (error) {
+          console.error('❌ Location capture failed:', {
+            error: error.message,
+            code: error.code,
+            requiresLocation
+          });
+
+          if (requiresLocation) {
+            let errorMsg = 'Location is required for check-in. ';
+            if (error.code === 1 || error.message.includes('permission')) {
+              errorMsg += 'Please enable location permission in browser settings.';
+            } else if (error.code === 2) {
+              errorMsg += 'GPS position unavailable. Please enable GPS on your device.';
+            } else if (error.code === 3 || error.message.includes('timeout')) {
+              errorMsg += 'Location request timed out. Please try again.';
+            } else {
+              errorMsg += error.message || 'Please enable location services and try again.';
+            }
+            
+            toast.error(errorMsg);
+            setIsProcessing(false);
+            return;
+          }
+        }
+      }
+
+      // Build clock-in payload
+      const clockInData = {
+        workLocation: 'office'
+      };
+
+      // Add location if available
+      if (locationData && locationData.latitude && locationData.longitude) {
+        clockInData.latitude = locationData.latitude;
+        clockInData.longitude = locationData.longitude;
+        clockInData.address = locationData.address;
+        clockInData.accuracy = locationData.accuracy;
+      }
+
+      // Final validation before sending
+      if (requiresLocation && (!clockInData.latitude || !clockInData.longitude)) {
+        console.error('🛑 Location required but missing - blocking request');
+        toast.error('Location is required for check-in at this site. Please enable location services and try again.');
+        setIsProcessing(false);
+        return;
+      }
+
+      console.info('📤 Sending clock-in request:', {
+        hasLocation: !!(clockInData.latitude && clockInData.longitude),
+        payloadKeys: Object.keys(clockInData)
+      });
+
+      // Try to check in
+      try {
+        const result = await dispatch(clockIn(clockInData)).unwrap();
+        
         const today = format(new Date(), 'yyyy-MM-dd');
         dispatch(fetchLogs({
           startDate: today,
           endDate: today
         }));
-        toast.success('Checked in successfully!');
-        } else if (result.type === 'attendance/clockIn/rejected') {
-          // Handle the rejected case - might be already checked in
-          // Removed console.log for production
+        
+        const successMessage = result?.message || 'Checked in successfully!';
+        toast.success(successMessage);
+        
+        if (result?.warning) {
+          toast.warning(result.warning);
+        }
+      } catch (err) {
+        // Extract error message with better handling
+        const errorData = err?.response?.data || err?.payload?.data || err?.payload;
+        let errorMessage = 'Failed to check in. Please try again.';
+        
+        // Handle validation errors (array of errors)
+        if (errorData?.errors && Array.isArray(errorData.errors)) {
+          errorMessage = errorData.errors.map(e => e.message || e.msg).join(', ');
+        } 
+        // Handle single error message
+        else if (errorData?.message) {
+          errorMessage = errorData.message;
+        } 
+        // Handle payload message
+        else if (err?.payload?.message) {
+          errorMessage = err.payload.message;
+        }
+        // Handle direct error message
+        else if (err?.message) {
+          errorMessage = err.message;
+        }
+        
+        toast.error(errorMessage);
+        
+        // If already checked in, refetch logs to show current session
+        if (errorData?.code === 'ALREADY_CLOCKED_IN' || errorMessage.includes('Already clocked in')) {
           const today = format(new Date(), 'yyyy-MM-dd');
-        await dispatch(fetchLogs({
-          startDate: today,
-          endDate: today
-        })).unwrap();
+          await dispatch(fetchLogs({
+            startDate: today,
+            endDate: today
+          })).unwrap();
+        }
+      } finally {
+        setIsProcessing(false);
       }
       
     } catch (err) {
-      // Removed console.error for production
+      setIsProcessing(false);
       // If already checked in, try to fetch logs anyway
       const today = format(new Date(), 'yyyy-MM-dd');
       try {
@@ -197,7 +400,7 @@ const AttendanceBox = () => {
           endDate: today
         })).unwrap();
       } catch (fetchErr) {
-        // Removed console.error for production
+        // Silently fail
       }
     }
   };
@@ -362,7 +565,7 @@ const AttendanceBox = () => {
                   // Fire-and-forget notify admins about back action
                   axios.post('/v1/both/notification/employee-back', {}, { withCredentials: true }).catch(() => {});
                 } catch {}
-                navigate('/dashboard-employee');
+                navigate('/dashboard');
               }}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors"
               title="Go back to dashboard"
@@ -570,14 +773,14 @@ const AttendanceBox = () => {
             {/* Check In Button */}
               <button
                 onClick={handleClockIn}
-              disabled={loading}
+              disabled={isProcessing || loading}
               className={`w-full py-4 px-6 rounded-lg text-white font-semibold shadow-lg transition-all duration-200 ${
-                loading 
+                isProcessing || loading 
                     ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-green-500 hover:bg-green-600'
                 }`}
               >
-              {loading ? (
+              {isProcessing || loading ? (
                   <div className="flex items-center justify-center">
                   <FiLoader className="animate-spin w-5 h-5 mr-2" />
                     Processing...

@@ -132,19 +132,38 @@ export const getNotifications = async (req, res) => {
 
   // Clean up on client disconnect
   req.on('close', () => {
+    logger.debug('SSE connection closed by client');
     if (intervalId) {
       clearInterval(intervalId);
+      intervalId = null;
     }
-    res.end();
+    // Only end response if it hasn't been ended already
+    if (!res.headersSent || res.writable) {
+      res.end();
+    }
   });
 
   // Handle errors that occur after connection is established
   req.on('error', (error) => {
-    logger.error('SSE Request error', { error: error.message, stack: error.stack });
+    // 'aborted' errors are normal when client disconnects - don't log as error
+    if (error.message === 'aborted' || error.code === 'ECONNRESET' || error.message?.includes('aborted')) {
+      logger.debug('SSE client disconnected', { 
+        error: error.message,
+        note: 'This is normal when user navigates away or closes the connection'
+      });
+    } else {
+      // Only log actual errors
+      logger.error('SSE Request error', { error: error.message, stack: error.stack });
+    }
+    
     if (intervalId) {
       clearInterval(intervalId);
+      intervalId = null;
     }
-    res.end();
+    // Only end response if it hasn't been ended already
+    if (!res.headersSent || res.writable) {
+      res.end();
+    }
   });
 };
 
@@ -175,9 +194,40 @@ const getAllowedOrigins = () => {
 export const getUserNotifications = async (req, res) => {
   try {
     const userId = req.user?._id || req.employee?._id;
+    
+    if (!userId) {
+      return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
+    }
+
     const { page = 1, limit = 20, type, unreadOnly = false } = req.query;
 
+    // Get organizationId from multiple sources
+    let organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+    
+    // If organizationId is not in request, try to load it from database
+    if (!organizationId) {
+      try {
+        if (req.user?._id) {
+          const user = await User.findById(req.user._id).select('organizationId');
+          organizationId = user?.organizationId;
+        } else if (req.employee?._id) {
+          const employee = await Employee.findById(req.employee._id).select('organizationId');
+          organizationId = employee?.organizationId;
+        }
+      } catch (dbError) {
+        logger.error('Error loading organizationId from database', { 
+          error: dbError.message, 
+          userId 
+        });
+      }
+    }
+    
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
     const filter = {
+      organizationId,
       $or: [
         { recipient: userId },
         { isBroadcast: true }
@@ -191,8 +241,8 @@ export const getUserNotifications = async (req, res) => {
       .populate('sender', 'name email')
       .populate('recipient', 'name email')
       .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
 
     const total = await Notification.countDocuments(filter);
 
@@ -200,7 +250,7 @@ export const getUserNotifications = async (req, res) => {
       notifications,
       pagination: {
         current: parseInt(page),
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / parseInt(limit)),
         total
       }
     }, 'Notifications retrieved successfully');
@@ -252,7 +302,37 @@ export const markAllAsRead = async (req, res) => {
 export const getUnreadCount = async (req, res) => {
   try {
     const userId = req.user?._id || req.employee?._id;
-    const count = await getUnreadNotificationCount(userId);
+    
+    if (!userId) {
+      return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
+    }
+
+    // Get organizationId from multiple sources
+    let organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+    
+    // If organizationId is not in request, try to load it from database
+    if (!organizationId) {
+      try {
+        if (req.user?._id) {
+          const user = await User.findById(req.user._id).select('organizationId');
+          organizationId = user?.organizationId;
+        } else if (req.employee?._id) {
+          const employee = await Employee.findById(req.employee._id).select('organizationId');
+          organizationId = employee?.organizationId;
+        }
+      } catch (dbError) {
+        logger.error('Error loading organizationId from database', { 
+          error: dbError.message, 
+          userId 
+        });
+      }
+    }
+    
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const count = await getUnreadNotificationCount(userId, organizationId);
 
     return sendSuccess(res, { unreadCount: count }, 'Unread count retrieved successfully');
   } catch (error) {

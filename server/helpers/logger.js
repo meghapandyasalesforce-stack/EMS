@@ -1,40 +1,95 @@
-// Logger utility to replace console.log with proper logging
-// This helps control what gets logged in production
+// Logger utility with structured JSON logging support
+// This helps control what gets logged in production and enables log aggregation
 
 const isDevelopment = process.env.NODE_ENV === 'development';
+const useStructuredLogging = process.env.STRUCTURED_LOGGING === 'true' || process.env.NODE_ENV === 'production';
+
+/**
+ * Create structured log entry
+ * @param {string} level - Log level (info, error, warn, debug)
+ * @param {string} message - Log message
+ * @param {Object} metadata - Additional metadata
+ * @returns {Object} Structured log entry
+ */
+const createStructuredLog = (level, message, metadata = {}) => {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level: level.toUpperCase(),
+    message,
+    ...metadata
+  };
+
+  // Add environment context
+  if (process.env.NODE_ENV) {
+    logEntry.environment = process.env.NODE_ENV;
+  }
+
+  // Add request ID if available
+  if (metadata.requestId) {
+    logEntry.requestId = metadata.requestId;
+  }
+
+  return logEntry;
+};
+
+/**
+ * Output log (structured JSON or formatted string)
+ * @param {string} level - Log level
+ * @param {string} message - Log message
+ * @param {Object} metadata - Additional metadata
+ */
+const outputLog = (level, message, metadata = {}) => {
+  const sanitizedMetadata = metadata && typeof metadata === 'object' 
+    ? logger.sanitize(metadata) 
+    : metadata;
+
+  if (useStructuredLogging) {
+    const logEntry = createStructuredLog(level, message, sanitizedMetadata);
+    const output = JSON.stringify(logEntry);
+    
+    if (level === 'error') {
+      console.error(output);
+    } else if (level === 'warn') {
+      console.warn(output);
+    } else {
+      console.log(output);
+    }
+  } else {
+    // Traditional formatted logging for development
+    const prefix = `[${level.toUpperCase()}]`;
+    if (Object.keys(sanitizedMetadata).length > 0) {
+      console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+        `${prefix} ${message}`,
+        sanitizedMetadata
+      );
+    } else {
+      console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+        `${prefix} ${message}`
+      );
+    }
+  }
+};
 
 const logger = {
-  info: (message, ...args) => {
-    if (isDevelopment) {
-      console.log(`[INFO] ${message}`, ...args);
+  info: (message, metadata = {}) => {
+    if (isDevelopment || useStructuredLogging) {
+      outputLog('info', message, metadata);
     }
   },
 
-  error: (message, ...args) => {
-    // Always log errors, but sanitize sensitive data
-    const sanitizedArgs = args.map(arg => {
-      if (typeof arg === 'object' && arg !== null) {
-        return logger.sanitize(arg);
-      }
-      return arg;
-    });
-    console.error(`[ERROR] ${message}`, ...sanitizedArgs);
+  error: (message, metadata = {}) => {
+    // Always log errors
+    outputLog('error', message, metadata);
   },
 
-  warn: (message, ...args) => {
-    // Always log warnings, but sanitize sensitive data
-    const sanitizedArgs = args.map(arg => {
-      if (typeof arg === 'object' && arg !== null) {
-        return logger.sanitize(arg);
-      }
-      return arg;
-    });
-    console.warn(`[WARN] ${message}`, ...sanitizedArgs);
+  warn: (message, metadata = {}) => {
+    // Always log warnings
+    outputLog('warn', message, metadata);
   },
 
-  debug: (message, ...args) => {
-    if (isDevelopment) {
-      console.log(`[DEBUG] ${message}`, ...args);
+  debug: (message, metadata = {}) => {
+    if (isDevelopment || useStructuredLogging) {
+      outputLog('debug', message, metadata);
     }
   },
 

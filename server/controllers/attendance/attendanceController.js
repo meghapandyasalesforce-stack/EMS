@@ -6,6 +6,8 @@ import mongoose from 'mongoose';
 import logger from "../../helpers/logger.js";
 import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/notificationService.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
+import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
+import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
 
 
 const OFFICE_START_TIME = 9;  // 9 AM
@@ -48,19 +50,74 @@ function calculateWorkingDays(startDate, endDate) {
 
 // Enhanced Clock In with image capture, geolocation, and network tracking
 export const clockIn = async (req, res) => {
-  const userId = req.employee._id;
-  const today = new Date();
-  const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+  // Log incoming request for debugging
+  logger.debug('Clock-in request received', {
+    hasEmployee: !!req.employee,
+    employeeId: req.employee?._id,
+    body: {
+      workLocation: req.body.workLocation,
+      latitude: req.body.latitude,
+      longitude: req.body.longitude,
+      latitudeType: typeof req.body.latitude,
+      longitudeType: typeof req.body.longitude,
+      hasLatitude: !!req.body.latitude,
+      hasLongitude: !!req.body.longitude,
+      hasImage: !!req.body.imageUrl,
+      hasAddress: !!req.body.address,
+      networkType: req.body.networkType,
+      deviceType: req.body.deviceType
+    }
+  });
 
   try {
+    // Validate employee authentication
+    if (!req.employee || !req.employee._id) {
+      logger.error('Clock-in error: Missing employee authentication', {
+        hasEmployee: !!req.employee,
+        hasUser: !!req.user,
+        path: req.path
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. Please log in again.',
+        code: 'AUTHENTICATION_REQUIRED'
+      });
+    }
+
+    const userId = req.employee._id;
+    const today = new Date();
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
+
     // Get organizationId from request
     const organizationId = getOrganizationId(req);
+    
+    if (!organizationId) {
+      logger.error('Clock-in error: Missing organizationId', {
+        userId,
+        hasEmployee: !!req.employee,
+        hasUser: !!req.user
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID is required',
+        code: 'MISSING_ORGANIZATION_ID'
+      });
+    }
     
     // Load active attendance rule for this organization (if any)
     const activeRule = await AttendanceRule.findOne({ 
       isActive: true,
       organizationId 
     }).lean();
+    
+    logger.debug('Clock-in attempt', {
+      userId,
+      organizationId,
+      hasActiveRule: !!activeRule,
+      enableSimplePunches: activeRule?.enableSimplePunches,
+      hasLocation: !!(req.body.latitude && req.body.longitude)
+    });
 
     // Helper: distance in meters between two lat/lng points (Haversine)
     const distanceInMeters = (lat1, lon1, lat2, lon2) => {
@@ -83,21 +140,76 @@ export const clockIn = async (req, res) => {
     });
     if (existing) {
       return res.status(400).json({
+        success: false,
         message: "Already clocked in for today",
+        code: 'ALREADY_CLOCKED_IN',
         session: existing
       });
     }
 
     const clockInTime = new Date();
-    const officeStartTime = new Date(startOfDay);
-    officeStartTime.setHours(OFFICE_START_TIME, 0, 0, 0);
+    
+    // Get office start time from rule or use default
+    let officeStartTime = new Date(startOfDay);
+    if (activeRule?.officeHours?.startTime) {
+      // Parse time string (HH:mm format)
+      const [hours, minutes] = activeRule.officeHours.startTime.split(':').map(Number);
+      officeStartTime.setHours(hours || OFFICE_START_TIME, minutes || 0, 0, 0);
+    } else if (activeRule?.checkInOutTimes?.checkInStartTime) {
+      // Use check-in start time if available
+      const [hours, minutes] = activeRule.checkInOutTimes.checkInStartTime.split(':').map(Number);
+      officeStartTime.setHours(hours || OFFICE_START_TIME, minutes || 0, 0, 0);
+    } else {
+      // Fallback to default
+      officeStartTime.setHours(OFFICE_START_TIME, 0, 0, 0);
+    }
+
+    // Validate check-in time window if configured (warning only, don't block)
+    let checkInWindowWarning = null;
+    if (activeRule?.checkInOutTimes?.checkInStartTime && activeRule?.checkInOutTimes?.checkInEndTime) {
+      const [startHour, startMin] = activeRule.checkInOutTimes.checkInStartTime.split(':').map(Number);
+      const [endHour, endMin] = activeRule.checkInOutTimes.checkInEndTime.split(':').map(Number);
+      
+      const checkInWindowStart = new Date(startOfDay);
+      checkInWindowStart.setHours(startHour, startMin, 0, 0);
+      
+      const checkInWindowEnd = new Date(startOfDay);
+      checkInWindowEnd.setHours(endHour, endMin, 0, 0);
+      
+      // Check if current time is within check-in window
+      if (clockInTime < checkInWindowStart) {
+        checkInWindowWarning = `Check-in is recommended between ${activeRule.checkInOutTimes.checkInStartTime} and ${activeRule.checkInOutTimes.checkInEndTime}. You are checking in early.`;
+        logger.info('Early check-in (before window)', {
+          userId,
+          checkInTime: clockInTime.toLocaleTimeString(),
+          windowStart: activeRule.checkInOutTimes.checkInStartTime
+        });
+      } else if (clockInTime > checkInWindowEnd) {
+        checkInWindowWarning = `Check-in window ended at ${activeRule.checkInOutTimes.checkInEndTime}. Late check-in will be recorded.`;
+        logger.warn('Check-in after allowed window', {
+          userId,
+          checkInTime: clockInTime.toLocaleTimeString(),
+          windowEnd: activeRule.checkInOutTimes.checkInEndTime
+        });
+      }
+    }
 
     // Apply grace period for late arrival if rule enabled
     let effectiveStartTime = new Date(officeStartTime);
     if (activeRule?.enablePenaltyRules && activeRule?.penaltyRules?.lateArrival?.enabled) {
-      const graceMinutes = Number(activeRule.penaltyRules.lateArrival.gracePeriod || 0);
+      // Use grace period from penalty rules or checkInOutTimes
+      const graceMinutes = Number(
+        activeRule.penaltyRules.lateArrival.gracePeriod || 
+        activeRule.checkInOutTimes?.checkInGracePeriod || 
+        0
+      );
+      effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
+    } else if (activeRule?.checkInOutTimes?.checkInGracePeriod) {
+      // Apply grace period even if penalty rules are disabled
+      const graceMinutes = Number(activeRule.checkInOutTimes.checkInGracePeriod || 0);
       effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
     }
+    
     const isLateArrival = clockInTime > effectiveStartTime;
 
     // Get real IP address
@@ -114,15 +226,74 @@ export const clockIn = async (req, res) => {
       deviceType: req.body.deviceType || deviceType // Use client-provided or detected
     };
 
-    // Extract geolocation information
+    // Extract geolocation information and normalize to numbers
+    // Values may come as strings from JSON parsing, so we need to convert them
+    // Handle null, undefined, empty string, and string "null" cases
+    const normalizeCoordinate = (value) => {
+      if (value == null || value === '' || value === 'null' || value === 'undefined') {
+        return undefined;
+      }
+      const num = Number(value);
+      // Check if conversion resulted in NaN
+      if (isNaN(num)) {
+        return undefined;
+      }
+      // Note: We allow 0 as a valid coordinate (though unlikely for real locations)
+      // The validation will check coordinate ranges separately
+      return num;
+    };
+
     const locationInfo = {
-      latitude: req.body.latitude,
-      longitude: req.body.longitude,
+      latitude: normalizeCoordinate(req.body.latitude),
+      longitude: normalizeCoordinate(req.body.longitude),
       address: req.body.address,
-      accuracy: req.body.accuracy,
+      accuracy: req.body.accuracy != null ? Number(req.body.accuracy) : undefined,
       locationMatch: false,
       locationDistance: null
     };
+
+    // Log location data for debugging
+    logger.debug('Location data received', {
+      hasLatitude: typeof locationInfo.latitude === 'number',
+      hasLongitude: typeof locationInfo.longitude === 'number',
+      latitude: locationInfo.latitude,
+      longitude: locationInfo.longitude,
+      latitudeType: typeof locationInfo.latitude,
+      longitudeType: typeof locationInfo.longitude,
+      originalLatitude: req.body.latitude,
+      originalLongitude: req.body.longitude,
+      originalLatitudeType: typeof req.body.latitude,
+      originalLongitudeType: typeof req.body.longitude,
+      bodyKeys: Object.keys(req.body)
+    });
+
+    // Reverse geocode coordinates to get address if address is missing and geocoding is available
+    if (typeof locationInfo.latitude === 'number' && 
+        typeof locationInfo.longitude === 'number' && 
+        (!locationInfo.address || locationInfo.address === 'Unknown location' || locationInfo.address === 'Location detected but address unavailable')) {
+      
+      if (isGeocodingAvailable()) {
+        try {
+          const reverseGeocodeResult = await reverseGeocode(locationInfo.latitude, locationInfo.longitude);
+          if (reverseGeocodeResult.formattedAddress) {
+            locationInfo.address = reverseGeocodeResult.formattedAddress;
+            logger.info('Reverse geocoded address for clock-in', {
+              coordinates: { lat: locationInfo.latitude, lng: locationInfo.longitude },
+              address: locationInfo.address
+            });
+          }
+        } catch (reverseGeocodeError) {
+          logger.warn('Reverse geocoding failed for clock-in', {
+            error: reverseGeocodeError.message,
+            coordinates: { lat: locationInfo.latitude, lng: locationInfo.longitude }
+          });
+          // Continue with provided address or default message
+          if (!locationInfo.address) {
+            locationInfo.address = 'Location detected but address unavailable';
+          }
+        }
+      }
+    }
 
     let locationMatch = false;
     let locationDistance = null;
@@ -134,12 +305,78 @@ export const clockIn = async (req, res) => {
         (empDept && activeRule.applicableDepartments.includes(empDept));
 
       if (appliesToDept) {
-        if (
-          typeof locationInfo.latitude !== 'number' ||
-          typeof locationInfo.longitude !== 'number'
-        ) {
+        // Validate location after normalization
+        // Check if location is missing or invalid
+        // Note: (0,0) coordinates are technically valid but unlikely for real locations
+        const hasValidLatitude = typeof locationInfo.latitude === 'number' && 
+                                  !isNaN(locationInfo.latitude) && 
+                                  locationInfo.latitude !== null && 
+                                  locationInfo.latitude !== undefined &&
+                                  locationInfo.latitude >= -90 && 
+                                  locationInfo.latitude <= 90;
+        
+        const hasValidLongitude = typeof locationInfo.longitude === 'number' && 
+                                   !isNaN(locationInfo.longitude) && 
+                                   locationInfo.longitude !== null && 
+                                   locationInfo.longitude !== undefined &&
+                                   locationInfo.longitude >= -180 && 
+                                   locationInfo.longitude <= 180;
+
+        // Reject if both are 0 (invalid location) or if either is invalid
+        const bothZero = locationInfo.latitude === 0 && locationInfo.longitude === 0;
+
+        if (!hasValidLatitude || !hasValidLongitude || bothZero) {
+          logger.warn('Clock-in location validation failed', {
+            userId,
+            organizationId,
+            latitude: locationInfo.latitude,
+            longitude: locationInfo.longitude,
+            latitudeType: typeof locationInfo.latitude,
+            longitudeType: typeof locationInfo.longitude,
+            hasValidLatitude,
+            hasValidLongitude,
+            bothZero,
+            originalLatitude: req.body.latitude,
+            originalLongitude: req.body.longitude,
+            originalLatitudeType: typeof req.body.latitude,
+            originalLongitudeType: typeof req.body.longitude,
+            bodyKeys: Object.keys(req.body),
+            enableSimplePunches: activeRule.enableSimplePunches,
+            ruleHasCoordinates: !!(activeRule.coordinates?.latitude && activeRule.coordinates?.longitude)
+          });
+          
+          // Provide more helpful error message
+          let errorMessage = 'Location is required to clock in at this site. ';
+          if (!req.body.latitude && !req.body.longitude) {
+            errorMessage += 'Location data was not provided. Please enable location services and try again.';
+          } else if (bothZero) {
+            errorMessage += 'Invalid location coordinates (0,0) received. Please ensure GPS is enabled and try again.';
+          } else {
+            errorMessage += 'Invalid location coordinates received. Please enable location services and try again.';
+          }
+          
           return res.status(400).json({
-            message: 'Location is required to clock in at this site'
+            success: false,
+            message: errorMessage,
+            code: 'LOCATION_REQUIRED',
+            details: {
+              received: {
+                latitude: req.body.latitude,
+                longitude: req.body.longitude,
+                latitudeType: typeof req.body.latitude,
+                longitudeType: typeof req.body.longitude
+              },
+              normalized: {
+                latitude: locationInfo.latitude,
+                longitude: locationInfo.longitude
+              },
+              validation: {
+                hasValidLatitude,
+                hasValidLongitude,
+                bothZero
+              },
+              requestBodyKeys: Object.keys(req.body)
+            }
           });
         }
         locationDistance = distanceInMeters(
@@ -149,8 +386,27 @@ export const clockIn = async (req, res) => {
           activeRule.coordinates.longitude
         );
         if (locationDistance > (activeRule.maximumRadius || 500)) {
+          logger.warn('Clock-in outside radius', {
+            userId,
+            organizationId,
+            distance: Math.round(locationDistance),
+            maximumRadius: activeRule.maximumRadius,
+            userLocation: { lat: locationInfo.latitude, lng: locationInfo.longitude },
+            officeLocation: activeRule.coordinates
+          });
           return res.status(400).json({
-            message: `Outside allowed radius (${Math.round(locationDistance)}m > ${activeRule.maximumRadius}m)`
+            success: false,
+            message: `You are outside the allowed check-in radius. Distance: ${Math.round(locationDistance)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
+            code: 'OUTSIDE_RADIUS',
+            distance: Math.round(locationDistance),
+            maximumRadius: activeRule.maximumRadius,
+            details: {
+              yourLocation: {
+                latitude: locationInfo.latitude,
+                longitude: locationInfo.longitude
+              },
+              officeLocation: activeRule.coordinates
+            }
           });
         }
         locationMatch = true;
@@ -191,7 +447,8 @@ export const clockIn = async (req, res) => {
       status: "present",
       isLateArrival,
       isOnTime: !isLateArrival,
-      workLocation: req.body.workLocation || "office",
+      // Normalize workLocation: accept 'home' as 'work_from_home' for backward compatibility
+      workLocation: req.body.workLocation === 'home' ? 'work_from_home' : (req.body.workLocation || "office"),
       clockInImage: imageInfo,
       clockInLocation: locationInfo,
       clockInNetwork: networkInfo
@@ -199,8 +456,8 @@ export const clockIn = async (req, res) => {
 
     // Send notification to admins about check-in
     try {
-      const employee = await Employee.findById(userId).select('name lastName email department position');
-      const admins = await User.find({ role: 'admin' }).select('_id');
+      const employee = await Employee.findById(userId).select('name lastName email department position organizationId');
+      const admins = await User.find({ role: 'admin', organizationId }).select('_id');
       
       if (admins.length > 0 && employee) {
         const locationStatus = locationMatch 
@@ -219,6 +476,7 @@ export const clockIn = async (req, res) => {
           message,
           'system',
           {
+            organizationId: organizationId, // Add organizationId to metadata as fallback
             employeeId: employee._id,
             employeeName: `${employee.name} ${employee.lastName || ''}`,
             deviceType: networkInfo.deviceType,
@@ -234,16 +492,79 @@ export const clockIn = async (req, res) => {
       // Don't fail the check-in if notification fails
     }
 
-    res.status(201).json(attendance);
+    // Return attendance object directly with additional metadata
+    const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
+    res.status(201).json({
+      ...attendanceObj,
+      success: true,
+      message: checkInWindowWarning 
+        ? `Checked in successfully. ${checkInWindowWarning}` 
+        : isLateArrival 
+          ? 'Checked in (late arrival noted)' 
+          : 'Checked in successfully',
+      ...(checkInWindowWarning && { warning: checkInWindowWarning })
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    // Enhanced error logging
+    logger.error('Clock-in error', {
+      error: error.message,
+      stack: error.stack,
+      userId: userId || req.employee?._id || 'unknown',
+      organizationId: organizationId || 'unknown',
+      body: {
+        ...req.body,
+        imageUrl: req.body.imageUrl ? '[Image data present]' : undefined
+      },
+      hasEmployee: !!req.employee,
+      errorName: error.name,
+      errorCode: error.code
+    });
+    
+    // If it's a validation error from express-validator, return 400
+    if (error.name === 'ValidationError' || error.statusCode === 400) {
+      return res.status(400).json({ 
+        success: false,
+        message: error.message || 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: error.errors || error.details
+      });
+    }
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError' && error.errors) {
+      const mongooseErrors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        errors: mongooseErrors
+      });
+    }
+    
+    // Default error response
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ 
+      success: false,
+      message: statusCode === 500 
+        ? 'An error occurred while processing your clock-in request. Please try again.' 
+        : (error.message || 'Failed to clock in'),
+      code: statusCode === 500 ? 'SERVER_ERROR' : 'CLOCK_IN_ERROR',
+      ...(process.env.NODE_ENV === 'development' && { 
+        details: error.message,
+        stack: error.stack 
+      })
+    });
   }
 };
 
 export const breakIn = async (req, res) => {
   try {
     const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
     const organizationId = getOrganizationId(req);
     const attendance = await Attendance.findOne({ 
       userId: req.employee._id, 
@@ -311,7 +632,7 @@ export const breakIn = async (req, res) => {
     
     // Get employee details and send notification to admins
     try {
-      const employee = await Employee.findById(req.employee._id).select('name lastName email');
+      const employee = await Employee.findById(req.employee._id).select('name lastName email organizationId');
       if (employee) {
         await sendBreakNotification(employee);
       }
@@ -329,7 +650,8 @@ export const breakIn = async (req, res) => {
 export const breakOut = async (req, res) => {
   try {
     const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
     const organizationId = getOrganizationId(req);
     const attendance = await Attendance.findOne({ 
       userId: req.employee._id, 
@@ -370,12 +692,19 @@ export const breakOut = async (req, res) => {
 // Enhanced Clock Out with image capture, geolocation, and network tracking
 export const clockOut = async (req, res) => {
   const today = new Date();
-  const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
 
   try {
-    // Load active rule to apply early-departure grace
-    const activeRule = await AttendanceRule.findOne({ isActive: true }).lean();
+    // Get organizationId first
     const organizationId = getOrganizationId(req);
+    
+    // Load active rule for this organization (if any)
+    const activeRule = await AttendanceRule.findOne({ 
+      isActive: true,
+      organizationId 
+    }).lean();
+    
     const attendance = await Attendance.findOne({ 
       userId: req.employee._id, 
       date: startOfDay,
@@ -433,13 +762,72 @@ export const clockOut = async (req, res) => {
       return R * c;
     };
 
-    // Extract geolocation information for clock out
-    const locationInfo = {
-      latitude: req.body.latitude,
-      longitude: req.body.longitude,
-      address: req.body.address,
-      accuracy: req.body.accuracy
+    // Extract geolocation information for clock out and normalize to numbers
+    // Values may come as strings from JSON parsing, so we need to convert them
+    // Handle null, undefined, empty string, and string "null" cases
+    const normalizeCoordinate = (value) => {
+      if (value == null || value === '' || value === 'null' || value === 'undefined') {
+        return undefined;
+      }
+      const num = Number(value);
+      // Check if conversion resulted in NaN or invalid coordinate
+      if (isNaN(num) || num === 0) {
+        return undefined;
+      }
+      return num;
     };
+
+    const locationInfo = {
+      latitude: normalizeCoordinate(req.body.latitude),
+      longitude: normalizeCoordinate(req.body.longitude),
+      address: req.body.address,
+      accuracy: req.body.accuracy != null ? Number(req.body.accuracy) : undefined,
+      locationMatch: false,
+      locationDistance: null
+    };
+
+    // Log location data for debugging
+    logger.debug('Location data received for clock-out', {
+      hasLatitude: typeof locationInfo.latitude === 'number',
+      hasLongitude: typeof locationInfo.longitude === 'number',
+      latitude: locationInfo.latitude,
+      longitude: locationInfo.longitude,
+      latitudeType: typeof locationInfo.latitude,
+      longitudeType: typeof locationInfo.longitude,
+      originalLatitude: req.body.latitude,
+      originalLongitude: req.body.longitude,
+      originalLatitudeType: typeof req.body.latitude,
+      originalLongitudeType: typeof req.body.longitude,
+      bodyKeys: Object.keys(req.body)
+    });
+
+    // Reverse geocode coordinates to get address if address is missing and geocoding is available
+    if (typeof locationInfo.latitude === 'number' && 
+        typeof locationInfo.longitude === 'number' && 
+        (!locationInfo.address || locationInfo.address === 'Unknown location' || locationInfo.address === 'Location detected but address unavailable')) {
+      
+      if (isGeocodingAvailable()) {
+        try {
+          const reverseGeocodeResult = await reverseGeocode(locationInfo.latitude, locationInfo.longitude);
+          if (reverseGeocodeResult.formattedAddress) {
+            locationInfo.address = reverseGeocodeResult.formattedAddress;
+            logger.info('Reverse geocoded address for clock-out', {
+              coordinates: { lat: locationInfo.latitude, lng: locationInfo.longitude },
+              address: locationInfo.address
+            });
+          }
+        } catch (reverseGeocodeError) {
+          logger.warn('Reverse geocoding failed for clock-out', {
+            error: reverseGeocodeError.message,
+            coordinates: { lat: locationInfo.latitude, lng: locationInfo.longitude }
+          });
+          // Continue with provided address or default message
+          if (!locationInfo.address) {
+            locationInfo.address = 'Location detected but address unavailable';
+          }
+        }
+      }
+    }
 
     // Enforce geofence if rule present and simple punches disabled
     if (activeRule && !activeRule.enableSimplePunches) {
@@ -448,12 +836,64 @@ export const clockOut = async (req, res) => {
         (empDept && activeRule.applicableDepartments.includes(empDept));
 
       if (appliesToDept) {
-        if (
-          typeof locationInfo.latitude !== 'number' ||
-          typeof locationInfo.longitude !== 'number'
-        ) {
+        // Validate location after normalization
+        // Check if location is missing or invalid
+        // Validate location after normalization
+        // Check if location is missing or invalid
+        // Note: (0,0) coordinates are technically valid but unlikely for real locations
+        const hasValidLatitude = typeof locationInfo.latitude === 'number' && 
+                                  !isNaN(locationInfo.latitude) && 
+                                  locationInfo.latitude !== null && 
+                                  locationInfo.latitude !== undefined &&
+                                  locationInfo.latitude >= -90 && 
+                                  locationInfo.latitude <= 90;
+        
+        const hasValidLongitude = typeof locationInfo.longitude === 'number' && 
+                                   !isNaN(locationInfo.longitude) && 
+                                   locationInfo.longitude !== null && 
+                                   locationInfo.longitude !== undefined &&
+                                   locationInfo.longitude >= -180 && 
+                                   locationInfo.longitude <= 180;
+
+        // Reject if both are 0 (invalid location) or if either is invalid
+        const bothZero = locationInfo.latitude === 0 && locationInfo.longitude === 0;
+
+        if (!hasValidLatitude || !hasValidLongitude || bothZero) {
+          logger.warn('Clock-out location validation failed', {
+            latitude: locationInfo.latitude,
+            longitude: locationInfo.longitude,
+            latitudeType: typeof locationInfo.latitude,
+            longitudeType: typeof locationInfo.longitude,
+            hasValidLatitude,
+            hasValidLongitude,
+            bothZero,
+            originalLatitude: req.body.latitude,
+            originalLongitude: req.body.longitude,
+            originalLatitudeType: typeof req.body.latitude,
+            originalLongitudeType: typeof req.body.longitude,
+            bodyKeys: Object.keys(req.body)
+          });
           return res.status(400).json({
-            message: 'Location is required to clock out at this site'
+            success: false,
+            message: 'Location is required to clock out at this site. Please enable location services and try again.',
+            code: 'LOCATION_REQUIRED',
+            details: {
+              received: {
+                latitude: req.body.latitude,
+                longitude: req.body.longitude,
+                latitudeType: typeof req.body.latitude,
+                longitudeType: typeof req.body.longitude
+              },
+              normalized: {
+                latitude: locationInfo.latitude,
+                longitude: locationInfo.longitude
+              },
+              validation: {
+                hasValidLatitude,
+                hasValidLongitude,
+                bothZero
+              }
+            }
           });
         }
         const dist = distanceInMeters(
@@ -464,7 +904,11 @@ export const clockOut = async (req, res) => {
         );
         if (dist > (activeRule.maximumRadius || 500)) {
           return res.status(400).json({
-            message: `Outside allowed radius for checkout (${Math.round(dist)}m > ${activeRule.maximumRadius}m)`
+            success: false,
+            message: `You are outside the allowed check-out radius. Distance: ${Math.round(dist)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
+            code: 'OUTSIDE_RADIUS',
+            distance: Math.round(dist),
+            maximumRadius: activeRule.maximumRadius
           });
         }
       }
@@ -606,15 +1050,34 @@ export const getLogs = async (req, res) => {
 // Get employees currently on break
 export const getEmployeesOnBreak = async (req, res) => {
   try {
-    const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+    const today = new Date();
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
     
     // Get all attendance records for today with status 'onBreak'
     const organizationId = getOrganizationId(req);
-    const attendanceRecords = await Attendance.find({ 
+    let attendanceQuery = { 
       date: startOfDay,
       status: 'onBreak',
       organizationId
-    })
+    };
+    
+    // If user is a manager (not admin or HR), filter by manager field
+    // Example: Manager "Arun Kumar" sees employees on break with manager="Arun Kumar" or "Arun"
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManager && req.employee) {
+      const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
+      attendanceQuery.userId = { $in: managerEmployeeIds };
+      
+      const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+      logger.info('Manager filtering employees on break by manager field', {
+        managerId: req.employee._id,
+        managerName: managerName,
+        employeeCount: managerEmployeeIds.length
+      });
+    }
+    
+    const attendanceRecords = await Attendance.find(attendanceQuery)
     .populate('userId', 'name lastName email employeeId department position profilePhoto')
     .lean();
 
@@ -655,14 +1118,33 @@ export const getEmployeesOnBreak = async (req, res) => {
 };
 
 export const getTodayStatus = async (req, res) => {
-  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+  const today = new Date();
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
   const now = new Date();
 
   try {
     // 1. Get all active employees for this organization
     const organizationId = getOrganizationId(req);
+    let employeeQuery = addOrganizationFilter(req, { active: true });
+    
+    // If user is a manager (not admin or HR), filter by manager field
+    // Example: Manager "Arun Kumar" sees attendance for employees with manager="Arun Kumar" or "Arun"
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManager && req.employee) {
+      const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
+      employeeQuery._id = { $in: managerEmployeeIds };
+      
+      const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+      logger.info('Manager filtering attendance by manager field', {
+        managerId: req.employee._id,
+        managerName: managerName,
+        employeeCount: managerEmployeeIds.length
+      });
+    }
+    
     const allEmployees = await Employee.find(
-      addOrganizationFilter(req, {}), 
+      employeeQuery, 
       '_id name email department position employeeId'
     );
     
@@ -797,7 +1279,9 @@ export const getTodayStatus = async (req, res) => {
 export const getMyTodayStatus = async (req, res) => {
   try {
     const organizationId = getOrganizationId(req);
-    const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+    const today = new Date();
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
     const session = await Attendance.findOne({ 
       userId: req.employee._id, 
       date: startOfDay,
@@ -812,8 +1296,25 @@ export const getEmployeeList = async (req, res) => {
   try {
     const { department, includeInactive } = req.query;
     
-    const query = { active: true }; // Default to only active employees
-    if (department) query.department = department;
+    const query = addOrganizationFilter(req, { active: true }); // Default to only active employees
+    
+    // If user is a manager (not admin or HR), filter by manager field
+    // Example: Manager "Arun Kumar" sees employees with manager="Arun Kumar" or "Arun"
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManager && req.employee) {
+      const managerQuery = buildManagerMatchQuery(req.employee);
+      if (managerQuery && managerQuery.$or) {
+        query.$or = managerQuery.$or;
+      }
+      const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+      logger.info('Manager filtering employee list by manager field', {
+        managerId: req.employee._id,
+        managerName: managerName
+      });
+    } else if (department) {
+      query.department = department;
+    }
+    
     if (includeInactive === 'true') delete query.active; // Remove active filter if including inactive
     
     const employees = await Employee.find(query)
@@ -837,7 +1338,8 @@ export const getEmployeeList = async (req, res) => {
 export const forceEndBreak = async (req, res) => {
   try {
     const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
     const organizationId = getOrganizationId(req);
     const attendance = await Attendance.findOne({ 
       userId: req.employee._id, 
@@ -879,6 +1381,116 @@ export const forceEndBreak = async (req, res) => {
   }
 };
 
+/**
+ * Get attendance summary (for both admin and employee)
+ */
+export const getAttendanceSummary = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    const employeeId = req.employee?._id || req.user?._id;
+    const { startDate, endDate, employeeId: queryEmployeeId } = req.query;
+
+    // If queryEmployeeId is provided and user is admin, use that instead
+    const targetEmployeeId = (req.user?.role === 'admin' && queryEmployeeId) 
+      ? queryEmployeeId 
+      : employeeId;
+
+    if (!targetEmployeeId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Employee ID is required'
+      });
+    }
+
+    const employee = await Employee.findOne({ 
+      _id: targetEmployeeId,
+      organizationId 
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.date = {};
+      if (startDate) dateFilter.date.$gte = new Date(startDate);
+      if (endDate) dateFilter.date.$lte = new Date(endDate);
+    }
+
+    const query = addOrganizationFilter(req, { 
+      userId: targetEmployeeId,
+      ...dateFilter
+    });
+
+    // Get attendance records
+    const records = await Attendance.find(query).sort({ date: -1 });
+
+    // Calculate date range
+    let periodStart, periodEnd;
+    if (startDate) {
+      periodStart = new Date(startDate);
+    } else if (records.length > 0) {
+      const dates = records.map(r => new Date(r.date).getTime()).filter(d => !isNaN(d));
+      periodStart = dates.length > 0 ? new Date(Math.min(...dates)) : new Date(new Date().setMonth(new Date().getMonth() - 1));
+    } else {
+      periodStart = new Date(new Date().setMonth(new Date().getMonth() - 1));
+    }
+    
+    periodEnd = endDate ? new Date(endDate) : new Date();
+    const workingDays = calculateWorkingDays(periodStart, periodEnd);
+
+    // Calculate statistics
+    const presentDays = records.filter(r => ['present', 'loggedOut'].includes(r.status)).length;
+    const halfDays = records.filter(r => r.status === 'half-day').length;
+    const absentDays = Math.max(0, workingDays - presentDays - halfDays);
+
+    const totalEffectiveHours = records.reduce((sum, r) => sum + (r.effectiveHours || 0), 0);
+    const totalOvertime = records.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
+
+    res.json({
+      success: true,
+      data: {
+        employee: {
+          _id: employee._id,
+          name: employee.name,
+          employeeId: employee.employeeId
+        },
+        period: {
+          start: periodStart,
+          end: periodEnd,
+          workingDays
+        },
+        statistics: {
+          presentDays,
+          halfDays,
+          absentDays,
+          attendanceRate: workingDays > 0 
+            ? parseFloat(((presentDays + halfDays * 0.5) / workingDays * 100).toFixed(2)) 
+            : 0,
+          totalEffectiveHours: parseFloat(totalEffectiveHours.toFixed(2)),
+          totalOvertime: parseFloat(totalOvertime.toFixed(2)),
+          avgDailyHours: presentDays > 0 
+            ? parseFloat((totalEffectiveHours / presentDays).toFixed(2)) 
+            : 0,
+          lateArrivals: records.filter(r => r.isLateArrival).length,
+          earlyDepartures: records.filter(r => r.isEarlyDeparture).length
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting attendance summary', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get attendance summary'
+    });
+  }
+};
+
 export const getEmployeeAttendanceDetails = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -892,6 +1504,27 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
         success: false,
         message: 'Employee not found'
       });
+    }
+
+    // If user is a manager (not admin or HR), verify employee is linked to them
+    // Example: Manager "Arun Kumar" can only view attendance for employees with manager="Arun Kumar" or "Arun"
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManager && req.employee) {
+      const isLinked = isEmployeeLinkedToManager(employee, req.employee);
+      
+      if (!isLinked) {
+        const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+        logger.warn('Manager trying to access attendance for unlinked employee', {
+          managerId: req.employee._id,
+          managerName: managerName,
+          employeeManager: employee.manager,
+          employeeId: employeeId
+        });
+        return res.status(403).json({
+          success: false,
+          message: 'You can only view attendance for employees linked to you.'
+        });
+      }
     }
 
     // Date filtering
@@ -952,6 +1585,104 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message
+    });
+  }
+};
+
+/**
+ * Get attendance rule details for employees (public info only)
+ * Returns office location, radius, and whether simple punches are enabled
+ */
+export const getAttendanceRuleForEmployee = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    
+    if (!organizationId) {
+      logger.error('Get attendance rule error: Missing organizationId', {
+        hasEmployee: !!req.employee,
+        hasUser: !!req.user
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID is required',
+        code: 'MISSING_ORGANIZATION_ID'
+      });
+    }
+
+    // Get active attendance rule
+    const activeRule = await AttendanceRule.findOne({ 
+      isActive: true,
+      organizationId 
+    }).lean();
+
+    if (!activeRule) {
+      // Return default values if no rule exists
+      return res.json({
+        success: true,
+        rule: {
+          location: null,
+          address: null,
+          coordinates: null,
+          maximumRadius: 500,
+          enableSimplePunches: true, // Default to true if no rule
+          locationRequired: false
+        }
+      });
+    }
+
+    // Check if employee is exempt
+    const empDept = req.employee?.department;
+    const appliesToDept = !activeRule.applicableDepartments?.length ||
+      (empDept && activeRule.applicableDepartments.includes(empDept));
+
+    // Check if employee is in exempt list
+    const isExempt = activeRule.exceptions?.exemptEmployees?.some(
+      empId => empId.toString() === req.employee?._id?.toString()
+    ) || false;
+
+    // Determine if location is required
+    // Location is required if:
+    // 1. Simple punches are disabled
+    // 2. Rule applies to employee's department
+    // 3. Employee is not exempt
+    // 4. Rule has valid coordinates
+    const hasValidCoordinates = activeRule.coordinates && 
+                                 typeof activeRule.coordinates.latitude === 'number' &&
+                                 typeof activeRule.coordinates.longitude === 'number' &&
+                                 !isNaN(activeRule.coordinates.latitude) &&
+                                 !isNaN(activeRule.coordinates.longitude) &&
+                                 activeRule.coordinates.latitude !== 0 &&
+                                 activeRule.coordinates.longitude !== 0;
+
+    const locationRequired = !activeRule.enableSimplePunches && 
+                            appliesToDept && 
+                            !isExempt &&
+                            hasValidCoordinates;
+
+    // Return public rule information
+    return res.json({
+      success: true,
+      rule: {
+        location: activeRule.location,
+        address: activeRule.address,
+        coordinates: activeRule.coordinates,
+        maximumRadius: activeRule.maximumRadius || 500,
+        enableSimplePunches: activeRule.enableSimplePunches || false,
+        locationRequired: locationRequired,
+        applicableToDepartment: appliesToDept,
+        isExempt: isExempt
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching attendance rule for employee', {
+      error: error.message,
+      stack: error.stack,
+      employeeId: req.employee?._id
+    });
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch attendance rule',
+      code: 'SERVER_ERROR'
     });
   }
 };

@@ -1,9 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FiCreditCard, FiDownload, FiUser, FiCalendar, FiMapPin, FiBriefcase, FiTag } from 'react-icons/fi';
+import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
 import { getUploadUrl } from '../utils/axios';
 import html2canvas from 'html2canvas';
+
+/**
+ * Sanitize text to prevent XSS attacks
+ * Removes all HTML tags and escapes special characters
+ */
+const sanitizeText = (text) => {
+    if (text === null || text === undefined) return '';
+    // Use DOMPurify to sanitize, removing all HTML tags
+    const sanitized = DOMPurify.sanitize(String(text), { ALLOWED_TAGS: [] });
+    return sanitized;
+};
+
+/**
+ * Sanitize CSS color value to prevent injection
+ * Only allows valid hex colors or CSS color names
+ */
+const sanitizeColor = (color) => {
+    if (!color) return '#000000';
+    // Remove any non-color characters and validate hex format
+    const sanitized = String(color).replace(/[^#a-fA-F0-9]/g, '');
+    // If it's a hex color, ensure it starts with #
+    if (sanitized.match(/^[0-9a-fA-F]{3,6}$/)) {
+        return `#${sanitized}`;
+    }
+    // Fallback to safe default
+    return '#000000';
+};
 
 const IdCardView = () => {
   const [idCard, setIdCard] = useState(null);
@@ -48,11 +76,56 @@ const IdCardView = () => {
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       `;
       
-      const bgColor = idCard.cardDesign?.backgroundColor || '#ffffff';
-      const accentColor = idCard.cardDesign?.accentColor || '#1976d2';
-      const textColor = idCard.cardDesign?.textColor || '#000000';
-      const companyName = idCard.cardDesign?.companyName || 'Paarsiv Technologies';
-      const companyAddress = idCard.cardDesign?.companyAddress || 'Employee ID Card';
+      // Sanitize all user-controlled data before inserting into HTML
+      const bgColor = sanitizeColor(idCard.cardDesign?.backgroundColor) || '#ffffff';
+      const accentColor = sanitizeColor(idCard.cardDesign?.accentColor) || '#1976d2';
+      const textColor = sanitizeColor(idCard.cardDesign?.textColor) || '#000000';
+      const companyName = sanitizeText(idCard.cardDesign?.companyName || 'Paarsiv Technologies');
+      const companyAddress = sanitizeText(idCard.cardDesign?.companyAddress || 'Employee ID Card');
+      
+      // Sanitize employee data
+      const employeeName = sanitizeText(idCard.employeeId?.name || '');
+      const employeeLastName = sanitizeText(idCard.employeeId?.lastName || '');
+      const employeeId = sanitizeText(idCard.employeeId?.employeeId || 'N/A');
+      const jobTitle = sanitizeText(idCard.employeeId?.jobTitle || 'Not Specified');
+      const department = sanitizeText(idCard.employeeId?.department || 'Not Specified');
+      const phone1 = sanitizeText(idCard.employeeId?.phone1 || '');
+      const joiningDate = idCard.employeeId?.joiningDate 
+        ? new Date(idCard.employeeId.joiningDate).toLocaleDateString() 
+        : '';
+      
+      // Sanitize image URLs - validate they're safe URLs
+      const profilePhotoUrl = idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto;
+      const qrCodeUrl = idCard.qrCode?.imageUrl;
+      
+      // Validate and sanitize URLs to prevent XSS via javascript: or data: URLs
+      const sanitizeUrl = (url) => {
+        if (!url) return null;
+        try {
+          const fullUrl = getUploadUrl(url);
+          // Create a temporary anchor element to validate URL
+          const tempAnchor = document.createElement('a');
+          tempAnchor.href = fullUrl;
+          
+          // Only allow http, https, and relative URLs (no javascript:, data:, etc.)
+          const protocol = tempAnchor.protocol;
+          if (protocol !== 'http:' && protocol !== 'https:' && protocol !== '') {
+            return null; // Reject dangerous protocols
+          }
+          
+          // Use DOMPurify to sanitize the URL string
+          const sanitized = DOMPurify.sanitize(tempAnchor.href, { 
+            ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i 
+          });
+          
+          return sanitized || null;
+        } catch {
+          return null;
+        }
+      };
+      
+      const safeProfilePhotoUrl = sanitizeUrl(profilePhotoUrl);
+      const safeQrCodeUrl = sanitizeUrl(qrCodeUrl);
       
       downloadCard.innerHTML = `
         <div style="background: ${accentColor}; color: white; padding: 15px; text-align: center; border-radius: 6px 6px 0 0;">
@@ -62,26 +135,26 @@ const IdCardView = () => {
         <div style="padding: 20px; background: ${bgColor};">
           <div style="text-align: center; margin-bottom: 15px;">
             <div style="width: 80px; height: 80px; border-radius: 50%; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center;">
-              ${idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto 
-                ? `<img src="${getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}" alt="Photo" crossOrigin="anonymous" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
+              ${safeProfilePhotoUrl 
+                ? `<img src="${safeProfilePhotoUrl}" alt="Photo" crossOrigin="anonymous" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
                 : '<div style="width: 40px; height: 40px; background: #d1d5db; border-radius: 50%;"></div>'}
             </div>
           </div>
           <div style="text-align: center;">
             <h4 style="margin: 0 0 15px 0; font-size: 20px; font-weight: bold; color: ${textColor};">
-              ${idCard.employeeId?.name || ''} ${idCard.employeeId?.lastName || ''}
+              ${employeeName} ${employeeLastName}
             </h4>
             <div style="font-size: 14px; color: ${textColor}; line-height: 1.8;">
-              <div style="margin: 5px 0;">ID: ${idCard.employeeId?.employeeId || 'N/A'}</div>
-              <div style="margin: 5px 0;">${idCard.employeeId?.jobTitle || 'Not Specified'}</div>
-              <div style="margin: 5px 0;">${idCard.employeeId?.department || 'Not Specified'}</div>
-              ${idCard.employeeId?.phone1 ? `<div style="margin: 5px 0;">Phone: ${idCard.employeeId.phone1}</div>` : ''}
-              ${idCard.employeeId?.joiningDate ? `<div style="margin: 5px 0;">Joined: ${new Date(idCard.employeeId.joiningDate).toLocaleDateString()}</div>` : ''}
+              <div style="margin: 5px 0;">ID: ${employeeId}</div>
+              <div style="margin: 5px 0;">${jobTitle}</div>
+              <div style="margin: 5px 0;">${department}</div>
+              ${phone1 ? `<div style="margin: 5px 0;">Phone: ${phone1}</div>` : ''}
+              ${joiningDate ? `<div style="margin: 5px 0;">Joined: ${joiningDate}</div>` : ''}
             </div>
           </div>
-          ${idCard.qrCode?.imageUrl ? `
+          ${safeQrCodeUrl ? `
             <div style="text-align: center; margin-top: 15px;">
-              <img src="${idCard.qrCode.imageUrl}" alt="QR Code" style="width: 64px; height: 64px;" />
+              <img src="${safeQrCodeUrl}" alt="QR Code" style="width: 64px; height: 64px;" />
             </div>
           ` : ''}
         </div>

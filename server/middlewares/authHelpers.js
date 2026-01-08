@@ -56,6 +56,27 @@ export const verifyToken = (token) => {
 };
 
 /**
+ * Verify that token was issued after password was last changed
+ * @param {Object} decoded - Decoded JWT token
+ * @param {Date|number} passwordChangedAt - Timestamp when password was last changed
+ * @returns {boolean} - True if token is valid, false if password was changed after token was issued
+ */
+export const verifyPasswordNotChanged = (decoded, passwordChangedAt) => {
+    if (!passwordChangedAt || !decoded.passwordChangedAt) {
+        // If either is missing, assume valid (backward compatibility)
+        return true;
+    }
+    
+    const tokenPasswordTime = decoded.passwordChangedAt;
+    const currentPasswordTime = passwordChangedAt instanceof Date 
+        ? passwordChangedAt.getTime() 
+        : passwordChangedAt;
+    
+    // Token is valid if it was issued after password was changed
+    return tokenPasswordTime >= currentPasswordTime;
+};
+
+/**
  * Create standardized authentication error response
  * @param {Error} error - Error object
  * @param {Object} res - Express response object

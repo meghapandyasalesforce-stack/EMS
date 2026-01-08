@@ -3,18 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchLogs } from '../../context/attendanceSlice';
 import { FiCalendar, FiClock, FiTrendingUp, FiHome, FiAlertTriangle, FiArrowLeft } from 'react-icons/fi';
-import { Bar } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const AttendanceStats = () => {
   const dispatch = useDispatch();
@@ -79,34 +68,29 @@ const AttendanceStats = () => {
     { wfh: 0, office: 0 }
   );
 
-  // Prepare data for the bar chart
-  const chartData = {
-    labels: ['Effective Hours', 'Overtime', 'Late Arrivals', 'Early Departures'],
-    datasets: [
-      {
-        label: 'Stats',
-        data: [
-          summary.totalEffectiveHours,
-          summary.totalOvertime,
-          summary.totalLateArrivals,
-          summary.totalEarlyDepartures
-        ],
-        backgroundColor: [
-          'rgba(54, 162, 235, 0.7)',
-          'rgba(255, 159, 64, 0.7)',
-          'rgba(255, 99, 132, 0.7)',
-          'rgba(255, 206, 86, 0.7)'
-        ],
-        borderColor: [
-          'rgba(54, 162, 235, 1)',
-          'rgba(255, 159, 64, 1)',
-          'rgba(255, 99, 132, 1)',
-          'rgba(255, 206, 86, 1)'
-        ],
-        borderWidth: 1,
-      },
-    ],
-  };
+  // Prepare data for the bar chart (Recharts format)
+  const chartData = [
+    {
+      name: 'Effective Hours',
+      value: summary.totalEffectiveHours,
+      label: 'Hours'
+    },
+    {
+      name: 'Overtime',
+      value: summary.totalOvertime,
+      label: 'Hours'
+    },
+    {
+      name: 'Late Arrivals',
+      value: summary.totalLateArrivals,
+      label: 'Count'
+    },
+    {
+      name: 'Early Departures',
+      value: summary.totalEarlyDepartures,
+      label: 'Count'
+    }
+  ];
 
   const formatTime = (timeString) => {
     if (!timeString) return '--:--';
@@ -124,7 +108,7 @@ const AttendanceStats = () => {
       <div className="mx-auto p-4 max-w-screen-2xl">
         <div className="flex items-center gap-4 mb-6">
           <button
-            onClick={() => navigate('/dashboard-employee')}
+            onClick={() => navigate('/dashboard')}
             className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
             title="Go back to dashboard"
           >
@@ -194,41 +178,23 @@ const AttendanceStats = () => {
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-3">Attendance Overview</h2>
           <div className="h-64">
-            <Bar data={chartData} options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { 
-                legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: function(context) {
-                      let label = context.dataset.label || '';
-                      if (label) {
-                        label += ': ';
-                      }
-                      if (context.parsed.y !== null) {
-                        if (context.dataIndex < 2) {
-                          label += `${context.parsed.y.toFixed(2)} hours`;
-                        } else {
-                          label += context.parsed.y;
-                        }
-                      }
-                      return label;
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  formatter={(value, name) => {
+                    const item = chartData.find(d => d.value === value);
+                    if (item && item.label === 'Hours') {
+                      return `${value.toFixed(2)} hours`;
                     }
-                  }
-                }
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    callback: function(value) {
-                      return Number.isInteger(value) ? value : value.toFixed(2);
-                    }
-                  }
-                }
-              }
-            }} />
+                    return value;
+                  }}
+                />
+                <Bar dataKey="value" fill="#3b82f6" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 

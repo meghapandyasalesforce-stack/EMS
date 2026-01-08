@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
       refetchOnReconnect: true,
       retry: 2,
       staleTime: 1000 * 60 * 2, // 2 minutes
-      cacheTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 5, // 5 minutes (garbage collection time - replaces deprecated cacheTime)
     },
   },
 });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { 
     fetchAdminEmployeePayrollHistory, 
     fetchAdminCurrentMonthPayroll, 
@@ -42,7 +43,6 @@ const AdminEmployeePayroll = () => {
     const { employees } = useSelector(state => state.employees);
     const [currentPage, setCurrentPage] = useState(1);
     const [showPayrollDetails, setShowPayrollDetails] = useState(false);
-    const [showPayslipModal, setShowPayslipModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
 
     useEffect(() => {
@@ -65,8 +65,43 @@ const AdminEmployeePayroll = () => {
     };
 
     const handleDownloadPayslip = async (payrollId) => {
-        await dispatch(downloadAdminPayslip(payrollId));
-        setShowPayslipModal(true);
+        try {
+            const result = await dispatch(downloadAdminPayslip(payrollId));
+            
+            if (downloadAdminPayslip.fulfilled.match(result)) {
+                // Create blob from the PDF data
+                const blob = new Blob([result.payload], { type: 'application/pdf' });
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                
+                // Generate filename - try to get employee info from current payroll or selected employee
+                const employeeInfo = selectedEmployee || currentMonthPayroll?.employeeId;
+                const employeeId = employeeInfo?.employeeId || employeeInfo?._id || 'employee';
+                const month = currentMonthPayroll?.month || new Date().toLocaleString('default', { month: 'long' });
+                const year = currentMonthPayroll?.year || new Date().getFullYear();
+                link.download = `Payslip_${employeeId}_${month}_${year}.pdf`;
+                
+                // Trigger download
+                document.body.appendChild(link);
+                link.click();
+                
+                // Cleanup
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                
+                // Show success message
+                toast.success('Payslip downloaded successfully!');
+            } else {
+                // Handle error
+                const errorMessage = result.payload || 'Failed to download payslip';
+                toast.error(errorMessage);
+            }
+        } catch (error) {
+            toast.error('Failed to download payslip. Please try again.');
+        }
     };
 
     const handleCreatePayroll = () => {
@@ -520,34 +555,6 @@ const AdminEmployeePayroll = () => {
                 </div>
             )}
 
-            {/* Payslip Download Modal */}
-            {showPayslipModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6">
-                        <div className="text-center">
-                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <FiDownload className="w-8 h-8 text-green-600" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Payslip Ready</h3>
-                            <p className="text-gray-600 mb-6">The payslip has been generated successfully.</p>
-                            <div className="space-y-3">
-                                <button
-                                    onClick={() => setShowPayslipModal(false)}
-                                    className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors"
-                                >
-                                    Download PDF
-                                </button>
-                                <button
-                                    onClick={() => setShowPayslipModal(false)}
-                                    className="w-full bg-gray-200 text-gray-800 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

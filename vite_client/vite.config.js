@@ -1,68 +1,32 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Custom plugin to suppress ECONNREFUSED proxy errors
-const suppressProxyErrors = () => {
+// Custom plugin to handle proxy errors gracefully (instead of suppressing)
+const handleProxyErrors = () => {
   return {
-    name: 'suppress-proxy-errors',
-    buildStart() {
-      // Intercept console methods to filter proxy errors
-      // This runs early in the build process
-      const originalError = console.error;
-      const originalWarn = console.warn;
-      
-      console.error = (...args) => {
-        const message = args.join(' ');
-        // Suppress ECONNREFUSED proxy errors
-        if (message.includes('http proxy error') && 
-            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
-          return; // Don't log these errors
-        }
-        originalError.apply(console, args);
-      };
-      
-      console.warn = (...args) => {
-        const message = args.join(' ');
-        // Suppress ECONNREFUSED proxy warnings
-        if (message.includes('http proxy error') && 
-            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
-          return; // Don't log these warnings
-        }
-        originalWarn.apply(console, args);
-      };
-    },
+    name: 'handle-proxy-errors',
     configureServer(server) {
-      // Also intercept at server level for additional coverage
-      const originalError = console.error;
-      const originalWarn = console.warn;
-      
-      console.error = (...args) => {
-        const message = args.join(' ');
-        if (message.includes('http proxy error') && 
-            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
-          return;
-        }
-        originalError.apply(console, args);
-      };
-      
-      console.warn = (...args) => {
-        const message = args.join(' ');
-        if (message.includes('http proxy error') && 
-            (message.includes('ECONNREFUSED') || message.includes('ECONNRESET') || message.includes('AggregateError'))) {
-          return;
-        }
-        originalWarn.apply(console, args);
-      };
+      // Handle proxy errors gracefully by logging them at debug level
+      // This allows developers to see connection issues without cluttering the console
+      server.middlewares.use((req, res, next) => {
+        // Errors are already handled in the proxy configuration below
+        next();
+      });
     }
   };
 };
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Load environment variables using Vite's loadEnv
+  // This properly handles VITE_* prefixed variables in config files
+  const env = loadEnv(mode, process.cwd(), '');
+  
+  return {
   plugins: [
-    suppressProxyErrors(), // Add this plugin first to suppress proxy errors
+    handleProxyErrors(), // Add this plugin to handle proxy errors gracefully
     react({
       // Ensure production build uses production React
       jsxRuntime: 'automatic',
@@ -201,10 +165,8 @@ export default defineConfig({
   // IMPORTANT: Vercel requires '/' for proper asset and routing resolution
   // For Capacitor builds, override this in the build script or use environment variable
   // Default to '/' for web, can be overridden with VITE_BASE_PATH env var
-  // Note: In vite.config.js, we MUST use process.env (not import.meta.env)
-  // import.meta.env is only available in application code, not in config files
-  // eslint-disable-next-line no-undef
-  base: process.env.VITE_BASE_PATH || '/',
+  // Note: Using loadEnv ensures VITE_* prefixed variables are correctly loaded
+  base: env.VITE_BASE_PATH || '/',
   optimizeDeps: {
     exclude: [
       'html2canvas',
@@ -273,4 +235,5 @@ export default defineConfig({
       },
     },
   },
-})
+  };
+});

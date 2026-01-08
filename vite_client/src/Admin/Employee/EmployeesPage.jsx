@@ -1,16 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchEmployees } from '../../context/employeeSlice';
-import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye } from 'react-icons/fa';
+import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye, FaUserPlus } from 'react-icons/fa';
 import ProfilePicture from '../../Shared/ProfilePicture';
+import RoleBadge from '../../components/RoleBadge';
+import { filterEmployeesByManager, isManager } from '../../utils/managerHelper';
 
 const EmployeesPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { employees, status, error } = useSelector((state) => state.employees);
+  const user = useSelector((state) => state.auth?.user);
+  const employee = useSelector((state) => state.employeeDetails?.employee);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Check if user is HR or Admin
+  const canAddEmployee = useMemo(() => {
+    const userRole = user?.role || employee?.role || localStorage.getItem('role');
+    const department = (user?.department || employee?.department || '').toLowerCase().trim();
+    const jobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
+    const position = (user?.position || employee?.position || '').toLowerCase().trim();
+
+    // Admin can always add employees
+    if (userRole === 'admin') {
+      return true;
+    }
+
+    // Check if user is HR
+    const isHR = 
+      department === 'hr' || 
+      department.includes('hr') || 
+      department.includes('human resource') ||
+      jobTitle.includes('hr manager') ||
+      jobTitle.includes('human resource') ||
+      jobTitle.includes('hr') ||
+      position.includes('hr manager') ||
+      (position.includes('hr') && position.includes('manager'));
+
+    return isHR;
+  }, [user, employee]);
 
   useEffect(() => {
     dispatch(fetchEmployees());
@@ -31,8 +61,32 @@ const EmployeesPage = () => {
     navigate(`/employees/${employeeId}`);
   };
 
+  // Check if user is HR
+  const isHR = useMemo(() => {
+    const department = (user?.department || employee?.department || '').toLowerCase().trim();
+    const jobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
+    const position = (user?.position || employee?.position || '').toLowerCase().trim();
+    
+    return department === 'hr' || 
+           department.includes('hr') || 
+           department.includes('human resource') ||
+           jobTitle.includes('hr manager') ||
+           jobTitle.includes('human resource') ||
+           jobTitle.includes('hr') ||
+           position.includes('hr manager') ||
+           (position.includes('hr') && position.includes('manager'));
+  }, [user, employee]);
+
+  // Filter employees by manager if user is a manager (but NOT if user is HR)
+  // HR should see ALL employees
+  const displayUser = user || employee;
+  const isUserManager = isManager(displayUser) && !isHR;
+  const managerFilteredEmployees = isUserManager 
+    ? filterEmployeesByManager(employees || [], displayUser)
+    : (employees || []);
+
   // Sort employees by createdAt date (newest first)
-  const sortedEmployees = [...(employees || [])].sort((a, b) => {
+  const sortedEmployees = [...managerFilteredEmployees].sort((a, b) => {
     const dateA = new Date(a.createdAt || 0);
     const dateB = new Date(b.createdAt || 0);
     return dateB - dateA; // Newest first
@@ -69,7 +123,31 @@ const EmployeesPage = () => {
     <div className="min-h-screen bg-gray-100 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6">Employees Management</h1>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">Employees Management</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                {isHR 
+                  ? `Showing all employees (${filteredEmployees.length} employees)`
+                  : isUserManager 
+                    ? `Showing your team members (${filteredEmployees.length} employees)`
+                    : `Showing employees (${filteredEmployees.length} employees)`
+                }
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {displayUser && <RoleBadge user={displayUser} />}
+              {canAddEmployee && (
+                <button
+                  onClick={() => navigate('/add-employee')}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
+                >
+                  <FaUserPlus className="h-4 w-4" />
+                  <span>Add Employee</span>
+                </button>
+              )}
+            </div>
+          </div>
           
           {/* Search Bar */}
           <div className="relative mb-6">

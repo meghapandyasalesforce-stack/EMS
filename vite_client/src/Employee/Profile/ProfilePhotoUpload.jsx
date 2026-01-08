@@ -142,7 +142,10 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
 
       toast.success('Profile photo uploaded successfully!');
       if (onPhotoUpdate) {
-        onPhotoUpdate(response.data.profilePhoto || response.data);
+        // Server response structure: { success: true, profilePhoto: {...}, fileSize: ... }
+        // The sendSuccess helper merges the data object, so profilePhoto is at the root level
+        const profilePhotoData = response.data?.profilePhoto || response.data?.data?.profilePhoto || response.data;
+        onPhotoUpdate(profilePhotoData);
       }
       
       // Reset state

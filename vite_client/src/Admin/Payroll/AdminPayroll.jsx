@@ -39,8 +39,18 @@ const AdminPayroll = () => {
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
     const currentUser = useSelector((state) => state.auth.user);
+    const employee = useSelector((state) => state.employeeDetails?.employee);
+    
+    // Check if user is CEO
+    const isCEO = useMemo(() => {
+        const userObj = currentUser || employee;
+        if (!userObj) return false;
+        const position = (userObj.position || '').toLowerCase().trim();
+        return position === 'ceo' || position.includes('chief executive');
+    }, [currentUser, employee]);
+    
     useEffect(() => {
-        if (!currentUser) {
+        if (!currentUser && !employee) {
             navigate('/login');
             return;
         }
@@ -49,10 +59,10 @@ const AdminPayroll = () => {
             month: months[selectedMonth].label,
             year: selectedYear
         }));
-    }, [selectedMonth, selectedYear, dispatch, navigate, months, currentUser]);
+    }, [selectedMonth, selectedYear, dispatch, navigate, months, currentUser, employee]);
 
     const handleDisburse = async () => {
-        if (!currentUser || currentUser.role !== 'admin') return;
+        if (!isCEO) return;
         try {
             setDisburseLoading(true);
             setDisburseResult(null);
@@ -197,8 +207,8 @@ const AdminPayroll = () => {
                     <button
                         className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
                         onClick={handleDisburse}
-                        disabled={disburseLoading || !currentUser || currentUser.role !== 'admin'}
-                        title="Disburse in-hand amounts to employees' bank accounts"
+                        disabled={disburseLoading || !isCEO}
+                        title={isCEO ? "Disburse in-hand amounts to employees' bank accounts (CEO only)" : "Only CEO can disburse payroll"}
                     >
                         {disburseLoading ? 'Disbursing…' : 'Disburse Salaries'}
                     </button>
@@ -322,10 +332,10 @@ const AdminPayroll = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {(Array.isArray(payrollData) ? payrollData : []).map((employee) => {
+                                {(Array.isArray(payrollData) ? payrollData : []).map((employee, index) => {
                                     const status = getPayrollStatus(employee);
                                     return (
-                                        <tr key={employee.employeeId} className="hover:bg-gray-50">
+                                        <tr key={employee._id || employee.employeeId || `employee-${index}`} className="hover:bg-gray-50">
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.name}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">${employee.totalEarnings}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>

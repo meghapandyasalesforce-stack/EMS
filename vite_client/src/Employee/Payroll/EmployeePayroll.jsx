@@ -23,6 +23,7 @@ import {
     FiX
 } from 'react-icons/fi';
 import { format } from 'date-fns';
+import { toast } from 'react-toastify';
 
 const EmployeePayroll = () => {
     const dispatch = useDispatch();
@@ -37,7 +38,6 @@ const EmployeePayroll = () => {
 
     const [currentPage, setCurrentPage] = useState(1);
     const [showPayrollDetails, setShowPayrollDetails] = useState(false);
-    const [showPayslipModal, setShowPayslipModal] = useState(false);
 
     useEffect(() => {
         dispatch(fetchCurrentMonthPayroll());
@@ -59,8 +59,40 @@ const EmployeePayroll = () => {
     };
 
     const handleDownloadPayslip = async (payrollId) => {
-        await dispatch(downloadPayslip(payrollId));
-        setShowPayslipModal(true);
+        try {
+            const result = await dispatch(downloadPayslip(payrollId));
+            
+            if (downloadPayslip.fulfilled.match(result)) {
+                // Create blob from the PDF data
+                const blob = new Blob([result.payload], { type: 'application/pdf' });
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                
+                // Generate filename
+                const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+                link.download = `Payslip_${currentMonth}.pdf`;
+                
+                // Trigger download
+                document.body.appendChild(link);
+                link.click();
+                
+                // Cleanup
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                
+                // Show success message
+                toast.success('Payslip downloaded successfully!');
+            } else {
+                // Handle error
+                const errorMessage = result.payload || 'Failed to download payslip';
+                toast.error(errorMessage);
+            }
+        } catch (error) {
+            toast.error('Failed to download payslip. Please try again.');
+        }
     };
 
     const formatCurrency = (amount) => {
@@ -431,38 +463,6 @@ const EmployeePayroll = () => {
                 </div>
             )}
 
-            {/* Payslip Download Modal */}
-            {showPayslipModal && payslipData && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg max-w-md w-full p-6">
-                        <div className="text-center">
-                            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <FiDownload className="w-7 h-7 text-green-600" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Payslip Ready</h3>
-                            <p className="text-sm text-gray-600 mb-5">Your payslip has been generated successfully.</p>
-                            <div className="space-y-3">
-                                <button
-                                    onClick={() => {
-                                        // In a real app, this would trigger the actual PDF download
-                                        window.open(payslipData.downloadUrl, '_blank');
-                                        setShowPayslipModal(false);
-                                    }}
-                                    className="w-full bg-green-500 text-white py-2.5 px-4 rounded-lg hover:bg-green-600 transition text-sm font-medium"
-                                >
-                                    Download PDF
-                                </button>
-                                <button
-                                    onClick={() => setShowPayslipModal(false)}
-                                    className="w-full bg-gray-200 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

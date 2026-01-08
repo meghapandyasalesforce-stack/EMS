@@ -3,6 +3,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
 import { App } from '@capacitor/app';
+import logger from './logger';
 
 /**
  * Initialize Capacitor plugins for mobile app
@@ -33,11 +34,11 @@ export const initCapacitor = async () => {
     // Handle app state changes
     if (Capacitor.isPluginAvailable('App')) {
       App.addListener('appStateChange', ({ isActive }) => {
-        console.log('App state changed. Is active?', isActive);
+        logger.debug('App state changed', { isActive });
       });
 
       App.addListener('appUrlOpen', (data) => {
-        console.log('App opened with URL:', data.url);
+        logger.debug('App opened with URL', { url: data.url });
       });
 
       // Handle back button on Android
@@ -50,7 +51,7 @@ export const initCapacitor = async () => {
       });
     }
   } catch (error) {
-    console.error('Error initializing Capacitor:', error);
+    logger.error('Error initializing Capacitor', { error: error.message, stack: error.stack });
   }
 };
 

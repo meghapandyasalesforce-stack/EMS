@@ -51,11 +51,23 @@ export const downloadAdminPayslip = createAsyncThunk(
     'adminEmployeePayroll/downloadPayslip',
     async (payrollId, { rejectWithValue }) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/download/${payrollId}`, {
+            // Use the correct export-pdf endpoint with blob response type
+            const response = await axios.get(`${API_BASE_URL}/${payrollId}/export-pdf`, {
+                responseType: 'blob', // Important: expect binary PDF data
                 withCredentials: true
             });
-            return response.data;
+            return response.data; // Return blob data
         } catch (error) {
+            // If error response is JSON, try to parse it
+            if (error.response?.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const errorData = JSON.parse(text);
+                    return rejectWithValue(errorData.message || 'Failed to download payslip');
+                } catch (parseError) {
+                    return rejectWithValue('Failed to download payslip');
+                }
+            }
             return rejectWithValue(error.response?.data?.message || 'Failed to download payslip');
         }
     }

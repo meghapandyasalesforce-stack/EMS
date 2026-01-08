@@ -1,6 +1,7 @@
 import Payroll from "../../models/payroll.model.js";
 import Employee from "../../models/employee.model.js";
 import logger from "../../helpers/logger.js";
+import { generatePayrollPDF } from "../../helpers/pdfGenerator.js";
 
 // Get employee's payroll history
 export const getEmployeePayrollHistory = async (req, res) => {
@@ -67,38 +68,46 @@ export const downloadPayslip = async (req, res) => {
             return res.status(404).json({ message: 'Payroll not found' });
         }
 
-        // Generate payslip data
-        const payslipData = {
-            employee: {
-                name: `${payroll.employeeId.name} ${payroll.employeeId.lastName}`,
-                employeeId: payroll.employeeId.employeeId,
-                email: payroll.employeeId.email,
-                jobTitle: payroll.employeeId.jobTitle,
-                department: payroll.employeeId.department
-            },
-            payroll: {
-                month: payroll.month,
-                year: payroll.year,
-                basicSalary: payroll.basicSalary,
-                earnings: payroll.earnings,
-                deductions: payroll.deductions,
-                ctc: payroll.ctc,
-                inHandSalary: payroll.inHandSalary,
-                status: payroll.status,
-                processedDate: payroll.processedDate,
-                paidDate: payroll.paidDate
-            }
+        // Prepare employee data for PDF
+        const employeeData = {
+            name: payroll.employeeId.name,
+            lastName: payroll.employeeId.lastName || '',
+            employeeId: payroll.employeeId.employeeId,
+            email: payroll.employeeId.email,
+            jobTitle: payroll.employeeId.jobTitle,
+            department: payroll.employeeId.department
         };
 
-        // For now, return the data as JSON
-        // In production, you would generate a PDF here
-        res.json({
-            message: 'Payslip data generated successfully',
-            payslipData,
-            downloadUrl: `/api/employee/payroll/download-pdf/${payrollId}`
-        });
+        // Prepare payroll data for PDF
+        const payrollData = {
+            month: payroll.month,
+            year: payroll.year,
+            basicSalary: payroll.basicSalary,
+            earnings: payroll.earnings,
+            deductions: payroll.deductions,
+            ctc: payroll.ctc,
+            inHandSalary: payroll.inHandSalary,
+            status: payroll.status,
+            processedDate: payroll.processedDate,
+            paidDate: payroll.paidDate,
+            payment: payroll.payment, // Add payment information
+            notes: payroll.notes // Add notes
+        };
+
+        // Generate PDF
+        const pdfBuffer = await generatePayrollPDF(payrollData, employeeData);
+
+        // Set response headers for PDF download
+        const fileName = `Payslip_${employeeData.employeeId}_${payroll.month}_${payroll.year}.pdf`;
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+
+        // Send PDF buffer
+        res.send(pdfBuffer);
     } catch (error) {
-        logger.error('Download Payslip Error', { error: error.message, stack: error.stack, payrollId: req.params.id });
+        logger.error('Download Payslip Error', { error: error.message, stack: error.stack, payrollId: req.params.payrollId });
         res.status(500).json({ message: error.message });
     }
 };
@@ -106,22 +115,49 @@ export const downloadPayslip = async (req, res) => {
 // Get current month payroll
 export const getCurrentMonthPayroll = async (req, res) => {
     try {
+        // Check if employee is authenticated
+        if (!req.employee || !req.employee._id) {
+            logger.warn('Get Current Month Payroll - Employee not authenticated', { 
+                hasEmployee: !!req.employee,
+                hasUserId: !!req.employee?._id
+            });
+            return res.status(401).json({ 
+                success: false,
+                message: 'Employee not authenticated' 
+            });
+        }
+
         const employeeId = req.employee._id;
         const currentDate = new Date();
         const month = currentDate.toLocaleString('default', { month: 'long' });
         const year = currentDate.getFullYear();
 
-        let payroll = await Payroll.findOne({
+        // Get organizationId for multi-tenancy
+        const organizationId = req.organizationId || req.employee?.organizationId || req.user?.organizationId;
+
+        // Build query with organization filter if available
+        const query = {
             employeeId,
             month,
             year
-        }).populate('employeeId', 'name lastName email jobTitle department employeeId');
+        };
+        if (organizationId) {
+            query.organizationId = organizationId;
+        }
+
+        let payroll = await Payroll.findOne(query)
+            .populate('employeeId', 'name lastName email jobTitle department employeeId')
+            .lean();
 
         // If no payroll exists for current month, create a default one
         if (!payroll) {
-            const employee = await Employee.findById(employeeId);
+            const employee = await Employee.findById(employeeId).lean();
             if (!employee) {
-                return res.status(404).json({ message: 'Employee not found' });
+                logger.warn('Get Current Month Payroll - Employee not found', { employeeId });
+                return res.status(404).json({ 
+                    success: false,
+                    message: 'Employee not found' 
+                });
             }
 
             const basicSalary = employee.salary || 0;
@@ -159,7 +195,7 @@ export const getCurrentMonthPayroll = async (req, res) => {
             const ctc = earnings.totalEarnings;
             const inHandSalary = earnings.totalEarnings - deductions.total;
 
-            payroll = new Payroll({
+            const payrollData = {
                 employeeId,
                 month,
                 year,
@@ -169,14 +205,34 @@ export const getCurrentMonthPayroll = async (req, res) => {
                 ctc,
                 inHandSalary,
                 status: 'Pending'
-            });
+            };
 
+            // Add organizationId if available
+            if (organizationId) {
+                payrollData.organizationId = organizationId;
+            }
+
+            payroll = new Payroll(payrollData);
             await payroll.save();
+            payroll = payroll.toObject();
         }
 
-        res.json(payroll);
+        // Return response in expected format
+        res.json({
+            success: true,
+            ...payroll,
+            inHandSalary: payroll.inHandSalary || (payroll.earnings?.totalEarnings || 0) - (payroll.deductions?.total || 0)
+        });
     } catch (error) {
-        logger.error('Get Current Month Payroll Error', { error: error.message, stack: error.stack, employeeId: req.employee?._id });
-        res.status(500).json({ message: error.message });
+        logger.error('Get Current Month Payroll Error', { 
+            error: error.message, 
+            stack: error.stack, 
+            employeeId: req.employee?._id,
+            organizationId: req.organizationId || req.employee?.organizationId
+        });
+        res.status(500).json({ 
+            success: false,
+            message: error.message || 'Failed to fetch current month payroll' 
+        });
     }
 };

@@ -82,7 +82,8 @@ export const createPolicy = asyncHandler(async (req, res) => {
  * @returns {Object} 500 - Server error
  */
 export const getPolicies = asyncHandler(async (req, res) => {
-    const organizationId = req.organizationId || req.user?.organizationId;
+    // Support both admin (req.user) and HR employee (req.employee) access
+    const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
     
     if (!organizationId) {
         return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
@@ -119,7 +120,8 @@ export const getPolicies = asyncHandler(async (req, res) => {
  */
 export const getPolicyById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = req.organizationId || req.user?.organizationId;
+    // Support both admin (req.user) and HR employee (req.employee) access
+    const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
     if (!organizationId) {
         return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
@@ -418,7 +420,8 @@ export const acknowledgePolicy = asyncHandler(async (req, res) => {
  * @returns {Object} 500 - Server error
  */
 export const getPolicyCompliance = asyncHandler(async (req, res) => {
-    const organizationId = req.organizationId || req.user?.organizationId;
+    // Support both admin (req.user) and HR employee (req.employee) access
+    const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
     if (!organizationId) {
         return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');

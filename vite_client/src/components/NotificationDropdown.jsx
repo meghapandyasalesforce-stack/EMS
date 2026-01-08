@@ -20,15 +20,51 @@ const NotificationDropdown = () => {
     useEffect(() => {
         // Only fetch when a user is available (authenticated)
         if (!authUser) return;
-        fetchNotifications();
-        fetchUnreadCount();
         
-        // Poll for new notifications every 30 seconds
-        const interval = setInterval(() => {
-            if (authUser) fetchUnreadCount();
-        }, 30000);
+        // Initial fetch with delay to avoid race conditions
+        const initialTimeout = setTimeout(() => {
+            fetchNotifications();
+            fetchUnreadCount();
+        }, 500);
+        
+        // Poll for new notifications every 60 seconds (reduced from 30s to reduce load)
+        // Only poll when tab is visible to reduce unnecessary requests
+        let interval;
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // Tab is hidden, clear interval
+                if (interval) {
+                    clearInterval(interval);
+                    interval = null;
+                }
+            } else {
+                // Tab is visible, start polling
+                if (!interval && authUser) {
+                    interval = setInterval(() => {
+                        if (authUser && !document.hidden) {
+                            fetchUnreadCount();
+                        }
+                    }, 60000); // 60 seconds
+                }
+            }
+        };
+        
+        // Start polling only if tab is visible
+        if (!document.hidden && authUser) {
+            interval = setInterval(() => {
+                if (authUser && !document.hidden) {
+                    fetchUnreadCount();
+                }
+            }, 60000); // 60 seconds
+        }
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        return () => clearInterval(interval);
+        return () => {
+            clearTimeout(initialTimeout);
+            if (interval) clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [authUser]);
 
     // Calculate dropdown position when opening
@@ -97,6 +133,13 @@ const NotificationDropdown = () => {
                 return;
             }
             
+            // Handle rate limiting (429) gracefully - don't retry immediately
+            if (status === 429) {
+                // Rate limited - silently fail, will retry on next poll
+                setNotifications([]);
+                return;
+            }
+            
             // Gracefully ignore auth errors; avoid noisy console in UI
             if (status !== 401 && status !== 403) {
                 // Removed console.error for production
@@ -125,6 +168,12 @@ const NotificationDropdown = () => {
             if (isConnectionError) {
                 // Backend is not running - silently fail
                 setUnreadCount(0);
+                return;
+            }
+            
+            // Handle rate limiting (429) gracefully - don't update count, will retry later
+            if (status === 429) {
+                // Rate limited - don't update count, will retry on next poll
                 return;
             }
             

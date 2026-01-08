@@ -108,6 +108,11 @@ const attendanceSchema = new mongoose.Schema({
         enum: ["present", "absent", "half-day", "onBreak", "loggedOut"],
         default: "present",
     },
+    // Auto check-out flag
+    autoCheckedOut: {
+        type: Boolean,
+        default: false
+    },
 }, {
     timestamps: true,
 });

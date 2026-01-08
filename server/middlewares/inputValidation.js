@@ -1,5 +1,6 @@
 import { body, param, query, validationResult } from 'express-validator';
 import { createError } from './errorHandler.js';
+import logger from '../helpers/logger.js';
 
 /**
  * Middleware to handle validation errors
@@ -17,9 +18,22 @@ export const handleValidationErrors = (req, res, next) => {
             value: err.value
         }));
 
+        // Log validation errors for debugging
+        logger.warn('Validation failed', {
+            path: req.path,
+            method: req.method,
+            errors: errorMessages,
+            body: {
+                ...req.body,
+                // Don't log sensitive data like images
+                imageUrl: req.body.imageUrl ? '[Image data present]' : undefined
+            }
+        });
+
         return res.status(400).json({
             success: false,
             message: 'Validation failed',
+            code: 'VALIDATION_ERROR',
             errors: errorMessages
         });
     }
@@ -244,7 +258,8 @@ export const attendanceValidations = {
     clockIn: [
         body('workLocation')
             .optional()
-            .isIn(['office', 'work_from_home']).withMessage('Invalid work location'),
+            .isIn(['office', 'work_from_home', 'home'])
+            .withMessage('Invalid work location. Must be one of: office, work_from_home, or home'),
         handleValidationErrors
     ],
 
@@ -255,6 +270,202 @@ export const attendanceValidations = {
         query('endDate')
             .optional()
             .isISO8601().withMessage('endDate must be a valid date'),
+        handleValidationErrors
+    ]
+};
+
+/**
+ * Project validations
+ */
+export const projectValidations = {
+    create: [
+        body('name')
+            .trim()
+            .notEmpty().withMessage('Project name is required')
+            .isLength({ min: 2, max: 200 }).withMessage('Project name must be between 2 and 200 characters'),
+        body('projectLeader')
+            .notEmpty().withMessage('Project leader ID is required')
+            .isMongoId().withMessage('Invalid project leader ID format'),
+        body('projectMembers')
+            .optional()
+            .isArray().withMessage('Project members must be an array'),
+        body('projectMembers.*')
+            .optional()
+            .isMongoId().withMessage('Invalid project member ID format'),
+        body('status')
+            .notEmpty().withMessage('Project status is required')
+            .isIn(['planning', 'active', 'on-hold', 'completed', 'cancelled']).withMessage('Invalid project status'),
+        handleValidationErrors
+    ],
+    update: [
+        commonValidations.objectId('id'),
+        body('name')
+            .optional()
+            .trim()
+            .isLength({ min: 2, max: 200 }).withMessage('Project name must be between 2 and 200 characters'),
+        body('projectLeader')
+            .optional()
+            .isMongoId().withMessage('Invalid project leader ID format'),
+        body('projectMembers')
+            .optional()
+            .isArray().withMessage('Project members must be an array'),
+        body('projectMembers.*')
+            .optional()
+            .isMongoId().withMessage('Invalid project member ID format'),
+        body('status')
+            .optional()
+            .isIn(['planning', 'active', 'on-hold', 'completed', 'cancelled']).withMessage('Invalid project status'),
+        handleValidationErrors
+    ],
+    getById: [
+        commonValidations.objectId('id'),
+        handleValidationErrors
+    ]
+};
+
+/**
+ * Role validations
+ */
+export const roleValidations = {
+    create: [
+        body('name')
+            .trim()
+            .notEmpty().withMessage('Role name is required')
+            .isLength({ min: 2, max: 100 }).withMessage('Role name must be between 2 and 100 characters'),
+        body('level')
+            .notEmpty().withMessage('Role level is required')
+            .isInt({ min: 1, max: 10 }).withMessage('Role level must be between 1 and 10'),
+        body('parentRole')
+            .optional()
+            .isMongoId().withMessage('Invalid parent role ID format'),
+        body('permissions')
+            .optional()
+            .isArray().withMessage('Permissions must be an array'),
+        handleValidationErrors
+    ],
+    update: [
+        commonValidations.objectId('id'),
+        body('name')
+            .optional()
+            .trim()
+            .isLength({ min: 2, max: 100 }).withMessage('Role name must be between 2 and 100 characters'),
+        body('level')
+            .optional()
+            .isInt({ min: 1, max: 10 }).withMessage('Role level must be between 1 and 10'),
+        body('parentRole')
+            .optional()
+            .isMongoId().withMessage('Invalid parent role ID format'),
+        body('permissions')
+            .optional()
+            .isArray().withMessage('Permissions must be an array'),
+        handleValidationErrors
+    ],
+    assign: [
+        body('employeeId')
+            .notEmpty().withMessage('Employee ID is required')
+            .isMongoId().withMessage('Invalid employee ID format'),
+        body('roleId')
+            .notEmpty().withMessage('Role ID is required')
+            .isMongoId().withMessage('Invalid role ID format'),
+        handleValidationErrors
+    ],
+    getById: [
+        commonValidations.objectId('id'),
+        handleValidationErrors
+    ]
+};
+
+/**
+ * Payroll validations (extended)
+ */
+export const payrollValidationsExtended = {
+    update: [
+        commonValidations.objectId('id'),
+        body('earnings')
+            .optional()
+            .isObject().withMessage('Earnings must be an object'),
+        body('deductions')
+            .optional()
+            .isObject().withMessage('Deductions must be an object'),
+        body('month')
+            .optional()
+            .isIn(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])
+            .withMessage('Invalid month'),
+        body('year')
+            .optional()
+            .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        body('status')
+            .optional()
+            .isIn(['Pending', 'Processed', 'Paid', 'Cancelled']).withMessage('Invalid payroll status'),
+        handleValidationErrors
+    ],
+    toggleVisibility: [
+        commonValidations.objectId('id'),
+        body('isVisible')
+            .notEmpty().withMessage('isVisible is required')
+            .isBoolean().withMessage('isVisible must be a boolean'),
+        handleValidationErrors
+    ],
+    generateBulk: [
+        body('month')
+            .notEmpty().withMessage('Month is required')
+            .isIn(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])
+            .withMessage('Invalid month'),
+        body('year')
+            .notEmpty().withMessage('Year is required')
+            .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        handleValidationErrors
+    ],
+    disburse: [
+        body('month')
+            .notEmpty().withMessage('Month is required')
+            .isIn(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])
+            .withMessage('Invalid month'),
+        body('year')
+            .notEmpty().withMessage('Year is required')
+            .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        handleValidationErrors
+    ],
+    getByEmployee: [
+        commonValidations.objectId('employeeId'),
+        query('page')
+            .optional()
+            .isInt({ min: 1 }).withMessage('Page must be a positive integer')
+            .toInt(),
+        query('limit')
+            .optional()
+            .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+            .toInt(),
+        handleValidationErrors
+    ],
+    getByMonthYear: [
+        commonValidations.objectId('employeeId'),
+        param('month')
+            .notEmpty().withMessage('Month is required'),
+        param('year')
+            .notEmpty().withMessage('Year is required')
+            .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        handleValidationErrors
+    ]
+};
+
+/**
+ * Notification settings validations
+ */
+export const notificationSettingsValidations = {
+    update: [
+        body('emailNotifications')
+            .optional()
+            .isBoolean().withMessage('emailNotifications must be a boolean'),
+        body('pushNotifications')
+            .optional()
+            .isBoolean().withMessage('pushNotifications must be a boolean'),
+        body('smsNotifications')
+            .optional()
+            .isBoolean().withMessage('smsNotifications must be a boolean'),
+        body('notificationPreferences')
+            .optional()
+            .isObject().withMessage('notificationPreferences must be an object'),
         handleValidationErrors
     ]
 };
@@ -373,7 +584,11 @@ export default {
     authValidations,
     employeeValidations,
     payrollValidations,
+    payrollValidationsExtended,
     attendanceValidations,
     organizationValidations,
+    projectValidations,
+    roleValidations,
+    notificationSettingsValidations,
     handleValidationErrors
 };

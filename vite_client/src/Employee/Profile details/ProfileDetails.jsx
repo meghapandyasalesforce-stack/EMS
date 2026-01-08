@@ -21,6 +21,7 @@ function ProfileDetails() {
         <div className="bg-white rounded-2xl shadow-md p-6 md:p-8 text-center">
           <div className="flex justify-center mb-4 md:mb-6">
             <ProfilePicture
+              key={user?.profilePhoto?.url || user?.profilePhoto?.filename || user?.id}
               user={user}
               size="2xl"
               showEditButton={true}
@@ -114,10 +115,31 @@ function ProfileDetails() {
                 userType="employee"
                 userId={user?.id}
                 onPhotoUpdate={(photoData) => {
-                  // Update user data in Redux store
-                  const updatedUser = { ...user, profilePhoto: photoData };
+                  // Ensure we extract the profilePhoto correctly
+                  let profilePhoto = photoData;
+                  
+                  // Handle different response structures
+                  if (photoData && typeof photoData === 'object') {
+                    // If it has a profilePhoto property, use that
+                    profilePhoto = photoData.profilePhoto || photoData;
+                  }
+                  
+                  // Update user data in Redux store with the new profile photo
+                  const updatedUser = { 
+                    ...user, 
+                    profilePhoto: profilePhoto 
+                  };
+                  
                   dispatch(setUser(updatedUser));
                   setShowPhotoUpload(false);
+                  
+                  // Debug log in development
+                  if (import.meta.env.DEV) {
+                    console.log('Updated user with profile photo:', {
+                      profilePhoto,
+                      updatedUser: updatedUser.profilePhoto
+                    });
+                  }
                 }}
               />
             </div>

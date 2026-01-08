@@ -80,18 +80,43 @@ export const requestLogger = (req, res, next) => {
             role: logData.role
         });
 
-        // Log security concerns
+        // Log security concerns - but only for actual security issues
         if (res.statusCode === 401 || res.statusCode === 403) {
-            logger.warn('Security event', {
-                requestId: req.id,
-                method: req.method,
-                path: req.path,
-                originalUrl: req.originalUrl, // Full URL path
-                statusCode: res.statusCode,
-                ip: req.ip,
-                userAgent: req.get('user-agent'),
-                body: req.body ? (req.body.email ? { email: req.body.email, hasPassword: !!req.body.password } : '[REDACTED]') : undefined
-            });
+            // Only log as security event if:
+            // 1. User appeared to be authenticated (had token/cookie)
+            // 2. OR it's not a common auth endpoint (login/refresh)
+            const isAuthEndpoint = req.path?.includes('/auth/login') || 
+                                  req.path?.includes('/auth/refresh-token') ||
+                                  req.path?.includes('/auth/register');
+            
+            const hadAuthAttempt = logData.authenticated || 
+                                  req.headers.authorization || 
+                                  req.cookies?.jwt;
+            
+            // Log security event only if:
+            // - User had auth credentials but still got 401/403 (potential security issue)
+            // - OR it's not an auth endpoint (unexpected 401/403)
+            if (hadAuthAttempt || !isAuthEndpoint) {
+                logger.warn('Security event', {
+                    requestId: req.id,
+                    method: req.method,
+                    path: req.path,
+                    originalUrl: req.originalUrl, // Full URL path
+                    statusCode: res.statusCode,
+                    ip: req.ip,
+                    userAgent: req.get('user-agent'),
+                    hadAuthAttempt,
+                    body: req.body ? (req.body.email ? { email: req.body.email, hasPassword: !!req.body.password } : '[REDACTED]') : undefined
+                });
+            }
+            // Otherwise, it's just a normal unauthenticated request - log at debug level
+            else if (process.env.NODE_ENV === 'development') {
+                logger.debug('Unauthenticated request (expected)', {
+                    requestId: req.id,
+                    path: req.path,
+                    statusCode: res.statusCode
+                });
+            }
         }
 
         // Log errors

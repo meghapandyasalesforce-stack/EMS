@@ -4,6 +4,7 @@ import fs from 'fs';
 import sharp from 'sharp';
 import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
+import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 
 // Helper functions for calculating holiday dates
 const calculateEaster = (year) => {
@@ -221,10 +222,21 @@ export const uploadCalendarFile = async (req, res) => {
       extractedHolidays = await getCommonHolidays(yearNum);
     }
 
+    // Get organizationId from request
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID is required',
+        code: 'MISSING_ORGANIZATION_ID'
+      });
+    }
+
     // Test database connection
     logger.debug('Testing database connection', { year: yearNum });
     try {
-      await Calendar.findOne({ year: yearNum });
+      const query = addOrganizationFilter(req, { year: yearNum });
+      await Calendar.findOne(query);
       logger.debug('Database connection successful');
     } catch (dbError) {
       logger.error('Database connection error', {
@@ -236,7 +248,8 @@ export const uploadCalendarFile = async (req, res) => {
     }
 
     // Get or create calendar for the year
-    let calendar = await Calendar.findOne({ year: yearNum });
+    const query = addOrganizationFilter(req, { year: yearNum });
+    let calendar = await Calendar.findOne(query);
     logger.debug('Calendar lookup', { 
       year: yearNum,
       found: !!calendar 
@@ -245,6 +258,7 @@ export const uploadCalendarFile = async (req, res) => {
     if (!calendar) {
       logger.info('Creating new calendar', { year: yearNum });
       calendar = new Calendar({
+        organizationId: organizationId,
         year: yearNum,
         holidays: [],
         workingDays: {
@@ -586,7 +600,8 @@ export const getCalendarUploadHistory = async (req, res) => {
     const { year } = req.params;
     const yearNum = parseInt(year);
     
-    const calendar = await Calendar.findOne({ year: yearNum });
+    const query = addOrganizationFilter(req, { year: yearNum });
+    const calendar = await Calendar.findOne(query);
     if (!calendar) {
       return res.json({ uploads: [] });
     }

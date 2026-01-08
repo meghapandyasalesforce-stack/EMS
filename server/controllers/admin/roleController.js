@@ -87,10 +87,12 @@ export const createRole = async (req, res) => {
 // Get all roles
 export const getAllRoles = async (req, res) => {
     try {
-        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
-        const organizationId = req.organizationId || req.user?.organizationId;
+        // SECURITY: Get organizationId from authenticated user or employee (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
         if (!organizationId) {
-            logger.error('Get roles error: Missing organizationId', { userId: req.user?._id });
+            logger.error('Get roles error: Missing organizationId', { 
+                userId: req.user?._id || req.employee?._id 
+            });
             return res.status(400).json({ 
                 success: false,
                 message: 'Organization ID is required. Please ensure you are authenticated.' 
@@ -346,10 +348,21 @@ export const assignRoleToEmployee = async (req, res) => {
             });
         }
 
+        // Assign role to employee - set all role-related fields
         employee.roleLevel = role.level;
         employee.permissions = role.permissions;
+        employee.assignedRole = roleId; // Set assignedRole for dashboard routing
 
         await employee.save();
+
+        logger.info('Role assigned to employee', {
+            employeeId: employee._id,
+            employeeName: employee.name,
+            roleId: role._id,
+            roleName: role.name,
+            dashboardRoute: role.dashboardRoute,
+            organizationId
+        });
 
         res.json({
             success: true,
@@ -358,7 +371,13 @@ export const assignRoleToEmployee = async (req, res) => {
                 id: employee._id,
                 name: employee.name,
                 roleLevel: employee.roleLevel,
-                permissions: employee.permissions
+                permissions: employee.permissions,
+                assignedRole: employee.assignedRole
+            },
+            role: {
+                id: role._id,
+                name: role.name,
+                dashboardRoute: role.dashboardRoute
             }
         });
     } catch (error) {
@@ -374,10 +393,12 @@ export const assignRoleToEmployee = async (req, res) => {
 // Get role hierarchy
 export const getRoleHierarchy = async (req, res) => {
     try {
-        // SECURITY: Get organizationId from authenticated user (multi-tenancy)
-        const organizationId = req.organizationId || req.user?.organizationId;
+        // SECURITY: Get organizationId from authenticated user or employee (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
         if (!organizationId) {
-            logger.error('Get hierarchy error: Missing organizationId', { userId: req.user?._id });
+            logger.error('Get hierarchy error: Missing organizationId', { 
+                userId: req.user?._id || req.employee?._id 
+            });
             return res.status(400).json({ 
                 success: false,
                 message: 'Organization ID is required. Please ensure you are authenticated.' 

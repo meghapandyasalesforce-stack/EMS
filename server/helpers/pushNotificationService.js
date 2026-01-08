@@ -9,12 +9,8 @@ const configureVAPID = () => {
   const subject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
 
   if (!publicKey || !privateKey) {
-    // Only warn in development - VAPID keys are optional for local development
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('VAPID keys not configured. Push notifications disabled. (Optional for local development)');
-    } else {
-      logger.warn('VAPID keys not configured. Push notifications will not work.');
-    }
+    // VAPID keys are optional - don't log warning here, it's handled in env validation
+    // This prevents duplicate warnings
     return false;
   }
 

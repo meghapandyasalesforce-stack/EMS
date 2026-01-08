@@ -8,6 +8,7 @@ import { generateVerificationTokenWithExpiry } from '../../helpers/emailVerifica
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../helpers/asyncHandler.js';
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
+import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
 
 /**
  * Register a new organization
@@ -184,7 +185,8 @@ export const registerOrganization = asyncHandler(async (req, res) => {
         }
 
         // Generate tokens
-        const tokens = generateToken(adminUser._id, adminUser.role, organization._id, res);
+        const passwordChangedAt = adminUser.passwordChangedAt || adminUser.createdAt;
+        const tokens = generateToken(adminUser._id, adminUser.role, organization._id, res, passwordChangedAt);
 
         return sendSuccess(res, {
             organization: {
@@ -310,7 +312,24 @@ export const loginOrganization = asyncHandler(async (req, res) => {
     await resetLoginAttempts(user);
 
     // Generate tokens
-    const tokens = generateToken(user._id, user.role, organization._id, res);
+    const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+    const tokens = generateToken(user._id, user.role, organization._id, res, passwordChangedAt);
+
+    // Get dashboard route based on role, position, and department
+    let dashboardRoute = '/organization/dashboard'; // Default for organization login
+    try {
+        dashboardRoute = await getDashboardRouteForUser(
+            user._id,
+            'admin',
+            organization._id,
+            user.email
+        );
+    } catch (dashboardError) {
+        logger.warn('Failed to get dashboard route, using default', {
+            userId: user._id,
+            error: dashboardError.message
+        });
+    }
 
     logger.info('Organization admin logged in', { 
         requestId,
@@ -319,9 +338,10 @@ export const loginOrganization = asyncHandler(async (req, res) => {
     });
 
     // CODE QUALITY FIX: Unified response structure across all login endpoints
-    // Structure: { token, user/employee, organization? (for org login), refreshToken?, csrfToken? }
+    // Structure: { token, user/employee, dashboardRoute, organization? (for org login), refreshToken?, csrfToken? }
     const response = {
         token: tokens.token || tokens.accessToken,
+        dashboardRoute, // Add dashboard route for automatic redirection
         user: {
             id: user._id,
             name: user.name,
@@ -369,28 +389,47 @@ export const checkOrganizationByEmail = asyncHandler(async (req, res) => {
         return sendValidationError(res, { email: 'Invalid email format' });
     }
 
-    const emailDomain = normalizedEmail.split('@')[1];
+    // Extract email domain safely
+    const emailParts = normalizedEmail.split('@');
+    if (emailParts.length !== 2 || !emailParts[1]) {
+        return sendValidationError(res, { email: 'Invalid email format - missing domain' });
+    }
+    const emailDomain = emailParts[1].toLowerCase().trim();
     
     // Rule 1: Check if employee exists first (even for Gmail) - employees take priority
-    const employee = await Employee.findOne({ 
-        email: normalizedEmail 
-    }).populate('organizationId', 'name email domain _id');
+    try {
+        const employee = await Employee.findOne({ 
+            email: normalizedEmail 
+        }).populate('organizationId', 'name email domain _id');
 
-    if (employee && employee.organizationId) {
-        // Employee exists - always use employee/admin login, even for Gmail
-        logger.debug('Employee found - takes priority over Gmail rule', { requestId, email: normalizedEmail, organizationId: employee.organizationId._id });
-        return sendSuccess(res, {
-            found: true,
-            loginType: 'employee_admin',
-            reason: 'employee_exists',
-            organization: {
-                id: employee.organizationId._id,
-                name: employee.organizationId.name,
-                email: employee.organizationId.email,
-                domain: employee.organizationId.domain
-            },
-            message: 'Employee account found. Please use Employee/Admin Login.'
-        }, 'Employee found - use employee/admin login');
+        if (employee && employee.organizationId && employee.organizationId._id) {
+            // Employee exists - always use employee/admin login, even for Gmail
+            logger.debug('Employee found - takes priority over Gmail rule', { 
+                requestId, 
+                email: normalizedEmail, 
+                organizationId: employee.organizationId._id 
+            });
+            return sendSuccess(res, {
+                found: true,
+                loginType: 'employee_admin',
+                reason: 'employee_exists',
+                organization: {
+                    id: employee.organizationId._id,
+                    name: employee.organizationId.name || null,
+                    email: employee.organizationId.email || null,
+                    domain: employee.organizationId.domain || null
+                },
+                message: 'Employee account found. Please use Employee/Admin Login.'
+            }, 'Employee found - use employee/admin login');
+        }
+    } catch (employeeError) {
+        // Log error but continue to check other rules
+        logger.error('Error checking employee for email', { 
+            requestId, 
+            email: normalizedEmail, 
+            error: employeeError.message 
+        });
+        // Continue to next rule instead of failing
     }
 
     // Rule 1b: Gmail emails go to Organization login (only if no employee found)
@@ -406,15 +445,16 @@ export const checkOrganizationByEmail = asyncHandler(async (req, res) => {
     }
     
     // Rule 2: Check if organization exists with this email or domain
-    const organization = await Organization.findOne({
-        $or: [
-            { email: normalizedEmail },
-            { domain: emailDomain }
-        ],
-        isActive: true
-    }).select('name email domain _id');
+    try {
+        const organization = await Organization.findOne({
+            $or: [
+                { email: normalizedEmail },
+                { domain: emailDomain }
+            ],
+            isActive: true
+        }).select('name email domain _id');
 
-    if (organization) {
+        if (organization) {
         // If organization email matches exactly, it's organization login
         if (organization.email === normalizedEmail) {
             logger.debug('Organization email match', { requestId, email: normalizedEmail, organizationId: organization._id });
@@ -447,32 +487,56 @@ export const checkOrganizationByEmail = asyncHandler(async (req, res) => {
                 },
                 message: 'Organization domain detected. Please use Employee/Admin Login.'
             }, 'Organization domain found');
+            }
         }
+    } catch (orgError) {
+        // Log error but continue to next rule
+        logger.error('Error checking organization for email', { 
+            requestId, 
+            email: normalizedEmail, 
+            domain: emailDomain,
+            error: orgError.message 
+        });
+        // Continue to next rule instead of failing
     }
 
     // Rule 3: Check if user exists with this email (to find organization)
-    const user = await User.findOne({ 
-        email: normalizedEmail 
-    }).populate('organizationId', 'name email domain _id');
+    try {
+        const user = await User.findOne({ 
+            email: normalizedEmail 
+        }).populate('organizationId', 'name email domain _id');
 
-    if (user && user.organizationId) {
-        // User exists - check if their email domain matches organization domain
-        const userEmailDomain = normalizedEmail.split('@')[1];
-        if (user.organizationId.domain === userEmailDomain) {
-            logger.debug('User found with organization domain', { requestId, email: normalizedEmail, organizationId: user.organizationId._id });
-            return sendSuccess(res, {
-                found: true,
-                loginType: 'employee_admin',
-                reason: 'user_with_organization_domain',
-                organization: {
-                    id: user.organizationId._id,
-                    name: user.organizationId.name,
-                    email: user.organizationId.email,
-                    domain: user.organizationId.domain
-                },
-                message: 'User found with organization domain. Please use Employee/Admin Login.'
-            }, 'User found with organization domain');
+        if (user && user.organizationId && user.organizationId._id) {
+            // User exists - check if their email domain matches organization domain
+            const userEmailDomain = normalizedEmail.split('@')[1];
+            if (user.organizationId.domain === userEmailDomain) {
+                logger.debug('User found with organization domain', { 
+                    requestId, 
+                    email: normalizedEmail, 
+                    organizationId: user.organizationId._id 
+                });
+                return sendSuccess(res, {
+                    found: true,
+                    loginType: 'employee_admin',
+                    reason: 'user_with_organization_domain',
+                    organization: {
+                        id: user.organizationId._id,
+                        name: user.organizationId.name || null,
+                        email: user.organizationId.email || null,
+                        domain: user.organizationId.domain || null
+                    },
+                    message: 'User found with organization domain. Please use Employee/Admin Login.'
+                }, 'User found with organization domain');
+            }
         }
+    } catch (userError) {
+        // Log error but continue to next rule
+        logger.error('Error checking user for email', { 
+            requestId, 
+            email: normalizedEmail, 
+            error: userError.message 
+        });
+        // Continue to next rule instead of failing
     }
 
     // Note: Employee check moved to Rule 1 (before Gmail check) for priority

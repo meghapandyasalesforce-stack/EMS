@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import axiosInstance from '../utils/axios.js';
 
 /**
  * Hook to manage browser permissions (Location, Camera, Notifications)
@@ -28,12 +29,24 @@ export const usePermissions = () => {
       return 'not-supported';
     }
 
-    // Geolocation API doesn't have a direct permission query
-    // We'll try to get position with a very short timeout to check
+    // Try Permissions API first (more reliable, Chrome/Edge support it)
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        return result.state; // 'granted', 'denied', or 'prompt'
+      } catch (err) {
+        // Permissions API not supported or failed, fall back to geolocation check
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Permissions API query failed, using fallback:', err);
+        }
+      }
+    }
+
+    // Fallback: Use geolocation API with longer timeout
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        resolve('prompt'); // If timeout, assume prompt state
-      }, 100);
+        resolve('prompt'); // If timeout, assume prompt state (permission not yet requested)
+      }, 3000); // Increased to 3 seconds
 
       navigator.geolocation.getCurrentPosition(
         () => {
@@ -42,13 +55,14 @@ export const usePermissions = () => {
         },
         (error) => {
           clearTimeout(timeout);
-          if (error.code === error.PERMISSION_DENIED) {
+          if (error.code === error.PERMISSION_DENIED || error.code === 1) {
             resolve('denied');
           } else {
+            // Other errors (timeout, position unavailable) mean prompt state
             resolve('prompt');
           }
         },
-        { timeout: 50, maximumAge: 0 }
+        { timeout: 2000, maximumAge: 60000 } // 2 second timeout, allow cached position up to 1 minute
       );
     });
   }, []);
@@ -135,11 +149,33 @@ export const usePermissions = () => {
 
     return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
+          // Save permission status to backend
+          // SECURITY FIX: Tokens are in httpOnly cookies, sent automatically via axios
+          try {
+            await axiosInstance.put('/v1/both/profile-details/update-location-permission', {
+              status: 'granted'
+            });
+          } catch (err) {
+            // Silently fail - permission tracking is not critical
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Failed to save permission status:', err);
+            }
+          }
+          
           resolve({ granted: true, position });
         },
-        (error) => {
+        async (error) => {
           if (error.code === error.PERMISSION_DENIED) {
+            // Save denied status
+            // SECURITY FIX: Tokens are in httpOnly cookies, sent automatically via axios
+            try {
+              await axiosInstance.put('/v1/both/profile-details/update-location-permission', {
+                status: 'denied'
+              });
+            } catch (err) {
+              // Silently fail - permission tracking is not critical
+            }
             resolve({ granted: false, error: 'Permission denied' });
           } else {
             reject(error);

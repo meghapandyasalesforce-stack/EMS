@@ -319,6 +319,10 @@ export const getOrganizationStatistics = async (req, res) => {
     try {
         const organizationId = getOrganizationId(req);
 
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
         const query = addOrganizationFilter(req, {});
 
         // Get counts
@@ -345,9 +349,15 @@ export const getOrganizationStatistics = async (req, res) => {
         // Get organization
         const organization = await Organization.findById(organizationId);
 
+        if (!organization) {
+            return sendError(res, 'Organization not found', 404, 'ORGANIZATION_NOT_FOUND');
+        }
+
         // Calculate employee usage percentage
-        const employeeUsage = organization.maxEmployees > 0
-            ? ((totalEmployees / organization.maxEmployees) * 100).toFixed(1)
+        // Handle case where maxEmployees might be undefined or null
+        const maxEmployees = organization.maxEmployees || 0;
+        const employeeUsage = maxEmployees > 0
+            ? ((totalEmployees / maxEmployees) * 100).toFixed(1)
             : 0;
 
         // Get recent activity (last 7 days)
@@ -406,7 +416,7 @@ export const getOrganizationStatistics = async (req, res) => {
                     active: activeEmployees,
                     inactive: totalEmployees - activeEmployees,
                     usage: parseFloat(employeeUsage),
-                    limit: organization.maxEmployees
+                    limit: maxEmployees
                 },
                 users: {
                     total: totalUsers
@@ -430,8 +440,8 @@ export const getOrganizationStatistics = async (req, res) => {
                 },
                 departments: departmentStats,
                 subscription: {
-                    plan: organization.subscriptionPlan,
-                    maxEmployees: organization.maxEmployees,
+                    plan: organization.subscriptionPlan || 'free',
+                    maxEmployees: maxEmployees,
                     employeeUsage: parseFloat(employeeUsage)
                 }
             }
@@ -495,49 +505,106 @@ export const getOrganizationUsers = async (req, res) => {
 export const getOrganizationActivity = async (req, res) => {
     try {
         const organizationId = getOrganizationId(req);
-        const { page = 1, limit = 50, startDate, endDate } = req.query;
-
-        // This would typically come from an audit log system
-        // For now, we'll return recent employee and attendance activity
-        const query = addOrganizationFilter(req, {});
-
-        if (startDate || endDate) {
-            query.createdAt = {};
-            if (startDate) query.createdAt.$gte = new Date(startDate);
-            if (endDate) query.createdAt.$lte = new Date(endDate);
+        
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
         }
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        // Validate organizationId is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(organizationId)) {
+            return sendError(res, 'Invalid organization ID format', 400, 'INVALID_ORGANIZATION_ID');
+        }
+
+        const { page = 1, limit = 50, startDate, endDate } = req.query;
+
+        // Build base query with organizationId
+        const baseQuery = { organizationId: new mongoose.Types.ObjectId(organizationId) };
+
+        // Add date filter if provided
+        if (startDate || endDate) {
+            baseQuery.createdAt = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                if (!isNaN(start.getTime())) {
+                    baseQuery.createdAt.$gte = start;
+                }
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                if (!isNaN(end.getTime())) {
+                    baseQuery.createdAt.$lte = end;
+                }
+            }
+        }
+
+        const limitNum = Math.min(parseInt(limit) || 10, 100); // Cap at 100
+        const skip = (Math.max(parseInt(page), 1) - 1) * limitNum;
 
         // Get recent employees
-        const recentEmployees = await Employee.find(query)
-            .select('name email department joiningDate createdAt')
-            .sort({ createdAt: -1 })
-            .limit(10);
+        let recentEmployees = [];
+        try {
+            recentEmployees = await Employee.find(baseQuery)
+                .select('name email department joiningDate createdAt')
+                .sort({ createdAt: -1 })
+                .limit(limitNum)
+                .lean();
+        } catch (error) {
+            logger.warn('Error fetching recent employees for activity', { error: error.message });
+        }
 
-        // Get recent attendances
-        const recentAttendances = await Attendance.find(query)
-            .populate('userId', 'name email')
-            .select('userId date clockIn clockOut status')
-            .sort({ createdAt: -1 })
-            .limit(10);
+        // Get recent attendances (userId in Attendance model references Employee)
+        let recentAttendances = [];
+        try {
+            recentAttendances = await Attendance.find(baseQuery)
+                .populate({
+                    path: 'userId',
+                    select: 'name email',
+                    model: 'Employee',
+                    options: { strictPopulate: false }
+                })
+                .select('userId date clockIn clockOut status createdAt')
+                .sort({ createdAt: -1 })
+                .limit(limitNum)
+                .lean();
+        } catch (error) {
+            logger.warn('Error fetching recent attendances for activity', { error: error.message });
+        }
 
         // Get recent leaves
-        const recentLeaves = await Leave.find(query)
-            .populate('employee', 'name email')
-            .select('employee leaveType startDate endDate status createdAt')
-            .sort({ createdAt: -1 })
-            .limit(10);
+        let recentLeaves = [];
+        try {
+            recentLeaves = await Leave.find(baseQuery)
+                .populate({
+                    path: 'employee',
+                    select: 'name email',
+                    model: 'Employee',
+                    options: { strictPopulate: false }
+                })
+                .select('employee leaveType startDate endDate status createdAt')
+                .sort({ createdAt: -1 })
+                .limit(limitNum)
+                .lean();
+        } catch (error) {
+            logger.warn('Error fetching recent leaves for activity', { error: error.message });
+        }
 
         return sendSuccess(res, {
             activity: {
-                recentEmployees,
-                recentAttendances,
-                recentLeaves
+                recentEmployees: recentEmployees || [],
+                recentAttendances: recentAttendances || [],
+                recentLeaves: recentLeaves || []
+            },
+            pagination: {
+                page: Math.max(parseInt(page), 1),
+                limit: limitNum
             }
         }, 'Organization activity retrieved successfully');
     } catch (error) {
-        logger.error('Error fetching organization activity', { error: error.message });
+        logger.error('Error fetching organization activity', { 
+            error: error.message, 
+            stack: error.stack,
+            organizationId: req.organizationId || req.user?.organizationId || req.employee?.organizationId
+        });
         return sendError(res, error.message || 'Failed to fetch activity', 500);
     }
 };

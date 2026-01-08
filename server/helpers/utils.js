@@ -82,6 +82,16 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
             };
             res.cookie('csrfToken', csrfToken, csrfCookieOptions);
             
+            // SECURITY: Store CSRF token server-side for enhanced validation
+            // Use non-blocking approach to avoid making generateToken async
+            import('./csrfTokenStore.js').then(({ storeCsrfToken }) => {
+                storeCsrfToken(userId.toString(), csrfToken).catch(storeError => {
+                    logger.warn('Failed to store CSRF token (async)', { error: storeError.message, userId });
+                });
+            }).catch(importError => {
+                logger.error('Failed to import csrfTokenStore.js', { error: importError.message });
+            });
+            
             // Return tokens for frontend storage (cross-site scenarios)
             return { token: accessToken, refreshToken, csrfToken };
         }

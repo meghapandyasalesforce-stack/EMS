@@ -74,7 +74,7 @@ const roleSchema = new mongoose.Schema({
             '/dashboard-hr',
             '/dashboard-manager',
             '/dashboard-finance',
-            '/dashboard-executive',
+            '/dashboard-administration',
             '/organization/dashboard'
         ]
     },

@@ -67,7 +67,8 @@ export const refreshToken = async (req, res) => {
         // Generate new access token with organizationId
         const role = decoded.role || userType;
         const organizationId = decoded.organizationId || user.organizationId;
-        const tokenResult = generateToken(user._id, role, organizationId, res);
+        const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+        const tokenResult = generateToken(user._id, role, organizationId, res, passwordChangedAt);
         const accessToken = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
         const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 

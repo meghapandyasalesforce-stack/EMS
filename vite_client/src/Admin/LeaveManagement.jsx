@@ -39,7 +39,10 @@ const LeaveManagement = () => {
       toast.success('Leave approved successfully!');
       dispatch(getAllLeaves());
     } catch (error) {
-      toast.error(`Failed to approve leave: ${error.message}`);
+      const errorMessage = typeof error === 'string' 
+        ? error 
+        : error?.message || error?.error || 'Failed to approve leave';
+      toast.error(`Failed to approve leave: ${errorMessage}`);
     }
   };
 
@@ -64,7 +67,10 @@ const LeaveManagement = () => {
       setSelectedLeaveDetails(null);
       dispatch(getAllLeaves());
     } catch (error) {
-      toast.error(`Failed to reject leave: ${error.message}`);
+      const errorMessage = typeof error === 'string' 
+        ? error 
+        : error?.message || error?.error || 'Failed to reject leave';
+      toast.error(`Failed to reject leave: ${errorMessage}`);
     }
   };
 
@@ -91,7 +97,9 @@ const LeaveManagement = () => {
           <h1 className="text-3xl font-bold mb-6">Leave Management</h1>
 
           {error && (
-            <div className="bg-red-100 text-red-700 p-4 mb-6 rounded-md">{error}</div>
+            <div className="bg-red-100 text-red-700 p-4 mb-6 rounded-md">
+              {typeof error === 'string' ? error : error?.message || 'An error occurred'}
+            </div>
           )}
 
           <div className="flex flex-col sm:flex-row gap-4 mb-6">

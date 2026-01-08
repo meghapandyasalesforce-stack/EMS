@@ -4,7 +4,8 @@ import {
   clockIn, 
   clockOut, 
   breakIn, 
-  breakOut
+  breakOut,
+  clearError
 } from '../../context/attendanceSlice';
 import { format, parseISO } from 'date-fns';
 import { 
@@ -25,6 +26,8 @@ import {
 import { usePermissions } from '../../Hooks/usePermissions';
 import PermissionRequestDialog from '../../components/PermissionRequestDialog';
 import PermissionStatusIndicator from '../../components/PermissionStatusIndicator';
+import axiosInstance from '../../utils/axios';
+import { isValidCoordinates, checkLocationWithinRadius } from '../../utils/locationHelper';
 
 const CheckInOut = () => {
   const dispatch = useDispatch();
@@ -49,6 +52,12 @@ const CheckInOut = () => {
   const [showCamera, setShowCamera] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // Location-based attendance state (Kredily-style)
+  const [attendanceRule, setAttendanceRule] = useState(null);
+  const [distanceFromOffice, setDistanceFromOffice] = useState(null);
+  const [isWithinRadius, setIsWithinRadius] = useState(null);
+  const [locationWatchId, setLocationWatchId] = useState(null);
+  
   // Permission management
   const {
     isPermissionGranted,
@@ -65,6 +74,21 @@ const CheckInOut = () => {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
 
+  // Function to save location permission status to backend
+  const saveLocationPermissionStatus = async (status) => {
+    try {
+      await axiosInstance.put('/v1/both/profile-details/update-location-permission', {
+        status
+      });
+    } catch (error) {
+      // Silently fail - permission tracking is not critical for functionality
+      if (import.meta.env && import.meta.env.MODE === 'development') {
+        // Show warning only in development mode
+        console.warn('Failed to save location permission status:', error);
+      }
+    }
+  };
+
   // Calculate derived values
   const isOnBreak = !!breakSession;
   const canTakeBreak = currentSession && !isOnBreak;
@@ -73,72 +97,138 @@ const CheckInOut = () => {
   // Get current location with permission check
   const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
-      return Promise.reject('Geolocation not supported');
+      await saveLocationPermissionStatus('not-requested');
+      return Promise.reject(new Error('Geolocation not supported'));
+    }
+
+    // Check if we're on HTTPS or localhost (required for geolocation)
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+      const errorMsg = 'Geolocation requires HTTPS. Please use HTTPS or localhost.';
+      showNotification(errorMsg, 'error');
+      return Promise.reject(new Error(errorMsg));
     }
 
     // Check if permission is denied
     if (isPermissionDenied('location')) {
+      await saveLocationPermissionStatus('denied');
       showNotification('Location permission denied. Please enable it in browser settings.', 'error');
-      return Promise.reject('Location permission denied');
+      return Promise.reject(new Error('Location permission denied'));
     }
 
-    // Request permission if not granted
-    if (!isPermissionGranted('location')) {
-      try {
-        const result = await requestLocationPermission();
-        if (!result.granted) {
-          showNotification('Location permission is required for attendance tracking.', 'warning');
-          return Promise.reject('Location permission not granted');
-        }
-      } catch (error) {
-        return Promise.reject(error);
-      }
-    }
+    // Don't check isPermissionGranted here - just try to get location
+    // The browser will use cached permission or prompt if needed
+    // This avoids race conditions where permission state hasn't updated yet
 
     return new Promise((resolve, reject) => {
+      // Set a timeout for the entire operation
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Location request timed out. Please ensure GPS is enabled and try again.'));
+      }, 30000); // 30 seconds total timeout
+
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
+          clearTimeout(timeoutId);
+          let { latitude, longitude, accuracy } = position.coords;
           
-          try {
-            const apiKey = import.meta.env.VITE_GEOCODING_API_KEY || '';
-            const response = await fetch(
-              `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}`
-            );
-            const data = await response.json();
-            const address = data.results?.[0]?.formatted || 'Unknown location';
-            
-            const locationData = {
-              latitude,
-              longitude,
-              accuracy,
-              address
-            };
-            
-            setLocation(locationData);
-            resolve(locationData);
-          } catch (err) {
-            // Removed console.log for production
-            const locationData = {
-              latitude,
-              longitude,
-              accuracy,
-              address: 'Location detected but address unavailable'
-            };
-            setLocation(locationData);
-            resolve(locationData);
+          // Ensure coordinates are numbers (convert if needed)
+          latitude = Number(latitude);
+          longitude = Number(longitude);
+          accuracy = Number(accuracy) || 0;
+          
+          // Validate coordinates
+          if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
+              isNaN(latitude) || isNaN(longitude) ||
+              latitude < -90 || latitude > 90 ||
+              longitude < -180 || longitude > 180) {
+            reject(new Error('Invalid location coordinates received'));
+            return;
+          }
+          
+          // Don't wait for geocoding - resolve immediately with coordinates
+          const locationData = {
+            latitude,
+            longitude,
+            accuracy,
+            address: 'Getting address...' // Temporary, will update async
+          };
+          
+          setLocation(locationData);
+          
+          // Save permission status as granted (we got location successfully)
+          await saveLocationPermissionStatus('granted').catch(() => {});
+          
+          resolve(locationData);
+          
+          // Get address asynchronously (non-blocking)
+          const apiKey = import.meta.env.VITE_GEOCODING_API_KEY || '';
+          if (apiKey) {
+            fetch(`https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}`)
+              .then(response => response.json())
+              .then(data => {
+                const address = data.results?.[0]?.formatted || 'Location detected but address unavailable';
+                const updatedLocation = { ...locationData, address };
+                setLocation(updatedLocation);
+              })
+              .catch(() => {
+                // Silently fail - we already have coordinates
+                const updatedLocation = { ...locationData, address: 'Location detected but address unavailable' };
+                setLocation(updatedLocation);
+              });
+          } else {
+            // No API key - just set default address
+            const updatedLocation = { ...locationData, address: 'Location detected but address unavailable' };
+            setLocation(updatedLocation);
           }
         },
-        (error) => {
-          if (error.code === error.PERMISSION_DENIED) {
-            showNotification('Location permission denied. Please enable it in browser settings.', 'error');
+        async (error) => {
+          clearTimeout(timeoutId);
+          let errorMessage = 'Location error: ';
+          const errorCode = error?.code;
+          
+          // Enhanced error logging with detailed diagnostics
+          const errorDetails = {
+            code: errorCode,
+            errorType: errorCode === 1 ? 'PERMISSION_DENIED' :
+                      errorCode === 2 ? 'POSITION_UNAVAILABLE' :
+                      errorCode === 3 ? 'TIMEOUT' : 'UNKNOWN',
+            message: error.message,
+            protocol: window.location.protocol,
+            hostname: window.location.hostname,
+            isHTTPS: window.location.protocol === 'https:',
+            isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
+            hasGeolocation: !!navigator.geolocation,
+            userAgent: navigator.userAgent
+          };
+          
+          console.error('❌ Geolocation API error:', errorDetails);
+          
+          if (errorCode === 1 || errorCode === error?.PERMISSION_DENIED) {
+            errorMessage = 'Location permission denied. Please enable it in browser settings.';
+            console.error('🚫 PERMISSION_DENIED - User denied location access');
+            // Save denied status
+            await saveLocationPermissionStatus('denied').catch(() => {});
+          } else if (errorCode === 2 || errorCode === error?.POSITION_UNAVAILABLE) {
+            errorMessage = 'GPS position unavailable. Please check your device settings and ensure GPS is enabled.';
+            console.error('📡 POSITION_UNAVAILABLE - GPS signal not available');
+          } else if (errorCode === 3 || errorCode === error?.TIMEOUT) {
+            errorMessage = 'Location request timed out. Please try again or check your GPS settings.';
+            console.error('⏱️ TIMEOUT - Location request took too long');
+          } else {
+            errorMessage += error.message || 'Unknown error';
+            console.error('❓ UNKNOWN error -', error);
           }
+          
+          showNotification(errorMessage, 'error');
           reject(error);
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000
+          timeout: 25000, // 25 seconds (less than the Promise timeout)
+          maximumAge: 0 // Always get fresh location, don't use cache
         }
       );
     });
@@ -155,6 +245,82 @@ const CheckInOut = () => {
     }
     return 'desktop';
   };
+
+  // Note: calculateDistance and checkLocationWithinRadius are now imported from locationHelper
+
+  // Fetch attendance rule on component mount
+  useEffect(() => {
+    const fetchAttendanceRule = async () => {
+      try {
+        const response = await axiosInstance.get('/v1/both/attendance/rule');
+        if (response.data.success && response.data.rule) {
+          setAttendanceRule(response.data.rule);
+        }
+      } catch (error) {
+        // Silently fail - location validation will still work
+        if (import.meta.env && import.meta.env.MODE === 'development') {
+          console.warn('Failed to fetch attendance rule:', error);
+        }
+      }
+    };
+    fetchAttendanceRule();
+  }, []);
+
+  // Real-time location monitoring for distance calculation
+  useEffect(() => {
+    if (!attendanceRule?.coordinates || attendanceRule?.enableSimplePunches) {
+      return; // Don't monitor if no rule or simple punches enabled
+    }
+
+    if (!isPermissionGranted('location')) {
+      return; // Don't monitor if location permission not granted
+    }
+
+    // Start watching location for real-time distance updates
+    if (navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const officeCoords = attendanceRule.coordinates;
+          
+          if (officeCoords && officeCoords.latitude && officeCoords.longitude) {
+            const result = checkLocationWithinRadius(
+              latitude,
+              longitude,
+              officeCoords.latitude,
+              officeCoords.longitude,
+              attendanceRule.maximumRadius
+            );
+            
+            if (result) {
+              setDistanceFromOffice(result.distance);
+              setIsWithinRadius(result.isWithinRadius);
+            }
+          }
+        },
+        (error) => {
+          // Silently handle location watch errors
+          if (import.meta.env && import.meta.env.MODE === 'development') {
+            console.warn('Location watch error:', error);
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5000 // Update every 5 seconds
+        }
+      );
+      
+      setLocationWatchId(watchId);
+    }
+
+    // Cleanup: stop watching when component unmounts or rule changes
+    return () => {
+      if (locationWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locationWatchId);
+      }
+    };
+  }, [attendanceRule, isPermissionGranted, locationWatchId]);
 
   // Get network information
   const getNetworkInfo = () => {
@@ -185,7 +351,7 @@ const CheckInOut = () => {
           showNotification('Camera permission is required to capture your photo.', 'warning');
           return;
         }
-      } catch (error) {
+      } catch {
         showNotification('Failed to request camera permission.', 'error');
         return;
       }
@@ -242,13 +408,44 @@ const CheckInOut = () => {
     checkAllPermissions();
   }, [checkAllPermissions]);
 
+  // Automatically show location permission dialog on mount if not granted
+  useEffect(() => {
+    // Wait a bit for permissions to be checked
+    const timer = setTimeout(() => {
+      if (!isPermissionGranted('location') && !isPermissionDenied('location')) {
+        setShowPermissionDialog(true);
+      }
+    }, 1000); // Give time for permission check to complete
+
+    return () => clearTimeout(timer);
+  }, [isPermissionGranted, isPermissionDenied]);
+
+  // Clear stale location-related errors on component mount
+  useEffect(() => {
+    if (error) {
+      const errorMessage = typeof error === 'string' ? error : error?.message || '';
+      const errorCode = typeof error === 'object' ? error?.code || error?.data?.code : '';
+      
+      // Clear if it's a location-related error (likely stale from previous attempt)
+      if (errorMessage.includes('Location is required') || 
+          errorMessage.includes('LOCATION_REQUIRED') ||
+          errorCode === 'LOCATION_REQUIRED') {
+        // Clear the error after component has mounted
+        const timer = setTimeout(() => {
+          dispatch(clearError());
+        }, 2000); // Clear after 2 seconds
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [error, dispatch]); // Include dependencies
+
   // Fetch attendance data on component mount
   useEffect(() => {
     const fetchAttendanceData = async () => {
       try {
         setInitialLoading(true);
         getNetworkInfo();
-      } catch (error) {
+      } catch {
         // Removed console.error for production
       } finally {
         setInitialLoading(false);
@@ -315,7 +512,9 @@ const CheckInOut = () => {
       }
 
       // Check permissions before proceeding
-      const needsLocation = !isPermissionGranted('location');
+      // Note: We check permissions but still allow proceeding if location permission is pending
+      // because getCurrentLocation will handle permission requests
+      const needsLocation = !isPermissionGranted('location') && isPermissionDenied('location');
       const needsCamera = !isPermissionGranted('camera');
       
       if (needsLocation || needsCamera) {
@@ -330,34 +529,463 @@ const CheckInOut = () => {
 
       setIsProcessing(true);
       
+      // Log initial state for debugging
+      if (import.meta.env && import.meta.env.MODE === 'development') {
+        console.info('Clock-in initiated:', {
+          hasCachedLocation: !!(location && location.latitude && location.longitude),
+          locationPermissionGranted: isPermissionGranted('location'),
+          attendanceRule: attendanceRule ? {
+            hasCoordinates: !!(attendanceRule.coordinates?.latitude && attendanceRule.coordinates?.longitude),
+            enableSimplePunches: attendanceRule.enableSimplePunches
+          } : null
+        });
+      }
+      
       let locationData = null;
       let networkData = networkInfo || getNetworkInfo();
       
-      try {
-        locationData = await getCurrentLocation();
-      } catch (error) {
-        // Removed console.warn for production
-        showNotification('Location access denied. Clocking in without location data.', 'warning');
+      // Always get fresh location for check-in to ensure accuracy
+      // Check if location is required based on attendance rule
+      // IMPORTANT: Backend requires location when enableSimplePunches is false
+      // This matches the backend logic: if (activeRule && !activeRule.enableSimplePunches)
+      const hasRuleWithCoordinates = attendanceRule && 
+                                      attendanceRule.coordinates && 
+                                      attendanceRule.coordinates.latitude && 
+                                      attendanceRule.coordinates.longitude;
+      
+      // Location is required if:
+      // 1. Rule exists with coordinates AND enableSimplePunches is false (matches backend logic)
+      // 2. OR locationRequired is explicitly true
+      const requiresLocation = hasRuleWithCoordinates && 
+                               (!attendanceRule.enableSimplePunches || attendanceRule.locationRequired === true);
+      
+      // Always try to get location if rule exists with coordinates (backend might require it)
+      // This ensures we have location data even if frontend logic doesn't think it's required
+      const shouldGetLocation = requiresLocation || hasRuleWithCoordinates;
+      
+      // Enhanced logging for debugging location capture issues
+      console.info('📍 Location capture requirements:', {
+        requiresLocation,
+        hasRuleWithCoordinates,
+        shouldGetLocation,
+        enableSimplePunches: attendanceRule?.enableSimplePunches,
+        hasCachedLocation: !!(location && location.latitude && location.longitude),
+        cachedLocation: location ? {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          isValid: isValidCoordinates(location.latitude, location.longitude)
+        } : null,
+        attendanceRule: attendanceRule ? {
+          hasCoordinates: !!(attendanceRule.coordinates?.latitude && attendanceRule.coordinates?.longitude),
+          enableSimplePunches: attendanceRule.enableSimplePunches,
+          locationRequired: attendanceRule.locationRequired
+        } : null
+      });
+      
+      // First, check if we have cached location that's still valid
+      if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number' &&
+          !isNaN(location.latitude) && !isNaN(location.longitude) &&
+          isValidCoordinates(location.latitude, location.longitude)) {
+        locationData = location;
+        console.info('✅ Using cached location:', locationData);
+      }
+      
+      // If we don't have valid cached location and we should get it, fetch fresh location
+      if (!locationData && shouldGetLocation) {
+        // Location is required or rule exists - get fresh location
+        let retries = 3;
+        let lastError = null;
+        
+        console.warn('📍 Starting location capture (required:', requiresLocation, ', attempts:', retries, ')');
+        
+        while (retries > 0 && !locationData) {
+          try {
+            // Show progress notification
+            if (retries === 3) {
+              showNotification('Getting your current location...', 'info');
+            }
+            
+            console.info(`📍 Location capture attempt ${4 - retries}/3...`);
+            locationData = await getCurrentLocation();
+            
+            // Verify we actually got valid location data using helper function
+            if (locationData && 
+                isValidCoordinates(locationData.latitude, locationData.longitude)) {
+              console.info('✅ Location captured successfully:', {
+                latitude: locationData.latitude,
+                longitude: locationData.longitude,
+                accuracy: locationData.accuracy,
+                address: locationData.address
+              });
+              break; // Success!
+            } else {
+              console.error('❌ Invalid location coordinates received:', locationData);
+              throw new Error('Invalid location coordinates received');
+            }
+          } catch (error) {
+            lastError = error;
+            retries--;
+            
+            // Enhanced error logging
+            console.error(`❌ Location capture attempt ${4 - retries} failed:`, {
+              error: error.message,
+              code: error.code,
+              errorType: error.code === 1 ? 'PERMISSION_DENIED' :
+                        error.code === 2 ? 'POSITION_UNAVAILABLE' :
+                        error.code === 3 ? 'TIMEOUT' : 'UNKNOWN',
+              retriesRemaining: retries,
+              requiresLocation,
+              hasRuleWithCoordinates
+            });
+            
+            // If permission is denied, don't retry - stop immediately
+            if (error?.code === 1 || error?.code === error?.PERMISSION_DENIED || 
+                error?.message?.includes('permission') || 
+                error?.message?.includes('Permission denied')) {
+              console.error('🚫 Location permission denied - stopping immediately');
+              showNotification('Location permission denied. Please enable it in browser settings.', 'error');
+              setIsProcessing(false);
+              return; // Stop immediately if permission denied
+            }
+            
+            if (retries > 0) {
+              // Wait before retry (exponential backoff)
+              const delay = (4 - retries) * 1000; // 1s, 2s, 3s
+              console.info(`⏳ Waiting ${delay}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        }
+        
+        // If all retries failed and location is required
+        if (!locationData && requiresLocation) {
+          let errorMsg = 'Location access failed after 3 attempts. ';
+          
+          if (lastError) {
+            const errorCode = lastError?.code;
+            console.error('🚫 All location capture attempts failed:', {
+              finalError: lastError.message,
+              errorCode,
+              errorType: errorCode === 1 ? 'PERMISSION_DENIED' :
+                        errorCode === 2 ? 'POSITION_UNAVAILABLE' :
+                        errorCode === 3 ? 'TIMEOUT' : 'UNKNOWN',
+              requiresLocation,
+              hasRuleWithCoordinates,
+              enableSimplePunches: attendanceRule?.enableSimplePunches
+            });
+            
+            if (errorCode === 1 || errorCode === lastError?.PERMISSION_DENIED || lastError?.message?.includes('permission')) {
+              errorMsg = 'Location permission denied. Please enable it in browser settings.';
+            } else if (errorCode === 2 || errorCode === lastError?.POSITION_UNAVAILABLE || lastError?.message?.includes('unavailable')) {
+              errorMsg = 'GPS position unavailable. Please check your device settings and ensure GPS is enabled.';
+            } else if (errorCode === 3 || errorCode === lastError?.TIMEOUT || lastError?.message?.includes('timeout')) {
+              errorMsg = 'Location request timed out. Please try again or check your GPS settings.';
+            } else if (lastError?.message) {
+              errorMsg = lastError.message;
+            }
+          } else {
+            console.error('🚫 Location capture failed but no error was captured');
+          }
+          
+          console.error('🛑 Stopping clock-in process - location required but not available');
+          showNotification(errorMsg, 'error');
+          setIsProcessing(false);
+          return; // Don't proceed if location is required but not available
+        }
+        
+        // If location capture failed but it's not strictly required, log warning
+        if (!locationData && !requiresLocation) {
+          console.warn('⚠️ Location capture failed but not required - continuing without location');
+        }
+      } else if (!locationData && !shouldGetLocation) {
+        // Location not required - try to get it but don't fail if unavailable
+        try {
+          if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number' &&
+              !isNaN(location.latitude) && !isNaN(location.longitude) &&
+              location.latitude !== 0 && location.longitude !== 0) {
+            locationData = location;
+          } else {
+            locationData = await getCurrentLocation();
+          }
+        } catch (error) {
+          // Location is optional, so continue without it
+          if (import.meta.env && import.meta.env.MODE === 'development') {
+            console.warn('Optional location capture failed:', error);
+          }
+        }
       }
 
+      // Ensure all numeric values are properly formatted and valid (only if location is provided)
+      let lat, lng;
+      if (locationData && locationData.latitude !== undefined && locationData.longitude !== undefined) {
+        lat = Number(locationData.latitude);
+        lng = Number(locationData.longitude);
+        
+        // Final validation before creating payload using helper function
+        if (!isValidCoordinates(lat, lng)) {
+          if (import.meta.env && import.meta.env.MODE === 'development') {
+            console.warn('Location coordinates failed validation:', { lat, lng, locationData });
+          }
+          if (requiresLocation) {
+            showNotification('Invalid location coordinates. Please enable location services and try again.', 'error');
+            setIsProcessing(false);
+            return;
+          }
+          // Location invalid but not required - don't include it
+          lat = undefined;
+          lng = undefined;
+          locationData = null; // Clear invalid location data
+        } else {
+          // Location is valid - log success
+          if (import.meta.env && import.meta.env.MODE === 'development') {
+            console.info('Location validated successfully:', { lat, lng, accuracy: locationData.accuracy });
+          }
+        }
+      } else {
+        // No location data available
+        console.error('❌ No location data available after capture attempt:', { 
+          locationData, 
+          requiresLocation, 
+          hasRuleWithCoordinates,
+          shouldGetLocation,
+          cachedLocation: location ? {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            isValid: location.latitude && location.longitude ? isValidCoordinates(location.latitude, location.longitude) : false
+          } : null,
+          attendanceRule: attendanceRule ? {
+            hasCoordinates: !!(attendanceRule.coordinates?.latitude && attendanceRule.coordinates?.longitude),
+            enableSimplePunches: attendanceRule.enableSimplePunches,
+            locationRequired: attendanceRule.locationRequired
+          } : null,
+          navigatorGeolocation: !!navigator.geolocation,
+          isHTTPS: window.location.protocol === 'https:',
+          isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        });
+        
+        // CRITICAL: If attendance rule exists with coordinates and enableSimplePunches is false,
+        // backend WILL require location. Don't proceed without it.
+        if (hasRuleWithCoordinates && !attendanceRule.enableSimplePunches) {
+          console.error('🛑 CRITICAL: Backend requires location but none available - stopping clock-in');
+          // Backend will reject this - we MUST have location
+          showNotification('Location is required for check-in at this site. Please enable location services and try again.', 'error');
+          setIsProcessing(false);
+          return;
+        }
+        
+        if (requiresLocation) {
+          console.error('🛑 Location required but not available - stopping clock-in');
+          showNotification('Location is required for check-in. Please enable location services.', 'error');
+          setIsProcessing(false);
+          return;
+        }
+      }
+      
+      // Final safety check: if location is required but missing, don't proceed
+      if (requiresLocation && (lat === undefined || lng === undefined)) {
+        showNotification('Location is required for check-in. Please enable location services and try again.', 'error');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Location-based validation (Kredily-style) - only if we have valid location
+      if (lat !== undefined && lng !== undefined && attendanceRule && requiresLocation) {
+        if (attendanceRule.coordinates && 
+            attendanceRule.coordinates.latitude && 
+            attendanceRule.coordinates.longitude) {
+          const locationCheck = checkLocationWithinRadius(
+            lat,
+            lng,
+            attendanceRule.coordinates.latitude,
+            attendanceRule.coordinates.longitude,
+            attendanceRule.maximumRadius || 500
+          );
+
+          if (locationCheck && !locationCheck.isWithinRadius) {
+            showNotification(
+              `You are ${locationCheck.distance}m away from the office. Please move within ${attendanceRule.maximumRadius || 500}m radius to check in.`,
+              'error'
+            );
+            setIsProcessing(false);
+            return;
+          }
+        }
+      }
+      
+      // Build clock-in data payload
+      // Always include location if we have valid coordinates
       const clockInData = {
         workLocation,
-        latitude: locationData?.latitude,
-        longitude: locationData?.longitude,
-        address: locationData?.address,
-        accuracy: locationData?.accuracy,
         networkType: networkData?.networkType,
         connectionSpeed: networkData?.connectionSpeed,
         deviceType: detectDeviceType(),
         imageUrl: capturedImage,
         imageFilename: capturedImage ? `clockin_${Date.now()}.jpg` : null
       };
+      
+      // Include location data if we have valid coordinates
+      if (lat !== undefined && lng !== undefined && 
+          typeof lat === 'number' && typeof lng === 'number' &&
+          !isNaN(lat) && !isNaN(lng)) {
+        clockInData.latitude = lat;
+        clockInData.longitude = lng;
+        clockInData.address = locationData?.address || 'Location detected but address unavailable';
+        if (locationData?.accuracy != null) {
+          clockInData.accuracy = Number(locationData.accuracy);
+        }
+      }
+      
+      // Final validation: Ensure location is included if required
+      if (requiresLocation && (!clockInData.latitude || !clockInData.longitude)) {
+        showNotification('Location is required but was not captured. Please enable location services and try again.', 'error');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // CRITICAL FINAL CHECK: Backend will reject if enableSimplePunches is false and location is missing
+      // This prevents sending invalid requests
+      if (hasRuleWithCoordinates && !attendanceRule.enableSimplePunches && 
+          (!clockInData.latitude || !clockInData.longitude)) {
+        showNotification('Location is required for check-in at this site. Please enable location services and try again.', 'error');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Log payload for debugging (development only)
+      if (import.meta.env && import.meta.env.MODE === 'development') {
+        console.info('Clock-in payload (CheckInOut):', {
+          hasLocation: !!(clockInData.latitude && clockInData.longitude),
+          latitude: clockInData.latitude,
+          longitude: clockInData.longitude,
+          lat,
+          lng,
+          locationData: locationData ? {
+            latitude: locationData.latitude,
+            longitude: locationData.longitude,
+            accuracy: locationData.accuracy
+          } : null,
+          cachedLocation: location ? {
+            latitude: location.latitude,
+            longitude: location.longitude
+          } : null,
+          requiresLocation,
+          hasRuleWithCoordinates,
+          shouldGetLocation,
+          attendanceRule: attendanceRule ? {
+            hasCoordinates: !!(attendanceRule.coordinates?.latitude && attendanceRule.coordinates?.longitude),
+            enableSimplePunches: attendanceRule.enableSimplePunches,
+            locationRequired: attendanceRule.locationRequired
+          } : null,
+          payloadKeys: Object.keys(clockInData),
+          payload: clockInData
+        });
+      }
 
-      await dispatch(clockIn(clockInData)).unwrap();
-      showNotification('Checked in successfully!', 'success');
+      // CRITICAL: Final validation before API call
+      // This is the last chance to prevent invalid requests
+      // Check if location is required based on attendance rule
+      if (hasRuleWithCoordinates && !attendanceRule.enableSimplePunches) {
+        const hasValidLocation = clockInData.latitude !== undefined && 
+                                clockInData.longitude !== undefined &&
+                                typeof clockInData.latitude === 'number' &&
+                                typeof clockInData.longitude === 'number' &&
+                                !isNaN(clockInData.latitude) &&
+                                !isNaN(clockInData.longitude) &&
+                                clockInData.latitude !== 0 &&
+                                clockInData.longitude !== 0;
+        
+        console.info('🔍 Final location validation check:', {
+          hasRuleWithCoordinates,
+          enableSimplePunches: attendanceRule.enableSimplePunches,
+          hasValidLocation,
+          latitude: clockInData.latitude,
+          longitude: clockInData.longitude,
+          latitudeType: typeof clockInData.latitude,
+          longitudeType: typeof clockInData.longitude,
+          payloadKeys: Object.keys(clockInData)
+        });
+        
+        if (!hasValidLocation) {
+          console.error('🛑 FINAL VALIDATION FAILED: Location required but missing in payload - blocking request');
+          showNotification('Location is required for check-in at this site. Please enable location services and try again.', 'error');
+          setIsProcessing(false);
+          return;
+        } else {
+          console.info('✅ Final validation passed - location is valid');
+        }
+      }
+
+      const result = await dispatch(clockIn(clockInData)).unwrap();
+      // Show success message from server if available, otherwise default
+      const successMessage = result?.message || 'Checked in successfully!';
+      showNotification(successMessage, 'success');
+      // Show warning if present
+      if (result?.warning) {
+        showNotification(result.warning, 'warning');
+      }
       setCapturedImage(null);
     } catch (err) {
-      const errorMessage = err?.message || err?.payload?.message || 'Failed to check in. Please try again.';
+      // Extract error message with better handling
+      const errorData = err?.response?.data || err?.payload?.data || err?.payload;
+      let errorMessage = 'Failed to check in. Please try again.';
+      
+      // Log error for debugging
+      if (import.meta.env && import.meta.env.MODE === 'development') {
+        console.error('Clock-in error:', {
+          error: err,
+          errorData,
+          response: err?.response,
+          payload: err?.payload
+        });
+      }
+      
+      // Handle validation errors (array of errors)
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        errorMessage = errorData.errors.map(e => e.message || e.msg || e.field ? `${e.field}: ${e.message || e.msg}` : e).join(', ');
+      } 
+      // Handle single error message
+      else if (errorData?.message) {
+        errorMessage = errorData.message;
+        // Add details if available
+        if (errorData.details && typeof errorData.details === 'object') {
+          const detailsStr = Object.entries(errorData.details)
+            .map(([key, value]) => {
+              if (typeof value === 'object') {
+                return `${key}: ${JSON.stringify(value)}`;
+              }
+              return `${key}: ${value}`;
+            })
+            .join(', ');
+          if (detailsStr) {
+            errorMessage += ` (${detailsStr})`;
+          }
+        }
+      } 
+      // Handle payload message
+      else if (err?.payload?.message) {
+        errorMessage = err.payload.message;
+      }
+      // Handle direct error message
+      else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      // Show specific error messages for common issues
+      if (errorData?.code === 'LOCATION_REQUIRED') {
+        if (!isPermissionGranted('location')) {
+          errorMessage = 'Location is required to clock in. Please grant location permission and try again.';
+          // Show permission dialog to help user grant permission
+          setPendingAction(() => handleClockIn);
+          setShowPermissionDialog(true);
+        } else {
+          errorMessage = 'Location is required to clock in. Please enable location services and try again.';
+        }
+      } else if (errorData?.code === 'OUTSIDE_RADIUS') {
+        errorMessage = errorData.message || `You are outside the allowed check-in radius. Please move closer to the office location.`;
+      } else if (errorData?.code === 'VALIDATION_ERROR') {
+        errorMessage = errorData.message || 'Please check your input and try again.';
+      }
+      
       showNotification(errorMessage, 'error');
     } finally {
       setIsProcessing(false);
@@ -372,34 +1000,202 @@ const CheckInOut = () => {
       let locationData = null;
       let networkData = networkInfo || getNetworkInfo();
       
-      try {
-        locationData = await getCurrentLocation();
+      // Check if location is required for clock-out (same logic as clock-in)
+      const requiresLocationForCheckout = attendanceRule && 
+                                          attendanceRule.coordinates && 
+                                          attendanceRule.coordinates.latitude && 
+                                          attendanceRule.coordinates.longitude &&
+                                          (attendanceRule.locationRequired === true || 
+                                           (!attendanceRule.enableSimplePunches && attendanceRule.locationRequired !== false));
+      
+      // Check if we already have valid location data cached
+      if (location && isValidCoordinates(location.latitude, location.longitude)) {
+        locationData = location;
+      } else if (requiresLocationForCheckout) {
+        // Location is required - get fresh location
+        let retries = 3;
+        let lastError = null;
+        
+        while (retries > 0 && !locationData) {
+          try {
+            // Show progress notification only on first attempt
+            if (retries === 3) {
+              showNotification('Getting location for clock-out...', 'info');
+            }
+            locationData = await getCurrentLocation();
+            
+            // Verify we actually got valid location data using helper function
+            if (locationData && isValidCoordinates(locationData.latitude, locationData.longitude)) {
+              break; // Success!
+            } else {
+              throw new Error('Invalid location coordinates received');
+            }
+          } catch (error) {
+            lastError = error;
+            retries--;
+            
+            // If permission is denied, don't retry - stop immediately
+            if (error?.code === 1 || error?.code === error?.PERMISSION_DENIED || 
+                error?.message?.includes('permission') || 
+                error?.message?.includes('Permission denied')) {
+              showNotification('Location permission denied. Please enable it in browser settings.', 'error');
+              setIsProcessing(false);
+              return; // Stop immediately if permission denied
+            }
+            
+            if (retries > 0) {
+              // Wait before retry (exponential backoff)
+              const delay = (4 - retries) * 1000; // 1s, 2s, 3s
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        }
+        
+        // If all retries failed
+        if (!locationData) {
+          let errorMsg = 'Location access failed after 3 attempts. ';
+          
+          if (lastError) {
+            const errorCode = lastError?.code;
+            if (errorCode === 1 || errorCode === lastError?.PERMISSION_DENIED || lastError?.message?.includes('permission')) {
+              errorMsg = 'Location permission denied. Please enable it in browser settings.';
+            } else if (errorCode === 2 || errorCode === lastError?.POSITION_UNAVAILABLE || lastError?.message?.includes('unavailable')) {
+              errorMsg = 'GPS position unavailable. Please check your device settings and ensure GPS is enabled.';
+            } else if (errorCode === 3 || errorCode === lastError?.TIMEOUT || lastError?.message?.includes('timeout')) {
+              errorMsg = 'Location request timed out. Please try again or check your GPS settings.';
+            } else if (lastError?.message) {
+              errorMsg = lastError.message;
+            }
+          }
+          
+          showNotification(errorMsg, 'error');
+          setIsProcessing(false);
+          return; // Don't proceed if location is not available
+        }
+      } else {
+        // Location not required - try to get it but don't fail if unavailable
+        try {
+          if (location && isValidCoordinates(location.latitude, location.longitude)) {
+            locationData = location;
+          } else {
+            locationData = await getCurrentLocation();
+          }
       } catch (error) {
-        // Removed console.warn for production
-        showNotification('Location access denied. Clocking out without location data.', 'warning');
+        // Location is optional, so continue without it
+        if (import.meta.env && import.meta.env.MODE === 'development') {
+          console.warn('Optional location capture failed:', error);
+        }
+      }
+      }
+
+      // Double-check location data before sending
+      if (requiresLocationForCheckout && !locationData) {
+        showNotification('Location is required for clock-out. Please enable location services and try again.', 'error');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Ensure all numeric values are properly formatted and valid
+      // Only process location if we have locationData
+      if (!locationData || !locationData.latitude || !locationData.longitude) {
+        if (requiresLocationForCheckout) {
+          showNotification('Location is required for clock-out. Please enable location services and try again.', 'error');
+          setIsProcessing(false);
+          return;
+        }
+        // Location not required - continue without it
+        locationData = null;
+      }
+      
+      let lat, lng;
+      if (locationData) {
+        lat = Number(locationData.latitude);
+        lng = Number(locationData.longitude);
+        
+        // Final validation before creating payload using helper function
+        if (!isValidCoordinates(lat, lng)) {
+          if (requiresLocationForCheckout) {
+            showNotification('Invalid location coordinates. Please enable location services and try again.', 'error');
+            setIsProcessing(false);
+            return;
+          }
+          // Location invalid but not required - don't include it
+          lat = undefined;
+          lng = undefined;
+        }
+      }
+
+      // Location-based validation (Kredily-style) for clock-out
+      // Use the requiresLocationForCheckout already declared above
+      if (requiresLocationForCheckout) {
+        if (attendanceRule.coordinates && attendanceRule.coordinates.latitude && attendanceRule.coordinates.longitude) {
+          const locationCheck = checkLocationWithinRadius(
+            lat,
+            lng,
+            attendanceRule.coordinates.latitude,
+            attendanceRule.coordinates.longitude,
+            attendanceRule.maximumRadius || 500
+          );
+
+          if (locationCheck && !locationCheck.isWithinRadius) {
+            showNotification(
+              `You are ${locationCheck.distance}m away from the office. Please move within ${attendanceRule.maximumRadius || 500}m radius to check out.`,
+              'error'
+            );
+            setIsProcessing(false);
+            return;
+          }
+        }
       }
 
       const clockOutData = {
-        latitude: locationData?.latitude,
-        longitude: locationData?.longitude,
-        address: locationData?.address,
-        accuracy: locationData?.accuracy,
+        // Include location only if we have valid coordinates
+        ...(lat !== undefined && lng !== undefined && {
+          latitude: lat, // Already validated as number
+          longitude: lng, // Already validated as number
+          address: locationData?.address || 'Location detected but address unavailable',
+          accuracy: locationData?.accuracy ? Number(locationData.accuracy) : undefined
+        }),
         networkType: networkData?.networkType,
         connectionSpeed: networkData?.connectionSpeed,
         imageUrl: capturedImage,
         imageFilename: capturedImage ? `clockout_${Date.now()}.jpg` : null
       };
+      
+      // Final check: If location is required, ensure it's included
+      if (requiresLocationForCheckout && (!clockOutData.latitude || !clockOutData.longitude)) {
+        showNotification('Location is required for clock-out but was not captured. Please enable location services and try again.', 'error');
+        setIsProcessing(false);
+        return;
+      }
 
       await dispatch(clockOut(clockOutData)).unwrap();
       showNotification('Checked out successfully!', 'success');
       setCapturedImage(null);
     } catch (err) {
-      const errorMessage = err?.message || err?.payload?.message || 'Failed to check out. Please try again.';
+      const errorData = err?.response?.data || err?.payload?.data || err?.payload;
+      let errorMessage = 'Failed to check out. Please try again.';
+      
+      // Handle validation errors (array of errors)
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        errorMessage = errorData.errors.map(e => e.message || e.msg).join(', ');
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      } else if (err?.payload?.message) {
+        errorMessage = err.payload.message;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
       
       // Check if it's an IP mismatch error
       if (errorMessage.includes('IP address mismatch')) {
         showNotification(
           `Cannot check out: ${errorMessage}. Please use the same device/network you used for check-in.`,
+          'error'
+        );
+      } else if (errorMessage.includes('Location is required')) {
+        showNotification(
+          'Location is required for clock-out. Please enable location services and try again.',
           'error'
         );
       } else {
@@ -489,14 +1285,24 @@ const CheckInOut = () => {
       {error && (
         <div className="mx-8 mt-6">
           <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 text-red-800 p-6 rounded-2xl shadow-lg" role="alert">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <FiAlertCircle className="w-5 h-5 text-red-600" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <FiAlertCircle className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-red-800 mb-1">Error</h4>
+                  <p className="text-sm text-red-700">{typeof error === 'string' ? error : error.message}</p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-semibold text-red-800 mb-1">Error</h4>
-                <p className="text-sm text-red-700">{typeof error === 'string' ? error : error.message}</p>
-              </div>
+              <button
+                onClick={() => dispatch(clearError())}
+                className="text-red-600 hover:text-red-800 p-2 hover:bg-red-100 rounded-lg transition-colors"
+                aria-label="Dismiss error"
+                title="Dismiss error"
+              >
+                <FiXCircle className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -543,16 +1349,98 @@ const CheckInOut = () => {
             </div>
           </div>
 
-          {/* Permission Request Dialog */}
+          {/* Location Status Indicator (Kredily-style) */}
+          {attendanceRule && attendanceRule.locationRequired && !attendanceRule.enableSimplePunches && attendanceRule.coordinates && (
+            <div className={`mb-6 rounded-xl p-4 border-2 shadow-lg ${
+              isWithinRadius === true 
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300' 
+                : isWithinRadius === false
+                ? 'bg-gradient-to-r from-red-50 to-rose-50 border-red-300'
+                : 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    isWithinRadius === true 
+                      ? 'bg-green-100' 
+                      : isWithinRadius === false
+                      ? 'bg-red-100'
+                      : 'bg-yellow-100'
+                  }`}>
+                    {isWithinRadius === true ? (
+                      <FiCheckCircle className="w-6 h-6 text-green-600" />
+                    ) : isWithinRadius === false ? (
+                      <FiXCircle className="w-6 h-6 text-red-600" />
+                    ) : (
+                      <FiLoader className="w-6 h-6 text-yellow-600 animate-spin" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className={`font-bold text-lg ${
+                      isWithinRadius === true 
+                        ? 'text-green-800' 
+                        : isWithinRadius === false
+                        ? 'text-red-800'
+                        : 'text-yellow-800'
+                    }`}>
+                      {isWithinRadius === true 
+                        ? 'Within Office Radius ✓' 
+                        : isWithinRadius === false
+                        ? 'Outside Office Radius ✗'
+                        : 'Checking Location...'}
+                    </h3>
+                    {distanceFromOffice !== null && (
+                      <p className={`text-sm font-medium ${
+                        isWithinRadius === true 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        Distance: {distanceFromOffice}m from office
+                        {attendanceRule.maximumRadius && (
+                          <span className="ml-2 text-gray-600">
+                            (Max: {attendanceRule.maximumRadius}m)
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {attendanceRule.address && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        Office: {attendanceRule.address}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {isWithinRadius === false && (
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-red-600">
+                      {distanceFromOffice !== null ? `${distanceFromOffice}m` : '--'}
+                    </div>
+                    <div className="text-xs text-red-600 font-medium">Too Far</div>
+                  </div>
+                )}
+              </div>
+              {isWithinRadius === false && (
+                <div className="mt-3 pt-3 border-t border-red-200">
+                  <p className="text-sm text-red-700">
+                    ⚠️ Please move within {attendanceRule.maximumRadius}m of the office location to check in/out.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Permission Request Dialog - Auto-show for location permission */}
           <PermissionRequestDialog
             isOpen={showPermissionDialog}
             onClose={() => {
               setShowPermissionDialog(false);
               checkAllPermissions();
             }}
-            requestedPermissions={['location', 'camera']}
+            requestedPermissions={['location']}
+            canClose={isPermissionDenied('location') || isPermissionGranted('location')}
             onPermissionsGranted={() => {
-              showNotification('Permissions granted successfully!', 'success');
+              showNotification('Location permission granted successfully!', 'success');
+              setShowPermissionDialog(false);
               if (pendingAction) {
                 pendingAction();
                 setPendingAction(null);
@@ -766,17 +1654,25 @@ const CheckInOut = () => {
                   <div className="flex gap-3">
                     <button
                       onClick={handleClockOut}
-                      disabled={loading || isOnBreak || isProcessing}
+                      disabled={loading || isOnBreak || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)}
                       className={`flex-1 py-4 px-6 rounded-2xl text-white font-bold flex items-center justify-center gap-3 text-lg shadow-lg transition-all duration-200 ${
-                        loading || isOnBreak || isProcessing 
+                        loading || isOnBreak || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)
                           ? 'bg-gray-400 cursor-not-allowed' 
                           : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 hover:shadow-xl transform hover:scale-105'
                       }`}
+                      title={attendanceRule?.locationRequired && isWithinRadius === false 
+                        ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check out.`
+                        : 'Check Out'}
                     >
                       {loading || isProcessing ? (
                         <>
                           <FiLoader className="animate-spin w-5 h-5" />
                           Processing...
+                        </>
+                      ) : attendanceRule?.locationRequired && isWithinRadius === false ? (
+                        <>
+                          <FiXCircle className="w-5 h-5" />
+                          Outside Radius
                         </>
                       ) : (
                         <>
@@ -963,17 +1859,25 @@ const CheckInOut = () => {
               {/* Enhanced Check In Button */}
               <button
                 onClick={handleClockIn}
-                disabled={loading || isProcessing}
+                disabled={loading || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)}
                 className={`w-full max-w-md py-5 px-8 rounded-2xl text-white font-bold text-xl shadow-xl transition-all duration-200 ${
-                  loading || isProcessing 
+                  loading || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)
                     ? 'bg-gray-400 cursor-not-allowed' 
                     : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-2xl transform hover:scale-105'
                 }`}
+                title={attendanceRule?.locationRequired && isWithinRadius === false 
+                  ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
+                  : 'Check In'}
               >
                 {loading || isProcessing ? (
                   <div className="flex items-center justify-center">
                     <FiLoader className="animate-spin w-6 h-6 mr-3" />
                     Processing...
+                  </div>
+                ) : attendanceRule?.locationRequired && isWithinRadius === false ? (
+                  <div className="flex items-center justify-center">
+                    <FiXCircle className="w-6 h-6 mr-3" />
+                    Outside Radius
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">

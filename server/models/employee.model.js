@@ -1,10 +1,36 @@
 import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-import logger from "../helpers/logger.js";
-import { BCRYPT_SALT_ROUNDS } from "../config/constants.js";
+import { hashPassword, comparePassword } from "../helpers/passwordUtils.js";
+import { organizationIsolationPlugin } from "../plugins/organizationIsolation.js";
 
+/**
+ * Employee Schema
+ * @typedef {Object} Employee
+ * @property {mongoose.Types.ObjectId} organizationId - Organization reference for multi-tenancy (required, indexed)
+ * @property {string} name - Employee first name (required)
+ * @property {string} lastName - Employee last name (required)
+ * @property {string} email - Employee email address (required, unique, lowercase, trimmed)
+ * @property {string} password - Hashed password (required, not returned in queries)
+ * @property {string} manager - Manager name or ID (required)
+ * @property {number} salary - Employee salary (required)
+ * @property {string} role - User role, either 'admin' or 'employee' (default: 'employee')
+ * @property {string} employeeId - Unique employee identifier (auto-generated, format: EMP-{NAME}-{YEAR}-{RANDOM})
+ * @property {Object} profilePhoto - Profile photo metadata (url, filename, uploadedAt)
+ * @property {Date} joiningDate - Employee joining date (required, default: Date.now)
+ * @property {Date} birthDate - Employee birth date (optional)
+ * @property {string} status - Employee status: 'active', 'inactive', 'suspended', 'terminated' (default: 'active')
+ * @property {number} roleLevel - Role hierarchy level 1-10 (default: 1)
+ * @property {mongoose.Types.ObjectId} assignedRole - Reference to Role model
+ * @property {Array<Object>} permissions - Direct employee permissions [{module, actions}]
+ * @property {Array<Object>} rolePermissions - Permissions inherited from role
+ */
 const employeeSchema = new mongoose.Schema({
-    // Organization reference (multi-tenancy)
+    /**
+     * Organization reference for multi-tenancy support
+     * @type {mongoose.Types.ObjectId}
+     * @required
+     * @indexed
+     * @ref Organization
+     */
     organizationId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Organization',
@@ -12,19 +38,78 @@ const employeeSchema = new mongoose.Schema({
         index: true
     },
     
-    // Registration required fields
+    /**
+     * Employee first name
+     * @type {string}
+     * @required
+     */
     name: { type: String, required: true },
+    
+    /**
+     * Employee last name
+     * @type {string}
+     * @required
+     */
     lastName: { type: String, required: true },
+    
+    /**
+     * Employee email address (unique, lowercase, trimmed)
+     * @type {string}
+     * @required
+     * @unique
+     */
     email: { 
         type: String, 
         required: true,
         trim: true,
         lowercase: true
     },
-    password: { type: String, required: true },
+    
+    /**
+     * Hashed password (never returned in queries)
+     * @type {string}
+     * @required
+     * @private
+     */
+    password: { type: String, required: true, select: false },
+    
+    /**
+     * Manager name or ID
+     * @type {string}
+     * @required
+     */
     manager: { type: String, required: true },
-    salary: { type: Number, required: true },
+    
+    /**
+     * Employee salary
+     * @type {number}
+     * @required
+     * @min 0
+     */
+    salary: { type: Number, required: true, min: 0 },
+    
+    /**
+     * User role: 'admin' or 'employee'
+     * @type {string}
+     * @enum ['admin', 'employee']
+     * @default 'employee'
+     */
     role: { type: String, enum: ['admin', 'employee'], default: 'employee' },
+    
+    /**
+     * Explicit functional roles array for security
+     * SECURITY: This replaces insecure string matching on department/position fields
+     * Roles: 'hr', 'manager', 'executive', 'finance', 'tech', 'ceo', 'cto', 'cfo', 'vp'
+     * @type {Array<string>}
+     * @default []
+     */
+    functionalRoles: {
+        type: [{
+            type: String,
+            enum: ['hr', 'manager', 'executive', 'finance', 'tech', 'ceo', 'cto', 'cfo', 'vp']
+        }],
+        default: []
+    },
     
     // Employee ID/Code generation
     employeeId: { 
@@ -227,6 +312,24 @@ const employeeSchema = new mongoose.Schema({
     },
     lockUntil: {
         type: Date
+    },
+    // Token invalidation: track when password was last changed
+    // Tokens issued before this timestamp are invalid
+    passwordChangedAt: {
+        type: Date,
+        default: Date.now
+    },
+    
+    // Location permission tracking
+    locationPermission: {
+        status: {
+            type: String,
+            enum: ['granted', 'denied', 'prompt', 'not-requested'],
+            default: 'not-requested'
+        },
+        grantedAt: { type: Date },
+        deniedAt: { type: Date },
+        lastCheckedAt: { type: Date }
     }
 }, { timestamps: true });
 
@@ -235,10 +338,13 @@ employeeSchema.pre('save', async function(next) {
     // Only hash password if it's been modified (or is new)
     if (this.isModified('password')) {
         try {
-            const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
-            this.password = await bcrypt.hash(this.password, salt);
+            this.password = await hashPassword(this.password);
+            // Update passwordChangedAt when password is changed (but not on initial creation)
+            if (!this.isNew) {
+                this.passwordChangedAt = Date.now();
+            }
         } catch (error) {
-            return next(new Error('Error hashing password'));
+            return next(error);
         }
     }
     next();
@@ -246,26 +352,7 @@ employeeSchema.pre('save', async function(next) {
 
 // Compare password method for consistency with User model
 employeeSchema.methods.comparePassword = async function(candidatePassword) {
-    try {
-        if (!candidatePassword) {
-            return false; // Return false instead of throwing for invalid input
-        }
-        if (!this.password) {
-            logger.warn('Password comparison attempted but employee has no password', { 
-                employeeId: this._id 
-            });
-            return false;
-        }
-        return await bcrypt.compare(candidatePassword, this.password);
-    } catch (error) {
-        logger.error('Password comparison error', { 
-            error: error.message, 
-            stack: error.stack,
-            employeeId: this._id 
-        });
-        // Return false instead of throwing to allow login controller to handle 401 properly
-        return false;
-    }
+    return await comparePassword(candidatePassword, this.password, this._id?.toString());
 };
 
 // Add toJSON method to remove sensitive data
@@ -287,6 +374,64 @@ employeeSchema.index({ jobTitle: 1 });
 employeeSchema.index({ joiningDate: 1 });
 employeeSchema.index({ status: 1, active: 1 }); // Compound index for common queries
 employeeSchema.index({ organizationId: 1, status: 1 }); // For filtering by org and status
+employeeSchema.index({ functionalRoles: 1 }); // Index for role-based queries
+
+// Apply organization isolation plugin (SECURITY: Enforces multi-tenancy)
+// Note: requireOrganizationId is false by default to avoid breaking populate() and other operations
+// Controllers should explicitly add organizationId to queries for security
+employeeSchema.plugin(organizationIsolationPlugin, { requireOrganizationId: false });
+
+// Pre-save hook to auto-populate functionalRoles based on department/position (backward compatibility)
+// SECURITY: This is for migration only. New code should explicitly set functionalRoles
+employeeSchema.pre('save', async function(next) {
+    // Only auto-populate if functionalRoles is empty (new employee or migration)
+    if (this.functionalRoles.length === 0 && this.department && this.position) {
+        const roles = [];
+        const dept = (this.department || '').toLowerCase().trim();
+        const pos = (this.position || '').toLowerCase().trim();
+        const jobTitle = (this.jobTitle || '').toLowerCase().trim();
+        
+        // HR detection
+        if (dept === 'hr' || dept.includes('hr') || dept.includes('human resource') ||
+            jobTitle.includes('hr manager') || jobTitle.includes('human resource') ||
+            jobTitle.includes('hr') || (pos.includes('hr') && pos.includes('manager'))) {
+            roles.push('hr');
+        }
+        
+        // Manager detection
+        if (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
+            pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director')) {
+            roles.push('manager');
+        }
+        
+        // Executive detection
+        if (pos === 'ceo' || pos === 'cto' || pos === 'cfo' || pos === 'vp' ||
+            pos === 'vice president' || pos.includes('chief executive') ||
+            pos.includes('chief technology') || pos.includes('chief financial') ||
+            pos.includes('vice president')) {
+            if (pos === 'ceo' || pos.includes('chief executive')) roles.push('ceo');
+            if (pos === 'cto' || pos.includes('chief technology')) roles.push('cto');
+            if (pos === 'cfo' || pos.includes('chief financial')) roles.push('cfo');
+            if (pos === 'vp' || pos === 'vice president') roles.push('vp');
+            roles.push('executive');
+        }
+        
+        // Finance detection
+        if (dept === 'finance' || dept.includes('finance')) {
+            roles.push('finance');
+        }
+        
+        // Tech detection
+        if (dept === 'engineering' || dept === 'it support' || dept.includes('engineering') ||
+            dept.includes('technology') || jobTitle.includes('engineer') || jobTitle.includes('developer')) {
+            roles.push('tech');
+        }
+        
+        // Set functional roles (remove duplicates)
+        this.functionalRoles = [...new Set(roles)];
+    }
+    next();
+});
 
 const Employee = mongoose.model("Employee", employeeSchema, "employees");
 

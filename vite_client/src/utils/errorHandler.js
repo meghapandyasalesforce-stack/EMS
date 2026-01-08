@@ -30,7 +30,19 @@ export const handleApiError = (error, options = {}) => {
   const message = error?.response?.data?.message || error?.message || fallbackMessage;
   const code = error?.response?.data?.code;
 
-  // Log error for debugging
+  // Handle backend unavailable (503) - don't log or show toast
+  if (status === 503 || error.isBackendUnavailable) {
+    // Backend is not running - return silently without logging
+    return {
+      status: 503,
+      message: 'Service unavailable',
+      code: 'SERVICE_UNAVAILABLE',
+      type: 'info',
+      originalError: error,
+    };
+  }
+
+  // Log error for debugging (skip for 503)
   logger.error(`${context} Error`, {
     status,
     statusText,

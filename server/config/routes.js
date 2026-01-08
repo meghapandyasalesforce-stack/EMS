@@ -10,10 +10,12 @@ import leaveEmployeeRouter from "../routes/Employee/LeaveEmployeeRoutes.js";
 import leaveAdminRouter from "../routes/Admin/LeaveAdminRoutes.js";
 import projectRouter from "../routes/Admin/ProjectsRoutes.js";
 import attendanceRouter from "../routes/Both/AttendanceRoutes.js";
+import attendanceRegularizationRouter from "../routes/Both/AttendanceRegularizationRoutes.js";
 import payrollRouter from "../routes/Admin/PayrollRoutes.js";
 import profileDetailsRouter from "../routes/Employee/ProfileDetailsRoutes.js";
 import employeeCalendarRouter from "../routes/Employee/EmployeeCalendarRoutes.js";
 import employeePayrollRouter from "../routes/Employee/EmployeePayrollRoutes.js";
+import employeeDataRouter from "../routes/Employee/EmployeeRoutes.js";
 import notificationRouter from "../routes/Admin/NotificationRoutes.js";
 import pushSubscriptionRouter from "../routes/Admin/PushSubscriptionRoutes.js";
 import uploadRouter from "../routes/Both/UploadRoutes.js";
@@ -35,12 +37,38 @@ import organizationRouter from "../routes/Admin/OrganizationRoutes.js";
 import subscriptionRouter from "../routes/Organization/SubscriptionRoutes.js";
 import policyRouter from "../routes/Organization/PolicyRoutes.js";
 import dashboardRouter from "../routes/Organization/DashboardRoutes.js";
+import healthRouter from "../routes/Health/healthRoutes.js";
+// New HR & Manager Features
+import recruitmentAdminRouter from "../routes/Admin/RecruitmentRoutes.js";
+import recruitmentBothRouter from "../routes/Both/RecruitmentRoutes.js";
+import onboardingRouter from "../routes/Admin/OnboardingRoutes.js";
+import onboardingBothRouter from "../routes/Both/OnboardingRoutes.js";
+import learningBothRouter from "../routes/Both/LearningRoutes.js";
+import learningAdminRouter from "../routes/Admin/LearningRoutes.js";
+import engagementBothRouter from "../routes/Both/EngagementRoutes.js";
+import engagementAdminRouter from "../routes/Admin/EngagementRoutes.js";
+import documentBothRouter from "../routes/Both/DocumentRoutes.js";
+import documentAdminRouter from "../routes/Admin/DocumentRoutes.js";
+import benefitsBothRouter from "../routes/Both/BenefitsRoutes.js";
+import benefitsAdminRouter from "../routes/Admin/BenefitsRoutes.js";
+import successionRouter from "../routes/Admin/SuccessionRoutes.js";
+import workforceRouter from "../routes/Admin/WorkforceRoutes.js";
+import helpdeskRouter from "../routes/Both/HelpdeskRoutes.js";
+import oneOnOneRouter from "../routes/Both/OneOnOneRoutes.js";
+import teamLearningRouter from "../routes/Both/TeamLearningRoutes.js";
+import analyticsRouter from "../routes/Admin/AnalyticsRoutes.js";
+import executiveRouter from "../routes/Executive/ExecutiveRoutes.js";
+
+import { setCacheHeaders } from "../middlewares/cacheHeaders.js";
 
 /**
  * Register all application routes
  * @param {Express} app - Express application instance
  */
 export const registerRoutes = (app) => {
+  // Health check routes (public - for monitoring)
+  app.use("/api/health", healthRouter);
+  
   // Organization routes (public - for registration and login)
   app.use("/api/v1/organization/auth", organizationAuthRouter);
   app.use("/api/v1/organization/subscription", subscriptionRouter);
@@ -62,16 +90,19 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/reports", reportRouter);
   app.use("/api/v1/admin/organization", organizationRouter);
 
-  // Employee routes
+  // Employee routes (register specific routes first to avoid conflicts)
   app.use("/api/v1/employee/auth", employeeRouter);
   app.use("/api/v1/employee/leave", leaveEmployeeRouter);
   app.use("/api/v1/employee/calendar", employeeCalendarRouter);
   app.use("/api/v1/employee/payroll", employeePayrollRouter);
+  // Register general employee routes last (after all specific routes)
+  app.use("/api/v1/employee", employeeDataRouter);
 
   // Shared routes (both admin and employee)
   app.use("/api/v1/both/attendance", attendanceRouter);
+  app.use("/api/v1/both/attendance-regularization", attendanceRegularizationRouter);
   app.use("/api/v1/both/notification", notificationRouter);
-  app.use("/api/v1/both/notification", pushSubscriptionRouter);
+  app.use("/api/v1/both/push-subscription", pushSubscriptionRouter);
   app.use("/api/v1/both/profile-details", profileDetailsRouter);
   app.use("/api/v1/both/document", uploadRouter);
   app.use("/api/v1/both/password", forgotPasswordRouter);
@@ -80,5 +111,28 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/email", emailTestRouter);
   app.use("/api/v1/both/expense", expenseRouter);
   app.use("/api/v1/both/performance-review", performanceReviewRouter);
+  
+  // New HR & Manager Features - Shared Routes
+  app.use("/api/v1/both/recruitment", recruitmentBothRouter);
+  app.use("/api/v1/both/onboarding", onboardingBothRouter);
+  app.use("/api/v1/both/learning", learningBothRouter);
+  app.use("/api/v1/both/engagement", engagementBothRouter);
+  app.use("/api/v1/both/documents", documentBothRouter);
+  app.use("/api/v1/both/benefits", benefitsBothRouter);
+  app.use("/api/v1/both/helpdesk", helpdeskRouter);
+  app.use("/api/v1/both/one-on-one", oneOnOneRouter);
+  app.use("/api/v1/both/team-learning", teamLearningRouter);
+  
+  // New HR & Manager Features - Admin Only Routes
+  app.use("/api/v1/admin/recruitment", recruitmentAdminRouter);
+  app.use("/api/v1/admin/onboarding", onboardingRouter);
+  app.use("/api/v1/admin/learning", learningAdminRouter);
+  app.use("/api/v1/admin/engagement", engagementAdminRouter);
+  app.use("/api/v1/admin/documents", documentAdminRouter);
+  app.use("/api/v1/admin/benefits", benefitsAdminRouter);
+  app.use("/api/v1/admin/succession", successionRouter);
+  app.use("/api/v1/admin/workforce", workforceRouter);
+  app.use("/api/v1/admin/analytics", analyticsRouter);
+  app.use("/api/v1/admin/executive", executiveRouter);
 };
 

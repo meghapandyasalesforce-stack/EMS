@@ -26,8 +26,77 @@ const validateEnvironment = () => {
   Object.entries(required).forEach(([key, value]) => {
     if (!value) {
       errors.push(`Missing required environment variable: ${key}`);
-    } else if (key === 'JWT_SECRET' && value.length < 32) {
-      errors.push(`JWT_SECRET must be at least 32 characters long. Current length: ${value.length}`);
+    } else if (key === 'JWT_SECRET') {
+      // Always validate JWT_SECRET in all environments
+      if (value.length < 32) {
+        if (process.env.NODE_ENV === 'production') {
+          errors.push(`JWT_SECRET must be at least 32 characters long. Current length: ${value.length}`);
+        } else {
+          warnings.push(`JWT_SECRET should be at least 32 characters long. Current length: ${value.length}. This will be required in production.`);
+        }
+      }
+      
+      // Check for default/weak secrets
+      if (value === 'change_this_to_a_strong_random_secret_min_32_characters') {
+        if (process.env.NODE_ENV === 'production') {
+          errors.push('JWT_SECRET must be changed from default value in production');
+        } else {
+          // Only show warning once in development (not on every restart)
+          // Use a flag to track if we've already shown this warning
+          if (!global.__JWT_SECRET_WARNING_SHOWN) {
+            warnings.push('JWT_SECRET is set to default value. Please change it before deploying to production.');
+            global.__JWT_SECRET_WARNING_SHOWN = true;
+          }
+        }
+      }
+      
+      // Basic entropy check: ensure it's not all the same character
+      const uniqueChars = new Set(value).size;
+      if (uniqueChars < 8) {
+        if (process.env.NODE_ENV === 'production') {
+          errors.push(`JWT_SECRET has low entropy (only ${uniqueChars} unique characters). Use a more random secret.`);
+        } else {
+          warnings.push(`JWT_SECRET has low entropy (only ${uniqueChars} unique characters). Consider using a more random secret.`);
+        }
+      }
+      
+      // Check for common weak patterns
+      if (/^(.)\1+$/.test(value)) {
+        if (process.env.NODE_ENV === 'production') {
+          errors.push('JWT_SECRET appears to be a repeated character pattern. Use a more random secret.');
+        } else {
+          warnings.push('JWT_SECRET appears to be a repeated character pattern. Consider using a more random secret.');
+        }
+      }
+      
+      // Enhanced security: Check for predictable patterns
+      // Check if it's a simple sequence (e.g., "1234567890...")
+      if (/^[0-9]+$/.test(value) || /^[a-z]+$/.test(value) || /^[A-Z]+$/.test(value)) {
+        if (process.env.NODE_ENV === 'production') {
+          errors.push('JWT_SECRET appears to be a simple sequence. Use a cryptographically random secret.');
+        } else {
+          warnings.push('JWT_SECRET appears to be a simple sequence. Consider using a cryptographically random secret.');
+        }
+      }
+      
+      // Check for common weak secrets
+      const commonWeakSecrets = [
+        'secret', 'password', 'admin', '12345678', 'changeme',
+        'default', 'test', 'demo', 'temp', 'temporary'
+      ];
+      const lowerValue = value.toLowerCase();
+      if (commonWeakSecrets.some(weak => lowerValue.includes(weak))) {
+        if (process.env.NODE_ENV === 'production') {
+          errors.push('JWT_SECRET contains common weak patterns. Use a cryptographically random secret.');
+        } else {
+          warnings.push('JWT_SECRET contains common weak patterns. Consider using a cryptographically random secret.');
+        }
+      }
+      
+      // Recommend generating a secure secret
+      if (process.env.NODE_ENV === 'production' && value.length < 64) {
+        warnings.push('For production, consider using a JWT_SECRET of at least 64 characters for enhanced security.');
+      }
     }
   });
 
@@ -39,10 +108,7 @@ const validateEnvironment = () => {
       }
     });
 
-    // Additional production validations
-    if (process.env.JWT_SECRET && process.env.JWT_SECRET === 'change_this_to_a_strong_random_secret_min_32_characters') {
-      errors.push('JWT_SECRET must be changed from default value in production');
-    }
+    // Additional production validations (JWT_SECRET already validated above for all environments)
 
     // DEFAULT_EMPLOYEE_PASSWORD has been removed for security - passwords are now auto-generated
   }
@@ -81,6 +147,17 @@ const validateEnvironment = () => {
   // Check CORS configuration
   if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL && !process.env.ALLOWED_ORIGINS) {
     warnings.push('CORS configuration may be incomplete. Set FRONTEND_URL or ALLOWED_ORIGINS in production.');
+  }
+
+  // Check VAPID keys for push notifications (optional feature)
+  const hasVapidPublic = process.env.VAPID_PUBLIC_KEY;
+  const hasVapidPrivate = process.env.VAPID_PRIVATE_KEY;
+  if (!hasVapidPublic || !hasVapidPrivate) {
+    if (process.env.NODE_ENV === 'development') {
+      warnings.push('VAPID keys not configured. Push notifications disabled. (Optional for local development)');
+    } else {
+      warnings.push('VAPID keys not configured. Push notifications will not work.');
+    }
   }
 
   // Check MongoDB connection pool settings
@@ -137,12 +214,41 @@ const validateEnvironment = () => {
     return false;
   }
 
+  // Group and display warnings more cleanly
   if (warnings.length > 0) {
-    warnings.forEach((warning) => logger.warn(`  - ${warning}`));
+    // Group warnings by category for better readability
+    const securityWarnings = warnings.filter(w => 
+      w.includes('JWT_SECRET') || 
+      w.includes('CORS') || 
+      w.includes('password')
+    );
+    const optionalWarnings = warnings.filter(w => 
+      w.includes('Email') || 
+      w.includes('Redis') ||
+      w.includes('VAPID')
+    );
+    const configWarnings = warnings.filter(w => 
+      !securityWarnings.includes(w) && !optionalWarnings.includes(w)
+    );
+
+    if (securityWarnings.length > 0) {
+      logger.warn('Security Configuration Warnings:');
+      securityWarnings.forEach((warning) => logger.warn(`  ⚠️  ${warning}`));
+    }
+
+    if (optionalWarnings.length > 0) {
+      logger.info('Optional Features (not configured):');
+      optionalWarnings.forEach((warning) => logger.info(`  ℹ️  ${warning}`));
+    }
+
+    if (configWarnings.length > 0) {
+      logger.warn('Configuration Warnings:');
+      configWarnings.forEach((warning) => logger.warn(`  ⚠️  ${warning}`));
+    }
   }
 
   if (errors.length === 0 && warnings.length === 0) {
-    logger.info('Environment variables validated successfully');
+    logger.info('✅ Environment variables validated successfully');
   }
 
   return true;

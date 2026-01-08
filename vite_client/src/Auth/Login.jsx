@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { setLoading, setUser } from '../context/Auth/authSlice';
 import { toast } from 'react-toastify';
@@ -7,8 +7,10 @@ import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { ORGANIZATION_AUTH_ENDPOINT } from '../utils/constant';
+import logger from '../utils/logger';
 
 function Login() {
+    const [searchParams] = useSearchParams();
     const [form, setForm] = useState({ email: '', password: '' });
     const [showReset, setShowReset] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +20,14 @@ function Login() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { loading, user } = useSelector(state => state.auth);
+
+    // Pre-fill email from URL params (when redirected from organization login)
+    useEffect(() => {
+        const emailParam = searchParams.get('email');
+        if (emailParam) {
+            setForm(prev => ({ ...prev, email: emailParam }));
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         if (user) {
@@ -78,12 +88,6 @@ function Login() {
             return;
         }
 
-        // Smart routing: If login type is organization, redirect to organization login
-        if (loginType === 'organization') {
-            navigate(`/organization/login?email=${encodeURIComponent(form.email)}`);
-            return;
-        }
-
         // If login type is unknown, show manual selection
         if (loginType === 'unknown') {
             setShowLoginTypeSelector(true);
@@ -93,57 +97,90 @@ function Login() {
         try {
             dispatch(setLoading(true));
 
-            // CODE QUALITY FIX: Use smart routing to determine correct endpoint
-            // If loginType is 'employee_admin', we still need to determine if it's admin or employee
-            // For now, try employee first (more common), then admin if it fails
-            // This is more efficient than the old approach of always trying admin first
+            // Unified login: Try all login types in order based on detection
+            // 1. Organization login (if detected as organization or null - before detection)
+            // 2. Employee login (if detected as employee_admin or if org login failed)
+            // 3. Admin login (if employee login failed)
             let response;
-            let apiEndpoint = '/v1/employee/auth/login';
-            let userRole = 'employee';
             let userData = null;
+            let userRole = null;
+            let isOrganizationLogin = false;
             
-            try {
-                // Try employee login first (more common case)
-                response = await axios.post(apiEndpoint, form, {
-                    withCredentials: true
-                });
-                
-                // Employee login successful
-                if (response.status === 200 && response.data.success) {
-                    userData = response.data.employee;
-                    userRole = 'employee';
-                }
-            } catch (employeeError) {
-                // If employee login fails with 401, try admin login
-                if (employeeError.response?.status === 401) {
-                    try {
-                        apiEndpoint = '/v1/admin/auth/login';
-                        response = await axios.post(apiEndpoint, form, {
-                            withCredentials: true
-                        });
+            // Try organization login first if:
+            // - Detected as organization
+            // - Type is null (before detection - try all types)
+            // Skip if detected as employee_admin (more efficient - go straight to employee/admin)
+            if (loginType === 'organization' || loginType === null) {
+                try {
+                    response = await axios.post(`${ORGANIZATION_AUTH_ENDPOINT}/login`, form, {
+                        withCredentials: true
+                    });
+                    
+                    if (response.status === 200 && response.data.success) {
+                        userData = response.data.user;
+                        userRole = response.data.user?.role || 'admin';
+                        isOrganizationLogin = true;
                         
-                        // Admin login successful
-                        if (response.status === 200 && response.data.success) {
-                            userData = response.data.user;
-                            userRole = 'admin';
+                        // Store organization info
+                        if (response.data.organization?.id) {
+                            localStorage.setItem('organizationId', response.data.organization.id);
                         }
-                    } catch (adminError) {
-                        // Both logins failed
-                        const errorMessage = adminError.response?.data?.message || 
-                                           employeeError.response?.data?.message || 
-                                           'Invalid credentials. Please check your email and password.';
-                        
-                        if (adminError.response?.status === 403 || employeeError.response?.status === 403) {
-                            const lockoutMessage = adminError.response?.data?.message || employeeError.response?.data?.message;
-                            toast.error(lockoutMessage || 'Account is locked or inactive. Please try again later.');
-                        } else {
-                            toast.error(errorMessage);
-                        }
-                        return;
+                        localStorage.setItem('isOrganizationLogin', 'true');
                     }
-                } else {
-                    // Network or server error
-                    throw employeeError;
+                } catch (orgError) {
+                    // Organization login failed, continue to try employee/admin
+                    // Only log if it's not a 401 (which is expected if user is not org admin)
+                    if (orgError.response?.status !== 401) {
+                        logger.debug('Organization login failed, trying employee/admin', {
+                            error: orgError.response?.data?.message
+                        });
+                    }
+                }
+            }
+            
+            // If organization login didn't succeed (or not organization type), try employee login
+            if (!userData) {
+                try {
+                    response = await axios.post('/v1/employee/auth/login', form, {
+                        withCredentials: true
+                    });
+                    
+                    if (response.status === 200 && response.data.success) {
+                        userData = response.data.employee;
+                        userRole = 'employee';
+                        localStorage.removeItem('isOrganizationLogin');
+                    }
+                } catch (employeeError) {
+                    // If employee login fails with 401, try admin login
+                    if (employeeError.response?.status === 401) {
+                        try {
+                            response = await axios.post('/v1/admin/auth/login', form, {
+                                withCredentials: true
+                            });
+                            
+                            if (response.status === 200 && response.data.success) {
+                                userData = response.data.user;
+                                userRole = 'admin';
+                                localStorage.removeItem('isOrganizationLogin');
+                            }
+                        } catch (adminError) {
+                            // All three logins failed
+                            const errorMessage = adminError.response?.data?.message || 
+                                               employeeError.response?.data?.message || 
+                                               'Invalid credentials. Please check your email and password.';
+                            
+                            if (adminError.response?.status === 403 || employeeError.response?.status === 403) {
+                                const lockoutMessage = adminError.response?.data?.message || employeeError.response?.data?.message;
+                                toast.error(lockoutMessage || 'Account is locked or inactive. Please try again later.');
+                            } else {
+                                toast.error(errorMessage);
+                            }
+                            return;
+                        }
+                    } else {
+                        // Network or server error
+                        throw employeeError;
+                    }
                 }
             }
 
@@ -152,13 +189,28 @@ function Login() {
                 const data = response.data;
                 
                 // Store user data in Redux
-                dispatch(setUser(userData));
+                if (isOrganizationLogin) {
+                    // Organization login - store organization context
+                    dispatch(setUser({
+                        id: userData.id || userData._id,
+                        name: userData.name,
+                        email: userData.email,
+                        role: userRole,
+                        organizationId: data.organization?.id
+                    }));
+                } else {
+                    // Employee/Admin login
+                    dispatch(setUser(userData));
+                }
                 
                 // SECURITY FIX: Tokens are stored in httpOnly cookies only (not localStorage)
                 // Cookies are set by the server automatically via generateToken()
                 // Only store UI-related data in localStorage (non-sensitive)
                 localStorage.setItem('role', userRole);
                 localStorage.setItem('email', form.email);
+                if (isOrganizationLogin && data.organization?.id) {
+                    localStorage.setItem('organizationId', data.organization.id);
+                }
 
                 // If employee must reset password, show popup and pause navigation
                 if (userRole === 'employee' && userData?.mustResetPassword) {
@@ -169,33 +221,13 @@ function Login() {
 
                 toast.success('Login successful!');
                 
-                // Clear organization login flag for non-org logins
-                localStorage.removeItem('isOrganizationLogin');
+                // Use dashboardRoute from login response (automatic redirection)
+                const dashboardRoute = data.dashboardRoute || (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
                 
-                // Fetch dashboard route based on Position and Department
-                try {
-                    const dashboardResponse = await axios.get('/v1/organization/dashboard/route', {
-                        withCredentials: true
-                    });
-                    
-                    if (dashboardResponse.data?.success && dashboardResponse.data?.dashboardRoute) {
-                        // Redirect to the dashboard determined by Position and Department
-                        setTimeout(() => {
-                            navigate(dashboardResponse.data.dashboardRoute, { replace: true });
-                        }, 500);
-                    } else {
-                        // Fallback to /dashboard which will use RoleBasedDashboard to determine route
-                        setTimeout(() => {
-                            navigate('/dashboard', { replace: true });
-                        }, 500);
-                    }
-                } catch (dashboardError) {
-                    // If dashboard route API fails, fallback to /dashboard
-                    // RoleBasedDashboard will handle the routing with fallback logic
-                    setTimeout(() => {
-                        navigate('/dashboard', { replace: true });
-                    }, 500);
-                }
+                // Redirect to the dashboard route provided by backend
+                setTimeout(() => {
+                    navigate(dashboardRoute, { replace: true });
+                }, 500);
             } else {
                 toast.error(response?.data?.message || 'Login failed. Please try again.');
             }
@@ -220,13 +252,11 @@ function Login() {
 
     const handleLoginTypeSelection = (selectedType) => {
         setShowLoginTypeSelector(false);
-        if (selectedType === 'organization') {
-            navigate(`/organization/login?email=${encodeURIComponent(form.email)}`);
-        } else {
-            // Continue with employee/admin login - create a synthetic event
-            const syntheticEvent = { preventDefault: () => {} };
-            handleSubmit(syntheticEvent);
-        }
+        // Set login type and retry login
+        setLoginType(selectedType);
+        // Continue with login - create a synthetic event
+        const syntheticEvent = { preventDefault: () => {} };
+        handleSubmit(syntheticEvent);
     };
 
     return (
@@ -240,12 +270,12 @@ function Login() {
                 {/* Show login type indicator */}
                 {loginType === 'organization' && (
                     <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
-                        <p>Gmail or Organization email detected. You'll be redirected to Organization Login.</p>
+                        <p>Organization email detected. Will try Organization Login first.</p>
                     </div>
                 )}
                 {loginType === 'employee_admin' && (
                     <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
-                        <p>Organization domain detected. Use Employee/Admin Login.</p>
+                        <p>Organization domain detected. Will try Employee/Admin Login.</p>
                     </div>
                 )}
 
@@ -299,17 +329,8 @@ function Login() {
                     </button>
                 </form>
 
-                <p className="mt-5 text-sm">
-                    Don't have an account?{' '}
-                    <a href="/register" className="text-blue-500 hover:text-blue-700 hover:underline">
-                        Create New
-                    </a>
-                </p>
-                <div className="flex flex-col space-y-2">
+                <div className="flex flex-col space-y-2 mt-5">
                     <div className="flex justify-between items-center">
-                        <Link to="/organization/login" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
-                            Organization Login
-                        </Link>
                         <Link to="/forgot-password" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
                             Forgot Password?
                         </Link>

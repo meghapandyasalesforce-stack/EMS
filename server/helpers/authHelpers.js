@@ -60,17 +60,29 @@ export const getCsrfCookieOptions = () => {
 };
 
 /**
- * Clear all authentication cookies
+ * Clear all authentication cookies and CSRF tokens
  * @param {Object} res - Express response object
- * @param {Object} req - Express request object (optional, for logging)
+ * @param {Object} req - Express request object (optional, for logging and user ID)
  */
-export const clearAuthCookies = (res, req = null) => {
+export const clearAuthCookies = async (res, req = null) => {
     const cookieOptions = getCookieOptions();
     const csrfCookieOptions = getCsrfCookieOptions();
 
     res.clearCookie('jwt', cookieOptions);
     res.clearCookie('refreshToken', cookieOptions);
     res.clearCookie('csrfToken', csrfCookieOptions);
+
+    // SECURITY: Delete CSRF token from server-side store
+    if (req && (req.user?._id || req.employee?._id)) {
+        try {
+            const { deleteCsrfToken } = await import('../helpers/csrfTokenStore.js');
+            const userId = req.user?._id || req.employee?._id;
+            await deleteCsrfToken(userId.toString());
+            logger.debug('CSRF token deleted from store', { requestId: req.id, userId });
+        } catch (error) {
+            logger.error('Failed to delete CSRF token from store', { requestId: req.id, error: error.message });
+        }
+    }
 
     if (req) {
         logger.debug('Auth cookies cleared', { requestId: req.id });

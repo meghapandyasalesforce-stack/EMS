@@ -10,23 +10,78 @@ import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendForbidden, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 import { addOrganizationFilter, getOrganizationId } from '../../helpers/organizationHelper.js';
+import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
+import { getCachedEmployees, setCachedEmployees } from '../../helpers/cacheHelper.js';
+import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
 
 /**
- * Get all employees (Admin only)
- * GET /api/v1/admin/employee
+ * Get all employees (Admin, HR, and Managers) - Paginated
+ * GET /api/v1/admin/employee or GET /api/v1/employee/auth/get-all-employees
+ * Managers will see employees in their department only
  */
 export const getAllEmployees = async (req, res) => {
     try {
         const user = req.user || req.employee;
 
-        if (!user || user.role !== 'admin') {
-            return sendForbidden(res, 'Access denied. Admins only.');
+        if (!user) {
+            return sendForbidden(res, 'Access denied. Authentication required.');
         }
+
+        // Access is controlled by middleware (isAdminOrManagerOrHRAuthenticated)
+        // No need to check role here as middleware handles it
+
+        // Parse pagination
+        const { page, limit, skip } = parsePagination(req, { defaultLimit: 20, maxLimit: 100 });
+        const sort = parseSort(req, '-createdAt');
 
         // Filter by organizationId
         const query = addOrganizationFilter(req, {});
-        const employees = await Employee.find(query).select('-password');
-        return sendSuccess(res, { employees }, 'Employees retrieved successfully');
+        const organizationId = getOrganizationId(req);
+
+        // If user is a manager (not admin or HR), filter by manager field
+        // Example: Manager "Arun Kumar" will see employees with manager="Arun Kumar" or "Arun"
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManager && req.employee) {
+            const managerQuery = buildManagerMatchQuery(req.employee);
+            if (managerQuery && managerQuery.$or) {
+                query.$or = managerQuery.$or;
+            }
+            query.status = 'active'; // Only active employees for managers
+            
+            const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+            logger.info('Manager filtering employees by manager field', {
+                managerId: req.employee._id,
+                managerName: managerName,
+                matchingCriteria: 'Employees where manager field matches manager name'
+            });
+        }
+
+        // Try cache first (only for first page)
+        if (page === 1) {
+            const cached = await getCachedEmployees(organizationId, query);
+            if (cached) {
+                return sendPaginatedResponse(res, cached.data, page, limit, cached.total, 'Employees retrieved successfully');
+            }
+        }
+
+        // Execute optimized query with pagination
+        const [employees, total] = await Promise.all([
+            Employee.find(query)
+                .select('-password -__v')
+                .populate('assignedRole', 'name level permissions')
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Employee.countDocuments(query)
+        ]);
+
+        // Cache first page results
+        if (page === 1) {
+            await setCachedEmployees(organizationId, query, employees, total);
+        }
+
+        return sendPaginatedResponse(res, employees, page, limit, total, 'Employees retrieved successfully');
     } catch (error) {
         logger.error('Error fetching employees', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to fetch employees', error);
@@ -86,8 +141,10 @@ export const getManagers = async (req, res) => {
     try {
         const user = req.user || req.employee;
 
-        if (!user || user.role !== 'admin') {
-            return sendForbidden(res, 'Access denied. Admins only.');
+        // Access is controlled by middleware (isAdminOrHRAuthenticated)
+        // No need to check role here as middleware handles it
+        if (!user) {
+            return sendForbidden(res, 'Access denied. Authentication required.');
         }
 
         // Management positions (in hierarchy order: highest to lowest)
@@ -99,10 +156,18 @@ export const getManagers = async (req, res) => {
             status: 'active' // Only active managers
         });
         
-        // Fetch managers
-        const managers = await Employee.find(query)
-            .select('name lastName email position department employeeId')
-            .lean(); // Use lean() for better performance
+        // Parse pagination for managers list
+        const { page, limit, skip } = parsePagination(req, { defaultLimit: 50, maxLimit: 200 });
+        
+        // Fetch managers with pagination
+        const [managers, total] = await Promise.all([
+            Employee.find(query)
+                .select('name lastName email position department employeeId')
+                .skip(skip)
+                .limit(limit)
+                .lean(), // Use lean() for better performance
+            Employee.countDocuments(query)
+        ]);
         
         // Sort by position hierarchy (CEO first, then CTO, CFO, VP, Director, Manager)
         const positionOrder = { 'CEO': 1, 'CTO': 2, 'CFO': 3, 'VP': 4, 'Director': 5, 'Manager': 6 };
@@ -118,7 +183,7 @@ export const getManagers = async (req, res) => {
             return nameA.localeCompare(nameB);
         });
         
-        return sendSuccess(res, { managers }, 'Managers retrieved successfully');
+        return sendPaginatedResponse(res, managers, page, limit, total, 'Managers retrieved successfully');
     } catch (error) {
         logger.error('Error fetching managers', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to fetch managers', error);

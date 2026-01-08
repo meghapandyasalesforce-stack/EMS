@@ -234,10 +234,36 @@ const EnhancedAttendanceBox = () => {
         imageFilename: `clockin_${Date.now()}.jpg`
       };
 
-      await dispatch(clockIn(clockInData)).unwrap();
-      showNotification('Checked in successfully!', 'success');
+      const result = await dispatch(clockIn(clockInData)).unwrap();
+      // Show success message from server if available, otherwise default
+      const successMessage = result?.message || 'Checked in successfully!';
+      showNotification(successMessage, 'success');
+      // Show warning if present
+      if (result?.warning) {
+        showNotification(result.warning, 'warning');
+      }
     } catch (err) {
-      const errorMessage = err?.message || err?.payload?.message || 'Failed to check in. Please try again.';
+      // Extract error message with better handling
+      const errorData = err?.response?.data || err?.payload?.data || err?.payload;
+      let errorMessage = 'Failed to check in. Please try again.';
+      
+      // Handle validation errors (array of errors)
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        errorMessage = errorData.errors.map(e => e.message || e.msg).join(', ');
+      } 
+      // Handle single error message
+      else if (errorData?.message) {
+        errorMessage = errorData.message;
+      } 
+      // Handle payload message
+      else if (err?.payload?.message) {
+        errorMessage = err.payload.message;
+      }
+      // Handle direct error message
+      else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
       showNotification(errorMessage, 'error');
       stopCamera();
     }

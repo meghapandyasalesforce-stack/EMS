@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { FaCheckCircle } from 'react-icons/fa';
 
 /**
  * Reusable StatCard component for displaying statistics in dashboards
@@ -65,27 +66,55 @@ const StatCard = ({
 
   const colors = colorClasses[color] || colorClasses.blue;
 
+  const isHighlighted = className.includes('border-purple-500');
+  
+  // Modern gradient backgrounds for icons
+  const gradientClasses = {
+    blue: 'bg-gradient-to-br from-blue-400 to-blue-600',
+    green: 'bg-gradient-to-br from-green-400 to-green-600',
+    yellow: 'bg-gradient-to-br from-yellow-400 to-yellow-600',
+    purple: 'bg-gradient-to-br from-purple-400 to-purple-600',
+    orange: 'bg-gradient-to-br from-orange-400 to-orange-600',
+    red: 'bg-gradient-to-br from-red-400 to-red-600',
+    indigo: 'bg-gradient-to-br from-indigo-400 to-indigo-600',
+    gray: 'bg-gradient-to-br from-gray-400 to-gray-600',
+  };
+
+  const iconGradient = gradientClasses[color] || gradientClasses.blue;
+
   return (
     <div 
-      className={`bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 ${colors.border} hover:shadow-lg transition-shadow ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`modern-card p-5 md:p-6 border-l-4 ${isHighlighted ? 'border-purple-500 border-2 ring-2 ring-purple-200' : colors.border} ${onClick ? 'cursor-pointer hover:scale-[1.02]' : ''} ${className} ${isHighlighted ? 'relative' : ''} animate-fadeIn`}
       onClick={onClick}
+      style={{
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
     >
       <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-gray-500 text-sm font-medium">{label}</p>
-          <p className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 mt-2">
-            {value}
-          </p>
-          {subtitle && (
-            <p className={`text-sm mt-1 ${subtitle.includes('active') || subtitle.includes('completed') || subtitle.includes('green') ? 'text-green-600' : 'text-gray-500'}`}>
-              {subtitle}
-            </p>
+        <div className="flex items-center gap-4 flex-1">
+          {icon && (
+            <div className={`${iconGradient} p-3.5 rounded-xl flex-shrink-0 shadow-lg transform transition-transform hover:scale-110`}>
+              <div className="text-white">
+                {icon}
+              </div>
+            </div>
           )}
+          <div className="flex-1 min-w-0">
+            <p className="text-gray-600 text-xs font-semibold uppercase tracking-wide mb-1.5">{label}</p>
+            <p className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-gray-900 leading-tight">
+              {value}
+            </p>
+            {subtitle && (
+              <p className={`text-xs md:text-sm mt-2 font-medium ${subtitle.includes('active') || subtitle.includes('completed') || subtitle.includes('green') ? 'text-green-600' : 'text-gray-500'}`}>
+                {subtitle}
+              </p>
+            )}
+          </div>
         </div>
-        {icon && (
-          <div className={`${colors.bg} p-2 md:p-3 rounded-full ml-4 flex-shrink-0`}>
-            <div className={colors.text}>
-              {icon}
+        {isHighlighted && (
+          <div className="ml-4 flex-shrink-0 animate-pulse">
+            <div className="bg-purple-100 p-2 rounded-full">
+              <FaCheckCircle className="w-5 h-5 text-purple-600" />
             </div>
           </div>
         )}

@@ -102,6 +102,13 @@ EMS-Paarsiv/
    - `JWT_SECRET` - Secret key for JWT tokens (min 32 characters)
    - `FRONTEND_URL` - Frontend URL for CORS
    - `EMAIL_USER` / `EMAIL_PASS` - Email credentials for notifications
+   - `GOOGLE_MAPS_API_KEY` / `VITE_GOOGLE_MAPS_API_KEY` - Google Maps API key (optional, for location features)
+   
+   **📍 Google Maps Setup (Optional)**: 
+   - Quick Start: See `GOOGLE_MAPS_QUICK_START.md` (5-minute setup)
+   - Detailed Guide: See `GOOGLE_MAPS_SETUP.md` (comprehensive guide)
+   - Free tier available: 28,000 map loads/month, 40,000 geocoding requests/month
+   - Test your setup: `node server/scripts/test-google-maps-api.js`
 
 ### Running the Application
 

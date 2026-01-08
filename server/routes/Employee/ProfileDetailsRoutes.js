@@ -9,7 +9,8 @@ import {
     addNextOfKin,
     getEmployeeInfoByAdmin,
     getEmployeeInfoByEmployee,
-    getUpcomingBirthdays
+    getUpcomingBirthdays,
+    updateLocationPermission
 } from "../../controllers/employee/profileDetailsController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
@@ -29,6 +30,7 @@ router.route("/add-family-detail").post(isAuthenticated, addFamilyDetail);
 router.route("/add-guarantor-detail").post(isAuthenticated, addGuarantorDetails);
 router.route("/add-nok-detail").post(isAuthenticated, addNextOfKin);
 router.route("/update-financial-details").put(isAuthenticated, updateFinancialDetails);
+router.route("/update-location-permission").put(isAuthenticated, updateLocationPermission);
 router.route("/upcoming-birthdays").get(isAuthenticated, getUpcomingBirthdays);
 
 // update status(active or inactive)

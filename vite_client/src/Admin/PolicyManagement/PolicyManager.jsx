@@ -11,6 +11,7 @@ const PolicyManager = () => {
     const navigate = useNavigate();
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all'); // all, active, inactive
 
     useEffect(() => {
@@ -19,6 +20,8 @@ const PolicyManager = () => {
 
     const fetchPolicies = async () => {
         try {
+            setError(null);
+            setLoading(true);
             const params = filter !== 'all' ? { isActive: filter === 'active' } : {};
             const response = await axios.get(ORGANIZATION_POLICIES_ENDPOINT, { params });
             if (response.data.success) {
@@ -26,7 +29,16 @@ const PolicyManager = () => {
             }
         } catch (error) {
             logger.error('Error fetching policies', { error: error.message, response: error.response?.data });
-            toast.error('Failed to load policies');
+            
+            // Handle 403 errors specifically
+            if (error.response?.status === 403) {
+                setError('You do not have permission to view policies. Please contact your administrator.');
+                toast.error('Access denied: Insufficient permissions');
+            } else {
+                setError('Failed to load policies. Please try again later.');
+                toast.error('Failed to load policies');
+            }
+            setPolicies([]);
         } finally {
             setLoading(false);
         }
@@ -105,7 +117,21 @@ const PolicyManager = () => {
 
             {/* Policies List */}
             <div className="grid grid-cols-1 gap-4">
-                {policies.length === 0 ? (
+                {error ? (
+                    <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <FaFileAlt className="w-8 h-8 text-red-600" />
+                        </div>
+                        <p className="text-red-600 text-lg font-semibold mb-2">Access Denied</p>
+                        <p className="text-gray-600 mb-4">{error}</p>
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                            Go to Dashboard
+                        </button>
+                    </div>
+                ) : policies.length === 0 ? (
                     <div className="bg-white rounded-lg shadow-md p-12 text-center">
                         <FaFileAlt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-600 text-lg">No policies found</p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { createEmployee } from '../../context/employeeSlice';
@@ -26,6 +26,39 @@ function AddEmployee() {
     const [loadingManagers, setLoadingManagers] = useState(false);
     const employeeStatus = useSelector(state => state.employees.status);
     const employeeError = useSelector(state => state.employees.error);
+    const user = useSelector((state) => state.auth?.user);
+    const employee = useSelector((state) => state.employeeDetails?.employee);
+
+    // Determine the correct dashboard route based on user role
+    const getDashboardRoute = useMemo(() => {
+        const userRole = user?.role || employee?.role || localStorage.getItem('role');
+        const department = (user?.department || employee?.department || '').toLowerCase().trim();
+        const jobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
+        const position = (user?.position || employee?.position || '').toLowerCase().trim();
+
+        // Admin goes to admin dashboard
+        if (userRole === 'admin') {
+            return '/dashboard-admin';
+        }
+
+        // Check if user is HR
+        const isHR = 
+            department === 'hr' || 
+            department.includes('hr') || 
+            department.includes('human resource') ||
+            jobTitle.includes('hr manager') ||
+            jobTitle.includes('human resource') ||
+            jobTitle.includes('hr') ||
+            position.includes('hr manager') ||
+            (position.includes('hr') && position.includes('manager'));
+
+        if (isHR) {
+            return '/dashboard-hr';
+        }
+
+        // Default to admin dashboard
+        return '/dashboard-admin';
+    }, [user, employee]);
 
     const departments = [
         "Engineering", "HR", "Finance", "Sales", "Marketing", "IT Support", "Operations",
@@ -122,7 +155,7 @@ function AddEmployee() {
                 });
             }
             
-            navigate('/dashboard-admin');
+            navigate(getDashboardRoute);
         } else {
             const errorMsg = resultAction.payload || 'Failed to create employee';
             setError(errorMsg);

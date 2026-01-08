@@ -98,16 +98,71 @@ export const errorHandler = (err, req, res, next) => {
 
     // Default error - hide details in production
     const statusCode = err.statusCode || 500;
+    
+    // Sanitize error message in production
+    let sanitizedMessage = 'An unexpected error occurred';
+    if (process.env.NODE_ENV === 'development') {
+        sanitizedMessage = err.message || 'Internal server error';
+    } else {
+        // In production, use generic message for 500 errors
+        if (statusCode >= 500) {
+            sanitizedMessage = 'Internal server error';
+        } else {
+            // For client errors (4xx), we can be more specific but still sanitize
+            sanitizedMessage = err.message || 'An error occurred';
+            // Remove any potential information leakage
+            sanitizedMessage = sanitizedMessage.replace(/at\s+.*/g, ''); // Remove stack trace snippets
+            sanitizedMessage = sanitizedMessage.replace(/file:\/\/.*/g, ''); // Remove file paths
+            sanitizedMessage = sanitizedMessage.replace(/\/.*\/.*\.js/g, ''); // Remove file paths
+        }
+    }
+    
     const response = {
         ...errorResponse,
-        message: err.message || 'Internal server error',
+        message: sanitizedMessage,
         code: 'INTERNAL_ERROR'
     };
 
-    // Include stack trace in development
+    // Include stack trace and details only in development
     if (process.env.NODE_ENV === 'development') {
         response.stack = err.stack;
         response.details = err.details;
+    }
+
+    // Error Tracking Integration (Sentry)
+    // Only track errors in production and for server errors (5xx)
+    // Use non-blocking approach - don't wait for Sentry (fire and forget)
+    if (process.env.NODE_ENV === 'production' && statusCode >= 500) {
+        // Fire and forget - don't block error response
+        import('@sentry/node').then(Sentry => {
+            if (Sentry && Sentry.default) {
+                Sentry.default.captureException(err, {
+                    tags: {
+                        path: req.path,
+                        method: req.method,
+                        statusCode: statusCode
+                    },
+                    user: {
+                        id: req.user?._id?.toString() || req.employee?._id?.toString(),
+                        organizationId: req.user?.organizationId?.toString() || req.employee?.organizationId?.toString()
+                    },
+                    extra: {
+                        requestId: req.id,
+                        ip: req.ip,
+                        headers: {
+                            'user-agent': req.headers['user-agent'],
+                            'content-type': req.headers['content-type']
+                        }
+                    },
+                    level: 'error'
+                });
+            }
+        }).catch(sentryError => {
+            // Sentry not configured or import failed - log and continue
+            logger.debug('Sentry error tracking not available', {
+                error: sentryError.message
+            });
+        });
     }
 
     res.status(statusCode).json(response);

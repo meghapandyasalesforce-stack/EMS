@@ -93,8 +93,9 @@ export const performLogin = async ({ email, password, userType, res, requestId }
     organizationId
   });
 
-  // Generate token with organizationId
-  const tokenResult = generateToken(user._id, userType, organizationId, res);
+  // Generate token with organizationId and passwordChangedAt for token invalidation
+  const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+  const tokenResult = generateToken(user._id, userType, organizationId, res, passwordChangedAt);
   const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
   const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
   const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
@@ -112,6 +113,33 @@ export const performLogin = async ({ email, password, userType, res, requestId }
     userData.lastName = user.lastName;
     userData.employeeId = user.employeeId;
     userData.mustResetPassword = user.mustResetPassword;
+    
+    // Fetch dashboard type from database (checks assignedRole first, then department/position)
+    try {
+      const { getDashboardForUserFromDB } = await import('./dashboardHelper.js');
+      const dashboardType = await getDashboardForUserFromDB(
+        user._id,
+        user.department,
+        user.position
+      );
+      userData.dashboardType = dashboardType;
+      
+      logger.info('Dashboard type determined from database in authService', {
+        requestId,
+        userId: user._id,
+        department: user.department,
+        position: user.position,
+        dashboardType
+      });
+    } catch (error) {
+      logger.error('Failed to fetch dashboard type from database in authService', { 
+        requestId,
+        userId: user._id,
+        error: error.message,
+        stack: error.stack
+      });
+      userData.dashboardType = 'EMPLOYEE_DASHBOARD'; // Default fallback
+    }
   }
 
   // Unified response structure

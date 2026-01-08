@@ -28,23 +28,15 @@ export const staticFilesCorsMiddleware = (req, res, next) => {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
   } else {
-    // Production: Strict CORS based on allowed origins
+    // Production: More permissive CORS for static files (images need to load from anywhere)
+    // Static files (images) are generally safe to serve with permissive CORS
     if (origin) {
-      if (allowedOrigins.includes(origin)) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else if (origin === "https://paarsiv.vercel.app") {
-        // Explicitly allow Vercel origin in production
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else {
-        // Reject unknown origins in production (no wildcard)
-        logger.warn('CORS rejected origin for static files', { origin });
-        // Still set headers but without credentials
-        res.setHeader("Access-Control-Allow-Origin", "*");
-      }
+      // Allow any origin for static files in production
+      // This is safe because images don't contain sensitive data
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      // No origin header - use wildcard but without credentials
+      // No origin header - use wildcard for static files
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
   }
@@ -106,17 +98,11 @@ export const staticFilesConfig = express.static(path.join(__dirname, "..", "uplo
         res.setHeader("Access-Control-Allow-Origin", "*");
       }
     } else {
-      // Production: Strict CORS
+      // Production: More permissive CORS for static files (images need to load from anywhere)
       if (origin) {
-        if (allowedOrigins.includes(origin)) {
-          res.setHeader("Access-Control-Allow-Origin", origin);
-          res.setHeader("Access-Control-Allow-Credentials", "true");
-        } else if (origin === "https://paarsiv.vercel.app") {
-          res.setHeader("Access-Control-Allow-Origin", origin);
-          res.setHeader("Access-Control-Allow-Credentials", "true");
-        } else {
-          res.setHeader("Access-Control-Allow-Origin", "*");
-        }
+        // Allow any origin for static files in production
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
       } else {
         res.setHeader("Access-Control-Allow-Origin", "*");
       }

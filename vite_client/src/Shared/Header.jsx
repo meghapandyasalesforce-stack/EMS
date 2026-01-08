@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaHome, FaMoneyBill, FaCalendarAlt, FaCog, FaSignOutAlt, FaShieldAlt, FaCreditCard, FaDollarSign, FaCamera, FaRuler } from "react-icons/fa";
-import { FaPeopleGroup } from "react-icons/fa6";
-import { IoIosArrowBack } from "react-icons/io";
-import { CgProfile } from "react-icons/cg";
-import { VscProject } from "react-icons/vsc";
+import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../context/Auth/authSlice";
 import { resetAttendance } from "../context/attendanceSlice";
-import { IoBookmarks } from "react-icons/io5";
 import { toast } from 'react-toastify';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { persistor } from '../context/store';
 import NotificationDropdown from '../components/NotificationDropdown';
+import { getNavigationItems } from '../utils/navigationConfig';
 
 const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -25,6 +21,7 @@ const Header = () => {
 
     // Get user data from Redux store with memoized selector
     const user = useSelector((state) => state.auth.user);
+    const employee = useSelector((state) => state.employeeDetails.employee);
     const { username, email } = useMemo(() => {
         return user ? { username: user.name || user.username, email: user.email } : { username: null, email: null };
     }, [user]);
@@ -92,41 +89,10 @@ const Header = () => {
     const openLogoutModal = () => setLogoutModalOpen(true);
     const closeLogoutModal = () => setLogoutModalOpen(false);
 
-    // Determine user type for navigation
-    const isAdmin = email?.endsWith('@gmail.com');
-    const isEmployee = email?.endsWith('@paarsiv.com');
-
-    // Navigation items based on user role
-    const adminNavItems = [
-        { path: "/dashboard", name: "Dashboard", icon: <FaHome /> },
-        { path: "/dashboard-admin", name: "Admin Dashboard", icon: <FaHome /> },
-        { path: "/organization/dashboard", name: "Organization", icon: <FaPeopleGroup /> },
-        { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
-        { path: "/projects", name: "Projects", icon: <VscProject /> },
-        { path: "/employees", name: "Employees", icon: <FaPeopleGroup /> },
-        { path: "/today-attendance", name: "Attendance", icon: <IoBookmarks /> },
-        { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-        { path: "/role-hierarchy", name: "Role Management", icon: <FaShieldAlt /> },
-        { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
-        { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
-        { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign /> },
-        { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
-    ];
-
-    const employeeNavItems = [
-        { path: "/dashboard-employee", name: "Dashboard", icon: <FaHome /> },
-        // { path: "/enhanced-attendance", name: "Enhanced Attendance", icon: <IoBookmarks /> },
-        { path: "/attendance-stats", name: "Attendance Stats", icon: <IoBookmarks /> },
-        { path: "/employee/projects", name: "Projects", icon: <IoBookmarks /> },
-        { path: "/my-leave", name: "Leave", icon: <FaCalendarAlt /> },
-        { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
-        { path: "/employee/id-card", name: "ID Card", icon: <FaCreditCard /> },
-        { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-       
-        { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
-    ];
-
-    const navItems = isAdmin ? adminNavItems : isEmployee ? employeeNavItems : [];
+    // Get navigation items based on user role, department, and position
+    const navItems = useMemo(() => {
+        return getNavigationItems(user, employee);
+    }, [user, employee]);
 
     // Highlight active route
     const isActive = (path) => location.pathname === path;
@@ -197,51 +163,61 @@ const Header = () => {
 
     // Desktop Sidebar - Now non-minimizable
     const DesktopSidebar = () => (
-        <div className="fixed top-0 left-0 h-full bg-gray-800 text-white w-64 flex flex-col z-40">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-                <h3 className="font-extrabold text-4xl">
-                    <span className="text-green-500">p</span>
+        <div className="fixed top-0 left-0 h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white w-64 flex flex-col z-40 overflow-hidden shadow-2xl border-r border-gray-700/50">
+            <div className="flex items-center justify-between p-5 border-b border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
+                <h3 className="font-extrabold text-3xl tracking-tight">
+                    <span className="text-green-400 drop-shadow-lg">p</span>
                     <span className="text-white">a</span>
                     <span className="text-white">a</span>
                     <span className="text-white">r</span>
-                    <span className="text-green-500">s</span>
+                    <span className="text-green-400 drop-shadow-lg">s</span>
                     <span className="text-white">i</span>
                     <span className="text-white">v</span>
                 </h3>
             </div>
 
             {/* Make the nav scrollable so bottom sections (notifications/logout) stay visible */}
-            <nav className="mt-6 flex-1 overflow-y-auto">
-                {navItems.map((item) => (
+            <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                {navItems.map((item, index) => (
                     <Link
                         key={item.path}
                         to={item.path}
-                        className={`flex items-center p-4 transition-colors duration-200 ${isActive(item.path) ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+                        className={`group flex items-center p-3.5 mx-2 rounded-xl transition-all duration-300 mb-1 ${
+                            isActive(item.path) 
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105' 
+                                : 'hover:bg-gray-700/50 text-gray-300 hover:text-white hover:translate-x-1'
+                        }`}
+                        style={{ animationDelay: `${index * 50}ms` }}
                     >
-                        <span className="text-lg">{item.icon}</span>
-                        <span className="ml-3">{item.name}</span>
+                        <span className={`text-lg flex-shrink-0 transition-transform duration-300 ${isActive(item.path) ? 'scale-110' : 'group-hover:scale-110'}`}>
+                            {item.icon}
+                        </span>
+                        <span className="ml-3 truncate font-medium">{item.name}</span>
+                        {isActive(item.path) && (
+                            <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                        )}
                     </Link>
                 ))}
             </nav>
 
-            {/* Notifications section */}
-            <div className="p-4 border-t border-gray-700">
+            {/* Notifications section - Fixed at bottom */}
+            <div className="p-4 border-t border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-gray-300 font-medium">Notifications</span>
+                    <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Notifications</span>
                     <div className="relative">
                         <NotificationDropdown />
                     </div>
                 </div>
             </div>
 
-            {/* Logout button at bottom */}
-            <div className="p-4 border-t border-gray-700">
+            {/* Logout button at bottom - Fixed at bottom */}
+            <div className="p-4 border-t border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
                 <button
                     onClick={openLogoutModal}
-                    className="flex items-center text-white hover:text-red-400 transition-colors duration-200 w-full"
+                    className="flex items-center justify-center gap-3 w-full p-3 rounded-xl text-gray-300 hover:text-white hover:bg-red-500/20 transition-all duration-300 group border border-transparent hover:border-red-500/30"
                 >
-                    <FaSignOutAlt className="text-lg" />
-                    <span className="ml-3">Logout</span>
+                    <FaSignOutAlt className="text-lg flex-shrink-0 transition-transform group-hover:rotate-12" />
+                    <span className="font-medium">Logout</span>
                 </button>
             </div>
         </div>
@@ -249,32 +225,35 @@ const Header = () => {
 
     // Mobile Header
     const MobileHeader = () => (
-        <header className="fixed top-0 left-0 right-0 bg-gray-700 text-white shadow-md z-30">
+        <header className="fixed top-0 left-0 right-0 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl z-30 border-b border-gray-700/50">
             <div className="flex justify-between items-center p-4">
-                <button onClick={toggleMobileMenu} className="text-white focus:outline-none">
-                    <FaBars />
+                <button 
+                    onClick={toggleMobileMenu} 
+                    className="text-white focus:outline-none p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                >
+                    <FaBars className="text-xl" />
                 </button>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <NotificationDropdown />
 
-                    <div className="relative text-xl text-white cursor-pointer hover:text-blue-300 transition-colors">
+                    <div className="relative text-xl text-white cursor-pointer hover:text-blue-300 transition-colors p-2 rounded-lg hover:bg-gray-700/50">
                         <FaEnvelope />
                     </div>
 
                     <div className="relative">
                         <FaUserCircle
-                            className="text-2xl text-white cursor-pointer hover:text-blue-300 transition-colors"
+                            className="text-2xl text-white cursor-pointer hover:text-blue-300 transition-colors p-1 rounded-lg hover:bg-gray-700/50"
                             onClick={toggleDropdown}
                         />
                         {dropdownOpen && (
-                            <div className="absolute top-full right-0 bg-white text-black rounded-lg shadow-lg p-2 z-50 w-48">
-                                <div className="px-4 py-2 border-b border-gray-200">
-                                    <p className="text-sm font-semibold text-gray-700">Welcome,</p>
-                                    <p className="text-sm font-bold text-gray-900 truncate">{username}</p>
+                            <div className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-56 border border-gray-100 animate-scaleIn">
+                                <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
+                                    <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>
                                 </div>
                                 <button
-                                    className="flex items-center w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    className="flex items-center w-full px-4 py-3 text-sm text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
                                     onClick={openLogoutModal}
                                 >
                                     <FaSignOutAlt className="mr-2" />
@@ -288,31 +267,44 @@ const Header = () => {
 
             {/* Mobile Menu */}
             {mobileMenuOpen && (
-                <div className="bg-gray-800 text-white shadow-lg animate-slideDown">
-                    <div className="px-4 py-3 border-b border-gray-700 flex justify-between items-center">
-                        <h3 className="font-extrabold text-2xl">
-                            <span className="text-green-500">p</span>
+                <div className="bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl animate-slideDown border-b border-gray-700/50">
+                    <div className="px-4 py-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/50 backdrop-blur-sm">
+                        <h3 className="font-extrabold text-2xl tracking-tight">
+                            <span className="text-green-400 drop-shadow-lg">p</span>
                             <span className="text-white">a</span>
                             <span className="text-white">a</span>
                             <span className="text-white">r</span>
-                            <span className="text-green-500">s</span>
+                            <span className="text-green-400 drop-shadow-lg">s</span>
                             <span className="text-white">i</span>
                             <span className="text-white">v</span>
                         </h3>
-                        <button onClick={toggleMobileMenu} className="text-white">
-                            <FaTimes />
+                        <button 
+                            onClick={toggleMobileMenu} 
+                            className="text-white p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                        >
+                            <FaTimes className="text-xl" />
                         </button>
                     </div>
-                    <nav className="flex flex-col">
-                        {navItems.map((item) => (
+                    <nav className="flex flex-col py-2">
+                        {navItems.map((item, index) => (
                             <Link
                                 key={item.path}
                                 to={item.path}
-                                className={`flex items-center p-4 transition-colors duration-200 ${isActive(item.path) ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+                                className={`flex items-center p-4 mx-2 rounded-xl transition-all duration-300 ${
+                                    isActive(item.path) 
+                                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg' 
+                                        : 'hover:bg-gray-700/50 text-gray-300'
+                                }`}
                                 onClick={() => setMobileMenuOpen(false)}
+                                style={{ animationDelay: `${index * 50}ms` }}
                             >
-                                <span className="text-lg mr-3">{item.icon}</span>
-                                <span>{item.name}</span>
+                                <span className={`text-lg mr-3 transition-transform ${isActive(item.path) ? 'scale-110' : ''}`}>
+                                    {item.icon}
+                                </span>
+                                <span className="font-medium">{item.name}</span>
+                                {isActive(item.path) && (
+                                    <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                )}
                             </Link>
                         ))}
                     </nav>

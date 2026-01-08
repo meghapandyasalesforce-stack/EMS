@@ -47,10 +47,20 @@ export const downloadPayslip = createAsyncThunk(
     async (payrollId, { rejectWithValue }) => {
         try {
             const response = await axios.get(`/v1/employee/payroll/download/${payrollId}`, {
-                responseType: 'blob' // For file downloads
+                responseType: 'blob' // Important: expect binary data
             });
-            return response.data;
+            return response.data; // Return blob data
         } catch (error) {
+            // If error response is JSON, try to parse it
+            if (error.response?.data instanceof Blob) {
+                try {
+                    const text = await error.response.data.text();
+                    const errorData = JSON.parse(text);
+                    return rejectWithValue(errorData.message || 'Failed to download payslip');
+                } catch (parseError) {
+                    return rejectWithValue('Failed to download payslip');
+                }
+            }
             return rejectWithValue(error.response?.data?.message || 'Failed to download payslip');
         }
     }

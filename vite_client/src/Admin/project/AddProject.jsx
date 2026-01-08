@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Button,
   TextField,
@@ -16,12 +16,16 @@ import {
   ListItemText,
   Autocomplete,
   useMediaQuery,
-  useTheme
+  useTheme,
+  InputAdornment,
+  Grid
 } from '@mui/material';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchEmployees } from '../../context/employeeSlice';
 import useAddProject from '../../Hooks/useAddProject';
+import { isManager, isHR } from '../../utils/managerHelper';
+import { isExecutive } from '../../utils/navigationConfig';
 
 function AddProject() {
     const dispatch = useDispatch();
@@ -29,62 +33,79 @@ function AddProject() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     
-    // Get employees from Redux store (simplified structure)
-    const { employees, status, error: employeesError } = useSelector((state) => ({
-        employees: state.employees.employees || [],
-        status: state.employees.status,
-        error: state.employees.error
-    }));
+    // Get user and employee from Redux
+    const user = useSelector((state) => state.auth.user);
+    const employee = useSelector((state) => state.employeeDetails.employee);
+    
+    // Get employees from Redux store
+    const employees = useSelector((state) => state.employees.employees || []);
+    const status = useSelector((state) => state.employees.status);
+    const employeesError = useSelector((state) => state.employees.error);
     
     // Project submission status
     const projectStatus = useSelector((state) => state.project.status);
     const projectError = useSelector((state) => state.project.error);
     const addProject = useAddProject();
 
+    // Check if user has permission to create projects
+    const hasPermission = useMemo(() => {
+        const userRole = user?.role || employee?.role;
+        if (userRole === 'admin') return true;
+        const userObj = user || employee;
+        const position = (userObj?.position || '').toLowerCase().trim();
+        const isCEO = position === 'ceo' || position.includes('chief executive');
+        return isManager(userObj) || isHR(userObj) || isCEO || isExecutive(position);
+    }, [user, employee]);
+
+    // Check if user is CEO (for cost tracking access)
+    const isCEO = useMemo(() => {
+        const position = (user?.position || employee?.position || '').toLowerCase().trim();
+        return position === 'ceo' || position.includes('chief executive');
+    }, [user, employee]);
+
     const [form, setForm] = useState({ 
         name: '', 
+        description: '',
         status: 'pending',
-        projectLeader: [],
-        projectMembers: []
+        priority: 'medium',
+        startDate: '',
+        endDate: '',
+        projectLeader: null,
+        projectMembers: [],
+        budget: '',
+        actualCost: '',
+        revenue: '',
+        currency: 'USD',
+        category: '',
+        tags: []
     });
     
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Redirect if no permission
+    useEffect(() => {
+        if (user && !hasPermission) {
+            navigate('/dashboard');
+        }
+    }, [user, hasPermission, navigate]);
+
     // Fetch employees when component mounts
     useEffect(() => {
-        // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
-        // Check authentication via role from localStorage (UI state only)
-        const userRole = localStorage.getItem('role'); // UI state only, not sensitive
-        // Removed console.log statements for production
-        
-        if (userRole !== 'admin') {
-            // Removed console.error for production
-            setError('You must be logged in as an admin to access this feature');
-            return;
-        }
-        
-        if (status === 'idle') {
+        if (hasPermission && status === 'idle') {
             dispatch(fetchEmployees());
         }
-    }, [status, dispatch]);
+    }, [status, dispatch, hasPermission]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const handleLeaderSelect = (employeeId) => {
-        if (form.projectLeader.includes(employeeId)) {
-            setForm({
-                ...form,
-                projectLeader: [] // Clear selection if clicking the same leader
-            });
-        } else {
-            setForm({
-                ...form,
-                projectLeader: [employeeId] // Only allow one leader
-            });
-        }
+    const handleLeaderChange = (event, newValue) => {
+        setForm({
+            ...form,
+            projectLeader: newValue ? newValue._id : null
+        });
         setError('');
     };
 
@@ -107,22 +128,44 @@ function AddProject() {
         setError('');
 
         // Validate
-        if (!form.name) {
+        if (!form.name.trim()) {
             setError('Project name is required');
             return;
         }
 
-        if (form.projectLeader.length === 0) {
+        if (!form.projectLeader) {
             setError('Please select a project leader');
             return;
         }
 
-        // Prepare data for backend - projectLeader should be a single ObjectId, not an array
+        // Validate dates
+        if (form.startDate && form.endDate) {
+            const start = new Date(form.startDate);
+            const end = new Date(form.endDate);
+            if (end < start) {
+                setError('End date must be after start date');
+                return;
+            }
+        }
+
+        // Prepare data for backend
         const projectData = {
-            name: form.name,
+            name: form.name.trim(),
+            description: form.description.trim() || undefined,
             status: form.status,
-            projectLeader: form.projectLeader[0], // Take the first selected leader
-            projectMembers: form.projectMembers
+            priority: form.priority,
+            startDate: form.startDate || undefined,
+            endDate: form.endDate || undefined,
+            projectLeader: form.projectLeader,
+            projectMembers: form.projectMembers,
+            ...(isCEO && {
+                budget: form.budget ? parseFloat(form.budget) : 0,
+                actualCost: form.actualCost ? parseFloat(form.actualCost) : 0,
+                revenue: form.revenue ? parseFloat(form.revenue) : 0,
+                currency: form.currency || 'USD'
+            }),
+            category: form.category || undefined,
+            tags: form.tags || []
         };
 
         // Removed console.log for production
@@ -130,7 +173,16 @@ function AddProject() {
         const result = await addProject(projectData);
 
         if (result.success) {
-            navigate('/dashboard-admin');
+            const userRole = user?.role || employee?.role;
+            if (userRole === 'admin') {
+                navigate('/dashboard-admin');
+            } else if (isManager(user || employee)) {
+                navigate('/dashboard-manager');
+            } else if (isHR(user || employee)) {
+                navigate('/dashboard-hr');
+            } else {
+                navigate('/dashboard');
+            }
         } else {
             setError(result.error?.message || 'Failed to add project');
         }
@@ -141,6 +193,9 @@ function AddProject() {
         const employee = employees.find(emp => emp._id === id);
         return employee ? `${employee.name} ${employee.lastName}` : '';
     };
+
+    // Get selected leader employee object
+    const selectedLeader = employees.find(emp => emp._id === form.projectLeader);
 
     // Filter employees based on search term and position
     const filteredEmployees = employees.filter(employee => 
@@ -157,6 +212,16 @@ function AddProject() {
     );
 
     // Removed console.log statements for production
+
+    if (!hasPermission) {
+        return (
+            <Box p={2}>
+                <Alert severity="error">
+                    You do not have permission to create projects. Only Admins, Managers, and HR can create projects.
+                </Alert>
+            </Box>
+        );
+    }
 
     if (status === 'loading') {
         return (
@@ -208,14 +273,6 @@ function AddProject() {
                 </Alert>
             )}
             
-            {/* Authentication Status Debug */}
-            <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Debug Info:</strong><br/>
-                Role: {localStorage.getItem('role') || 'Not set'}<br/>
-                Token: {'In httpOnly cookie (not accessible via JS)'}<br/>
-                Cookies: {document.cookie ? 'Present (httpOnly cookies not shown)' : 'None'}
-            </Alert>
-            
             {projectStatus === 'loading' && (
                 <Box display="flex" justifyContent="center" p={2}>
                     <CircularProgress />
@@ -240,66 +297,111 @@ function AddProject() {
                         sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
                     />
                     
-                    <FormControl fullWidth margin="normal" sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}>
-                        <InputLabel>Project Status</InputLabel>
-                        <Select
-                            name="status"
-                            value={form.status}
-                            onChange={handleChange}
-                            label="Project Status"
-                            required
-                        >
-                            <MenuItem value="pending">Pending</MenuItem>
-                            <MenuItem value="in-progress">In Progress</MenuItem>
-                            <MenuItem value="completed">Completed</MenuItem>
-                            <MenuItem value="on-hold">On Hold</MenuItem>
-                        </Select>
-                    </FormControl>
+                    <TextField
+                        fullWidth
+                        label="Description"
+                        name="description"
+                        value={form.description}
+                        onChange={handleChange}
+                        margin="normal"
+                        multiline
+                        rows={3}
+                        sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                    />
                     
-                    {/* Project Leaders Section */}
+                    <Box display="flex" gap={2} sx={{ [theme.breakpoints.down('md')]: { flexDirection: 'column' } }}>
+                        <FormControl fullWidth margin="normal" sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}>
+                            <InputLabel>Project Status</InputLabel>
+                            <Select
+                                name="status"
+                                value={form.status}
+                                onChange={handleChange}
+                                label="Project Status"
+                                required
+                            >
+                                <MenuItem value="pending">Pending</MenuItem>
+                                <MenuItem value="in-progress">In Progress</MenuItem>
+                                <MenuItem value="completed">Completed</MenuItem>
+                                <MenuItem value="on-hold">On Hold</MenuItem>
+                            </Select>
+                        </FormControl>
+                        
+                        <FormControl fullWidth margin="normal" sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}>
+                            <InputLabel>Priority</InputLabel>
+                            <Select
+                                name="priority"
+                                value={form.priority}
+                                onChange={handleChange}
+                                label="Priority"
+                            >
+                                <MenuItem value="low">Low</MenuItem>
+                                <MenuItem value="medium">Medium</MenuItem>
+                                <MenuItem value="high">High</MenuItem>
+                                <MenuItem value="critical">Critical</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Box>
+                    
+                    <Box display="flex" gap={2} sx={{ [theme.breakpoints.down('md')]: { flexDirection: 'column' } }}>
+                        <TextField
+                            fullWidth
+                            label="Start Date"
+                            name="startDate"
+                            type="date"
+                            value={form.startDate}
+                            onChange={handleChange}
+                            margin="normal"
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                        />
+                        
+                        <TextField
+                            fullWidth
+                            label="End Date"
+                            name="endDate"
+                            type="date"
+                            value={form.endDate}
+                            onChange={handleChange}
+                            margin="normal"
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                        />
+                    </Box>
+                    
+                    {/* Project Leader Section */}
                     <Box mt={3} sx={{ [theme.breakpoints.down('md')]: { marginTop: 2 } }}>
                         <Typography variant="h6" gutterBottom sx={{ [theme.breakpoints.down('md')]: { fontSize: '1.1rem' } }}>
-                            Project Leaders (Max 2)
+                            Project Leader <span style={{ color: 'red' }}>*</span>
                         </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                            {form.projectLeader.map(id => (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Select one project leader for this project.
+                        </Typography>
+                        {selectedLeader && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                                 <Chip
-                                    key={id}
-                                    label={getEmployeeName(id)}
-                                    onDelete={() => handleLeaderSelect(id)}
+                                    label={`${selectedLeader.name} ${selectedLeader.lastName}`}
+                                    onDelete={() => setForm({ ...form, projectLeader: null })}
                                     color="primary"
                                     size={isMobile ? 'small' : 'medium'}
                                 />
-                            ))}
-                        </Box>
+                            </Box>
+                        )}
                         <Autocomplete
-                            multiple
                             options={filteredEmployees}
                             getOptionLabel={(employee) => `${employee.name} ${employee.lastName}`}
-                            value={employees.filter(emp => form.projectLeader.includes(emp._id))}
-                            onChange={(event, newValue) => {
-                                if (newValue.length <= 2) {
-                                    setForm({
-                                        ...form,
-                                        projectLeader: newValue.map(emp => emp._id)
-                                    });
-                                    setError('');
-                                } else {
-                                    setError('Maximum 2 leaders can be selected');
-                                }
-                            }}
+                            value={selectedLeader || null}
+                            onChange={handleLeaderChange}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
-                                    label="Search and select leaders"
+                                    label="Search and select project leader"
                                     placeholder="Type to search employees"
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    required
                                     size={isMobile ? 'small' : 'medium'}
                                 />
                             )}
-                            renderOption={(props, employee, { selected }) => (
+                            renderOption={(props, employee) => (
                                 <MenuItem {...props} key={employee._id}>
-                                    <Checkbox checked={form.projectLeader.includes(employee._id)} size={isMobile ? 'small' : 'medium'} />
                                     <ListItemText 
                                         primary={`${employee.name} ${employee.lastName}`}
                                         secondary={`${employee.position} - ${employee.department}`}
@@ -310,16 +412,6 @@ function AddProject() {
                                     />
                                 </MenuItem>
                             )}
-                            renderTags={(value, getTagProps) =>
-                                value.map((employee, index) => (
-                                    <Chip
-                                        {...getTagProps({ index })}
-                                        key={employee._id}
-                                        label={`${employee.name} ${employee.lastName}`}
-                                        size={isMobile ? 'small' : 'medium'}
-                                    />
-                                ))
-                            }
                         />
                     </Box>
                     
@@ -387,6 +479,97 @@ function AddProject() {
                             }
                         />
                     </Box>
+
+                    {/* Cost Tracking Section (CEO Only) */}
+                    {isCEO && (
+                        <Box mt={3} sx={{ [theme.breakpoints.down('md')]: { marginTop: 2 }, p: 2, bgcolor: '#e3f2fd', borderRadius: 2 }}>
+                            <Typography variant="h6" gutterBottom sx={{ [theme.breakpoints.down('md')]: { fontSize: '1.1rem' } }}>
+                                Cost Tracking <Chip label="CEO Only" size="small" color="primary" sx={{ ml: 1 }} />
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                Track project budget, costs, and revenue.
+                            </Typography>
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Budget"
+                                        name="budget"
+                                        type="number"
+                                        value={form.budget}
+                                        onChange={handleChange}
+                                        margin="normal"
+                                        InputProps={{
+                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
+                                        }}
+                                        sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth margin="normal">
+                                        <InputLabel>Currency</InputLabel>
+                                        <Select
+                                            name="currency"
+                                            value={form.currency}
+                                            onChange={handleChange}
+                                            label="Currency"
+                                        >
+                                            <MenuItem value="USD">USD</MenuItem>
+                                            <MenuItem value="EUR">EUR</MenuItem>
+                                            <MenuItem value="GBP">GBP</MenuItem>
+                                            <MenuItem value="INR">INR</MenuItem>
+                                            <MenuItem value="CAD">CAD</MenuItem>
+                                            <MenuItem value="AUD">AUD</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Actual Cost"
+                                        name="actualCost"
+                                        type="number"
+                                        value={form.actualCost}
+                                        onChange={handleChange}
+                                        margin="normal"
+                                        InputProps={{
+                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
+                                        }}
+                                        sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Revenue"
+                                        name="revenue"
+                                        type="number"
+                                        value={form.revenue}
+                                        onChange={handleChange}
+                                        margin="normal"
+                                        InputProps={{
+                                            startAdornment: <InputAdornment position="start">$</InputAdornment>
+                                        }}
+                                        sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                                    />
+                                </Grid>
+                            </Grid>
+                        </Box>
+                    )}
+
+                    {/* Category */}
+                    <Box mt={3} sx={{ [theme.breakpoints.down('md')]: { marginTop: 2 } }}>
+                        <TextField
+                            fullWidth
+                            label="Category"
+                            name="category"
+                            value={form.category}
+                            onChange={handleChange}
+                            margin="normal"
+                            placeholder="e.g., Development, Marketing, Research"
+                            sx={{ [theme.breakpoints.down('md')]: { marginBottom: 2 } }}
+                        />
+                    </Box>
                     
                     <Box mt={4} display="flex" justifyContent="space-between" sx={{ 
                         [theme.breakpoints.down('md')]: { 
@@ -407,8 +590,18 @@ function AddProject() {
                         </Button>
                         
                         <Button 
-                            component={Link}
-                            to="/dashboard-admin"
+                            onClick={() => {
+                                const userRole = user?.role || employee?.role;
+                                if (userRole === 'admin') {
+                                    navigate('/dashboard-admin');
+                                } else if (isManager(user || employee)) {
+                                    navigate('/dashboard-manager');
+                                } else if (isHR(user || employee)) {
+                                    navigate('/dashboard-hr');
+                                } else {
+                                    navigate('/dashboard');
+                                }
+                            }}
                             variant="outlined"
                             color="secondary"
                             fullWidth={isMobile}

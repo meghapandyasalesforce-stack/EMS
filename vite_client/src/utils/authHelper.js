@@ -79,25 +79,33 @@ export const isAuthenticated = () => {
 };
 
 /**
- * Get user role from Redux store or localStorage (UI state only)
+ * Get user role from cookie or localStorage (UI state only)
  * Role is not sensitive data, but should come from JWT token ideally
+ * Priority: Cookie (set during login) > localStorage (UI state)
  * 
  * @returns {string|null} User role if found, null otherwise
  */
 export const getUserRole = () => {
-  // Try to get from Redux store first (if available)
-  if (typeof window !== 'undefined' && window.__REDUX_STORE__) {
+  // Priority 1: Get from cookie (set during login in Auth components)
+  if (typeof document !== 'undefined') {
     try {
-      const state = window.__REDUX_STORE__.getState();
-      return state?.auth?.user?.role || null;
+      const cookies = document.cookie.split('; ');
+      const roleCookie = cookies.find(c => c.startsWith('role='));
+      if (roleCookie) {
+        return roleCookie.split('=')[1];
+      }
     } catch {
-      // Fallback to localStorage (UI state only)
+      // Continue to fallback
     }
   }
   
-  // Fallback to localStorage (acceptable for UI state)
+  // Priority 2: Fallback to localStorage (acceptable for UI state)
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('role');
+    try {
+      return localStorage.getItem('role');
+    } catch {
+      // localStorage access failed
+    }
   }
   
   return null;

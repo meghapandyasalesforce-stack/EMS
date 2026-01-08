@@ -13,7 +13,30 @@ const AttendanceRules = () => {
         enableCompOff: true,
         autoApprove: false,
         enableSimplePunches: false,
-        enablePenaltyRules: true
+        enablePenaltyRules: true,
+        // New fields
+        officeHours: {
+            startTime: '09:00',
+            endTime: '17:00'
+        },
+        checkInOutTimes: {
+            checkInStartTime: '09:00',
+            checkInEndTime: '10:00',
+            checkOutStartTime: '17:00',
+            checkOutEndTime: '18:00',
+            checkInGracePeriod: 15,
+            checkOutGracePeriod: 30
+        },
+        autoCheckOut: {
+            enabled: false,
+            time: '18:00',
+            notifyBeforeMinutes: 15
+        },
+        timeStop: {
+            enabled: false,
+            time: '20:00',
+            action: 'auto_checkout'
+        }
     });
 
     const [mapKey, setMapKey] = useState(Date.now());
@@ -32,22 +55,40 @@ const AttendanceRules = () => {
             const response = await axios.get('/v1/admin/attendance-rules/current');
 
             if (response.data.success && response.data.rule) {
-                // Removed console.log statements for production
-                
+                const rule = response.data.rule;
                 const newFormData = {
-                    location: response.data.rule.location || '',
-                    address: response.data.rule.address || '',
-                    coordinates: response.data.rule.coordinates || { latitude: 0, longitude: 0 },
-                    maximumRadius: response.data.rule.maximumRadius || 500,
-                    enableCompOff: response.data.rule.enableCompOff !== undefined ? response.data.rule.enableCompOff : true,
-                    autoApprove: response.data.rule.autoApprove !== undefined ? response.data.rule.autoApprove : false,
-                    enableSimplePunches: response.data.rule.enableSimplePunches !== undefined ? response.data.rule.enableSimplePunches : false,
-                    enablePenaltyRules: response.data.rule.enablePenaltyRules !== undefined ? response.data.rule.enablePenaltyRules : true
+                    location: rule.location || '',
+                    address: rule.address || '',
+                    coordinates: rule.coordinates || { latitude: 0, longitude: 0 },
+                    maximumRadius: rule.maximumRadius || 500,
+                    enableCompOff: rule.enableCompOff !== undefined ? rule.enableCompOff : true,
+                    autoApprove: rule.autoApprove !== undefined ? rule.autoApprove : false,
+                    enableSimplePunches: rule.enableSimplePunches !== undefined ? rule.enableSimplePunches : false,
+                    enablePenaltyRules: rule.enablePenaltyRules !== undefined ? rule.enablePenaltyRules : true,
+                    // New fields
+                    officeHours: rule.officeHours || { startTime: '09:00', endTime: '17:00' },
+                    checkInOutTimes: rule.checkInOutTimes || {
+                        checkInStartTime: '09:00',
+                        checkInEndTime: '10:00',
+                        checkOutStartTime: '17:00',
+                        checkOutEndTime: '18:00',
+                        checkInGracePeriod: 15,
+                        checkOutGracePeriod: 30
+                    },
+                    autoCheckOut: rule.autoCheckOut || {
+                        enabled: false,
+                        time: '18:00',
+                        notifyBeforeMinutes: 15
+                    },
+                    timeStop: rule.timeStop || {
+                        enabled: false,
+                        time: '20:00',
+                        action: 'auto_checkout'
+                    }
                 };
                 
-                // Removed console.log for production
                 setFormData(newFormData);
-                setHasAddress(!!response.data.rule.address);
+                setHasAddress(!!rule.address);
             }
         } catch (error) {
             if (error.response?.status !== 404) {
@@ -105,6 +146,27 @@ const AttendanceRules = () => {
         setFormData(prev => ({
             ...prev,
             [feature]: !prev[feature]
+        }));
+    };
+
+    const handleTimeChange = (section, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [section]: {
+                ...prev[section],
+                [field]: value
+            }
+        }));
+    };
+
+    const handleNumberChange = (section, field, value) => {
+        const numValue = parseInt(value) || 0;
+        setFormData(prev => ({
+            ...prev,
+            [section]: {
+                ...prev[section],
+                [field]: numValue
+            }
         }));
     };
 
@@ -328,6 +390,227 @@ const AttendanceRules = () => {
                             </div>
                         </div>
 
+                        {/* Office Hours Section */}
+                        <div className="mb-8 border-t pt-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Office Hours</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Office Start Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.officeHours.startTime}
+                                        onChange={(e) => handleTimeChange('officeHours', 'startTime', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Office End Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.officeHours.endTime}
+                                        onChange={(e) => handleTimeChange('officeHours', 'endTime', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Check-In/Check-Out Times Section */}
+                        <div className="mb-8 border-t pt-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Check-In & Check-Out Times</h3>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Check-In Start Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.checkInOutTimes.checkInStartTime}
+                                        onChange={(e) => handleTimeChange('checkInOutTimes', 'checkInStartTime', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Check-In End Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.checkInOutTimes.checkInEndTime}
+                                        onChange={(e) => handleTimeChange('checkInOutTimes', 'checkInEndTime', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Check-Out Start Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.checkInOutTimes.checkOutStartTime}
+                                        onChange={(e) => handleTimeChange('checkInOutTimes', 'checkOutStartTime', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Check-Out End Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.checkInOutTimes.checkOutEndTime}
+                                        onChange={(e) => handleTimeChange('checkInOutTimes', 'checkOutEndTime', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Grace Periods */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Check-In Grace Period (minutes)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="120"
+                                        value={formData.checkInOutTimes.checkInGracePeriod}
+                                        onChange={(e) => handleNumberChange('checkInOutTimes', 'checkInGracePeriod', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Employees can check-in within this grace period without penalty</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Check-Out Grace Period (minutes)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="120"
+                                        value={formData.checkInOutTimes.checkOutGracePeriod}
+                                        onChange={(e) => handleNumberChange('checkInOutTimes', 'checkOutGracePeriod', e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Employees can check-out within this grace period without penalty</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Auto Check-Out Section */}
+                        <div className="mb-8 border-t pt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">Auto Check-Out</h3>
+                                    <p className="text-sm text-gray-600">Automatically check out employees at a specific time</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleTimeChange('autoCheckOut', 'enabled', !formData.autoCheckOut.enabled)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                        formData.autoCheckOut.enabled ? 'bg-blue-600' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                            formData.autoCheckOut.enabled ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {formData.autoCheckOut.enabled && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Auto Check-Out Time
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={formData.autoCheckOut.time}
+                                            onChange={(e) => handleTimeChange('autoCheckOut', 'time', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Notify Before (minutes)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="5"
+                                            max="60"
+                                            value={formData.autoCheckOut.notifyBeforeMinutes}
+                                            onChange={(e) => handleNumberChange('autoCheckOut', 'notifyBeforeMinutes', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Send notification X minutes before auto check-out</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Time Stop Section */}
+                        <div className="mb-8 border-t pt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">Time Stop</h3>
+                                    <p className="text-sm text-gray-600">Stop time tracking after a specific time</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleTimeChange('timeStop', 'enabled', !formData.timeStop.enabled)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                        formData.timeStop.enabled ? 'bg-blue-600' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                            formData.timeStop.enabled ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {formData.timeStop.enabled && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Time Stop Time
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={formData.timeStop.time}
+                                            onChange={(e) => handleTimeChange('timeStop', 'time', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Action When Time Stops
+                                        </label>
+                                        <select
+                                            value={formData.timeStop.action}
+                                            onChange={(e) => handleTimeChange('timeStop', 'action', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="stop_tracking">Stop Tracking</option>
+                                            <option value="auto_checkout">Auto Check-Out</option>
+                                            <option value="warning">Send Warning</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Feature Toggles */}
                         <div className="space-y-4 mb-8">

@@ -361,9 +361,19 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Invalid employee ID' });
     }
 
+    // Get organizationId from admin user
+    const organizationId = req.user?.organizationId;
+    if (!organizationId) {
+      return res.status(400).json({ message: 'Organization ID is required' });
+    }
+
     // Fetch employee and include active status and salary
     // Use lean() to get plain object and explicitly ensure salary is included
-    const employee = await Employee.findById(employeeId)
+    // Filter by organizationId for multi-tenancy
+    const employee = await Employee.findOne({ 
+      _id: employeeId,
+      organizationId 
+    })
       .select('-password -role') // Exclude only password and role
       .lean(); // Get plain JavaScript object (no Mongoose document methods)
 
@@ -434,6 +444,76 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
         res.status(500).json({ 
             message: 'Failed to fetch employee data.',
             error: error.message,
+        });
+    }
+};
+
+// Update location permission status
+export const updateLocationPermission = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const { status } = req.body;
+
+        if (!employeeId) {
+            return res.status(401).json({ 
+                message: 'Unauthorized. Please log in.' 
+            });
+        }
+
+        // Validate status
+        const validStatuses = ['granted', 'denied', 'prompt', 'not-requested'];
+        if (!status || !validStatuses.includes(status)) {
+            return res.status(400).json({ 
+                message: 'Invalid permission status. Must be one of: granted, denied, prompt, not-requested' 
+            });
+        }
+
+        // Prepare update object
+        const updateData = {
+            'locationPermission.status': status,
+            'locationPermission.lastCheckedAt': new Date()
+        };
+
+        // Set grantedAt or deniedAt based on status
+        if (status === 'granted') {
+            updateData['locationPermission.grantedAt'] = new Date();
+            // Clear deniedAt if it was previously denied
+            updateData['locationPermission.deniedAt'] = null;
+        } else if (status === 'denied') {
+            updateData['locationPermission.deniedAt'] = new Date();
+            // Clear grantedAt if it was previously granted
+            updateData['locationPermission.grantedAt'] = null;
+        }
+
+        const updatedEmployee = await Employee.findByIdAndUpdate(
+            employeeId,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).select('locationPermission');
+
+        if (!updatedEmployee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        logger.info('Location permission updated', { 
+            employeeId, 
+            status,
+            timestamp: new Date()
+        });
+
+        res.status(200).json({
+            message: 'Location permission status updated successfully',
+            locationPermission: updatedEmployee.locationPermission
+        });
+
+    } catch (error) {
+        logger.error('Error updating location permission', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        res.status(500).json({ 
+            message: 'Failed to update location permission',
+            error: error.message
         });
     }
 };

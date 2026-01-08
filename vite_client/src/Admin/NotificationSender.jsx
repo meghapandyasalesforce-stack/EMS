@@ -32,11 +32,20 @@ const NotificationSender = () => {
   };
 
   return (
-    <div className="p-6 rounded-xl shadow-md bg-white w-full">
+    <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 w-full">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">Send Announcement</h2>
+        <div>
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Send Announcement</h2>
+          <p className="text-xs text-gray-500">Broadcast important messages to all employees</p>
+        </div>
         <div className="flex items-center space-x-2">
-          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+            message.length > 450 
+              ? 'bg-red-100 text-red-800' 
+              : message.length > 400 
+              ? 'bg-yellow-100 text-yellow-800'
+              : 'bg-blue-100 text-blue-800'
+          }`}>
             {message.length}/500
           </span>
         </div>
@@ -44,7 +53,7 @@ const NotificationSender = () => {
       
       <textarea
         rows={4}
-        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-4 transition-all"
+        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-4 transition-all resize-none text-sm"
         placeholder="Type your important announcement here..."
         value={message}
         onChange={(e) => setMessage(e.target.value.slice(0, 500))}
@@ -63,11 +72,11 @@ const NotificationSender = () => {
         <button
           onClick={handleSend}
           disabled={status === 'loading' || !message.trim()}
-          className={`px-5 py-2 rounded-lg font-medium transition-all ${
-            status === 'loading'
+          className={`px-4 py-2 rounded-md font-medium transition-colors ${
+            status === 'loading' || !message.trim()
               ? 'bg-blue-400 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700'
-          } text-white shadow-sm`}
+          } text-white text-sm`}
         >
           {status === 'loading' ? (
             <span className="flex items-center">

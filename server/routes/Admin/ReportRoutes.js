@@ -7,7 +7,9 @@ import {
     updateReport,
     deleteReport
 } from '../../controllers/report/reportController.js';
+import { exportReportPDF } from '../../controllers/admin/pdfExportController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
+import { exportLimiter } from '../../middlewares/endpointRateLimiters.js';
 
 const router = express.Router();
 
@@ -18,6 +20,9 @@ router.get('/:id', isAdminAuthenticated, getReportById);
 router.post('/:id/regenerate', isAdminAuthenticated, regenerateReport);
 router.put('/:id', isAdminAuthenticated, updateReport);
 router.delete('/:id', isAdminAuthenticated, deleteReport);
+
+// PDF Export route
+router.post('/export-pdf', isAdminAuthenticated, exportLimiter, exportReportPDF);
 
 export default router;
 

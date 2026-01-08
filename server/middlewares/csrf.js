@@ -1,7 +1,10 @@
 import crypto from 'crypto';
+import { verifyToken } from './authHelpers.js';
+import { getCsrfToken } from '../helpers/csrfTokenStore.js';
+import logger from '../helpers/logger.js';
 
 // Enhanced double-submit CSRF protection with timing-safe comparison
-export default function csrfProtection(req, res, next) {
+export default async function csrfProtection(req, res, next) {
     const method = req.method.toUpperCase();
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
         return next();
@@ -19,6 +22,8 @@ export default function csrfProtection(req, res, next) {
         '/api/v1/admin/auth/register',
         '/api/v1/organization/auth/register',
         '/api/v1/organization/auth/login',
+        '/api/v1/employee/auth/refresh-token', // Refresh token endpoint (no CSRF needed)
+        '/api/v1/admin/auth/refresh-token', // Refresh token endpoint (no CSRF needed)
         '/api/v1/both/password', // forgot/reset password endpoints under this prefix
     ].some((path) => normalizedUrl.startsWith(path));
     
@@ -44,6 +49,7 @@ export default function csrfProtection(req, res, next) {
     if (hasAuthHeader) {
         // CSRF header is required - Authorization header alone is not sufficient
         if (!csrfHeader) {
+            logger.warn('CSRF token missing in header for authenticated request', { requestId: req.id, path: req.path });
             return res.status(403).json({ 
                 success: false, 
                 message: 'CSRF token required for authenticated requests',
@@ -52,13 +58,53 @@ export default function csrfProtection(req, res, next) {
         }
         // Validate token format (should be 64 hex characters for 32-byte token)
         if (!/^[a-f0-9]{64}$/i.test(csrfHeader)) {
+            logger.warn('Invalid CSRF token format in header', { requestId: req.id, path: req.path });
             return res.status(403).json({ 
                 success: false, 
                 message: 'Invalid CSRF token format',
                 code: 'INVALID_CSRF_FORMAT'
             });
         }
-        // CSRF token present and valid format, allow the request
+        
+        // SECURITY ENHANCEMENT: Validate token was issued by our server
+        try {
+            const token = req.headers.authorization.replace('Bearer ', '');
+            const decoded = verifyToken(token); // This will throw if token is invalid/expired
+            const userId = decoded.userId;
+            
+            const storedCsrfToken = await getCsrfToken(userId.toString());
+            
+            if (!storedCsrfToken || csrfHeader.length !== storedCsrfToken.length || !crypto.timingSafeEqual(Buffer.from(csrfHeader), Buffer.from(storedCsrfToken))) {
+                logger.warn('Invalid or mismatched CSRF token (Authorization header scenario)', { 
+                    requestId: req.id, 
+                    path: req.path, 
+                    userId,
+                    hasStoredToken: !!storedCsrfToken
+                });
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Invalid or mismatched CSRF token',
+                    code: 'CSRF_TOKEN_MISMATCH'
+                });
+            }
+        } catch (error) {
+            // If JWT is invalid, the auth middleware will catch it later
+            // For CSRF, we just need to know if we can get a userId to check the stored token
+            if (error.name === 'TokenExpiredError' || error.name === 'JsonWebTokenError') {
+                // Let the main auth middleware handle JWT errors
+                return next();
+            }
+            logger.warn('CSRF validation failed during token decoding', { 
+                requestId: req.id, 
+                path: req.path, 
+                error: error.message 
+            });
+            return res.status(403).json({ 
+                success: false, 
+                message: 'CSRF validation failed',
+                code: 'CSRF_VALIDATION_ERROR'
+            });
+        }
         return next();
     }
 

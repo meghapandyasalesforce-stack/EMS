@@ -4,6 +4,7 @@ import Attendance from "../../models/attendance.model.js";
 import Leave from "../../models/leave.model.js";
 import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
+import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerMatchQuery } from "../../helpers/managerHelper.js";
 
 
 
@@ -99,13 +100,20 @@ export const getEmployeePayroll = async (req, res) => {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        // Try to find visible payroll
-        let payroll = await Payroll.findOne({
+        // Import organization helper for multi-tenancy support
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        
+        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
+        const query = addOrganizationFilter(req, {
             employeeId,
             month,
             year,
             isVisible: true
-        }).populate('employeeId', 'name designation salary jobTitle department');
+        });
+
+        // Try to find visible payroll
+        let payroll = await Payroll.findOne(query)
+            .populate('employeeId', 'name designation salary jobTitle department');
 
         // If not found, create a default payroll
         if (!payroll) {
@@ -162,22 +170,49 @@ export const getEmployeePayroll = async (req, res) => {
 // Get all payrolls for a specific month and year (for employees - only visible ones)
 export const getAllPayrolls = async (req, res) => {
     try {
+        // Import organization helper for multi-tenancy support
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        
         const { month, year } = req.query;
         const isAdmin = req.user?.role === 'admin';
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
         
-        // Build query - employees only see visible payrolls
-        const query = { month, year };
+        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
+        const query = addOrganizationFilter(req, { month, year });
+        
         if (!isAdmin) {
             query.isVisible = true;
+        }
+
+        // If user is a manager, filter by manager field
+        // Example: Manager "Arun Kumar" sees payrolls for employees with manager="Arun Kumar" or "Arun"
+        if (isManager && req.employee) {
+            const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+            const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
+            query.employeeId = { $in: managerEmployeeIds };
+            
+            const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+            logger.info('Manager filtering payrolls by manager field', {
+                managerId: req.employee._id,
+                managerName: managerName,
+                employeeCount: managerEmployeeIds.length
+            });
         }
 
         const payrolls = await Payroll.find(query)
             .populate('employeeId', 'name designation salary jobTitle department');
 
-        res.json(payrolls);
+        res.json({
+            success: true,
+            payrolls: payrolls,
+            message: 'Payrolls retrieved successfully'
+        });
     } catch (error) {
         logger.error('Get All Payrolls Error', { error: error.message, stack: error.stack });
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ 
+            success: false,
+            message: error.message 
+        });
     }
 };
 
@@ -222,15 +257,51 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
         const { employeeId } = req.params;
         const { page = 1, limit = 12 } = req.query;
 
+        // If user is a manager (not admin or HR), verify employee is linked to them
+        // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManager && req.employee) {
+            const employee = await Employee.findById(employeeId).select('manager').lean();
+            if (!employee) {
+                return res.status(404).json({ 
+                    success: false,
+                    message: 'Employee not found.' 
+                });
+            }
+            
+            // Check if employee's manager field matches this manager
+            const isLinked = isEmployeeLinkedToManager(employee, req.employee);
+            
+            if (!isLinked) {
+                const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+                logger.warn('Manager trying to access payroll for unlinked employee', {
+                    managerId: req.employee._id,
+                    managerName: managerName,
+                    employeeManager: employee.manager,
+                    employeeId: employeeId
+                });
+                return res.status(403).json({ 
+                    success: false,
+                    message: 'You can only view payroll for employees linked to you.' 
+                });
+            }
+        }
+
         const skip = (page - 1) * limit;
 
-        const payrolls = await Payroll.find({ employeeId })
+        // Import organization helper for multi-tenancy support
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        
+        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
+        const query = addOrganizationFilter(req, { employeeId });
+
+        const payrolls = await Payroll.find(query)
             .sort({ year: -1, month: -1 })
             .skip(skip)
             .limit(parseInt(limit))
             .populate('employeeId', 'name lastName email jobTitle department employeeId');
 
-        const total = await Payroll.countDocuments({ employeeId });
+        const total = await Payroll.countDocuments(query);
 
         res.json({
             payrolls,
@@ -248,12 +319,49 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
 export const getPayrollByEmployeeMonthYear = async (req, res) => {
     try {
         const { employeeId, month, year } = req.params;
+
+        // If user is a manager (not admin or HR), verify employee is linked to them
+        // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManager && req.employee) {
+            const employee = await Employee.findById(employeeId).select('manager').lean();
+            if (!employee) {
+                return res.status(404).json({ 
+                    success: false,
+                    message: 'Employee not found.' 
+                });
+            }
+            
+            // Check if employee's manager field matches this manager
+            const isLinked = isEmployeeLinkedToManager(employee, req.employee);
+            
+            if (!isLinked) {
+                const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+                logger.warn('Manager trying to access payroll for unlinked employee', {
+                    managerId: req.employee._id,
+                    managerName: managerName,
+                    employeeManager: employee.manager,
+                    employeeId: employeeId
+                });
+                return res.status(403).json({ 
+                    success: false,
+                    message: 'You can only view payroll for employees linked to you.' 
+                });
+            }
+        }
         
-        const payroll = await Payroll.findOne({
+        // Import organization helper for multi-tenancy support
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        
+        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
+        const query = addOrganizationFilter(req, {
             employeeId,
             month: decodeURIComponent(month),
             year: parseInt(year)
-        }).populate('employeeId', 'name lastName email jobTitle department employeeId');
+        });
+        
+        const payroll = await Payroll.findOne(query)
+            .populate('employeeId', 'name lastName email jobTitle department employeeId');
 
         if (!payroll) {
             return res.status(404).json({ message: 'Payroll not found' });
@@ -270,6 +378,37 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
 export const getCurrentMonthPayrollForAdmin = async (req, res) => {
     try {
         const { employeeId } = req.params;
+        
+        // If user is a manager (not admin or HR), verify employee is linked to them
+        // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManager && req.employee) {
+            const employee = await Employee.findById(employeeId).select('manager').lean();
+            if (!employee) {
+                return res.status(404).json({ 
+                    success: false,
+                    message: 'Employee not found.' 
+                });
+            }
+            
+            // Check if employee's manager field matches this manager
+            const isLinked = isEmployeeLinkedToManager(employee, req.employee);
+            
+            if (!isLinked) {
+                const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+                logger.warn('Manager trying to access payroll for unlinked employee', {
+                    managerId: req.employee._id,
+                    managerName: managerName,
+                    employeeManager: employee.manager,
+                    employeeId: employeeId
+                });
+                return res.status(403).json({ 
+                    success: false,
+                    message: 'You can only view payroll for employees linked to you.' 
+                });
+            }
+        }
+        
         const currentDate = new Date();
         const month = currentDate.toLocaleString('default', { month: 'long' });
         const year = currentDate.getFullYear();
@@ -344,45 +483,84 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
     }
 };
 
-// Get all employees' payroll data for admin
+// Get all employees' payroll data for admin (Optimized - No N+1 queries)
 export const getAllEmployeesPayroll = async (req, res) => {
     try {
-        // Get all employees with salary set
-        const employees = await Employee.find({ salary: { $exists: true } })
-            .select('name salary designation jobTitle department');
+        const { parsePagination, sendPaginatedResponse } = await import('../../helpers/paginationHelper.js');
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        
+        // Parse pagination
+        const { page, limit, skip } = parsePagination(req, { defaultLimit: 20, maxLimit: 100 });
 
         // Use current month/year if not provided
         const month = req.query.month || new Date().toLocaleString('default', { month: 'long' });
         const year = parseInt(req.query.year) || new Date().getFullYear();
 
+        // Build query with organization filter
+        const query = addOrganizationFilter(req, { salary: { $exists: true } });
+
+        // If user is a manager (not admin or HR), filter by manager field
+        // Example: Manager "Arun Kumar" sees payrolls for employees with manager="Arun Kumar" or "Arun"
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManager && req.employee) {
+            const managerQuery = buildManagerMatchQuery(req.employee);
+            if (managerQuery && managerQuery.$or) {
+                query.$or = managerQuery.$or;
+            }
+            query.status = 'active'; // Only active employees for managers
+            
+            const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+            logger.info('Manager filtering employee payrolls by manager field', {
+                managerId: req.employee._id,
+                managerName: managerName
+            });
+        }
+
+        // Get employees with pagination
+        const [employees, totalEmployees] = await Promise.all([
+            Employee.find(query)
+                .select('name salary designation jobTitle department _id')
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Employee.countDocuments(query)
+        ]);
+
+        // Get all payrolls for these employees in one query (fixes N+1)
+        const employeeIds = employees.map(emp => emp._id);
+        const payrolls = await Payroll.find({
+            employeeId: { $in: employeeIds },
+            month,
+            year
+        }).lean();
+
+        // Create a map for O(1) lookup
+        const payrollMap = new Map();
+        payrolls.forEach(payroll => {
+            payrollMap.set(payroll.employeeId.toString(), payroll);
+        });
+
         // Build payroll summary per employee
-        const payrollSummaries = await Promise.all(
-            employees.map(async (employee) => {
-                const payroll = await Payroll.findOne({
-                    employeeId: employee._id,
-                    month,
-                    year
-                });
+        const payrollSummaries = employees.map(employee => {
+            const payroll = payrollMap.get(employee._id.toString());
+            return {
+                employeeId: employee._id,
+                name: employee.name,
+                designation: employee.designation,
+                jobTitle: employee.jobTitle,
+                department: employee.department,
+                basicSalary: employee.salary,
+                ctc: payroll?.ctc || employee.salary,
+                inHandSalary: payroll?.inHandSalary || employee.salary,
+                totalEarnings: payroll?.earnings?.totalEarnings || 0,
+                totalDeductions: payroll?.deductions?.total || 0,
+                leaves: payroll?.leaves?.length || 0,
+                status: payroll?.status || 'Not Generated',
+                isVisible: payroll?.isVisible !== false
+            };
+        });
 
-                return {
-                    employeeId: employee._id,
-                    name: employee.name,
-                    designation: employee.designation,
-                    jobTitle: employee.jobTitle,
-                    department: employee.department,
-                    basicSalary: employee.salary,
-                    ctc: payroll?.ctc || employee.salary,
-                    inHandSalary: payroll?.inHandSalary || employee.salary,
-                    totalEarnings: payroll?.earnings?.totalEarnings || 0,
-                    totalDeductions: payroll?.deductions?.total || 0,
-                    leaves: payroll?.leaves?.length || 0,
-                    status: payroll?.status || 'Not Generated',
-                    isVisible: payroll?.isVisible !== false
-                };
-            })
-        );
-
-        res.json(payrollSummaries);
+        return sendPaginatedResponse(res, payrollSummaries, page, limit, totalEmployees, 'Payroll data retrieved successfully');
     } catch (error) {
         logger.error('Admin Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
@@ -406,6 +584,20 @@ export const togglePayrollVisibility = async (req, res) => {
                 success: false,
                 message: 'Payroll not found' 
             });
+        }
+
+        // Send push notification when payroll is made visible
+        if (isVisible && payroll.employeeId) {
+            try {
+                const { notifyPayrollReleased } = await import('../../helpers/pushNotificationTriggers.js');
+                await notifyPayrollReleased(payroll.employeeId._id || payroll.employeeId, payroll);
+            } catch (notifError) {
+                logger.warn('Failed to send payroll release notification', {
+                    error: notifError.message,
+                    payrollId: payroll._id
+                });
+                // Don't fail the request if notification fails
+            }
         }
 
         res.status(200).json({
@@ -532,14 +724,42 @@ export const generatePayrollsForMonthYear = async (req, res) => {
 // Disburse payrolls for a given month/year
 export const disbursePayrolls = async (req, res) => {
     try {
-        const adminId = req.user?._id;
+        // CEO-only access check (extra security layer)
+        const isCEO = req.employee && (
+            (req.employee.position || '').toLowerCase().trim() === 'ceo' ||
+            (req.employee.position || '').toLowerCase().trim().includes('chief executive')
+        );
+        
+        if (!isCEO) {
+            logger.warn('Unauthorized payroll disbursement attempt', {
+                userId: req.user?._id || req.employee?._id,
+                role: req.user?.role || req.employee?.role,
+                position: req.employee?.position
+            });
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Access restricted to CEO only. Only the CEO can disburse payroll.' 
+            });
+        }
+
+        const adminId = req.employee?._id || req.user?._id;
         const { month, year } = req.body;
         if (!month || !year) {
             return res.status(400).json({ success: false, message: 'month and year are required' });
         }
 
+        // Import organization helper for multi-tenancy support
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        
+        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
+        const query = addOrganizationFilter(req, { 
+            month, 
+            year, 
+            status: { $in: ['Processed', 'Pending'] } 
+        });
+
         // Fetch payrolls eligible for payment (Processed or Pending depending on policy)
-        const payrolls = await Payroll.find({ month, year, status: { $in: ['Processed', 'Pending'] } })
+        const payrolls = await Payroll.find(query)
             .populate('employeeId', 'financialDetails name lastName');
 
         if (!payrolls.length) {

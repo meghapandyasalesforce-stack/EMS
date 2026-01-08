@@ -1,32 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { setUser, setLoading } from '../context/Auth/authSlice';
-import { toast } from 'react-toastify';
-import axios from '../utils/axios';
-import { FiEye, FiEyeOff, FiMail, FiLock } from 'react-icons/fi';
-import { FaBuilding } from 'react-icons/fa';
-import { ORGANIZATION_AUTH_ENDPOINT } from '../utils/constant';
-import logger from '../utils/logger';
+import React, { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
+/**
+ * OrganizationLogin - Redirects to unified login page
+ * This component is kept for backward compatibility
+ * All login types are now handled in the main Login component
+ */
 const OrganizationLogin = () => {
     const [searchParams] = useSearchParams();
-    const [formData, setFormData] = useState({
-        email: '',
-        password: ''
-    });
-    const [showPassword, setShowPassword] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const dispatch = useDispatch();
     const navigate = useNavigate();
 
-    // Pre-fill email from URL params (when redirected from regular login)
+    // Redirect to main login page with email pre-filled if provided
     useEffect(() => {
         const emailParam = searchParams.get('email');
         if (emailParam) {
-            setFormData(prev => ({ ...prev, email: emailParam }));
+            navigate(`/login?email=${encodeURIComponent(emailParam)}`, { replace: true });
+        } else {
+            navigate('/login', { replace: true });
         }
-    }, [searchParams]);
+    }, [searchParams, navigate]);
+
+    // Show loading while redirecting
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+            <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Redirecting to login...</p>
+            </div>
+        </div>
+    );
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -79,12 +81,15 @@ const OrganizationLogin = () => {
 
                 toast.success('Login successful!');
                 
-                // Redirect to organization dashboard for organization logins
                 // Store flag to indicate this is an organization login
                 localStorage.setItem('isOrganizationLogin', 'true');
                 
+                // Use dashboardRoute from login response (automatic redirection)
+                const dashboardRoute = response.data.dashboardRoute || '/organization/dashboard';
+                
+                // Redirect to the dashboard route provided by backend
                 setTimeout(() => {
-                    navigate('/organization/dashboard');
+                    navigate(dashboardRoute, { replace: true });
                 }, 500);
             }
         } catch (error) {

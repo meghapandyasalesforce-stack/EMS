@@ -28,6 +28,13 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      // CRITICAL: Prefer logger utility over console, but allow console methods used by logger
+      // The logger utility (utils/logger.js) uses console internally, so we allow those methods
+      'no-console': ['warn', { 
+        allow: ['warn', 'error', 'info', 'debug'] // Allow console methods used by logger utility
+      }],
+      // CRITICAL: Prevent alert() calls - use toast notifications instead
+      'no-alert': 'error',
     },
   },
 ]

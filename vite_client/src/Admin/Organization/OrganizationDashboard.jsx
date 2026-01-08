@@ -17,31 +17,7 @@ import {
     FiCheckCircle,
     FiX
 } from 'react-icons/fi';
-import { Bar, Pie, Line } from 'react-chartjs-2';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend
-} from 'chart.js';
-
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend
-);
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const OrganizationDashboard = () => {
     const dispatch = useDispatch();
@@ -68,80 +44,58 @@ const OrganizationDashboard = () => {
         );
     }
 
-    // Prepare chart data
-    const departmentData = {
-        labels: statistics.departments?.map(d => d._id) || [],
-        datasets: [{
-            label: 'Employees',
-            data: statistics.departments?.map(d => d.count) || [],
-            backgroundColor: [
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(245, 158, 11, 0.8)',
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(139, 92, 246, 0.8)',
-            ]
-        }]
-    };
+    // Prepare chart data (Recharts format)
+    const departmentData = statistics.departments?.map(d => ({
+        name: d._id,
+        employees: d.count
+    })) || [];
 
-    const attendanceData = {
-        labels: statistics.attendance?.byStatus?.map(s => s._id) || [],
-        datasets: [{
-            label: 'Attendance Records',
-            data: statistics.attendance?.byStatus?.map(s => s.count) || [],
-            backgroundColor: [
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(245, 158, 11, 0.8)',
-            ]
-        }]
-    };
+    const attendanceData = statistics.attendance?.byStatus?.map(s => ({
+        name: s._id,
+        count: s.count
+    })) || [];
 
-    const leaveData = {
-        labels: statistics.leaves?.byType?.map(l => l._id) || [],
-        datasets: [{
-            label: 'Leave Days',
-            data: statistics.leaves?.byType?.map(l => l.totalDays) || [],
-            backgroundColor: [
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(245, 158, 11, 0.8)',
-            ]
-        }]
-    };
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+    const leaveData = statistics.leaves?.byType?.map(l => ({
+        name: l._id,
+        days: l.totalDays
+    })) || [];
 
     return (
-        <div className="p-6 space-y-6 min-h-screen bg-gray-50">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gray-50 ml-64">
+            {/* Header */}
+            <div className="mb-6">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Organization Dashboard</h1>
+                <p className="text-sm text-gray-600">Overview of your organization's key metrics and activities</p>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+            {/* Statistics Cards - Consistent Icon Placement */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
                             <p className="text-gray-500 text-sm font-medium">Total Employees</p>
-                            <p className="text-3xl font-bold text-gray-800 mt-2">
+                            <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-2">
                                 {statistics.employees?.total || 0}
                             </p>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-sm text-gray-600 mt-1">
                                 {statistics.employees?.active || 0} active
                             </p>
                         </div>
-                        <div className="bg-blue-100 p-3 rounded-full ml-4">
-                            <FiUsers className="w-8 h-8 text-blue-600" />
+                        <div className="bg-blue-100 p-3 rounded-full ml-4 flex-shrink-0">
+                            <FiUsers className="w-6 h-6 text-blue-600" />
                         </div>
                     </div>
                     {statistics.subscription && (
                         <div className="mt-4 pt-4 border-t border-gray-100">
-                            <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <div className="flex justify-between text-xs text-gray-600 mb-2">
                                 <span className="font-medium">Subscription Usage</span>
-                                <span className="font-semibold">{statistics.subscription.employeeUsage || 0}%</span>
+                                <span className="font-semibold text-gray-900">{statistics.subscription.employeeUsage || 0}%</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                                     style={{ width: `${Math.min(statistics.subscription.employeeUsage || 0, 100)}%` }}
                                 ></div>
                             </div>
@@ -152,45 +106,45 @@ const OrganizationDashboard = () => {
                     )}
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
                             <p className="text-gray-500 text-sm font-medium">Attendance Records</p>
-                            <p className="text-3xl font-bold text-gray-800 mt-2">
+                            <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-2">
                                 {statistics.attendance?.total || 0}
                             </p>
                             <p className="text-sm text-green-600 mt-1 font-medium">
                                 {statistics.attendance?.recent || 0} this week
                             </p>
                         </div>
-                        <div className="bg-green-100 p-3 rounded-full ml-4">
-                            <FiCalendar className="w-8 h-8 text-green-600" />
+                        <div className="bg-green-100 p-3 rounded-full ml-4 flex-shrink-0">
+                            <FiCalendar className="w-6 h-6 text-green-600" />
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
                             <p className="text-gray-500 text-sm font-medium">Leave Requests</p>
-                            <p className="text-3xl font-bold text-gray-800 mt-2">
+                            <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-2">
                                 {statistics.leaves?.total || 0}
                             </p>
-                            <p className="text-sm text-yellow-600 mt-1 font-medium">
+                            <p className="text-sm text-orange-600 mt-1 font-medium">
                                 {statistics.leaves?.pending || 0} pending
                             </p>
                         </div>
-                        <div className="bg-yellow-100 p-3 rounded-full ml-4">
-                            <FiClock className="w-8 h-8 text-yellow-600" />
+                        <div className="bg-orange-100 p-3 rounded-full ml-4 flex-shrink-0">
+                            <FiClock className="w-6 h-6 text-orange-600" />
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
                             <p className="text-gray-500 text-sm font-medium">Active Projects</p>
-                            <p className="text-3xl font-bold text-gray-800 mt-2">
+                            <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-2">
                                 {statistics.projects?.total || 0}
                             </p>
                             {statistics.projects?.completed !== undefined && (
@@ -199,98 +153,107 @@ const OrganizationDashboard = () => {
                                 </p>
                             )}
                         </div>
-                        <div className="bg-purple-100 p-3 rounded-full ml-4">
-                            <FiFolder className="w-8 h-8 text-purple-600" />
+                        <div className="bg-purple-100 p-3 rounded-full ml-4 flex-shrink-0">
+                            <FiFolder className="w-6 h-6 text-purple-600" />
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                 {/* Department Distribution */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
                         Employees by Department
                     </h3>
                     {statistics.departments && statistics.departments.length > 0 ? (
-                        <Bar
-                            data={departmentData}
-                            options={{
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                plugins: {
-                                    legend: {
-                                        display: false
-                                    }
-                                }
-                            }}
-                        />
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={departmentData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" />
+                                <YAxis />
+                                <Tooltip />
+                                <Bar dataKey="employees" fill="#3b82f6" />
+                            </BarChart>
+                        </ResponsiveContainer>
                     ) : (
-                        <div className="flex items-center justify-center h-64 text-gray-400">
-                            <div className="text-center">
-                                <FiUsers className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                <p className="text-sm">No department data available</p>
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                            <div className="bg-gray-100 p-6 rounded-full mb-4">
+                                <FiUsers className="w-12 h-12 text-gray-400" />
                             </div>
+                            <p className="text-sm font-medium text-gray-500">No department data available</p>
+                            <p className="text-xs text-gray-400 mt-1">Add employees to see department distribution</p>
                         </div>
                     )}
                 </div>
 
                 {/* Attendance Status */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
                         Attendance Status
                     </h3>
                     {statistics.attendance?.byStatus && statistics.attendance.byStatus.length > 0 ? (
-                        <Pie
-                            data={attendanceData}
-                            options={{
-                                responsive: true,
-                                maintainAspectRatio: true
-                            }}
-                        />
+                        <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                                <Pie
+                                    data={attendanceData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    dataKey="count"
+                                >
+                                    {attendanceData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
                     ) : (
-                        <div className="flex items-center justify-center h-64 text-gray-400">
-                            <div className="text-center">
-                                <FiCalendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                <p className="text-sm">No attendance data available</p>
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                            <div className="bg-gray-100 p-6 rounded-full mb-4">
+                                <FiCalendar className="w-12 h-12 text-gray-400" />
                             </div>
+                            <p className="text-sm font-medium text-gray-500">No attendance data available</p>
+                            <p className="text-xs text-gray-400 mt-1">Attendance records will appear here</p>
                         </div>
                     )}
                 </div>
             </div>
 
             {/* Leave Statistics */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Leave Statistics by Type
                 </h3>
                 {statistics.leaves?.byType && statistics.leaves.byType.length > 0 ? (
-                    <Bar
-                        data={leaveData}
-                        options={{
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: {
-                                legend: {
-                                    display: false
-                                }
-                            }
-                        }}
-                    />
+                    <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={leaveData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="days" fill="#10b981" />
+                        </BarChart>
+                    </ResponsiveContainer>
                 ) : (
-                    <div className="flex items-center justify-center h-64 text-gray-400">
-                        <div className="text-center">
-                            <FiClock className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                            <p className="text-sm">No leave data available</p>
+                    <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                        <div className="bg-gray-100 p-6 rounded-full mb-4">
+                            <FiClock className="w-12 h-12 text-gray-400" />
                         </div>
+                        <p className="text-sm font-medium text-gray-500">No leave data available</p>
+                        <p className="text-xs text-gray-400 mt-1">Leave requests will appear here</p>
                     </div>
                 )}
             </div>
 
             {/* Recent Activity */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Recent Activity
                 </h3>
                 <div className="space-y-4">

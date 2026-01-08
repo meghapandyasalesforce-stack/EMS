@@ -2,6 +2,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { validateFileContentSync } from '../helpers/fileContentValidator.js';
+import logger from '../helpers/logger.js';
 
 // Configure allowed file types
 const ALLOWED_FILE_TYPES = {
@@ -142,6 +144,40 @@ const fileFilter = (allowedTypes) => {
     };
 };
 
+// Post-upload validation middleware (validates file content after upload)
+export const validateUploadedFileContent = (allowedMimeType) => {
+    return (req, res, next) => {
+        if (!req.file) {
+            return next(); // No file to validate
+        }
+
+        const filePath = req.file.path;
+        const expectedMimeType = allowedMimeType || req.file.mimetype;
+
+        // Validate file content using magic numbers
+        const validation = validateFileContentSync(filePath, expectedMimeType);
+        
+        if (!validation.valid) {
+            // Delete the uploaded file if validation fails
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (error) {
+                logger.error('Failed to delete invalid file', { filePath, error: error.message });
+            }
+
+            return res.status(400).json({
+                success: false,
+                message: validation.error || 'File content validation failed',
+                code: 'FILE_CONTENT_INVALID'
+            });
+        }
+
+        next();
+    };
+};
+
 // Create upload middleware
 export const createUploadMiddleware = (type = 'any', single = true) => {
     const allowedTypes = ALLOWED_FILE_TYPES[type] || ALLOWED_FILE_TYPES.any;
@@ -176,5 +212,6 @@ export default {
     uploadMultiple,
     uploadFile,
     validateFileType,
-    validateFileSize
+    validateFileSize,
+    validateUploadedFileContent
 };

@@ -11,7 +11,19 @@ import {
   FaEdit,
   FaEye,
   FaPlus,
-  FaDownload
+  FaDownload,
+  FaUserTie,
+  FaGraduationCap,
+  FaFolderOpen,
+  FaGift,
+  FaHandshake,
+  FaHeadset,
+  FaChartBar,
+  FaProjectDiagram,
+  FaChartLine,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaArrowRight
 } from 'react-icons/fa';
 import Todo from './Todo';
 import AttendanceBox from '../Attendance/AttendanceBox';
@@ -40,7 +52,10 @@ function DashboardEmployee() {
         tasksCount: '0',
         currentMonthSalary: '₹0',
         leaveDaysRemaining: '0',
-        birthdays: null
+        birthdays: null,
+        projects: [],
+        monthHours: 0,
+        attendanceRate: 0
     });
     const [statsLoading, setStatsLoading] = useState(true);
 
@@ -176,6 +191,25 @@ function DashboardEmployee() {
 
                 // Calculate month's total hours
                 const monthHours = monthLogs.data?.summary?.totalEffectiveHours || 0;
+                
+                // Calculate attendance rate (assuming 8 hours per day, ~22 working days per month)
+                const expectedHours = 22 * 8; // 176 hours per month
+                const attendanceRate = expectedHours > 0 ? Math.round((monthHours / expectedHours) * 100) : 0;
+
+                // Fetch employee projects
+                let projects = [];
+                try {
+                    const projectsRes = await axios.get(`${BOTH_TASK_ENDPOINT}/get-my-projects`, {
+                        withCredentials: true
+                    });
+                    if (projectsRes.data?.projects) {
+                        projects = projectsRes.data.projects.slice(0, 5); // Get latest 5 projects
+                    } else if (Array.isArray(projectsRes.data)) {
+                        projects = projectsRes.data.slice(0, 5); // Handle array response
+                    }
+                } catch (err) {
+                    // Removed console.log for production
+                }
 
                 // Update state
                 setDashboardStats({
@@ -185,7 +219,10 @@ function DashboardEmployee() {
                     tasksCount: tasksCount.toString(),
                     currentMonthSalary: `₹${payrollAmount.toLocaleString('en-IN')}`,
                     leaveDaysRemaining: leaveBalance.toString(),
-                    birthdays: birthdays
+                    birthdays: birthdays,
+                    projects: projects,
+                    monthHours: monthHours,
+                    attendanceRate: attendanceRate
                 });
             } catch (error) {
                 // Removed console.error for production
@@ -347,7 +384,131 @@ function DashboardEmployee() {
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-6 min-h-[400px]">
+                    {/* Attendance Summary */}
+                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                        <div className="bg-indigo-500 p-3">
+                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                <FaChartLine className="w-4 h-4" />
+                                Attendance Summary
+                            </h3>
+                        </div>
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-4 border border-indigo-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-gray-600">This Month</span>
+                                        <FaClock className="w-4 h-4 text-indigo-600" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-indigo-700">
+                                        {statsLoading ? '...' : `${dashboardStats.monthHours.toFixed(1)}h`}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">Total Hours</div>
+                                </div>
+                                
+                                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-gray-600">Attendance Rate</span>
+                                        <FaCheckCircle className="w-4 h-4 text-green-600" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-green-700">
+                                        {statsLoading ? '...' : `${dashboardStats.attendanceRate}%`}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">This Month</div>
+                                </div>
+                                
+                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-gray-600">Today</span>
+                                        <FaClock className="w-4 h-4 text-blue-600" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-blue-700">
+                                        {statsLoading ? '...' : dashboardStats.todayHours}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">Hours Worked</div>
+                                </div>
+                            </div>
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                                <Link to="/attendance-stats" className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                                    View Detailed Stats <FaArrowRight className="w-3 h-3 ml-2" />
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* My Projects */}
+                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                        <div className="bg-purple-500 p-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                    <FaProjectDiagram className="w-4 h-4" />
+                                    My Projects
+                                </h3>
+                                <Link to="/employee/projects">
+                                    <button className="text-white text-sm hover:underline flex items-center gap-1">
+                                        View All <FaArrowRight className="w-3 h-3" />
+                                    </button>
+                                </Link>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            {statsLoading ? (
+                                <div className="text-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
+                                </div>
+                            ) : dashboardStats.projects && dashboardStats.projects.length > 0 ? (
+                                <div className="space-y-3">
+                                    {dashboardStats.projects.map((project) => (
+                                        <div 
+                                            key={project._id} 
+                                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200 cursor-pointer"
+                                            onClick={() => navigate(`/employee/projects/${project._id}`)}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <h4 className="font-semibold text-gray-800 mb-1">{project.name}</h4>
+                                                    <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                                        {project.description || 'No description available'}
+                                                    </p>
+                                                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                                                        <span className={`px-2 py-1 rounded-full ${
+                                                            project.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                            project.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                                            project.status === 'on-hold' ? 'bg-yellow-100 text-yellow-700' :
+                                                            'bg-gray-100 text-gray-700'
+                                                        }`}>
+                                                            {project.status?.replace('-', ' ') || 'pending'}
+                                                        </span>
+                                                        {project.priority && (
+                                                            <span className={`px-2 py-1 rounded-full ${
+                                                                project.priority === 'high' || project.priority === 'critical' ? 'bg-red-100 text-red-700' :
+                                                                project.priority === 'medium' ? 'bg-orange-100 text-orange-700' :
+                                                                'bg-gray-100 text-gray-700'
+                                                            }`}>
+                                                                {project.priority}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <FaArrowRight className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <FaProjectDiagram className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                                    <p className="text-gray-500 mb-4">No projects assigned</p>
+                                    <Link to="/employee/projects">
+                                        <button className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition text-sm font-medium">
+                                            View All Projects
+                                        </button>
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Notifications */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                         <div className="bg-blue-500 p-3">
@@ -356,7 +517,7 @@ function DashboardEmployee() {
                                 Announcements
                             </h3>
                         </div>
-                        <div className="p-0">
+                        <div className="p-4 min-h-[200px]">
                             <NotificationFeed/>
                         </div>
                     </div>
@@ -369,8 +530,8 @@ function DashboardEmployee() {
                                 My Tasks
                             </h3>
                         </div>
-                        <div className="p-6">
-                    <Todo/>
+                        <div className="p-6 min-h-[200px]">
+                            <Todo/>
                         </div>
                     </div>
                 </div>
@@ -454,6 +615,104 @@ function DashboardEmployee() {
                                         View My Leaves
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Manager Features Section */}
+                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                        <div className="bg-indigo-500 p-3">
+                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                <FaUserTie className="w-4 h-4" />
+                                Manager Resources
+                            </h3>
+                        </div>
+                        <div className="p-6">
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => navigate('/one-on-one')}
+                                    className="w-full bg-indigo-500 text-white py-2 rounded-lg font-medium hover:bg-indigo-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaUserTie className="w-4 h-4" />
+                                    One-on-One Meetings
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/team-learning')}
+                                    className="w-full bg-purple-500 text-white py-2 rounded-lg font-medium hover:bg-purple-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaGraduationCap className="w-4 h-4" />
+                                    Team Learning
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/my-attendance-regularization')}
+                                    className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaClock className="w-4 h-4" />
+                                    Attendance Regularization
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* HR Features Section */}
+                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                        <div className="bg-teal-500 p-3">
+                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                <FaHandshake className="w-4 h-4" />
+                                HR Resources
+                            </h3>
+                        </div>
+                        <div className="p-6">
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => navigate('/benefits')}
+                                    className="w-full bg-teal-500 text-white py-2 rounded-lg font-medium hover:bg-teal-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaGift className="w-4 h-4" />
+                                    My Benefits
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/documents')}
+                                    className="w-full bg-green-500 text-white py-2 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaFolderOpen className="w-4 h-4" />
+                                    My Documents
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/onboarding')}
+                                    className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaHandshake className="w-4 h-4" />
+                                    Onboarding Status
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/learning')}
+                                    className="w-full bg-purple-500 text-white py-2 rounded-lg font-medium hover:bg-purple-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaGraduationCap className="w-4 h-4" />
+                                    Learning & Development
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/engagement')}
+                                    className="w-full bg-pink-500 text-white py-2 rounded-lg font-medium hover:bg-pink-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaChartBar className="w-4 h-4" />
+                                    Employee Engagement
+                                </button>
+                                
+                                <button 
+                                    onClick={() => navigate('/helpdesk')}
+                                    className="w-full bg-orange-500 text-white py-2 rounded-lg font-medium hover:bg-orange-600 transition flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FaHeadset className="w-4 h-4" />
+                                    Helpdesk
+                                </button>
                             </div>
                         </div>
                     </div>

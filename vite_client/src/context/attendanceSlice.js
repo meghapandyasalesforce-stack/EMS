@@ -8,9 +8,74 @@ export const clockIn = createAsyncThunk(
   "attendance/clockIn",
   async (clockInData, { rejectWithValue }) => {
     try {
+      // Ensure latitude and longitude are numbers, not strings
+      // Only include location if it's valid (not null, undefined, 0, or NaN)
+      const normalizeCoord = (value, isLatitude) => {
+        if (value == null || value === '' || value === 'null' || value === 'undefined') {
+          return undefined;
+        }
+        const num = Number(value);
+        if (isNaN(num)) {
+          return undefined;
+        }
+        // Validate coordinate ranges
+        if (isLatitude) {
+          if (num < -90 || num > 90) return undefined; // Invalid latitude
+        } else {
+          if (num < -180 || num > 180) return undefined; // Invalid longitude
+        }
+        // Note: We allow 0 as a valid coordinate (though unlikely for real locations)
+        // The backend will validate that both aren't 0
+        return num;
+      };
+
+      const lat = normalizeCoord(clockInData.latitude, true);
+      const lng = normalizeCoord(clockInData.longitude, false);
+      
+      const payload = {
+        ...clockInData,
+        accuracy: clockInData.accuracy != null ? Number(clockInData.accuracy) : undefined
+      };
+      
+      // Only include location if we have valid coordinates
+      // This ensures we don't send invalid data, but also don't remove valid data
+      if (lat !== undefined && lng !== undefined && 
+          typeof lat === 'number' && typeof lng === 'number' &&
+          !isNaN(lat) && !isNaN(lng)) {
+        payload.latitude = lat;
+        payload.longitude = lng;
+      } else {
+        // If location was expected but is missing, log warning
+        // This helps debug cases where location should have been captured
+        if (import.meta.env.DEV) {
+          console.warn('Clock-in payload missing location:', {
+            hasLatitude: clockInData.latitude !== undefined,
+            hasLongitude: clockInData.longitude !== undefined,
+            originalLatitude: clockInData.latitude,
+            originalLongitude: clockInData.longitude,
+            normalizedLat: lat,
+            normalizedLng: lng,
+            payloadKeys: Object.keys(clockInData)
+          });
+        }
+      }
+      
+      // Remove undefined accuracy to avoid sending it
+      if (payload.accuracy === undefined) delete payload.accuracy;
+      
+      // Log payload for debugging (development only)
+      if (import.meta.env.DEV) {
+        console.info('Clock-in API payload:', {
+          hasLocation: !!(payload.latitude && payload.longitude),
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          payloadKeys: Object.keys(payload)
+        });
+      }
+      
       const res = await axios.post(
         `${BOTH_ATTENDANCE_ENDPOINT}/clock-in`,
-        clockInData,
+        payload,
         {
           headers: {
             "Content-Type": "application/json",
@@ -19,9 +84,19 @@ export const clockIn = createAsyncThunk(
       );
       return res.data;
     } catch (err) {
-      // Removed console.error for production
+      // Enhanced error handling for location-related errors
+      const errorData = err.response?.data;
+      let errorMessage = err.response?.data?.message || "Clock-in failed";
+      
+      // Provide specific error messages
+      if (errorData?.code === 'LOCATION_REQUIRED') {
+        errorMessage = 'Location is required to clock in. Please enable location services and try again.';
+      } else if (errorData?.code === 'OUTSIDE_RADIUS') {
+        errorMessage = errorData.message || 'You are outside the allowed check-in radius.';
+      }
+      
       return rejectWithValue({
-        message: err.response?.data?.message || "Clock-in failed",
+        message: errorMessage,
         status: err.response?.status,
         data: err.response?.data
       });
@@ -33,7 +108,37 @@ export const clockOut = createAsyncThunk(
   'attendance/clockOut',
   async (clockOutData, { rejectWithValue }) => {
     try {
-      const res = await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/clock-out`, clockOutData);
+      // Normalize location coordinates similar to clockIn
+      const normalizeCoord = (value) => {
+        if (value == null || value === '' || value === 'null' || value === 'undefined') {
+          return undefined;
+        }
+        const num = Number(value);
+        if (isNaN(num) || num === 0) {
+          return undefined;
+        }
+        // Validate coordinate ranges
+        if (num < -90 || num > 90) return undefined; // Invalid latitude
+        if (num < -180 || num > 180) return undefined; // Invalid longitude
+        return num;
+      };
+
+      const lat = normalizeCoord(clockOutData.latitude);
+      const lng = normalizeCoord(clockOutData.longitude);
+      
+      const payload = {
+        ...clockOutData,
+        latitude: lat,
+        longitude: lng,
+        accuracy: clockOutData.accuracy != null ? Number(clockOutData.accuracy) : undefined
+      };
+      
+      // Remove undefined values to avoid sending them
+      if (payload.latitude === undefined) delete payload.latitude;
+      if (payload.longitude === undefined) delete payload.longitude;
+      if (payload.accuracy === undefined) delete payload.accuracy;
+      
+      const res = await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/clock-out`, payload);
       return res.data;
     } catch (err) {
       // Removed console.error for production
@@ -227,6 +332,9 @@ const attendanceSlice = createSlice({
       state.employeeDetails = null;
       state.employeeStats = null;
     },
+    clearError: (state) => {
+      state.error = null;
+    },
     clearEmployeeDetails: (state) => {
       state.employeeDetails = null;
       state.employeeStats = null;
@@ -247,7 +355,12 @@ const attendanceSlice = createSlice({
       .addCase(clockIn.pending, pending)
       .addCase(clockIn.fulfilled, (state, action) => {
         state.loading = false;
-        state.sessions = [action.payload];
+        // Handle both response formats: direct attendance object or wrapped response
+        const attendance = action.payload.attendance || action.payload;
+        // Ensure we have a valid attendance object
+        if (attendance && (attendance._id || attendance.id)) {
+          state.sessions = [attendance];
+        }
         state.error = null;
       })
       .addCase(clockIn.rejected, (state, action) => {
@@ -374,5 +487,5 @@ const attendanceSlice = createSlice({
   }
 });
 
-export const { resetAttendance, clearEmployeeDetails } = attendanceSlice.actions;
+export const { resetAttendance, clearEmployeeDetails, clearError } = attendanceSlice.actions;
 export default attendanceSlice.reducer;

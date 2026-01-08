@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice'; 
-import { Pie, Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
+import { PieChart, Pie, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { FaCalendarAlt, FaUmbrellaBeach, FaChartPie, FaChartBar } from 'react-icons/fa';
 import { MdSick } from 'react-icons/md';
 import { BsCalendarCheck } from 'react-icons/bs';
 import { useNavigate } from 'react-router-dom';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
 const MyLeavePage = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -77,45 +76,30 @@ const MyLeavePage = () => {
     return <div className="text-center py-10 text-gray-500">No leave data available.</div>;
   }
 
-  // Chart data
-  const pieChartData = {
-    labels: ['Sick Leaves Taken', 'Annual Leaves Taken', 'Casual Leaves Taken'],
-    datasets: [
-      {
-        data: [
-          calculatedStats.sickLeaves.taken,
-          calculatedStats.annualLeaves.taken,
-          calculatedStats.casualLeaves.taken
-        ],
-        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56'],
-        hoverBackgroundColor: ['#FF6384', '#36A2EB', '#FFCE56']
-      }
-    ]
-  };
+  // Chart data (Recharts format)
+  const pieChartData = [
+    { name: 'Sick Leaves', value: calculatedStats.sickLeaves.taken },
+    { name: 'Annual Leaves', value: calculatedStats.annualLeaves.taken },
+    { name: 'Casual Leaves', value: calculatedStats.casualLeaves.taken }
+  ];
 
-  const barChartData = {
-    labels: ['Sick', 'Annual', 'Casual'],
-    datasets: [
-      {
-        label: 'Taken',
-        data: [
-          calculatedStats.sickLeaves.taken,
-          calculatedStats.annualLeaves.taken,
-          calculatedStats.casualLeaves.taken
-        ],
-        backgroundColor: '#3B82F6',
-      },
-      {
-        label: 'Remaining',
-        data: [
-          calculatedStats.sickLeaves.remaining,
-          calculatedStats.annualLeaves.remaining,
-          calculatedStats.casualLeaves.remaining
-        ],
-        backgroundColor: '#10B981',
-      }
-    ]
-  };
+  const barChartData = [
+    {
+      name: 'Sick',
+      taken: calculatedStats.sickLeaves.taken,
+      remaining: calculatedStats.sickLeaves.remaining
+    },
+    {
+      name: 'Annual',
+      taken: calculatedStats.annualLeaves.taken,
+      remaining: calculatedStats.annualLeaves.remaining
+    },
+    {
+      name: 'Casual',
+      taken: calculatedStats.casualLeaves.taken,
+      remaining: calculatedStats.casualLeaves.remaining
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 ml-0 lg:ml-64 transition-all duration-300">
@@ -253,7 +237,25 @@ const MyLeavePage = () => {
                 <FaChartPie className="mr-2" /> Leave Distribution
               </h2>
               <div className="h-64">
-                <Pie data={pieChartData} options={{ maintainAspectRatio: false }} />
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
@@ -262,16 +264,17 @@ const MyLeavePage = () => {
                 <FaChartBar className="mr-2" /> Leave Usage
               </h2>
               <div className="h-64">
-                <Bar
-                  data={barChartData}
-                  options={{
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: { stacked: true },
-                      y: { stacked: true }
-                    }
-                  }}
-                />
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="taken" stackId="a" fill="#3B82F6" name="Taken" />
+                    <Bar dataKey="remaining" stackId="a" fill="#10B981" name="Remaining" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
 

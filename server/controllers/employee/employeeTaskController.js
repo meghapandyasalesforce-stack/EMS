@@ -3,6 +3,8 @@ import Project from "../../models/project.model.js";
 import Employee from "../../models/employee.model.js";
 import { sendTaskUpdateNotification } from "../../helpers/notificationService.js";
 import { sendSuccess, sendError, sendForbidden, sendInternalError } from "../../helpers/responseHelper.js";
+import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
+import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
 import logger from "../../helpers/logger.js";
 
 // Get all projects for the logged-in employee
@@ -151,12 +153,43 @@ export const updateTask = async (req, res) => {
 };
 
 // Get all tasks for the logged-in employee
+// For managers, returns tasks from their department team members
 export const getMyTasks = async (req, res) => {
     try {
         const employeeId = req.employee._id;
         const { date, projectId, status } = req.query;
 
-        const filter = { employee: employeeId };
+        // Get organizationId for multi-tenancy
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Organization ID is required'
+            });
+        }
+
+        // Add organization filter
+        let filter = addOrganizationFilter(req, {});
+        
+        // Check if user is a manager (not admin or HR)
+        // Example: Manager "Arun Kumar" sees tasks for employees with manager="Arun Kumar" or "Arun"
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        
+        if (isManager && req.employee) {
+            // Manager: Get tasks from all employees linked to them
+            const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
+            filter.employee = { $in: managerEmployeeIds };
+            
+            const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+            logger.info('Manager filtering tasks by manager field', {
+                managerId: employeeId,
+                managerName: managerName,
+                employeeCount: managerEmployeeIds.length
+            });
+        } else {
+            // Regular employee: Only their own tasks
+            filter.employee = employeeId;
+        }
 
         if (date) {
             const selectedDate = new Date(date);
@@ -174,6 +207,7 @@ export const getMyTasks = async (req, res) => {
 
         const tasks = await Task.find(filter)
             .populate('project', 'name')
+            .populate('employee', 'name email department')
             .sort({ date: -1 });
 
         res.json({
@@ -181,7 +215,9 @@ export const getMyTasks = async (req, res) => {
             tasks
         });
     } catch (error) {
+        logger.error('Get My Tasks Error', { error: error.message, stack: error.stack });
         res.status(500).json({ 
+            success: false,
             error: 'Failed to fetch tasks', 
             details: error.message 
         });
