@@ -14,15 +14,21 @@
 export const parsePagination = (req, options = {}) => {
     const { defaultLimit = 20, maxLimit = 100 } = options;
     
-    let page = parseInt(req.query.page, 10) || 1;
-    let limit = parseInt(req.query.limit, 10) || defaultLimit;
+    let page = parseInt(req.query.page, 10);
+    let limit = parseInt(req.query.limit, 10);
     
-    // Validate page
-    if (page < 1) page = 1;
+    // Validate page - handle NaN and invalid values
+    if (isNaN(page) || page < 1) {
+        page = 1;
+    }
     
-    // Validate and cap limit
-    if (limit < 1) limit = defaultLimit;
-    if (limit > maxLimit) limit = maxLimit;
+    // Validate and cap limit - handle NaN and invalid values
+    if (isNaN(limit) || limit < 1) {
+        limit = defaultLimit;
+    }
+    if (limit > maxLimit) {
+        limit = maxLimit;
+    }
     
     const skip = (page - 1) * limit;
     

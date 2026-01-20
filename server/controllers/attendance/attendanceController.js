@@ -770,10 +770,12 @@ export const clockOut = async (req, res) => {
         return undefined;
       }
       const num = Number(value);
-      // Check if conversion resulted in NaN or invalid coordinate
-      if (isNaN(num) || num === 0) {
+      // Check if conversion resulted in NaN
+      if (isNaN(num)) {
         return undefined;
       }
+      // Note: We allow 0 as a valid coordinate (though unlikely for real locations)
+      // The validation will check coordinate ranges separately
       return num;
     };
 

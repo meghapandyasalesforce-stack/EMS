@@ -88,20 +88,17 @@ export default async function csrfProtection(req, res, next) {
                 });
             }
         } catch (error) {
-            // If JWT is invalid, the auth middleware will catch it later
-            // For CSRF, we just need to know if we can get a userId to check the stored token
-            if (error.name === 'TokenExpiredError' || error.name === 'JsonWebTokenError') {
-                // Let the main auth middleware handle JWT errors
-                return next();
-            }
+            // If JWT is invalid, reject the request - don't bypass CSRF protection
+            // CSRF protection must be enforced for all authenticated requests
             logger.warn('CSRF validation failed during token decoding', { 
                 requestId: req.id, 
                 path: req.path, 
-                error: error.message 
+                error: error.message,
+                errorName: error.name
             });
             return res.status(403).json({ 
                 success: false, 
-                message: 'CSRF validation failed',
+                message: 'CSRF validation failed. Invalid or expired authentication token.',
                 code: 'CSRF_VALIDATION_ERROR'
             });
         }

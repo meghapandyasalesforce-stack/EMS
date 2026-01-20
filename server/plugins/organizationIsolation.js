@@ -49,19 +49,32 @@ export const organizationIsolationPlugin = (schema, options = {}) => {
     const addOrganizationFilter = function(query) {
         // Skip for populate operations (internal Mongoose queries)
         // Populate queries are used to fetch related documents and shouldn't be filtered
-        if (query._mongooseOptions?.populate || query._populatedPaths?.length > 0) {
-            return; // Skip filtering for populate operations
-        }
+        // However, we still validate organizationId exists in context for security
+        const isPopulateQuery = query._mongooseOptions?.populate || query._populatedPaths?.length > 0;
         
         const organizationId = getOrganizationIdFromContext(query);
         
-        if (organizationId) {
+        // Validate organizationId format if present
+        if (organizationId && !/^[0-9a-fA-F]{24}$/.test(organizationId.toString())) {
+            logger.error('Invalid organizationId format in query context', {
+                modelName: this.model?.modelName || 'Unknown',
+                organizationId,
+                query: JSON.stringify(query.getQuery())
+            });
+            // Don't proceed with invalid organizationId
+            if (requireOrganizationId) {
+                throw new Error('Invalid organization ID format');
+            }
+            return;
+        }
+        
+        if (organizationId && !isPopulateQuery) {
             // Add organizationId to query if not already present
             const currentQuery = query.getQuery();
             if (!currentQuery.organizationId) {
                 query.where({ organizationId });
             }
-        } else if (requireOrganizationId) {
+        } else if (requireOrganizationId && !isPopulateQuery) {
             // In strict mode, log warning but don't throw (to avoid breaking populate/other queries)
             // The controller should handle organizationId validation
             logger.warn('Organization ID not found in query context', {

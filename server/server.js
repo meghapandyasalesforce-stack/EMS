@@ -132,18 +132,7 @@ registerDiagnosticRoutes(app);
 
 // =================== API DOCUMENTATION ===================
 // Swagger/OpenAPI documentation - enabled by default, can be disabled via ENABLE_SWAGGER=false
-const enableSwagger = process.env.ENABLE_SWAGGER !== 'false'; // Default to true unless explicitly disabled
-if (enableSwagger) {
-    try {
-        const { swaggerUiSetup, swaggerUiServe } = await import('./config/swagger.js');
-        app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
-        logger.info('Swagger API documentation available at /api-docs');
-    } catch (error) {
-        logger.warn('Swagger documentation not available', { error: error.message });
-    }
-} else {
-    logger.info('Swagger documentation disabled via ENABLE_SWAGGER=false');
-}
+// Note: Swagger initialization moved to startServer() to avoid top-level await
 
 // ✅ Error handlers
 app.use(notFoundHandler);
@@ -221,6 +210,20 @@ const startServer = async () => {
       } catch (emailError) {
         logger.warn('Could not validate email configuration', { error: emailError.message });
       }
+    }
+
+    // Initialize Swagger API documentation (non-blocking)
+    const enableSwagger = process.env.ENABLE_SWAGGER !== 'false';
+    if (enableSwagger) {
+      try {
+        const { swaggerUiSetup, swaggerUiServe } = await import('./config/swagger.js');
+        app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
+        logger.info('Swagger API documentation available at /api-docs');
+      } catch (swaggerError) {
+        logger.warn('Swagger documentation not available', { error: swaggerError.message });
+      }
+    } else {
+      logger.info('Swagger documentation disabled via ENABLE_SWAGGER=false');
     }
 
     // ✅ Important for Render - listen on 0.0.0.0 to accept connections from all interfaces

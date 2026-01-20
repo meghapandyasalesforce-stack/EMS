@@ -201,8 +201,25 @@ export const getUserNotifications = async (req, res) => {
 
     const { page = 1, limit = 20, type, unreadOnly = false } = req.query;
 
+    // Validate pagination parameters
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    
+    if (isNaN(pageNum) || pageNum < 1) {
+      return sendError(res, 'Invalid page number', 400, 'INVALID_PAGE');
+    }
+    
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      return sendError(res, 'Invalid limit (must be between 1 and 100)', 400, 'INVALID_LIMIT');
+    }
+
     // Get organizationId from multiple sources
     let organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+    
+    // Validate organizationId format (MongoDB ObjectId)
+    if (organizationId && !/^[0-9a-fA-F]{24}$/.test(organizationId.toString())) {
+      return sendError(res, 'Invalid organization ID format', 400, 'INVALID_ORGANIZATION_ID');
+    }
     
     // If organizationId is not in request, try to load it from database
     if (!organizationId) {
@@ -241,8 +258,8 @@ export const getUserNotifications = async (req, res) => {
       .populate('sender', 'name email')
       .populate('recipient', 'name email')
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
+      .limit(limitNum)
+      .skip((pageNum - 1) * limitNum);
 
     const total = await Notification.countDocuments(filter);
 

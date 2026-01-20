@@ -68,6 +68,14 @@ export const createExpense = async (req, res) => {
 export const getExpenses = async (req, res) => {
     try {
         const organizationId = getOrganizationId(req);
+        
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required'
+            });
+        }
+
         const { 
             employeeId, 
             status, 
@@ -80,7 +88,44 @@ export const getExpenses = async (req, res) => {
 
         const query = addOrganizationFilter(req, {});
 
+        // Validate and parse pagination parameters
+        const pageNum = parseInt(page, 10);
+        const limitNum = parseInt(limit, 10);
+        
+        if (isNaN(pageNum) || pageNum < 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid page number'
+            });
+        }
+        
+        if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid limit (must be between 1 and 100)'
+            });
+        }
+
+        // Validate employeeId if provided (must be valid MongoDB ObjectId)
         if (employeeId) {
+            if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid employee ID format'
+                });
+            }
+            
+            // If employee is requesting another employee's data, check permissions
+            if (req.employee?._id && employeeId !== req.employee._id.toString()) {
+                // Only admins can view other employees' expenses
+                if (!req.user) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Access denied. You can only view your own expenses.'
+                    });
+                }
+            }
+            
             query.employeeId = employeeId;
         } else if (req.employee?._id) {
             // Employee can only see their own expenses
@@ -101,7 +146,7 @@ export const getExpenses = async (req, res) => {
             if (endDate) query.expenseDate.$lte = new Date(endDate);
         }
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
 
         const expenses = await Expense.find(query)
             .populate('employeeId', 'name lastName email employeeId')
@@ -109,13 +154,13 @@ export const getExpenses = async (req, res) => {
             .populate('projectId', 'name')
             .sort({ expenseDate: -1 })
             .skip(skip)
-            .limit(parseInt(limit));
+            .limit(limitNum);
 
         const total = await Expense.countDocuments(query);
 
-        // Calculate summary statistics
+        // Calculate summary statistics with organizationId filter
         const summary = await Expense.aggregate([
-            { $match: query },
+            { $match: { ...query, organizationId } },
             {
                 $group: {
                     _id: null,
@@ -138,10 +183,10 @@ export const getExpenses = async (req, res) => {
             success: true,
             data: expenses,
             pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
+                page: pageNum,
+                limit: limitNum,
                 total,
-                pages: Math.ceil(total / parseInt(limit))
+                pages: Math.ceil(total / limitNum)
             },
             summary: summary[0] || {
                 totalAmount: 0,
@@ -483,11 +528,37 @@ export const deleteExpense = async (req, res) => {
 export const getExpenseStatistics = async (req, res) => {
     try {
         const organizationId = getOrganizationId(req);
+        
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required'
+            });
+        }
+
         const { startDate, endDate, employeeId } = req.query;
 
         const query = addOrganizationFilter(req, {});
 
+        // Validate employeeId if provided
         if (employeeId) {
+            if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid employee ID format'
+                });
+            }
+            
+            // If employee is requesting another employee's data, check permissions
+            if (req.employee?._id && employeeId !== req.employee._id.toString()) {
+                if (!req.user) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Access denied. You can only view your own expense statistics.'
+                    });
+                }
+            }
+            
             query.employeeId = employeeId;
         }
 
@@ -497,9 +568,9 @@ export const getExpenseStatistics = async (req, res) => {
             if (endDate) query.expenseDate.$lte = new Date(endDate);
         }
 
-        // Overall statistics
+        // Overall statistics with organizationId filter
         const overallStats = await Expense.aggregate([
-            { $match: query },
+            { $match: { ...query, organizationId } },
             {
                 $group: {
                     _id: null,
@@ -518,9 +589,9 @@ export const getExpenseStatistics = async (req, res) => {
             }
         ]);
 
-        // Statistics by category
+        // Statistics by category with organizationId filter
         const categoryStats = await Expense.aggregate([
-            { $match: query },
+            { $match: { ...query, organizationId } },
             {
                 $group: {
                     _id: '$category',
@@ -531,9 +602,9 @@ export const getExpenseStatistics = async (req, res) => {
             { $sort: { totalAmount: -1 } }
         ]);
 
-        // Statistics by status
+        // Statistics by status with organizationId filter
         const statusStats = await Expense.aggregate([
-            { $match: query },
+            { $match: { ...query, organizationId } },
             {
                 $group: {
                     _id: '$status',
@@ -543,9 +614,9 @@ export const getExpenseStatistics = async (req, res) => {
             }
         ]);
 
-        // Monthly trend
+        // Monthly trend with organizationId filter
         const monthlyTrend = await Expense.aggregate([
-            { $match: query },
+            { $match: { ...query, organizationId } },
             {
                 $group: {
                     _id: {
