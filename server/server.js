@@ -16,6 +16,7 @@ import xss from "xss-clean";
 import connectDB from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import { requestIdMiddleware, requestLogger } from "./middlewares/requestLogger.js";
+import requestContextMiddleware from "./middlewares/requestContext.js";
 import { apiLimiter } from "./middlewares/rateLimiter.js";
 import validateEnvironment from "./helpers/envValidator.js";
 import { corsMiddleware } from "./middlewares/corsConfig.js";
@@ -44,15 +45,26 @@ if (!isValid && process.env.NODE_ENV === 'production') {
 }
 
 // ✅ CRITICAL SECURITY: Prevent rate limiting from being disabled in production
-if (process.env.NODE_ENV === 'production' && process.env.DISABLE_RATE_LIMIT === 'true') {
-  logger.error("CRITICAL SECURITY ERROR: Rate limiting is disabled in production. Exiting...");
-  process.exit(1);
+// This check ensures that even if DISABLE_RATE_LIMIT is accidentally set in production,
+// the server will refuse to start. Rate limiting is mandatory for production security.
+if (process.env.NODE_ENV === 'production') {
+  if (process.env.DISABLE_RATE_LIMIT === 'true') {
+    logger.error("CRITICAL SECURITY ERROR: Rate limiting cannot be disabled in production. Exiting...");
+    logger.error("Please remove DISABLE_RATE_LIMIT from your production environment variables.");
+    process.exit(1);
+  }
+  // Also check for case-insensitive variations
+  if (process.env.DISABLE_RATE_LIMIT?.toLowerCase() === 'true') {
+    logger.error("CRITICAL SECURITY ERROR: Rate limiting cannot be disabled in production. Exiting...");
+    process.exit(1);
+  }
 }
 
 const PORT = process.env.PORT || 10000;
 
 // ✅ Request ID middleware (must be first to track all requests)
 app.use(requestIdMiddleware);
+app.use(requestContextMiddleware);
 
 // ✅ Logger (except tests)
 if (process.env.NODE_ENV !== "test") app.use(requestLogger);

@@ -33,9 +33,23 @@ export const createLeave = async (req, res) => {
             return sendNotFound(res, "Employee");
         }
 
+        // Get organizationId - required for multi-tenancy
+        const organizationId = req.organizationId || req.employee?.organizationId || req.user?.organizationId || employee.organizationId;
+        
+        if (!organizationId) {
+            logger.error('Create Leave Error: Missing organizationId', {
+                employeeId,
+                hasEmployee: !!employee,
+                hasReqEmployee: !!req.employee,
+                hasReqUser: !!req.user
+            });
+            return sendError(res, 'Organization ID is required. Please ensure you are authenticated.', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
         const duration = Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1);
 
         const leave = new Leave({
+            organizationId, // Required for multi-tenancy
             employee: employeeId,
             employeeName: `${employee.name} ${employee.lastName}`,
             startDate,

@@ -36,9 +36,6 @@ export const usePermissions = () => {
         return result.state; // 'granted', 'denied', or 'prompt'
       } catch (err) {
         // Permissions API not supported or failed, fall back to geolocation check
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Permissions API query failed, using fallback:', err);
-        }
       }
     }
 
@@ -158,9 +155,6 @@ export const usePermissions = () => {
             });
           } catch (err) {
             // Silently fail - permission tracking is not critical
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('Failed to save permission status:', err);
-            }
           }
           
           resolve({ granted: true, position });

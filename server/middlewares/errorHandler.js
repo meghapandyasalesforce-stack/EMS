@@ -99,7 +99,7 @@ export const errorHandler = (err, req, res, next) => {
     // Default error - hide details in production
     const statusCode = err.statusCode || 500;
     
-    // Sanitize error message in production
+    // Sanitize error message in production to prevent information leakage
     let sanitizedMessage = 'An unexpected error occurred';
     if (process.env.NODE_ENV === 'development') {
         sanitizedMessage = err.message || 'Internal server error';
@@ -110,10 +110,42 @@ export const errorHandler = (err, req, res, next) => {
         } else {
             // For client errors (4xx), we can be more specific but still sanitize
             sanitizedMessage = err.message || 'An error occurred';
-            // Remove any potential information leakage
-            sanitizedMessage = sanitizedMessage.replace(/at\s+.*/g, ''); // Remove stack trace snippets
-            sanitizedMessage = sanitizedMessage.replace(/file:\/\/.*/g, ''); // Remove file paths
-            sanitizedMessage = sanitizedMessage.replace(/\/.*\/.*\.js/g, ''); // Remove file paths
+            
+            // SECURITY: Comprehensive sanitization to remove all potential information leakage
+            // Remove stack trace snippets (e.g., "at functionName (file.js:123:45)")
+            sanitizedMessage = sanitizedMessage.replace(/at\s+[\w\s\.]+\([^)]+\)/g, '');
+            sanitizedMessage = sanitizedMessage.replace(/at\s+.*/g, '');
+            
+            // Remove file paths (absolute and relative)
+            sanitizedMessage = sanitizedMessage.replace(/file:\/\/[^\s]+/g, '');
+            sanitizedMessage = sanitizedMessage.replace(/\/[^\s]+\.(js|ts|jsx|tsx|mjs|cjs)/g, '');
+            sanitizedMessage = sanitizedMessage.replace(/[A-Z]:\\[^\s]+/g, ''); // Windows paths
+            
+            // Remove line numbers and column numbers
+            sanitizedMessage = sanitizedMessage.replace(/:\d+:\d+/g, '');
+            sanitizedMessage = sanitizedMessage.replace(/line\s+\d+/gi, '');
+            
+            // Remove module paths
+            sanitizedMessage = sanitizedMessage.replace(/node_modules[^\s]*/g, '');
+            sanitizedMessage = sanitizedMessage.replace(/\.\.\/[^\s]*/g, '');
+            
+            // Remove IP addresses and ports
+            sanitizedMessage = sanitizedMessage.replace(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?/g, '');
+            
+            // Remove MongoDB connection strings and database names
+            sanitizedMessage = sanitizedMessage.replace(/mongodb:\/\/[^\s]+/gi, '');
+            sanitizedMessage = sanitizedMessage.replace(/database:\s*[\w-]+/gi, '');
+            
+            // Remove environment variable names that might leak config
+            sanitizedMessage = sanitizedMessage.replace(/process\.env\.\w+/g, '');
+            
+            // Clean up multiple spaces and trim
+            sanitizedMessage = sanitizedMessage.replace(/\s+/g, ' ').trim();
+            
+            // If message is empty or too short after sanitization, use generic message
+            if (!sanitizedMessage || sanitizedMessage.length < 3) {
+                sanitizedMessage = 'An error occurred';
+            }
         }
     }
     

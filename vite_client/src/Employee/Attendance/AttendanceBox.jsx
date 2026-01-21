@@ -28,15 +28,12 @@ const AttendanceBox = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [breakCount, setBreakCount] = useState(0);
   const [isOnBreak, setIsOnBreak] = useState(false);
-  const [location, setLocation] = useState(null);
   const [attendanceRule, setAttendanceRule] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Permission management
   const {
-    isPermissionGranted,
-    isPermissionDenied,
-    requestLocationPermission
+    isPermissionDenied
   } = usePermissions();
 
   // Fetch today's logs on component mount
@@ -59,11 +56,11 @@ const AttendanceBox = () => {
             if (status?.session && !status.session.clockOut) {
               setCurrentSession(status.session);
             }
-          } catch (e) {
+          } catch {
             // swallow - optional enrichment
           }
         }
-        } catch (error) {
+      } catch {
         // Removed console.error for production
         // If fetch fails, don't show error - might be page refresh issue
       } finally {
@@ -160,9 +157,6 @@ const AttendanceBox = () => {
         }
       } catch (error) {
         // Silently fail - location validation will still work
-        if (import.meta.env && import.meta.env.MODE === 'development') {
-          console.warn('Failed to fetch attendance rule:', error);
-        }
       }
     };
     fetchAttendanceRule();
@@ -200,7 +194,6 @@ const AttendanceBox = () => {
             accuracy: Number(position.coords.accuracy) || 0,
             address: 'Location detected'
           };
-          setLocation(locationData);
           resolve(locationData);
         },
         (error) => {
@@ -217,12 +210,6 @@ const AttendanceBox = () => {
           } else {
             errorMessage += error.message || 'Unknown error';
           }
-          
-          console.error('❌ Geolocation error:', {
-            code: errorCode,
-            message: errorMessage,
-            error
-          });
           
           reject(new Error(errorMessage));
         },
@@ -272,27 +259,13 @@ const AttendanceBox = () => {
       const requiresLocation = hasRuleWithCoordinates && 
                                !attendanceRule.enableSimplePunches;
 
-      console.info('📍 AttendanceBox clock-in:', {
-        requiresLocation,
-        hasRuleWithCoordinates,
-        enableSimplePunches: attendanceRule?.enableSimplePunches
-      });
-
       let locationData = null;
 
       // Get location if required
       if (requiresLocation || hasRuleWithCoordinates) {
         try {
-          console.info('📍 Getting location for clock-in...');
           locationData = await getCurrentLocation();
-          console.info('✅ Location captured:', locationData);
         } catch (error) {
-          console.error('❌ Location capture failed:', {
-            error: error.message,
-            code: error.code,
-            requiresLocation
-          });
-
           if (requiresLocation) {
             let errorMsg = 'Location is required for check-in. ';
             if (error.code === 1 || error.message.includes('permission')) {
@@ -327,16 +300,10 @@ const AttendanceBox = () => {
 
       // Final validation before sending
       if (requiresLocation && (!clockInData.latitude || !clockInData.longitude)) {
-        console.error('🛑 Location required but missing - blocking request');
         toast.error('Location is required for check-in at this site. Please enable location services and try again.');
         setIsProcessing(false);
         return;
       }
-
-      console.info('📤 Sending clock-in request:', {
-        hasLocation: !!(clockInData.latitude && clockInData.longitude),
-        payloadKeys: Object.keys(clockInData)
-      });
 
       // Try to check in
       try {
@@ -390,7 +357,7 @@ const AttendanceBox = () => {
         setIsProcessing(false);
       }
       
-    } catch (err) {
+    } catch {
       setIsProcessing(false);
       // If already checked in, try to fetch logs anyway
       const today = format(new Date(), 'yyyy-MM-dd');
@@ -399,7 +366,7 @@ const AttendanceBox = () => {
           startDate: today,
           endDate: today
         })).unwrap();
-      } catch (fetchErr) {
+      } catch {
         // Silently fail
       }
     }
@@ -424,7 +391,58 @@ const AttendanceBox = () => {
     }
     
     try {
-      const result = await dispatch(clockOut({})).unwrap();
+      setIsProcessing(true);
+
+      // Check attendance rule to see if location is required for clock-out
+      const hasRuleWithCoordinates = attendanceRule && 
+                                      attendanceRule.coordinates && 
+                                      attendanceRule.coordinates.latitude && 
+                                      attendanceRule.coordinates.longitude;
+      
+      const requiresLocation = hasRuleWithCoordinates && 
+                               !attendanceRule.enableSimplePunches;
+
+      let locationData = null;
+
+      if (requiresLocation || hasRuleWithCoordinates) {
+        try {
+          locationData = await getCurrentLocation();
+        } catch (error) {
+          if (requiresLocation) {
+            let errorMsg = 'Location is required for clock-out. ';
+            if (error.code === 1 || error.message.includes('permission')) {
+              errorMsg += 'Please enable location permission in browser settings.';
+            } else if (error.code === 2) {
+              errorMsg += 'GPS position unavailable. Please enable GPS on your device.';
+            } else if (error.code === 3 || error.message.includes('timeout')) {
+              errorMsg += 'Location request timed out. Please try again.';
+            } else {
+              errorMsg += error.message || 'Please enable location services and try again.';
+            }
+
+            toast.error(errorMsg);
+            setIsProcessing(false);
+            return;
+          }
+        }
+      }
+
+      const clockOutData = {};
+      if (locationData && locationData.latitude && locationData.longitude) {
+        clockOutData.latitude = locationData.latitude;
+        clockOutData.longitude = locationData.longitude;
+        clockOutData.address = locationData.address;
+        clockOutData.accuracy = locationData.accuracy;
+      }
+
+      // Final validation before sending
+      if (requiresLocation && (!clockOutData.latitude || !clockOutData.longitude)) {
+        toast.error('Location is required for clock-out at this site. Please enable location services and try again.');
+        setIsProcessing(false);
+        return;
+      }
+
+      const result = await dispatch(clockOut(clockOutData)).unwrap();
       
       // Update the currentSession with the clockOut data
       if (result) {
@@ -454,6 +472,8 @@ const AttendanceBox = () => {
           endDate: today
         }));
       }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -497,7 +517,9 @@ const AttendanceBox = () => {
             startDate: today,
             endDate: today
           }));
-        } catch {}
+        } catch {
+          // Ignore refresh errors
+        }
       }
     }
   };
@@ -564,7 +586,9 @@ const AttendanceBox = () => {
                 try {
                   // Fire-and-forget notify admins about back action
                   axios.post('/v1/both/notification/employee-back', {}, { withCredentials: true }).catch(() => {});
-                } catch {}
+                } catch {
+                  // Ignore notification errors
+                }
                 navigate('/dashboard');
               }}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors"

@@ -44,7 +44,6 @@ const MyTeamLearningPage = () => {
             });
             setLearnings(assignedLearnings);
         } catch (error) {
-            console.error('Error fetching learnings:', error);
             toast.error('Failed to load learning resources');
         } finally {
             setLoading(false);
@@ -62,7 +61,6 @@ const MyTeamLearningPage = () => {
             toast.success('Progress updated successfully');
             fetchLearnings();
         } catch (error) {
-            console.error('Error updating progress:', error);
             toast.error('Failed to update progress');
         } finally {
             setUpdatingProgress(null);

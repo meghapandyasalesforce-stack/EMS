@@ -46,6 +46,12 @@ const getBaseURL = () => {
 
 // Helper function to get backend base URL (without /api) for static files like uploads
 export const getBackendBaseURL = () => {
+  // Development: use same-origin so /uploads hits Vite proxy
+  const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+  if (isDevelopment) {
+    return '';
+  }
+
   // Priority 1: Use explicit backend URL
   if (import.meta.env.VITE_BACKEND_URL) {
     return import.meta.env.VITE_BACKEND_URL;
@@ -66,9 +72,6 @@ export const getBackendBaseURL = () => {
       return prodUrl.replace(/\/api\/?$/, '');
     }
     // Fallback to relative path (may work if frontend and backend are on same domain)
-    if (typeof console !== 'undefined' && console.warn) {
-      console.warn('⚠️ VITE_BACKEND_URL or VITE_API_URL not set in production. Using relative path.');
-    }
     return ''; // Empty string means relative path
   }
   
@@ -289,6 +292,15 @@ instance.interceptors.response.use(
     
     // Handle 401 errors - attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
+      const errorCode = error.response?.data?.code;
+      if (errorCode === 'PASSWORD_CHANGED') {
+        if (typeof window !== 'undefined') {
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            window.location.href = '/login';
+          }
+        }
+        return Promise.reject(error);
+      }
       // Don't attempt refresh for auth endpoints (login, register, password reset)
       const isAuthEndpoint = originalRequest.url && (
         originalRequest.url.includes('/auth/login') ||
@@ -329,6 +341,7 @@ instance.interceptors.response.use(
         // The server sets refreshToken in httpOnly cookie via generateToken()
         // Note: httpOnly cookies cannot be read by JavaScript, but they're sent automatically
         let refreshToken = null;
+        let refreshTokenPresent = false;
         
         // Try to get from cookie (for non-httpOnly cookies only, if any)
         // Most refresh tokens should be httpOnly, so this may not be accessible
@@ -338,6 +351,22 @@ instance.interceptors.response.use(
           if (refreshCookie) {
             refreshToken = refreshCookie.split('=')[1];
           }
+          const refreshFlag = cookies.find(c => c.startsWith('refreshTokenPresent='));
+          if (refreshFlag) {
+            refreshTokenPresent = true;
+          }
+        }
+
+        // If no refresh token flag is present, skip refresh to avoid noisy 401s
+        if (!refreshTokenPresent) {
+          isRefreshing = false;
+          processQueue(error, null);
+          if (typeof window !== 'undefined') {
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+              window.location.href = '/login';
+            }
+          }
+          return Promise.reject(error);
         }
 
         // Proceed with refresh - httpOnly cookie will be sent automatically even if we can't read it

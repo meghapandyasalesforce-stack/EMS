@@ -2,8 +2,15 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { validateFileContentSync } from '../helpers/fileContentValidator.js';
 import logger from '../helpers/logger.js';
+
+// Get absolute path to uploads directory for path traversal prevention
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const UPLOADS_ROOT = path.resolve(__dirname, '../uploads');
 
 // Configure allowed file types
 const ALLOWED_FILE_TYPES = {
@@ -88,15 +95,34 @@ export const validateFileSize = (maxSize, file, res) => {
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadType = req.params.type || 'general';
-        const uploadPath = `./uploads/${uploadType}`;
+        
+        // SECURITY: Prevent path traversal attacks by using path.resolve() and validating
+        // Sanitize uploadType to prevent directory traversal
+        const sanitizedType = path.basename(uploadType).replace(/[^a-zA-Z0-9_-]/g, '_');
+        
+        // Build the target path using path.resolve() for absolute path
+        const targetPath = path.resolve(UPLOADS_ROOT, sanitizedType);
+        
+        // CRITICAL: Ensure resolved path is within UPLOADS_ROOT directory
+        // This prevents directory traversal attacks (e.g., ../../../etc/passwd)
+        if (!targetPath.startsWith(UPLOADS_ROOT)) {
+            logger.error('Path traversal attempt detected', {
+                uploadType,
+                sanitizedType,
+                targetPath,
+                uploadsRoot: UPLOADS_ROOT
+            });
+            return cb(new Error('Invalid upload path: directory traversal detected'));
+        }
         
         // Create directory if it doesn't exist (synchronously to avoid race conditions)
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
+        if (!fs.existsSync(targetPath)) {
+            fs.mkdirSync(targetPath, { recursive: true });
             // Set directory permissions (readable/writable by owner only)
-            fs.chmodSync(uploadPath, 0o700);
+            fs.chmodSync(targetPath, 0o700);
         }
-        cb(null, uploadPath);
+        
+        cb(null, targetPath);
     },
     filename: (req, file, cb) => {
         // Use cryptographically secure random bytes instead of Math.random()
@@ -122,10 +148,26 @@ const fileFilter = (allowedTypes) => {
             return cb(new Error('File name is required'));
         }
 
-        // Prevent directory traversal attacks
+        // SECURITY: Prevent directory traversal attacks
+        // Use path.basename() to normalize and extract only the filename
         const filename = path.basename(file.originalname);
-        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        
+        // Additional validation: check for directory traversal patterns
+        if (filename.includes('..') || 
+            filename.includes('/') || 
+            filename.includes('\\') ||
+            path.isAbsolute(filename) ||
+            filename.startsWith('.') && filename !== '.' && filename !== '..') {
+            logger.warn('Directory traversal attempt detected in filename', {
+                originalName: file.originalname,
+                sanitizedName: filename
+            });
             return cb(new Error('Invalid file name: directory traversal not allowed'));
+        }
+        
+        // Ensure filename is not empty after sanitization
+        if (!filename || filename.trim().length === 0) {
+            return cb(new Error('File name is required'));
         }
 
         // Check MIME type
@@ -152,6 +194,36 @@ export const validateUploadedFileContent = (allowedMimeType) => {
         }
 
         const filePath = req.file.path;
+        
+        // SECURITY: Validate that file path is within UPLOADS_ROOT directory
+        // This is a final check to prevent any path traversal that might have bypassed earlier checks
+        const resolvedFilePath = path.resolve(filePath);
+        if (!resolvedFilePath.startsWith(UPLOADS_ROOT)) {
+            logger.error('Path traversal detected in uploaded file path', {
+                filePath,
+                resolvedFilePath,
+                uploadsRoot: UPLOADS_ROOT
+            });
+            
+            // Attempt to delete the file if it exists outside uploads directory
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (error) {
+                logger.error('Failed to delete invalid file outside uploads directory', { 
+                    filePath, 
+                    error: error.message 
+                });
+            }
+            
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid file path detected',
+                code: 'FILE_PATH_INVALID'
+            });
+        }
+        
         const expectedMimeType = allowedMimeType || req.file.mimetype;
 
         // Validate file content using magic numbers

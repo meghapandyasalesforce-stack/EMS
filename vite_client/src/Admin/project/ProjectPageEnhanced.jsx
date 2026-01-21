@@ -311,12 +311,10 @@ const ProjectsPageEnhanced = () => {
       case 'delete':
         if (window.confirm(`Delete ${selectedProjects.length} project(s)?`)) {
           // Implement bulk delete
-          console.log('Bulk delete:', selectedProjects);
         }
         break;
       case 'status':
         // Open status change dialog
-        console.log('Bulk status change:', selectedProjects);
         break;
       case 'export':
         handleExport(selectedProjects);

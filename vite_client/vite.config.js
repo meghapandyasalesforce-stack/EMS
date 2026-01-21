@@ -3,16 +3,40 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Custom plugin to handle proxy errors gracefully (instead of suppressing)
+// Custom plugin to handle proxy errors gracefully and suppress ECONNREFUSED logs
 const handleProxyErrors = () => {
   return {
     name: 'handle-proxy-errors',
     configureServer(server) {
-      // Handle proxy errors gracefully by logging them at debug level
-      // This allows developers to see connection issues without cluttering the console
-      server.middlewares.use((req, res, next) => {
-        // Errors are already handled in the proxy configuration below
-        next();
+      // Suppress Vite's proxy error logging for connection issues
+      // Only intercept errors that match proxy connection failures
+      const originalWrite = process.stderr.write.bind(process.stderr);
+      const suppressedPatterns = [
+        /\[vite\] http proxy error.*ECONNREFUSED/,
+        /\[vite\] http proxy error.*ECONNRESET/,
+        /\[vite\] http proxy error.*ETIMEDOUT/,
+        /AggregateError.*ECONNREFUSED/,
+        /AggregateError.*ECONNRESET/
+      ];
+      
+      process.stderr.write = function(chunk, encoding, fd) {
+        const message = chunk.toString();
+        // Only suppress Vite proxy errors, not other important errors
+        const isProxyError = suppressedPatterns.some(pattern => pattern.test(message));
+        const isApiOrUploads = message.includes('/api/') || message.includes('/uploads');
+        
+        if (isProxyError && isApiOrUploads) {
+          // Suppress this proxy connection error - backend is likely not running
+          // This is expected during development when backend hasn't started yet
+          return true;
+        }
+        // Write other errors normally (including non-proxy errors)
+        return originalWrite(chunk, encoding, fd);
+      };
+      
+      // Clean up on server close
+      server.httpServer?.once('close', () => {
+        process.stderr.write = originalWrite;
       });
     }
   };
@@ -25,6 +49,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   return {
+  // Suppress verbose logging for proxy errors
+  logLevel: env.VITE_LOG_LEVEL || 'warn',
+  clearScreen: false, // Don't clear screen on errors
   plugins: [
     handleProxyErrors(), // Add this plugin to handle proxy errors gracefully
     react({
@@ -120,34 +147,128 @@ export default defineConfig(({ mode }) => {
       output: {
         // Optimize chunk splitting for better code splitting
         manualChunks: (id) => {
-          // Vendor chunks
+          // Vendor chunks - split large libraries into separate chunks
           if (id.includes('node_modules')) {
-            // React, React DOM, React-Redux, and use-sync-external-store (they're tightly coupled)
-            // react-redux and use-sync-external-store directly depend on React's internals
-            if (id.includes('react') || 
-                id.includes('react-dom') || 
-                id.includes('react-redux') ||
-                id.includes('use-sync-external-store')) {
-              return 'react-vendor';
+            // React core libraries (keep together as they're tightly coupled)
+            if (id.includes('react') && !id.includes('react-dom')) {
+              return 'react-core';
             }
-            // Redux core (without react-redux)
-            if (id.includes('@reduxjs/toolkit') || id.includes('redux-persist')) {
-              return 'redux-vendor';
+            if (id.includes('react-dom')) {
+              return 'react-dom';
             }
-            // Material UI
-            if (id.includes('@mui')) {
-              return 'mui-vendor';
+            if (id.includes('react-redux') || id.includes('use-sync-external-store')) {
+              return 'react-redux';
             }
-            // Charts
-            if (id.includes('chart.js') || id.includes('recharts') || id.includes('react-chartjs-2')) {
-              return 'charts-vendor';
+            
+            // Redux core
+            if (id.includes('@reduxjs/toolkit')) {
+              return 'redux-toolkit';
             }
-            // Other large libraries
-            if (id.includes('axios') || id.includes('date-fns')) {
-              return 'utils-vendor';
+            if (id.includes('redux-persist')) {
+              return 'redux-persist';
             }
-            // Everything else from node_modules
+            
+            // Material UI - split into smaller chunks
+            if (id.includes('@mui/material')) {
+              return 'mui-material';
+            }
+            if (id.includes('@mui/icons-material')) {
+              return 'mui-icons';
+            }
+            if (id.includes('@mui') || id.includes('@emotion')) {
+              return 'mui-core';
+            }
+            
+            // Charts libraries (can be large)
+            if (id.includes('chart.js')) {
+              return 'chartjs';
+            }
+            if (id.includes('recharts')) {
+              return 'recharts';
+            }
+            if (id.includes('react-chartjs-2')) {
+              return 'react-chartjs';
+            }
+            
+            // Router
+            if (id.includes('react-router')) {
+              return 'react-router';
+            }
+            
+            // Google Maps (large library)
+            if (id.includes('@react-google-maps') || id.includes('@vis.gl/react-google-maps')) {
+              return 'google-maps';
+            }
+            
+            // Capacitor (mobile-specific, can be large)
+            if (id.includes('@capacitor')) {
+              return 'capacitor';
+            }
+            
+            // PDF and image processing (large libraries)
+            if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('qrcode')) {
+              return 'document-processing';
+            }
+            
+            // Date utilities
+            if (id.includes('date-fns')) {
+              return 'date-utils';
+            }
+            
+            // Animation libraries
+            if (id.includes('framer-motion')) {
+              return 'framer-motion';
+            }
+            
+            // HTTP client
+            if (id.includes('axios')) {
+              return 'axios';
+            }
+            
+            // i18n
+            if (id.includes('i18next') || id.includes('react-i18next')) {
+              return 'i18n';
+            }
+            
+            // Toast notifications
+            if (id.includes('react-toastify')) {
+              return 'toastify';
+            }
+            
+            // Other vendor libraries
             return 'vendor';
+          }
+          
+          // Split by feature areas for better code splitting
+          // Admin features
+          if (id.includes('/Admin/')) {
+            if (id.includes('/Admin/Employee/')) {
+              return 'admin-employee';
+            }
+            if (id.includes('/Admin/project/') || id.includes('/Admin/Project/')) {
+              return 'admin-project';
+            }
+            if (id.includes('/Admin/Payroll/')) {
+              return 'admin-payroll';
+            }
+            if (id.includes('/Admin/')) {
+              return 'admin';
+            }
+          }
+          
+          // HR features
+          if (id.includes('/HR/')) {
+            return 'hr';
+          }
+          
+          // Employee features
+          if (id.includes('/Employee/')) {
+            return 'employee';
+          }
+          
+          // Dashboard features
+          if (id.includes('/Dashboard') || id.includes('/dashboard')) {
+            return 'dashboard';
           }
         },
         // Optimize chunk file names
@@ -158,8 +279,9 @@ export default defineConfig(({ mode }) => {
     },
     // Disable source maps in production for security and performance
     sourcemap: false,
-    // Optimize chunk size
-    chunkSizeWarningLimit: 1000,
+    // Increase chunk size warning limit slightly (chunks under 1500KB are acceptable)
+    // The improved manualChunks should keep most chunks under 1000KB
+    chunkSizeWarningLimit: 1500,
   },
   // Set base path - use '/' for web deployment (Vercel)
   // IMPORTANT: Vercel requires '/' for proper asset and routing resolution
@@ -191,10 +313,24 @@ export default defineConfig(({ mode }) => {
         secure: false,
         // Handle connection errors gracefully - suppress ECONNREFUSED errors
         configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Set timeout to prevent hanging requests
+            proxyReq.setTimeout(5000, () => {
+              if (!res.headersSent) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                  success: false, 
+                  message: 'Service unavailable',
+                  code: 'SERVICE_UNAVAILABLE'
+                }));
+              }
+            });
+          });
+          
           proxy.on('error', (err, req, res) => {
             // Silently handle connection refused errors (backend not running)
-            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
-              // Send a 503 response instead of logging error
+            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
+              // Suppress error logging and send a 503 response
               if (res && !res.headersSent) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
@@ -203,11 +339,16 @@ export default defineConfig(({ mode }) => {
                   code: 'SERVICE_UNAVAILABLE'
                 }));
               }
+              // Prevent error from being logged by returning early
               return;
             }
             // For other errors, let them propagate (they'll be logged by Vite)
+            console.error('Proxy error:', err.message);
           });
         },
+        // Suppress error logging at the proxy level
+        ws: false,
+        timeout: 5000,
       },
       '/uploads': {
         target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)
@@ -215,10 +356,24 @@ export default defineConfig(({ mode }) => {
         secure: false,
         // Handle connection errors gracefully - suppress ECONNREFUSED errors
         configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Set timeout to prevent hanging requests
+            proxyReq.setTimeout(5000, () => {
+              if (!res.headersSent) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                  success: false, 
+                  message: 'Service unavailable',
+                  code: 'SERVICE_UNAVAILABLE'
+                }));
+              }
+            });
+          });
+          
           proxy.on('error', (err, req, res) => {
             // Silently handle connection refused errors (backend not running)
-            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
-              // Send a 503 response instead of logging error
+            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
+              // Suppress error logging and send a 503 response
               if (res && !res.headersSent) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
@@ -227,12 +382,21 @@ export default defineConfig(({ mode }) => {
                   code: 'SERVICE_UNAVAILABLE'
                 }));
               }
+              // Prevent error from being logged by returning early
               return;
             }
             // For other errors, let them propagate (they'll be logged by Vite)
+            console.error('Proxy error:', err.message);
           });
         },
+        // Suppress error logging at the proxy level
+        ws: false,
+        timeout: 5000,
       },
+    },
+    // Suppress connection errors in the server log
+    hmr: {
+      overlay: false, // Disable error overlay for connection issues
     },
   },
   };

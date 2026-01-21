@@ -9,9 +9,10 @@ import { DEFAULT_JWT_ACCESS_EXPIRE, DEFAULT_JWT_REFRESH_EXPIRE, CSRF_TOKEN_BYTES
  * @param {string} role - User role (admin/employee)
  * @param {string} organizationId - Organization ID (for multi-tenancy)
  * @param {Object} res - Express response object (optional)
+ * @param {Date|number} passwordChangedAt - Timestamp for token invalidation (optional)
  * @returns {Object|string} - Token object with accessToken, refreshToken, csrfToken or just accessToken
  */
-export const generateToken = (userId, role = null, organizationId = null, res = null) => {
+export const generateToken = (userId, role = null, organizationId = null, res = null, passwordChangedAt = null) => {
     try {
         // Validate JWT_SECRET is set
         if (!process.env.JWT_SECRET) {
@@ -22,6 +23,14 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
         const payload = { userId };
         if (role) payload.role = role;
         if (organizationId) payload.organizationId = organizationId;
+        if (passwordChangedAt) {
+            const passwordChangedAtMs = passwordChangedAt instanceof Date
+                ? passwordChangedAt.getTime()
+                : Number(passwordChangedAt);
+            if (!Number.isNaN(passwordChangedAtMs)) {
+                payload.passwordChangedAt = passwordChangedAtMs;
+            }
+        }
 
         // Access token - shorter expiration (1 hour default, configurable)
         const accessTokenExpiry = process.env.JWT_ACCESS_EXPIRE || DEFAULT_JWT_ACCESS_EXPIRE;
@@ -35,6 +44,7 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
         const refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRE || DEFAULT_JWT_REFRESH_EXPIRE;
         const refreshPayload = { userId, role, type: 'refresh' };
         if (organizationId) refreshPayload.organizationId = organizationId;
+        if (payload.passwordChangedAt) refreshPayload.passwordChangedAt = payload.passwordChangedAt;
         const refreshToken = jwt.sign(
             refreshPayload,
             process.env.JWT_SECRET,
@@ -70,6 +80,34 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
                 refreshCookieOptions.domain = process.env.DOMAIN;
             }
             res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+
+            // Non-httpOnly flag so frontend can detect presence of refresh token cookie
+            const refreshFlagOptions = {
+                maxAge: refreshCookieOptions.maxAge,
+                httpOnly: false,
+                sameSite: refreshCookieOptions.sameSite,
+                secure: refreshCookieOptions.secure,
+                path: '/',
+            };
+            if (process.env.NODE_ENV === 'production' && process.env.DOMAIN) {
+                refreshFlagOptions.domain = process.env.DOMAIN;
+            }
+            res.cookie('refreshTokenPresent', 'true', refreshFlagOptions);
+
+            // Store user role for client-side routing and refresh selection (non-sensitive)
+            if (role) {
+                const roleCookieOptions = {
+                    maxAge: refreshCookieOptions.maxAge,
+                    httpOnly: false,
+                    sameSite: refreshCookieOptions.sameSite,
+                    secure: refreshCookieOptions.secure,
+                    path: '/',
+                };
+                if (process.env.NODE_ENV === 'production' && process.env.DOMAIN) {
+                    roleCookieOptions.domain = process.env.DOMAIN;
+                }
+                res.cookie('role', role, roleCookieOptions);
+            }
 
             // Issue CSRF token for double-submit cookie strategy
             const csrfToken = crypto.randomBytes(CSRF_TOKEN_BYTES).toString('hex');

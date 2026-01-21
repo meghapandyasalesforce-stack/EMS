@@ -183,7 +183,8 @@ export const registerUser = asyncHandler(async (req, res) => {
         }
 
         // Generate JWT token with organizationId
-        const tokenResult = generateToken(newUser._id, newUser.role, newUser.organizationId, res);
+        const passwordChangedAt = newUser.passwordChangedAt || newUser.createdAt;
+        const tokenResult = generateToken(newUser._id, newUser.role, newUser.organizationId, res, passwordChangedAt);
         const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
         const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
         const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
@@ -352,13 +353,14 @@ export const loginUser = asyncHandler(async (req, res) => {
     });
 
     // Generate token with organizationId
-    const tokenResult = generateToken(user._id, 'admin', organizationId, res);
+    const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+    const tokenResult = generateToken(user._id, 'admin', organizationId, res, passwordChangedAt);
     const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
     const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
     const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
     
     // Get dashboard route based on role, position, and department
-    let dashboardRoute = '/dashboard/admin'; // Default fallback
+    let dashboardRoute = '/dashboard-admin'; // Default fallback
     try {
         dashboardRoute = await getDashboardRouteForUser(
             user._id,

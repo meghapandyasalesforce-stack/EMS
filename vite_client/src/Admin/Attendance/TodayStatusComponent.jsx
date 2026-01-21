@@ -22,7 +22,7 @@ const TodayStatusComponent = () => {
   }, []);
 
   useEffect(() => {
-    dispatch(fetchTodayStatus());
+    dispatch(fetchTodayStatus({ forceAdmin: true }));
   }, [dispatch]);
 
   if (loading) return <div className="text-center py-8">Loading today's status...</div>;

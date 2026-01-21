@@ -230,7 +230,6 @@ const ProjectDetailPage = () => {
         toast.error(result.error || 'Failed to update project');
       }
     } catch (error) {
-      console.error('Error updating project:', error);
       toast.error(error.response?.data?.error || 'An error occurred while updating the project');
     }
   }, [editedProject, employees, updateProject, project, isCEO, mapStatusToBackend]);
@@ -305,7 +304,6 @@ const ProjectDetailPage = () => {
         setUpdates(response.data.updates || []);
       }
     } catch (error) {
-      console.error('Error fetching project updates:', error);
       // Don't show error toast if updates don't exist yet
       if (error.response?.status !== 404) {
         toast.error('Failed to load project updates');
@@ -337,7 +335,6 @@ const ProjectDetailPage = () => {
         toast.error(response.data?.error || 'Failed to update status');
       }
     } catch (error) {
-      console.error('Error updating status:', error);
       toast.error(error.response?.data?.error || 'Failed to update project status');
     } finally {
       setUpdatingStatus(false);
@@ -372,7 +369,6 @@ const ProjectDetailPage = () => {
         toast.error(response.data?.error || 'Failed to post update');
       }
     } catch (error) {
-      console.error('Error posting update:', error);
       toast.error(error.response?.data?.error || 'Failed to post daily update');
     } finally {
       setSubmittingUpdate(false);

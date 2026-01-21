@@ -176,34 +176,81 @@ export const isAdminOrEmployee = createAuthMiddleware({
 });
 
 /**
- * Helper function to check if employee has HR role
- * SECURITY: Uses explicit functionalRoles array instead of string matching
+ * Legacy role derivation (fallback for old records without functionalRoles)
  */
-const checkIsHR = (employee) => {
-    const functionalRoles = employee.functionalRoles || [];
-    return functionalRoles.includes('hr');
+const deriveFunctionalRolesFromLegacy = (employee) => {
+    const roles = [];
+    const dept = (employee.department || '').toLowerCase().trim();
+    const pos = (employee.position || '').toLowerCase().trim();
+    const jobTitle = (employee.jobTitle || '').toLowerCase().trim();
+
+    // HR detection
+    if (dept === 'hr' || dept.includes('hr') || dept.includes('human resource') ||
+        jobTitle.includes('hr manager') || jobTitle.includes('human resource') ||
+        jobTitle.includes('hr') || (pos.includes('hr') && pos.includes('manager'))) {
+        roles.push('hr');
+    }
+
+    // Manager detection
+    if (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
+        pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director')) {
+        roles.push('manager');
+    }
+
+    // Executive detection
+    if (pos === 'ceo' || pos === 'cto' || pos === 'cfo' || pos === 'vp' ||
+        pos === 'vice president' || pos.includes('chief executive') ||
+        pos.includes('chief technology') || pos.includes('chief financial') ||
+        pos.includes('vice president')) {
+        if (pos === 'ceo' || pos.includes('chief executive')) roles.push('ceo');
+        if (pos === 'cto' || pos.includes('chief technology')) roles.push('cto');
+        if (pos === 'cfo' || pos.includes('chief financial')) roles.push('cfo');
+        if (pos === 'vp' || pos === 'vice president') roles.push('vp');
+        roles.push('executive');
+    }
+
+    // Finance detection
+    if (dept === 'finance' || dept.includes('finance')) {
+        roles.push('finance');
+    }
+
+    // Tech detection
+    if (dept === 'engineering' || dept === 'it support' || dept.includes('engineering') ||
+        dept.includes('technology') || jobTitle.includes('engineer') || jobTitle.includes('developer')) {
+        roles.push('tech');
+    }
+
+    return [...new Set(roles)];
 };
+
+/**
+ * Get functional roles with legacy fallback
+ */
+const getEffectiveFunctionalRoles = (employee) => {
+    const roles = Array.isArray(employee.functionalRoles) ? employee.functionalRoles : [];
+    return roles.length > 0 ? roles : deriveFunctionalRolesFromLegacy(employee);
+};
+
+/**
+ * Helper function to check if employee has HR role
+ */
+const checkIsHR = (employee) => getEffectiveFunctionalRoles(employee).includes('hr');
 
 /**
  * Helper function to check if employee has Manager role
- * SECURITY: Uses explicit functionalRoles array instead of string matching
  */
-const checkIsManager = (employee) => {
-    const functionalRoles = employee.functionalRoles || [];
-    return functionalRoles.includes('manager');
-};
+const checkIsManager = (employee) => getEffectiveFunctionalRoles(employee).includes('manager');
 
 /**
  * Helper function to check if employee is Executive
- * SECURITY: Uses explicit functionalRoles array instead of string matching
  */
 const checkIsExecutive = (employee) => {
-    const functionalRoles = employee.functionalRoles || [];
-    return functionalRoles.includes('executive') || 
-           functionalRoles.includes('ceo') ||
-           functionalRoles.includes('cto') ||
-           functionalRoles.includes('cfo') ||
-           functionalRoles.includes('vp');
+    const roles = getEffectiveFunctionalRoles(employee);
+    return roles.includes('executive') || 
+           roles.includes('ceo') ||
+           roles.includes('cto') ||
+           roles.includes('cfo') ||
+           roles.includes('vp');
 };
 
 /**
@@ -222,14 +269,16 @@ export const isAdminOrHR = createAuthMiddleware({
         // For employees, check if they are HR
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId')
+                .select('functionalRoles organizationId department position jobTitle')
                 .lean();
 
             if (!employee) {
                 return 'Employee not found';
             }
 
-            if (checkIsHR(employee)) {
+            const effectiveRoles = getEffectiveFunctionalRoles(employee);
+
+            if (effectiveRoles.includes('hr')) {
                 // Ensure organizationId is available from employee record if not in token
                 if (employee.organizationId && !decoded.organizationId) {
                     decoded.organizationId = employee.organizationId;
@@ -241,7 +290,7 @@ export const isAdminOrHR = createAuthMiddleware({
                 // Then enhance req.employee with functional roles
                 req.employee = {
                     ...req.employee,
-                    functionalRoles: employee.functionalRoles || [],
+                    functionalRoles: effectiveRoles,
                     organizationId: employee.organizationId || decoded.organizationId || req.organizationId
                 };
                 return true;
@@ -249,7 +298,7 @@ export const isAdminOrHR = createAuthMiddleware({
 
             logger.warn('HR access denied - not HR employee', { 
                 userId: decoded.userId,
-                functionalRoles: employee.functionalRoles || []
+                functionalRoles: effectiveRoles
             });
             return 'Access restricted to admins and HR personnel only';
         }
@@ -274,14 +323,16 @@ export const isAdminOrExecutive = createAuthMiddleware({
         // For employees, check if they are executives
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId status active')
+                .select('functionalRoles organizationId status active department position jobTitle')
                 .lean();
 
             if (!employee) {
                 return 'Employee not found';
             }
 
-            if (checkIsExecutive(employee)) {
+            const effectiveRoles = getEffectiveFunctionalRoles(employee);
+
+            if (effectiveRoles.includes('executive') || effectiveRoles.includes('ceo') || effectiveRoles.includes('cto') || effectiveRoles.includes('cfo') || effectiveRoles.includes('vp')) {
                 // Ensure organizationId is available from employee record if not in token
                 if (employee.organizationId && !decoded.organizationId) {
                     decoded.organizationId = employee.organizationId;
@@ -291,7 +342,7 @@ export const isAdminOrExecutive = createAuthMiddleware({
                 // Also attach full employee data for easy access
                 req.employee = {
                     ...req.employee,
-                    functionalRoles: employee.functionalRoles || [],
+                    functionalRoles: effectiveRoles,
                     organizationId: employee.organizationId,
                     status: employee.status,
                     active: employee.active
@@ -305,7 +356,7 @@ export const isAdminOrExecutive = createAuthMiddleware({
 
             logger.warn('Executive access denied - not an executive position', { 
                 userId: decoded.userId,
-                functionalRoles: employee.functionalRoles || []
+                functionalRoles: effectiveRoles
             });
             return 'Access restricted to admins and executives only';
         }
@@ -330,15 +381,16 @@ export const isAdminOrHROrExecutive = createAuthMiddleware({
         // For employees, check if they are HR or Executive
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId status active')
+                .select('functionalRoles organizationId status active department position jobTitle')
                 .lean();
 
             if (!employee) {
                 return 'Employee not found';
             }
 
-            const isHR = checkIsHR(employee);
-            const isExec = checkIsExecutive(employee);
+            const effectiveRoles = getEffectiveFunctionalRoles(employee);
+            const isHR = effectiveRoles.includes('hr');
+            const isExec = effectiveRoles.includes('executive') || effectiveRoles.includes('ceo') || effectiveRoles.includes('cto') || effectiveRoles.includes('cfo') || effectiveRoles.includes('vp');
 
             if (isHR || isExec) {
                 // Ensure organizationId is available
@@ -349,7 +401,7 @@ export const isAdminOrHROrExecutive = createAuthMiddleware({
                 attachUserToRequest(req, decoded);
                 req.employee = {
                     ...req.employee,
-                    functionalRoles: employee.functionalRoles || [],
+                    functionalRoles: effectiveRoles,
                     organizationId: employee.organizationId || decoded.organizationId || req.organizationId
                 };
                 return true;
@@ -357,7 +409,7 @@ export const isAdminOrHROrExecutive = createAuthMiddleware({
 
             logger.warn('HR/Executive access denied', { 
                 userId: decoded.userId,
-                functionalRoles: employee.functionalRoles || []
+                functionalRoles: effectiveRoles
             });
             return 'Access restricted to admins, HR personnel, and executives only';
         }
@@ -382,23 +434,24 @@ export const isAdminOrManagerOrHR = createAuthMiddleware({
         // For employees, check if they are HR, Manager, or Executive
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId status active')
+                .select('functionalRoles organizationId status active department position jobTitle')
                 .lean();
 
             if (!employee) {
                 return 'Employee not found';
             }
 
-            const isHR = checkIsHR(employee);
-            const isManager = checkIsManager(employee);
-            const isExec = checkIsExecutive(employee);
+            const effectiveRoles = getEffectiveFunctionalRoles(employee);
+            const isHR = effectiveRoles.includes('hr');
+            const isManager = effectiveRoles.includes('manager');
+            const isExec = effectiveRoles.includes('executive') || effectiveRoles.includes('ceo') || effectiveRoles.includes('cto') || effectiveRoles.includes('cfo') || effectiveRoles.includes('vp');
 
             if (isHR || isManager || isExec) {
                 // Enhance req.employee with functional roles
                 if (req.employee) {
                     req.employee = {
                         ...req.employee,
-                        functionalRoles: employee.functionalRoles || [],
+                        functionalRoles: effectiveRoles,
                         organizationId: employee.organizationId || decoded.organizationId || req.organizationId,
                         isManager: isManager,
                         isHR: isHR,
@@ -414,7 +467,7 @@ export const isAdminOrManagerOrHR = createAuthMiddleware({
 
             logger.warn('Access denied - not HR, Manager, or Executive', { 
                 userId: decoded.userId,
-                functionalRoles: employee.functionalRoles || []
+                functionalRoles: effectiveRoles
             });
             return 'Access restricted to admins, HR personnel, managers, and executives only';
         }

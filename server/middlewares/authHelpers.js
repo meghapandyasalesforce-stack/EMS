@@ -62,12 +62,17 @@ export const verifyToken = (token) => {
  * @returns {boolean} - True if token is valid, false if password was changed after token was issued
  */
 export const verifyPasswordNotChanged = (decoded, passwordChangedAt) => {
-    if (!passwordChangedAt || !decoded.passwordChangedAt) {
-        // If either is missing, assume valid (backward compatibility)
+    if (!passwordChangedAt) {
+        // No password change recorded, assume valid
         return true;
     }
     
-    const tokenPasswordTime = decoded.passwordChangedAt;
+    const tokenPasswordTime = decoded?.passwordChangedAt
+        ?? (decoded?.iat ? decoded.iat * 1000 : null);
+    if (!tokenPasswordTime) {
+        // Backward compatibility: token missing timing info
+        return true;
+    }
     const currentPasswordTime = passwordChangedAt instanceof Date 
         ? passwordChangedAt.getTime() 
         : passwordChangedAt;

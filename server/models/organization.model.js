@@ -236,6 +236,23 @@ const organizationSchema = new mongoose.Schema({
             type: Boolean,
             default: true
         },
+        employeeIdPrefix: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: null
+        },
+        employeeIdNextNumber: {
+            type: Number,
+            default: null,
+            min: 1
+        },
+        employeeIdMinDigits: {
+            type: Number,
+            default: 3,
+            min: 2,
+            max: 10
+        },
         twoFactorAuth: {
             enabled: { type: Boolean, default: false },
             required: { type: Boolean, default: false }

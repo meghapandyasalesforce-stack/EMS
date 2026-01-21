@@ -18,8 +18,8 @@ const NotificationDropdown = () => {
     const authUser = useSelector((state) => state?.auth?.user);
 
     useEffect(() => {
-        // Only fetch when a user is available (authenticated)
-        if (!authUser) return;
+        // Only fetch when a user is available (authenticated) and password reset is not required
+        if (!authUser || authUser?.mustResetPassword) return;
         
         // Initial fetch with delay to avoid race conditions
         const initialTimeout = setTimeout(() => {
@@ -111,6 +111,7 @@ const NotificationDropdown = () => {
     }, [isOpen]);
 
     const fetchNotifications = async () => {
+        if (!authUser || authUser?.mustResetPassword) return;
         try {
             setLoading(true);
             const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications?limit=10&unreadOnly=true`);
@@ -150,6 +151,7 @@ const NotificationDropdown = () => {
     };
 
     const fetchUnreadCount = async () => {
+        if (!authUser || authUser?.mustResetPassword) return;
         try {
             const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/unread-count`);
 

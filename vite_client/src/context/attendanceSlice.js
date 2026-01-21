@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../utils/axios';
 import { BOTH_ATTENDANCE_ENDPOINT } from './../utils/constant';
+import { getUserRole } from '../utils/authHelper';
 
 // Thunks
 
@@ -46,32 +47,10 @@ export const clockIn = createAsyncThunk(
         payload.longitude = lng;
       } else {
         // If location was expected but is missing, log warning
-        // This helps debug cases where location should have been captured
-        if (import.meta.env.DEV) {
-          console.warn('Clock-in payload missing location:', {
-            hasLatitude: clockInData.latitude !== undefined,
-            hasLongitude: clockInData.longitude !== undefined,
-            originalLatitude: clockInData.latitude,
-            originalLongitude: clockInData.longitude,
-            normalizedLat: lat,
-            normalizedLng: lng,
-            payloadKeys: Object.keys(clockInData)
-          });
-        }
       }
       
       // Remove undefined accuracy to avoid sending it
       if (payload.accuracy === undefined) delete payload.accuracy;
-      
-      // Log payload for debugging (development only)
-      if (import.meta.env.DEV) {
-        console.info('Clock-in API payload:', {
-          hasLocation: !!(payload.latitude && payload.longitude),
-          latitude: payload.latitude,
-          longitude: payload.longitude,
-          payloadKeys: Object.keys(payload)
-        });
-      }
       
       const res = await axios.post(
         `${BOTH_ATTENDANCE_ENDPOINT}/clock-in`,
@@ -206,11 +185,32 @@ export const fetchLogs = createAsyncThunk(
 
 export const fetchTodayStatus = createAsyncThunk(
   'attendance/fetchTodayStatus',
-  async (_, { rejectWithValue }) => {
+  async (options = {}, { rejectWithValue }) => {
     try {
+      const role = getUserRole();
+      const forceAdmin = options?.forceAdmin === true;
+      const useMyStatus = !forceAdmin && role && role !== 'admin';
+
+      if (useMyStatus) {
+        const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/my-today-status`);
+        return res.data;
+      }
+
       const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/today-status`);
       return res.data;
     } catch (err) {
+      if (!options?.forceAdmin && (err.response?.status === 403 || err.response?.status === 401)) {
+        try {
+          const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/my-today-status`);
+          return res.data;
+        } catch (fallbackError) {
+          return rejectWithValue({
+            message: fallbackError.response?.data?.message || "Failed to get today status",
+            status: fallbackError.response?.status,
+            data: fallbackError.response?.data
+          });
+        }
+      }
       // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to get today status",

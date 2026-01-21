@@ -79,7 +79,7 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
             }
             // PRIORITY 6: Default → Employee Dashboard
             else {
-                dashboardRoute = '/dashboard/employee';
+                dashboardRoute = '/dashboard-employee';
                 logger.debug('Default Employee Dashboard', { userId });
             }
         } 
@@ -118,7 +118,7 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
                     } else if (department === 'finance' || department.includes('finance')) {
                         dashboardRoute = '/dashboard/finance';
                     } else {
-                        dashboardRoute = '/dashboard/admin';
+                        dashboardRoute = '/dashboard-admin';
                     }
                     
                     logger.debug('Admin with employee record - using employee routing', { 
@@ -148,7 +148,7 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
             }
             
             // Default admin dashboard
-            dashboardRoute = '/dashboard/admin';
+            dashboardRoute = '/dashboard-admin';
             logger.debug('Default Admin Dashboard', { userId });
         }
         
@@ -161,7 +161,7 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
             stack: error.stack 
         });
         // Return safe default based on role
-        return role === 'admin' ? '/dashboard/admin' : '/dashboard/employee';
+        return role === 'admin' ? '/dashboard-admin' : '/dashboard-employee';
     }
 };
 
@@ -181,7 +181,7 @@ export const getDashboardRouteByRole = (role, email = '') => {
         if (isGmailUser) {
             return '/organization/dashboard';
         }
-        return '/dashboard/admin';
+        return '/dashboard-admin';
     } else if (role === 'hr_manager') {
         return '/dashboard/hr';
     } else if (role === 'manager') {
@@ -189,7 +189,7 @@ export const getDashboardRouteByRole = (role, email = '') => {
     } else if (role === 'finance') {
         return '/dashboard/finance';
     } else {
-        return '/dashboard/employee';
+        return '/dashboard-employee';
     }
 };
 

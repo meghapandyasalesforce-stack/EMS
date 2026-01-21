@@ -34,7 +34,6 @@ const MyOnboardingPage = () => {
                 // No workflow found
                 setWorkflow(null);
             } else {
-                console.error('Error fetching workflow:', error);
                 toast.error('Failed to load onboarding workflow');
             }
         } finally {
@@ -53,7 +52,6 @@ const MyOnboardingPage = () => {
             toast.success('Task updated successfully');
             fetchMyWorkflow();
         } catch (error) {
-            console.error('Error updating task:', error);
             toast.error(error.response?.data?.message || 'Failed to update task');
         } finally {
             setSubmitting(false);

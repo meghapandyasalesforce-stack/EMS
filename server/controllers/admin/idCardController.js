@@ -1,10 +1,12 @@
 import IdCard from '../../models/idCard.model.js';
 import Employee from '../../models/employee.model.js';
+import User from '../../models/user.model.js';
 import path from 'path';
 import fs from 'fs';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { generateEmployeeQRCode, generateQRCodeBuffer } from '../../helpers/qrCodeGenerator.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
 
 // Helper to generate QR code image and save it
 const generateAndSaveQRCode = async (employee, employeeCode) => {
@@ -48,6 +50,106 @@ const generateAndSaveQRCode = async (employee, employeeCode) => {
     }
 };
 
+// Reusable function for auto-generating ID cards
+export const autoGenerateIdCard = async (employeeId, organizationId, generatedBy = null) => {
+    try {
+        // Check if ID card already exists
+        const existingIdCard = await IdCard.findOne({ 
+            employeeId, 
+            organizationId 
+        });
+        
+        if (existingIdCard) {
+            logger.debug('ID card already exists for employee', { employeeId });
+            return { success: false, reason: 'already_exists', idCard: existingIdCard };
+        }
+
+        // Fetch employee data
+        const employee = await Employee.findOne({
+            _id: employeeId,
+            organizationId
+        }).select('name lastName employeeId jobTitle department email joiningDate profilePhoto position jobCategory phone1 phone2 address bloodGroup');
+
+        if (!employee) {
+            logger.warn('Employee not found for ID card generation', { employeeId, organizationId });
+            return { success: false, reason: 'employee_not_found' };
+        }
+
+        // Generate QR code
+        let qrCodeUrl = null, qrCodeFileName = null, qrData = null;
+        try {
+            const qrResult = await generateAndSaveQRCode(employee, employee.employeeId);
+            qrCodeUrl = qrResult.qrCodeUrl;
+            qrCodeFileName = qrResult.qrCodeFileName;
+            qrData = JSON.stringify({
+                employeeId: employee.employeeId,
+                email: employee.email,
+                name: `${employee.name} ${employee.lastName}`,
+                department: employee.department,
+                jobTitle: employee.jobTitle
+            });
+        } catch (qrError) {
+            logger.warn('QR Code generation failed for auto-generate', {
+                error: qrError.message,
+                employeeId: employee.employeeId
+            });
+            // Continue without QR code
+        }
+
+        // Default card design
+        const defaultCardDesign = {
+            template: 'standard',
+            backgroundColor: '#ffffff',
+            textColor: '#000000',
+            companyName: 'Paarsiv Technologies',
+            companyAddress: 'Your Company Address'
+        };
+
+        // Generate card number
+        const year = new Date().getFullYear().toString().slice(-2);
+        const random = Math.floor(100000 + Math.random() * 900000);
+        const cardNumber = `ID${year}${random}`;
+
+        // Create ID card data
+        const idCardData = {
+            organizationId, // Required field
+            employeeId: employee._id,
+            cardNumber,
+            cardType: 'employee',
+            cardDesign: defaultCardDesign,
+            accessLevel: 'basic',
+            accessZones: [],
+            generatedBy: generatedBy || employee._id // Use employee ID if no admin specified
+        };
+
+        // Add QR code if generated
+        if (qrCodeUrl) {
+            idCardData.qrCode = {
+                data: qrData,
+                imageUrl: qrCodeUrl
+            };
+        }
+
+        const newIdCard = await IdCard.create(idCardData);
+        
+        logger.info('ID card auto-generated successfully', { 
+            idCardId: newIdCard._id, 
+            employeeId: employee._id,
+            organizationId 
+        });
+        
+        return { success: true, idCard: newIdCard };
+    } catch (error) {
+        logger.error('Auto-generate ID card error', {
+            error: error.message,
+            stack: error.stack,
+            employeeId,
+            organizationId
+        });
+        return { success: false, reason: 'generation_failed', error: error.message };
+    }
+};
+
 // Generate ID Card
 export const generateIdCard = async (req, res) => {
     try {
@@ -65,6 +167,16 @@ export const generateIdCard = async (req, res) => {
         } = req.body;
         const adminId = req.user._id;
 
+        // Get organizationId from request
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            logger.error('Missing organizationId in ID card generation request', {
+                adminId: req.user._id,
+                employeeId: req.body.employeeId
+            });
+            return res.status(400).json({ message: 'Organization ID is required' });
+        }
+
         logger.debug('Looking for employee', { employeeId, employeeIdType: typeof employeeId });
         
         // Check if employeeId is a valid ObjectId
@@ -73,16 +185,27 @@ export const generateIdCard = async (req, res) => {
             return res.status(400).json({ message: 'Invalid employee ID format' });
         }
         
-        const employee = await Employee.findById(employeeId).select('name lastName employeeId jobTitle department email joiningDate profilePhoto position jobCategory phone1 phone2 address bloodGroup');
+        // Update employee lookup to include organizationId filter for security
+        const employee = await Employee.findOne({ 
+            _id: employeeId,
+            organizationId // Ensure employee belongs to same organization
+        }).select('name lastName employeeId jobTitle department email joiningDate profilePhoto position jobCategory phone1 phone2 address bloodGroup organizationId');
+        
         if (!employee) {
-            logger.warn('Employee not found', { employeeId });
+            logger.warn('Employee not found or does not belong to organization', { 
+                employeeId, 
+                organizationId 
+            });
             return res.status(404).json({ message: 'Employee not found' });
         }
 
         logger.info('Found employee', { employeeId: employee._id, name: employee.name });
 
-        // Check if an ID card already exists for this employee
-        const existingIdCard = await IdCard.findOne({ employeeId });
+        // Check if an ID card already exists for this employee (within same organization)
+        const existingIdCard = await IdCard.findOne({ 
+            employeeId,
+            organizationId // Check within same organization
+        });
         if (existingIdCard) {
             logger.warn('ID card already exists for employee', { employeeId });
             return res.status(400).json({ message: 'ID card already exists for this employee. Please update it instead.' });
@@ -134,8 +257,9 @@ export const generateIdCard = async (req, res) => {
 
         logger.debug('Creating ID card', { cardDesign: defaultCardDesign.template, employeeId: employee._id });
         const idCardData = {
+            organizationId: organizationId, // Add required organizationId field
             employeeId: employee._id,
-            cardNumber: cardNumber, // Add cardNumber explicitly
+            cardNumber: cardNumber,
             cardType,
             cardDesign: defaultCardDesign,
             accessLevel,

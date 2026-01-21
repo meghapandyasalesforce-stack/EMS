@@ -34,11 +34,17 @@ export const getAllowedOrigins = () => {
   // Remove duplicates and filter out empty strings
   const uniqueOrigins = [...new Set(origins.filter(origin => origin && origin.trim()))];
   
-  // In production, ensure we have at least one origin configured
-  if (process.env.NODE_ENV === 'production' && uniqueOrigins.length === 0) {
-    logger.error('CORS: No allowed origins configured in production. This is a security risk!');
+  // SECURITY: In production, fail fast if no origins are configured
+  // Never fall back to localhost in production - this is a critical security risk
+  if (process.env.NODE_ENV === 'production') {
+    if (uniqueOrigins.length === 0) {
+      logger.error('CORS: No allowed origins configured in production. This is a critical security risk!');
+      throw new Error('CORS configuration error: At least one origin must be configured in production via FRONTEND_URL or ALLOWED_ORIGINS environment variables.');
+    }
+    return uniqueOrigins;
   }
   
+  // Development: Allow localhost fallback for convenience
   return uniqueOrigins.length > 0 ? uniqueOrigins : ['http://localhost:5173'];
 };
 

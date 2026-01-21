@@ -22,7 +22,10 @@ const OrganizationSettings = () => {
     const [settings, setSettings] = useState({
         allowEmployeeRegistration: true,
         requireEmailVerification: false,
-        allowSelfService: true
+        allowSelfService: true,
+        employeeIdPrefix: '',
+        employeeIdStartNumber: 1,
+        employeeIdMinDigits: 3
     });
     const [subscription, setSubscription] = useState({
         subscriptionPlan: 'free',
@@ -35,12 +38,18 @@ const OrganizationSettings = () => {
     }, [dispatch]);
 
     useEffect(() => {
-        if (profile) {
+        // Update local state whenever profile data changes
+        if (profile?.settings) {
             setSettings({
-                allowEmployeeRegistration: profile.settings?.allowEmployeeRegistration ?? true,
-                requireEmailVerification: profile.settings?.requireEmailVerification ?? false,
-                allowSelfService: profile.settings?.allowSelfService ?? true
+                allowEmployeeRegistration: profile.settings.allowEmployeeRegistration ?? true,
+                requireEmailVerification: profile.settings.requireEmailVerification ?? false,
+                allowSelfService: profile.settings.allowSelfService ?? true,
+                employeeIdPrefix: profile.settings.employeeIdPrefix || '',
+                employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
+                employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3
             });
+        }
+        if (profile) {
             setSubscription({
                 subscriptionPlan: profile.subscriptionPlan || 'free',
                 maxEmployees: profile.maxEmployees || 10
@@ -81,6 +90,19 @@ const OrganizationSettings = () => {
         try {
             setIsSaving(true);
             await dispatch(updateOrganizationSettings(settings)).unwrap();
+            // Re-fetch profile to ensure we have the latest data
+            const updatedProfile = await dispatch(fetchOrganizationProfile()).unwrap();
+            // Update local state from the freshly fetched profile
+            if (updatedProfile?.settings) {
+                setSettings({
+                    allowEmployeeRegistration: updatedProfile.settings.allowEmployeeRegistration ?? true,
+                    requireEmailVerification: updatedProfile.settings.requireEmailVerification ?? false,
+                    allowSelfService: updatedProfile.settings.allowSelfService ?? true,
+                    employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
+                    employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
+                    employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3
+                });
+            }
             toast.success('Settings updated successfully');
         } catch (error) {
             toast.error(error || 'Failed to update settings');
@@ -196,6 +218,59 @@ const OrganizationSettings = () => {
                                 <FiToggleLeft className="w-12 h-6 text-gray-400" />
                             )}
                         </button>
+                    </div>
+
+                    {/* Employee ID Format */}
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex-1">
+                            <h3 className="text-lg font-medium text-gray-800 flex items-center">
+                                <FiUsers className="mr-2" />
+                                Employee ID Format
+                            </h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Example: prefix PRS + start 10 → PRS010
+                            </p>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Prefix</label>
+                                <input
+                                    type="text"
+                                    value={settings.employeeIdPrefix}
+                                    onChange={(e) => setSettings(prev => ({ ...prev, employeeIdPrefix: e.target.value }))}
+                                    className="mt-1 w-full border rounded-md p-2"
+                                    placeholder="PRS"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Start Number</label>
+                                <input
+                                    type="number"
+                                    value={settings.employeeIdStartNumber}
+                                    onChange={(e) => setSettings(prev => ({ ...prev, employeeIdStartNumber: Number(e.target.value) }))}
+                                    className="mt-1 w-full border rounded-md p-2"
+                                    min="1"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Min Digits</label>
+                                <input
+                                    type="number"
+                                    value={settings.employeeIdMinDigits}
+                                    onChange={(e) => setSettings(prev => ({ ...prev, employeeIdMinDigits: Number(e.target.value) }))}
+                                    className="mt-1 w-full border rounded-md p-2"
+                                    min="2"
+                                    max="10"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-3 text-sm text-gray-600">
+                            Preview: <strong>{settings.employeeIdPrefix || 'EMP'}{String(settings.employeeIdStartNumber).padStart(settings.employeeIdMinDigits, '0')}</strong>
+                        </div>
                     </div>
                 </div>
             </div>

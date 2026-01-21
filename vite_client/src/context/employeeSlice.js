@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../utils/axios';
 import { EMPLOYEE_AUTH_ENDPOINT } from '../utils/constant';
+import { getUserRole } from '../utils/authHelper';
 
 // employeeSlice.js
 export const createEmployee = createAsyncThunk(
@@ -25,31 +26,46 @@ export const fetchEmployees = createAsyncThunk(
   'employees/fetchEmployees',
   async (_, thunkAPI) => {
     try {
-      // Try admin endpoint first (for HR and Admins to see all employees)
-      try {
+      const role = getUserRole();
+      const useAdminEndpoint = role === 'admin';
+
+      const fetchFromAdmin = async () => {
         const adminResponse = await axios.get('/v1/admin/employee', { withCredentials: true });
-        // Admin endpoint returns: { success: true, data: [...], pagination: {...} }
         if (adminResponse.data?.data && Array.isArray(adminResponse.data.data)) {
           return adminResponse.data.data;
         }
-      } catch (adminError) {
-        // If admin endpoint fails (403/401), try employee endpoint
-        if (adminError.response?.status === 403 || adminError.response?.status === 401) {
-          const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, { withCredentials: true });
-          // Handle different response structures
-          if (response.data.employees) {
-            return response.data.employees;
-          } else if (Array.isArray(response.data)) {
-            return response.data;
-          } else if (response.data.data && Array.isArray(response.data.data)) {
-            return response.data.data;
-          }
-          return [];
+        return [];
+      };
+
+      const fetchFromEmployee = async () => {
+        const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, { withCredentials: true });
+        if (response.data.employees) {
+          return response.data.employees;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          return response.data.data;
         }
-        // Re-throw if it's not a permission error
+        return [];
+      };
+
+      if (useAdminEndpoint) {
+        return await fetchFromAdmin();
+      }
+
+      if (role) {
+        return await fetchFromEmployee();
+      }
+
+      // Fallback if role is unknown
+      try {
+        return await fetchFromAdmin();
+      } catch (adminError) {
+        if (adminError.response?.status === 403 || adminError.response?.status === 401) {
+          return await fetchFromEmployee();
+        }
         throw adminError;
       }
-      return [];
     } catch (err) {
       // Removed console.error for production
       return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to fetch employees');

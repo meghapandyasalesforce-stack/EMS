@@ -297,6 +297,14 @@ const DashboardManager = () => {
 
     const handleEditProfile = () => navigate('/profile-details');
     
+    if (user?.mustResetPassword) {
+        return (
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+                <PasswordResetPopup onClose={() => navigate('/login')} />
+            </div>
+        );
+    }
+
     if (loading || isLoading) {
         return <LoadingSpinner message="Loading Manager Dashboard..." />;
     }

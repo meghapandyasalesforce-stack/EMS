@@ -7,6 +7,7 @@
 import { getOrganizationId } from '../helpers/organizationHelper.js';
 import logger from '../helpers/logger.js';
 import { sendError } from '../helpers/responseHelper.js';
+import { setRequestContextValue } from '../helpers/requestContext.js';
 
 /**
  * Middleware to set organization context for queries
@@ -28,6 +29,9 @@ export const setOrganizationContext = (req, res, next) => {
         req.queryContext = {
             organizationId
         };
+
+        // Store in AsyncLocalStorage for automatic query scoping
+        setRequestContextValue('organizationId', organizationId);
         
         logger.debug('Organization context set', {
             organizationId,

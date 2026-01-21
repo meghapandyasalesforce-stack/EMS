@@ -4,6 +4,7 @@ import User from "../../models/user.model.js";
 import { generateToken } from "../../helpers/utils.js";
 import { sendSuccess, sendError, sendUnauthorized } from "../../helpers/responseHelper.js";
 import logger from "../../helpers/logger.js";
+import { verifyPasswordNotChanged } from "../../middlewares/authHelpers.js";
 
 /**
  * Refresh access token using refresh token
@@ -62,6 +63,11 @@ export const refreshToken = async (req, res) => {
         const isActive = user.active !== undefined ? user.active : user.isActive;
         if (!isActive) {
             return sendError(res, 'Account is inactive', 403, 'ACCOUNT_INACTIVE');
+        }
+
+        // SECURITY: Invalidate refresh if password changed after token issuance
+        if (!verifyPasswordNotChanged(decoded, user.passwordChangedAt || user.createdAt)) {
+            return sendUnauthorized(res, 'Session expired due to password change. Please login again.');
         }
 
         // Generate new access token with organizationId

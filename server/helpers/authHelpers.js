@@ -71,6 +71,8 @@ export const clearAuthCookies = async (res, req = null) => {
     res.clearCookie('jwt', cookieOptions);
     res.clearCookie('refreshToken', cookieOptions);
     res.clearCookie('csrfToken', csrfCookieOptions);
+    res.clearCookie('role', csrfCookieOptions);
+    res.clearCookie('refreshTokenPresent', csrfCookieOptions);
 
     // SECURITY: Delete CSRF token from server-side store
     if (req && (req.user?._id || req.employee?._id)) {

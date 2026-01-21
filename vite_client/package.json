@@ -82,6 +82,7 @@
     "@vitejs/plugin-react": "^4.4.1",
     "@vitest/coverage-v8": "^4.0.12",
     "@vitest/ui": "^4.0.12",
+    "baseline-browser-mapping": "^2.9.15",
     "cross-env": "^10.1.0",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",

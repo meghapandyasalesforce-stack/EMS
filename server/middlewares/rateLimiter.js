@@ -16,9 +16,15 @@ export const loginLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // In development, skip rate limiting if explicitly disabled
+    // SECURITY: Never skip rate limiting in production
+    // Only allow skipping in development with explicit flag
     skip: (req) => {
-        return process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true';
+        // Never skip in production - rate limiting is mandatory
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // Only allow disabling in development
+        return process.env.DISABLE_RATE_LIMIT === 'true';
     }
 });
 
@@ -35,9 +41,15 @@ export const apiLimiter = rateLimit({
     skipSuccessfulRequests: false,
     // Skip failed requests from rate limiting (count all requests)
     skipFailedRequests: false,
-    // In development, allow disabling rate limiting entirely
+    // SECURITY: Never skip rate limiting in production
+    // Only allow skipping in development with explicit flag
     skip: (req) => {
-        return process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true';
+        // Never skip in production - rate limiting is mandatory
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // Only allow disabling in development
+        return process.env.DISABLE_RATE_LIMIT === 'true';
     }
 });
 
@@ -64,9 +76,15 @@ export const generalLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // In development, allow disabling rate limiting entirely
+    // SECURITY: Never skip rate limiting in production
+    // Only allow skipping in development with explicit flag
     skip: (req) => {
-        return process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true';
+        // Never skip in production - rate limiting is mandatory
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // Only allow disabling in development
+        return process.env.DISABLE_RATE_LIMIT === 'true';
     }
 });
 
@@ -86,10 +104,17 @@ export const userLimiter = rateLimit({
         return userId ? `user:${userId}` : req.ip;
     },
     // Skip rate limiting for certain user roles (e.g., admins) or if disabled in dev
+    // SECURITY: Never skip rate limiting in production, even for admins
     skip: (req) => {
-        if (process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true') {
+        // Never skip in production - rate limiting is mandatory for all users
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // In development, allow disabling with explicit flag
+        if (process.env.DISABLE_RATE_LIMIT === 'true') {
             return true;
         }
+        // Allow admins to skip in development only
         const role = req.user?.role || req.employee?.role;
         return role === 'admin' || role === 'superadmin';
     }
@@ -109,9 +134,15 @@ export const readLimiter = rateLimit({
         const userId = req.user?._id || req.employee?._id;
         return userId ? `user:${userId}` : req.ip;
     },
-    // In development, allow disabling rate limiting entirely
+    // SECURITY: Never skip rate limiting in production
+    // Only allow skipping in development with explicit flag
     skip: (req) => {
-        return process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true';
+        // Never skip in production - rate limiting is mandatory
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // Only allow disabling in development
+        return process.env.DISABLE_RATE_LIMIT === 'true';
     }
 });
 
@@ -129,9 +160,15 @@ export const writeLimiter = rateLimit({
         const userId = req.user?._id || req.employee?._id;
         return userId ? `user:${userId}` : req.ip;
     },
-    // In development, allow disabling rate limiting entirely
+    // SECURITY: Never skip rate limiting in production
+    // Only allow skipping in development with explicit flag
     skip: (req) => {
-        return process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true';
+        // Never skip in production - rate limiting is mandatory
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // Only allow disabling in development
+        return process.env.DISABLE_RATE_LIMIT === 'true';
     }
 });
 

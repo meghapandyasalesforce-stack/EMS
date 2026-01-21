@@ -5,6 +5,7 @@
  */
 
 import logger from '../helpers/logger.js';
+import { getRequestContext } from '../helpers/requestContext.js';
 
 /**
  * Organization Isolation Plugin
@@ -38,6 +39,12 @@ export const organizationIsolationPlugin = (schema, options = {}) => {
         // Try to get from query context (set by middleware)
         if (query._context?.organizationId) {
             return query._context.organizationId;
+        }
+
+        // Fallback: AsyncLocalStorage request context
+        const requestContext = getRequestContext();
+        if (requestContext?.organizationId) {
+            return requestContext.organizationId;
         }
         
         return null;

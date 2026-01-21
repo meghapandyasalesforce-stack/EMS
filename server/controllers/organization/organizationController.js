@@ -8,6 +8,8 @@ import Project from '../../models/project.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
+import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
+import { autoGenerateIdCard } from '../admin/idCardController.js';
 import mongoose from 'mongoose';
 
 /**
@@ -222,7 +224,10 @@ export const updateOrganizationSettings = async (req, res) => {
         const {
             allowEmployeeRegistration,
             requireEmailVerification,
-            allowSelfService
+            allowSelfService,
+            employeeIdPrefix,
+            employeeIdStartNumber,
+            employeeIdMinDigits
         } = req.body;
 
         const organization = await Organization.findById(organizationId);
@@ -230,6 +235,38 @@ export const updateOrganizationSettings = async (req, res) => {
         if (!organization) {
             return sendError(res, 'Organization not found', 404);
         }
+
+        // Store old settings to detect changes
+        const oldPrefix = organization.settings?.employeeIdPrefix || null;
+        const oldMinDigits = organization.settings?.employeeIdMinDigits || 3;
+        const oldNextNumber = organization.settings?.employeeIdNextNumber || null;
+
+        // Determine new values
+        const newPrefix = employeeIdPrefix !== undefined 
+            ? (employeeIdPrefix?.trim() ? employeeIdPrefix.trim().toUpperCase() : null)
+            : oldPrefix;
+        const newMinDigits = employeeIdMinDigits !== undefined 
+            ? employeeIdMinDigits 
+            : oldMinDigits;
+        const newStartNumber = employeeIdStartNumber !== undefined 
+            ? employeeIdStartNumber 
+            : oldNextNumber;
+
+        // Check if employee ID format is being changed
+        // Migration should run if:
+        // 1. Prefix is being set/changed (including first time setting)
+        // 2. Min digits is being changed
+        // 3. Start number is being changed
+        const formatChanged = (
+            employeeIdPrefix !== undefined && newPrefix !== oldPrefix
+        ) || (
+            employeeIdMinDigits !== undefined && newMinDigits !== oldMinDigits
+        ) || (
+            employeeIdStartNumber !== undefined && newStartNumber !== oldNextNumber
+        );
+        
+        // Also check if we're setting a prefix for the first time (migrating from legacy format)
+        const isFirstTimePrefix = !oldPrefix && newPrefix && employeeIdPrefix !== undefined;
 
         // Update settings
         if (allowEmployeeRegistration !== undefined) {
@@ -241,14 +278,179 @@ export const updateOrganizationSettings = async (req, res) => {
         if (allowSelfService !== undefined) {
             organization.settings.allowSelfService = allowSelfService;
         }
+        if (employeeIdPrefix !== undefined) {
+            organization.settings.employeeIdPrefix = newPrefix;
+        }
+        if (employeeIdMinDigits !== undefined) {
+            organization.settings.employeeIdMinDigits = newMinDigits;
+        }
+        if (employeeIdStartNumber !== undefined) {
+            organization.settings.employeeIdNextNumber = newStartNumber;
+        }
+
+        // Variables to track ID card generation stats (declared at function level)
+        let idCardsGenerated = 0;
+        let idCardsFailed = 0;
+
+        // If format changed and new prefix is set, migrate all employees
+        // Also migrate if setting prefix for the first time (from legacy format)
+        if ((formatChanged || isFirstTimePrefix) && newPrefix) {
+            try {
+                logger.info('Employee ID format changed, starting migration', {
+                    organizationId,
+                    oldPrefix,
+                    newPrefix,
+                    oldMinDigits,
+                    newMinDigits,
+                    oldNextNumber,
+                    newStartNumber
+                });
+
+                // Get all employees for this organization, sorted by joining date then creation date
+                const employees = await Employee.find({ organizationId })
+                    .select('_id employeeId name joiningDate createdAt')
+                    .sort({ joiningDate: 1, createdAt: 1 })
+                    .lean();
+
+                if (employees.length > 0) {
+                    let currentNumber = newStartNumber || 1;
+                    const batchSize = 100;
+                    const batches = [];
+
+                    // Prepare batch updates
+                    for (const employee of employees) {
+                        const newEmployeeId = `${newPrefix}${String(currentNumber).padStart(newMinDigits, '0')}`;
+                        
+                        batches.push({
+                            updateOne: {
+                                filter: { _id: employee._id, organizationId },
+                                update: { $set: { employeeId: newEmployeeId } }
+                            }
+                        });
+
+                        currentNumber++;
+
+                        // Execute in batches to avoid memory issues
+                        if (batches.length >= batchSize) {
+                            await Employee.bulkWrite(batches, { ordered: false });
+                            batches.length = 0;
+                        }
+                    }
+
+                    // Execute remaining batches
+                    if (batches.length > 0) {
+                        await Employee.bulkWrite(batches, { ordered: false });
+                    }
+
+                    // Update the next number counter
+                    organization.settings.employeeIdNextNumber = currentNumber;
+
+                    // Invalidate employee cache to ensure fresh data is served with updated IDs
+                    await invalidateEmployeesCache(organizationId);
+
+                    // Auto-generate ID cards for all employees (if they don't have one)
+                    try {
+                        logger.info('Starting auto-generation of ID cards for migrated employees', {
+                            organizationId,
+                            totalEmployees: employees.length
+                        });
+
+                        // Get admin user ID for generatedBy field
+                        const adminUser = await User.findOne({
+                            organizationId,
+                            role: 'admin'
+                        }).select('_id').lean();
+
+                        const generatedBy = adminUser?._id || null;
+
+                        // Generate ID cards in batches to avoid overwhelming the system
+                        const idCardBatchSize = 10;
+                        for (let i = 0; i < employees.length; i += idCardBatchSize) {
+                            const batch = employees.slice(i, i + idCardBatchSize);
+                            
+                            await Promise.allSettled(
+                                batch.map(async (emp) => {
+                                    const result = await autoGenerateIdCard(
+                                        emp._id,
+                                        organizationId,
+                                        generatedBy
+                                    );
+                                    
+                                    if (result.success) {
+                                        idCardsGenerated++;
+                                    } else if (result.reason !== 'already_exists') {
+                                        idCardsFailed++;
+                                        logger.warn('Failed to auto-generate ID card during migration', {
+                                            employeeId: emp._id,
+                                            reason: result.reason
+                                        });
+                                    }
+                                })
+                            );
+                        }
+
+                        logger.info('ID card auto-generation completed during migration', {
+                            organizationId,
+                            totalEmployees: employees.length,
+                            idCardsGenerated,
+                            idCardsFailed
+                        });
+                    } catch (idCardGenError) {
+                        logger.error('Error during ID card auto-generation in migration', {
+                            error: idCardGenError.message,
+                            organizationId
+                        });
+                        // Don't fail migration if ID card generation fails
+                    }
+
+                    logger.info('Employee ID migration completed', {
+                        organizationId,
+                        employeesMigrated: employees.length,
+                        nextNumber: currentNumber,
+                        idCardsGenerated,
+                        idCardsFailed
+                    });
+                } else {
+                    logger.info('No employees to migrate', { organizationId });
+                }
+            } catch (migrationError) {
+                logger.error('Error migrating employee IDs', {
+                    error: migrationError.message,
+                    organizationId,
+                    stack: migrationError.stack
+                });
+                // Don't fail the entire request, but log the error
+                // The settings will still be saved, but employee IDs won't be migrated
+                return sendError(res, `Settings saved but employee ID migration failed: ${migrationError.message}`, 500);
+            }
+        }
 
         await organization.save();
 
-        logger.info('Organization settings updated', { organizationId: organization._id });
+        // ID card stats are already tracked in idCardsGenerated and idCardsFailed variables above
+        // They are updated during migration if migration occurred
 
-        return sendSuccess(res, {
-            settings: organization.settings
-        }, 'Organization settings updated successfully');
+        logger.info('Organization settings updated', { 
+            organizationId: organization._id,
+            migrationCompleted: formatChanged && newPrefix ? true : false,
+            idCardsGenerated,
+            idCardsFailed
+        });
+
+        const response = {
+            settings: organization.settings,
+            migrationCompleted: formatChanged && newPrefix ? true : false
+        };
+
+        // Include ID card generation stats if migration occurred
+        if (formatChanged && newPrefix) {
+            response.idCardsGenerated = idCardsGenerated;
+            response.idCardsFailed = idCardsFailed;
+        }
+
+        return sendSuccess(res, response, formatChanged && newPrefix 
+            ? `Organization settings updated successfully. All employee IDs have been migrated to the new format. ${idCardsGenerated} ID cards have been auto-generated.`
+            : 'Organization settings updated successfully');
     } catch (error) {
         logger.error('Error updating organization settings', { error: error.message });
         return sendError(res, error.message || 'Failed to update settings', 500);

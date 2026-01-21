@@ -62,7 +62,10 @@ export const updateOrganizationSettings = createAsyncThunk(
     async (settings, { rejectWithValue }) => {
         try {
             const response = await axios.put(`${ORGANIZATION_ENDPOINT}/settings`, settings);
-            return response.data.settings;
+            return {
+                settings: response.data.settings,
+                migrationCompleted: response.data.migrationCompleted || false
+            };
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to update settings');
         }
@@ -126,7 +129,8 @@ const organizationSlice = createSlice({
         activity: null,
         loading: false,
         error: null,
-        usersPagination: null
+        usersPagination: null,
+        migrationCompleted: false
     },
     reducers: {
         clearOrganization: (state) => {
@@ -211,7 +215,11 @@ const organizationSlice = createSlice({
             .addCase(updateOrganizationSettings.fulfilled, (state, action) => {
                 state.loading = false;
                 if (state.profile) {
-                    state.profile.settings = action.payload;
+                    state.profile.settings = action.payload.settings || action.payload;
+                }
+                // Store migration status if available
+                if (action.payload.migrationCompleted !== undefined) {
+                    state.migrationCompleted = action.payload.migrationCompleted;
                 }
             })
             .addCase(updateOrganizationSettings.rejected, (state, action) => {

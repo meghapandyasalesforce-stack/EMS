@@ -528,6 +528,18 @@ export const organizationValidations = {
         body('allowSelfService')
             .optional()
             .isBoolean().withMessage('allowSelfService must be a boolean'),
+        body('employeeIdPrefix')
+            .optional({ nullable: true })
+            .trim()
+            .matches(/^[A-Za-z0-9]{2,10}$/).withMessage('employeeIdPrefix must be 2-10 alphanumeric characters'),
+        body('employeeIdStartNumber')
+            .optional()
+            .isInt({ min: 1, max: 999999 }).withMessage('employeeIdStartNumber must be between 1 and 999999')
+            .toInt(),
+        body('employeeIdMinDigits')
+            .optional()
+            .isInt({ min: 2, max: 10 }).withMessage('employeeIdMinDigits must be between 2 and 10')
+            .toInt(),
         handleValidationErrors
     ],
 

@@ -9,6 +9,7 @@ import { sendSuccess, sendError, sendValidationError, sendInternalError, sendNot
 import asyncHandler from '../../helpers/asyncHandler.js';
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
 import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
+import { autoGenerateIdCard } from '../admin/idCardController.js';
 
 
 // Generate token with employeeId instead of email
@@ -35,6 +36,7 @@ export const registerEmployee = async (req, res) => {
         
         // Generate secure password if not provided
         const employeePassword = password || generateSecurePassword(16);
+        const mustResetPassword = !password;
         logger.info('Password generation', { 
             provided: !!password, 
             generated: !password,
@@ -83,27 +85,60 @@ export const registerEmployee = async (req, res) => {
         // Password will be hashed automatically by the model's pre-save hook
         // No need to hash manually
         
-        // Generate unique employee ID: EMP-{first3lettersOfName}-{joiningYear}-{random4Digits}
-        const namePrefix = name.substring(0, 3).toUpperCase();
-        const joiningYear = new Date().getFullYear();
+        // Generate organization-specific employee ID (if configured), otherwise fallback to legacy format
         let employeeId;
-        let isUnique = false;
-        let attempts = 0;
-        const maxAttempts = 10;
-        
-        // Ensure unique employee ID within organization
-        while (!isUnique && attempts < maxAttempts) {
-            const random = Math.floor(1000 + Math.random() * 9000);
-            employeeId = `EMP-${namePrefix}-${joiningYear}-${random}`;
-            const existing = await Employee.findOne({ employeeId, organizationId });
-            if (!existing) {
-                isUnique = true;
+        const orgSettings = await Organization.findById(organizationId)
+            .select('settings.employeeIdPrefix settings.employeeIdNextNumber settings.employeeIdMinDigits')
+            .lean();
+
+        if (orgSettings?.settings?.employeeIdPrefix) {
+            const prefix = orgSettings.settings.employeeIdPrefix.toUpperCase();
+            const minDigits = orgSettings.settings.employeeIdMinDigits || 3;
+            let attempts = 0;
+            const maxAttempts = 10;
+
+            while (attempts < maxAttempts) {
+                const updatedOrg = await Organization.findOneAndUpdate(
+                    { _id: organizationId },
+                    { $inc: { 'settings.employeeIdNextNumber': 1 } },
+                    { new: true, projection: { 'settings.employeeIdNextNumber': 1 } }
+                );
+
+                const seq = updatedOrg?.settings?.employeeIdNextNumber || 1;
+                const candidate = `${prefix}${String(seq).padStart(minDigits, '0')}`;
+                const existing = await Employee.findOne({ employeeId: candidate, organizationId });
+
+                if (!existing) {
+                    employeeId = candidate;
+                    break;
+                }
+                attempts++;
             }
-            attempts++;
-        }
-        
-        if (!isUnique) {
-            return sendInternalError(res, 'Failed to generate unique employee ID. Please try again.');
+
+            if (!employeeId) {
+                return sendInternalError(res, 'Failed to generate unique employee ID. Please try again.');
+            }
+        } else {
+            // Legacy format: EMP-{first3lettersOfName}-{joiningYear}-{random4Digits}
+            const namePrefix = name.substring(0, 3).toUpperCase();
+            const joiningYear = new Date().getFullYear();
+            let isUnique = false;
+            let attempts = 0;
+            const maxAttempts = 10;
+
+            while (!isUnique && attempts < maxAttempts) {
+                const random = Math.floor(1000 + Math.random() * 9000);
+                employeeId = `EMP-${namePrefix}-${joiningYear}-${random}`;
+                const existing = await Employee.findOne({ employeeId, organizationId });
+                if (!existing) {
+                    isUnique = true;
+                }
+                attempts++;
+            }
+
+            if (!isUnique) {
+                return sendInternalError(res, 'Failed to generate unique employee ID. Please try again.');
+            }
         }
 
         // Create the employee (normalize email to lowercase)
@@ -120,7 +155,7 @@ export const registerEmployee = async (req, res) => {
             jobCategory,
             salary,
             role: 'employee',
-            mustResetPassword: true,
+            mustResetPassword: mustResetPassword,
             employeeId: employeeId // Set the auto-generated ID
         });
 
@@ -223,7 +258,8 @@ export const registerEmployee = async (req, res) => {
         // Only generate tokens if NOT created by admin (self-registration scenario)
         // This should rarely happen since the route requires admin auth, but kept for safety
         if (!isAdminCreating) {
-            const tokenResult = generateToken(employee._id, "employee", organizationId, res);
+            const passwordChangedAt = employee.passwordChangedAt || employee.createdAt;
+            const tokenResult = generateToken(employee._id, "employee", organizationId, res, passwordChangedAt);
             token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
             refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
             csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
@@ -255,6 +291,47 @@ export const registerEmployee = async (req, res) => {
         }
         if (csrfToken) {
             response.csrfToken = csrfToken;
+        }
+
+        // Auto-generate ID card for new employee
+        let idCardGenerated = false;
+        let idCardError = null;
+        try {
+            const idCardResult = await autoGenerateIdCard(
+                employee._id, 
+                organizationId,
+                req.user?._id || req.employee?._id // Use admin/HR ID if available
+            );
+            
+            if (idCardResult.success) {
+                idCardGenerated = true;
+                logger.info('ID card auto-generated for new employee', {
+                    employeeId: employee._id,
+                    idCardId: idCardResult.idCard._id
+                });
+            } else if (idCardResult.reason === 'already_exists') {
+                logger.debug('ID card already exists for new employee', { employeeId: employee._id });
+            } else {
+                idCardError = idCardResult.error || idCardResult.reason;
+                logger.warn('Failed to auto-generate ID card for new employee', {
+                    employeeId: employee._id,
+                    reason: idCardResult.reason,
+                    error: idCardError
+                });
+            }
+        } catch (idCardGenError) {
+            idCardError = idCardGenError.message;
+            logger.error('Exception during ID card auto-generation', {
+                employeeId: employee._id,
+                error: idCardGenError.message
+            });
+            // Don't fail employee creation if ID card generation fails
+        }
+
+        // Add ID card status to response
+        response.idCardGenerated = idCardGenerated;
+        if (idCardError) {
+            response.idCardError = idCardError;
         }
         
         return sendSuccess(res, response, 'Employee registered successfully', 201);
@@ -306,11 +383,50 @@ export const loginEmployee = asyncHandler(async (req, res) => {
     // SECURITY FIX: Determine organization from email domain first for scoping
     const emailDomain = normalizedEmail.split('@')[1];
     
-    // Find organization by domain (if exists)
-    const organization = await Organization.findOne({
+    // Find organization by domain field first (if exists)
+    let organization = await Organization.findOne({
         domain: emailDomain,
         isActive: true
-    }).select('_id');
+    }).select('_id domain');
+
+    // Fallback: If domain field not set, try to find organization by email domain
+    // Extract domain from organization email and match it
+    if (!organization) {
+        // Find organizations where email ends with the domain
+        const organizations = await Organization.find({
+            email: { $regex: new RegExp(`@${emailDomain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            isActive: true
+        }).select('_id domain email').limit(1);
+        
+        if (organizations.length > 0) {
+            organization = organizations[0];
+            
+            // Auto-populate domain field if missing for future lookups
+            if (organization && !organization.domain) {
+                try {
+                    await Organization.updateOne(
+                        { _id: organization._id },
+                        { $set: { domain: emailDomain.toLowerCase() } }
+                    );
+                    logger.info('Auto-populated organization domain field', {
+                        requestId,
+                        organizationId: organization._id,
+                        domain: emailDomain,
+                        organizationEmail: organization.email
+                    });
+                    // Update the organization object to reflect the change
+                    organization.domain = emailDomain.toLowerCase();
+                } catch (updateError) {
+                    // Log but don't fail - domain update is not critical for login
+                    logger.warn('Failed to auto-populate organization domain', {
+                        requestId,
+                        organizationId: organization._id,
+                        error: updateError.message
+                    });
+                }
+            }
+        }
+    }
 
     // Find employee with normalized email AND organization scoping
     // Use .select('+password') to include password field (normally excluded for security)
@@ -333,7 +449,7 @@ export const loginEmployee = asyncHandler(async (req, res) => {
             return sendUnauthorized(res, 'Invalid email or password');
         }
     } else {
-        // No organization domain found - search globally but log warning
+        // No organization found for this domain - search globally but log warning
         logger.warn('Employee login: No organization found for email domain', { 
             requestId, 
             email: normalizedEmail, 
@@ -408,13 +524,14 @@ export const loginEmployee = asyncHandler(async (req, res) => {
     });
 
     // Generate token with organizationId
-    const tokenResult = generateToken(employee._id, "employee", employee.organizationId, res);
+    const passwordChangedAt = employee.passwordChangedAt || employee.createdAt;
+    const tokenResult = generateToken(employee._id, "employee", employee.organizationId, res, passwordChangedAt);
     const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
     const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
     const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 
     // Get dashboard route based on role, position, and department
-    let dashboardRoute = '/dashboard/employee'; // Default fallback
+    let dashboardRoute = '/dashboard-employee'; // Default fallback
     try {
         dashboardRoute = await getDashboardRouteForUser(
             employee._id,
@@ -506,22 +623,7 @@ export const resetEmployeePassword = async (req, res) => {
         await employee.save();
 
         // Clear authentication cookies to force logout
-        const crossSite = String(process.env.CROSS_SITE_COOKIES).toLowerCase() === 'true';
-        const cookieOptions = {
-            httpOnly: true,
-            sameSite: crossSite ? 'none' : 'lax',
-            secure: crossSite || process.env.NODE_ENV === 'production',
-            path: '/',
-        };
-
-        res.clearCookie('jwt', cookieOptions);
-        res.clearCookie('refreshToken', cookieOptions);
-        res.clearCookie('csrfToken', {
-            httpOnly: false,
-            sameSite: cookieOptions.sameSite,
-            secure: cookieOptions.secure,
-            path: '/',
-        });
+        await clearAuthCookies(res, req);
 
         return sendSuccess(res, { logout: true }, 'Password reset successful. Please login with your new password.');
     } catch (error) {

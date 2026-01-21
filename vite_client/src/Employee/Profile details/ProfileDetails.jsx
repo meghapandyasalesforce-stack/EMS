@@ -4,14 +4,43 @@ import { FiCamera, FiEdit } from 'react-icons/fi';
 import ProfilePhotoUpload from '../Profile/ProfilePhotoUpload';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import { setUser } from '../../context/Auth/authSlice';
+import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 
 function ProfileDetails() {
-  const [employee, setEmployee] = useState(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [isFetchingFreshData, setIsFetchingFreshData] = useState(false);
   const user = useSelector((state) => state.auth.user);
   const dispatch = useDispatch();
+
+  // Fetch fresh employee data on mount and when user changes to ensure we have the latest Employee ID
+  useEffect(() => {
+    const fetchFreshData = async () => {
+      // Wait for user to be available
+      if (!user) return;
+      
+      if (user?.role === 'employee' || user?.role === 'hr' || user?.role === 'manager') {
+        try {
+          setIsFetchingFreshData(true);
+          const result = await dispatch(fetchEmployeeOwnInfo()).unwrap();
+          // Update auth state with fresh data including updated employeeId
+          if (result && result.employeeId) {
+            dispatch(setUser({
+              ...user,
+              ...result,
+              employeeId: result.employeeId // Always use the fresh employeeId from server
+            }));
+          }
+        } catch (err) {
+          // Error is silently handled - user can refresh page if needed
+        } finally {
+          setIsFetchingFreshData(false);
+        }
+      }
+    };
+
+    fetchFreshData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, user?.id]); // Run when user.id changes (user logs in or data updates)
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 ml-0 md:ml-64 transition-all duration-300">
@@ -38,9 +67,14 @@ function ProfileDetails() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-4">
               <div>
                 <p className="text-gray-500 text-sm">Employee ID</p>
-                <p className="text-base md:text-lg font-semibold text-gray-700">
-                  {user?.employeeId || 'N/A'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-base md:text-lg font-semibold text-gray-700">
+                    {user?.employeeId || 'N/A'}
+                  </p>
+                  {isFetchingFreshData && (
+                    <span className="text-xs text-blue-500 animate-pulse">Updating...</span>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-gray-500 text-sm">Department</p>
@@ -132,14 +166,6 @@ function ProfileDetails() {
                   
                   dispatch(setUser(updatedUser));
                   setShowPhotoUpload(false);
-                  
-                  // Debug log in development
-                  if (import.meta.env.DEV) {
-                    console.log('Updated user with profile photo:', {
-                      profilePhoto,
-                      updatedUser: updatedUser.profilePhoto
-                    });
-                  }
                 }}
               />
             </div>
