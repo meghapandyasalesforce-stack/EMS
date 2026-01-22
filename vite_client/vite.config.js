@@ -164,9 +164,11 @@ export default defineConfig(({ mode }) => {
               return; // Return undefined to let Vite handle React automatically
             }
             
-            // Redux ecosystem (can be split safely)
+            // CRITICAL FIX: Don't split react-redux separately - it must load after React is initialized
+            // Splitting react-redux can cause "Cannot set properties of undefined (setting 'Children')" error
+            // Let Vite handle react-redux automatically to ensure proper dependency order
             if (id.includes('react-redux') || id.includes('use-sync-external-store')) {
-              return 'react-redux';
+              return; // Don't split - let Vite handle it to ensure React loads first
             }
             
             // Redux core
