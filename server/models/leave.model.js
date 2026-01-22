@@ -20,7 +20,7 @@ const leaveSchema = new mongoose.Schema({
     leaveType: {
         type: String,
         required: true,
-        enum: ['sick', 'annual', 'casual']
+        enum: ['sick', 'annual', 'casual', 'loss_of_pay', 'maternity', 'paternity', 'vacation', 'privileged', 'compensatory', 'sabbatical']
     },
     startDate: {
         type: Date,
@@ -44,7 +44,7 @@ const leaveSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'approved', 'rejected'],
+        enum: ['pending', 'approved', 'rejected', 'cancelled'],
         default: 'pending'
     },
     rejectionReason: {
@@ -56,7 +56,58 @@ const leaveSchema = new mongoose.Schema({
     year: {
         type: Number,
         required: true
-    }
+    },
+    // Approval workflow
+    approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    approvedAt: {
+        type: Date
+    },
+    rejectedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    rejectedAt: {
+        type: Date
+    },
+    // Leave encashment
+    isEncashed: {
+        type: Boolean,
+        default: false
+    },
+    encashmentAmount: {
+        type: Number,
+        default: 0
+    },
+    // Working days calculation (excluding weekends and holidays)
+    workingDays: {
+        type: Number,
+        default: 0
+    },
+    // Half day support
+    isHalfDay: {
+        type: Boolean,
+        default: false
+    },
+    halfDayType: {
+        type: String,
+        enum: ['first_half', 'second_half'],
+        default: null
+    },
+    // Comments/notes
+    comments: [{
+        comment: String,
+        commentedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Employee'
+        },
+        commentedAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, { timestamps: true });
 
 // Update the updatedAt timestamp before saving

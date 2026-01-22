@@ -8,6 +8,9 @@ import adminRouter from "../routes/Auth/AdminRoutes.js";
 import employeeRouter from "../routes/Auth/EmployeeRoutes.js";
 import leaveEmployeeRouter from "../routes/Employee/LeaveEmployeeRoutes.js";
 import leaveAdminRouter from "../routes/Admin/LeaveAdminRoutes.js";
+import leavePolicyRouter from "../routes/Admin/LeavePolicyRoutes.js";
+import leaveEncashmentRouter from "../routes/Employee/LeaveEncashmentRoutes.js";
+import leaveReportsRouter from "../routes/Admin/LeaveReportsRoutes.js";
 import projectRouter from "../routes/Admin/ProjectsRoutes.js";
 import attendanceRouter from "../routes/Both/AttendanceRoutes.js";
 import attendanceRegularizationRouter from "../routes/Both/AttendanceRegularizationRoutes.js";
@@ -78,6 +81,9 @@ export const registerRoutes = (app) => {
   // Admin routes
   app.use("/api/v1/admin/auth", adminRouter);
   app.use("/api/v1/admin/leave", leaveAdminRouter);
+  app.use("/api/v1/admin/leave-policy", leavePolicyRouter);
+  app.use("/api/v1/admin/leave-encashment", leaveEncashmentRouter);
+  app.use("/api/v1/admin/leave-reports", leaveReportsRouter);
   app.use("/api/v1/admin/project", projectRouter);
   app.use("/api/v1/admin/payroll", payrollRouter);
   app.use("/api/v1/admin/employee", employeeAdminRouter);
@@ -93,6 +99,7 @@ export const registerRoutes = (app) => {
   // Employee routes (register specific routes first to avoid conflicts)
   app.use("/api/v1/employee/auth", employeeRouter);
   app.use("/api/v1/employee/leave", leaveEmployeeRouter);
+  app.use("/api/v1/employee/leave-encashment", leaveEncashmentRouter);
   app.use("/api/v1/employee/calendar", employeeCalendarRouter);
   app.use("/api/v1/employee/payroll", employeePayrollRouter);
   // Register general employee routes last (after all specific routes)

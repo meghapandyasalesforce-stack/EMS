@@ -9,6 +9,7 @@ import processEmailJob from './emailJob.js';
 import processNotificationJob from './notificationJob.js';
 import { startCompOffExpiryWorker, scheduleCompOffExpiry } from './compOffExpiryJob.js';
 import { startAutoCheckOutWorker, scheduleAutoCheckOut } from './autoCheckOutJob.js';
+import { scheduleLeaveBalanceJobs } from './leaveBalanceJob.js';
 import logger from '../helpers/logger.js';
 
 /**
@@ -57,6 +58,14 @@ export const initializeWorkers = async () => {
             await scheduleAutoCheckOut();
         } else {
             logger.warn('Auto check-out worker not initialized - Redis not available');
+        }
+
+        // Leave Balance Jobs (cron-based, no Redis required)
+        try {
+            scheduleLeaveBalanceJobs();
+            logger.info('Leave balance jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule leave balance jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker) {

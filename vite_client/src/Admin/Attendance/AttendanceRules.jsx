@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
-import { FaMapMarkerAlt, FaRuler, FaSave, FaTimes } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaRuler, FaSave, FaTimes, FaCalendarAlt } from 'react-icons/fa';
 import GoogleMapsComponent from '../../utils/GoogleMaps';
+import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
 
 const AttendanceRules = () => {
     const [formData, setFormData] = useState({
@@ -723,6 +724,11 @@ const AttendanceRules = () => {
                         </div>
                     </form>
                 )}
+
+                {/* Leave Policy Section - Moved outside the form to prevent nested forms */}
+                <div className="mt-8 border-t pt-8">
+                    <LeavePolicyManagement />
+                </div>
         </div>
     );
 };

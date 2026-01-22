@@ -180,10 +180,24 @@ export const updateLeaveStatus = async (req, res) => {
         }
 
         leave.status = status;
-        if (status === 'rejected' && rejectionReason) {
-            leave.rejectionReason = rejectionReason;
-        } else {
-            leave.rejectionReason = undefined; // clear if not rejected
+        
+        if (status === 'approved') {
+            leave.approvedBy = req.user?._id || req.employee?._id;
+            leave.approvedAt = new Date();
+            leave.rejectionReason = undefined;
+            leave.rejectedBy = undefined;
+            leave.rejectedAt = undefined;
+        } else if (status === 'rejected') {
+            leave.rejectedBy = req.user?._id || req.employee?._id;
+            leave.rejectedAt = new Date();
+            if (rejectionReason) {
+                leave.rejectionReason = rejectionReason;
+            }
+            leave.approvedBy = undefined;
+            leave.approvedAt = undefined;
+        } else if (status === 'cancelled') {
+            // Employee can cancel their own leave
+            leave.status = 'cancelled';
         }
 
         await leave.save();

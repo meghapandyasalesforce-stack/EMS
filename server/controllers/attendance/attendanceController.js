@@ -1133,8 +1133,9 @@ export const getTodayStatus = async (req, res) => {
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees attendance for employees with manager="Arun Kumar" or "Arun"
     const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    let managerEmployeeIds = [];
     if (isManager && req.employee) {
-      const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
+      managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
       employeeQuery._id = { $in: managerEmployeeIds };
       
       const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
@@ -1151,10 +1152,18 @@ export const getTodayStatus = async (req, res) => {
     );
     
     // 2. Get today's attendance records with breaks populated for this organization
-    const attendanceRecords = await Attendance.find({ 
+    // If manager, filter attendance records by manager's team employee IDs
+    const attendanceQuery = { 
       date: startOfDay,
       organizationId 
-    })
+    };
+    
+    // Filter attendance records by manager's team if user is a manager
+    if (isManager && managerEmployeeIds.length > 0) {
+      attendanceQuery.userId = { $in: managerEmployeeIds };
+    }
+    
+    const attendanceRecords = await Attendance.find(attendanceQuery)
       .lean();
 
     // 3. Create maps for easier lookup

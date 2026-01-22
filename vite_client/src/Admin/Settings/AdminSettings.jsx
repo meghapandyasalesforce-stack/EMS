@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa';
+import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
 import AttendanceRules from '../Attendance/AttendanceRules';
 import NotificationSettings from './NotificationSettings';
 import EmailSettings from './EmailSettings';
+import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
 import { toast } from 'react-toastify';
 import {
     fetchOrganizationProfile,
@@ -23,6 +24,12 @@ const AdminSettings = () => {
             name: 'Attendance Rules',
             icon: <FaRuler />,
             component: <AttendanceRules />
+        },
+        {
+            id: 'leave-policy',
+            name: 'Leave Policy',
+            icon: <FaCalendarAlt />,
+            component: <LeavePolicyManagement />
         },
         {
             id: 'notifications',

@@ -419,6 +419,16 @@ export const adminRoutes = [
     message: 'Loading admin settings...'
   },
   {
+    path: '/admin/leave-policy',
+    component: lazy(() => import('../HR/Leave/LeavePolicyManagement')),
+    message: 'Loading leave policy management...'
+  },
+  {
+    path: '/admin/leave-balance',
+    component: lazy(() => import('../Admin/Leave/EmployeeLeaveBalanceViewer')),
+    message: 'Loading employee leave balances...'
+  },
+  {
     path: '/admin/policies',
     component: lazy(() => import('../Admin/PolicyManagement/PolicyManager')),
     message: 'Loading policies...'

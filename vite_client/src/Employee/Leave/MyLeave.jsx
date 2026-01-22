@@ -6,6 +6,7 @@ import { FaCalendarAlt, FaUmbrellaBeach, FaChartPie, FaChartBar } from 'react-ic
 import { MdSick } from 'react-icons/md';
 import { BsCalendarCheck } from 'react-icons/bs';
 import { useNavigate } from 'react-router-dom';
+import axios from '../../utils/axios';
 
 const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
@@ -14,6 +15,10 @@ const MyLeavePage = () => {
   const dispatch = useDispatch();
   const state = useSelector((state) => state.employeeLeave);
   const [activeTab, setActiveTab] = useState('leaves');
+  const [leaveBalance, setLeaveBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const employee = useSelector(state => state.auth.employee || state.auth.user);
 
   useEffect(() => {
     const handleResize = () => {
@@ -23,24 +28,74 @@ const MyLeavePage = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  const navigate =  useNavigate();
+  const navigate = useNavigate();
 
   useEffect(() => {
     dispatch(getEmployeeLeaves());
   }, [dispatch]);
 
-  const MAX_LEAVES = {
-    sick: 12,
-    annual: 12,
-    casual: 12
+  // Fetch leave balance from LeavePolicyManagement
+  useEffect(() => {
+    if (employee?._id) {
+      fetchLeaveBalance();
+    }
+  }, [employee?._id, selectedYear]);
+
+  const fetchLeaveBalance = async () => {
+    setBalanceLoading(true);
+    try {
+      const res = await axios.get(
+        `/v1/admin/leave-policy/balance/${employee?._id}`,
+        { params: { year: selectedYear } }
+      );
+      setLeaveBalance(res.data.balance);
+    } catch (error) {
+      console.error('Error fetching leave balance:', error);
+      // Set to null explicitly so we can show a message
+      setLeaveBalance(null);
+      // Only show error if it's not a 404 (no policy configured)
+      if (error.response?.status !== 404) {
+        // Silently fail - don't show toast for missing policy
+      }
+    } finally {
+      setBalanceLoading(false);
+    }
   };
+
+  // Use leave balance from policy if available, otherwise use hardcoded values
+  const getMaxLeaves = () => {
+    if (leaveBalance?.balances) {
+      const maxLeaves = {};
+      leaveBalance.balances.forEach(balance => {
+        const policyType = leaveBalance.policy?.leaveTypes?.find(lt => lt.type === balance.leaveType);
+        const displayName = policyType?.displayName?.toLowerCase() || balance.leaveType;
+        
+        // Map leave types
+        if (displayName.includes('sick') || balance.leaveType === 'sick') {
+          maxLeaves.sick = balance.accrued + balance.carriedForward;
+        } else if (displayName.includes('annual') || displayName.includes('paid') || balance.leaveType === 'paid') {
+          maxLeaves.annual = balance.accrued + balance.carriedForward;
+        } else if (displayName.includes('casual') || balance.leaveType === 'casual') {
+          maxLeaves.casual = balance.accrued + balance.carriedForward;
+        }
+      });
+      return maxLeaves;
+    }
+    return { sick: 12, annual: 12, casual: 12 };
+  };
+
+  const MAX_LEAVES = getMaxLeaves();
 
   const leavesData = state.myLeaves || [];
   const statsData = state.leaveStats || null;
 
   const calculatedStats = statsData && {
-    totalLeaves: statsData.totalLeaves,
-    remainingLeaves: statsData.remainingLeaves,
+    totalLeaves: leaveBalance?.balances 
+      ? leaveBalance.balances.reduce((sum, b) => sum + (b.accrued + b.carriedForward), 0)
+      : statsData.totalLeaves,
+    remainingLeaves: leaveBalance?.balances
+      ? leaveBalance.balances.reduce((sum, b) => sum + b.available, 0)
+      : statsData.remainingLeaves,
     sickLeaves: {
       taken: statsData.leavesByType?.sick || 0,
       remaining: MAX_LEAVES.sick - (statsData.leavesByType?.sick || 0)
@@ -55,6 +110,44 @@ const MyLeavePage = () => {
     }
   };
 
+  // Get monthly leave usage
+  const getMonthlyLeaves = () => {
+    const monthlyData = {};
+    leavesData.forEach(leave => {
+      const leaveDate = new Date(leave.startDate);
+      const month = leaveDate.getMonth();
+      const monthKey = `${leaveDate.getFullYear()}-${month}`;
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          month: leaveDate.toLocaleString('default', { month: 'long' }),
+          year: leaveDate.getFullYear(),
+          sick: 0,
+          annual: 0,
+          casual: 0,
+          total: 0
+        };
+      }
+      
+      const leaveType = leave.leaveType?.toLowerCase();
+      if (leaveType === 'sick') {
+        monthlyData[monthKey].sick += leave.duration || 0;
+      } else if (leaveType === 'annual' || leaveType === 'paid') {
+        monthlyData[monthKey].annual += leave.duration || 0;
+      } else if (leaveType === 'casual') {
+        monthlyData[monthKey].casual += leave.duration || 0;
+      }
+      monthlyData[monthKey].total += leave.duration || 0;
+    });
+    
+    return Object.values(monthlyData).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return new Date(`${b.month} 1, ${b.year}`).getMonth() - new Date(`${a.month} 1, ${a.year}`).getMonth();
+    });
+  };
+
+  const monthlyLeaves = getMonthlyLeaves();
+
   const leaveHistory = leavesData.map((leave) => ({
     id: leave._id,
     type: leave.leaveType?.charAt(0).toUpperCase() + leave.leaveType?.slice(1),
@@ -64,7 +157,7 @@ const MyLeavePage = () => {
     days: leave.duration
   }));
 
-  if (state.loading) {
+  if (state.loading || balanceLoading) {
     return <div className="text-center py-10 text-gray-500">Loading leave data...</div>;
   }
 
@@ -72,7 +165,7 @@ const MyLeavePage = () => {
     return <div className="text-center py-10 text-red-500">Error: {state.error}</div>;
   }
 
-  if (!statsData) {
+  if (!statsData && !leaveBalance) {
     return <div className="text-center py-10 text-gray-500">No leave data available.</div>;
   }
 
@@ -126,13 +219,126 @@ const MyLeavePage = () => {
               Statistics
             </button>
             <button 
-                            onClick={() => navigate('/leave')}
-                            className="bg-green-500 text-white rounded-xl px-3 py-1 md:px-4 md:py-2  hover:bg-green-800 transition text-sm md:text-base"
-                        >
-                            Apply for Leave
-                        </button>
+              onClick={() => navigate('/leave')}
+              className="bg-green-500 text-white rounded-xl px-3 py-1 md:px-4 md:py-2  hover:bg-green-800 transition text-sm md:text-base"
+            >
+              Apply for Leave
+            </button>
           </div>
         </header>
+
+        {/* Leave Balance from Policy */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Leave Balance ({selectedYear})</h2>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="border rounded px-3 py-2"
+            >
+              {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          
+          {leaveBalance ? (
+            <>
+              {leaveBalance.policy && (
+                <p className="text-sm text-gray-600 mb-4">
+                  Policy: <strong>{leaveBalance.policy.policyName}</strong>
+                </p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {leaveBalance.balances?.map((typeBalance) => {
+                  const policyType = leaveBalance.policy?.leaveTypes?.find(lt => lt.type === typeBalance.leaveType);
+                  return (
+                    <div key={typeBalance.leaveType} className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="font-semibold mb-2 capitalize">
+                        {policyType?.displayName || typeBalance.leaveType} Leave
+                      </h3>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Accrued:</span>
+                          <span className="font-medium">{typeBalance.accrued} days</span>
+                        </div>
+                        {typeBalance.carriedForward > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Carried Forward:</span>
+                            <span className="font-medium text-blue-600">+{typeBalance.carriedForward} days</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Used:</span>
+                          <span className="font-medium text-red-600">-{typeBalance.used} days</span>
+                        </div>
+                        {typeBalance.pending > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Pending:</span>
+                            <span className="font-medium text-yellow-600">-{typeBalance.pending} days</span>
+                          </div>
+                        )}
+                        <div className="border-t pt-2 mt-2">
+                          <div className="flex justify-between">
+                            <span className="font-semibold">Available:</span>
+                            <span className={`font-bold text-lg ${
+                              typeBalance.available > 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {typeBalance.available} days
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-800">
+                No leave policy configured yet. Please contact HR to set up your leave policy.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Monthly Leave Usage */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-bold mb-4">Monthly Leave Usage</h2>
+          {monthlyLeaves.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sick</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Annual</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Casual</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {monthlyLeaves.map((month, index) => (
+                    <tr key={index}>
+                      <td className="px-4 py-3 whitespace-nowrap font-medium">
+                        {month.month} {month.year}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">{month.sick} days</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{month.annual} days</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{month.casual} days</td>
+                      <td className="px-4 py-3 whitespace-nowrap font-semibold">{month.total} days</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No leave usage recorded for this period.</p>
+            </div>
+          )}
+        </div>
 
         {activeTab === 'leaves' ? (
           <div>

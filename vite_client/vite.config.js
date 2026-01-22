@@ -25,8 +25,15 @@ const handleProxyErrors = () => {
         const isProxyError = suppressedPatterns.some(pattern => pattern.test(message));
         const isApiOrUploads = message.includes('/api/') || message.includes('/uploads');
         
+        // Check if this is an SSE endpoint error (get-all-notification)
+        const isSSEEndpoint = message.includes('/get-all-notification');
+        
         if (isProxyError && isApiOrUploads) {
-          // Suppress this proxy connection error - backend is likely not running
+          // For SSE endpoints, ECONNRESET is normal when clients disconnect - always suppress
+          if (isSSEEndpoint && message.includes('ECONNRESET')) {
+            return true;
+          }
+          // Suppress other proxy connection errors - backend is likely not running
           // This is expected during development when backend hasn't started yet
           return true;
         }
@@ -314,20 +321,39 @@ export default defineConfig(({ mode }) => {
         // Handle connection errors gracefully - suppress ECONNREFUSED errors
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            // Set timeout to prevent hanging requests
-            proxyReq.setTimeout(5000, () => {
-              if (!res.headersSent) {
-                res.writeHead(503, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                  success: false, 
-                  message: 'Service unavailable',
-                  code: 'SERVICE_UNAVAILABLE'
-                }));
-              }
-            });
+            // Check if this is an SSE endpoint (Server-Sent Events)
+            const isSSEEndpoint = req.url?.includes('/get-all-notification');
+            
+            // SSE endpoints need long-lived connections - don't apply timeout
+            if (!isSSEEndpoint) {
+              // Set timeout to prevent hanging requests (only for non-SSE endpoints)
+              proxyReq.setTimeout(5000, () => {
+                if (!res.headersSent) {
+                  res.writeHead(503, { 'Content-Type': 'application/json' });
+                  res.end(JSON.stringify({ 
+                    success: false, 
+                    message: 'Service unavailable',
+                    code: 'SERVICE_UNAVAILABLE'
+                  }));
+                }
+              });
+            } else {
+              // For SSE endpoints, set a very long timeout (1 hour) to allow long-lived connections
+              proxyReq.setTimeout(3600000); // 1 hour timeout for SSE connections
+            }
           });
           
           proxy.on('error', (err, req, res) => {
+            // Check if this is an SSE endpoint
+            const isSSEEndpoint = req.url?.includes('/get-all-notification');
+            
+            // For SSE endpoints, ECONNRESET is normal when clients disconnect
+            // Suppress these errors completely
+            if (isSSEEndpoint && (err.code === 'ECONNRESET' || err.message?.includes('aborted'))) {
+              // SSE connection reset is normal - silently ignore
+              return;
+            }
+            
             // Silently handle connection refused errors (backend not running)
             if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
               // Suppress error logging and send a 503 response
@@ -348,7 +374,7 @@ export default defineConfig(({ mode }) => {
         },
         // Suppress error logging at the proxy level
         ws: false,
-        timeout: 5000,
+        timeout: 300000, // 5 minutes timeout (SSE endpoints handled per-request above)
       },
       '/uploads': {
         target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)

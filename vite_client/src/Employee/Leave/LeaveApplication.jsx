@@ -3,21 +3,25 @@ import { useDispatch, useSelector } from 'react-redux';
 import { submitLeave, resetStatus } from '../../context/employeeLeaveSlice';
 import { toast } from 'react-toastify';
 import { useMediaQuery } from 'react-responsive';
+import { useLocation } from 'react-router-dom';
 
 const LeaveApplication = () => {
   const dispatch = useDispatch();
   const { submitting, success, error } = useSelector((state) => state.employeeLeave);
   const user = useSelector((state) => state.auth.user);
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
+  const location = useLocation();
 
   const [leaveForm, setLeaveForm] = useState({
     name: '',
     email: '',
     startDate: '',
     endDate: '',
-    leaveType: '',
+    leaveType: location.state?.leaveType || '',
     reason: '',
     document: null,
+    isHalfDay: false,
+    halfDayType: 'first_half',
   });
 
   const [errors, setErrors] = useState({});
@@ -83,6 +87,9 @@ const LeaveApplication = () => {
       endDate: leaveForm.endDate,
       leaveType: leaveForm.leaveType,
       reason: leaveForm.reason,
+      isHalfDay: leaveForm.isHalfDay,
+      halfDayType: leaveForm.isHalfDay ? leaveForm.halfDayType : null,
+      document: leaveForm.document,
     }));
   };
 
@@ -97,6 +104,8 @@ const LeaveApplication = () => {
         leaveType: '',
         reason: '',
         document: null,
+        isHalfDay: false,
+        halfDayType: 'first_half',
       });
       setErrors({});
       dispatch(resetStatus());
@@ -145,6 +154,13 @@ const LeaveApplication = () => {
               <option value="sick">Sick Leave</option>
               <option value="annual">Annual Leave</option>
               <option value="casual">Casual Leave</option>
+              <option value="vacation">Vacation Leave</option>
+              <option value="privileged">Privileged Leave</option>
+              <option value="maternity">Maternity Leave</option>
+              <option value="paternity">Paternity Leave</option>
+              <option value="compensatory">Compensatory Leave</option>
+              <option value="sabbatical">Sabbatical Leave</option>
+              <option value="loss_of_pay">Loss of Pay</option>
             </select>
             {errors.leaveType && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.leaveType}</p>}
           </div>
@@ -162,13 +178,51 @@ const LeaveApplication = () => {
                   value={leaveForm[field]}
                   onChange={handleChange}
                   disabled={submitting}
-                  min={field === 'endDate' ? leaveForm.startDate : undefined}
+                  min={field === 'endDate' ? leaveForm.startDate : new Date().toISOString().split('T')[0]}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
                 />
                 {errors[field] && <p className="text-red-500 text-xs md:text-sm mt-1">{errors[field]}</p>}
               </div>
             ))}
           </div>
+
+          {/* Half Day Option */}
+          {leaveForm.startDate && leaveForm.endDate && 
+           new Date(leaveForm.startDate).toDateString() === new Date(leaveForm.endDate).toDateString() && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <label className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  name="isHalfDay"
+                  checked={leaveForm.isHalfDay}
+                  onChange={(e) => {
+                    setLeaveForm({ ...leaveForm, isHalfDay: e.target.checked });
+                    if (errors.isHalfDay) {
+                      setErrors({ ...errors, isHalfDay: '' });
+                    }
+                  }}
+                  disabled={submitting}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">Half Day Leave</span>
+              </label>
+              {leaveForm.isHalfDay && (
+                <div className="mt-2 ml-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Half Day Type</label>
+                  <select
+                    name="halfDayType"
+                    value={leaveForm.halfDayType}
+                    onChange={handleChange}
+                    disabled={submitting}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                  >
+                    <option value="first_half">First Half (Morning)</option>
+                    <option value="second_half">Second Half (Afternoon)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Reason */}
           <div>

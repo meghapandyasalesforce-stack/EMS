@@ -42,7 +42,13 @@ class ErrorBoundary extends React.Component {
         if (this.state.hasError) {
             // Custom fallback UI
             if (this.props.fallback) {
-                return this.props.fallback(this.state.error, this.handleReset);
+                // Check if fallback is a function or JSX element
+                if (typeof this.props.fallback === 'function') {
+                    return this.props.fallback(this.state.error, this.handleReset);
+                } else {
+                    // If it's JSX, render it directly
+                    return this.props.fallback;
+                }
             }
 
             // Default fallback UI
