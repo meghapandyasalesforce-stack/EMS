@@ -156,13 +156,15 @@ export default defineConfig(({ mode }) => {
         manualChunks: (id) => {
           // Vendor chunks - split large libraries into separate chunks
           if (id.includes('node_modules')) {
-            // React core libraries (keep together as they're tightly coupled)
-            if (id.includes('react') && !id.includes('react-dom')) {
-              return 'react-core';
+            // CRITICAL: Never split React or ReactDOM - they must stay together
+            // React and ReactDOM are tightly coupled and splitting them causes runtime errors
+            // Exclude React core from manual chunking - let Vite handle it automatically
+            // This ensures React and ReactDOM stay together
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+              return; // Return undefined to let Vite handle React automatically
             }
-            if (id.includes('react-dom')) {
-              return 'react-dom';
-            }
+            
+            // Redux ecosystem (can be split safely)
             if (id.includes('react-redux') || id.includes('use-sync-external-store')) {
               return 'react-redux';
             }

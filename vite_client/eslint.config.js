@@ -23,7 +23,10 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', { 
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^_'
+      }],
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
@@ -35,6 +38,15 @@ export default [
       }],
       // CRITICAL: Prevent alert() calls - use toast notifications instead
       'no-alert': 'error',
+    },
+  },
+  // Config files (vite.config.js, etc.) run in Node.js, not browser
+  {
+    files: ['*.config.js', '*.config.mjs', '*.config.ts', '*.config.mts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
     },
   },
 ]
