@@ -721,32 +721,8 @@ export const clockOut = async (req, res) => {
       return res.status(400).json({ message: "Please end your break before clocking out" });
     }
 
-    // Get real IP address for check-out
+    // Get real IP address for check-out (for logging only, not for validation)
     const clientIP = getClientIP(req);
-    const checkInIP = attendance.clockInNetwork?.ipAddress;
-
-    // Validate IP address matches check-in IP
-    if (checkInIP && checkInIP !== 'unknown') {
-      // Normalize IPs (remove port if present, handle IPv6)
-      const normalizeIP = (ip) => {
-        if (!ip) return '';
-        // Remove port if present
-        const ipOnly = ip.split(':')[0];
-        // Handle IPv4-mapped IPv6 addresses
-        return ipOnly.replace(/^::ffff:/, '');
-      };
-
-      const normalizedCheckInIP = normalizeIP(checkInIP);
-      const normalizedCheckOutIP = normalizeIP(clientIP);
-
-      if (normalizedCheckInIP !== normalizedCheckOutIP) {
-        return res.status(400).json({ 
-          message: `IP address mismatch. You checked in from IP: ${checkInIP}, but you're trying to check out from IP: ${clientIP}. Please use the same device/network you used for check-in.`,
-          checkInIP: checkInIP,
-          checkOutIP: clientIP
-        });
-      }
-    }
 
     // Helper: distance in meters between two lat/lng points (Haversine)
     const distanceInMeters = (lat1, lon1, lat2, lon2) => {
@@ -829,6 +805,53 @@ export const clockOut = async (req, res) => {
           }
         }
       }
+    }
+
+    // Validate location matches check-in location (location-based validation)
+    const checkInLocation = attendance.clockInLocation;
+    if (checkInLocation && 
+        typeof checkInLocation.latitude === 'number' && 
+        typeof checkInLocation.longitude === 'number' &&
+        typeof locationInfo.latitude === 'number' && 
+        typeof locationInfo.longitude === 'number') {
+      
+      const distanceFromCheckIn = distanceInMeters(
+        checkInLocation.latitude,
+        checkInLocation.longitude,
+        locationInfo.latitude,
+        locationInfo.longitude
+      );
+
+      // Allow reasonable distance (100 meters) - adjust as needed
+      // This allows for GPS accuracy variations and small movements
+      const maxAllowedDistance = 100; // meters
+      
+      if (distanceFromCheckIn > maxAllowedDistance) {
+        return res.status(400).json({ 
+          success: false,
+          message: `Location mismatch. You checked in from a different location. Check-out location is ${Math.round(distanceFromCheckIn)}m away from check-in location. Maximum allowed distance: ${maxAllowedDistance}m. Please check out from the same location where you checked in.`,
+          code: 'LOCATION_MISMATCH',
+          checkInLocation: {
+            latitude: checkInLocation.latitude,
+            longitude: checkInLocation.longitude,
+            address: checkInLocation.address
+          },
+          checkOutLocation: {
+            latitude: locationInfo.latitude,
+            longitude: locationInfo.longitude,
+            address: locationInfo.address
+          },
+          distance: Math.round(distanceFromCheckIn),
+          maxAllowedDistance: maxAllowedDistance
+        });
+      }
+      
+      logger.debug('Check-out location validated against check-in location', {
+        distanceFromCheckIn: Math.round(distanceFromCheckIn),
+        maxAllowedDistance: maxAllowedDistance,
+        checkInLocation: { lat: checkInLocation.latitude, lng: checkInLocation.longitude },
+        checkOutLocation: { lat: locationInfo.latitude, lng: locationInfo.longitude }
+      });
     }
 
     // Enforce geofence if rule present and simple punches disabled
