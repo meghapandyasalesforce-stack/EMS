@@ -23,7 +23,8 @@ import { corsMiddleware } from "./middlewares/corsConfig.js";
 import { 
   staticFilesCorsMiddleware, 
   staticFilesCheckMiddleware, 
-  staticFilesConfig 
+  staticFilesConfig,
+  staticFiles404Handler
 } from "./middlewares/staticFiles.js";
 import { registerRoutes } from "./config/routes.js";
 import { registerDiagnosticRoutes } from "./config/diagnosticRoutes.js";
@@ -125,6 +126,8 @@ app.use(corsMiddleware);
 // ✅ Static files (before rate limiting/CSRF to avoid unnecessary checks)
 app.use("/uploads", staticFilesCorsMiddleware);
 app.use("/uploads", staticFilesCheckMiddleware, staticFilesConfig);
+// Handle 404s for missing static files (after express.static, before route handlers)
+app.use("/uploads", staticFiles404Handler);
 app.use(staticCacheHeaders); // Add cache headers for static files
 
 // ✅ Request timeout (prevent hanging requests)

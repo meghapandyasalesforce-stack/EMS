@@ -59,7 +59,7 @@ export const validateEmailConfig = async () => {
 
     if (error.code === 'EAUTH' || error.responseCode === 535) {
       message = 'Email authentication failed';
-      if (isGmail) {
+      if (provider?.isGmail) {
         recommendation = 'For Gmail, you must use an App Password. Generate one at: https://myaccount.google.com/apppasswords';
       } else {
         recommendation = 'Verify your email and password are correct';

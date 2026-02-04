@@ -100,6 +100,29 @@ export const staticFilesCheckMiddleware = (req, res, next) => {
 };
 
 /**
+ * Middleware to handle 404s for missing static files
+ * This runs after express.static to catch requests that didn't match any files
+ */
+export const staticFiles404Handler = (req, res, next) => {
+  // Only handle requests to /uploads that look like file requests
+  if (req.path.startsWith('/uploads/') && req.path.match(/\.(jpg|jpeg|png|gif|webp|pdf|doc|docx)$/i)) {
+    // If response hasn't been sent and status is not set, file wasn't found
+    if (!res.headersSent) {
+      logger.warn('Static file not found - returning 404', {
+        path: req.path,
+        url: req.url,
+        method: req.method
+      });
+      return res.status(404).json({ 
+        message: 'File not found',
+        path: req.path 
+      });
+    }
+  }
+  next();
+};
+
+/**
  * Configure static file serving with proper headers
  */
 export const staticFilesConfig = express.static(path.join(__dirname, "..", "uploads"), {
