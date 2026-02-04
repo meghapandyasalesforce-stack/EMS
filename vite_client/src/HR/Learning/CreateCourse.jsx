@@ -166,7 +166,6 @@ const CreateCourse = () => {
             alert('Course created successfully!');
             navigate('/learning');
         } catch (error) {
-            console.error('Error creating course:', error);
             alert(error.response?.data?.message || 'Failed to create course');
         } finally {
             setLoading(false);

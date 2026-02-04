@@ -22,7 +22,7 @@ const HelpdeskPage = () => {
             });
             setTickets(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching tickets:', error);
+            // Error handled silently for production
         } finally {
             setLoading(false);
         }

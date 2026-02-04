@@ -50,7 +50,6 @@ const SuccessionDetailPage = () => {
                 navigate('/succession');
             }
         } catch (error) {
-            console.error('Error fetching plan:', error);
             toast.error('Failed to load succession plan');
             navigate('/succession');
         } finally {

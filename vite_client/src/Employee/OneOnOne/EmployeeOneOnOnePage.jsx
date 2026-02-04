@@ -37,7 +37,6 @@ const EmployeeOneOnOnePage = () => {
             });
             setMeetings(employeeMeetings);
         } catch (error) {
-            console.error('Error fetching meetings:', error);
             toast.error('Failed to load one-on-one meetings');
         } finally {
             setLoading(false);

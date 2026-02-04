@@ -198,6 +198,7 @@ const RoleBasedDashboard = () => {
             '/dashboard/hr',
             '/dashboard/finance',
             '/dashboard/manager',
+            '/dashboard/employee',
             '/dashboard/ceo',
             '/dashboard/cto',
             '/dashboard/cfo',

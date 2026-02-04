@@ -77,7 +77,6 @@ const BenefitsPage = () => {
             const response = await axios.get('/v1/both/benefits/benefit-plans', { withCredentials: true });
             setBenefitPlans(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching benefits:', error);
             toast.error('Failed to load benefit plans');
         } finally {
             setLoading(false);
@@ -89,7 +88,6 @@ const BenefitsPage = () => {
             const response = await axios.get(`/v1/admin/benefits/benefit-plans/${planId}/enrollments`, { withCredentials: true });
             setEnrollments(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching enrollments:', error);
             toast.error('Failed to load enrollments');
         }
     };
@@ -110,7 +108,6 @@ const BenefitsPage = () => {
             resetForm();
             fetchBenefits();
         } catch (error) {
-            console.error('Error creating benefit:', error);
             toast.error(error.response?.data?.message || 'Failed to create benefit plan');
         } finally {
             setSubmitting(false);
@@ -127,7 +124,6 @@ const BenefitsPage = () => {
             toast.success('Benefit plan deleted successfully');
             fetchBenefits();
         } catch (error) {
-            console.error('Error deleting benefit:', error);
             toast.error(error.response?.data?.message || 'Failed to delete benefit plan');
         }
     };

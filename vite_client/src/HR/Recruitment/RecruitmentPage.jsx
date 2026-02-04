@@ -26,7 +26,7 @@ const RecruitmentPage = () => {
                 setCandidates(response.data?.data || []);
             }
         } catch (error) {
-            console.error('Error fetching data:', error);
+            // Error handled silently for production
         } finally {
             setLoading(false);
         }

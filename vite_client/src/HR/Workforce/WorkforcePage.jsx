@@ -70,7 +70,6 @@ const WorkforcePage = () => {
                 setForecasts(response.data?.data || []);
             }
         } catch (error) {
-            console.error('Error fetching data:', error);
             toast.error('Failed to load data');
         } finally {
             setLoading(false);
@@ -100,7 +99,6 @@ const WorkforcePage = () => {
             resetPlanForm();
             fetchData();
         } catch (error) {
-            console.error('Error creating plan:', error);
             toast.error(error.response?.data?.message || 'Failed to create workforce plan');
         } finally {
             setSubmitting(false);
@@ -123,7 +121,6 @@ const WorkforcePage = () => {
             resetForecastForm();
             fetchData();
         } catch (error) {
-            console.error('Error creating forecast:', error);
             toast.error(error.response?.data?.message || 'Failed to create headcount forecast');
         } finally {
             setSubmitting(false);
@@ -140,7 +137,6 @@ const WorkforcePage = () => {
             toast.success('Workforce plan deleted successfully');
             fetchData();
         } catch (error) {
-            console.error('Error deleting plan:', error);
             toast.error(error.response?.data?.message || 'Failed to delete workforce plan');
         }
     };
@@ -155,7 +151,6 @@ const WorkforcePage = () => {
             toast.success('Forecast deleted successfully');
             fetchData();
         } catch (error) {
-            console.error('Error deleting forecast:', error);
             toast.error(error.response?.data?.message || 'Failed to delete forecast');
         }
     };

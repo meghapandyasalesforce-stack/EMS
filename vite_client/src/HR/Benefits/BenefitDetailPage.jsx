@@ -33,7 +33,6 @@ const BenefitDetailPage = () => {
                 navigate('/benefits');
             }
         } catch (error) {
-            console.error('Error fetching plan:', error);
             toast.error('Failed to load benefit plan');
             navigate('/benefits');
         } finally {
@@ -47,7 +46,7 @@ const BenefitDetailPage = () => {
             const response = await axios.get(`/v1/admin/benefits/benefit-plans/${id}/enrollments`, { withCredentials: true });
             setEnrollments(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching enrollments:', error);
+            // Error handled silently for production
         } finally {
             setEnrollmentsLoading(false);
         }

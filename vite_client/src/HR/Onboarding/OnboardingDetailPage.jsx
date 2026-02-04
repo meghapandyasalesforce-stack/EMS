@@ -43,7 +43,6 @@ const OnboardingDetailPage = () => {
                 navigate('/onboarding');
             }
         } catch (error) {
-            console.error('Error fetching workflow:', error);
             toast.error('Failed to load workflow');
             navigate('/onboarding');
         } finally {
@@ -62,7 +61,6 @@ const OnboardingDetailPage = () => {
             toast.success('Task updated successfully');
             fetchWorkflow();
         } catch (error) {
-            console.error('Error updating task:', error);
             toast.error(error.response?.data?.message || 'Failed to update task');
         } finally {
             setSubmitting(false);
@@ -106,7 +104,6 @@ const OnboardingDetailPage = () => {
             });
             fetchWorkflow();
         } catch (error) {
-            console.error('Error adding task:', error);
             toast.error(error.response?.data?.message || 'Failed to add task');
         } finally {
             setSubmitting(false);

@@ -60,22 +60,43 @@ export const staticFilesCorsMiddleware = (req, res, next) => {
  * Helps debug 404s for profile photos
  */
 export const staticFilesCheckMiddleware = (req, res, next) => {
-  // Check if file exists before serving (helps debug 404s for profile photos)
-  const requestedPath = req.path;
-  if (requestedPath.includes('profile-photos')) {
-    const fullPath = path.join(__dirname, "..", "uploads", requestedPath);
-    if (!fs.existsSync(fullPath)) {
-      logger.warn('File not found', {
-        requestedPath,
-        fullPath,
-        url: req.url,
-        timestamp: new Date().toISOString()
-      });
-      // Don't return 404 here - let express.static handle it
-      // But log it for debugging Render ephemeral filesystem issues
+  try {
+    // Check if file exists before serving (helps debug 404s for profile photos)
+    const requestedPath = req.path;
+    if (requestedPath.includes('profile-photos')) {
+      const fullPath = path.join(__dirname, "..", "uploads", requestedPath);
+      try {
+        if (!fs.existsSync(fullPath)) {
+          logger.warn('File not found', {
+            requestedPath,
+            fullPath,
+            url: req.url,
+            timestamp: new Date().toISOString()
+          });
+          // Don't return 404 here - let express.static handle it
+          // But log it for debugging Render ephemeral filesystem issues
+        }
+      } catch (fsError) {
+        // Log filesystem errors but don't block the request
+        logger.error('Error checking file existence', {
+          error: fsError.message,
+          requestedPath,
+          fullPath,
+          stack: fsError.stack
+        });
+      }
     }
+    next();
+  } catch (error) {
+    // Catch any unexpected errors in the middleware
+    logger.error('Error in staticFilesCheckMiddleware', {
+      error: error.message,
+      stack: error.stack,
+      url: req.url
+    });
+    // Continue to next middleware - don't block the request
+    next();
   }
-  next();
 };
 
 /**
@@ -83,44 +104,59 @@ export const staticFilesCheckMiddleware = (req, res, next) => {
  */
 export const staticFilesConfig = express.static(path.join(__dirname, "..", "uploads"), {
   setHeaders: (res, filePath, stat) => {
-    // CRITICAL: Get origin from request - this is essential for CORS
-    const req = res.req || res.locals?.req;
-    const origin = req?.headers?.origin || req?.get?.('origin');
-    const allowedOrigins = getAllowedOrigins();
-    
-    // Set CORS headers for the file response - MUST match what middleware set
-    // Development: More permissive CORS
-    if (process.env.NODE_ENV === "development") {
-      if (origin) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
+    try {
+      // CRITICAL: Get origin from request - this is essential for CORS
+      const req = res.req || res.locals?.req;
+      const origin = req?.headers?.origin || req?.get?.('origin');
+      
+      // Set CORS headers for the file response - MUST match what middleware set
+      // Development: More permissive CORS
+      if (process.env.NODE_ENV === "development") {
+        if (origin) {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+        }
       } else {
-        res.setHeader("Access-Control-Allow-Origin", "*");
+        // Production: More permissive CORS for static files (images need to load from anywhere)
+        if (origin) {
+          // Allow any origin for static files in production
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+        }
       }
-    } else {
-      // Production: More permissive CORS for static files (images need to load from anywhere)
-      if (origin) {
-        // Allow any origin for static files in production
-        res.setHeader("Access-Control-Allow-Origin", origin);
-        res.setHeader("Access-Control-Allow-Credentials", "true");
-      } else {
+      
+      // Set appropriate content type for images
+      if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.setHeader("Content-Type", "image/jpeg");
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader("Content-Type", "image/png");
+      } else if (filePath.endsWith('.gif')) {
+        res.setHeader("Content-Type", "image/gif");
+      } else if (filePath.endsWith('.webp')) {
+        res.setHeader("Content-Type", "image/webp");
+      }
+      
+      // Cache control for images
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    } catch (error) {
+      // Log error but don't throw - allow Express static to handle file serving
+      logger.error('Error setting static file headers', {
+        error: error.message,
+        filePath,
+        stack: error.stack
+      });
+      // Set basic CORS headers as fallback
+      try {
         res.setHeader("Access-Control-Allow-Origin", "*");
+      } catch (headerError) {
+        // If even setting headers fails, log and continue
+        logger.error('Failed to set fallback CORS headers', { error: headerError.message });
       }
     }
-    
-    // Set appropriate content type for images
-    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
-      res.setHeader("Content-Type", "image/jpeg");
-    } else if (filePath.endsWith('.png')) {
-      res.setHeader("Content-Type", "image/png");
-    } else if (filePath.endsWith('.gif')) {
-      res.setHeader("Content-Type", "image/gif");
-    } else if (filePath.endsWith('.webp')) {
-      res.setHeader("Content-Type", "image/webp");
-    }
-    
-    // Cache control for images
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   },
   // Add fallthrough to handle missing files gracefully
   fallthrough: true

@@ -63,7 +63,6 @@ const SuccessionPage = () => {
                 setTalentPool(response.data?.data || []);
             }
         } catch (error) {
-            console.error('Error fetching data:', error);
             toast.error('Failed to load data');
         } finally {
             setLoading(false);
@@ -86,7 +85,6 @@ const SuccessionPage = () => {
             resetPlanForm();
             fetchData();
         } catch (error) {
-            console.error('Error creating plan:', error);
             toast.error(error.response?.data?.message || 'Failed to create succession plan');
         } finally {
             setSubmitting(false);
@@ -109,7 +107,6 @@ const SuccessionPage = () => {
             resetTalentForm();
             fetchData();
         } catch (error) {
-            console.error('Error adding talent:', error);
             toast.error(error.response?.data?.message || 'Failed to add to talent pool');
         } finally {
             setSubmitting(false);
@@ -126,7 +123,6 @@ const SuccessionPage = () => {
             toast.success('Succession plan deleted successfully');
             fetchData();
         } catch (error) {
-            console.error('Error deleting plan:', error);
             toast.error(error.response?.data?.message || 'Failed to delete succession plan');
         }
     };
@@ -141,7 +137,6 @@ const SuccessionPage = () => {
             toast.success('Removed from talent pool successfully');
             fetchData();
         } catch (error) {
-            console.error('Error deleting talent:', error);
             toast.error(error.response?.data?.message || 'Failed to remove from talent pool');
         }
     };

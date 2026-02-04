@@ -28,7 +28,6 @@ const EmployeeLeaveBalanceViewer = () => {
             const employeesData = res.data?.data || res.data?.employees || [];
             setEmployees(Array.isArray(employeesData) ? employeesData : []);
         } catch (error) {
-            console.error('Error fetching employees:', error);
             toast.error('Failed to fetch employees');
             setEmployees([]);
         } finally {
@@ -45,7 +44,6 @@ const EmployeeLeaveBalanceViewer = () => {
             );
             setBalance(res.data.balance);
         } catch (error) {
-            console.error('Error fetching balance:', error);
             if (error.response?.status === 404) {
                 setBalance(null);
                 toast.info('No leave balance found for this employee');

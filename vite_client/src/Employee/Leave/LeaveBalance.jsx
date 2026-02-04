@@ -25,7 +25,6 @@ const LeaveBalance = () => {
             );
             setBalance(res.data.balance);
         } catch (error) {
-            console.error('Error fetching balance:', error);
             if (error.response?.status !== 404) {
                 toast.error('Failed to fetch leave balance');
             }

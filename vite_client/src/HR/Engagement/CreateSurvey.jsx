@@ -176,7 +176,6 @@ const CreateSurvey = () => {
             alert('Survey created successfully!');
             navigate('/engagement');
         } catch (error) {
-            console.error('Error creating survey:', error);
             alert(error.response?.data?.message || 'Failed to create survey');
         } finally {
             setLoading(false);

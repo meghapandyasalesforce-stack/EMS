@@ -44,7 +44,6 @@ const OnboardingPage = () => {
             const response = await axios.get('/v1/admin/onboarding/onboarding', { withCredentials: true });
             setWorkflows(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching workflows:', error);
             toast.error('Failed to load onboarding workflows');
         } finally {
             setLoading(false);
@@ -73,7 +72,6 @@ const OnboardingPage = () => {
             resetForm();
             fetchWorkflows();
         } catch (error) {
-            console.error('Error creating workflow:', error);
             toast.error(error.response?.data?.message || 'Failed to create onboarding workflow');
         } finally {
             setSubmitting(false);

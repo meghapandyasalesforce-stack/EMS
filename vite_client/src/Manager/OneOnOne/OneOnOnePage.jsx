@@ -65,7 +65,6 @@ const OneOnOnePage = () => {
             });
             setMeetings(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching meetings:', error);
             toast.error('Failed to load one-on-one meetings');
         } finally {
             setLoading(false);
@@ -82,7 +81,7 @@ const OneOnOnePage = () => {
             const teamMembers = filterEmployeesByManager(allEmployees, user);
             setEmployees(teamMembers);
         } catch (error) {
-            console.error('Error fetching employees:', error);
+            // Error handled silently for production
         }
     };
 
@@ -119,7 +118,6 @@ const OneOnOnePage = () => {
             resetForm();
             fetchMeetings();
         } catch (error) {
-            console.error('Error saving meeting:', error);
             toast.error(error.response?.data?.message || 'Failed to save meeting');
         } finally {
             setSubmitting(false);
@@ -138,7 +136,6 @@ const OneOnOnePage = () => {
             toast.success('Meeting deleted successfully');
             fetchMeetings();
         } catch (error) {
-            console.error('Error deleting meeting:', error);
             toast.error(error.response?.data?.message || 'Failed to delete meeting');
         }
     };

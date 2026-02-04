@@ -105,6 +105,11 @@ export const dashboardRoutes = [
     component: lazy(() => import('../Manager/Dashboard/DashboardManager')),
     message: 'Loading manager dashboard...'
   },
+  {
+    path: '/dashboard/employee',
+    component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')),
+    message: 'Loading employee dashboard...'
+  },
   // Keep existing routes for backward compatibility
   {
     path: '/dashboard-admin',

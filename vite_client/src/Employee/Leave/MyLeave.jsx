@@ -50,7 +50,6 @@ const MyLeavePage = () => {
       );
       setLeaveBalance(res.data.balance);
     } catch (error) {
-      console.error('Error fetching leave balance:', error);
       // Set to null explicitly so we can show a message
       setLeaveBalance(null);
       // Only show error if it's not a 404 (no policy configured)

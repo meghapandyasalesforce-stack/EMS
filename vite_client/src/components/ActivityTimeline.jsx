@@ -40,7 +40,7 @@ const ActivityTimeline = ({ organizationId, entityType, entityId, limit = 50 }) 
         setActivities(combineActivities(activityData));
       }
     } catch (error) {
-      console.error('Failed to fetch activities:', error);
+      // Error handled silently for production
     } finally {
       setLoading(false);
     }

@@ -36,7 +36,6 @@ const MyRegularizationRequests = () => {
             });
             setRequests(response.data?.requests || []);
         } catch (error) {
-            console.error('Error fetching regularization requests:', error);
             toast.error('Failed to load regularization requests');
         } finally {
             setLoading(false);
@@ -89,7 +88,6 @@ const MyRegularizationRequests = () => {
             });
             fetchRequests();
         } catch (error) {
-            console.error('Error creating request:', error);
             toast.error(error.response?.data?.message || 'Failed to submit request');
         } finally {
             setSubmitting(false);
@@ -110,7 +108,6 @@ const MyRegularizationRequests = () => {
             toast.success('Request cancelled successfully');
             fetchRequests();
         } catch (error) {
-            console.error('Error cancelling request:', error);
             toast.error(error.response?.data?.message || 'Failed to cancel request');
         }
     };

@@ -28,7 +28,6 @@ const RegularizationRequests = () => {
             });
             setRequests(response.data?.requests || []);
         } catch (error) {
-            console.error('Error fetching regularization requests:', error);
             toast.error('Failed to load regularization requests');
         } finally {
             setLoading(false);
@@ -47,7 +46,6 @@ const RegularizationRequests = () => {
             fetchRequests();
             setSelectedRequest(null);
         } catch (error) {
-            console.error('Error approving request:', error);
             toast.error(error.response?.data?.message || 'Failed to approve request');
         } finally {
             setActionLoading(null);
@@ -72,7 +70,6 @@ const RegularizationRequests = () => {
             setSelectedRequest(null);
             setRejectReason('');
         } catch (error) {
-            console.error('Error rejecting request:', error);
             toast.error(error.response?.data?.message || 'Failed to reject request');
         } finally {
             setActionLoading(null);

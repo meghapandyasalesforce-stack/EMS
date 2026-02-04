@@ -19,7 +19,7 @@ const HRReportsPage = () => {
             const response = await axios.get('/v1/admin/analytics/hr', { withCredentials: true });
             setAnalytics(response.data?.data);
         } catch (error) {
-            console.error('Error fetching analytics:', error);
+            // Error handled silently for production
         } finally {
             setLoading(false);
         }

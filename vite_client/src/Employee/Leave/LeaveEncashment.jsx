@@ -27,7 +27,7 @@ const LeaveEncashment = () => {
             const res = await axios.get(`/v1/employee/leave-encashment/history/${employee?._id}`);
             setEncashmentHistory(res.data.encashments || []);
         } catch (error) {
-            console.error('Error fetching encashment history:', error);
+            // Error handled silently for production
         }
     };
 
@@ -44,7 +44,7 @@ const LeaveEncashment = () => {
                 setAvailableBalances(balances);
             }
         } catch (error) {
-            console.error('Error fetching leave balances:', error);
+            // Error handled silently for production
         }
     };
 

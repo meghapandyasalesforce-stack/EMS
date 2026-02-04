@@ -69,7 +69,6 @@ const LeavePolicyManagement = () => {
             const res = await axios.get('/v1/admin/leave-policy');
             setPolicies(res.data.policies || []);
         } catch (error) {
-            console.error('Error fetching policies:', error);
             toast.error('Failed to fetch leave policies');
         } finally {
             setLoading(false);
@@ -94,7 +93,6 @@ const LeavePolicyManagement = () => {
             setEditingPolicy(null);
             resetForm();
         } catch (error) {
-            console.error('Error saving policy:', error);
             toast.error('Error saving policy: ' + (error.response?.data?.message || error.message));
         } finally {
             setLoading(false);

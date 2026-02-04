@@ -64,7 +64,6 @@ const TeamLearningPage = () => {
             });
             setLearnings(response.data?.data || []);
         } catch (error) {
-            console.error('Error fetching learnings:', error);
             toast.error('Failed to load learning resources');
         } finally {
             setLoading(false);
@@ -81,7 +80,7 @@ const TeamLearningPage = () => {
             const teamMembers = filterEmployeesByManager(allEmployees, user);
             setEmployees(teamMembers);
         } catch (error) {
-            console.error('Error fetching employees:', error);
+            // Error handled silently for production
         }
     };
 
@@ -118,7 +117,6 @@ const TeamLearningPage = () => {
             resetForm();
             fetchLearnings();
         } catch (error) {
-            console.error('Error saving learning:', error);
             toast.error(error.response?.data?.message || 'Failed to save learning resource');
         } finally {
             setSubmitting(false);
@@ -137,7 +135,6 @@ const TeamLearningPage = () => {
             toast.success('Learning resource deleted successfully');
             fetchLearnings();
         } catch (error) {
-            console.error('Error deleting learning:', error);
             toast.error(error.response?.data?.message || 'Failed to delete learning resource');
         }
     };

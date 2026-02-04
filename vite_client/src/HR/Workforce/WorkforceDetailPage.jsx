@@ -50,7 +50,6 @@ const WorkforceDetailPage = () => {
                 navigate('/workforce');
             }
         } catch (error) {
-            console.error('Error fetching plan:', error);
             toast.error('Failed to load workforce plan');
             navigate('/workforce');
         } finally {
