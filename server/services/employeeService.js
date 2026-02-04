@@ -108,9 +108,13 @@ export const getEmployeeByIdService = async (employeeId, organizationId) => {
  */
 export const createEmployeeService = async (employeeData, organizationId) => {
     try {
+        // ✅ Ensure active and status are set for new employees
         const employee = new Employee({
             ...employeeData,
-            organizationId
+            organizationId,
+            // Explicitly set status and active if not provided
+            status: employeeData.status || 'active',
+            active: employeeData.active !== undefined ? employeeData.active : (employeeData.status === 'active' || !employeeData.status)
         });
 
         await employee.save();
@@ -142,6 +146,16 @@ export const createEmployeeService = async (employeeData, organizationId) => {
  */
 export const updateEmployeeService = async (employeeId, updateData, organizationId) => {
     try {
+        // ✅ SYNC: Ensure status and active fields are synced before update
+        // If active is being updated, sync status
+        if (updateData.active !== undefined) {
+            updateData.status = updateData.active ? 'active' : 'inactive';
+        }
+        // If status is being updated, sync active
+        else if (updateData.status !== undefined) {
+            updateData.active = (updateData.status === 'active');
+        }
+        
         const employee = await Employee.findOneAndUpdate(
             { _id: employeeId, organizationId },
             updateData,

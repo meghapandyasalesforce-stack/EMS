@@ -16,6 +16,113 @@ import { autoGenerateIdCard } from '../admin/idCardController.js';
 import Payroll from '../../models/payroll.model.js'; // Make sure this path is correct
 
 
+/**
+ * @swagger
+ * /api/v1/employee/auth/register:
+ *   post:
+ *     summary: Register a new employee
+ *     description: Creates a new employee account. Requires admin or HR authentication. Password is optional and will be auto-generated if not provided.
+ *     tags: [Employee Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - lastName
+ *               - email
+ *               - position
+ *               - department
+ *               - manager
+ *               - jobTitle
+ *               - jobCategory
+ *               - salary
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: John
+ *                 description: Employee first name
+ *               lastName:
+ *                 type: string
+ *                 example: Doe
+ *                 description: Employee last name
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john.doe@example.com
+ *                 description: Employee email address (must be unique)
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: SecurePass123!
+ *                 description: Password (optional - will be auto-generated if not provided)
+ *               position:
+ *                 type: string
+ *                 enum: [Intern, Junior, Mid-Level, Senior, Lead, Supervisor, Manager, Director, VP, CTO, CFO, CEO, Developer]
+ *                 example: Senior
+ *                 description: Employee position
+ *               department:
+ *                 type: string
+ *                 enum: [Engineering, HR, Finance, Sales, Marketing, IT Support, Operations, Customer Support, Legal, Product, Research & Development, Design, Administration]
+ *                 example: Engineering
+ *                 description: Employee department
+ *               manager:
+ *                 type: string
+ *                 example: Jane Smith
+ *                 description: Manager name or ID
+ *               jobTitle:
+ *                 type: string
+ *                 enum: [Software Engineer, Frontend Developer, Backend Developer, DevOps Engineer, HR Manager, Financial Analyst, Marketing Executive, Sales Representative, Product Manager, QA Tester, Customer Support Specialist, UX/UI Designer, Project Manager, Legal Advisor, Operations Coordinator, Full Stack Developer]
+ *                 example: Software Engineer
+ *                 description: Job title
+ *               jobCategory:
+ *                 type: string
+ *                 enum: [Information Technology, Human Resources, Finance, Marketing, Sales, Operations, Customer Service, Research and Development, Engineering, Legal, Administration, Management, Design, Product Management]
+ *                 example: Information Technology
+ *                 description: Job category
+ *               salary:
+ *                 type: number
+ *                 minimum: 0
+ *                 example: 50000
+ *                 description: Employee salary
+ *     responses:
+ *       201:
+ *         description: Employee registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Employee registered successfully
+ *                 employee:
+ *                   $ref: '#/components/schemas/Employee'
+ *                 emailSent:
+ *                   type: boolean
+ *                   example: true
+ *                 emailWarning:
+ *                   type: string
+ *                   example: Welcome email could not be sent
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       409:
+ *         description: Email already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Register new employee
 
 export const registerEmployee = async (req, res) => {
@@ -156,7 +263,9 @@ export const registerEmployee = async (req, res) => {
             salary,
             role: 'employee',
             mustResetPassword: mustResetPassword,
-            employeeId: employeeId // Set the auto-generated ID
+            employeeId: employeeId, // Set the auto-generated ID
+            status: 'active', // ✅ Explicitly set status to active
+            active: true // ✅ Explicitly set active to true for new employees
         });
 
         // Save employee - this will trigger password hashing
@@ -356,6 +465,75 @@ export const registerEmployee = async (req, res) => {
     }
 };
 
+/**
+ * @swagger
+ * /api/v1/employee/auth/login:
+ *   post:
+ *     summary: Login as employee
+ *     description: Authenticates an employee and returns JWT tokens. Account lockout applies after failed attempts. Organization is determined from email domain.
+ *     tags: [Employee Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john.doe@example.com
+ *                 description: Employee email address
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: EmployeePass123!
+ *                 description: Employee password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 token:
+ *                   type: string
+ *                   description: JWT access token
+ *                 employee:
+ *                   $ref: '#/components/schemas/Employee'
+ *                 refreshToken:
+ *                   type: string
+ *                   description: JWT refresh token (optional)
+ *                 csrfToken:
+ *                   type: string
+ *                   description: CSRF token (optional)
+ *                 dashboardRoute:
+ *                   type: string
+ *                   example: /dashboard-employee
+ *                   description: Dashboard route for the employee
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Account locked or inactive
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *               example:
+ *                 success: false
+ *                 message: Your account is inactive. Please contact HR or Admin.
+ *                 code: ACCOUNT_INACTIVE
+ */
 /**
  * Login employee
  * @route POST /api/v1/employee/auth/login

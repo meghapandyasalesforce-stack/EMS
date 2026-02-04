@@ -289,6 +289,12 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
                 pending: leaveStats.find(l => l._id === 'pending')?.count || 0,
                 approved: leaveStats.find(l => l._id === 'approved')?.count || 0,
                 totalDays: leaveStats.reduce((sum, l) => sum + (l.totalDays || 0), 0)
+            },
+            approvals: approvalStats,
+            sla: slaStats,
+            productivity: {
+                avgHoursPerEmployee: attendanceStats[0]?.avgHours || 0,
+                employeeEngagement: 0 // Placeholder for future implementation
             }
         }, 'KPIs retrieved successfully');
     } catch (error) {

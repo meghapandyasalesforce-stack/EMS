@@ -347,12 +347,52 @@ employeeSchema.pre('save', async function(next) {
             return next(error);
         }
     }
+    
+    // ✅ SYNC: Keep active field in sync with status field
+    // If status is modified, update active accordingly
+    // This ensures consistency between status (enum) and active (boolean)
+    if (this.isModified('status')) {
+        this.active = (this.status === 'active');
+    }
+    // If active is modified but status is not, sync status to match active
+    // This handles cases where active is set directly
+    else if (this.isModified('active') && !this.isModified('status')) {
+        if (this.active === false && this.status === 'active') {
+            // If setting active to false but status is still 'active', change status to 'inactive'
+            this.status = 'inactive';
+        } else if (this.active === true && this.status !== 'active') {
+            // If setting active to true but status is not 'active', change status to 'active'
+            this.status = 'active';
+        }
+    }
+    
     next();
 });
 
 // Compare password method for consistency with User model
 employeeSchema.methods.comparePassword = async function(candidatePassword) {
     return await comparePassword(candidatePassword, this.password, this._id?.toString());
+};
+
+/**
+ * Sync active field with status field (or vice versa)
+ * This ensures consistency between status (enum) and active (boolean)
+ * @returns {Object} The employee document with synced fields
+ */
+employeeSchema.methods.syncStatusFields = function() {
+    // If status is set, sync active to match
+    if (this.status) {
+        this.active = (this.status === 'active');
+    }
+    // If active is set but status doesn't match, sync status
+    else if (this.active !== undefined) {
+        if (this.active === false && this.status === 'active') {
+            this.status = 'inactive';
+        } else if (this.active === true && this.status !== 'active') {
+            this.status = 'active';
+        }
+    }
+    return this;
 };
 
 // Add toJSON method to remove sensitive data

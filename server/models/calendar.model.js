@@ -33,6 +33,19 @@ const calendarSchema = new mongoose.Schema({
             type: String,
             trim: true
         },
+        theme: {
+            type: String,
+            enum: ['saffron', 'green', 'blue', 'red', 'orange', 'yellow', 'purple', 'pink', 'gold', 'silver', 'default'],
+            default: 'default'
+        },
+        icon: {
+            type: String,
+            trim: true
+        },
+        color: {
+            type: String,
+            trim: true
+        },
         isRecurring: {
             type: Boolean,
             default: false

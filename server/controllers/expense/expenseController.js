@@ -3,6 +3,8 @@ import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import logger from '../../helpers/logger.js';
 import mongoose from 'mongoose';
+import { initiateApproval } from '../../services/approvalWorkflowService.js';
+import { logCreate, logUpdate, logApprove, logReject, logDelete } from '../../helpers/auditLogger.js';
 
 /**
  * Create a new expense claim
@@ -47,6 +49,60 @@ export const createExpense = async (req, res) => {
         });
 
         await expense.save();
+
+        // Log audit trail for expense creation
+        await logCreate({
+            entityType: 'Expense',
+            entityId: expense._id,
+            entityName: `${expense.category} expense - ${expense.amount} ${expense.currency}`,
+            req,
+            before: null,
+            after: expense.toObject(),
+            metadata: {
+                category: expense.category,
+                amount: expense.amount,
+                currency: expense.currency,
+                expenseDate: expense.expenseDate
+            }
+        });
+
+        // Initiate approval workflow if configured
+        try {
+            const employee = await Employee.findById(employeeId).select('organizationId').lean();
+            if (employee) {
+                const approvalResult = await initiateApproval({
+                    organizationId: expense.organizationId,
+                    entityType: 'Expense',
+                    entityId: expense._id,
+                    requestedBy: employeeId,
+                    metadata: {
+                        amount: expense.amount,
+                        category: expense.category,
+                        currency: expense.currency,
+                        description: expense.description
+                    },
+                    priority: expense.amount > 1000 ? 'High' : expense.amount > 500 ? 'Medium' : 'Low'
+                });
+
+                // Update expense with approval instance ID if workflow was initiated
+                if (approvalResult.approvalInstanceId) {
+                    expense.approvalInstanceId = approvalResult.approvalInstanceId;
+                    await expense.save();
+                }
+
+                // If auto-approved, update expense status
+                if (approvalResult.status === 'Approved' && approvalResult.autoApproved) {
+                    expense.status = 'Approved';
+                    await expense.save();
+                }
+            }
+        } catch (approvalError) {
+            logger.warn('Error initiating approval workflow for expense', {
+                error: approvalError.message,
+                expenseId: expense._id
+            });
+            // Don't fail expense creation if approval workflow fails
+        }
 
         res.status(201).json({
             success: true,
@@ -270,6 +326,9 @@ export const updateExpense = async (req, res) => {
             });
         }
 
+        // Get expense before update for audit log
+        const expenseBefore = expense.toObject();
+
         // Employee can only update their own pending expenses
         if (req.employee?._id) {
             if (expense.employeeId.toString() !== employeeId.toString()) {
@@ -295,6 +354,21 @@ export const updateExpense = async (req, res) => {
 
         await expense.save();
 
+        // Log audit trail
+        await logUpdate({
+            entityType: 'Expense',
+            entityId: expense._id,
+            entityName: `${expense.category} expense - ${expense.amount} ${expense.currency}`,
+            req,
+            before: expenseBefore,
+            after: expense.toObject(),
+            metadata: {
+                category: expense.category,
+                amount: expense.amount,
+                currency: expense.currency
+            }
+        });
+
         res.json({
             success: true,
             message: 'Expense updated successfully',
@@ -311,24 +385,26 @@ export const updateExpense = async (req, res) => {
 
 /**
  * Approve expense (admin only)
+ * If approval workflow exists, use workflow; otherwise direct approval
  */
 export const approveExpense = async (req, res) => {
     try {
         const { id } = req.params;
+        const { comments } = req.body;
         const organizationId = getOrganizationId(req);
-        const approverId = req.user?._id;
+        const approverId = req.user?._id || req.employee?._id;
 
         if (!approverId) {
             return res.status(401).json({
                 success: false,
-                message: 'Admin authentication required'
+                message: 'Authentication required'
             });
         }
 
         const expense = await Expense.findOne({
             _id: id,
             organizationId
-        });
+        }).populate('approvalInstanceId');
 
         if (!expense) {
             return res.status(404).json({
@@ -344,11 +420,99 @@ export const approveExpense = async (req, res) => {
             });
         }
 
+        // If approval workflow exists, process through workflow
+        if (expense.approvalInstanceId) {
+            try {
+                const { processApprovalAction } = await import('../../services/approvalWorkflowService.js');
+                
+                const ApprovalInstance = (await import('../../models/approvalWorkflow.model.js')).ApprovalInstance;
+                const instance = await ApprovalInstance.findById(expense.approvalInstanceId);
+                
+                if (instance && instance.status === 'In Progress') {
+                    const pendingStep = instance.steps.find(s => 
+                        s.status === 'Pending' && 
+                        s.approverId?.toString() === approverId.toString()
+                    );
+
+                    if (pendingStep) {
+                        await processApprovalAction({
+                            approvalInstanceId: instance._id,
+                            stepNumber: pendingStep.stepNumber,
+                            approverId: approverId,
+                            action: 'Approve',
+                            comments: comments || 'Expense approved',
+                            metadata: {
+                                expenseId: expense._id,
+                                amount: expense.amount
+                            }
+                        });
+
+                        // Check if workflow is complete
+                        const updatedInstance = await ApprovalInstance.findById(instance._id);
+                        if (updatedInstance.status === 'Approved') {
+                            expense.status = 'Approved';
+                            expense.approvedBy = approverId;
+                            expense.approvedAt = new Date();
+                            await expense.save();
+                            
+                            // Log audit trail
+                            await logApprove({
+                                entityType: 'Expense',
+                                entityId: expense._id,
+                                entityName: `${expense.category} expense - ${expense.amount} ${expense.currency}`,
+                                req,
+                                before: expenseBefore,
+                                after: expense.toObject(),
+                                metadata: {
+                                    category: expense.category,
+                                    amount: expense.amount,
+                                    currency: expense.currency,
+                                    approverId: approverId.toString(),
+                                    comments,
+                                    viaWorkflow: true
+                                }
+                            });
+                        }
+
+                        return res.json({
+                            success: true,
+                            message: 'Expense approved through workflow',
+                            data: expense
+                        });
+                    }
+                }
+            } catch (workflowError) {
+                logger.warn('Error processing expense through workflow, falling back to direct approval', {
+                    error: workflowError.message,
+                    expenseId: expense._id
+                });
+                // Fall through to direct approval
+            }
+        }
+
+        // Direct approval (no workflow or workflow failed)
         expense.status = 'Approved';
         expense.approvedBy = approverId;
         expense.approvedAt = new Date();
 
         await expense.save();
+
+        // Log audit trail
+        await logApprove({
+            entityType: 'Expense',
+            entityId: expense._id,
+            entityName: `${expense.category} expense - ${expense.amount} ${expense.currency}`,
+            req,
+            before: expenseBefore,
+            after: expense.toObject(),
+            metadata: {
+                category: expense.category,
+                amount: expense.amount,
+                currency: expense.currency,
+                approverId: approverId.toString(),
+                comments
+            }
+        });
 
         res.json({
             success: true,
@@ -366,25 +530,26 @@ export const approveExpense = async (req, res) => {
 
 /**
  * Reject expense (admin only)
+ * If approval workflow exists, use workflow; otherwise direct rejection
  */
 export const rejectExpense = async (req, res) => {
     try {
         const { id } = req.params;
         const { rejectionReason } = req.body;
         const organizationId = getOrganizationId(req);
-        const approverId = req.user?._id;
+        const approverId = req.user?._id || req.employee?._id;
 
         if (!approverId) {
             return res.status(401).json({
                 success: false,
-                message: 'Admin authentication required'
+                message: 'Authentication required'
             });
         }
 
         const expense = await Expense.findOne({
             _id: id,
             organizationId
-        });
+        }).populate('approvalInstanceId');
 
         if (!expense) {
             return res.status(404).json({
@@ -400,12 +565,98 @@ export const rejectExpense = async (req, res) => {
             });
         }
 
+        // If approval workflow exists, process through workflow
+        if (expense.approvalInstanceId) {
+            try {
+                const { processApprovalAction } = await import('../../services/approvalWorkflowService.js');
+                
+                const ApprovalInstance = (await import('../../models/approvalWorkflow.model.js')).ApprovalInstance;
+                const instance = await ApprovalInstance.findById(expense.approvalInstanceId);
+                
+                if (instance && instance.status === 'In Progress') {
+                    const pendingStep = instance.steps.find(s => 
+                        s.status === 'Pending' && 
+                        s.approverId?.toString() === approverId.toString()
+                    );
+
+                    if (pendingStep) {
+                        await processApprovalAction({
+                            approvalInstanceId: instance._id,
+                            stepNumber: pendingStep.stepNumber,
+                            approverId: approverId,
+                            action: 'Reject',
+                            comments: rejectionReason || 'Expense rejected',
+                            metadata: {
+                                expenseId: expense._id,
+                                amount: expense.amount
+                            }
+                        });
+
+                        // Workflow rejection will update expense status
+                        expense.status = 'Rejected';
+                        expense.approvedBy = approverId;
+                        expense.approvedAt = new Date();
+                        expense.rejectionReason = rejectionReason || '';
+                        await expense.save();
+                        
+                        // Log audit trail
+                        await logReject({
+                            entityType: 'Expense',
+                            entityId: expense._id,
+                            entityName: `${expense.category} expense - ${expense.amount} ${expense.currency}`,
+                            req,
+                            before: expenseBefore,
+                            after: expense.toObject(),
+                            metadata: {
+                                category: expense.category,
+                                amount: expense.amount,
+                                currency: expense.currency,
+                                approverId: approverId.toString(),
+                                rejectionReason,
+                                viaWorkflow: true
+                            }
+                        });
+
+                        return res.json({
+                            success: true,
+                            message: 'Expense rejected through workflow',
+                            data: expense
+                        });
+                    }
+                }
+            } catch (workflowError) {
+                logger.warn('Error processing expense rejection through workflow, falling back to direct rejection', {
+                    error: workflowError.message,
+                    expenseId: expense._id
+                });
+                // Fall through to direct rejection
+            }
+        }
+
+        // Direct rejection (no workflow or workflow failed)
         expense.status = 'Rejected';
         expense.approvedBy = approverId;
         expense.approvedAt = new Date();
         expense.rejectionReason = rejectionReason || '';
 
         await expense.save();
+
+        // Log audit trail
+        await logReject({
+            entityType: 'Expense',
+            entityId: expense._id,
+            entityName: `${expense.category} expense - ${expense.amount} ${expense.currency}`,
+            req,
+            before: expenseBefore,
+            after: expense.toObject(),
+            metadata: {
+                category: expense.category,
+                amount: expense.amount,
+                currency: expense.currency,
+                approverId: approverId.toString(),
+                rejectionReason
+            }
+        });
 
         res.json({
             success: true,
@@ -490,6 +741,9 @@ export const deleteExpense = async (req, res) => {
                 message: 'Expense not found'
             });
         }
+
+        // Get expense before deletion for audit log
+        const expenseBefore = expense.toObject();
 
         // Employee can only delete their own pending expenses
         if (req.employee?._id) {

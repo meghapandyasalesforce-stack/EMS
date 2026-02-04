@@ -322,13 +322,22 @@ export const uploadCalendarFile = async (req, res) => {
           continue;
         }
 
-        // Create new holiday
+        // Auto-detect theme and check if Indian holiday
+        const indianHolidayService = await import('../../helpers/indianHolidayService.js');
+        const holidayName = holidayData.name.trim();
+        const isIndian = indianHolidayService.isIndianHoliday(holidayName);
+        const themeData = indianHolidayService.detectHolidayTheme(holidayName, holidayData.type || 'national');
+        
+        // Create new holiday with theme
         const holiday = {
-          name: holidayData.name.trim(),
+          name: holidayName,
           date: holidayDate,
-          type: holidayData.type || 'national',
-          description: holidayData.description || `Auto-generated from calendar file: ${req.file.originalname}`,
-          isRecurring: holidayData.isRecurring || false,
+          type: isIndian ? (holidayData.type || 'religious') : (holidayData.type || 'national'),
+          description: holidayData.description || (isIndian ? `Indian ${holidayData.type || 'religious'} festival` : `Auto-generated from calendar file: ${req.file.originalname}`),
+          theme: themeData.theme,
+          icon: themeData.icon,
+          color: themeData.color,
+          isRecurring: holidayData.isRecurring !== undefined ? holidayData.isRecurring : true,
           recurringPattern: holidayData.recurringPattern || 'yearly',
           isActive: true
         };
@@ -547,10 +556,18 @@ const extractHolidaysFromText = async (text, year) => {
 
       // Check if this date is in the current year
       if (dateStr.startsWith(year.toString())) {
+        // Auto-detect theme
+        const indianHolidayService = await import('../../helpers/indianHolidayService.js');
+        const holidayNameFinal = holidayName || `Holiday on ${dateStr}`;
+        const themeData = indianHolidayService.detectHolidayTheme(holidayNameFinal, 'national');
+        
         holidays.push({
-          name: holidayName || `Holiday on ${dateStr}`,
+          name: holidayNameFinal,
           date: dateStr,
           type: 'national',
+          theme: themeData.theme,
+          icon: themeData.icon,
+          color: themeData.color,
           description: `Auto-detected from calendar file`
         });
         logger.debug('Found date-based holiday', {

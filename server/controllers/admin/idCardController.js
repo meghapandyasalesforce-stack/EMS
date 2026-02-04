@@ -393,21 +393,43 @@ export const downloadIdCard = async (req, res) => {
         const { id } = req.params;
         
         // Find the ID card
-        const idCard = await IdCard.findById(id).populate('employeeId');
+        const idCard = await IdCard.findById(id).populate('employeeId', 'name lastName employeeId email department jobTitle profilePhoto phone1 phone2 address bloodGroup joiningDate');
         
         if (!idCard) {
             return res.status(404).json({ message: 'ID card not found' });
         }
 
-        // For now, return the ID card data as JSON
-        // In production, you would generate an actual image/PDF here
-        // You could use libraries like Puppeteer, jsPDF, or html-pdf-node
-        
-        res.status(200).json({
-            success: true,
-            message: 'ID card download (preview mode - PDF generation not yet implemented)',
-            idCard: idCard
-        });
+        // Generate PDF
+        try {
+            const { generateIdCardPDF } = await import('../../helpers/idCardPdfGenerator.js');
+            const pdfBuffer = await generateIdCardPDF(idCard);
+            
+            // Set response headers for PDF download
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="id-card-${idCard.cardNumber || idCard._id}.pdf"`);
+            res.setHeader('Content-Length', pdfBuffer.length);
+            
+            // Send PDF buffer
+            res.send(pdfBuffer);
+            
+            logger.info('ID card PDF generated and sent', {
+                idCardId: idCard._id,
+                cardNumber: idCard.cardNumber,
+                employeeId: idCard.employeeId?._id
+            });
+        } catch (pdfError) {
+            logger.error('PDF generation failed, falling back to JSON', {
+                error: pdfError.message,
+                idCardId: idCard._id
+            });
+            
+            // Fallback to JSON if PDF generation fails
+            res.status(200).json({
+                success: true,
+                message: 'ID card data (PDF generation failed, returning JSON)',
+                idCard: idCard
+            });
+        }
     } catch (error) {
         logger.error('Download ID Card Error', {
             error: error.message,

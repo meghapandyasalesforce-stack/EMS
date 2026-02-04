@@ -9,7 +9,8 @@ import {
     getHeadcountForecasts,
     getHeadcountForecast,
     updateHeadcountForecast,
-    deleteHeadcountForecast
+    deleteHeadcountForecast,
+    getWorkforceAnalytics
 } from '../../controllers/workforce/workforceController.js';
 import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
@@ -35,6 +36,10 @@ router.route('/headcount-forecasts/:id')
     .get(isAdminOrHRAuthenticated, readLimiter, getHeadcountForecast)
     .put(isAdminOrHRAuthenticated, writeLimiter, updateHeadcountForecast)
     .delete(isAdminOrHRAuthenticated, writeLimiter, deleteHeadcountForecast);
+
+// Analytics
+router.route('/analytics')
+    .get(isAdminOrHRAuthenticated, readLimiter, getWorkforceAnalytics);
 
 export default router;
 

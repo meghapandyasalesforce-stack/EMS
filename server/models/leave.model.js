@@ -58,6 +58,10 @@ const leaveSchema = new mongoose.Schema({
         required: true
     },
     // Approval workflow
+    approvalInstanceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ApprovalInstance'
+    },
     approvedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee'

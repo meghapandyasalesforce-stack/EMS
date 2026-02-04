@@ -245,6 +245,17 @@ const startServer = async () => {
       logger.info(`Frontend: ${process.env.FRONTEND_URL || "Not set"}`);
     });
 
+    // Initialize WebSocket server
+    try {
+      const { initializeWebSocket } = await import('./config/websocket.js');
+      initializeWebSocket(server);
+      logger.info('WebSocket server initialized');
+    } catch (wsError) {
+      logger.warn('WebSocket server initialization failed - continuing without WebSocket', {
+        error: wsError.message
+      });
+    }
+
     // ✅ Graceful shutdown handling
     const gracefulShutdown = async (signal) => {
       logger.info(`${signal} received, starting graceful shutdown...`);
@@ -259,6 +270,18 @@ const startServer = async () => {
           await closeAll();
         } catch (error) {
           logger.error('Error closing job queues', { error: error.message });
+        }
+
+        // Close WebSocket server
+        try {
+          const { getIO } = await import('./config/websocket.js');
+          const io = getIO();
+          if (io) {
+            io.close();
+            logger.info('WebSocket server closed');
+          }
+        } catch (error) {
+          logger.error('Error closing WebSocket server', { error: error.message });
         }
 
         // Close Redis connection

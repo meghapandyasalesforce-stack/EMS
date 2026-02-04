@@ -11,6 +11,73 @@ import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts,
 import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
 
 /**
+ * @swagger
+ * /api/v1/organization/auth/register:
+ *   post:
+ *     summary: Register a new organization
+ *     description: Creates a new organization with an admin user account. This is the entry point for multi-tenant setup.
+ *     tags: [Organization Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *               - termsAccepted
+ *               - privacyPolicyAccepted
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Acme Corporation
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: contact@acme.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 example: SecurePass123!
+ *               domain:
+ *                 type: string
+ *                 example: acme.com
+ *               subscriptionPlan:
+ *                 type: string
+ *                 enum: [free, basic, premium, enterprise]
+ *                 default: free
+ *               termsAccepted:
+ *                 type: boolean
+ *                 example: true
+ *               privacyPolicyAccepted:
+ *                 type: boolean
+ *                 example: true
+ *     responses:
+ *       201:
+ *         description: Organization registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 organization:
+ *                   $ref: '#/components/schemas/Organization'
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 token:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       409:
+ *         description: Organization or email already exists
+ */
+/**
  * Register a new organization
  * Creates organization and admin user
  * @route POST /api/v1/organization/auth/register
@@ -207,6 +274,69 @@ export const registerOrganization = asyncHandler(async (req, res) => {
         }, 'Registration successful', 201);
 });
 
+/**
+ * @swagger
+ * /api/v1/organization/auth/login:
+ *   post:
+ *     summary: Login as organization admin
+ *     description: Authenticates an organization admin user and returns JWT tokens with organization context. Account lockout applies after failed attempts.
+ *     tags: [Organization Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: admin@example.com
+ *                 description: Organization admin email address
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: AdminPass123!
+ *                 description: Organization admin password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 token:
+ *                   type: string
+ *                   description: JWT access token
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 organization:
+ *                   $ref: '#/components/schemas/Organization'
+ *                 refreshToken:
+ *                   type: string
+ *                   description: JWT refresh token (optional)
+ *                 csrfToken:
+ *                   type: string
+ *                   description: CSRF token (optional)
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Account locked, inactive, or organization inactive
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 /**
  * Login organization admin
  * Authenticates admin user and returns organization context

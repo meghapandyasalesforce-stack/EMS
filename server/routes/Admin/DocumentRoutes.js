@@ -5,7 +5,8 @@ import {
     rejectDocument,
     getPendingDocuments,
     uploadDocumentVersion,
-    getDocumentVersions
+    getDocumentVersions,
+    shareDocument
 } from '../../controllers/document/documentController.js';
 import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
@@ -28,6 +29,10 @@ router.route('/:id/approve')
 
 router.route('/:id/reject')
     .post(isAdminOrHRAuthenticated, writeLimiter, rejectDocument);
+
+// Share document
+router.route('/:id/share')
+    .post(isAdminOrHRAuthenticated, writeLimiter, shareDocument);
 
 // Document version control
 router.route('/:id/versions')

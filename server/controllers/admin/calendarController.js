@@ -2,6 +2,8 @@ import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
+import { detectHolidayTheme, isIndianHoliday } from '../../helpers/indianHolidayService.js';
+import asyncHandler from '../../middlewares/asyncHandler.js';
 
 // Get calendar for a specific year
 export const getCalendar = async (req, res) => {
@@ -111,11 +113,17 @@ export const addHoliday = async (req, res) => {
             return sendError(res, 'Holiday already exists for this date', 400, 'DUPLICATE_HOLIDAY');
         }
 
+        // Auto-detect theme if not provided
+        const themeData = detectHolidayTheme(name, type || 'national');
+        
         const holiday = {
             name,
             date: new Date(date),
             type: type || 'national',
             description,
+            theme: themeData.theme,
+            icon: themeData.icon,
+            color: themeData.color,
             isRecurring: isRecurring || false,
             recurringPattern: recurringPattern || 'yearly',
             isActive: true
@@ -154,6 +162,15 @@ export const updateHoliday = async (req, res) => {
         Object.keys(updates).forEach(key => {
             if (key === 'date') {
                 holiday[key] = new Date(updates[key]);
+            } else if (key === 'name' || key === 'type') {
+                // Auto-update theme if name or type changes
+                holiday[key] = updates[key];
+                if (key === 'name' || (key === 'type' && !updates.theme)) {
+                    const themeData = detectHolidayTheme(holiday.name, holiday.type);
+                    holiday.theme = themeData.theme;
+                    holiday.icon = themeData.icon;
+                    holiday.color = themeData.color;
+                }
             } else {
                 holiday[key] = updates[key];
             }
@@ -293,10 +310,24 @@ export const getHolidaysForMonth = async (req, res) => {
             return sendSuccess(res, { holidays: [] }, 'Holidays retrieved successfully');
         }
 
-        const holidays = calendar.holidays.filter(holiday => {
-            const holidayDate = new Date(holiday.date);
-            return holidayDate.getMonth() === monthNum && holiday.isActive;
-        });
+        const holidays = calendar.holidays
+            .filter(holiday => {
+                const holidayDate = new Date(holiday.date);
+                return holidayDate.getMonth() === monthNum && holiday.isActive;
+            })
+            .map(holiday => {
+                const holidayObj = holiday.toObject ? holiday.toObject() : holiday;
+                if (!holidayObj.theme) {
+                    const themeData = detectHolidayTheme(holidayObj.name, holidayObj.type || 'national');
+                    return {
+                        ...holidayObj,
+                        theme: themeData.theme,
+                        icon: themeData.icon,
+                        color: themeData.color
+                    };
+                }
+                return holidayObj;
+            });
 
         return sendSuccess(res, { holidays }, 'Holidays retrieved successfully');
     } catch (error) {
@@ -338,15 +369,103 @@ export const isWorkingDay = async (req, res) => {
 
         const isWorkingDay = isWorkingDayBySchedule && !isHoliday;
 
+        const holidayData = isHoliday ? calendar.holidays.find(h => 
+            new Date(h.date).getTime() === checkDate.getTime() && h.isActive
+        ) : null;
+
         return sendSuccess(res, {
             isWorkingDay,
             reason: isHoliday ? 'holiday' : (isWorkingDayBySchedule ? 'working_day' : 'weekend'),
-            holiday: isHoliday ? calendar.holidays.find(h => 
-                new Date(h.date).getTime() === checkDate.getTime() && h.isActive
-            ) : null
+            holiday: holidayData ? {
+                ...holidayData.toObject(),
+                theme: holidayData.theme || 'default',
+                icon: holidayData.icon || '📅',
+                color: holidayData.color || '#808080'
+            } : null
         }, 'Working day status retrieved successfully');
     } catch (error) {
         logger.error('Check working day error', { error: error.message, stack: error.stack, date: req.params.date });
         return sendInternalError(res, 'Failed to check working day', error);
     }
 };
+
+/**
+ * Import Indian holidays to calendar
+ */
+export const importIndianHolidays = asyncHandler(async (req, res) => {
+    try {
+        const { year } = req.params;
+        const yearNum = parseInt(year);
+        
+        if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
+            return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const query = addOrganizationFilter(req, { year: yearNum });
+        let calendar = await Calendar.findOne(query);
+
+        if (!calendar) {
+            calendar = new Calendar({
+                organizationId: organizationId,
+                year: yearNum,
+                holidays: [],
+                workingDays: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                workingHours: {
+                    startTime: "09:00",
+                    endTime: "17:00",
+                    breakDuration: 60
+                },
+                companySettings: {
+                    timezone: "UTC",
+                    dateFormat: "DD/MM/YYYY",
+                    weekStartsOn: "monday"
+                }
+            });
+        }
+
+        const { importIndianHolidays: importHolidays } = await import('../../helpers/indianHolidayService.js');
+        const result = await importHolidays(calendar, yearNum, organizationId);
+
+        // Enhance holidays with theme data
+        const enhancedHolidays = calendar.holidays.map(holiday => {
+            const holidayObj = holiday.toObject ? holiday.toObject() : holiday;
+            if (!holidayObj.theme) {
+                const themeData = detectHolidayTheme(holidayObj.name, holidayObj.type || 'national');
+                return {
+                    ...holidayObj,
+                    theme: themeData.theme,
+                    icon: themeData.icon,
+                    color: themeData.color
+                };
+            }
+            return holidayObj;
+        });
+
+        return sendSuccess(res, {
+            imported: result.imported,
+            duplicates: result.duplicates,
+            totalHolidays: calendar.holidays.length,
+            holidays: enhancedHolidays
+        }, `Indian holidays imported successfully. ${result.imported} holidays added, ${result.duplicates} duplicates skipped.`);
+    } catch (error) {
+        logger.error('Import Indian holidays error', {
+            error: error.message,
+            stack: error.stack,
+            year: req.params.year
+        });
+        return sendInternalError(res, 'Failed to import Indian holidays', error);
+    }
+});

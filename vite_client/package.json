@@ -51,7 +51,7 @@
     "framer-motion": "^12.23.24",
     "html2canvas": "^1.4.1",
     "i18next": "^23.15.1",
-    "jspdf": "^3.0.3",
+    "jspdf": "^4.1.0",
     "jwt-decode": "^4.0.0",
     "prop-types": "^15.8.1",
     "qrcode": "^1.5.3",
@@ -70,7 +70,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^6.1.2",
-    "@capacitor/cli": "^6.1.2",
+    "@capacitor/cli": "^8.0.2",
     "@capacitor/ios": "^6.1.2",
     "@eslint/js": "^9.25.0",
     "@playwright/test": "^1.40.1",

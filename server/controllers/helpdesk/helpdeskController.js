@@ -18,6 +18,37 @@ export const createTicket = asyncHandler(async (req, res) => {
 
     await ticket.save();
 
+    // Auto-track ticket for SLA
+    try {
+        const { trackEntity } = await import('../../services/slaService.js');
+        const slaViolation = await trackEntity({
+            organizationId,
+            entityType: 'Helpdesk',
+            entityId: ticket._id,
+            priority: ticket.priority || 'Medium',
+            metadata: {
+                category: ticket.category,
+                subCategory: ticket.subCategory,
+                ticketNumber: ticket.ticketNumber
+            }
+        });
+
+        if (slaViolation) {
+            // Update ticket with SLA violation ID if needed
+            // You can add a slaViolationId field to the ticket model if needed
+            logger.info('Ticket tracked for SLA', {
+                ticketId: ticket._id,
+                slaViolationId: slaViolation._id
+            });
+        }
+    } catch (slaError) {
+        logger.warn('Error tracking ticket for SLA', {
+            error: slaError.message,
+            ticketId: ticket._id
+        });
+        // Don't fail ticket creation if SLA tracking fails
+    }
+
     res.status(201).json({
         success: true,
         message: 'Ticket created successfully',

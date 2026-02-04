@@ -5,6 +5,7 @@ import Leave from "../../models/leave.model.js";
 import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerMatchQuery } from "../../helpers/managerHelper.js";
+import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
 
 
 
@@ -60,6 +61,16 @@ export const updatePayroll = async (req, res) => {
             lastModifiedBy: adminId
         };
 
+        // Get payroll before update for audit log
+        const payrollBefore = await Payroll.findById(id).populate('employeeId', 'name lastName email jobTitle department employeeId').lean();
+        
+        if (!payrollBefore) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Payroll not found' 
+            });
+        }
+
         // Perform the update
         const payroll = await Payroll.findByIdAndUpdate(
             id,
@@ -67,12 +78,21 @@ export const updatePayroll = async (req, res) => {
             { new: true }
         ).populate('employeeId', 'name lastName email jobTitle department employeeId');
 
-        if (!payroll) {
-            return res.status(404).json({ 
-                success: false,
-                message: 'Payroll not found' 
-            });
-        }
+        // Log audit trail
+        await logUpdate({
+            entityType: 'Payroll',
+            entityId: payroll._id,
+            entityName: `Payroll for ${payroll.employeeId?.name || 'Employee'}`,
+            req,
+            before: payrollBefore,
+            after: payroll.toObject(),
+            metadata: {
+                month: payroll.month,
+                year: payroll.year,
+                inHandSalary: payroll.inHandSalary,
+                ctc: payroll.ctc
+            }
+        });
 
         res.status(200).json({
             success: true,
@@ -243,6 +263,22 @@ export const createPayroll = async (req, res) => {
         
         const populatedPayroll = await Payroll.findById(payroll._id)
             .populate('employeeId', 'name lastName email jobTitle department employeeId');
+        
+        // Log audit trail
+        await logCreate({
+            entityType: 'Payroll',
+            entityId: payroll._id,
+            entityName: `Payroll for ${populatedPayroll.employeeId?.name || 'Employee'}`,
+            req,
+            before: null,
+            after: populatedPayroll.toObject(),
+            metadata: {
+                month: payroll.month,
+                year: payroll.year,
+                inHandSalary: payroll.inHandSalary,
+                ctc: payroll.ctc
+            }
+        });
         
         res.status(201).json(populatedPayroll);
     } catch (error) {

@@ -82,6 +82,10 @@ const expenseSchema = new mongoose.Schema({
     notes: {
         type: String,
         maxlength: 1000
+    },
+    approvalInstanceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ApprovalInstance'
     }
 }, {
     timestamps: true

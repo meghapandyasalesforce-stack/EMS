@@ -10,6 +10,7 @@ import processNotificationJob from './notificationJob.js';
 import { startCompOffExpiryWorker, scheduleCompOffExpiry } from './compOffExpiryJob.js';
 import { startAutoCheckOutWorker, scheduleAutoCheckOut } from './autoCheckOutJob.js';
 import { scheduleLeaveBalanceJobs } from './leaveBalanceJob.js';
+import { startApprovalTimeoutWorker, scheduleApprovalTimeout } from './approvalTimeoutJob.js';
 import logger from '../helpers/logger.js';
 
 /**
@@ -60,6 +61,16 @@ export const initializeWorkers = async () => {
             logger.warn('Auto check-out worker not initialized - Redis not available');
         }
 
+        // Approval Timeout worker
+        const approvalTimeoutWorker = startApprovalTimeoutWorker();
+        if (approvalTimeoutWorker) {
+            logger.info('Approval timeout worker initialized');
+            // Schedule hourly approval timeout check
+            await scheduleApprovalTimeout();
+        } else {
+            logger.warn('Approval timeout worker not initialized - Redis not available');
+        }
+
         // Leave Balance Jobs (cron-based, no Redis required)
         try {
             scheduleLeaveBalanceJobs();
@@ -68,7 +79,7 @@ export const initializeWorkers = async () => {
             logger.error('Failed to schedule leave balance jobs', { error: error.message });
         }
 
-        if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker) {
+        if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {
             logger.info('All job workers initialized successfully');
         } else {
             logger.warn('Some workers not initialized - Redis connection required for background jobs');

@@ -18,13 +18,35 @@ const emailConfig = getEmailConfig();
 const provider = detectEmailProvider(emailConfig);
 const validation = validateEmailConfiguration();
 
+// Check FRONTEND_URL for email links
+const frontendUrl = process.env.FRONTEND_URL;
+const nodeEnv = process.env.NODE_ENV || 'development';
+
 console.log('Configuration:');
 console.log(`  EMAIL_USER: ${emailConfig.user ? emailConfig.user.replace(/@.*/, '@***') : '❌ Not set'}`);
 console.log(`  EMAIL_PASS: ${emailConfig.password ? '✓ Set' : '❌ Not set'}`);
 console.log(`  EMAIL_HOST: ${emailConfig.host}`);
 console.log(`  EMAIL_PORT: ${emailConfig.port}`);
 console.log(`  Provider: ${provider.type}`);
+console.log(`  FRONTEND_URL: ${frontendUrl || '❌ Not set'}`);
+console.log(`  NODE_ENV: ${nodeEnv}`);
 console.log('');
+
+// Validate FRONTEND_URL
+if (!frontendUrl) {
+  console.warn('⚠️  WARNING: FRONTEND_URL is not set!');
+  console.warn('   Email links (password reset, welcome emails) will not work correctly.');
+  console.warn('   Set FRONTEND_URL in your .env file (e.g., FRONTEND_URL=https://yourdomain.com)\n');
+} else if (frontendUrl.includes('localhost') && nodeEnv === 'production') {
+  console.warn('⚠️  WARNING: FRONTEND_URL points to localhost in production!');
+  console.warn(`   Current: ${frontendUrl}`);
+  console.warn('   Update FRONTEND_URL to your production domain (e.g., https://yourdomain.com)\n');
+} else if (!frontendUrl.startsWith('http')) {
+  console.warn('⚠️  WARNING: FRONTEND_URL should start with http:// or https://');
+  console.warn(`   Current: ${frontendUrl}\n`);
+} else {
+  console.log(`✅ FRONTEND_URL is configured: ${frontendUrl}\n`);
+}
 
 if (!validation.valid) {
   console.error('❌ Email credentials are not configured!');

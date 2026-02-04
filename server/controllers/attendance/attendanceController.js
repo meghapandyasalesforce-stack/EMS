@@ -48,6 +48,89 @@ function calculateWorkingDays(startDate, endDate) {
 }
 
 
+/**
+ * @swagger
+ * /api/v1/both/attendance/clock-in:
+ *   post:
+ *     summary: Employee clock in
+ *     description: Records employee check-in with optional location, image, and network information. Rate limited to 5 per hour.
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               workLocation:
+ *                 type: string
+ *                 example: Office
+ *                 description: Work location name
+ *               latitude:
+ *                 type: number
+ *                 format: float
+ *                 example: 28.6139
+ *                 description: GPS latitude (optional)
+ *               longitude:
+ *                 type: number
+ *                 format: float
+ *                 example: 77.2090
+ *                 description: GPS longitude (optional)
+ *               address:
+ *                 type: string
+ *                 example: 123 Main St, City, State
+ *                 description: Physical address (optional)
+ *               imageUrl:
+ *                 type: string
+ *                 format: uri
+ *                 description: Profile photo URL for verification (optional)
+ *               networkType:
+ *                 type: string
+ *                 example: wifi
+ *                 description: Network type (wifi, cellular, etc.)
+ *               deviceType:
+ *                 type: string
+ *                 example: mobile
+ *                 description: Device type (mobile, tablet, desktop)
+ *     responses:
+ *       200:
+ *         description: Clock in successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Clocked in successfully
+ *                 attendance:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     checkInTime:
+ *                       type: string
+ *                       format: date-time
+ *                     status:
+ *                       type: string
+ *                       example: present
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       429:
+ *         description: Too many clock-in attempts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Enhanced Clock In with image capture, geolocation, and network tracking
 export const clockIn = async (req, res) => {
   // Log incoming request for debugging
@@ -689,6 +772,62 @@ export const breakOut = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/v1/both/attendance/clock-out:
+ *   post:
+ *     summary: Employee clock out
+ *     description: Records employee check-out. Rate limited to 5 per hour.
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *                 format: float
+ *                 description: GPS latitude (optional)
+ *               longitude:
+ *                 type: number
+ *                 format: float
+ *                 description: GPS longitude (optional)
+ *               address:
+ *                 type: string
+ *                 description: Physical address (optional)
+ *     responses:
+ *       200:
+ *         description: Clock out successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Clocked out successfully
+ *                 attendance:
+ *                   type: object
+ *                   properties:
+ *                     checkOutTime:
+ *                       type: string
+ *                       format: date-time
+ *                     totalHours:
+ *                       type: number
+ *                       example: 8.5
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 // Enhanced Clock Out with image capture, geolocation, and network tracking
 export const clockOut = async (req, res) => {
   const today = new Date();
@@ -998,6 +1137,60 @@ export const clockOut = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/v1/both/attendance/get-logs:
+ *   get:
+ *     summary: Get attendance logs
+ *     description: Retrieves attendance logs for the authenticated employee. Supports date range filtering.
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for filtering (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for filtering (ISO format)
+ *     responses:
+ *       200:
+ *         description: Attendance logs retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 logs:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       date:
+ *                         type: string
+ *                         format: date
+ *                       checkInTime:
+ *                         type: string
+ *                         format: date-time
+ *                       checkOutTime:
+ *                         type: string
+ *                         format: date-time
+ *                       status:
+ *                         type: string
+ *                         example: present
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 export const getLogs = async (req, res) => {
   try {
     const organizationId = getOrganizationId(req);
@@ -1417,6 +1610,58 @@ export const forceEndBreak = async (req, res) => {
 
 /**
  * Get attendance summary (for both admin and employee)
+ */
+/**
+ * @swagger
+ * /api/v1/both/attendance/summary:
+ *   get:
+ *     summary: Get attendance summary
+ *     description: Retrieves attendance summary statistics for the authenticated user (admin sees all, employee sees own).
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date for summary period
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: End date for summary period
+ *     responses:
+ *       200:
+ *         description: Attendance summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalDays:
+ *                       type: number
+ *                       example: 22
+ *                     presentDays:
+ *                       type: number
+ *                       example: 20
+ *                     absentDays:
+ *                       type: number
+ *                       example: 2
+ *                     attendanceRate:
+ *                       type: number
+ *                       example: 90.91
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 export const getAttendanceSummary = async (req, res) => {
   try {

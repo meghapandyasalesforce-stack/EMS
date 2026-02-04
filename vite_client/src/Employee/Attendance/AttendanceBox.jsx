@@ -155,7 +155,7 @@ const AttendanceBox = () => {
         if (response.data.success && response.data.rule) {
           setAttendanceRule(response.data.rule);
         }
-      } catch (error) {
+      } catch {
         // Silently fail - location validation will still work
       }
     };
@@ -245,7 +245,7 @@ const AttendanceBox = () => {
         })).unwrap();
         // Also reflect currentSession instantly for UX
         setCurrentSession(openSession);
-        return; // Don't try to check in again
+        return; // Don't try to punch in again
       }
 
       setIsProcessing(true);
@@ -267,7 +267,7 @@ const AttendanceBox = () => {
           locationData = await getCurrentLocation();
         } catch (error) {
           if (requiresLocation) {
-            let errorMsg = 'Location is required for check-in. ';
+            let errorMsg = 'Location is required for punch-in. ';
             if (error.code === 1 || error.message.includes('permission')) {
               errorMsg += 'Please enable location permission in browser settings.';
             } else if (error.code === 2) {
@@ -300,12 +300,12 @@ const AttendanceBox = () => {
 
       // Final validation before sending
       if (requiresLocation && (!clockInData.latitude || !clockInData.longitude)) {
-        toast.error('Location is required for check-in at this site. Please enable location services and try again.');
+        toast.error('Location is required for punch-in at this site. Please enable location services and try again.');
         setIsProcessing(false);
         return;
       }
 
-      // Try to check in
+      // Try to punch in
       try {
         const result = await dispatch(clockIn(clockInData)).unwrap();
         
@@ -315,7 +315,7 @@ const AttendanceBox = () => {
           endDate: today
         }));
         
-        const successMessage = result?.message || 'Checked in successfully!';
+        const successMessage = result?.message || 'Punched in successfully!';
         toast.success(successMessage);
         
         if (result?.warning) {
@@ -324,7 +324,7 @@ const AttendanceBox = () => {
       } catch (err) {
         // Extract error message with better handling
         const errorData = err?.response?.data || err?.payload?.data || err?.payload;
-        let errorMessage = 'Failed to check in. Please try again.';
+        let errorMessage = 'Failed to punch in. Please try again.';
         
         // Handle validation errors (array of errors)
         if (errorData?.errors && Array.isArray(errorData.errors)) {
@@ -374,19 +374,19 @@ const AttendanceBox = () => {
 
   const handleClockOut = async () => {
     if (!currentSession) {
-      toast.warning('No active session to clock out from.');
+      toast.warning('No active session to punch out from.');
       return;
     }
     
     // Check if already clocked out
     if (currentSession.clockOut) {
-      toast.info('You have already clocked out for today.');
+      toast.info('You have already punched out for today.');
       return;
     }
     
     // Don't allow clock out while on break
     if (isOnBreak) {
-      toast.warning('Please end your break before clocking out!');
+      toast.warning('Please end your break before punching out!');
       return;
     }
     
@@ -409,7 +409,7 @@ const AttendanceBox = () => {
           locationData = await getCurrentLocation();
         } catch (error) {
           if (requiresLocation) {
-            let errorMsg = 'Location is required for clock-out. ';
+            let errorMsg = 'Location is required for punch-out. ';
             if (error.code === 1 || error.message.includes('permission')) {
               errorMsg += 'Please enable location permission in browser settings.';
             } else if (error.code === 2) {
@@ -437,7 +437,7 @@ const AttendanceBox = () => {
 
       // Final validation before sending
       if (requiresLocation && (!clockOutData.latitude || !clockOutData.longitude)) {
-        toast.error('Location is required for clock-out at this site. Please enable location services and try again.');
+        toast.error('Location is required for punch-out at this site. Please enable location services and try again.');
         setIsProcessing(false);
         return;
       }
@@ -456,11 +456,11 @@ const AttendanceBox = () => {
         endDate: today
       }));
       
-      toast.success('Checked out successfully!');
+      toast.success('Punched out successfully!');
       setIsOnBreak(false);
       setBreakCount(0);
     } catch (err) {
-      const errorMessage = err?.message || 'Failed to check out';
+      const errorMessage = err?.message || 'Failed to punch out';
       toast.error(errorMessage);
       // Removed console.error for production
       
@@ -479,7 +479,7 @@ const AttendanceBox = () => {
 
   const handleBreakIn = async () => {
     if (!currentSession) {
-      toast.warning('Please check in first!');
+      toast.warning('Please punch in first!');
       return;
     }
     
@@ -658,7 +658,7 @@ const AttendanceBox = () => {
                         ? 'text-blue-800' 
                         : 'text-green-800'
                     }`}>
-                      {currentSession.clockOut ? 'Checked Out' : 'Checked In'}
+                      {currentSession.clockOut ? 'Punched Out' : 'Punched In'}
                     </h3>
                     <p className={`text-sm font-medium ${
                       currentSession.clockOut 
@@ -666,8 +666,8 @@ const AttendanceBox = () => {
                         : 'text-green-600'
                     }`}>
                       {currentSession.clockOut 
-                        ? `Check-Out Time: ${formatTime(currentSession.clockOut)}` 
-                        : `Check-In Time: ${formatTime(currentSession.clockIn)}`}
+                        ? `Punch-Out Time: ${formatTime(currentSession.clockOut)}` 
+                        : `Punch-In Time: ${formatTime(currentSession.clockIn)}`}
                     </p>
                   </div>
                 </div>
@@ -707,7 +707,7 @@ const AttendanceBox = () => {
                   <div className="flex items-center justify-between text-blue-800">
                     <div className="flex items-center gap-2">
                       <FiCheckCircle className="w-5 h-5" />
-                      <span className="font-medium">Checked Out</span>
+                      <span className="font-medium">Punched Out</span>
                     </div>
                     <span className="text-sm">{formatTime(currentSession.clockOut)}</span>
                   </div>
@@ -777,7 +777,7 @@ const AttendanceBox = () => {
                         ) : (
                           <>
                             <FiClock className="w-4 h-4" />
-                            Check Out
+                            Punch Out
                           </>
                         )}
                       </button>
@@ -791,10 +791,10 @@ const AttendanceBox = () => {
                       </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Ready to Start?</h3>
             <p className="text-gray-600 text-sm mb-6 max-w-md mx-auto">
-              Click below to check in and start tracking your work hours
+              Click below to punch in and start tracking your work hours
             </p>
 
-            {/* Check In Button */}
+            {/* Punch In Button */}
               <button
                 onClick={handleClockIn}
               disabled={isProcessing || loading}
@@ -812,7 +812,7 @@ const AttendanceBox = () => {
                 ) : (
                   <div className="flex items-center justify-center">
                   <FiClock className="w-5 h-5 mr-2" />
-                    Check In
+                    Punch In
                   </div>
                 )}
               </button>

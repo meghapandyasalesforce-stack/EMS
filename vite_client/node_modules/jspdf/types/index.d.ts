@@ -607,7 +607,12 @@ declare module "jspdf" {
   export interface TableConfig {
     printHeaders?: boolean;
     autoSize?: boolean;
-    margins?: number;
+    margins?: {
+      top: number;
+      bottom: number;
+      left: number;
+      width: number;
+    };
     fontSize?: number;
     padding?: number;
     headerBackgroundColor?: string;
@@ -1094,6 +1099,7 @@ declare module "jspdf" {
       sync: false,
       callback: (data: string) => string
     ): void;
+    allowFsRead: string[] | undefined;
 
     // jsPDF plugin: html
     html(src: string | HTMLElement, options?: HTMLOptions): HTMLWorker;
@@ -1334,7 +1340,11 @@ declare module "jspdf" {
     getFileFromVFS(filename: string): string;
 
     // jsPDF plugin: xmp_metadata
-    addMetadata(metadata: string, namespaceuri?: string): jsPDF;
+    addMetadata(metadata: string, namespaceUri?: string): jsPDF;
+    /**
+     * WARNING: Passing raw XML is potentially insecure! Always sanitize user input before passing it to this function!
+     */
+    addMetadata(metadata: string, rawXml?: boolean): jsPDF;
 
     Matrix(
       a: number,

@@ -5,8 +5,84 @@ import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalErr
 import leaveBalanceEngine from "../../services/leaveBalanceEngine.js";
 import leaveValidationService from "../../services/leaveValidationService.js";
 import Calendar from "../../models/calendar.model.js";
+import { logCreate } from "../../helpers/auditLogger.js";
 
 
+/**
+ * @swagger
+ * /api/v1/employee/leave/create:
+ *   post:
+ *     summary: Create a leave request
+ *     description: Creates a new leave request for the authenticated employee. Validates leave balance and policies.
+ *     tags: [Leave Management]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - startDate
+ *               - endDate
+ *               - leaveType
+ *             properties:
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *                 example: 2025-02-01
+ *                 description: Leave start date
+ *               endDate:
+ *                 type: string
+ *                 format: date
+ *                 example: 2025-02-05
+ *                 description: Leave end date
+ *               leaveType:
+ *                 type: string
+ *                 enum: [Sick, Casual, Annual, Maternity, Paternity, Compensatory, Unpaid, Other]
+ *                 example: Annual
+ *                 description: Type of leave
+ *               reason:
+ *                 type: string
+ *                 example: Family vacation
+ *                 description: Reason for leave
+ *               isHalfDay:
+ *                 type: boolean
+ *                 example: false
+ *                 description: Whether this is a half-day leave
+ *               halfDayType:
+ *                 type: string
+ *                 enum: [First Half, Second Half]
+ *                 description: Half-day type (if isHalfDay is true)
+ *     responses:
+ *       201:
+ *         description: Leave request created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Leave request created successfully
+ *                 leave:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                       example: pending
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 // Create a leave request
 export const createLeave = async (req, res) => {
     logger.debug("Creating leave request", { employeeId: req.employee?._id });
@@ -127,6 +203,82 @@ export const createLeave = async (req, res) => {
         });
 
         await leave.save();
+        
+        // Log audit trail for leave creation
+        await logCreate({
+            entityType: 'Leave',
+            entityId: leave._id,
+            entityName: `${leave.leaveType} leave for ${employee.name}`,
+            req,
+            before: null,
+            after: leave.toObject(),
+            metadata: {
+                leaveType,
+                duration: leave.duration,
+                startDate,
+                endDate,
+                isHalfDay: leave.isHalfDay
+            }
+        });
+        
+        // ✅ INTEGRATE APPROVAL WORKFLOW
+        try {
+            const { initiateApproval } = await import('../../services/approvalWorkflowService.js');
+            const approvalResult = await initiateApproval({
+                organizationId,
+                entityType: 'Leave',
+                entityId: leave._id,
+                requestedBy: employeeId,
+                metadata: {
+                    leaveType,
+                    duration,
+                    startDate,
+                    endDate,
+                    employeeName: `${employee.name} ${employee.lastName}`
+                },
+                priority: duration > 5 ? 'High' : 'Medium'
+            });
+
+            // Update leave with approval instance ID if workflow was initiated
+            if (approvalResult.approvalInstanceId) {
+                leave.approvalInstanceId = approvalResult.approvalInstanceId;
+                await leave.save();
+            }
+
+            // If auto-approved, update leave status
+            if (approvalResult.autoApproved && approvalResult.status === 'Approved') {
+                leave.status = 'approved';
+                leave.approvedBy = employeeId; // Auto-approved
+                leave.approvedAt = new Date();
+                await leave.save();
+
+                // Update leave balance
+                try {
+                    const year = new Date(startDate).getFullYear();
+                    await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+                } catch (balanceError) {
+                    logger.warn('Error updating leave balance after auto-approval', {
+                        error: balanceError.message,
+                        employeeId,
+                        leaveId: leave._id
+                    });
+                }
+            }
+
+            logger.info('Leave approval workflow initiated', {
+                leaveId: leave._id,
+                approvalInstanceId: approvalResult.approvalInstanceId,
+                autoApproved: approvalResult.autoApproved
+            });
+        } catch (approvalError) {
+            // Log error but don't fail leave creation
+            logger.error('Error initiating approval workflow for leave', {
+                error: approvalError.message,
+                leaveId: leave._id,
+                stack: approvalError.stack
+            });
+            // Leave is still created, just without workflow integration
+        }
         
         // Return success with warnings if any
         return sendSuccess(

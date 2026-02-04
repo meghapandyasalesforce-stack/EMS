@@ -7,7 +7,8 @@ import {
     updateWorkingDays,
     updateWorkingHours,
     getHolidaysForMonth,
-    isWorkingDay
+    isWorkingDay,
+    importIndianHolidays
 } from '../../controllers/admin/calendarController.js';
 import { 
     uploadCalendarFile, 
@@ -57,5 +58,9 @@ router.route('/:year/upload')
 // Get upload history
 router.route('/:year/upload-history')
     .get(isAdminAuthenticated, getCalendarUploadHistory);
+
+// Import Indian holidays
+router.route('/:year/import-indian-holidays')
+    .post(isAdminAuthenticated, importIndianHolidays);
 
 export default router;

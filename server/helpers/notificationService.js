@@ -10,6 +10,19 @@ import {
   createPushPayload 
 } from './pushNotificationService.js';
 
+// WebSocket notification service (lazy import to avoid circular dependencies)
+let wsNotificationService = null;
+const getWebSocketService = async () => {
+  if (!wsNotificationService) {
+    try {
+      wsNotificationService = await import('../config/websocket.js');
+    } catch (error) {
+      logger.warn('WebSocket service not available', { error: error.message });
+    }
+  }
+  return wsNotificationService;
+};
+
 /**
  * Send task update notification to relevant stakeholders
  * @param {Object} task - The updated task
@@ -153,7 +166,23 @@ export const sendTaskUpdateNotification = async (task, employee, updateType = 'u
       });
     });
 
-    await Promise.all(notificationPromises);
+    const notifications = await Promise.all(notificationPromises);
+
+    // Send notifications via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        notifications.forEach(notification => {
+          const recipientId = notification.recipient.toString();
+          wsService.sendNotificationToUser(recipientId, notification.toObject ? notification.toObject() : notification);
+        });
+      }
+    } catch (wsError) {
+      logger.warn('Error sending notifications via WebSocket', {
+        error: wsError.message,
+        taskId: task._id
+      });
+    }
 
     logger.info('Task update notification sent', {
       updateType,
@@ -209,9 +238,25 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
     });
 
     const notifications = await Promise.all(notificationPromises);
+    
+    // Send notifications via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        notifications.forEach(notification => {
+          const recipientId = notification.recipient.toString();
+          wsService.sendNotificationToUser(recipientId, notification.toObject ? notification.toObject() : notification);
+        });
+      }
+    } catch (wsError) {
+      logger.warn('Error sending notifications via WebSocket', {
+        error: wsError.message
+      });
+    }
+
     logger.info('Notification sent to users', {
       recipientCount: recipientIds.length,
-      notificationId: notification._id
+      notificationId: notifications[0]?._id
     });
 
     // Send push notifications if enabled
@@ -284,9 +329,22 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
       isBroadcast: true,
       metadata
     });
+    
+    // Send broadcast notification via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        wsService.sendBroadcastNotification(organizationId.toString(), notification.toObject ? notification.toObject() : notification);
+      }
+    } catch (wsError) {
+      logger.warn('Error sending broadcast notification via WebSocket', {
+        error: wsError.message
+      });
+    }
+
     logger.info('Broadcast notification sent', {
       notificationId: notification._id,
-      title
+      message
     });
 
     // Send push notification to all subscribers
@@ -435,6 +493,19 @@ export const sendNotification = async ({ userId, title, message, type = 'general
       type
     });
     
+    // Send notification via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        wsService.sendNotificationToUser(userId.toString(), notification.toObject ? notification.toObject() : notification);
+      }
+    } catch (wsError) {
+      logger.warn('Error sending notification via WebSocket', {
+        error: wsError.message,
+        userId
+      });
+    }
+    
     // Send push notification if enabled
     try {
       const settings = await NotificationSettings.findOne({ user: userId });
@@ -517,6 +588,23 @@ export const sendBreakNotification = async (employee) => {
     });
 
     const notifications = await Promise.all(notificationPromises);
+    
+    // Send notifications via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        notifications.forEach(notification => {
+          const recipientId = notification.recipient.toString();
+          wsService.sendNotificationToUser(recipientId, notification.toObject ? notification.toObject() : notification);
+        });
+      }
+    } catch (wsError) {
+      logger.warn('Error sending break notifications via WebSocket', {
+        error: wsError.message,
+        employeeId: employee._id
+      });
+    }
+
     logger.info('Break notification sent', {
       adminCount: admins.length,
       employeeId: employee._id,

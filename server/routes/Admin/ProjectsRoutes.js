@@ -11,6 +11,13 @@ import {
     createProjectUpdate,
     getProjectUpdates
 } from "../../controllers/admin/projectController.js";
+import {
+    getProjectDashboard,
+    getProjectStatistics,
+    getProjectProgress,
+    getTeamPerformance,
+    getBudgetAnalysis
+} from "../../controllers/admin/projectDashboardController.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
 import isAdminOrExecutiveAuthenticated from "../../middlewares/isAdminOrExecutiveAuthenticated.js";
@@ -62,5 +69,21 @@ router.route("/:id/update-status")
 router.route("/:id/updates")
     .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, createProjectUpdate)
     .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectUpdates);
+
+// Project Dashboard routes
+router.route("/dashboard")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectDashboard);
+
+router.route("/dashboard/statistics")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectStatistics);
+
+router.route("/dashboard/progress")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectProgress);
+
+router.route("/dashboard/team-performance")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getTeamPerformance);
+
+router.route("/dashboard/budget-analysis")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getBudgetAnalysis);
 
 export default router;

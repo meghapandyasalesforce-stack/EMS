@@ -13,7 +13,78 @@ import { addOrganizationFilter, getOrganizationId } from '../../helpers/organiza
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { getCachedEmployees, setCachedEmployees } from '../../helpers/cacheHelper.js';
 import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
+import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 
+/**
+ * @swagger
+ * /api/v1/admin/employee:
+ *   get:
+ *     summary: Get all employees (paginated)
+ *     description: Retrieves a paginated list of employees. Admins and HR see all employees. Managers see only employees in their department.
+ *     tags: [Employee Management]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: Number of items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by name or email
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive, suspended, terminated]
+ *         description: Filter by employee status
+ *     responses:
+ *       200:
+ *         description: Employees retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Employee'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 20
+ *                     total:
+ *                       type: integer
+ *                       example: 100
+ *                     pages:
+ *                       type: integer
+ *                       example: 5
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ */
 /**
  * Get all employees (Admin, HR, and Managers) - Paginated
  * GET /api/v1/admin/employee or GET /api/v1/employee/auth/get-all-employees
@@ -112,16 +183,42 @@ export const updateEmployeeStatus = async (req, res) => {
         }
 
         // Update status - ensure employee belongs to same organization
+        // ✅ SYNC: Update both active and status fields to keep them in sync
         const organizationId = getOrganizationId(req);
+        
+        // Get employee before update for audit log
+        const employeeBefore = await Employee.findOne({ _id: employeeId, organizationId }).select('-password').lean();
+        
+        if (!employeeBefore) {
+            return sendNotFound(res, 'Employee');
+        }
+
+        const updateData = {
+            active,
+            status: active ? 'active' : 'inactive' // Sync status with active field
+        };
         const updatedEmployee = await Employee.findOneAndUpdate(
             { _id: employeeId, organizationId },
-            { active },
+            updateData,
             { new: true, runValidators: true }
         ).select('-password');
 
-        if (!updatedEmployee) {
-            return sendNotFound(res, 'Employee');
-        }
+        // Log audit trail
+        await logUpdate({
+            entityType: 'Employee',
+            entityId: employeeId,
+            entityName: `${employeeBefore.name} ${employeeBefore.lastName || ''}`.trim(),
+            req,
+            before: employeeBefore,
+            after: updatedEmployee.toObject(),
+            metadata: {
+                statusChange: true,
+                previousStatus: employeeBefore.status,
+                newStatus: updatedEmployee.status,
+                previousActive: employeeBefore.active,
+                newActive: updatedEmployee.active
+            }
+        });
 
         return sendSuccess(res, {
             employee: updatedEmployee
@@ -209,14 +306,32 @@ export const deleteEmployee = async (req, res) => {
 
         // Delete employee - ensure employee belongs to same organization
         const organizationId = getOrganizationId(req);
-        const employee = await Employee.findOneAndDelete({ _id: employeeId, organizationId });
-
+        
+        // Get employee before deletion for audit log
+        const employee = await Employee.findOne({ _id: employeeId, organizationId }).select('-password').lean();
+        
         if (!employee) {
             return sendNotFound(res, 'Employee');
         }
 
+        // Delete employee
+        await Employee.findOneAndDelete({ _id: employeeId, organizationId });
+
         // Optionally delete associated payroll data
         await Payroll.deleteMany({ employeeId: employee._id });
+
+        // Log audit trail
+        await logDelete({
+            entityType: 'Employee',
+            entityId: employeeId,
+            entityName: `${employee.name} ${employee.lastName || ''}`.trim(),
+            req,
+            before: employee,
+            after: null,
+            metadata: {
+                deletedPayroll: true
+            }
+        });
 
         return sendSuccess(res, null, 'Employee deleted successfully');
     } catch (error) {

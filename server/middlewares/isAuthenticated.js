@@ -48,8 +48,14 @@ const isAuthenticated = async (req, res, next) => {
             }
 
             // Check if employee is active
-            if (employee.status !== 'active' && employee.active !== true) {
-                logger.warn('Inactive employee trying to access', { userId: decoded.userId });
+            // ✅ Standardized: Use active field (boolean) for login checks
+            // Status field is used for queries, active field is used for quick boolean checks
+            if (!employee.active) {
+                logger.warn('Inactive employee trying to access', { 
+                    userId: decoded.userId,
+                    status: employee.status,
+                    active: employee.active
+                });
                 return res.status(403).json({ 
                     success: false,
                     message: "Account is inactive",

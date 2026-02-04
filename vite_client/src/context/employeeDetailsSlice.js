@@ -130,7 +130,7 @@ export const addGuarantor = createAsyncThunk(
 // Async thunk for adding professional qualification
 export const addProfessionalQualification = createAsyncThunk(
   'employeeDetails/addProfessionalQualification',
-  async (qualificationData, { rejectWithValue, getState }) => {
+  async (qualificationData, { rejectWithValue }) => {
     try {
       // Removed console.log for production
       const response = await axios.post(

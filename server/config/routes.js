@@ -36,6 +36,9 @@ import notificationSettingsRouter from "../routes/Admin/NotificationSettingsRout
 import expenseRouter from "../routes/Both/ExpenseRoutes.js";
 import reportRouter from "../routes/Admin/ReportRoutes.js";
 import performanceReviewRouter from "../routes/Both/PerformanceReviewRoutes.js";
+import performanceTrackingRouter from "../routes/Both/PerformanceTrackingRoutes.js";
+import reviewCycleRouter from "../routes/Admin/ReviewCycleRoutes.js";
+import goalRouter from "../routes/Both/GoalRoutes.js";
 import organizationRouter from "../routes/Admin/OrganizationRoutes.js";
 import subscriptionRouter from "../routes/Organization/SubscriptionRoutes.js";
 import policyRouter from "../routes/Organization/PolicyRoutes.js";
@@ -61,6 +64,12 @@ import oneOnOneRouter from "../routes/Both/OneOnOneRoutes.js";
 import teamLearningRouter from "../routes/Both/TeamLearningRoutes.js";
 import analyticsRouter from "../routes/Admin/AnalyticsRoutes.js";
 import executiveRouter from "../routes/Executive/ExecutiveRoutes.js";
+import approvalWorkflowRouter from "../routes/Admin/ApprovalWorkflowRoutes.js";
+import slaRouter from "../routes/Admin/SLARoutes.js";
+import compOffRouter from "../routes/Both/CompOffRoutes.js";
+import compOffAdminRouter from "../routes/Admin/CompOffAdminRoutes.js";
+import payrollReportsRouter from "../routes/Admin/PayrollReportsRoutes.js";
+import auditLogRouter from "../routes/Admin/AuditLogRoutes.js";
 
 import { setCacheHeaders } from "../middlewares/cacheHeaders.js";
 
@@ -87,6 +96,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/project", projectRouter);
   app.use("/api/v1/admin/payroll", payrollRouter);
   app.use("/api/v1/admin/employee", employeeAdminRouter);
+  app.use("/api/v1/admin/audit-logs", auditLogRouter);
   app.use("/api/v1/admin/roles", roleRouter);
   app.use("/api/v1/admin/calendar", calendarRouter);
   app.use("/api/v1/admin/id-cards", idCardRouter);
@@ -95,6 +105,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/notification-settings", notificationSettingsRouter);
   app.use("/api/v1/admin/reports", reportRouter);
   app.use("/api/v1/admin/organization", organizationRouter);
+  app.use("/api/v1/admin/review-cycle", reviewCycleRouter);
 
   // Employee routes (register specific routes first to avoid conflicts)
   app.use("/api/v1/employee/auth", employeeRouter);
@@ -118,6 +129,8 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/email", emailTestRouter);
   app.use("/api/v1/both/expense", expenseRouter);
   app.use("/api/v1/both/performance-review", performanceReviewRouter);
+  app.use("/api/v1/both/performance-tracking", performanceTrackingRouter);
+  app.use("/api/v1/both/goal", goalRouter);
   
   // New HR & Manager Features - Shared Routes
   app.use("/api/v1/both/recruitment", recruitmentBothRouter);
@@ -133,6 +146,8 @@ export const registerRoutes = (app) => {
   // New HR & Manager Features - Admin Only Routes
   app.use("/api/v1/admin/recruitment", recruitmentAdminRouter);
   app.use("/api/v1/admin/onboarding", onboardingRouter);
+  app.use("/api/v1/admin/comp-off", compOffAdminRouter);
+  app.use("/api/v1/admin/payroll-reports", payrollReportsRouter);
   app.use("/api/v1/admin/learning", learningAdminRouter);
   app.use("/api/v1/admin/engagement", engagementAdminRouter);
   app.use("/api/v1/admin/documents", documentAdminRouter);
@@ -141,5 +156,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/workforce", workforceRouter);
   app.use("/api/v1/admin/analytics", analyticsRouter);
   app.use("/api/v1/admin/executive", executiveRouter);
+  app.use("/api/v1/admin/approvals", approvalWorkflowRouter);
+  app.use("/api/v1/admin/sla", slaRouter);
 };
 

@@ -3,7 +3,9 @@ import {
     getDocuments,
     requestDocument,
     getDocumentRequests,
-    uploadEmployeeDocument
+    uploadEmployeeDocument,
+    getSharedDocuments,
+    shareDocument
 } from '../../controllers/document/documentController.js';
 import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
@@ -16,6 +18,10 @@ const router = express.Router();
 router.route('/')
     .get(isAuthenticatedBoth, readLimiter, getDocuments);
 
+// Get shared documents (for employees)
+router.route('/shared')
+    .get(isAuthenticated, readLimiter, getSharedDocuments);
+
 // Employee uploads document (requires approval)
 router.route('/upload')
     .post(isAuthenticated, (req, res, next) => {
@@ -26,6 +32,10 @@ router.route('/upload')
             next();
         });
     }, writeLimiter, uploadEmployeeDocument);
+
+// Share document (employees can share their own documents)
+router.route('/:id/share')
+    .post(isAuthenticated, writeLimiter, shareDocument);
 
 // Document Requests
 router.route('/document-requests')

@@ -5,6 +5,7 @@ import logger from "../../helpers/logger.js";
 import { parsePagination, parseSort, sendPaginatedResponse } from "../../helpers/paginationHelper.js";
 import { addOrganizationFilter } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
+import { logApprove, logReject, logUpdate } from "../../helpers/auditLogger.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -149,6 +150,9 @@ export const updateLeaveStatus = async (req, res) => {
             return res.status(404).json({ message: 'Leave application not found' });
         }
 
+        // Get leave before update for audit log
+        const leaveBefore = leave.toObject();
+
         // If user is a manager (not admin or HR), verify the leave belongs to an employee linked to them
         // Example: Manager "Arun Kumar" can only approve/reject leaves for employees with manager="Arun Kumar" or "Arun"
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
@@ -179,28 +183,149 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
 
-        leave.status = status;
+        // ✅ SYNC WITH APPROVAL WORKFLOW
+        const approverId = req.user?._id || req.employee?._id;
         
-        if (status === 'approved') {
-            leave.approvedBy = req.user?._id || req.employee?._id;
-            leave.approvedAt = new Date();
-            leave.rejectionReason = undefined;
-            leave.rejectedBy = undefined;
-            leave.rejectedAt = undefined;
-        } else if (status === 'rejected') {
-            leave.rejectedBy = req.user?._id || req.employee?._id;
-            leave.rejectedAt = new Date();
-            if (rejectionReason) {
-                leave.rejectionReason = rejectionReason;
+        // If leave has an approval instance, process through workflow
+        if (leave.approvalInstanceId) {
+            try {
+                const { processApprovalAction } = await import('../../services/approvalWorkflowService.js');
+                const { ApprovalInstance } = await import('../../models/approvalWorkflow.model.js');
+                
+                const approvalInstance = await ApprovalInstance.findById(leave.approvalInstanceId);
+                if (approvalInstance && approvalInstance.status === 'In Progress') {
+                    // Find current step
+                    const currentStep = approvalInstance.steps.find(s => s.status === 'Pending');
+                    if (currentStep) {
+                        await processApprovalAction({
+                            approvalInstanceId: leave.approvalInstanceId,
+                            stepNumber: currentStep.stepNumber,
+                            approverId,
+                            action: status === 'approved' ? 'Approve' : 'Reject',
+                            comments: rejectionReason || '',
+                            metadata: {
+                                leaveId: leave._id,
+                                leaveType: leave.leaveType,
+                                duration: leave.duration
+                            }
+                        });
+                        
+                        // Reload approval instance to get updated status
+                        const updatedInstance = await ApprovalInstance.findById(leave.approvalInstanceId);
+                        
+                        // If workflow is complete, update leave status
+                        if (updatedInstance && updatedInstance.status === 'Approved') {
+                            leave.status = 'approved';
+                            leave.approvedBy = approverId;
+                            leave.approvedAt = new Date();
+                        } else if (updatedInstance && updatedInstance.status === 'Rejected') {
+                            leave.status = 'rejected';
+                            leave.rejectedBy = approverId;
+                            leave.rejectedAt = new Date();
+                            leave.rejectionReason = rejectionReason || updatedInstance.rejectionReason;
+                        }
+                    }
+                }
+            } catch (workflowError) {
+                logger.error('Error processing approval workflow', {
+                    error: workflowError.message,
+                    leaveId: leave._id,
+                    stack: workflowError.stack
+                });
+                // Fall through to direct status update if workflow fails
             }
-            leave.approvedBy = undefined;
-            leave.approvedAt = undefined;
-        } else if (status === 'cancelled') {
-            // Employee can cancel their own leave
-            leave.status = 'cancelled';
+        }
+        
+        // Direct status update (if no workflow or workflow processing failed)
+        if (!leave.approvalInstanceId || leave.status === 'pending') {
+            leave.status = status;
+            
+            if (status === 'approved') {
+                leave.approvedBy = approverId;
+                leave.approvedAt = new Date();
+                leave.rejectionReason = undefined;
+                leave.rejectedBy = undefined;
+                leave.rejectedAt = undefined;
+            } else if (status === 'rejected') {
+                leave.rejectedBy = approverId;
+                leave.rejectedAt = new Date();
+                if (rejectionReason) {
+                    leave.rejectionReason = rejectionReason;
+                }
+                leave.approvedBy = undefined;
+                leave.approvedAt = undefined;
+            } else if (status === 'cancelled') {
+                // Employee can cancel their own leave
+                leave.status = 'cancelled';
+            }
         }
 
         await leave.save();
+        
+        // Log audit trail for leave status change
+        if (status === 'approved') {
+            await logApprove({
+                entityType: 'Leave',
+                entityId: leave._id,
+                entityName: `${leave.leaveType} leave for ${leave.employeeName || 'Employee'}`,
+                req,
+                before: leaveBefore,
+                after: leave.toObject(),
+                metadata: {
+                    leaveType: leave.leaveType,
+                    duration: leave.duration,
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    approverId: approverId.toString()
+                }
+            });
+        } else if (status === 'rejected') {
+            await logReject({
+                entityType: 'Leave',
+                entityId: leave._id,
+                entityName: `${leave.leaveType} leave for ${leave.employeeName || 'Employee'}`,
+                req,
+                before: leaveBefore,
+                after: leave.toObject(),
+                metadata: {
+                    leaveType: leave.leaveType,
+                    duration: leave.duration,
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    rejectionReason,
+                    rejectedBy: approverId.toString()
+                }
+            });
+        } else {
+            await logUpdate({
+                entityType: 'Leave',
+                entityId: leave._id,
+                entityName: `${leave.leaveType} leave for ${leave.employeeName || 'Employee'}`,
+                req,
+                before: leaveBefore,
+                after: leave.toObject(),
+                metadata: {
+                    statusChange: true,
+                    previousStatus: leaveBefore.status,
+                    newStatus: leave.status
+                }
+            });
+        }
+        
+        // Update leave balance if approved
+        if (leave.status === 'approved') {
+            try {
+                const leaveBalanceEngine = (await import('../../services/leaveBalanceEngine.js')).default;
+                const year = new Date(leave.startDate).getFullYear();
+                const organizationId = leave.organizationId || req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+                await leaveBalanceEngine.calculateBalance(leave.employee, year, organizationId);
+            } catch (balanceError) {
+                logger.warn('Error updating leave balance after approval', {
+                    error: balanceError.message,
+                    leaveId: leave._id
+                });
+            }
+        }
 
         // Send push notification based on status
         if (leave.employee) {

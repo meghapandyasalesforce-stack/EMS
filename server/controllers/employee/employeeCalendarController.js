@@ -1,5 +1,6 @@
 import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
+import { detectHolidayTheme } from '../../helpers/indianHolidayService.js';
 
 // Get calendar for year (employee view - read-only)
 export const getEmployeeCalendar = async (req, res) => {
@@ -41,8 +42,22 @@ export const getEmployeeCalendar = async (req, res) => {
       };
     }
 
-    // Filter only active holidays for employee view
-    const activeHolidays = calendar.holidays.filter(holiday => holiday.isActive);
+    // Filter only active holidays for employee view and enhance with theme
+    const activeHolidays = calendar.holidays
+      .filter(holiday => holiday.isActive)
+      .map(holiday => {
+        const holidayObj = holiday.toObject ? holiday.toObject() : holiday;
+        if (!holidayObj.theme) {
+          const themeData = detectHolidayTheme(holidayObj.name, holidayObj.type || 'national');
+          return {
+            ...holidayObj,
+            theme: themeData.theme,
+            icon: themeData.icon,
+            color: themeData.color
+          };
+        }
+        return holidayObj;
+      });
 
     res.json({
       ...calendar.toObject ? calendar.toObject() : calendar,

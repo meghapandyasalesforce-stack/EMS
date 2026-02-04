@@ -1,4 +1,5 @@
 import { Document, DocumentRequest } from '../../models/document.model.js';
+import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
@@ -89,7 +90,7 @@ export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get documents
+ * Get documents with proper access control
  */
 export const getDocuments = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
@@ -97,12 +98,58 @@ export const getDocuments = asyncHandler(async (req, res) => {
 
     const query = addOrganizationFilter(req, {});
 
-    // For employees, only show approved documents or their own pending documents
+    // For employees, enforce access control
     if (req.employee?._id && !req.user?._id) {
-        query.$or = [
-            { approvalStatus: 'Approved' },
-            { approvalStatus: { $exists: false } },
-            { uploadedBy: req.employee._id }
+        const employeeId = req.employee._id;
+        
+        // Get employee details for access control
+        const employee = await Employee.findById(employeeId)
+            .select('department assignedRole functionalRoles')
+            .populate('assignedRole', '_id')
+            .lean();
+
+        if (!employee) {
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found'
+            });
+        }
+
+        // Build access control query
+        const accessQuery = {
+            $or: [
+                // Own documents (always accessible)
+                { uploadedBy: employeeId },
+                // Public documents
+                { accessLevel: 'Public' },
+                // Department-specific documents
+                {
+                    accessLevel: 'Department',
+                    allowedDepartments: { $in: [employee.department] }
+                },
+                // Role-specific documents
+                {
+                    accessLevel: 'Role',
+                    allowedRoles: employee.assignedRole?._id || { $exists: false }
+                },
+                // Specific employee documents
+                {
+                    accessLevel: 'Specific',
+                    allowedEmployees: employeeId
+                }
+            ]
+        };
+
+        // Combine with approval status
+        query.$and = [
+            {
+                $or: [
+                    { approvalStatus: 'Approved' },
+                    { approvalStatus: { $exists: false } },
+                    { uploadedBy: employeeId }
+                ]
+            },
+            accessQuery
         ];
     } else {
         // For HR/Admin, show all documents
@@ -125,6 +172,8 @@ export const getDocuments = asyncHandler(async (req, res) => {
     const documents = await Document.find(query)
         .populate('uploadedBy', 'name email employeeId department')
         .populate('approvedBy', 'name email')
+        .populate('allowedEmployees', 'name email employeeId')
+        .populate('allowedRoles', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -407,6 +456,185 @@ export const getDocumentVersions = asyncHandler(async (req, res) => {
                 description: document.description
             },
             versions
+        }
+    });
+});
+
+/**
+ * Share document with employees, departments, or roles
+ */
+export const shareDocument = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const { 
+        accessLevel, 
+        allowedEmployees, 
+        allowedDepartments, 
+        allowedRoles 
+    } = req.body;
+
+    // Validate access level
+    const validAccessLevels = ['Public', 'Department', 'Role', 'Specific', 'Private'];
+    if (accessLevel && !validAccessLevels.includes(accessLevel)) {
+        return res.status(400).json({
+            success: false,
+            message: `Invalid access level. Must be one of: ${validAccessLevels.join(', ')}`
+        });
+    }
+
+    const document = await Document.findOne({
+        _id: id,
+        organizationId
+    });
+
+    if (!document) {
+        return res.status(404).json({
+            success: false,
+            message: 'Document not found'
+        });
+    }
+
+    // Check if user has permission to share (must be uploader or admin/HR)
+    const userId = req.user?._id || req.employee?._id;
+    const isUploader = document.uploadedBy?.toString() === userId?.toString();
+    const isAdmin = req.user?._id && req.user.role === 'admin';
+
+    if (!isUploader && !isAdmin) {
+        return res.status(403).json({
+            success: false,
+            message: 'You do not have permission to share this document'
+        });
+    }
+
+    // Validate employees exist and belong to same organization
+    if (allowedEmployees && Array.isArray(allowedEmployees)) {
+        const employees = await Employee.find({
+            _id: { $in: allowedEmployees },
+            organizationId
+        }).select('_id').lean();
+
+        if (employees.length !== allowedEmployees.length) {
+            return res.status(400).json({
+                success: false,
+                message: 'Some employee IDs are invalid or do not belong to this organization'
+            });
+        }
+    }
+
+    // Update document sharing settings
+    if (accessLevel) {
+        document.accessLevel = accessLevel;
+    }
+
+    if (allowedEmployees !== undefined) {
+        document.allowedEmployees = Array.isArray(allowedEmployees) ? allowedEmployees : [];
+    }
+
+    if (allowedDepartments !== undefined) {
+        document.allowedDepartments = Array.isArray(allowedDepartments) ? allowedDepartments : [];
+    }
+
+    if (allowedRoles !== undefined) {
+        document.allowedRoles = Array.isArray(allowedRoles) ? allowedRoles : [];
+    }
+
+    await document.save();
+
+    // Populate for response
+    await document.populate('allowedEmployees', 'name email employeeId');
+    await document.populate('allowedRoles', 'name');
+
+    logger.info('Document shared', {
+        documentId: id,
+        accessLevel: document.accessLevel,
+        organizationId
+    });
+
+    res.json({
+        success: true,
+        message: 'Document sharing settings updated successfully',
+        data: document
+    });
+});
+
+/**
+ * Get shared documents for current employee
+ */
+export const getSharedDocuments = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const employeeId = req.employee?._id;
+
+    if (!employeeId) {
+        return res.status(401).json({
+            success: false,
+            message: 'Employee authentication required'
+        });
+    }
+
+    const { category, page = 1, limit = 20 } = req.query;
+
+    // Get employee details
+    const employee = await Employee.findById(employeeId)
+        .select('department assignedRole functionalRoles')
+        .populate('assignedRole', '_id')
+        .lean();
+
+    if (!employee) {
+        return res.status(404).json({
+            success: false,
+            message: 'Employee not found'
+        });
+    }
+
+    // Build query for shared documents (excluding own documents)
+    const query = {
+        organizationId,
+        isActive: true,
+        approvalStatus: { $in: ['Approved', null] },
+        uploadedBy: { $ne: employeeId }, // Exclude own documents
+        $or: [
+            // Public documents
+            { accessLevel: 'Public' },
+            // Department-specific documents
+            {
+                accessLevel: 'Department',
+                allowedDepartments: { $in: [employee.department] }
+            },
+            // Role-specific documents
+            {
+                accessLevel: 'Role',
+                allowedRoles: employee.assignedRole?._id || { $exists: false }
+            },
+            // Specific employee documents
+            {
+                accessLevel: 'Specific',
+                allowedEmployees: employeeId
+            }
+        ]
+    };
+
+    if (category) query.category = category;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const documents = await Document.find(query)
+        .populate('uploadedBy', 'name email employeeId department')
+        .populate('allowedEmployees', 'name email employeeId')
+        .populate('allowedRoles', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+    const total = await Document.countDocuments(query);
+
+    res.json({
+        success: true,
+        data: documents,
+        pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / parseInt(limit))
         }
     });
 });
