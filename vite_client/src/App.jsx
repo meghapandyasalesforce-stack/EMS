@@ -40,7 +40,8 @@ function App() {
 
     const [activeSection, setActiveSection] = useState('Personal Details'); // Track active section
 
-    const shouldHideLayout = hideHeaderRoutes.includes(location.pathname);
+    // Check if pathname is in hideHeaderRoutes or starts with /reset-password (for token routes)
+    const shouldHideLayout = hideHeaderRoutes.includes(location.pathname) || location.pathname.startsWith('/reset-password');
     const shouldShowSidebar = showSidebarRoutes.includes(location.pathname);
     
     return (
@@ -65,6 +66,7 @@ function App() {
                     )}
                     <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
                         <Routes>
+                            {renderRoutes(authRoutes)}
                             {renderRoutes(dashboardRoutes)}
                             {renderRoutes(employeeRoutes)}
                             {renderRoutes(projectRoutes)}
