@@ -4,6 +4,35 @@ import axios from '../../utils/axios';
 import { ORGANIZATION_ENDPOINT } from '../../utils/constant';
 import { FiUsers, FiTrendingUp, FiCalendar, FiDollarSign, FiActivity } from 'react-icons/fi';
 import logger from '../../utils/logger';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    ArcElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+} from 'chart.js';
+import LoadingSpinner from '../../components/LoadingSpinner';
+
+// Register Chart.js components
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    ArcElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+);
 
 const OrganizationAnalytics = () => {
     const { user } = useSelector((state) => state.auth || {});
@@ -31,15 +60,91 @@ const OrganizationAnalytics = () => {
     };
 
     if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
-        );
+        return <LoadingSpinner message="Loading analytics..." />;
     }
 
     const stats = analytics?.stats || {};
     const trends = analytics?.trends || {};
+
+    // Prepare chart data
+    const employeeGrowthData = {
+        labels: trends.employeeGrowthData?.map(item => item.month) || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [{
+            label: 'Employee Count',
+            data: trends.employeeGrowthData?.map(item => item.count) || [0, 0, 0, 0, 0, 0],
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    };
+
+    const projectStatusData = {
+        labels: ['Active', 'Completed', 'On Hold', 'Cancelled'],
+        datasets: [{
+            label: 'Projects',
+            data: [
+                stats.activeProjects || 0,
+                stats.completedProjects || 0,
+                stats.onHoldProjects || 0,
+                stats.cancelledProjects || 0
+            ],
+            backgroundColor: [
+                'rgba(34, 197, 94, 0.8)',
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(251, 191, 36, 0.8)',
+                'rgba(239, 68, 68, 0.8)'
+            ],
+            borderColor: [
+                'rgb(34, 197, 94)',
+                'rgb(59, 130, 246)',
+                'rgb(251, 191, 36)',
+                'rgb(239, 68, 68)'
+            ],
+            borderWidth: 2
+        }]
+    };
+
+    const payrollTrendData = {
+        labels: trends.payrollTrendData?.map(item => item.month) || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [{
+            label: 'Payroll (₹)',
+            data: trends.payrollTrendData?.map(item => item.amount) || [0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(147, 51, 234, 0.2)',
+            borderColor: 'rgb(147, 51, 234)',
+            borderWidth: 2,
+            fill: true
+        }]
+    };
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    };
+
+    const doughnutOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+            }
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -139,16 +244,45 @@ const OrganizationAnalytics = () => {
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                     <div className="bg-white rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Employee Growth</h3>
-                        <div className="h-64 flex items-center justify-center text-gray-400">
-                            <p>Chart visualization would go here</p>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Employee Growth Trend</h3>
+                        <div className="h-64">
+                            <Line data={employeeGrowthData} options={chartOptions} />
                         </div>
                     </div>
 
                     <div className="bg-white rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Status</h3>
-                        <div className="h-64 flex items-center justify-center text-gray-400">
-                            <p>Chart visualization would go here</p>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Status Distribution</h3>
+                        <div className="h-64">
+                            <Doughnut data={projectStatusData} options={doughnutOptions} />
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-lg p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Payroll Trend</h3>
+                        <div className="h-64">
+                            <Bar data={payrollTrendData} options={chartOptions} />
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-lg p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Attendance Overview</h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                                <span className="text-gray-700">Average Attendance Rate</span>
+                                <span className="text-2xl font-bold text-green-600">{stats.attendanceRate || 0}%</span>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                                <span className="text-gray-700">Total Hours Logged</span>
+                                <span className="text-xl font-semibold text-blue-600">
+                                    {stats.totalHours || 0} hrs
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
+                                <span className="text-gray-700">Average Hours/Day</span>
+                                <span className="text-xl font-semibold text-purple-600">
+                                    {stats.avgHoursPerDay || 0} hrs
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

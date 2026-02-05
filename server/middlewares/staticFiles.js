@@ -8,6 +8,27 @@ import { getAllowedOrigins } from "./corsConfig.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, "..", "uploads");
+const profilePhotosDir = path.join(uploadsDir, "profile-photos");
+
+try {
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+        logger.info('Created uploads directory', { path: uploadsDir });
+    }
+    if (!fs.existsSync(profilePhotosDir)) {
+        fs.mkdirSync(profilePhotosDir, { recursive: true });
+        logger.info('Created profile-photos directory', { path: profilePhotosDir });
+    }
+} catch (error) {
+    logger.error('Failed to create uploads directories', {
+        error: error.message,
+        uploadsDir,
+        profilePhotosDir
+    });
+}
+
 /**
  * Middleware to set CORS headers for static file requests
  * This is critical for images to work with html2canvas and other CORS contexts
@@ -102,23 +123,73 @@ export const staticFilesCheckMiddleware = (req, res, next) => {
 /**
  * Middleware to handle 404s for missing static files
  * This runs after express.static to catch requests that didn't match any files
+ * CRITICAL: This must return a proper response to prevent route handlers from catching it
  */
 export const staticFiles404Handler = (req, res, next) => {
-  // Only handle requests to /uploads that look like file requests
-  if (req.path.startsWith('/uploads/') && req.path.match(/\.(jpg|jpeg|png|gif|webp|pdf|doc|docx)$/i)) {
-    // If response hasn't been sent and status is not set, file wasn't found
-    if (!res.headersSent) {
-      logger.warn('Static file not found - returning 404', {
-        path: req.path,
-        url: req.url,
-        method: req.method
-      });
-      return res.status(404).json({ 
-        message: 'File not found',
-        path: req.path 
-      });
+  // Only handle GET requests to /uploads that look like file requests
+  if (req.method === 'GET' && req.path.startsWith('/uploads/')) {
+    // Check if response was already sent by express.static (file was found and served)
+    if (res.headersSent) {
+      // File was found and served, continue normally
+      return next();
+    }
+    
+    // If we reach here and it's a file request, express.static didn't find it
+    // Check if it's a file request (has extension)
+    if (req.path.match(/\.(jpg|jpeg|png|gif|webp|pdf|doc|docx)$/i)) {
+      const requestedPath = req.path.replace(/^\/uploads\//, '');
+      const fullPath = path.join(__dirname, "..", "uploads", requestedPath);
+      
+      // Check if file exists
+      let fileExists = false;
+      try {
+        fileExists = fs.existsSync(fullPath);
+      } catch (fsError) {
+        logger.error('Error checking file existence', {
+          error: fsError.message,
+          fullPath,
+          path: req.path
+        });
+      }
+      
+      if (!fileExists) {
+        logger.warn('Static file not found - returning 404', {
+          path: req.path,
+          fullPath,
+          url: req.url,
+          method: req.method,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Return a proper 404 response with appropriate headers
+        // Set CORS headers for the 404 response too
+        const origin = req.headers.origin;
+        if (origin) {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+        }
+        res.setHeader("Content-Type", "application/json");
+        
+        res.status(404).json({ 
+          success: false,
+          message: 'File not found',
+          path: req.path 
+        });
+        // CRITICAL: Don't call next() - stop the middleware chain here
+        return;
+      } else {
+        // File exists but express.static didn't serve it - this shouldn't happen
+        // Log warning but continue to next middleware
+        logger.warn('File exists but express.static did not serve it', {
+          path: req.path,
+          fullPath
+        });
+      }
     }
   }
+  // If it's not a static file request or file exists, continue to next middleware
   next();
 };
 

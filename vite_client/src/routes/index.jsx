@@ -536,6 +536,11 @@ export const hrRoutes = [
     path: '/admin/reports',
     component: lazy(() => import('../HR/Reports/HRReportsPage')),
     message: 'Loading HR reports...'
+  },
+  {
+    path: '/hr/analytics',
+    component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')),
+    message: 'Loading HR analytics...'
   }
 ];
 

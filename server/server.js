@@ -123,7 +123,9 @@ app.use(xss());
 // ✅ CORS configuration
 app.use(corsMiddleware);
 
-// ✅ Static files (before rate limiting/CSRF to avoid unnecessary checks)
+// ✅ Static files (MUST be before organization isolation and other middleware)
+// This ensures static file requests are handled before they reach route handlers
+// CRITICAL: Static files must be registered early to prevent route conflicts
 app.use("/uploads", staticFilesCorsMiddleware);
 app.use("/uploads", staticFilesCheckMiddleware, staticFilesConfig);
 // Handle 404s for missing static files (after express.static, before route handlers)
@@ -131,15 +133,41 @@ app.use("/uploads", staticFiles404Handler);
 app.use(staticCacheHeaders); // Add cache headers for static files
 
 // ✅ Request timeout (prevent hanging requests)
-app.use(requestTimeout(parseInt(process.env.REQUEST_TIMEOUT_MS || '30000')));
+// Skip timeout for static file requests to allow large file downloads
+app.use((req, res, next) => {
+  if (req.path.startsWith('/uploads/')) {
+    return next();
+  }
+  requestTimeout(parseInt(process.env.REQUEST_TIMEOUT_MS || '30000'))(req, res, next);
+});
 
-// ✅ Rate limiting + CSRF
-app.use(apiLimiter);
-app.use(csrfProtection);
+// ✅ Rate limiting + CSRF (skip for static files - already handled above)
+app.use((req, res, next) => {
+  // Skip rate limiting for static file requests
+  if (req.path.startsWith('/uploads/')) {
+    return next();
+  }
+  apiLimiter(req, res, next);
+});
+app.use((req, res, next) => {
+  // Skip CSRF for static file requests
+  if (req.path.startsWith('/uploads/')) {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
 
 // ✅ Organization isolation (set context for all authenticated requests)
 // This should be after authentication middleware but before routes
-app.use(setOrganizationContext);
+// CRITICAL: Skip for static file requests to prevent 404 errors
+app.use((req, res, next) => {
+  // Skip organization isolation for static file requests
+  // Static files don't need organization context
+  if (req.path.startsWith('/uploads/')) {
+    return next();
+  }
+  setOrganizationContext(req, res, next);
+});
 
 // =================== ROUTES ===================
 registerRoutes(app);

@@ -214,8 +214,25 @@ export const createError = (message, statusCode = 400, code = null, details = nu
 
 /**
  * 404 Not Found handler
+ * CRITICAL: Skip static file requests - they are handled by staticFiles404Handler
  */
 export const notFoundHandler = (req, res, next) => {
+    // Skip static file requests - they are handled by staticFiles404Handler
+    // This prevents duplicate 404 errors for missing static files
+    if (req.path.startsWith('/uploads/')) {
+        // If we reach here, staticFiles404Handler didn't handle it
+        // This shouldn't happen, but if it does, return a simple 404
+        if (!res.headersSent) {
+            return res.status(404).json({
+                success: false,
+                message: 'File not found',
+                path: req.path
+            });
+        }
+        return; // Response already sent
+    }
+    
+    // For non-static file routes, create proper error
     const error = createError(
         `Route ${req.method} ${req.path} not found`,
         404,
