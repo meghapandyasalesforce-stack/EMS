@@ -28,6 +28,7 @@ import {
 } from "./middlewares/staticFiles.js";
 import { registerRoutes } from "./config/routes.js";
 import { registerDiagnosticRoutes } from "./config/diagnosticRoutes.js";
+import { metricsMiddleware, getMetrics, isMetricsEnabled } from "./monitoring/prometheus.js";
 import csrfProtection from "./middlewares/csrf.js";
 import { requestTimeout } from "./middlewares/requestTimeout.js";
 import { staticCacheHeaders } from "./middlewares/cacheHeaders.js";
@@ -66,6 +67,11 @@ const PORT = process.env.PORT || 10000;
 // ✅ Request ID middleware (must be first to track all requests)
 app.use(requestIdMiddleware);
 app.use(requestContextMiddleware);
+
+// ✅ Metrics middleware (HTTP request metrics) - safe no-op if prom-client is not installed
+if (isMetricsEnabled()) {
+  app.use(metricsMiddleware);
+}
 
 // ✅ Logger (except tests)
 if (process.env.NODE_ENV !== "test") app.use(requestLogger);
@@ -181,9 +187,16 @@ app.get("/", (req, res) => {
     status: "active",
     version: "1.0.0",
     documentation: "/api-docs",
-    health: "/api/health"
+    health: "/api/health",
+    metrics: process.env.ENABLE_METRICS === 'true' ? "/metrics" : undefined
   });
 });
+
+// ✅ Prometheus Metrics Endpoint (enabled only when explicitly configured)
+if (process.env.ENABLE_METRICS === 'true') {
+  // Expose /metrics for Prometheus scraping
+  app.get("/metrics", getMetrics);
+}
 
 // =================== API DOCUMENTATION ===================
 // Swagger/OpenAPI documentation - enabled by default, can be disabled via ENABLE_SWAGGER=false

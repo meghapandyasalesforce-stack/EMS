@@ -11,13 +11,17 @@
 
 import logger from '../helpers/logger.js';
 
-// Check if prom-client is available
+// Check if prom-client is available (ESM-compatible)
 let promClient = null;
 let metricsEnabled = false;
 
 try {
-    promClient = require('prom-client');
+    // Use dynamic import to avoid breaking when prom-client is not installed
+    // Node.js ESM supports top-level await
+    const module = await import('prom-client');
+    promClient = module.default || module;
     metricsEnabled = true;
+    logger.info('Prometheus metrics enabled using prom-client');
 } catch (error) {
     logger.warn('prom-client not installed. Metrics collection disabled.');
     logger.warn('Install with: npm install prom-client');

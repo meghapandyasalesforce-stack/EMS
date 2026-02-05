@@ -16,9 +16,16 @@ export const loginLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // WARNING: Rate limiting disabled - login endpoint is now unprotected against brute force attacks
-    // Always skip rate limiting (no protection)
-    skip: () => true
+    // SECURITY: Login rate limiting is mandatory in production
+    // In development, it can be optionally disabled with DISABLE_RATE_LIMIT=true
+    skip: () => {
+        // Never skip in production
+        if (process.env.NODE_ENV === 'production') {
+            return false;
+        }
+        // Allow disabling only in non-production environments
+        return process.env.DISABLE_RATE_LIMIT === 'true';
+    }
 });
 
 export const apiLimiter = rateLimit({
