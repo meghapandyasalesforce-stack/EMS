@@ -236,7 +236,9 @@ export const employeeValidations = {
  */
 export const payrollValidations = {
     create: [
-        commonValidations.objectId('employeeId'),
+        body('employeeId')
+            .notEmpty().withMessage('Employee ID is required')
+            .isMongoId().withMessage('Invalid employee ID format'),
         body('month')
             .notEmpty().withMessage('Month is required')
             .isIn(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])

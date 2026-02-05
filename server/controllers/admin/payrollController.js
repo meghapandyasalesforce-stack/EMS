@@ -137,6 +137,15 @@ export const getEmployeePayroll = async (req, res) => {
 
         // If not found, create a default payroll
         if (!payroll) {
+            // Get organizationId from request context (multi-tenancy)
+            const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId || employee.organizationId;
+            if (!organizationId) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Organization ID is required. Please ensure you are authenticated.' 
+                });
+            }
+
             const basicSalary = employee.salary;
 
             // Default earnings
@@ -165,6 +174,7 @@ export const getEmployeePayroll = async (req, res) => {
             const inHandSalary = earnings.totalEarnings - deductions.total;
 
             payroll = new Payroll({
+                organizationId: organizationId, // Multi-tenancy: ensure organizationId is set
                 employeeId,
                 month,
                 year,
@@ -241,6 +251,32 @@ export const createPayroll = async (req, res) => {
     try {
         const payrollData = req.body;
         
+        // Get organizationId from request context (multi-tenancy security)
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
+        }
+        
+        // If employeeId is provided, verify it belongs to the same organization
+        if (payrollData.employeeId) {
+            const employee = await Employee.findById(payrollData.employeeId).select('organizationId').lean();
+            if (!employee) {
+                return res.status(404).json({ 
+                    success: false, 
+                    message: 'Employee not found' 
+                });
+            }
+            if (employee.organizationId && employee.organizationId.toString() !== organizationId.toString()) {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Access denied. Employee does not belong to your organization.' 
+                });
+            }
+        }
+        
         // Calculate totals
         const earnings = payrollData.earnings || {};
         const deductions = payrollData.deductions || {};
@@ -253,6 +289,7 @@ export const createPayroll = async (req, res) => {
         
         const payroll = new Payroll({
             ...payrollData,
+            organizationId: organizationId, // Override with request context for security
             earnings,
             deductions,
             ctc,
@@ -462,6 +499,15 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
                 return res.status(404).json({ message: 'Employee not found' });
             }
 
+            // Get organizationId from request context (multi-tenancy)
+            const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId || employee.organizationId;
+            if (!organizationId) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Organization ID is required. Please ensure you are authenticated.' 
+                });
+            }
+
             const basicSalary = employee.salary || 0;
             
             // Default earnings calculation
@@ -498,6 +544,7 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
             const inHandSalary = earnings.totalEarnings - deductions.total;
 
             payroll = new Payroll({
+                organizationId: organizationId, // Multi-tenancy: ensure organizationId is set
                 employeeId,
                 month,
                 year,
@@ -658,7 +705,21 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             return res.status(400).json({ success: false, message: 'month and year are required' });
         }
 
-        const employees = await Employee.find({ salary: { $exists: true } }).select('salary');
+        // Get organizationId from request context (multi-tenancy)
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Organization ID is required. Please ensure you are authenticated.' 
+            });
+        }
+
+        // Filter employees by organizationId for multi-tenancy security
+        const employees = await Employee.find({ 
+            salary: { $exists: true, $gt: 0 },
+            organizationId: organizationId,
+            active: true 
+        }).select('salary organizationId');
         let created = 0;
 
         // Helper: calculate working days (Mon-Fri) in target month
@@ -676,14 +737,21 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         })();
 
         for (const emp of employees) {
-            const exists = await Payroll.findOne({ employeeId: emp._id, month, year });
+            // Check if payroll already exists (filtered by organizationId for multi-tenancy)
+            const exists = await Payroll.findOne({ 
+                employeeId: emp._id, 
+                month, 
+                year,
+                organizationId: emp.organizationId || organizationId
+            });
             if (exists) continue;
 
             const basicSalary = emp.salary || 0;
             
-            // Attendance aggregation for the month
+            // Attendance aggregation for the month (filtered by organizationId for multi-tenancy)
             const attendanceRecords = await Attendance.find({
                 userId: emp._id,
+                organizationId: emp.organizationId || organizationId,
                 date: { $gte: startOfMonth, $lte: endOfMonth }
             });
 
@@ -691,9 +759,10 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             const halfDays = attendanceRecords.filter(r => r.status === 'half-day').length;
             const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
 
-            // Approved leaves within month
+            // Approved leaves within month (filtered by organizationId for multi-tenancy)
             const approvedLeaves = await Leave.find({
                 employee: emp._id,
+                organizationId: emp.organizationId || organizationId,
                 status: 'approved',
                 $or: [
                     { startDate: { $lte: endOfMonth }, endDate: { $gte: startOfMonth } }
@@ -736,6 +805,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             deductions.total = Object.values(deductions).reduce((s, v) => s + (v || 0), 0);
 
             const payroll = new Payroll({
+                organizationId: emp.organizationId || organizationId, // Multi-tenancy: ensure organizationId is set
                 employeeId: emp._id,
                 month,
                 year,

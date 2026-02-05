@@ -52,12 +52,17 @@ export const organizationIsolationPlugin = (schema, options = {}) => {
     
     /**
      * Add organizationId filter to query
+     * SECURITY: Always applies organizationId filter, even for populate queries
+     * Populate queries that reference documents with organizationId should be filtered
      */
     const addOrganizationFilter = function(query) {
-        // Skip for populate operations (internal Mongoose queries)
-        // Populate queries are used to fetch related documents and shouldn't be filtered
-        // However, we still validate organizationId exists in context for security
-        const isPopulateQuery = query._mongooseOptions?.populate || query._populatedPaths?.length > 0;
+        // Check if this is a populate query
+        // Populate queries are internal Mongoose queries that fetch related documents
+        // We need to be careful here - populate queries should respect organization isolation
+        // when the referenced model also has organizationId
+        const isPopulateQuery = query._mongooseOptions?.populate || 
+                               query._populatedPaths?.length > 0 ||
+                               query._mongooseOptions?.populateOptions;
         
         const organizationId = getOrganizationIdFromContext(query);
         
@@ -75,11 +80,25 @@ export const organizationIsolationPlugin = (schema, options = {}) => {
             return;
         }
         
-        if (organizationId && !isPopulateQuery) {
-            // Add organizationId to query if not already present
+        // SECURITY FIX: Apply organizationId filter to all queries, including populate
+        // The populate query will be filtered by the organizationIsolationPlugin on the referenced model
+        // This ensures that even when populating related documents, we only get documents from the same organization
+        if (organizationId) {
             const currentQuery = query.getQuery();
+            
+            // For populate queries, we still need to ensure the base query is filtered
+            // The populated documents will be filtered by their own model's plugin
             if (!currentQuery.organizationId) {
                 query.where({ organizationId });
+                
+                // Log populate queries for audit purposes
+                if (isPopulateQuery) {
+                    logger.debug('Organization filter applied to populate query', {
+                        modelName: this.model?.modelName || 'Unknown',
+                        organizationId,
+                        isPopulateQuery: true
+                    });
+                }
             }
         } else if (requireOrganizationId && !isPopulateQuery) {
             // In strict mode, log warning but don't throw (to avoid breaking populate/other queries)
@@ -91,6 +110,12 @@ export const organizationIsolationPlugin = (schema, options = {}) => {
             });
             // Don't throw - let the query proceed and let controllers handle validation
             // This prevents breaking populate() and other operations
+        } else if (requireOrganizationId && isPopulateQuery) {
+            // For populate queries in strict mode, log but don't block
+            // The populated model's plugin will handle filtering
+            logger.debug('Populate query without organizationId in context (will be filtered by referenced model)', {
+                modelName: this.model?.modelName || 'Unknown'
+            });
         }
     };
     

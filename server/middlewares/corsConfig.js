@@ -56,36 +56,32 @@ export const corsMiddleware = cors({
   origin: (origin, callback) => {
     const allowedOrigins = getAllowedOrigins();
     
-  // In production, be strict about origins
-  if (process.env.NODE_ENV === 'production') {
-    // In production, reject requests with no origin
-    // Note: Mobile apps should send a proper origin header or use a different authentication method
+    // Same-origin requests don't send Origin header - allow them
+    // This is correct behavior per CORS spec: same-origin requests bypass CORS entirely
+    // Only cross-origin requests need CORS validation
     if (!origin) {
-      logger.warn('CORS: Request with no origin header rejected in production');
-      return callback(new Error('Origin header required in production'));
-    }
-    
-    // Check if origin is in allowed list (strict matching)
-    if (allowedOrigins.includes(origin)) {
+      logger.debug('CORS: Same-origin request (no Origin header) - allowing');
       return callback(null, true);
     }
     
-    // Log rejected origins for security monitoring (sanitized by logger)
-    logger.warn('CORS: Origin rejected in production', { 
-      origin,
-      allowedOrigins: allowedOrigins.length > 0 ? '[CONFIGURED]' : '[NONE]'
-    });
-    callback(new Error('Not allowed by CORS'));
-    return;
-  }
-    
-    // Development mode: Allow requests without origin header (common in development)
-    // This handles same-origin requests, proxy requests, and development tools
-    if (!origin) {
-      logger.debug('CORS: Request with no origin header allowed in development');
-      return callback(null, true);
+    // Validate cross-origin requests (when Origin header is present)
+    if (process.env.NODE_ENV === 'production') {
+      // In production, validate cross-origin requests strictly
+      // Check if origin is in allowed list (strict matching)
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // Log rejected origins for security monitoring (sanitized by logger)
+      logger.warn('CORS: Origin rejected in production', { 
+        origin,
+        allowedOrigins: allowedOrigins.length > 0 ? '[CONFIGURED]' : '[NONE]'
+      });
+      callback(new Error('Not allowed by CORS'));
+      return;
     }
     
+    // Development mode: Validate cross-origin requests
     // Check if origin is in allowed list (strict matching)
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import logger from './helpers/logger.js';
 
 dotenv.config();
 
@@ -8,35 +9,35 @@ const testConnection = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
     // Mask password in URI for logging
     const maskedURI = mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@');
-    console.log('🔌 Connecting to MongoDB:', maskedURI);
+    logger.info('🔌 Connecting to MongoDB:', { uri: maskedURI });
     
     await mongoose.connect(mongoURI);
-    console.log('✅ MongoDB connected successfully!');
+    logger.info('✅ MongoDB connected successfully!');
     
     // Test database operations
     const db = mongoose.connection.db;
     const collections = await db.listCollections().toArray();
-    console.log('📁 Collections found:', collections.length);
+    logger.info('📁 Collections found:', { count: collections.length });
     if (collections.length > 0) {
-      console.log('   Collections:', collections.map(c => c.name).join(', '));
+      logger.info('   Collections:', { collections: collections.map(c => c.name).join(', ') });
     } else {
-      console.log('   (No collections yet - database is empty)');
+      logger.info('   (No collections yet - database is empty)');
     }
     
     // Test database name
-    console.log('📊 Database name:', db.databaseName);
+    logger.info('📊 Database name:', { databaseName: db.databaseName });
     
     await mongoose.connection.close();
-    console.log('✅ Connection closed successfully');
+    logger.info('✅ Connection closed successfully');
     process.exit(0);
   } catch (error) {
-    console.error('❌ MongoDB connection failed!');
-    console.error('   Error:', error.message);
-    console.error('\n💡 Troubleshooting:');
-    console.error('   1. Ensure MongoDB is running');
-    console.error('   2. Check MONGO_URI in .env file');
-    console.error('   3. Verify MongoDB service is started');
-    console.error('   4. Check MongoDB logs for errors');
+    logger.error('❌ MongoDB connection failed!');
+    logger.error('   Error:', { error: error.message });
+    logger.error('\n💡 Troubleshooting:');
+    logger.error('   1. Ensure MongoDB is running');
+    logger.error('   2. Check MONGO_URI in .env file');
+    logger.error('   3. Verify MongoDB service is started');
+    logger.error('   4. Check MongoDB logs for errors');
     process.exit(1);
   }
 };

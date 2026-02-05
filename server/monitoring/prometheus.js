@@ -9,6 +9,8 @@
  * 4. Dashboard creation
  */
 
+import logger from '../helpers/logger.js';
+
 // Check if prom-client is available
 let promClient = null;
 let metricsEnabled = false;
@@ -17,8 +19,8 @@ try {
     promClient = require('prom-client');
     metricsEnabled = true;
 } catch (error) {
-    console.warn('prom-client not installed. Metrics collection disabled.');
-    console.warn('Install with: npm install prom-client');
+    logger.warn('prom-client not installed. Metrics collection disabled.');
+    logger.warn('Install with: npm install prom-client');
 }
 
 // Create a Registry to register the metrics

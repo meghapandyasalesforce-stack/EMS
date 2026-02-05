@@ -5,6 +5,7 @@ import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
+import isAdminOrHRAuthenticated from "../../middlewares/isAdminOrHRAuthenticated.js";
 import isCEOAuthenticated from "../../middlewares/isCEOAuthenticated.js";
 import { payrollLimiter, exportLimiter } from "../../middlewares/endpointRateLimiters.js";
 import { writeLimiter } from "../../middlewares/rateLimiter.js";
@@ -20,13 +21,13 @@ router.route("/")
     .get(isAdminOrManagerOrHRAuthenticated, payrollLimiter, cacheMiddleware('payroll:all', 120), getAllPayrolls);
 
 router.route("/create-payroll")
-    .post(isAdminAuthenticated, writeLimiter, payrollValidations.create, createPayroll);
+    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidations.create, createPayroll);
 router.route("/update-payroll/:id")
     .put(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.update, updatePayroll);
 router.route("/toggle-visibility/:id")
     .patch(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.toggleVisibility, togglePayrollVisibility);
 router.route("/generate-bulk")
-    .post(isAdminAuthenticated, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
+    .post(isAdminOrHRAuthenticated, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
 
 // Disburse salaries to employees' bank accounts (mock provider) - CEO only
 router.route("/disburse")

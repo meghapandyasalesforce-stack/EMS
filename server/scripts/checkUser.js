@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,23 +21,23 @@ const connectDB = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
     try {
         await mongoose.connect(mongoURI);
-        console.log('✅ MongoDB connected successfully');
+        logger.info('✅ MongoDB connected successfully');
         return true;
     } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
+        logger.error('❌ MongoDB connection failed:', { error: error.message });
         return false;
     }
 };
 
 const checkUser = async (email) => {
     if (!email) {
-        console.error('❌ Please provide an email address');
-        console.log('Usage: node server/scripts/checkUser.js <email>');
+        logger.error('❌ Please provide an email address');
+        logger.info('Usage: node server/scripts/checkUser.js <email>');
         process.exit(1);
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    console.log(`\n🔍 Checking for user: ${normalizedEmail}\n`);
+    logger.info(`\n🔍 Checking for user: ${normalizedEmail}\n`);
 
     // Check in User collection
     try {
@@ -45,18 +46,18 @@ const checkUser = async (email) => {
         }).select('+password');
         
         if (user) {
-            console.log('✅ User found in User collection:');
-            console.log(`   ID: ${user._id}`);
-            console.log(`   Name: ${user.name}`);
-            console.log(`   Email: ${user.email}`);
-            console.log(`   Role: ${user.role}`);
-            console.log(`   Active: ${user.isActive}`);
-            console.log(`   Has Password: ${user.password ? 'Yes (hashed)' : 'No'}`);
-            console.log(`   Created: ${user.createdAt}`);
+            logger.info('✅ User found in User collection:');
+            logger.info(`   ID: ${user._id}`);
+            logger.info(`   Name: ${user.name}`);
+            logger.info(`   Email: ${user.email}`);
+            logger.info(`   Role: ${user.role}`);
+            logger.info(`   Active: ${user.isActive}`);
+            logger.info(`   Has Password: ${user.password ? 'Yes (hashed)' : 'No'}`);
+            logger.info(`   Created: ${user.createdAt}`);
             return { found: true, type: 'user', data: user };
         }
     } catch (error) {
-        console.error('❌ Error checking User collection:', error.message);
+        logger.error('❌ Error checking User collection:', { error: error.message });
     }
 
     // Check in Employee collection
@@ -66,47 +67,47 @@ const checkUser = async (email) => {
         }).select('+password');
         
         if (employee) {
-            console.log('✅ Employee found in Employee collection:');
-            console.log(`   ID: ${employee._id}`);
-            console.log(`   Name: ${employee.name} ${employee.lastName}`);
-            console.log(`   Email: ${employee.email}`);
-            console.log(`   Employee ID: ${employee.employeeId}`);
-            console.log(`   Position: ${employee.position}`);
-            console.log(`   Department: ${employee.department}`);
-            console.log(`   Active: ${employee.active}`);
-            console.log(`   Has Password: ${employee.password ? 'Yes (hashed)' : 'No'}`);
-            console.log(`   Created: ${employee.createdAt}`);
+            logger.info('✅ Employee found in Employee collection:');
+            logger.info(`   ID: ${employee._id}`);
+            logger.info(`   Name: ${employee.name} ${employee.lastName}`);
+            logger.info(`   Email: ${employee.email}`);
+            logger.info(`   Employee ID: ${employee.employeeId}`);
+            logger.info(`   Position: ${employee.position}`);
+            logger.info(`   Department: ${employee.department}`);
+            logger.info(`   Active: ${employee.active}`);
+            logger.info(`   Has Password: ${employee.password ? 'Yes (hashed)' : 'No'}`);
+            logger.info(`   Created: ${employee.createdAt}`);
             return { found: true, type: 'employee', data: employee };
         }
     } catch (error) {
-        console.error('❌ Error checking Employee collection:', error.message);
+        logger.error('❌ Error checking Employee collection:', { error: error.message });
     }
 
-    console.log('❌ User not found in either User or Employee collection');
+    logger.info('❌ User not found in either User or Employee collection');
     return { found: false, type: null, data: null };
 };
 
 const listAllUsers = async () => {
-    console.log('\n📋 Listing all users:\n');
+    logger.info('\n📋 Listing all users:\n');
     
     try {
         const users = await User.find({}).select('-password');
-        console.log(`👥 Users (${users.length}):`);
+        logger.info(`👥 Users (${users.length}):`);
         users.forEach(user => {
-            console.log(`   - ${user.email} (${user.role}) - ${user.name}`);
+            logger.info(`   - ${user.email} (${user.role}) - ${user.name}`);
         });
     } catch (error) {
-        console.error('❌ Error listing users:', error.message);
+        logger.error('❌ Error listing users:', { error: error.message });
     }
 
     try {
         const employees = await Employee.find({}).select('-password');
-        console.log(`\n👤 Employees (${employees.length}):`);
+        logger.info(`\n👤 Employees (${employees.length}):`);
         employees.forEach(emp => {
-            console.log(`   - ${emp.email} - ${emp.name} ${emp.lastName} (${emp.active ? 'Active' : 'Inactive'})`);
+            logger.info(`   - ${emp.email} - ${emp.name} ${emp.lastName} (${emp.active ? 'Active' : 'Inactive'})`);
         });
     } catch (error) {
-        console.error('❌ Error listing employees:', error.message);
+        logger.error('❌ Error listing employees:', { error: error.message });
     }
 };
 
@@ -125,12 +126,12 @@ const main = async () => {
     }
 
     await mongoose.connection.close();
-    console.log('\n✅ Database connection closed');
+    logger.info('\n✅ Database connection closed');
     process.exit(0);
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

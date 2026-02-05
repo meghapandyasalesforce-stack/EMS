@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { createInterface } from 'readline';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,24 +20,24 @@ const rootDir = join(__dirname, '..');
 const envExamplePath = join(rootDir, 'env.example');
 const envPath = join(rootDir, '.env');
 
-console.log('==========================================');
-console.log('VAPID Keys Generator for EMS-Paarsiv');
-console.log('==========================================');
-console.log('');
+logger.info('==========================================');
+logger.info('VAPID Keys Generator for EMS-Paarsiv');
+logger.info('==========================================');
+logger.info('');
 
 // Generate VAPID keys
-console.log('Generating VAPID keys...');
+logger.info('Generating VAPID keys...');
 const vapidKeys = webpush.generateVAPIDKeys();
 
-console.log('');
-console.log('✅ VAPID keys generated successfully!');
-console.log('');
-console.log('Public Key:');
-console.log(vapidKeys.publicKey);
-console.log('');
-console.log('Private Key:');
-console.log(vapidKeys.privateKey);
-console.log('');
+logger.info('');
+logger.info('✅ VAPID keys generated successfully!');
+logger.info('');
+logger.info('Public Key:');
+logger.info(vapidKeys.publicKey);
+logger.info('');
+logger.info('Private Key:');
+logger.info(vapidKeys.privateKey);
+logger.info('');
 
 // Ask for subject
 const readline = createInterface({
@@ -47,18 +48,18 @@ const readline = createInterface({
 readline.question('Enter VAPID subject (mailto:email@example.com or https://yourdomain.com): ', (subject) => {
     if (!subject) {
         subject = 'mailto:admin@example.com';
-        console.log(`Using default subject: ${subject}`);
+        logger.info(`Using default subject: ${subject}`);
     }
 
-    console.log('');
-    console.log('==========================================');
-    console.log('Add these to your .env file:');
-    console.log('==========================================');
-    console.log('');
-    console.log(`VAPID_SUBJECT=${subject}`);
-    console.log(`VAPID_PUBLIC_KEY=${vapidKeys.publicKey}`);
-    console.log(`VAPID_PRIVATE_KEY=${vapidKeys.privateKey}`);
-    console.log('');
+    logger.info('');
+    logger.info('==========================================');
+    logger.info('Add these to your .env file:');
+    logger.info('==========================================');
+    logger.info('');
+    logger.info(`VAPID_SUBJECT=${subject}`);
+    logger.info(`VAPID_PUBLIC_KEY=${vapidKeys.publicKey}`);
+    logger.info(`VAPID_PRIVATE_KEY=${vapidKeys.privateKey}`);
+    logger.info('');
 
     // Try to update .env file if it exists
     if (existsSync(envPath)) {
@@ -89,19 +90,19 @@ readline.question('Enter VAPID subject (mailto:email@example.com or https://your
                     }
                     
                     writeFileSync(envPath, envContent);
-                    console.log('✅ .env file updated successfully!');
+                    logger.info('✅ .env file updated successfully!');
                 } catch (error) {
-                    console.log('❌ Error updating .env file:', error.message);
-                    console.log('Please update .env file manually with the keys above.');
+                    logger.error('❌ Error updating .env file:', { error: error.message });
+                    logger.info('Please update .env file manually with the keys above.');
                 }
             } else {
-                console.log('Please update .env file manually with the keys above.');
+                logger.info('Please update .env file manually with the keys above.');
             }
             
             readline.close();
         });
     } else {
-        console.log('⚠️  .env file not found. Please create it and add the keys above.');
+        logger.warn('⚠️  .env file not found. Please create it and add the keys above.');
         readline.close();
     }
 });

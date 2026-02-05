@@ -20,9 +20,9 @@ import requestContextMiddleware from "./middlewares/requestContext.js";
 import { apiLimiter } from "./middlewares/rateLimiter.js";
 import validateEnvironment from "./helpers/envValidator.js";
 import { corsMiddleware } from "./middlewares/corsConfig.js";
-import { 
-  staticFilesCorsMiddleware, 
-  staticFilesCheckMiddleware, 
+import {
+  staticFilesCorsMiddleware,
+  staticFilesCheckMiddleware,
   staticFilesConfig,
   staticFiles404Handler
 } from "./middlewares/staticFiles.js";
@@ -173,6 +173,18 @@ app.use((req, res, next) => {
 registerRoutes(app);
 registerDiagnosticRoutes(app);
 
+// ✅ Root Route
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Welcome to EMS-Paarsiv API",
+    status: "active",
+    version: "1.0.0",
+    documentation: "/api-docs",
+    health: "/api/health"
+  });
+});
+
 // =================== API DOCUMENTATION ===================
 // Swagger/OpenAPI documentation - enabled by default, can be disabled via ENABLE_SWAGGER=false
 // Note: Swagger initialization moved to startServer() to avoid top-level await
@@ -290,11 +302,11 @@ const startServer = async () => {
     // ✅ Graceful shutdown handling
     const gracefulShutdown = async (signal) => {
       logger.info(`${signal} received, starting graceful shutdown...`);
-      
+
       // Stop accepting new connections
       server.close(async () => {
         logger.info('HTTP server closed');
-        
+
         // Close job queues and workers
         try {
           const { closeAll } = await import('./config/queue.js');
@@ -322,7 +334,7 @@ const startServer = async () => {
         } catch (error) {
           logger.error('Error closing Redis connection', { error: error.message });
         }
-        
+
         // Close database connection
         try {
           const mongoose = (await import("mongoose")).default;
@@ -333,7 +345,7 @@ const startServer = async () => {
         } catch (error) {
           logger.error('Error closing MongoDB connection', { error: error.message });
         }
-        
+
         logger.info('Graceful shutdown completed');
         process.exit(0);
       });

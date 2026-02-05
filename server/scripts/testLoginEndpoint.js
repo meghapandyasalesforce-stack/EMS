@@ -3,19 +3,21 @@
  * Usage: node server/scripts/testLoginEndpoint.js <email> <password>
  */
 
+import logger from '../helpers/logger.js';
+
 const testLogin = async (email, password) => {
     if (!email || !password) {
-        console.error('❌ Please provide both email and password');
-        console.log('Usage: node server/scripts/testLoginEndpoint.js <email> <password>');
+        logger.error('❌ Please provide both email and password');
+        logger.info('Usage: node server/scripts/testLoginEndpoint.js <email> <password>');
         process.exit(1);
     }
 
-    console.log(`\n🔍 Testing login endpoint for: ${email}\n`);
+    logger.info(`\n🔍 Testing login endpoint for: ${email}\n`);
 
     const baseURL = 'http://localhost:10000/api';
     
     // Test admin login
-    console.log('Testing Admin Login...');
+    logger.info('Testing Admin Login...');
     try {
         const adminResponse = await fetch(
             `${baseURL}/v1/admin/auth/login`,
@@ -30,27 +32,27 @@ const testLogin = async (email, password) => {
         );
         
         const adminData = await adminResponse.json();
-        console.log(`Status: ${adminResponse.status}`);
-        console.log('Response:', JSON.stringify(adminData, null, 2));
+        logger.info(`Status: ${adminResponse.status}`);
+        logger.info('Response:', { response: adminData });
         
         if (adminResponse.status === 200) {
-            console.log('✅ Admin login successful!');
+            logger.info('✅ Admin login successful!');
             return;
         } else {
-            console.log(`❌ Admin login failed: ${adminData?.message || 'Unknown error'}`);
+            logger.info(`❌ Admin login failed: ${adminData?.message || 'Unknown error'}`);
         }
     } catch (error) {
         if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
-            console.error('❌ Cannot connect to server. Is the server running on port 10000?');
-            console.error('   Start the server with: cd server && npm run dev');
+            logger.error('❌ Cannot connect to server. Is the server running on port 10000?');
+            logger.error('   Start the server with: cd server && npm run dev');
             process.exit(1);
         } else {
-            console.error('❌ Error:', error.message);
+            logger.error('❌ Error:', { error: error.message });
         }
     }
 
     // Test employee login
-    console.log('\nTesting Employee Login...');
+    logger.info('\nTesting Employee Login...');
     try {
         const employeeResponse = await fetch(
             `${baseURL}/v1/employee/auth/login`,
@@ -65,20 +67,20 @@ const testLogin = async (email, password) => {
         );
         
         const employeeData = await employeeResponse.json();
-        console.log(`Status: ${employeeResponse.status}`);
-        console.log('Response:', JSON.stringify(employeeData, null, 2));
+        logger.info(`Status: ${employeeResponse.status}`);
+        logger.info('Response:', { response: employeeData });
         
         if (employeeResponse.status === 200) {
-            console.log('✅ Employee login successful!');
+            logger.info('✅ Employee login successful!');
         } else {
-            console.log(`❌ Employee login failed: ${employeeData?.message || 'Unknown error'}`);
+            logger.info(`❌ Employee login failed: ${employeeData?.message || 'Unknown error'}`);
         }
     } catch (error) {
         if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
-            console.error('❌ Cannot connect to server. Is the server running on port 10000?');
-            console.error('   Start the server with: cd server && npm run dev');
+            logger.error('❌ Cannot connect to server. Is the server running on port 10000?');
+            logger.error('   Start the server with: cd server && npm run dev');
         } else {
-            console.error('❌ Error:', error.message);
+            logger.error('❌ Error:', { error: error.message });
         }
     }
 };
@@ -88,8 +90,8 @@ const main = async () => {
     const password = process.argv[3];
 
     if (!email || !password) {
-        console.error('❌ Missing required parameters');
-        console.log('Usage: node server/scripts/testLoginEndpoint.js <email> <password>');
+        logger.error('❌ Missing required parameters');
+        logger.info('Usage: node server/scripts/testLoginEndpoint.js <email> <password>');
         process.exit(1);
     }
 
@@ -98,10 +100,10 @@ const main = async () => {
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error.message);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     if (error.code === 'ECONNREFUSED') {
-        console.error('\n💡 Make sure the server is running:');
-        console.error('   cd server && npm run dev');
+        logger.error('\n💡 Make sure the server is running:');
+        logger.error('   cd server && npm run dev');
     }
     process.exit(1);
 });

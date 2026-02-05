@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,11 +17,11 @@ const connectDB = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
     try {
         await mongoose.connect(mongoURI);
-        console.log('✅ MongoDB connected successfully');
-        console.log(`📊 Database: ${mongoose.connection.db.databaseName}\n`);
+        logger.info('✅ MongoDB connected successfully');
+        logger.info(`📊 Database: ${mongoose.connection.db.databaseName}\n`);
         return true;
     } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
+        logger.error('❌ MongoDB connection failed:', { error: error.message });
         return false;
     }
 };
@@ -31,15 +32,15 @@ const viewRawOrganization = async () => {
         const collection = db.collection('organizations');
         const organizations = await collection.find({}).toArray();
         
-        console.log(`Found ${organizations.length} organization(s):\n`);
+        logger.info(`Found ${organizations.length} organization(s):\n`);
         
         organizations.forEach((org, index) => {
-            console.log(`\n=== Organization ${index + 1} ===`);
-            console.log(JSON.stringify(org, null, 2));
+            logger.info(`\n=== Organization ${index + 1} ===`);
+            logger.info(JSON.stringify(org, null, 2));
         });
         
     } catch (error) {
-        console.error('❌ Error viewing organizations:', error.message);
+        logger.error('❌ Error viewing organizations:', { error: error.message });
     }
 };
 
@@ -52,12 +53,12 @@ const main = async () => {
     await viewRawOrganization();
 
     await mongoose.connection.close();
-    console.log('\n✅ Database connection closed');
+    logger.info('\n✅ Database connection closed');
     process.exit(0);
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

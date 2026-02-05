@@ -11,6 +11,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { Client } from '@googlemaps/google-maps-services-js';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,40 +21,27 @@ dotenv.config({ path: join(__dirname, '../.env') });
 
 const client = new Client({});
 
-// Colors for console output
-const colors = {
-    reset: '\x1b[0m',
-    green: '\x1b[32m',
-    red: '\x1b[31m',
-    yellow: '\x1b[33m',
-    blue: '\x1b[34m',
-    cyan: '\x1b[36m',
-};
-
-function log(message, color = 'reset') {
-    console.log(`${colors[color]}${message}${colors.reset}`);
-}
-
+// Logging functions using logger utility
 function logSuccess(message) {
-    log(`✅ ${message}`, 'green');
+    logger.info(`✅ ${message}`);
 }
 
 function logError(message) {
-    log(`❌ ${message}`, 'red');
+    logger.error(`❌ ${message}`);
 }
 
 function logWarning(message) {
-    log(`⚠️  ${message}`, 'yellow');
+    logger.warn(`⚠️  ${message}`);
 }
 
 function logInfo(message) {
-    log(`ℹ️  ${message}`, 'cyan');
+    logger.info(`ℹ️  ${message}`);
 }
 
 function logHeader(message) {
-    log(`\n${'='.repeat(60)}`, 'blue');
-    log(message, 'blue');
-    log('='.repeat(60), 'blue');
+    logger.info(`\n${'='.repeat(60)}`);
+    logger.info(message);
+    logger.info('='.repeat(60));
 }
 
 async function testApiKeyConfiguration() {
@@ -191,31 +179,30 @@ async function checkApiStatus(apiKey) {
 function displayNextSteps() {
     logHeader('Next Steps');
     
-    log('1. If all tests passed, your API key is configured correctly!', 'green');
-    log('2. Add the API key to your frontend .env.local file:', 'cyan');
-    log('   VITE_GOOGLE_MAPS_API_KEY=your_api_key_here', 'cyan');
-    log('3. Restart your development server', 'cyan');
-    log('4. Test the map features in your application', 'cyan');
-    log('5. Set up billing alerts in Google Cloud Console', 'yellow');
-    log('6. Monitor usage regularly', 'yellow');
+    logInfo('1. If all tests passed, your API key is configured correctly!');
+    logInfo('2. Add the API key to your frontend .env.local file:');
+    logInfo('   VITE_GOOGLE_MAPS_API_KEY=your_api_key_here');
+    logInfo('3. Restart your development server');
+    logInfo('4. Test the map features in your application');
+    logWarning('5. Set up billing alerts in Google Cloud Console');
+    logWarning('6. Monitor usage regularly');
 }
 
 function displayTroubleshootingTips() {
     logHeader('Troubleshooting Tips');
     
-    log('If tests failed:', 'yellow');
-    log('1. Verify API key is correct', 'cyan');
-    log('2. Check APIs are enabled in Google Cloud Console', 'cyan');
-    log('3. Ensure billing is enabled (required even for free tier)', 'cyan');
-    log('4. Check API key restrictions (HTTP referrers, API restrictions)', 'cyan');
-    log('5. Review error messages above for specific issues', 'cyan');
-    log('\nFor detailed setup instructions, see: GOOGLE_MAPS_SETUP.md', 'blue');
+    logWarning('If tests failed:');
+    logInfo('1. Verify API key is correct');
+    logInfo('2. Check APIs are enabled in Google Cloud Console');
+    logInfo('3. Ensure billing is enabled (required even for free tier)');
+    logInfo('4. Check API key restrictions (HTTP referrers, API restrictions)');
+    logInfo('5. Review error messages above for specific issues');
+    logInfo('\nFor detailed setup instructions, see: GOOGLE_MAPS_SETUP.md');
 }
 
 async function main() {
-    console.clear();
     logHeader('Google Maps API Key Validation');
-    log('Testing your Google Maps API configuration...\n', 'cyan');
+    logInfo('Testing your Google Maps API configuration...\n');
     
     // Step 1: Check API key configuration
     const apiKey = await testApiKeyConfiguration();
@@ -252,7 +239,7 @@ async function main() {
 // Run the script
 main().catch(error => {
     logError(`Unexpected error: ${error.message}`);
-    console.error(error);
+    logger.error('Unexpected error details:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

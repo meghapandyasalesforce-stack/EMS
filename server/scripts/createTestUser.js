@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import User from '../models/user.model.js';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,19 +21,19 @@ const connectDB = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
     try {
         await mongoose.connect(mongoURI);
-        console.log('✅ MongoDB connected successfully');
+        logger.info('✅ MongoDB connected successfully');
         return true;
     } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
+        logger.error('❌ MongoDB connection failed:', { error: error.message });
         return false;
     }
 };
 
 const createUser = async (email, password, name) => {
     if (!email || !password || !name) {
-        console.error('❌ Missing required parameters');
-        console.log('Usage: node server/scripts/createTestUser.js <email> <password> <name>');
-        console.log('Example: node server/scripts/createTestUser.js admin@test.com Password123 "Admin User"');
+        logger.error('❌ Missing required parameters');
+        logger.info('Usage: node server/scripts/createTestUser.js <email> <password> <name>');
+        logger.info('Example: node server/scripts/createTestUser.js admin@test.com Password123 "Admin User"');
         process.exit(1);
     }
 
@@ -42,10 +43,10 @@ const createUser = async (email, password, name) => {
         // Check if user already exists
         const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
-            console.log(`⚠️  User with email ${normalizedEmail} already exists`);
-            console.log(`   ID: ${existingUser._id}`);
-            console.log(`   Name: ${existingUser.name}`);
-            console.log(`   Role: ${existingUser.role}`);
+            logger.warn(`⚠️  User with email ${normalizedEmail} already exists`);
+            logger.info(`   ID: ${existingUser._id}`);
+            logger.info(`   Name: ${existingUser.name}`);
+            logger.info(`   Role: ${existingUser.role}`);
             return;
         }
 
@@ -59,19 +60,19 @@ const createUser = async (email, password, name) => {
 
         await newUser.save();
 
-        console.log('\n✅ User created successfully:');
-        console.log(`   ID: ${newUser._id}`);
-        console.log(`   Name: ${newUser.name}`);
-        console.log(`   Email: ${newUser.email}`);
-        console.log(`   Role: ${newUser.role}`);
-        console.log(`   Password: ${password} (will be hashed on save)`);
-        console.log('\n💡 You can now login with these credentials');
+        logger.info('\n✅ User created successfully:');
+        logger.info(`   ID: ${newUser._id}`);
+        logger.info(`   Name: ${newUser.name}`);
+        logger.info(`   Email: ${newUser.email}`);
+        logger.info(`   Role: ${newUser.role}`);
+        logger.info(`   Password: ${password} (will be hashed on save)`);
+        logger.info('\n💡 You can now login with these credentials');
 
     } catch (error) {
-        console.error('❌ Error creating user:', error.message);
+        logger.error('❌ Error creating user:', { error: error.message });
         if (error.errors) {
             Object.values(error.errors).forEach(err => {
-                console.error(`   - ${err.message}`);
+                logger.error(`   - ${err.message}`);
             });
         }
     }
@@ -90,12 +91,12 @@ const main = async () => {
     await createUser(email, password, name);
 
     await mongoose.connection.close();
-    console.log('\n✅ Database connection closed');
+    logger.info('\n✅ Database connection closed');
     process.exit(0);
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

@@ -8,11 +8,12 @@
 import dotenv from 'dotenv';
 import { validateEmailConfig } from '../helpers/emailValidator.js';
 import { getEmailConfig, detectEmailProvider, validateEmailConfiguration } from '../config/email.config.js';
+import logger from '../helpers/logger.js';
 
 // Load environment variables
 dotenv.config();
 
-console.log('🔍 Checking Email Configuration...\n');
+logger.info('🔍 Checking Email Configuration...\n');
 
 const emailConfig = getEmailConfig();
 const provider = detectEmailProvider(emailConfig);
@@ -22,36 +23,36 @@ const validation = validateEmailConfiguration();
 const frontendUrl = process.env.FRONTEND_URL;
 const nodeEnv = process.env.NODE_ENV || 'development';
 
-console.log('Configuration:');
-console.log(`  EMAIL_USER: ${emailConfig.user ? emailConfig.user.replace(/@.*/, '@***') : '❌ Not set'}`);
-console.log(`  EMAIL_PASS: ${emailConfig.password ? '✓ Set' : '❌ Not set'}`);
-console.log(`  EMAIL_HOST: ${emailConfig.host}`);
-console.log(`  EMAIL_PORT: ${emailConfig.port}`);
-console.log(`  Provider: ${provider.type}`);
-console.log(`  FRONTEND_URL: ${frontendUrl || '❌ Not set'}`);
-console.log(`  NODE_ENV: ${nodeEnv}`);
-console.log('');
+logger.info('Configuration:');
+logger.info(`  EMAIL_USER: ${emailConfig.user ? emailConfig.user.replace(/@.*/, '@***') : '❌ Not set'}`);
+logger.info(`  EMAIL_PASS: ${emailConfig.password ? '✓ Set' : '❌ Not set'}`);
+logger.info(`  EMAIL_HOST: ${emailConfig.host}`);
+logger.info(`  EMAIL_PORT: ${emailConfig.port}`);
+logger.info(`  Provider: ${provider.type}`);
+logger.info(`  FRONTEND_URL: ${frontendUrl || '❌ Not set'}`);
+logger.info(`  NODE_ENV: ${nodeEnv}`);
+logger.info('');
 
 // Validate FRONTEND_URL
 if (!frontendUrl) {
-  console.warn('⚠️  WARNING: FRONTEND_URL is not set!');
-  console.warn('   Email links (password reset, welcome emails) will not work correctly.');
-  console.warn('   Set FRONTEND_URL in your .env file (e.g., FRONTEND_URL=https://yourdomain.com)\n');
+  logger.warn('⚠️  WARNING: FRONTEND_URL is not set!');
+  logger.warn('   Email links (password reset, welcome emails) will not work correctly.');
+  logger.warn('   Set FRONTEND_URL in your .env file (e.g., FRONTEND_URL=https://yourdomain.com)\n');
 } else if (frontendUrl.includes('localhost') && nodeEnv === 'production') {
-  console.warn('⚠️  WARNING: FRONTEND_URL points to localhost in production!');
-  console.warn(`   Current: ${frontendUrl}`);
-  console.warn('   Update FRONTEND_URL to your production domain (e.g., https://yourdomain.com)\n');
+  logger.warn('⚠️  WARNING: FRONTEND_URL points to localhost in production!');
+  logger.warn(`   Current: ${frontendUrl}`);
+  logger.warn('   Update FRONTEND_URL to your production domain (e.g., https://yourdomain.com)\n');
 } else if (!frontendUrl.startsWith('http')) {
-  console.warn('⚠️  WARNING: FRONTEND_URL should start with http:// or https://');
-  console.warn(`   Current: ${frontendUrl}\n`);
+  logger.warn('⚠️  WARNING: FRONTEND_URL should start with http:// or https://');
+  logger.warn(`   Current: ${frontendUrl}\n`);
 } else {
-  console.log(`✅ FRONTEND_URL is configured: ${frontendUrl}\n`);
+  logger.info(`✅ FRONTEND_URL is configured: ${frontendUrl}\n`);
 }
 
 if (!validation.valid) {
-  console.error('❌ Email credentials are not configured!');
+  logger.error('❌ Email credentials are not configured!');
   validation.errors.forEach(error => {
-    console.error(`   ${error}`);
+    logger.error(`   ${error}`);
   });
   process.exit(1);
 }
@@ -60,38 +61,38 @@ if (!validation.valid) {
 if (provider.isGmail) {
   const cleanPass = emailConfig.password?.replace(/\s/g, '');
   if (cleanPass && cleanPass.length !== 16) {
-    console.warn('⚠️  WARNING: Gmail requires an App Password (16 characters)');
-    console.warn('   Your password may not be an App Password.');
-    console.warn('   Generate one at: https://myaccount.google.com/apppasswords\n');
+    logger.warn('⚠️  WARNING: Gmail requires an App Password (16 characters)');
+    logger.warn('   Your password may not be an App Password.');
+    logger.warn('   Generate one at: https://myaccount.google.com/apppasswords\n');
   }
 }
 
-console.log('Testing email connection...\n');
+logger.info('Testing email connection...\n');
 
 try {
   const validation = await validateEmailConfig();
   
   if (validation.valid) {
-    console.log('✅ Email configuration is valid!');
-    console.log(`   Provider: ${validation.details.provider}`);
-    console.log(`   Host: ${validation.details.emailHost}`);
-    console.log(`   Port: ${validation.details.emailPort}`);
-    console.log(`   User: ${validation.details.emailUser}`);
-    console.log('\n✓ Welcome emails should work correctly.');
+    logger.info('✅ Email configuration is valid!');
+    logger.info(`   Provider: ${validation.details.provider}`);
+    logger.info(`   Host: ${validation.details.emailHost}`);
+    logger.info(`   Port: ${validation.details.emailPort}`);
+    logger.info(`   User: ${validation.details.emailUser}`);
+    logger.info('\n✓ Welcome emails should work correctly.');
     process.exit(0);
   } else {
-    console.error('❌ Email configuration validation failed!');
-    console.error(`   Error: ${validation.message}`);
+    logger.error('❌ Email configuration validation failed!');
+    logger.error(`   Error: ${validation.message}`);
     if (validation.recommendation) {
-      console.error(`   Recommendation: ${validation.recommendation}`);
+      logger.error(`   Recommendation: ${validation.recommendation}`);
     }
-    console.error('\n✗ Welcome emails will not be sent until this is fixed.');
-    console.error('   See EMAIL_TROUBLESHOOTING.md for help.');
+    logger.error('\n✗ Welcome emails will not be sent until this is fixed.');
+    logger.error('   See EMAIL_TROUBLESHOOTING.md for help.');
     process.exit(1);
   }
 } catch (error) {
-  console.error('❌ Error validating email configuration:');
-  console.error(`   ${error.message}`);
+  logger.error('❌ Error validating email configuration:');
+  logger.error(`   ${error.message}`);
   process.exit(1);
 }
 

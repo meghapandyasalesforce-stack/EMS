@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,10 +20,10 @@ const connectDB = async () => {
     try {
         // Connect to admin database to list all databases
         await mongoose.connect(mongoURI);
-        console.log('✅ MongoDB connected successfully\n');
+        logger.info('✅ MongoDB connected successfully\n');
         return true;
     } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
+        logger.error('❌ MongoDB connection failed:', { error: error.message });
         return false;
     }
 };
@@ -32,9 +33,9 @@ const listAllDatabases = async () => {
         const adminDb = mongoose.connection.db.admin();
         const { databases } = await adminDb.listDatabases();
         
-        console.log('📊 MongoDB Databases:\n');
-        console.log(`Total Databases: ${databases.length}\n`);
-        console.log('='.repeat(60));
+        logger.info('📊 MongoDB Databases:\n');
+        logger.info(`Total Databases: ${databases.length}\n`);
+        logger.info('='.repeat(60));
         
         for (const dbInfo of databases) {
             // Skip system databases
@@ -44,28 +45,28 @@ const listAllDatabases = async () => {
                 continue;
             }
             
-            console.log(`\n📁 Database: ${dbInfo.name}`);
-            console.log(`   Size: ${(dbInfo.sizeOnDisk / 1024 / 1024).toFixed(2)} MB`);
-            console.log(`   Empty: ${dbInfo.empty ? 'Yes' : 'No'}`);
+            logger.info(`\n📁 Database: ${dbInfo.name}`);
+            logger.info(`   Size: ${(dbInfo.sizeOnDisk / 1024 / 1024).toFixed(2)} MB`);
+            logger.info(`   Empty: ${dbInfo.empty ? 'Yes' : 'No'}`);
             
             // Get collections for this database
             const db = mongoose.connection.useDb(dbInfo.name);
             const collections = await db.db.listCollections().toArray();
             
-            console.log(`   Collections: ${collections.length}`);
+            logger.info(`   Collections: ${collections.length}`);
             
             if (collections.length > 0) {
-                console.log(`   Collection Names:`);
+                logger.info(`   Collection Names:`);
                 for (const collection of collections) {
                     try {
                         const docCount = await db.db.collection(collection.name).countDocuments();
-                        console.log(`      - ${collection.name} (${docCount} documents)`);
+                        logger.info(`      - ${collection.name} (${docCount} documents)`);
                     } catch (err) {
-                        console.log(`      - ${collection.name} (error getting count)`);
+                        logger.info(`      - ${collection.name} (error getting count)`);
                     }
                 }
             }
-            console.log('-'.repeat(60));
+            logger.info('-'.repeat(60));
         }
         
         // Summary
@@ -93,14 +94,13 @@ const listAllDatabases = async () => {
             }
         }
         
-        console.log('\n📊 Summary:');
-        console.log(`   Total Databases (non-system): ${nonSystemDbs.length}`);
-        console.log(`   Total Collections: ${totalCollections}`);
-        console.log(`   Total Documents: ${totalDocuments}`);
+        logger.info('\n📊 Summary:');
+        logger.info(`   Total Databases (non-system): ${nonSystemDbs.length}`);
+        logger.info(`   Total Collections: ${totalCollections}`);
+        logger.info(`   Total Documents: ${totalDocuments}`);
         
     } catch (error) {
-        console.error('❌ Error listing databases:', error.message);
-        console.error(error);
+        logger.error('❌ Error listing databases:', { error: error.message, stack: error.stack });
     }
 };
 
@@ -109,31 +109,31 @@ const showCurrentDatabase = async () => {
         const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
         const dbName = mongoURI.split('/').pop().split('?')[0];
         
-        console.log('\n🔍 Current Connection Details:');
-        console.log(`   Connection String: ${mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@')}`);
-        console.log(`   Database Name: ${dbName}`);
-        console.log(`   Connected Database: ${mongoose.connection.db.databaseName}`);
+        logger.info('\n🔍 Current Connection Details:');
+        logger.info(`   Connection String: ${mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@')}`);
+        logger.info(`   Database Name: ${dbName}`);
+        logger.info(`   Connected Database: ${mongoose.connection.db.databaseName}`);
         
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         
-        console.log(`\n📁 Collections in "${db.databaseName}": ${collections.length}\n`);
+        logger.info(`\n📁 Collections in "${db.databaseName}": ${collections.length}\n`);
         
         for (const collection of collections) {
             try {
                 const docCount = await db.collection(collection.name).countDocuments();
-                console.log(`   📄 ${collection.name}`);
-                console.log(`      Documents: ${docCount}`);
-                console.log('');
+                logger.info(`   📄 ${collection.name}`);
+                logger.info(`      Documents: ${docCount}`);
+                logger.info('');
             } catch (err) {
-                console.log(`   📄 ${collection.name}`);
-                console.log(`      Error getting stats: ${err.message}`);
-                console.log('');
+                logger.info(`   📄 ${collection.name}`);
+                logger.info(`      Error getting stats: ${err.message}`);
+                logger.info('');
             }
         }
         
     } catch (error) {
-        console.error('❌ Error showing current database:', error.message);
+        logger.error('❌ Error showing current database:', { error: error.message });
     }
 };
 
@@ -149,17 +149,17 @@ const main = async () => {
         await showCurrentDatabase();
     } else {
         await listAllDatabases();
-        console.log('\n');
+        logger.info('\n');
         await showCurrentDatabase();
     }
 
     await mongoose.connection.close();
-    console.log('\n✅ Database connection closed');
+    logger.info('\n✅ Database connection closed');
     process.exit(0);
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

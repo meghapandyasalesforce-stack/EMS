@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,23 +21,23 @@ const connectDB = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
     try {
         await mongoose.connect(mongoURI);
-        console.log('✅ MongoDB connected successfully');
+        logger.info('✅ MongoDB connected successfully');
         return true;
     } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
+        logger.error('❌ MongoDB connection failed:', { error: error.message });
         return false;
     }
 };
 
 const testPassword = async (email, password) => {
     if (!email || !password) {
-        console.error('❌ Please provide both email and password');
-        console.log('Usage: node server/scripts/testPassword.js <email> <password>');
+        logger.error('❌ Please provide both email and password');
+        logger.info('Usage: node server/scripts/testPassword.js <email> <password>');
         process.exit(1);
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    console.log(`\n🔍 Testing password for: ${normalizedEmail}\n`);
+    logger.info(`\n🔍 Testing password for: ${normalizedEmail}\n`);
 
     // Check in User collection
     try {
@@ -45,25 +46,25 @@ const testPassword = async (email, password) => {
         }).select('+password');
         
         if (user) {
-            console.log('✅ User found in User collection');
-            console.log(`   Testing password...`);
+            logger.info('✅ User found in User collection');
+            logger.info(`   Testing password...`);
             
             try {
                 const isValid = await user.comparePassword(password);
                 if (isValid) {
-                    console.log('✅ Password is CORRECT');
+                    logger.info('✅ Password is CORRECT');
                 } else {
-                    console.log('❌ Password is INCORRECT');
+                    logger.info('❌ Password is INCORRECT');
                 }
             } catch (error) {
-                console.error('❌ Error comparing password:', error.message);
+                logger.error('❌ Error comparing password:', { error: error.message });
             }
             
             await mongoose.connection.close();
             process.exit(0);
         }
     } catch (error) {
-        console.error('❌ Error checking User collection:', error.message);
+        logger.error('❌ Error checking User collection:', { error: error.message });
     }
 
     // Check in Employee collection
@@ -73,28 +74,28 @@ const testPassword = async (email, password) => {
         }).select('+password');
         
         if (employee) {
-            console.log('✅ Employee found in Employee collection');
-            console.log(`   Testing password...`);
+            logger.info('✅ Employee found in Employee collection');
+            logger.info(`   Testing password...`);
             
             try {
                 const isValid = await employee.comparePassword(password);
                 if (isValid) {
-                    console.log('✅ Password is CORRECT');
+                    logger.info('✅ Password is CORRECT');
                 } else {
-                    console.log('❌ Password is INCORRECT');
+                    logger.info('❌ Password is INCORRECT');
                 }
             } catch (error) {
-                console.error('❌ Error comparing password:', error.message);
+                logger.error('❌ Error comparing password:', { error: error.message });
             }
             
             await mongoose.connection.close();
             process.exit(0);
         }
     } catch (error) {
-        console.error('❌ Error checking Employee collection:', error.message);
+        logger.error('❌ Error checking Employee collection:', { error: error.message });
     }
 
-    console.log('❌ User not found in either User or Employee collection');
+    logger.info('❌ User not found in either User or Employee collection');
     await mongoose.connection.close();
     process.exit(1);
 };
@@ -112,7 +113,7 @@ const main = async () => {
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

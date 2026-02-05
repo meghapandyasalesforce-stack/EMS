@@ -15,28 +15,57 @@ const handleProxyErrors = () => {
         /\[vite\] http proxy error.*ECONNREFUSED/,
         /\[vite\] http proxy error.*ECONNRESET/,
         /\[vite\] http proxy error.*ETIMEDOUT/,
+        /Error:.*ECONNREFUSED/,
+        /Error:.*ECONNRESET/,
+        /Error:.*ETIMEDOUT/,
+        /read ECONNRESET/,
+        /read ECONNREFUSED/,
         /AggregateError.*ECONNREFUSED/,
         /AggregateError.*ECONNRESET/
       ];
       
+      // Buffer to handle multi-line error messages
+      let errorBuffer = '';
+      
       process.stderr.write = function(chunk, encoding, fd) {
         const message = chunk.toString();
+        errorBuffer += message;
+        
+        // Check if we have a complete error message (ends with newline or is complete)
+        const isComplete = message.includes('\n') || message.length < 100;
+        
+        if (!isComplete) {
+          // Buffer incomplete messages
+          return true;
+        }
+        
+        // Process the buffered message
+        const fullMessage = errorBuffer;
+        errorBuffer = ''; // Clear buffer
+        
         // Only suppress Vite proxy errors, not other important errors
-        const isProxyError = suppressedPatterns.some(pattern => pattern.test(message));
-        const isApiOrUploads = message.includes('/api/') || message.includes('/uploads');
+        const isProxyError = suppressedPatterns.some(pattern => pattern.test(fullMessage));
+        const isApiOrUploads = fullMessage.includes('/api/') || fullMessage.includes('/uploads');
         
         // Check if this is an SSE endpoint error (get-all-notification)
-        const isSSEEndpoint = message.includes('/get-all-notification');
+        const isSSEEndpoint = fullMessage.includes('/get-all-notification') || fullMessage.includes('get-all-notification');
         
+        // Suppress proxy errors for API endpoints (including SSE)
         if (isProxyError && isApiOrUploads) {
           // For SSE endpoints, ECONNRESET is normal when clients disconnect - always suppress
-          if (isSSEEndpoint && message.includes('ECONNRESET')) {
+          if (isSSEEndpoint && (fullMessage.includes('ECONNRESET') || fullMessage.includes('ECONNREFUSED'))) {
             return true;
           }
           // Suppress other proxy connection errors - backend is likely not running
           // This is expected during development when backend hasn't started yet
           return true;
         }
+        
+        // Suppress standalone ECONNRESET errors for SSE endpoints (even if not matching proxy pattern)
+        if (isSSEEndpoint && (fullMessage.includes('ECONNRESET') || fullMessage.includes('ECONNREFUSED'))) {
+          return true;
+        }
+        
         // Write other errors normally (including non-proxy errors)
         return originalWrite(chunk, encoding, fd);
       };
@@ -349,12 +378,22 @@ export default defineConfig(({ mode }) => {
           
           proxy.on('error', (err, req, res) => {
             // Check if this is an SSE endpoint
-            const isSSEEndpoint = req.url?.includes('/get-all-notification');
+            const isSSEEndpoint = req.url?.includes('/get-all-notification') || req.url?.includes('get-all-notification');
             
-            // For SSE endpoints, ECONNRESET is normal when clients disconnect
-            // Suppress these errors completely
-            if (isSSEEndpoint && (err.code === 'ECONNRESET' || err.message?.includes('aborted'))) {
+            // For SSE endpoints, ECONNRESET is normal when clients disconnect or backend restarts
+            // Suppress these errors completely - they're expected behavior
+            if (isSSEEndpoint && (
+              err.code === 'ECONNRESET' || 
+              err.code === 'ECONNREFUSED' ||
+              err.message?.includes('aborted') ||
+              err.message?.includes('ECONNRESET') ||
+              err.message?.includes('ECONNREFUSED')
+            )) {
               // SSE connection reset is normal - silently ignore
+              // Don't send response if headers already sent (SSE connection)
+              if (res && !res.headersSent) {
+                res.end();
+              }
               return;
             }
             

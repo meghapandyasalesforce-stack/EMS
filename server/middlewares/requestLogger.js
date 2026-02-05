@@ -17,7 +17,7 @@ export const requestIdMiddleware = (req, res, next) => {
  */
 export const requestLogger = (req, res, next) => {
     const startTime = Date.now();
-    
+
     // Log request details
     const logData = {
         requestId: req.id,
@@ -53,7 +53,7 @@ export const requestLogger = (req, res, next) => {
 
     // Log the request
     logger.info('Incoming request', logData);
-    
+
     // Extra logging for login endpoints to debug 401 issues
     if (req.path === '/login' || req.originalUrl?.includes('/auth/login')) {
         logger.info('Login request detected', {
@@ -69,7 +69,7 @@ export const requestLogger = (req, res, next) => {
     // Track response time
     res.on('finish', () => {
         const duration = Date.now() - startTime;
-        
+
         logger.info('Request completed', {
             requestId: req.id,
             method: req.method,
@@ -85,18 +85,21 @@ export const requestLogger = (req, res, next) => {
             // Only log as security event if:
             // 1. User appeared to be authenticated (had token/cookie)
             // 2. OR it's not a common auth endpoint (login/refresh)
-            const isAuthEndpoint = req.path?.includes('/auth/login') || 
-                                  req.path?.includes('/auth/refresh-token') ||
-                                  req.path?.includes('/auth/register');
-            
-            const hadAuthAttempt = logData.authenticated || 
-                                  req.headers.authorization || 
-                                  req.cookies?.jwt;
-            
+            const isAuthEndpoint = req.path?.includes('/auth/login') ||
+                req.path?.includes('/auth/refresh-token') ||
+                req.path?.includes('/auth/register');
+
+            const hadAuthAttempt = logData.authenticated ||
+                req.headers.authorization ||
+                req.cookies?.jwt;
+
             // Log security event only if:
             // - User had auth credentials but still got 401/403 (potential security issue)
             // - OR it's not an auth endpoint (unexpected 401/403)
-            if (hadAuthAttempt || !isAuthEndpoint) {
+            // Log security event only if:
+            // - User had auth credentials but still got 401/403 (potential security issue)
+            // - OR it's a 403 Forbidden (authenticated but not authorized)
+            if (hadAuthAttempt || res.statusCode === 403) {
                 logger.warn('Security event', {
                     requestId: req.id,
                     method: req.method,
@@ -110,7 +113,7 @@ export const requestLogger = (req, res, next) => {
                 });
             }
             // Otherwise, it's just a normal unauthenticated request - log at debug level
-            else if (process.env.NODE_ENV === 'development') {
+            else {
                 logger.debug('Unauthenticated request (expected)', {
                     requestId: req.id,
                     path: req.path,

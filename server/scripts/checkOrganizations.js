@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import Organization from '../models/organization.model.js';
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
+import logger from '../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,24 +24,24 @@ const connectDB = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
     try {
         await mongoose.connect(mongoURI);
-        console.log('✅ MongoDB connected successfully');
-        console.log(`📊 Database: ${mongoose.connection.db.databaseName}\n`);
+        logger.info('✅ MongoDB connected successfully');
+        logger.info(`📊 Database: ${mongoose.connection.db.databaseName}\n`);
         return true;
     } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
+        logger.error('❌ MongoDB connection failed:', { error: error.message });
         return false;
     }
 };
 
 const checkOrganizationByEmail = async (email) => {
     if (!email) {
-        console.error('❌ Please provide an email address');
-        console.log('Usage: node server/scripts/checkOrganizations.js <email>');
+        logger.error('❌ Please provide an email address');
+        logger.info('Usage: node server/scripts/checkOrganizations.js <email>');
         process.exit(1);
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    console.log(`🔍 Checking for organization: ${normalizedEmail}\n`);
+    logger.info(`🔍 Checking for organization: ${normalizedEmail}\n`);
 
     try {
         const organization = await Organization.findOne({ 
@@ -48,72 +49,72 @@ const checkOrganizationByEmail = async (email) => {
         });
         
         if (organization) {
-            console.log('✅ Organization found:');
-            console.log(`   ID: ${organization._id}`);
-            console.log(`   Name: ${organization.name}`);
-            console.log(`   Email: ${organization.email}`);
-            console.log(`   Phone: ${organization.phone || 'N/A'}`);
-            console.log(`   Domain: ${organization.domain || 'N/A'}`);
-            console.log(`   Subscription Plan: ${organization.subscriptionPlan}`);
-            console.log(`   Max Employees: ${organization.maxEmployees}`);
-            console.log(`   Active: ${organization.isActive}`);
-            console.log(`   Created: ${organization.createdAt}`);
+            logger.info('✅ Organization found:');
+            logger.info(`   ID: ${organization._id}`);
+            logger.info(`   Name: ${organization.name}`);
+            logger.info(`   Email: ${organization.email}`);
+            logger.info(`   Phone: ${organization.phone || 'N/A'}`);
+            logger.info(`   Domain: ${organization.domain || 'N/A'}`);
+            logger.info(`   Subscription Plan: ${organization.subscriptionPlan}`);
+            logger.info(`   Max Employees: ${organization.maxEmployees}`);
+            logger.info(`   Active: ${organization.isActive}`);
+            logger.info(`   Created: ${organization.createdAt}`);
             
             // Count users and employees for this organization
             const userCount = await User.countDocuments({ organizationId: organization._id });
             const employeeCount = await Employee.countDocuments({ organizationId: organization._id });
             
-            console.log(`\n📊 Organization Statistics:`);
-            console.log(`   Admin Users: ${userCount}`);
-            console.log(`   Employees: ${employeeCount}`);
-            console.log(`   Total Users: ${userCount + employeeCount}`);
+            logger.info(`\n📊 Organization Statistics:`);
+            logger.info(`   Admin Users: ${userCount}`);
+            logger.info(`   Employees: ${employeeCount}`);
+            logger.info(`   Total Users: ${userCount + employeeCount}`);
             
             return { found: true, data: organization };
         } else {
-            console.log('❌ Organization not found');
+            logger.info('❌ Organization not found');
             return { found: false, data: null };
         }
     } catch (error) {
-        console.error('❌ Error checking organization:', error.message);
+        logger.error('❌ Error checking organization:', { error: error.message });
         return { found: false, data: null, error: error.message };
     }
 };
 
 const listAllOrganizations = async () => {
-    console.log('📋 Listing all organizations:\n');
+    logger.info('📋 Listing all organizations:\n');
     
     try {
         const organizations = await Organization.find({}).sort({ createdAt: -1 });
         
         if (organizations.length === 0) {
-            console.log('❌ No organizations found in database');
-            console.log('\n💡 To create an organization:');
-            console.log('   1. Visit: http://localhost:5173/organization/register');
-            console.log('   2. Or use the API: POST /api/v1/organization/auth/register');
+            logger.info('❌ No organizations found in database');
+            logger.info('\n💡 To create an organization:');
+            logger.info('   1. Visit: http://localhost:5173/organization/register');
+            logger.info('   2. Or use the API: POST /api/v1/organization/auth/register');
             return;
         }
         
-        console.log(`✅ Found ${organizations.length} organization(s):\n`);
+        logger.info(`✅ Found ${organizations.length} organization(s):\n`);
         
         for (const org of organizations) {
             const orgData = org.toObject ? org.toObject() : org;
-            console.log(`📌 ${orgData.name || '(No name)'}`);
-            console.log(`   ID: ${orgData._id}`);
-            console.log(`   Email: ${orgData.email || '(No email)'}`);
-            console.log(`   Phone: ${orgData.phone || 'Not set'}`);
-            console.log(`   Domain: ${orgData.domain || 'Not set'}`);
-            console.log(`   Plan: ${orgData.subscriptionPlan || 'free'}`);
-            console.log(`   Max Employees: ${orgData.maxEmployees || 10}`);
-            console.log(`   Active: ${orgData.isActive !== false ? 'Yes' : 'No'}`);
-            console.log(`   Created: ${orgData.createdAt || orgData.createdAt || 'Unknown'}`);
+            logger.info(`📌 ${orgData.name || '(No name)'}`);
+            logger.info(`   ID: ${orgData._id}`);
+            logger.info(`   Email: ${orgData.email || '(No email)'}`);
+            logger.info(`   Phone: ${orgData.phone || 'Not set'}`);
+            logger.info(`   Domain: ${orgData.domain || 'Not set'}`);
+            logger.info(`   Plan: ${orgData.subscriptionPlan || 'free'}`);
+            logger.info(`   Max Employees: ${orgData.maxEmployees || 10}`);
+            logger.info(`   Active: ${orgData.isActive !== false ? 'Yes' : 'No'}`);
+            logger.info(`   Created: ${orgData.createdAt || orgData.createdAt || 'Unknown'}`);
             
             // Count users and employees
             const userCount = await User.countDocuments({ organizationId: org._id });
             const employeeCount = await Employee.countDocuments({ organizationId: org._id });
             
-            console.log(`   Admin Users: ${userCount}`);
-            console.log(`   Employees: ${employeeCount}`);
-            console.log(`   Total: ${userCount + employeeCount} users\n`);
+            logger.info(`   Admin Users: ${userCount}`);
+            logger.info(`   Employees: ${employeeCount}`);
+            logger.info(`   Total: ${userCount + employeeCount} users\n`);
         }
         
         // Summary
@@ -122,18 +123,18 @@ const listAllOrganizations = async () => {
         const usersWithoutOrg = await User.countDocuments({ organizationId: { $exists: false } });
         const employeesWithoutOrg = await Employee.countDocuments({ organizationId: { $exists: false } });
         
-        console.log('📊 Database Summary:');
-        console.log(`   Total Organizations: ${organizations.length}`);
-        console.log(`   Total Admin Users: ${totalUsers}`);
-        console.log(`   Total Employees: ${totalEmployees}`);
+        logger.info('📊 Database Summary:');
+        logger.info(`   Total Organizations: ${organizations.length}`);
+        logger.info(`   Total Admin Users: ${totalUsers}`);
+        logger.info(`   Total Employees: ${totalEmployees}`);
         if (usersWithoutOrg > 0 || employeesWithoutOrg > 0) {
-            console.log(`   ⚠️  Users without organizationId: ${usersWithoutOrg}`);
-            console.log(`   ⚠️  Employees without organizationId: ${employeesWithoutOrg}`);
-            console.log(`   💡 These records need to be assigned to an organization`);
+            logger.warn(`   ⚠️  Users without organizationId: ${usersWithoutOrg}`);
+            logger.warn(`   ⚠️  Employees without organizationId: ${employeesWithoutOrg}`);
+            logger.info(`   💡 These records need to be assigned to an organization`);
         }
         
     } catch (error) {
-        console.error('❌ Error listing organizations:', error.message);
+        logger.error('❌ Error listing organizations:', { error: error.message });
     }
 };
 
@@ -152,12 +153,12 @@ const main = async () => {
     }
 
     await mongoose.connection.close();
-    console.log('\n✅ Database connection closed');
+    logger.info('\n✅ Database connection closed');
     process.exit(0);
 };
 
 main().catch(error => {
-    console.error('❌ Script error:', error);
+    logger.error('❌ Script error:', { error: error.message, stack: error.stack });
     process.exit(1);
 });
 

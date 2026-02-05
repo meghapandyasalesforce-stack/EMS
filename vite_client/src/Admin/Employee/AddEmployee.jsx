@@ -89,8 +89,8 @@ function AddEmployee() {
             try {
                 setLoadingManagers(true);
                 const response = await axios.get('/v1/admin/employee/managers');
-                if (response.data.success && response.data.managers) {
-                    setManagers(response.data.managers);
+                if (response.data.success && response.data.data) {
+                    setManagers(response.data.data);
                 }
             } catch (error) {
                 // Handle errors gracefully - if backend is unavailable, use empty array
