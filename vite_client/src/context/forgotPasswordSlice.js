@@ -10,7 +10,11 @@ export const requestPasswordReset = createAsyncThunk(
       const response = await axios.post(`${BOTH_PASSWORD_ENDPOINT}/forgot-password`, { email });
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response.data);
+      return rejectWithValue(
+        error.response?.data || { 
+          message: error.message || 'Failed to send reset link. Please try again.' 
+        }
+      );
     }
   }
 );
@@ -22,7 +26,11 @@ export const resetPassword = createAsyncThunk(
       const response = await axios.post(`${BOTH_PASSWORD_ENDPOINT}/reset-password/${token}`, { password });
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response.data);
+      return rejectWithValue(
+        error.response?.data || { 
+          message: error.message || 'Failed to reset password. Please try again.' 
+        }
+      );
     }
   }
 );

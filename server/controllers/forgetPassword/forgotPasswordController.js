@@ -19,6 +19,14 @@ export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     
+    // Validate email format
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ 
+        message: 'Please provide a valid email address.' 
+      });
+    }
+    
     // Case-insensitive email search - check both Employee and User (Admin) collections
     let user = await Employee.findOne({ 
       email: { $regex: new RegExp(`^${email}$`, 'i') }
@@ -247,6 +255,13 @@ export const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({ 
         message: 'Invalid or expired token. Please request a new password reset.' 
+      });
+    }
+
+    // Validate password strength
+    if (!req.body.password || req.body.password.length < 8) {
+      return res.status(400).json({ 
+        message: 'Password must be at least 8 characters long.' 
       });
     }
 
