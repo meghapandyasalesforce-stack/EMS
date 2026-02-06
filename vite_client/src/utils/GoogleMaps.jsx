@@ -23,16 +23,13 @@ const GoogleMapsComponent = ({ latitude, longitude, onMarkerDrag, onLocationSele
         version: 'weekly'
     });
 
-    const [map, setMap] = React.useState(null);
-
     const onLoad = React.useCallback(function callback(map) {
         const bounds = new window.google.maps.LatLngBounds({ lat: latitude || defaultCenter.lat, lng: longitude || defaultCenter.lng });
         map.fitBounds(bounds);
-        setMap(map);
     }, [latitude, longitude]);
 
-    const onUnmount = React.useCallback(function callback(map) {
-        setMap(null);
+    const onUnmount = React.useCallback(function callback(_map) {
+        // Map cleanup - no action needed
     }, []);
 
     const onMarkerDragEnd = (e) => {

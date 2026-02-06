@@ -230,14 +230,15 @@ export default defineConfig(({ mode }) => {
               return 'react-chartjs';
             }
             
-            // Router
+            // Router - don't split separately to ensure React loads first
             if (id.includes('react-router')) {
-              return 'react-router';
+              return; // Don't split - let Vite handle it to ensure React loads first
             }
             
-            // Google Maps (large library)
+            // Google Maps - don't split separately to prevent React initialization errors
+            // Google Maps React components need React to be initialized first
             if (id.includes('@react-google-maps') || id.includes('@vis.gl/react-google-maps')) {
-              return 'google-maps';
+              return; // Don't split - let Vite handle it to ensure React loads first
             }
             
             // Capacitor (mobile-specific, can be large)
@@ -280,20 +281,12 @@ export default defineConfig(({ mode }) => {
           }
           
           // Split by feature areas for better code splitting
-          // Admin features
+          // CRITICAL FIX: Don't split admin chunks separately - causes React initialization error
+          // Admin chunks must load after React is initialized to prevent "Cannot set properties of undefined" error
           if (id.includes('/Admin/')) {
-            if (id.includes('/Admin/Employee/')) {
-              return 'admin-employee';
-            }
-            if (id.includes('/Admin/project/') || id.includes('/Admin/Project/')) {
-              return 'admin-project';
-            }
-            if (id.includes('/Admin/Payroll/')) {
-              return 'admin-payroll';
-            }
-            if (id.includes('/Admin/')) {
-              return 'admin';
-            }
+            // Return undefined to prevent splitting - ensures React loads first
+            // Admin code will load with main bundle or after React is ready
+            return; // Prevents admin chunk from loading before React initializes
           }
           
           // HR features
