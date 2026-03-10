@@ -153,6 +153,24 @@ export const staticFiles404Handler = (req, res, next) => {
       }
       
       if (!fileExists) {
+        // Legacy: try public/uploads (e.g. documents previously saved by multer to public/uploads/documents)
+        const legacyPath = path.join(process.cwd(), 'public', req.path);
+        try {
+          if (fs.existsSync(legacyPath)) {
+            const origin = req.headers.origin;
+            if (origin) {
+              res.setHeader("Access-Control-Allow-Origin", origin);
+              res.setHeader("Access-Control-Allow-Credentials", "true");
+            } else {
+              res.setHeader("Access-Control-Allow-Origin", "*");
+            }
+            res.sendFile(path.resolve(legacyPath));
+            return;
+          }
+        } catch (legacyErr) {
+          logger.warn('Legacy static file serve failed', { path: req.path, error: legacyErr?.message });
+        }
+
         logger.warn('Static file not found - returning 404', {
           path: req.path,
           fullPath,
@@ -162,7 +180,6 @@ export const staticFiles404Handler = (req, res, next) => {
         });
         
         // Return a proper 404 response with appropriate headers
-        // Set CORS headers for the 404 response too
         const origin = req.headers.origin;
         if (origin) {
           res.setHeader("Access-Control-Allow-Origin", origin);
@@ -177,7 +194,6 @@ export const staticFiles404Handler = (req, res, next) => {
           message: 'File not found',
           path: req.path 
         });
-        // CRITICAL: Don't call next() - stop the middleware chain here
         return;
       } else {
         // File exists but express.static didn't serve it - this shouldn't happen

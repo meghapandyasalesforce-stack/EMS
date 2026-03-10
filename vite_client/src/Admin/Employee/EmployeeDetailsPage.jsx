@@ -101,13 +101,12 @@ const EmployeeDetailsPage = () => {
 
   const handleDownloadDocument = async (documentId, fileName) => {
     try {
-      const downloadUrl = `${BOTH_DOCUMENT_ENDPOINT}/${employeeId}/documents/${documentId}/download`;
+      // Use /api prefix so Vite proxy forwards to backend (same as other API calls)
+      const base = BOTH_DOCUMENT_ENDPOINT.startsWith('http') ? '' : '/api';
+      const downloadUrl = `${base}${BOTH_DOCUMENT_ENDPOINT}/${employeeId}/documents/${documentId}/download`;
       const response = await fetch(downloadUrl, {
         method: 'GET',
-        credentials: 'include', // Cookies (including httpOnly JWT) are sent automatically
-        // SECURITY FIX: Token is in httpOnly cookie, sent automatically with credentials: 'include'
-        // No need for Authorization header if server accepts cookie-based auth
-        // If server requires Authorization header, it should be added by axios interceptor
+        credentials: 'include',
       });
 
       if (!response.ok) throw new Error('Failed to download document');
@@ -1180,11 +1179,11 @@ const EmployeeDetailsPage = () => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <FiFileText size={16} />
-                            {doc.fileName || 'Unknown File'}
+                            {doc.fileName || doc.originalName || 'Unknown File'}
                           </Box>
                         </TableCell>
                         <TableCell>
-                          {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : 'N/A'}
+                          {(doc.size ?? doc.fileSize) ? `${((doc.size ?? doc.fileSize) / 1024).toFixed(1)} KB` : 'N/A'}
                         </TableCell>
                         <TableCell>
                           {new Date(doc.uploadedAt).toLocaleDateString()}
@@ -1198,7 +1197,7 @@ const EmployeeDetailsPage = () => {
                             <Tooltip title="Download Document">
                               <IconButton 
                                 size="small"
-                                onClick={() => handleDownloadDocument(doc._id, doc.fileName)}
+                                onClick={() => handleDownloadDocument(doc._id, doc.fileName || doc.originalName)}
                                 color="primary"
                               >
                                 <FiDownload size={16} />

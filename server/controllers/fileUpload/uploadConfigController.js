@@ -1,18 +1,23 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import multer from 'multer';
 import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Store under server/uploads/documents so static middleware (server/uploads) can serve /uploads/documents/...
+const UPLOADS_DOCUMENTS_DIR = path.join(__dirname, '..', '..', 'uploads', 'documents');
+
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = 'public/uploads/documents';
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    if (!fs.existsSync(UPLOADS_DOCUMENTS_DIR)) {
+      fs.mkdirSync(UPLOADS_DOCUMENTS_DIR, { recursive: true });
     }
-    cb(null, uploadDir);
+    cb(null, UPLOADS_DOCUMENTS_DIR);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -80,10 +85,11 @@ export const addDocument = async (req, res) => {
             }
         }
 
-        // Construct document metadata
+        // Construct document metadata (fileName/size match employee schema for display)
         const newDocument = {
             documentType,
             filePath: `/uploads/documents/${req.file.filename}`,
+            fileName: req.file.originalname,
             originalName: req.file.originalname,
             mimeType: req.file.mimetype,
             size: req.file.size,
@@ -92,22 +98,51 @@ export const addDocument = async (req, res) => {
             additionalInfo: parsedInfo
         };
 
-        // Update employee record
-        const updatedEmployee = await Employee.findByIdAndUpdate(
-            employeeId,
-            { 
-                $push: { 
-                    documents: {
-                        $each: [newDocument],
-                        $sort: { uploadedAt: -1 } // Keep documents sorted by upload date
-                    } 
-                } 
-            },
-            { 
-                new: true,
-                select: 'documents'
+        // Load employee so we can replace any existing document(s) of this type
+        const employee = await Employee.findById(employeeId).select('documents');
+        if (!employee) {
+            // Clean up uploaded file if employee is missing
+            try {
+                if (req.file?.path && fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
+            } catch (cleanupErr) {
+                logger.error('Error deleting uploaded file for missing employee', {
+                    error: cleanupErr.message,
+                    filePath: req.file?.path
+                });
             }
-        );
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        // Delete any existing files for this documentType on disk
+        const existingOfType = (employee.documents || []).filter(doc => doc.documentType === documentType);
+        for (const doc of existingOfType) {
+            if (!doc?.filePath) continue;
+            const basename = path.basename(doc.filePath);
+            const currentPath = path.join(__dirname, '..', '..', 'uploads', 'documents', basename);
+            const legacyPath = path.join(process.cwd(), 'public', doc.filePath);
+            try {
+                if (fs.existsSync(currentPath)) {
+                    fs.unlinkSync(currentPath);
+                } else if (fs.existsSync(legacyPath)) {
+                    fs.unlinkSync(legacyPath);
+                }
+            } catch (unlinkErr) {
+                logger.warn('Failed to delete old document file', {
+                    error: unlinkErr.message,
+                    filePath: doc.filePath
+                });
+            }
+        }
+
+        // Replace documents of this type in the array, keeping others intact
+        employee.documents = (employee.documents || []).filter(doc => doc.documentType !== documentType);
+        employee.documents.push(newDocument);
+        // Sort newest first to match previous behaviour
+        employee.documents.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+        const updatedEmployee = await employee.save();
 
         res.status(201).json({
             message: 'Document uploaded successfully',
@@ -123,7 +158,7 @@ export const addDocument = async (req, res) => {
             try {
                 fs.unlinkSync(req.file.path);
             } catch (err) {
-                logger.error('Error deleting uploaded file', { error: err.message, stack: err.stack, filePath: document.filePath });
+                logger.error('Error deleting uploaded file', { error: err.message, stack: err.stack, filePath: req.file?.path });
             }
         }
 
@@ -155,13 +190,19 @@ export const downloadDocument = async (req, res) => {
             return res.status(404).json({ message: 'Document not found' });
         }
 
-        const filePath = path.join('public', document.filePath);
-        
+        // Resolve path: prefer server/uploads/documents (new), fallback to public/uploads/documents (legacy)
+        const basename = path.basename(document.filePath);
+        let filePath = path.join(__dirname, '..', '..', 'uploads', 'documents', basename);
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'File not found on server' });
+            const legacyPath = path.join(process.cwd(), 'public', document.filePath);
+            if (fs.existsSync(legacyPath)) filePath = legacyPath;
+        }
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ message: 'File not found on server', path: document.filePath });
         }
 
-        res.download(filePath, document.originalName, (err) => {
+        const downloadName = document.originalName || document.fileName || path.basename(document.filePath);
+        res.download(filePath, downloadName, (err) => {
             if (err) {
                 logger.error('Error downloading file', { error: err.message, stack: err.stack, filePath });
                 res.status(500).json({ message: 'Error downloading file' });

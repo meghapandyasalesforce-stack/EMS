@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { BOTH_DOCUMENT_ENDPOINT } from '../../utils/constant';
+import { getCsrfToken } from '../../utils/authHelper';
 
 const JobDetails = () => {
     const employeeId = localStorage.getItem('employeeId');
@@ -38,16 +39,32 @@ const JobDetails = () => {
                 formData.append('additionalInfo', JSON.stringify(additionalInfo[documentType]));
             }
 
-            const response = await fetch(`${BOTH_DOCUMENT_ENDPOINT}/document-upload`, {
+            // Use /api prefix so Vite proxy forwards to backend (same as axios baseURL)
+            const uploadUrl = BOTH_DOCUMENT_ENDPOINT.startsWith('http')
+                ? `${BOTH_DOCUMENT_ENDPOINT}/document-upload`
+                : `/api${BOTH_DOCUMENT_ENDPOINT}/document-upload`;
+            const csrf = getCsrfToken();
+            const headers = {};
+            if (csrf) headers['x-csrf-token'] = csrf;
+            const response = await fetch(uploadUrl, {
                 method: 'POST',
                 body: formData,
                 credentials: 'include',
+                headers,
             });
 
-            const result = await response.json();
+            const text = await response.text();
+            let result = {};
+            if (text && text.trim()) {
+                try {
+                    result = JSON.parse(text);
+                } catch {
+                    throw new Error(response.ok ? 'Invalid response from server' : (text.slice(0, 100) || `Upload failed (${response.status})`));
+                }
+            }
 
             if (!response.ok) {
-                throw new Error(result.message || `Failed to upload ${documentType}`);
+                throw new Error(result.message || `Failed to upload ${documentType} (${response.status})`);
             }
 
             alert(`${documentType} uploaded successfully!`);
@@ -96,6 +113,7 @@ const JobDetails = () => {
                                 <label className="font-medium text-gray-700 text-sm md:text-base">Effective Date</label>
                                 <input
                                     type="date"
+                                    value={additionalInfo.OFFER_LETTER?.effectiveDate ?? ''}
                                     onChange={(e) => handleAdditionalInfoChange('OFFER_LETTER', 'effectiveDate', e.target.value)}
                                     className="border p-2 rounded text-sm"
                                 />
@@ -151,16 +169,20 @@ const JobDetails = () => {
                                     <label className="font-medium text-gray-700 text-sm md:text-base">Guarantor Name</label>
                                     <input
                                         type="text"
+                                        value={additionalInfo.GUARANTOR_FORM?.guarantorName ?? ''}
                                         onChange={(e) => handleAdditionalInfoChange('GUARANTOR_FORM', 'guarantorName', e.target.value)}
                                         className="border p-2 rounded text-sm"
+                                        placeholder="Guarantor full name"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <label className="font-medium text-gray-700 text-sm md:text-base">Guarantor Contact</label>
                                     <input
                                         type="text"
+                                        value={additionalInfo.GUARANTOR_FORM?.guarantorContact ?? ''}
                                         onChange={(e) => handleAdditionalInfoChange('GUARANTOR_FORM', 'guarantorContact', e.target.value)}
                                         className="border p-2 rounded text-sm"
+                                        placeholder="Phone or email"
                                     />
                                 </div>
                             </div>
@@ -192,16 +214,20 @@ const JobDetails = () => {
                                     <label className="font-medium text-gray-700 text-sm md:text-base">Institution</label>
                                     <input
                                         type="text"
+                                        value={additionalInfo.DEGREE_CERTIFICATE?.institution ?? ''}
                                         onChange={(e) => handleAdditionalInfoChange('DEGREE_CERTIFICATE', 'institution', e.target.value)}
                                         className="border p-2 rounded text-sm"
+                                        placeholder="School or university"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <label className="font-medium text-gray-700 text-sm md:text-base">Year Obtained</label>
                                     <input
                                         type="text"
+                                        value={additionalInfo.DEGREE_CERTIFICATE?.yearObtained ?? ''}
                                         onChange={(e) => handleAdditionalInfoChange('DEGREE_CERTIFICATE', 'yearObtained', e.target.value)}
                                         className="border p-2 rounded text-sm"
+                                        placeholder="e.g. 2020"
                                     />
                                 </div>
                             </div>

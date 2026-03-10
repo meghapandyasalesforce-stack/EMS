@@ -287,6 +287,8 @@ const employeeSchema = new mongoose.Schema({
             documentType: { type: String },
             filePath: { type: String },
             fileName: { type: String },
+            originalName: { type: String },
+            size: { type: Number },
             uploadedAt: { type: Date, default: Date.now }
         }
     ],
@@ -427,7 +429,8 @@ employeeSchema.plugin(organizationIsolationPlugin, { requireOrganizationId: fals
 // SECURITY: This is for migration only. New code should explicitly set functionalRoles
 employeeSchema.pre('save', async function(next) {
     // Only auto-populate if functionalRoles is empty (new employee or migration)
-    if (this.functionalRoles.length === 0 && this.department && this.position) {
+    const currentRoles = Array.isArray(this.functionalRoles) ? this.functionalRoles : [];
+    if (currentRoles.length === 0 && this.department && this.position) {
         const roles = [];
         const dept = (this.department || '').toLowerCase().trim();
         const pos = (this.position || '').toLowerCase().trim();
