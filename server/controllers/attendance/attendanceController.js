@@ -1837,7 +1837,7 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
     // Get all attendance records
     const records = await Attendance.find(query).sort({ date: -1 });
 
-    // Calculate working days in period
+    // Calculate working days in period (still useful for context)
     const periodStart = startDate ? new Date(startDate) : records.length > 0 
       ? new Date(Math.min(...records.map(r => r.date.getTime()))) 
       : new Date();
@@ -1847,7 +1847,10 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
     // Calculate statistics
     const presentDays = records.filter(r => ['present', 'loggedOut'].includes(r.status)).length;
     const halfDays = records.filter(r => r.status === 'half-day').length;
-    const absentDays = workingDays - presentDays - halfDays;
+    // NEW: Only count explicit 'absent' records; days with no record are not treated as absent
+    const absentDays = records.filter(r => r.status === 'absent').length;
+    // Denominator for attendance rate: only days where we have a record
+    const recordedDays = presentDays + halfDays + absentDays;
 
     const totalEffectiveHours = records.reduce((sum, r) => sum + (r.effectiveHours || 0), 0);
     const totalOvertime = records.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
@@ -1871,7 +1874,10 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
         presentDays,
         halfDays,
         absentDays,
-        attendanceRate: workingDays > 0 ? parseFloat(((presentDays + halfDays * 0.5) / workingDays).toFixed(2)) : 0,
+        // Attendance rate based only on days with records; no record = not counted
+        attendanceRate: recordedDays > 0
+          ? parseFloat(((presentDays + halfDays * 0.5) / recordedDays).toFixed(2))
+          : 0,
         totalEffectiveHours: parseFloat(totalEffectiveHours.toFixed(2)),
         totalOvertime: parseFloat(totalOvertime.toFixed(2)),
         avgDailyHours: presentDays > 0 ? parseFloat((totalEffectiveHours / presentDays).toFixed(2)) : 0,
