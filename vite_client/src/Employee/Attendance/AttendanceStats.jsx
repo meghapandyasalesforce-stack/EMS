@@ -104,7 +104,7 @@ const AttendanceStats = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 ml-0 lg:ml-64 transition-all duration-300">
+    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
       <div className="mx-auto p-4 max-w-screen-2xl">
         <div className="flex items-center gap-4 mb-6">
           <button

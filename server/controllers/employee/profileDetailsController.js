@@ -309,10 +309,10 @@ export const addFamilyDetail = async (req, res) => {
 export const updateFinancialDetails = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
-        const { bankName, ifsc, accountNo, accountName } = req.body;
+        const { bankName, ifsc, accountNo, accountName, panNumber, epfUan, taxRegime } = req.body;
 
         if (!bankName || !ifsc || !accountNo || !accountName) {
-            return res.status(400).json({ message: 'All financial details are required' });
+            return res.status(400).json({ message: 'Bank name, IFSC, account number and account name are required' });
         }
 
         // Basic validation
@@ -324,7 +324,15 @@ export const updateFinancialDetails = async (req, res) => {
             return res.status(400).json({ message: 'Account number must be 9-18 digits' });
         }
 
-        const financialDetails = { bankName, ifsc, accountNo, accountName };
+        const financialDetails = {
+            bankName,
+            ifsc,
+            accountNo,
+            accountName,
+            panNumber: (panNumber != null && String(panNumber).trim()) ? String(panNumber).trim() : '',
+            epfUan: (epfUan != null && String(epfUan).trim()) ? String(epfUan).trim() : '',
+            taxRegime: (taxRegime != null && String(taxRegime).trim()) ? String(taxRegime).trim() : ''
+        };
 
         const updatedEmployee = await Employee.findByIdAndUpdate(
             employeeId,

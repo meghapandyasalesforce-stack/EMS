@@ -3,14 +3,15 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../utils/axios';
 import { ADMIN_LEAVE_ENDPOINT } from '../utils/constant';
 
-// Async thunk to get all leaves
+// Async thunk to get all leaves (optional filters: { status, year })
 export const getAllLeaves = createAsyncThunk(
   'leave/getAll',
-  async (_, { rejectWithValue }) => {
+  async (params, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${ADMIN_LEAVE_ENDPOINT}/get-all-leaves`,{
-  withCredentials: true
-});
+      const response = await axios.get(`${ADMIN_LEAVE_ENDPOINT}/get-all-leaves`, {
+        params: params || {},
+        withCredentials: true
+      });
       return response.data.leaves;
     } catch (err) {
       return rejectWithValue(err.response.data || err.message);
@@ -50,7 +51,7 @@ const leaveSlice = createSlice({
       })
       .addCase(getAllLeaves.fulfilled, (state, action) => {
         state.loading = false;
-        state.leaves = action.payload;
+        state.leaves = Array.isArray(action.payload) ? action.payload : [];
       })
       .addCase(getAllLeaves.rejected, (state, action) => {
         state.loading = false;
@@ -61,11 +62,11 @@ const leaveSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateLeave.fulfilled, (state, action) => {
-  state.loading = false;
-  // Replace all leaves with updated leaves array from backend
-  state.leaves = action.payload;
-})
+      .addCase(updateLeave.fulfilled, (state) => {
+        state.loading = false;
+        // Backend returns { message, leave } not { leaves }; do not overwrite state.leaves.
+        // Component refetches getAllLeaves() after approve/reject.
+      })
 
       .addCase(updateLeave.rejected, (state, action) => {
         state.loading = false;

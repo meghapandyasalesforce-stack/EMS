@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { 
     fetchPayrollHistory, 
     fetchCurrentMonthPayroll, 
+    fetchPayrollByMonth,
     fetchPayrollDetails,
     downloadPayslip,
     clearError 
@@ -27,17 +28,24 @@ import { toast } from 'react-toastify';
 
 const EmployeePayroll = () => {
     const dispatch = useDispatch();
+    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 3 }, (_, i) => currentYear - i);
+
     const { 
         loading, 
         error, 
         payrollHistory, 
         currentMonthPayroll, 
+        selectedMonthPayroll,
         selectedPayroll,
         payslipData 
     } = useSelector(state => state.employeePayroll);
 
     const [currentPage, setCurrentPage] = useState(1);
     const [showPayrollDetails, setShowPayrollDetails] = useState(false);
+    const [viewMonth, setViewMonth] = useState(new Date().toLocaleString('default', { month: 'long' }));
+    const [viewYear, setViewYear] = useState(currentYear);
 
     useEffect(() => {
         dispatch(fetchCurrentMonthPayroll());
@@ -56,6 +64,14 @@ const EmployeePayroll = () => {
     const handleViewDetails = async (payrollId) => {
         await dispatch(fetchPayrollDetails(payrollId));
         setShowPayrollDetails(true);
+    };
+
+    const handleViewMonth = async () => {
+        const result = await dispatch(fetchPayrollByMonth({ month: viewMonth, year: viewYear }));
+        if (fetchPayrollByMonth.fulfilled.match(result)) {
+            dispatch(fetchPayrollHistory({ page: 1, limit: 12 }));
+            toast.success(`${viewMonth} ${viewYear} payroll is ready. It was created automatically.`);
+        }
     };
 
     const handleDownloadPayslip = async (payrollId) => {
@@ -130,7 +146,7 @@ const EmployeePayroll = () => {
 
     if (loading && !currentMonthPayroll) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
                     <p className="text-gray-600">Loading payroll data...</p>
@@ -140,7 +156,7 @@ const EmployeePayroll = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
@@ -235,6 +251,70 @@ const EmployeePayroll = () => {
                         </div>
                     </div>
                 )}
+
+                {/* View another month - auto-creates payroll when first viewed */}
+                <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-6 border border-gray-200">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">View any month</h2>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-4">Select a month and year to view or download payslip. Payroll is created automatically when you view a month for the first time.</p>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+                            <select
+                                value={viewMonth}
+                                onChange={(e) => setViewMonth(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                {MONTHS.map((m) => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+                            <select
+                                value={viewYear}
+                                onChange={(e) => setViewYear(Number(e.target.value))}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                {years.map((y) => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            onClick={handleViewMonth}
+                            disabled={loading}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                        >
+                            {loading ? <FiLoader className="animate-spin w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                            View / Create
+                        </button>
+                    </div>
+                    {selectedMonthPayroll && selectedMonthPayroll._id && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-900">{selectedMonthPayroll.month} {selectedMonthPayroll.year}</p>
+                                    <p className="text-xs text-gray-600">In-Hand: {formatCurrency(selectedMonthPayroll.inHandSalary)}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleViewDetails(selectedMonthPayroll._id)}
+                                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+                                    >
+                                        <FiEye className="w-4 h-4" /> View Details
+                                    </button>
+                                    <button
+                                        onClick={() => handleDownloadPayslip(selectedMonthPayroll._id)}
+                                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
+                                    >
+                                        <FiDownload className="w-4 h-4" /> Download Payslip
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 {/* Payroll History */}
                 <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200">

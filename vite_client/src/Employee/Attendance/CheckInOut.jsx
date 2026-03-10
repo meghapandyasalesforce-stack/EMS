@@ -5,7 +5,8 @@ import {
   clockOut, 
   breakIn, 
   breakOut,
-  clearError
+  clearError,
+  fetchLogs
 } from '../../context/attendanceSlice';
 import { format, parseISO } from 'date-fns';
 import { 
@@ -442,7 +443,17 @@ const CheckInOut = () => {
   useEffect(() => {
     if (sessions && sessions.length > 0) {
       const openSession = sessions.find(session => !session.clockOut);
-      setCurrentSession(openSession || null);
+      if (openSession) {
+        setCurrentSession(openSession);
+      } else {
+        const todayKey = format(new Date(), 'yyyy-MM-dd');
+        const todaySession = sessions.find(s => {
+          if (!s.date || !s.clockOut) return false;
+          const sessionDateKey = format(new Date(s.date), 'yyyy-MM-dd');
+          return sessionDateKey === todayKey;
+        });
+        setCurrentSession(todaySession || null);
+      }
     } else {
       setCurrentSession(null);
     }
@@ -992,6 +1003,8 @@ const CheckInOut = () => {
       await dispatch(clockOut(clockOutData)).unwrap();
       showNotification('Checked out successfully!', 'success');
       setCapturedImage(null);
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      await dispatch(fetchLogs({ startDate: todayStr, endDate: todayStr })).catch(() => {});
     } catch (err) {
       const errorData = err?.response?.data || err?.payload?.data || err?.payload;
       let errorMessage = 'Failed to check out. Please try again.';

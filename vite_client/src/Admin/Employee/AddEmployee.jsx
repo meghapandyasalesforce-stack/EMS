@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { createEmployee } from '../../context/employeeSlice';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 
 function AddEmployee() {
+    const queryClient = useQueryClient();
     const [form, setForm] = useState({
         name: '',
         lastName: '',
@@ -83,29 +85,41 @@ function AddEmployee() {
         "Director", "VP", "CTO", "CFO", "CEO"
     ];
 
-    // Fetch managers from database on component mount
-    useEffect(() => {
-        const fetchManagers = async () => {
-            try {
-                setLoadingManagers(true);
-                const response = await axios.get('/v1/admin/employee/managers');
-                if (response.data.success && response.data.data) {
-                    setManagers(response.data.data);
-                }
-            } catch (error) {
-                // Handle errors gracefully - if backend is unavailable, use empty array
-                const status = error?.response?.status;
-                if (status !== 401 && status !== 403 && status !== 503) {
-                    // Only log non-auth/connection errors
-                }
-                setManagers([]);
-            } finally {
-                setLoadingManagers(false);
+    // Fetch managers (supports paginated { data } or array response)
+    const fetchManagers = React.useCallback(async () => {
+        try {
+            setLoadingManagers(true);
+            const response = await axios.get('/v1/admin/employee/managers?limit=500', { withCredentials: true });
+            const data = response.data;
+            const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+            setManagers(list);
+            if (list.length === 0) {
+                setForm(prev => ({ ...prev, manager: 'CEO' }));
+            } else {
+                setForm(prev => (prev.manager === 'CEO' ? { ...prev, manager: '' } : prev));
             }
-        };
-        
-        fetchManagers();
+        } catch (error) {
+            const status = error?.response?.status;
+            if (status !== 401 && status !== 403 && status !== 503) {
+                // Only log non-auth/connection errors
+            }
+            setManagers([]);
+            setForm(prev => ({ ...prev, manager: 'CEO' }));
+        } finally {
+            setLoadingManagers(false);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchManagers();
+    }, [fetchManagers]);
+
+    // Refetch managers when page gains focus (e.g. after creating first employee and coming back to add second)
+    useEffect(() => {
+        const onFocus = () => fetchManagers();
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, [fetchManagers]);
 
     const handleChange = e => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -115,9 +129,23 @@ function AddEmployee() {
         e.preventDefault();
         setError('');
 
+        if (form.password && form.password.length < 8) {
+            toast.error('Password must be at least 8 characters');
+            setError('Password must be at least 8 characters');
+            return;
+        }
+
+        // After the first employee, manager is required (first employee can be CEO/Manager without a manager)
+        if (managers.length > 0 && (!form.manager || !String(form.manager).trim())) {
+            toast.error('Please select a manager. All employees after the first must have a manager assigned.');
+            setError('Please select a manager.');
+            return;
+        }
+
         const resultAction = await dispatch(createEmployee(form));
 
         if (createEmployee.fulfilled.match(resultAction)) {
+            queryClient.invalidateQueries({ queryKey: ['employees'] });
             // Check email status and show appropriate notifications
             const { emailSent, emailWarning, emailError } = resultAction.payload;
             
@@ -168,7 +196,7 @@ function AddEmployee() {
     return (
         <div className="min-h-screen bg-gray-100">
             {/* Main Content - responsive to sidebar state */}
-            <div className="transition-all duration-300 ease-in-out ml-0 lg:ml-64 p-4 sm:p-6 lg:p-8">
+            <div className="transition-all duration-300 ease-in-out p-4 sm:p-6 lg:p-8">
                 {/* Mobile header would go here if needed */}
                 
                 <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 lg:p-8">
@@ -211,23 +239,24 @@ function AddEmployee() {
                                 name="manager"
                                 onChange={handleChange}
                                 value={form.manager}
-                                required
+                                required={managers.length > 0}
                                 disabled={loadingManagers}
+                                title={managers.length > 0 ? 'Manager is required for all employees after the first' : ''}
                             >
                                 <option value="">
-                                    {loadingManagers ? 'Loading managers...' : 'Select Manager'}
+                                    {loadingManagers ? 'Loading managers...' : (managers.length > 0 ? 'Select Manager (required)' : 'Select Manager')}
                                 </option>
                                 {managers.length === 0 && !loadingManagers && (
-                                    <option value="" disabled>No managers found</option>
+                                    <option value="CEO">First employee (CEO/Manager) - No manager assigned</option>
                                 )}
-                                {managers.map(manager => {
-                                    const fullName = `${manager.name}${manager.lastName ? ' ' + manager.lastName : ''}`.trim();
+                                {managers.map(mgr => {
+                                    const fullName = `${mgr.name}${mgr.lastName ? ' ' + mgr.lastName : ''}`.trim();
                                     return (
                                         <option 
-                                            key={manager._id || manager.employeeId} 
+                                            key={mgr._id || mgr.employeeId} 
                                             value={fullName}
                                         >
-                                            {fullName} - {manager.position}
+                                            {fullName} - {mgr.position}
                                         </option>
                                     );
                                 })}
@@ -267,8 +296,9 @@ function AddEmployee() {
                             <input
                                 className="flex-1 px-4 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
                                 name="password"
-                                placeholder="Password"
+                                placeholder="Password (min 8 characters)"
                                 type="password"
+                                minLength={8}
                                 onChange={handleChange}
                                 required
                             />

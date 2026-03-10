@@ -43,10 +43,8 @@ function ProfileDetails() {
   }, [dispatch, user?.id]); // Run when user.id changes (user logs in or data updates)
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 ml-0 md:ml-64 transition-all duration-300">
-      {/* On mobile: ml-0, on medium screens and up: ml-64 for one sidebar */}
-      {/* When both sidebars are open (lg screens), we need ml-128 (64x2) */}
-      <div className="max-w-3xl mx-auto lg:mx-4 lg:ml-32 xl:mx-auto">
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
+      <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-2xl shadow-md p-6 md:p-8 text-center">
           <div className="flex justify-center mb-4 md:mb-6">
             <ProfilePicture

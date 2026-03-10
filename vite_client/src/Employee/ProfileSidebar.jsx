@@ -102,10 +102,10 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
     );
   }
 
-  // Desktop view - appears alongside main sidebar
+  // Desktop view - fills App's sidebar wrapper (w-64); no extra width/margin so main content has room
   return (
-    <div className="hidden lg:block w-80 ml-64 h-screen overflow-y-auto sticky top-0">
-      <div className="bg-blue-100 p-5 rounded-xl h-full">
+    <div className="hidden lg:block w-full h-full min-h-screen overflow-y-auto sticky top-0">
+      <div className="bg-blue-50/80 p-4 rounded-xl h-full border-r border-gray-100">
         <ul className="space-y-2">
           {sections.map((section, index) => (
             <li

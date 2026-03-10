@@ -74,11 +74,10 @@ const employeeSchema = new mongoose.Schema({
     password: { type: String, required: true, select: false },
     
     /**
-     * Manager name or ID
+     * Manager name or ID (optional for first employee e.g. CEO/Manager; default 'CEO')
      * @type {string}
-     * @required
      */
-    manager: { type: String, required: true },
+    manager: { type: String, required: false, default: 'CEO' },
     
     /**
      * Employee salary
@@ -296,7 +295,10 @@ const employeeSchema = new mongoose.Schema({
         bankName: { type: String },
         ifsc: { type: String },
         accountNo: { type: String },
-        accountName: { type: String }
+        accountName: { type: String },
+        panNumber: { type: String },
+        epfUan: { type: String },
+        taxRegime: { type: String }
     },
     mustResetPassword: {
         type: Boolean,

@@ -12,6 +12,9 @@ const FinancialDetails = () => {
     ifsc: '',
     accountNo: '',
     accountName: '',
+    panNumber: '',
+    epfUan: '',
+    taxRegime: '',
   });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -23,6 +26,9 @@ const FinancialDetails = () => {
         ifsc: employee.financialDetails.ifsc || '',
         accountNo: employee.financialDetails.accountNo || '',
         accountName: employee.financialDetails.accountName || '',
+        panNumber: employee.financialDetails.panNumber || '',
+        epfUan: employee.financialDetails.epfUan || '',
+        taxRegime: employee.financialDetails.taxRegime || '',
       });
       setLoading(false);
     }
@@ -52,8 +58,9 @@ const FinancialDetails = () => {
   };
 
   return (
-    <div className="bg-blue-50 p-8 rounded-2xl ml-84 max-w-2xl mx-auto mt-10 shadow-md">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Financial Details</h2>
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
+      <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-md">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Financial Details</h2>
 
       {isEditing ? (
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -62,10 +69,13 @@ const FinancialDetails = () => {
             { label: 'IFSC Code', name: 'ifsc', required: true },
             { label: 'Account Number', name: 'accountNo', required: true },
             { label: 'Account Holder Name', name: 'accountName', required: true },
-          ].map(({ label, name, required }) => (
+            { label: 'PAN Number', name: 'panNumber', required: false, placeholder: 'e.g. ABCDE1234F' },
+            { label: 'EPF UAN', name: 'epfUan', required: false, placeholder: 'Universal Account Number' },
+            { label: 'Tax Regime', name: 'taxRegime', required: false, placeholder: 'e.g. Old / New' },
+          ].map(({ label, name, required, placeholder }) => (
             <div key={name} className="flex flex-col gap-1">
               <label htmlFor={name} className="text-sm text-gray-700 font-medium">
-                {label} {required && <span className="text-red-500">*</span>}
+                {label} {required ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
               </label>
               <input
                 type="text"
@@ -75,7 +85,7 @@ const FinancialDetails = () => {
                 onChange={handleChange}
                 required={required}
                 className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                placeholder={label}
+                placeholder={placeholder || label}
               />
             </div>
           ))}
@@ -116,6 +126,16 @@ const FinancialDetails = () => {
           <p className="mb-4">
             <strong>Account Name:</strong> {formData.accountName || 'N/A'}
           </p>
+          <h3 className="text-lg font-semibold mb-4 mt-6">Tax & statutory</h3>
+          <p className="mb-2">
+            <strong>PAN Number:</strong> {formData.panNumber || 'N/A'}
+          </p>
+          <p className="mb-2">
+            <strong>EPF UAN:</strong> {formData.epfUan || 'N/A'}
+          </p>
+          <p className="mb-4">
+            <strong>Tax Regime:</strong> {formData.taxRegime || 'N/A'}
+          </p>
           <button
             onClick={() => setIsEditing(true)}
             className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
@@ -124,6 +144,7 @@ const FinancialDetails = () => {
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 };

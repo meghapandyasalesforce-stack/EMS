@@ -17,11 +17,13 @@ import {
     FiCheckCircle,
     FiX
 } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const OrganizationDashboard = () => {
     const dispatch = useDispatch();
     const { statistics, activity, loading } = useSelector((state) => state.organization);
+    const navigate = useNavigate();
 
     useEffect(() => {
         dispatch(fetchOrganizationStatistics());
@@ -63,11 +65,20 @@ const OrganizationDashboard = () => {
     })) || [];
 
     return (
-        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gray-50 ml-64">
+        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gray-50">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Organization Dashboard</h1>
-                <p className="text-sm text-gray-600">Overview of your organization's key metrics and activities</p>
+            <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Organization Dashboard</h1>
+                    <p className="text-sm text-gray-600">Overview of your organization's key metrics and activities</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => navigate('/organization/profile')}
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                    Organization Profile
+                </button>
             </div>
 
             {/* Statistics Cards - Consistent Icon Placement */}

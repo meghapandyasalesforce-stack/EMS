@@ -56,11 +56,15 @@ export const setCachedEmployees = async (organizationId, query, employees, total
  */
 export const invalidateEmployeesCache = async (organizationId) => {
     try {
+        const { deleteCacheByPattern } = await import('./cache.js');
         const cacheKey = generateCacheKey('employees', { organizationId });
         await deleteCache(cacheKey);
-        // Also delete pattern-based cache
-        const { deleteCacheByPattern } = await import('./cache.js');
-        await deleteCacheByPattern(`employees:${organizationId}*`);
+        // Controller cache key format: "employees:organizationId:xxx|query:..."
+        await deleteCacheByPattern(`employees:organizationId:${String(organizationId)}*`);
+        // Route-level cache (GET /v1/admin/employee) uses prefix "employees:all"
+        await deleteCacheByPattern('employees:all*');
+        // Invalidate managers list so new managers (e.g. first CEO/Manager) appear in dropdown
+        await deleteCacheByPattern('employees:managers*');
         return true;
     } catch (error) {
         logger.error('Error invalidating employees cache', { error: error.message });
@@ -114,6 +118,23 @@ export const invalidateUserCache = async (userId) => {
     }
 };
 
+/**
+ * Invalidate payroll list caches so new/updated payrolls show in admin list
+ * Call after create, update, or toggle visibility.
+ * @returns {Promise<boolean>} Success status
+ */
+export const invalidatePayrollCache = async () => {
+    try {
+        const { deleteCacheByPattern } = await import('./cache.js');
+        await deleteCacheByPattern('payroll:all-employees*');
+        await deleteCacheByPattern('payroll:all*');
+        return true;
+    } catch (error) {
+        logger.error('Error invalidating payroll cache', { error: error.message });
+        return false;
+    }
+};
+
 export default {
     getCachedEmployees,
     setCachedEmployees,
@@ -121,6 +142,7 @@ export default {
     getCachedUser,
     setCachedUser,
     invalidateUserCache,
+    invalidatePayrollCache,
     CACHE_TTL
 };
 

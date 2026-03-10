@@ -1,5 +1,6 @@
 import Leave from "../../models/leave.model.js"
 import Employee from "../../models/employee.model.js";
+import LeavePolicy from "../../models/leavePolicy.model.js";
 import mongoose from "mongoose";
 import logger from "../../helpers/logger.js";
 import { parsePagination, parseSort, sendPaginatedResponse } from "../../helpers/paginationHelper.js";
@@ -81,26 +82,37 @@ export const getAllLeaves = async (req, res) => {
         const leavesByType = {
             sick: 0,
             annual: 0,
+            paid: 0,
             casual: 0
         };
-        
-        // Handle case where aggregation returns empty array
+
         if (statisticsData && Array.isArray(statisticsData)) {
             statisticsData.forEach(stat => {
-                if (leavesByType.hasOwnProperty(stat._id)) {
-                    leavesByType[stat._id] = stat.totalDuration;
-                }
+                leavesByType[stat._id] = stat.totalDuration;
             });
         }
 
         const leavesTaken = (statisticsData && Array.isArray(statisticsData))
             ? statisticsData.reduce((acc, stat) => acc + stat.totalDuration, 0)
             : 0;
-        const totalLeaves = 36; // This should come from employee/leave policy configuration
+
+        let totalLeaves = 0;
+        try {
+            const policy = await LeavePolicy.findOne({
+                organizationId,
+                isActive: true
+            }).sort({ effectiveDate: -1 });
+            if (policy && policy.leaveTypes && policy.leaveTypes.length) {
+                totalLeaves = policy.leaveTypes.reduce((sum, lt) => sum + (lt.accrual?.amount ?? 0), 0);
+            }
+        } catch (e) {
+            logger.warn('Get All Leaves: policy fetch for stats failed', { organizationId, error: e.message });
+        }
+
         const statistics = {
             totalLeaves,
             leavesTaken,
-            remainingLeaves: totalLeaves - leavesTaken,
+            remainingLeaves: Math.max(0, totalLeaves - leavesTaken),
             leavesByType
         };
 
@@ -312,17 +324,21 @@ export const updateLeaveStatus = async (req, res) => {
             });
         }
         
-        // Update leave balance if approved
-        if (leave.status === 'approved') {
+        // Recalculate leave balance when status changes (approved: deduct used; rejected/cancelled: release pending)
+        const employeeId = leave.employee?._id || leave.employee;
+        if (employeeId && (leave.status === 'approved' || leave.status === 'rejected')) {
             try {
                 const leaveBalanceEngine = (await import('../../services/leaveBalanceEngine.js')).default;
                 const year = new Date(leave.startDate).getFullYear();
                 const organizationId = leave.organizationId || req.organizationId || req.user?.organizationId || req.employee?.organizationId;
-                await leaveBalanceEngine.calculateBalance(leave.employee, year, organizationId);
+                if (organizationId) {
+                    await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+                }
             } catch (balanceError) {
-                logger.warn('Error updating leave balance after approval', {
+                logger.warn('Error updating leave balance after status update', {
                     error: balanceError.message,
-                    leaveId: leave._id
+                    leaveId: leave._id,
+                    status: leave.status
                 });
             }
         }

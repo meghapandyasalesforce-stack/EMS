@@ -4,17 +4,18 @@ import { useSelector } from 'react-redux';
 import LoadingSpinner from './LoadingSpinner';
 import { isManager, isHR } from '../utils/managerHelper';
 import { isExecutive } from '../utils/navigationConfig';
+import { getDefaultDashboardRoute } from '../utils/dashboardRedirect';
 
 /**
  * ProtectedRoute Component
  * Protects routes based on user roles
- * 
+ *
  * @param {Object} props
  * @param {React.ReactNode} props.children - Component to render if authorized
- * @param {Array<string>} props.allowedRoles - Array of allowed roles: ['admin', 'manager', 'hr', 'employee']
- * @param {string} props.redirectTo - Path to redirect if unauthorized (default: '/dashboard')
+ * @param {Array<string>} props.allowedRoles - Array of allowed roles: ['admin', 'manager', 'hr', 'employee', 'executive']
+ * @param {string} props.redirectTo - Path to redirect if unauthorized (default: use role-based dashboard)
  */
-const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/dashboard' }) => {
+const ProtectedRoute = ({ children, allowedRoles = [], redirectTo }) => {
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -53,21 +54,29 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo = '/dashboard'
     const position = (userObj?.position || '').toLowerCase().trim();
     const userIsExecutive = isExecutive(position);
 
-    // Build effective roles array
+    const department = (userObj?.department || '').toLowerCase().trim();
+    const isFinanceDept = department === 'finance' || department.includes('finance') || department === 'accounting';
+    const isTechDept = department === 'technology' || department === 'tech' || department.includes('technology') ||
+      department === 'it' || (department.includes('it') && !department.includes('support'));
+
     const effectiveRoles = [];
     if (isAdmin) effectiveRoles.push('admin');
     if (userIsManager) effectiveRoles.push('manager');
     if (userIsHR) effectiveRoles.push('hr');
     if (userIsExecutive) effectiveRoles.push('executive');
-    effectiveRoles.push('employee'); // Everyone is an employee
+    if (isFinanceDept) effectiveRoles.push('finance');
+    if (isTechDept) effectiveRoles.push('tech');
+    effectiveRoles.push('employee');
 
     // Check if user has any of the allowed roles
     const hasAccess = allowedRoles.length === 0 || 
                       allowedRoles.some(role => effectiveRoles.includes(role));
 
     if (!hasAccess) {
-        // Redirect to dashboard or specified redirect path
-        return <Navigate to={redirectTo} replace />;
+        const targetRedirect = redirectTo != null && redirectTo !== '' && redirectTo !== '/dashboard'
+            ? redirectTo
+            : getDefaultDashboardRoute(user, employee);
+        return <Navigate to={targetRedirect} replace />;
     }
 
     return <>{children}</>;

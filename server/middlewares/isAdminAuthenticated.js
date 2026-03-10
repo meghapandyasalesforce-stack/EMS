@@ -1,5 +1,6 @@
 import logger from "../helpers/logger.js";
 import { extractToken, verifyToken, handleAuthError, attachUserToRequest } from "./authHelpers.js";
+import User from "../models/user.model.js";
 
 const isAdminAuthenticated = async (req, res, next) => {
     try {
@@ -31,6 +32,18 @@ const isAdminAuthenticated = async (req, res, next) => {
                 code: 'ADMIN_ONLY',
                 debug: process.env.NODE_ENV === 'development' ? { role: decoded.role } : undefined
             });
+        }
+
+        // Ensure organizationId is available (e.g. for delete employee / multi-tenant queries)
+        if (!decoded.organizationId) {
+            try {
+                const user = await User.findById(decoded.userId).select('organizationId').lean();
+                if (user?.organizationId) {
+                    decoded.organizationId = user.organizationId;
+                }
+            } catch (err) {
+                logger.warn('Failed to load admin organizationId', { error: err.message });
+            }
         }
 
         // Attach user to request

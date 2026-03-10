@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { fetchEmployees } from '../../context/employeeSlice';
 import { createPayroll, updatePayroll } from '../../context/payrollSlice';
 import { FiUser, FiDollarSign, FiCalendar, FiSave, FiArrowLeft } from 'react-icons/fi';
+
+// Salary formula: Basic = 50% Gross, HRA = 40% Basic, Gratuity = 4.81% Basic, Special = balance
+function computeEarningsFromGross(gross) {
+    const g = Number(gross) || 0;
+    const basicWage = Math.round(0.5 * g);
+    const houseRentAllowance = Math.round(0.4 * basicWage);
+    const gratuity = Math.round(0.0481 * basicWage);
+    const specialAllowance = Math.round(g - basicWage - houseRentAllowance - gratuity);
+    return { basicWage, houseRentAllowance, gratuity, specialAllowance };
+}
 
 const AddPayroll = () => {
     const dispatch = useDispatch();
@@ -52,7 +63,8 @@ const AddPayroll = () => {
         'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
-    const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
 
     useEffect(() => {
         dispatch(fetchEmployees());
@@ -63,13 +75,18 @@ const AddPayroll = () => {
             const employee = employees.find(emp => emp._id === employeeId);
             if (employee) {
                 setSelectedEmployee(employee);
+                const gross = employee.salary || 0;
+                const formula = computeEarningsFromGross(gross);
                 setFormData(prev => ({
                     ...prev,
                     employeeId: employee._id,
-                    basicSalary: employee.salary || 0,
+                    basicSalary: formula.basicWage,
                     earnings: {
                         ...prev.earnings,
-                        basicWage: employee.salary || 0
+                        basicWage: formula.basicWage,
+                        houseRentAllowance: formula.houseRentAllowance,
+                        gratuity: formula.gratuity,
+                        specialAllowance: formula.specialAllowance
                     }
                 }));
             }
@@ -79,13 +96,18 @@ const AddPayroll = () => {
     const handleEmployeeSelect = (selectedEmployeeId) => {
         const employee = employees.find(emp => emp._id === selectedEmployeeId);
         setSelectedEmployee(employee);
+        const gross = employee?.salary || 0;
+        const formula = computeEarningsFromGross(gross);
         setFormData(prev => ({
             ...prev,
             employeeId: selectedEmployeeId,
-            basicSalary: employee?.salary || 0,
+            basicSalary: formula.basicWage,
             earnings: {
                 ...prev.earnings,
-                basicWage: employee?.salary || 0
+                basicWage: formula.basicWage,
+                houseRentAllowance: formula.houseRentAllowance,
+                gratuity: formula.gratuity,
+                specialAllowance: formula.specialAllowance
             }
         }));
     };
@@ -121,8 +143,12 @@ const AddPayroll = () => {
     };
 
     const calculateTotals = () => {
-        const earningsTotal = Object.values(formData.earnings).reduce((sum, val) => sum + (val || 0), 0);
-        const deductionsTotal = Object.values(formData.deductions).reduce((sum, val) => sum + (val || 0), 0);
+        const earningsTotal = Object.entries(formData.earnings)
+            .filter(([key]) => key !== 'totalEarnings')
+            .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
+        const deductionsTotal = Object.entries(formData.deductions)
+            .filter(([key]) => key !== 'total')
+            .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
         const inHandSalary = earningsTotal - deductionsTotal;
 
         return { earningsTotal, deductionsTotal, inHandSalary };
@@ -130,9 +156,9 @@ const AddPayroll = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         const { earningsTotal, deductionsTotal, inHandSalary } = calculateTotals();
-        
+
         const payload = {
             ...formData,
             earnings: {
@@ -147,16 +173,24 @@ const AddPayroll = () => {
             inHandSalary: inHandSalary
         };
 
-        try {
-            if (isEditMode) {
-                await dispatch(updatePayroll({ payrollId: formData._id, updatedData: payload }));
-            } else {
-                await dispatch(createPayroll(payload));
+        if (isEditMode) {
+            const result = await dispatch(updatePayroll({ payrollId: formData._id, updatedData: payload }));
+            if (updatePayroll.fulfilled.match(result)) {
+                toast.success('Payroll updated successfully.');
+                navigate('/admin-payroll');
+            } else if (updatePayroll.rejected.match(result)) {
+                const errMsg = result.payload || 'Failed to update payroll';
+                toast.error(errMsg);
             }
-            
-            navigate('/admin-payroll');
-        } catch (error) {
-            // Removed console.error for production
+        } else {
+            const result = await dispatch(createPayroll(payload));
+            if (createPayroll.fulfilled.match(result)) {
+                toast.success('Payroll created successfully.');
+                navigate('/admin-payroll');
+            } else if (createPayroll.rejected.match(result)) {
+                const errMsg = result.payload || 'Failed to create payroll';
+                toast.error(errMsg);
+            }
         }
     };
 

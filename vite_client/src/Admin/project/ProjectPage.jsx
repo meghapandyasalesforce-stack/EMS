@@ -400,16 +400,8 @@ const ProjectsPageEnhanced = () => {
   }, [allProjects, projectStats, isCEO]);
 
   return (
-    <Box sx={{
-      ml: { xs: '0px', md: '80px' },
-      transition: 'margin-left 0.3s ease',
-      width: { xs: '100%', md: 'calc(100% - 80px)' }
-    }}>
-      <Box className="sidebar-expanded" sx={{
-        ml: { md: '256px' },
-        width: { md: 'calc(100% - 256px)' }
-      }}>
-        <Container maxWidth="xl" sx={{ 
+    <Box sx={{ width: '100%', minWidth: 0 }}>
+      <Container maxWidth="xl" sx={{ 
           py: 4,
           px: { xs: 2, sm: 3 },
           maxWidth: { 
@@ -1164,7 +1156,6 @@ const ProjectsPageEnhanced = () => {
             </>
           )}
         </Container>
-      </Box>
 
       {/* Bulk Actions Menu */}
       <Menu

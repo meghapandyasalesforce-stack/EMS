@@ -19,7 +19,13 @@ export const submitLeave = createAsyncThunk(
       );
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || 'Something went wrong');
+      const backend = error.response?.data;
+      const message =
+        backend?.message ||
+        backend?.error ||
+        error.message ||
+        'Something went wrong';
+      return rejectWithValue(message);
     }
   }
 );

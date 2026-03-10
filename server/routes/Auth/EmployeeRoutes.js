@@ -31,6 +31,6 @@ router.route("/refresh-token").post(refreshToken); // Refresh access token
 router.route("/reset-password").patch(loginLimiter, isAuthenticated, resetEmployeePassword); // Rate limited password reset
 // Allow managers to view employees in their department
 router.route("/get-all-employees").get(isAdminOrManagerOrHRAuthenticated, getAllEmployees);
-router.route("/delete-employee/:employeeId").delete(isAdminAuthenticated, deleteEmployee);
+router.route("/delete-employee/:employeeId").delete(isAdminOrHRAuthenticated, deleteEmployee);
 
 export default router;

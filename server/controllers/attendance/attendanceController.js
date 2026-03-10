@@ -1199,9 +1199,14 @@ export const getLogs = async (req, res) => {
     const query = addOrganizationFilter(req, { userId });
 
     if (startDate && endDate) {
+      // Use local timezone range so we match how Attendance stores date (startOfDay in server local time).
+      // This avoids excluding first/last day of month when server is not in UTC.
+      const [y, m] = startDate.split('-').map(Number);
+      const monthIndex = (m || 1) - 1;
+      const year = y || new Date().getFullYear();
       query.date = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+        $gte: new Date(year, monthIndex, 1),
+        $lt: new Date(year, monthIndex + 1, 1)
       };
     }
 
@@ -1211,6 +1216,20 @@ export const getLogs = async (req, res) => {
     const sessions = [];
     let totalLateArrivals = 0;
     let totalEarlyDepartures = 0;
+
+    // Compute effective hours from clockIn/clockOut/breaks when stored value is 0 (e.g. old data or pre clock-out).
+    const getEffectiveHours = (log) => {
+      if (log.effectiveHours != null && log.effectiveHours > 0) return log.effectiveHours;
+      if (!log.clockIn || !log.clockOut) return 0;
+      const durationMs = new Date(log.clockOut) - new Date(log.clockIn);
+      let breakMs = 0;
+      if (log.breaks && log.breaks.length > 0) {
+        log.breaks.forEach(b => {
+          if (b.breakIn && b.breakOut) breakMs += new Date(b.breakOut) - new Date(b.breakIn);
+        });
+      }
+      return Math.round((durationMs - breakMs) / (1000 * 60 * 60) * 100) / 100;
+    };
 
     logs.forEach(log => {
       sessions.push(log);
@@ -1228,7 +1247,8 @@ export const getLogs = async (req, res) => {
         };
       }
 
-      dailyStats[dateKey].effectiveHours += log.effectiveHours || 0;
+      const effectiveHours = getEffectiveHours(log);
+      dailyStats[dateKey].effectiveHours += effectiveHours;
       dailyStats[dateKey].grossHours += log.grossHours || 0;
       dailyStats[dateKey].overtimeHours += log.overtimeHours || 0;
       dailyStats[dateKey].isLateArrival = log.isLateArrival;

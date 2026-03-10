@@ -28,6 +28,20 @@ export const fetchCurrentMonthPayroll = createAsyncThunk(
     }
 );
 
+export const fetchPayrollByMonth = createAsyncThunk(
+    'employeePayroll/fetchPayrollByMonth',
+    async ({ month, year }, { rejectWithValue }) => {
+        try {
+            const response = await axios.get(`/v1/employee/payroll/by-month`, {
+                params: { month, year }
+            });
+            return response.data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to fetch payroll for month');
+        }
+    }
+);
+
 export const fetchPayrollDetails = createAsyncThunk(
     'employeePayroll/fetchPayrollDetails',
     async (payrollId, { rejectWithValue }) => {
@@ -76,6 +90,7 @@ const initialState = {
         total: 0
     },
     currentMonthPayroll: null,
+    selectedMonthPayroll: null,
     selectedPayroll: null,
     payslipData: null
 };
@@ -119,6 +134,18 @@ const employeePayrollSlice = createSlice({
                 state.currentMonthPayroll = action.payload;
             })
             .addCase(fetchCurrentMonthPayroll.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload;
+            })
+            .addCase(fetchPayrollByMonth.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(fetchPayrollByMonth.fulfilled, (state, action) => {
+                state.loading = false;
+                state.selectedMonthPayroll = action.payload;
+            })
+            .addCase(fetchPayrollByMonth.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             })

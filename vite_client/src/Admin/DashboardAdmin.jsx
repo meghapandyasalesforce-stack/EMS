@@ -117,7 +117,7 @@ function DashboardAdmin() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto ml-64">
+      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
         {/* Header - Clean and Professional */}
         <div className="mb-6 md:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -444,7 +444,14 @@ function DashboardAdmin() {
                     <div 
                       key={payroll._id || payroll.id} 
                       className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
-                      onClick={() => navigate(`/admin-payroll/${payroll._id || payroll.id}`)}
+                      onClick={() => {
+                        const employeeId = payroll.employeeId?._id || payroll.employeeId;
+                        if (employeeId) {
+                          navigate(`/admin-employee-payroll/${employeeId}`);
+                        } else {
+                          navigate('/admin-payroll');
+                        }
+                      }}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm md:text-base text-gray-800">

@@ -36,7 +36,9 @@ const AdminPayroll = () => {
         { value: 11, label: 'December' }
     ], []);
 
-    const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+    const currentYear = new Date().getFullYear();
+    const currentMonthIndex = new Date().getMonth();
+    const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
 
     const currentUser = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails?.employee);
@@ -60,6 +62,22 @@ const AdminPayroll = () => {
             year: selectedYear
         }));
     }, [selectedMonth, selectedYear, dispatch, navigate, months, currentUser, employee]);
+
+    // Ensure selected month is not in the future for the selected year
+    useEffect(() => {
+        // For past years, all months are allowed
+        if (selectedYear < currentYear) return;
+
+        // For the current year, restrict to months strictly before the current month
+        const allowedMonths = months.filter((m) => m.value < currentMonthIndex);
+        if (!allowedMonths.length) return;
+
+        const isSelectedAllowed = allowedMonths.some((m) => m.value === selectedMonth);
+        if (!isSelectedAllowed) {
+            // Default to the latest allowed month (previous month or earlier)
+            setSelectedMonth(allowedMonths[allowedMonths.length - 1].value);
+        }
+    }, [selectedYear, currentYear, currentMonthIndex, months, selectedMonth]);
 
     const handleDisburse = async () => {
         if (!isCEO) return;
@@ -186,7 +204,7 @@ const AdminPayroll = () => {
     };
 
     return (
-        <div className="p-5 transition-all duration-300 ease-in-out ml-0 lg:ml-64 min-h-screen bg-gray-50">
+        <div className="p-5 transition-all duration-300 ease-in-out min-h-screen bg-gray-50">
             {/* Mobile header - only shown on small screens */}
             <div className="sm:block lg:hidden md:hidden mb-4 bg-white p-4 rounded-lg shadow">
                 <h2 className="text-xl font-semibold text-gray-800">Employee Payroll</h2>
@@ -286,11 +304,19 @@ const AdminPayroll = () => {
                             onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                             disabled={loading}
                         >
-                            {months.map((month) => (
-                                <option key={month.value} value={month.value}>
-                                    {month.label}
-                                </option>
-                            ))}
+                            {months
+                                .filter((month) =>
+                                    // For previous years: allow all months
+                                    selectedYear < currentYear
+                                        ? true
+                                        // For current year: only months strictly before current month
+                                        : month.value < currentMonthIndex
+                                )
+                                .map((month) => (
+                                    <option key={month.value} value={month.value}>
+                                        {month.label}
+                                    </option>
+                                ))}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1 flex-1">

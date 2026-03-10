@@ -95,9 +95,8 @@ const EducationQualifications = () => {
   if (loading) return <div className="text-center py-8">Loading qualifications...</div>;
 
   return (
-    <div className="pl-0 lg:pl-64 pr-0 lg:pr-64 w-full min-h-screen bg-gray-50">
-      {/* Main content container with proper spacing for both sidebars */}
-      <div className="mx-auto w-full max-w-[calc(100vw-32rem)] px-4 sm:px-6 py-6">
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
+      <div className="mx-auto w-full max-w-4xl">
         {/* Error and Success Messages */}
         {apiError && (
           <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700">

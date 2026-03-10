@@ -299,7 +299,7 @@ const DashboardManager = () => {
     
     if (user?.mustResetPassword) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
                 <PasswordResetPopup onClose={() => navigate('/login')} />
             </div>
         );
@@ -311,7 +311,7 @@ const DashboardManager = () => {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-red-600 font-medium mb-4">Error: {error}</p>
                     <button 
@@ -327,7 +327,7 @@ const DashboardManager = () => {
 
     if (!user) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-gray-600 font-medium mb-4">Please log in to access the dashboard</p>
                     <button 
@@ -342,7 +342,7 @@ const DashboardManager = () => {
     }
     
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
             
             {/* Welcome Header */}

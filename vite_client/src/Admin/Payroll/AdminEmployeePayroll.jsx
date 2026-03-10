@@ -185,7 +185,7 @@ const AdminEmployeePayroll = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-5 ml-64">
+        <div className="min-h-screen bg-gray-50 p-5">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-5">

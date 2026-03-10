@@ -69,6 +69,7 @@ const EmployeeDetailsPage = () => {
   
   // Check if mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const [deletingEmployee, setDeletingEmployee] = useState(false);
   
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -143,15 +144,22 @@ const EmployeeDetailsPage = () => {
   };
 
   const handleConfirmDelete = () => {
+    setDeletingEmployee(true);
     dispatch(deleteEmployee(employeeId))
       .unwrap()
       .then(() => {
+        toast.success('Employee deleted successfully');
+        setOpenDeleteDialog(false);
         navigate('/employees');
       })
       .catch((error) => {
-        // Removed console.error for production
+        const message = error || 'Failed to delete employee';
+        toast.error(message);
+        setOpenDeleteDialog(false);
+      })
+      .finally(() => {
+        setDeletingEmployee(false);
       });
-    setOpenDeleteDialog(false);
   };
 
   const handleCloseDeleteDialog = () => {
@@ -365,19 +373,11 @@ const EmployeeDetailsPage = () => {
     <Box 
       sx={{ 
         p: 3,
-        marginLeft: { 
-          xs: 0, // Mobile - no margin since sidebar becomes navbar
-          sm: '20px', // Minimized sidebar (w-20)
-          md: '256px' // Expanded sidebar (w-64)
-        },
-        transition: theme.transitions.create('margin', {
-          easing: theme.transitions.easing.sharp,
-          duration: theme.transitions.duration.leavingScreen,
-        }),
+        marginLeft: 0,
         width: {
-          xs: '100%', // Mobile - full width
-          sm: 'calc(100% - 20px)', // Account for minimized sidebar
-          md: 'calc(100% - 256px)' // Account for expanded sidebar
+          xs: '100%',
+          sm: '100%',
+          md: '100%'
         }
       }}
     >
@@ -548,9 +548,9 @@ const EmployeeDetailsPage = () => {
             onClick={handleConfirmDelete} 
             color="error" 
             autoFocus
-            disabled={updatingStatus}
+            disabled={deletingEmployee}
           >
-            {updatingStatus ? 'Deleting...' : 'Confirm Delete'}
+            {deletingEmployee ? 'Deleting...' : 'Confirm Delete'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -791,8 +791,12 @@ const EmployeeDetailsPage = () => {
                         <TableCell>{employee.financialDetails.panNumber || 'N/A'}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Tax ID</TableCell>
-                        <TableCell>{employee.financialDetails.taxId || 'N/A'}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>EPF UAN</TableCell>
+                        <TableCell>{employee.financialDetails.epfUan || 'N/A'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Tax Regime</TableCell>
+                        <TableCell>{employee.financialDetails.taxRegime || employee.financialDetails.taxId || 'N/A'}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>

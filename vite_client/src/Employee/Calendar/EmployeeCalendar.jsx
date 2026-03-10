@@ -118,7 +118,7 @@ const EmployeeCalendar = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading calendar...</p>
@@ -132,7 +132,7 @@ const EmployeeCalendar = () => {
   const workingHours = getWorkingHoursInfo();
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
       <div className="max-w-6xl mx-auto space-y-5">
         {/* Error Display */}
         {error && (

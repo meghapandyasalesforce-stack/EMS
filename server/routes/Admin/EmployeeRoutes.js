@@ -21,11 +21,9 @@ const router = express.Router();
 router.route('/')
   .get(isAdminOrManagerOrHRAuthenticated, employeeListLimiter, cacheMiddleware('employees:all', 300), getAllEmployees);
 
-// Get managers (employees with management positions) - with rate limiting and caching
-// Allow HR to access this endpoint for adding employees
-// Cache for 10 minutes (managers list changes less frequently)
+// Get managers (employees with management positions) - no cache so dropdown always shows current list
 router.route('/managers')
-  .get(isAdminOrHRAuthenticated, employeeListLimiter, cacheMiddleware('employees:managers', 600), getManagers);
+  .get(isAdminOrHRAuthenticated, employeeListLimiter, getManagers);
 
 // Update employee work information - write operations have stricter limits
 router.route('/:employeeId/work-info')

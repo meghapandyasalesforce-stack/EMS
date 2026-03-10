@@ -352,8 +352,8 @@ export default defineConfig(({ mode }) => {
             
             // SSE endpoints need long-lived connections - don't apply timeout
             if (!isSSEEndpoint) {
-              // Set timeout to prevent hanging requests (only for non-SSE endpoints)
-              proxyReq.setTimeout(5000, () => {
+              // 30s timeout so slow operations (e.g. org registration + email) complete before proxy responds 503
+              proxyReq.setTimeout(30000, () => {
                 if (!res.headersSent) {
                   res.writeHead(503, { 'Content-Type': 'application/json' });
                   res.end(JSON.stringify({ 
@@ -419,8 +419,7 @@ export default defineConfig(({ mode }) => {
         // Handle connection errors gracefully - suppress ECONNREFUSED errors
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            // Set timeout to prevent hanging requests
-            proxyReq.setTimeout(5000, () => {
+            proxyReq.setTimeout(30000, () => {
               if (!res.headersSent) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 

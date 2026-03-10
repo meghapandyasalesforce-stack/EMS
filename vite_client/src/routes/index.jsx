@@ -1,14 +1,17 @@
 /**
  * Centralized Route Configuration
- * Split from App.jsx for better organization and maintainability
+ * Split from App.jsx for better organization and maintainability.
+ * Role-based protection: each non-auth route has allowedRoles.
+ * Empty array [] = any authenticated user. Otherwise ['admin'], ['admin','hr'], etc.
  */
 
 import React, { Suspense, lazy } from 'react';
 import { Route } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
+import ProtectedRoute from '../components/ProtectedRoute';
 
-// Helper to create lazy route element
+// Helper to create lazy route element (unprotected - for auth routes)
 const createLazyRoute = (Component, message) => (
   <RouteErrorBoundary>
     <Suspense fallback={<LoadingSpinner message={message} />}>
@@ -16,6 +19,26 @@ const createLazyRoute = (Component, message) => (
     </Suspense>
   </RouteErrorBoundary>
 );
+
+// Helper to create protected lazy route: wraps with ProtectedRoute and uses allowedRoles from config
+const createProtectedLazyRoute = (route) => {
+  const { path, component: Component, message, allowedRoles = [], redirectTo } = route;
+  return (
+    <Route
+      key={path}
+      path={path}
+      element={
+        <ProtectedRoute allowedRoles={allowedRoles} redirectTo={redirectTo}>
+          <RouteErrorBoundary>
+            <Suspense fallback={<LoadingSpinner message={message} />}>
+              <Component />
+            </Suspense>
+          </RouteErrorBoundary>
+        </ProtectedRoute>
+      }
+    />
+  );
+};
 
 // Authentication routes
 export const authRoutes = [
@@ -57,534 +80,164 @@ export const authRoutes = [
   }
 ];
 
-// Dashboard routes
+// Dashboard routes - allowedRoles restrict who can open each dashboard by URL
 export const dashboardRoutes = [
-  {
-    path: '/dashboard',
-    component: lazy(() => import('../components/RoleBasedDashboard')),
-    message: 'Loading dashboard...'
-  },
-  // New department/position-based routes
-  {
-    path: '/dashboard/hr',
-    component: lazy(() => import('../HR/Dashboard/DashboardHR')),
-    message: 'Loading HR dashboard...'
-  },
-  {
-    path: '/dashboard/finance',
-    component: lazy(() => import('../Finance/Dashboard/DashboardFinance')),
-    message: 'Loading finance dashboard...'
-  },
-  {
-    path: '/dashboard/tech',
-    component: lazy(() => import('../Tech/Dashboard/DashboardTech')),
-    message: 'Loading tech dashboard...'
-  },
-  {
-    path: '/dashboard/ceo',
-    component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')),
-    message: 'Loading CEO dashboard...'
-  },
-  {
-    path: '/dashboard/cto',
-    component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')),
-    message: 'Loading CTO dashboard...'
-  },
-  {
-    path: '/dashboard/cfo',
-    component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')),
-    message: 'Loading CFO dashboard...'
-  },
-  {
-    path: '/dashboard/vp',
-    component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')),
-    message: 'Loading VP dashboard...'
-  },
-  {
-    path: '/dashboard/manager',
-    component: lazy(() => import('../Manager/Dashboard/DashboardManager')),
-    message: 'Loading manager dashboard...'
-  },
-  {
-    path: '/dashboard/employee',
-    component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')),
-    message: 'Loading employee dashboard...'
-  },
-  // Keep existing routes for backward compatibility
-  {
-    path: '/dashboard-admin',
-    component: lazy(() => import('../Admin/DashboardAdmin')),
-    message: 'Loading admin dashboard...'
-  },
-  {
-    path: '/dashboard-employee',
-    component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')),
-    message: 'Loading employee dashboard...'
-  },
-  {
-    path: '/dashboard-hr',
-    component: lazy(() => import('../HR/Dashboard/DashboardHR')),
-    message: 'Loading HR dashboard...'
-  },
-  {
-    path: '/dashboard-manager',
-    component: lazy(() => import('../Manager/Dashboard/DashboardManager')),
-    message: 'Loading manager dashboard...'
-  },
-  {
-    path: '/dashboard-finance',
-    component: lazy(() => import('../Finance/Dashboard/DashboardFinance')),
-    message: 'Loading finance dashboard...'
-  },
-  {
-    path: '/dashboard-administration',
-    component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')),
-    message: 'Loading administration dashboard...'
-  }
+  { path: '/dashboard', component: lazy(() => import('../components/RoleBasedDashboard')), message: 'Loading dashboard...', allowedRoles: [] },
+  { path: '/dashboard/hr', component: lazy(() => import('../HR/Dashboard/DashboardHR')), message: 'Loading HR dashboard...', allowedRoles: ['admin', 'hr'] },
+  { path: '/dashboard/finance', component: lazy(() => import('../Finance/Dashboard/DashboardFinance')), message: 'Loading finance dashboard...', allowedRoles: ['admin', 'finance', 'executive'] },
+  { path: '/dashboard/tech', component: lazy(() => import('../Tech/Dashboard/DashboardTech')), message: 'Loading tech dashboard...', allowedRoles: ['admin', 'tech', 'executive'] },
+  { path: '/dashboard/ceo', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading CEO dashboard...', allowedRoles: ['admin', 'executive'] },
+  { path: '/dashboard/cto', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading CTO dashboard...', allowedRoles: ['admin', 'executive'] },
+  { path: '/dashboard/cfo', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading CFO dashboard...', allowedRoles: ['admin', 'executive'] },
+  { path: '/dashboard/vp', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading VP dashboard...', allowedRoles: ['admin', 'executive'] },
+  { path: '/dashboard/manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/dashboard/employee', component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')), message: 'Loading employee dashboard...', allowedRoles: [] },
+  { path: '/dashboard-admin', component: lazy(() => import('../Admin/DashboardAdmin')), message: 'Loading admin dashboard...', allowedRoles: ['admin'] },
+  { path: '/dashboard-employee', component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')), message: 'Loading employee dashboard...', allowedRoles: [] },
+  { path: '/dashboard-hr', component: lazy(() => import('../HR/Dashboard/DashboardHR')), message: 'Loading HR dashboard...', allowedRoles: ['admin', 'hr'] },
+  { path: '/dashboard-manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/dashboard-finance', component: lazy(() => import('../Finance/Dashboard/DashboardFinance')), message: 'Loading finance dashboard...', allowedRoles: ['admin', 'finance', 'executive'] },
+  { path: '/dashboard-administration', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading administration dashboard...', allowedRoles: ['admin', 'executive'] }
 ];
 
 // Employee management routes
 export const employeeRoutes = [
-  {
-    path: '/add',
-    component: lazy(() => import('../Admin/Employee/AddEmployee')),
-    message: 'Loading...'
-  },
-  {
-    path: '/add-employee',
-    component: lazy(() => import('../Admin/Employee/AddEmployee')),
-    message: 'Loading...'
-  },
-  {
-    path: '/employees',
-    component: lazy(() => import('../Admin/Employee/EmployeesPage')),
-    message: 'Loading employees...'
-  },
-  {
-    path: '/employees/:employeeId',
-    component: lazy(() => import('../Admin/Employee/EmployeeDetailsPage')),
-    message: 'Loading employee details...'
-  },
-  {
-    path: '/view-profile',
-    component: lazy(() => import('../Employee/Profile details/ViewProfile')),
-    message: 'Loading profile...'
-  }
+  { path: '/add', component: lazy(() => import('../Admin/Employee/AddEmployee')), message: 'Loading...', allowedRoles: ['admin', 'hr'] },
+  { path: '/add-employee', component: lazy(() => import('../Admin/Employee/AddEmployee')), message: 'Loading...', allowedRoles: ['admin', 'hr'] },
+  { path: '/employees', component: lazy(() => import('../Admin/Employee/EmployeesPage')), message: 'Loading employees...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/employees/:employeeId', component: lazy(() => import('../Admin/Employee/EmployeeDetailsPage')), message: 'Loading employee details...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/view-profile', component: lazy(() => import('../Employee/Profile details/ViewProfile')), message: 'Loading profile...', allowedRoles: [] }
 ];
 
 // Project routes
 export const projectRoutes = [
-  {
-    path: '/add-project',
-    component: lazy(() => import('../components/AddProjectProtected')),
-    message: 'Loading...'
-  },
-  {
-    path: '/projects',
-    component: lazy(() => import('../Admin/project/ProjectPage')),
-    message: 'Loading projects...'
-  },
-  {
-    path: '/projects/:id',
-    component: lazy(() => import('../Admin/project/ProjectDetailPage')),
-    message: 'Loading project details...'
-  },
-  {
-    path: '/employee/projects',
-    component: lazy(() => import('../Employee/Project/EmployeeProjects')),
-    message: 'Loading projects...'
-  },
-  {
-    path: '/employee/projects/:projectId',
-    component: lazy(() => import('../Employee/Project/EmployeeTasks')),
-    message: 'Loading tasks...'
-  }
+  { path: '/add-project', component: lazy(() => import('../Admin/project/AddProject')), message: 'Loading...', allowedRoles: ['admin', 'manager', 'hr', 'executive'] },
+  { path: '/projects', component: lazy(() => import('../Admin/project/ProjectPage')), message: 'Loading projects...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/projects/:id', component: lazy(() => import('../Admin/project/ProjectDetailPage')), message: 'Loading project details...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/employee/projects', component: lazy(() => import('../Employee/Project/EmployeeProjects')), message: 'Loading projects...', allowedRoles: [] },
+  { path: '/employee/projects/:projectId', component: lazy(() => import('../Employee/Project/EmployeeTasks')), message: 'Loading tasks...', allowedRoles: [] }
 ];
 
-// Profile detail routes
+// Profile detail routes - any authenticated user
 export const profileDetailRoutes = [
-  {
-    path: '/profile-details',
-    component: lazy(() => import('../Employee/Profile details/ProfileDetails')),
-    message: 'Loading profile details...'
-  },
-  {
-    path: '/contact-details',
-    component: lazy(() => import('../Employee/Profile details/ContactDetails')),
-    message: 'Loading contact details...'
-  },
-  {
-    path: '/next-of-kin-details',
-    component: lazy(() => import('../Employee/Additional details/NextOfKinDetails')),
-    message: 'Loading...'
-  },
-  {
-    path: '/education-qualifications',
-    component: lazy(() => import('../Employee/Profile details/EducationQualifications')),
-    message: 'Loading...'
-  },
-  {
-    path: '/guarantor-details',
-    component: lazy(() => import('../Employee/Additional details/GuarantorDetails')),
-    message: 'Loading...'
-  },
-  {
-    path: '/family-details',
-    component: lazy(() => import('../Employee/Additional details/FamilyDetails')),
-    message: 'Loading...'
-  },
-  {
-    path: '/job-details',
-    component: lazy(() => import('../Employee/Additional details/JobDetails')),
-    message: 'Loading...'
-  },
-  {
-    path: '/financial-details',
-    component: lazy(() => import('../Employee/Profile details/FinancialDetails')),
-    message: 'Loading...'
-  }
+  { path: '/profile-details', component: lazy(() => import('../Employee/Profile details/ProfileDetails')), message: 'Loading profile details...', allowedRoles: [] },
+  { path: '/contact-details', component: lazy(() => import('../Employee/Profile details/ContactDetails')), message: 'Loading contact details...', allowedRoles: [] },
+  { path: '/next-of-kin-details', component: lazy(() => import('../Employee/Additional details/NextOfKinDetails')), message: 'Loading...', allowedRoles: [] },
+  { path: '/education-qualifications', component: lazy(() => import('../Employee/Profile details/EducationQualifications')), message: 'Loading...', allowedRoles: [] },
+  { path: '/guarantor-details', component: lazy(() => import('../Employee/Additional details/GuarantorDetails')), message: 'Loading...', allowedRoles: [] },
+  { path: '/family-details', component: lazy(() => import('../Employee/Additional details/FamilyDetails')), message: 'Loading...', allowedRoles: [] },
+  { path: '/job-details', component: lazy(() => import('../Employee/Additional details/JobDetails')), message: 'Loading...', allowedRoles: [] },
+  { path: '/financial-details', component: lazy(() => import('../Employee/Profile details/FinancialDetails')), message: 'Loading...', allowedRoles: [] }
 ];
 
 // Leave routes
 export const leaveRoutes = [
-  {
-    path: '/leave',
-    component: lazy(() => import('../Employee/Leave/LeaveApplication')),
-    message: 'Loading leave application...'
-  },
-  {
-    path: '/my-leave',
-    component: lazy(() => import('../Employee/Leave/MyLeave')),
-    message: 'Loading leave history...'
-  },
-  {
-    path: '/leave-management',
-    component: lazy(() => import('../Admin/LeaveManagement')),
-    message: 'Loading leave management...'
-  }
+  { path: '/leave', component: lazy(() => import('../Employee/Leave/LeaveApplication')), message: 'Loading leave application...', allowedRoles: [] },
+  { path: '/my-leave', component: lazy(() => import('../Employee/Leave/MyLeave')), message: 'Loading leave history...', allowedRoles: [] },
+  { path: '/leave-management', component: lazy(() => import('../Admin/LeaveManagement')), message: 'Loading leave management...', allowedRoles: ['admin', 'hr', 'manager'] }
 ];
 
 // Payroll routes
 export const payrollRoutes = [
-  {
-    path: '/employee-payroll',
-    component: lazy(() => import('../Employee/Payroll/EmployeePayroll')),
-    message: 'Loading payroll...'
-  },
-  {
-    path: '/admin-payroll',
-    component: lazy(() => import('../Admin/Payroll/AdminPayroll')),
-    message: 'Loading admin payroll...'
-  },
-  {
-    path: '/admin-employee-payroll/:employeeId',
-    component: lazy(() => import('../Admin/Payroll/AdminEmployeePayroll')),
-    message: 'Loading employee payroll...'
-  },
-  {
-    path: '/add-payroll',
-    component: lazy(() => import('../Admin/Payroll/AddPayroll')),
-    message: 'Loading...'
-  },
-  {
-    path: '/add-payroll/:employeeId/:month/:year',
-    component: lazy(() => import('../Admin/Payroll/UpdatePayroll')),
-    message: 'Loading payroll update...'
-  }
+  { path: '/employee-payroll', component: lazy(() => import('../Employee/Payroll/EmployeePayroll')), message: 'Loading payroll...', allowedRoles: [] },
+  { path: '/admin-payroll', component: lazy(() => import('../Admin/Payroll/AdminPayroll')), message: 'Loading admin payroll...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin-employee-payroll/:employeeId', component: lazy(() => import('../Admin/Payroll/AdminEmployeePayroll')), message: 'Loading employee payroll...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/add-payroll', component: lazy(() => import('../Admin/Payroll/AddPayroll')), message: 'Loading...', allowedRoles: ['admin', 'hr'] },
+  { path: '/add-payroll/:employeeId/:month/:year', component: lazy(() => import('../Admin/Payroll/UpdatePayroll')), message: 'Loading payroll update...', allowedRoles: ['admin', 'hr'] }
 ];
 
 // Attendance routes
 export const attendanceRoutes = [
-  {
-    path: '/attendance',
-    component: lazy(() => import('../Both/AttendanceDashboard')),
-    message: 'Loading attendance...'
-  },
-  {
-    path: '/attendance-stats',
-    component: lazy(() => import('../Employee/Attendance/AttendanceStats')),
-    message: 'Loading attendance stats...'
-  },
-  {
-    path: '/today-attendance',
-    component: lazy(() => import('../Admin/Attendance/TodayStatusComponent')),
-    message: "Loading today's attendance..."
-  },
-  {
-    path: '/all-attendance-history',
-    component: lazy(() => import('../Admin/Attendance/AllAttendanceStatsComponent')),
-    message: 'Loading attendance history...'
-  },
-  {
-    path: '/attendance-regularization',
-    component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')),
-    message: 'Loading attendance regularization...'
-  },
-  {
-    path: '/my-attendance-regularization',
-    component: lazy(() => import('../Employee/AttendanceRegularization/MyRegularizationRequests')),
-    message: 'Loading my attendance regularization...'
-  },
-  {
-    path: '/team-learning',
-    component: lazy(() => import('../components/TeamLearningRouteWrapper')),
-    message: 'Loading team learning...'
-  },
-  {
-    path: '/one-on-one',
-    component: lazy(() => import('../components/OneOnOneRouteWrapper')),
-    message: 'Loading one-on-one meetings...'
-  }
+  { path: '/attendance', component: lazy(() => import('../Both/AttendanceDashboard')), message: 'Loading attendance...', allowedRoles: [] },
+  { path: '/attendance-stats', component: lazy(() => import('../Employee/Attendance/AttendanceStats')), message: 'Loading attendance stats...', allowedRoles: [] },
+  { path: '/today-attendance', component: lazy(() => import('../Admin/Attendance/TodayStatusComponent')), message: "Loading today's attendance...", allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/all-attendance-history', component: lazy(() => import('../Admin/Attendance/AllAttendanceStatsComponent')), message: 'Loading attendance history...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/my-attendance-regularization', component: lazy(() => import('../Employee/AttendanceRegularization/MyRegularizationRequests')), message: 'Loading my attendance regularization...', allowedRoles: [] },
+  { path: '/team-learning', component: lazy(() => import('../components/TeamLearningRouteWrapper')), message: 'Loading team learning...', allowedRoles: [] },
+  { path: '/one-on-one', component: lazy(() => import('../components/OneOnOneRouteWrapper')), message: 'Loading one-on-one meetings...', allowedRoles: [] }
 ];
 
-// Organization routes
+// Organization routes - admin only
 export const organizationRoutes = [
-  {
-    path: '/organization/profile',
-    component: lazy(() => import('../Admin/Organization/OrganizationProfile')),
-    message: 'Loading organization profile...'
-  },
-  {
-    path: '/organization/dashboard',
-    component: lazy(() => import('../Admin/Organization/OrganizationDashboard')),
-    message: 'Loading organization dashboard...'
-  },
-  {
-    path: '/organization/settings',
-    component: lazy(() => import('../Admin/Organization/OrganizationSettings')),
-    message: 'Loading organization settings...'
-  },
-  {
-    path: '/organization/onboarding',
-    component: lazy(() => import('../Admin/Organization/OrganizationOnboarding')),
-    message: 'Loading onboarding...'
-  },
-  {
-    path: '/organization/subscription',
-    component: lazy(() => import('../Admin/Organization/SubscriptionManagement')),
-    message: 'Loading subscription...'
-  },
-  {
-    path: '/organization/verification',
-    component: lazy(() => import('../Admin/Organization/OrganizationVerification')),
-    message: 'Loading verification...'
-  },
-  {
-    path: '/organization/analytics',
-    component: lazy(() => import('../Admin/Organization/OrganizationAnalytics')),
-    message: 'Loading analytics...'
-  },
-  {
-    path: '/organization/referrals',
-    component: lazy(() => import('../Admin/Organization/ReferralProgram')),
-    message: 'Loading referrals...'
-  },
-  {
-    path: '/organization/domain',
-    component: lazy(() => import('../Admin/Organization/DomainVerification')),
-    message: 'Loading domain verification...'
-  }
+  { path: '/organization/profile', component: lazy(() => import('../Admin/Organization/OrganizationProfile')), message: 'Loading organization profile...', allowedRoles: ['admin'] },
+  { path: '/organization/dashboard', component: lazy(() => import('../Admin/Organization/OrganizationDashboard')), message: 'Loading organization dashboard...', allowedRoles: ['admin'] },
+  { path: '/organization/settings', component: lazy(() => import('../Admin/Organization/OrganizationSettings')), message: 'Loading organization settings...', allowedRoles: ['admin'] },
+  { path: '/organization/onboarding', component: lazy(() => import('../Admin/Organization/OrganizationOnboarding')), message: 'Loading onboarding...', allowedRoles: ['admin'] },
+  { path: '/organization/subscription', component: lazy(() => import('../Admin/Organization/SubscriptionManagement')), message: 'Loading subscription...', allowedRoles: ['admin'] },
+  { path: '/organization/verification', component: lazy(() => import('../Admin/Organization/OrganizationVerification')), message: 'Loading verification...', allowedRoles: ['admin'] },
+  { path: '/organization/analytics', component: lazy(() => import('../Admin/Organization/OrganizationAnalytics')), message: 'Loading analytics...', allowedRoles: ['admin'] },
+  { path: '/organization/referrals', component: lazy(() => import('../Admin/Organization/ReferralProgram')), message: 'Loading referrals...', allowedRoles: ['admin'] },
+  { path: '/organization/domain', component: lazy(() => import('../Admin/Organization/DomainVerification')), message: 'Loading domain verification...', allowedRoles: ['admin'] }
 ];
 
 // Admin management routes
 export const adminRoutes = [
-  {
-    path: '/role-hierarchy',
-    component: lazy(() => import('../Admin/RoleManagement/RoleHierarchy')),
-    message: 'Loading role hierarchy...'
-  },
-  {
-    path: '/calendar-management',
-    component: lazy(() => import('../Admin/Calendar/CalendarManagement')),
-    message: 'Loading calendar management...'
-  },
-  {
-    path: '/id-card-generator',
-    component: lazy(() => import('../Admin/IdCards/IdCardGenerator')),
-    message: 'Loading ID card generator...'
-  },
-  {
-    path: '/employee/id-card',
-    component: lazy(() => import('../Employee/IdCardView')),
-    message: 'Loading ID card...'
-  },
-  {
-    path: '/salary-structure',
-    component: lazy(() => import('../Admin/SalaryStructure/SalaryStructureManager')),
-    message: 'Loading salary structure...'
-  },
-  {
-    path: '/attendance-rules',
-    component: lazy(() => import('../Admin/Attendance/AttendanceRules')),
-    message: 'Loading attendance rules...'
-  },
-  {
-    path: '/admin-settings',
-    component: lazy(() => import('../Admin/Settings/AdminSettings')),
-    message: 'Loading admin settings...'
-  },
-  {
-    path: '/admin/leave-policy',
-    component: lazy(() => import('../HR/Leave/LeavePolicyManagement')),
-    message: 'Loading leave policy management...'
-  },
-  {
-    path: '/admin/leave-balance',
-    component: lazy(() => import('../Admin/Leave/EmployeeLeaveBalanceViewer')),
-    message: 'Loading employee leave balances...'
-  },
-  {
-    path: '/admin/policies',
-    component: lazy(() => import('../Admin/PolicyManagement/PolicyManager')),
-    message: 'Loading policies...'
-  },
-  {
-    path: '/admin/policies/create',
-    component: lazy(() => import('../Admin/PolicyManagement/CreatePolicy')),
-    message: 'Loading create policy...'
-  },
-  {
-    path: '/employee/policies',
-    component: lazy(() => import('../Employee/Policies/ViewPolicies')),
-    message: 'Loading policies...'
-  }
+  { path: '/role-hierarchy', component: lazy(() => import('../Admin/RoleManagement/RoleHierarchy')), message: 'Loading role hierarchy...', allowedRoles: ['admin'] },
+  { path: '/calendar-management', component: lazy(() => import('../Admin/Calendar/CalendarManagement')), message: 'Loading calendar management...', allowedRoles: ['admin'] },
+  { path: '/id-card-generator', component: lazy(() => import('../Admin/IdCards/IdCardGenerator')), message: 'Loading ID card generator...', allowedRoles: ['admin'] },
+  { path: '/employee/id-card', component: lazy(() => import('../Employee/IdCardView')), message: 'Loading ID card...', allowedRoles: [] },
+  { path: '/salary-structure', component: lazy(() => import('../Admin/SalaryStructure/SalaryStructureManager')), message: 'Loading salary structure...', allowedRoles: ['admin', 'hr', 'finance'] },
+  { path: '/attendance-rules', component: lazy(() => import('../Admin/Attendance/AttendanceRules')), message: 'Loading attendance rules...', allowedRoles: ['admin'] },
+  { path: '/admin-settings', component: lazy(() => import('../Admin/Settings/AdminSettings')), message: 'Loading admin settings...', allowedRoles: ['admin'] },
+  { path: '/admin/leave-policy', component: lazy(() => import('../HR/Leave/LeavePolicyManagement')), message: 'Loading leave policy management...', allowedRoles: ['admin', 'hr'] },
+  { path: '/admin/leave-balance', component: lazy(() => import('../Admin/Leave/EmployeeLeaveBalanceViewer')), message: 'Loading employee leave balances...', allowedRoles: ['admin', 'hr'] },
+  { path: '/admin/policies', component: lazy(() => import('../Admin/PolicyManagement/PolicyManager')), message: 'Loading policies...', allowedRoles: ['admin'] },
+  { path: '/admin/policies/create', component: lazy(() => import('../Admin/PolicyManagement/CreatePolicy')), message: 'Loading create policy...', allowedRoles: ['admin'] },
+  { path: '/admin/approval-workflows', component: lazy(() => import('../Admin/ApprovalWorkflows/WorkflowManager')), message: 'Loading approval workflows...', allowedRoles: ['admin', 'hr'] },
+  { path: '/admin/pending-approvals', component: lazy(() => import('../Admin/ApprovalWorkflows/PendingApprovals')), message: 'Loading pending approvals...', allowedRoles: ['admin', 'hr', 'manager'] },
+  { path: '/employee/policies', component: lazy(() => import('../Employee/Policies/ViewPolicies')), message: 'Loading policies...', allowedRoles: [] }
 ];
 
-// HR Feature routes
+// HR Feature routes - admin and HR
 export const hrRoutes = [
-  {
-    path: '/recruitment',
-    component: lazy(() => import('../HR/Recruitment/RecruitmentPage')),
-    message: 'Loading recruitment...'
-  },
-  {
-    path: '/onboarding',
-    component: lazy(() => import('../components/OnboardingRouteWrapper')),
-    message: 'Loading onboarding...'
-  },
-  {
-    path: '/onboarding/:id',
-    component: lazy(() => import('../HR/Onboarding/OnboardingDetailPage')),
-    message: 'Loading workflow details...'
-  },
-  {
-    path: '/learning',
-    component: lazy(() => import('../HR/Learning/LearningPage')),
-    message: 'Loading learning & development...'
-  },
-  {
-    path: '/learning/create-course',
-    component: lazy(() => import('../HR/Learning/CreateCourse')),
-    message: 'Loading course creator...'
-  },
-  {
-    path: '/engagement',
-    component: lazy(() => import('../HR/Engagement/EngagementPage')),
-    message: 'Loading employee engagement...'
-  },
-  {
-    path: '/engagement/create-survey',
-    component: lazy(() => import('../HR/Engagement/CreateSurvey')),
-    message: 'Loading survey builder...'
-  },
-  {
-    path: '/documents',
-    component: lazy(() => import('../HR/Documents/DocumentsPage')),
-    message: 'Loading documents...'
-  },
-  {
-    path: '/documents/:id/versions',
-    component: lazy(() => import('../HR/Documents/DocumentVersions')),
-    message: 'Loading document versions...'
-  },
-  {
-    path: '/benefits',
-    component: lazy(() => import('../HR/Benefits/BenefitsPage')),
-    message: 'Loading benefits...'
-  },
-  {
-    path: '/benefits/:id',
-    component: lazy(() => import('../HR/Benefits/BenefitDetailPage')),
-    message: 'Loading benefit plan details...'
-  },
-  {
-    path: '/succession',
-    component: lazy(() => import('../HR/Succession/SuccessionPage')),
-    message: 'Loading succession planning...'
-  },
-  {
-    path: '/succession/:id',
-    component: lazy(() => import('../HR/Succession/SuccessionDetailPage')),
-    message: 'Loading succession plan details...'
-  },
-  {
-    path: '/workforce',
-    component: lazy(() => import('../HR/Workforce/WorkforcePage')),
-    message: 'Loading workforce planning...'
-  },
-  {
-    path: '/workforce/:id',
-    component: lazy(() => import('../HR/Workforce/WorkforceDetailPage')),
-    message: 'Loading workforce plan details...'
-  },
-  {
-    path: '/helpdesk',
-    component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')),
-    message: 'Loading helpdesk...'
-  },
-  {
-    path: '/admin/reports',
-    component: lazy(() => import('../HR/Reports/HRReportsPage')),
-    message: 'Loading HR reports...'
-  },
-  {
-    path: '/hr/analytics',
-    component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')),
-    message: 'Loading HR analytics...'
-  }
+  { path: '/recruitment', component: lazy(() => import('../HR/Recruitment/RecruitmentPage')), message: 'Loading recruitment...', allowedRoles: ['admin', 'hr'] },
+  { path: '/onboarding', component: lazy(() => import('../components/OnboardingRouteWrapper')), message: 'Loading onboarding...', allowedRoles: ['admin', 'hr'] },
+  { path: '/onboarding/:id', component: lazy(() => import('../HR/Onboarding/OnboardingDetailPage')), message: 'Loading workflow details...', allowedRoles: ['admin', 'hr'] },
+  { path: '/learning', component: lazy(() => import('../HR/Learning/LearningPage')), message: 'Loading learning & development...', allowedRoles: [] },
+  { path: '/learning/create-course', component: lazy(() => import('../HR/Learning/CreateCourse')), message: 'Loading course creator...', allowedRoles: ['admin', 'hr'] },
+  { path: '/engagement', component: lazy(() => import('../HR/Engagement/EngagementPage')), message: 'Loading employee engagement...', allowedRoles: [] },
+  { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: ['admin', 'hr'] },
+  { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: [] },
+  { path: '/documents/:id/versions', component: lazy(() => import('../HR/Documents/DocumentVersions')), message: 'Loading document versions...', allowedRoles: ['admin', 'hr'] },
+  { path: '/benefits', component: lazy(() => import('../HR/Benefits/BenefitsPage')), message: 'Loading benefits...', allowedRoles: [] },
+  { path: '/benefits/:id', component: lazy(() => import('../HR/Benefits/BenefitDetailPage')), message: 'Loading benefit plan details...', allowedRoles: [] },
+  { path: '/succession', component: lazy(() => import('../HR/Succession/SuccessionPage')), message: 'Loading succession planning...', allowedRoles: ['admin', 'hr'] },
+  { path: '/succession/:id', component: lazy(() => import('../HR/Succession/SuccessionDetailPage')), message: 'Loading succession plan details...', allowedRoles: ['admin', 'hr'] },
+  { path: '/workforce', component: lazy(() => import('../HR/Workforce/WorkforcePage')), message: 'Loading workforce planning...', allowedRoles: ['admin', 'hr'] },
+  { path: '/workforce/:id', component: lazy(() => import('../HR/Workforce/WorkforceDetailPage')), message: 'Loading workforce plan details...', allowedRoles: ['admin', 'hr'] },
+  { path: '/helpdesk', component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')), message: 'Loading helpdesk...', allowedRoles: ['admin', 'hr'] },
+  { path: '/admin/reports', component: lazy(() => import('../HR/Reports/HRReportsPage')), message: 'Loading HR reports...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/hr/analytics', component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')), message: 'Loading HR analytics...', allowedRoles: ['admin', 'hr'] }
 ];
 
 // Other routes
 export const otherRoutes = [
-  {
-    path: '/employee/calendar',
-    component: lazy(() => import('../Employee/Calendar/EmployeeCalendar')),
-    message: 'Loading calendar...'
-  },
-  {
-    path: '/notifications',
-    component: lazy(() => import('../Both/Notifications')),
-    message: 'Loading notifications...'
-  },
-  {
-    path: '/daily-report',
-    component: lazy(() => import('../Others/DailyReport')),
-    message: 'Loading daily report...'
-  },
-  {
-    path: '*',
-    component: lazy(() => import('../Others/NotFound')),
-    message: 'Loading...'
-  }
+  { path: '/employee/calendar', component: lazy(() => import('../Employee/Calendar/EmployeeCalendar')), message: 'Loading calendar...', allowedRoles: [] },
+  { path: '/notifications', component: lazy(() => import('../Both/Notifications')), message: 'Loading notifications...', allowedRoles: [] },
+  { path: '/daily-report', component: lazy(() => import('../Others/DailyReport')), message: 'Loading daily report...', allowedRoles: [] },
+  { path: '*', component: lazy(() => import('../Others/NotFound')), message: 'Loading...', allowedRoles: [] }
 ];
 
 /**
- * Render routes from configuration
+ * Render public/auth routes (no role protection)
  */
 export const renderRoutes = (routes) => {
   return routes.map((route) => {
-    // Check condition if provided
-    if (route.condition && !route.condition()) {
-      return null;
-    }
-    
+    if (route.condition && !route.condition()) return null;
     return (
-      <Route
-        key={route.path}
-        path={route.path}
-        element={createLazyRoute(route.component, route.message)}
-      />
+      <Route key={route.path} path={route.path} element={createLazyRoute(route.component, route.message)} />
     );
+  }).filter(Boolean);
+};
+
+/**
+ * Render protected routes (wrapped with ProtectedRoute using allowedRoles from config)
+ */
+export const renderProtectedRoutes = (routes) => {
+  return routes.map((route) => {
+    if (route.condition && !route.condition()) return null;
+    return createProtectedLazyRoute(route);
   }).filter(Boolean);
 };
 

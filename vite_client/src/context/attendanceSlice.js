@@ -378,8 +378,18 @@ const attendanceSlice = createSlice({
       .addCase(clockOut.pending, pending)
       .addCase(clockOut.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.sessions.findIndex(s => s._id === action.payload._id);
-        if (index !== -1) state.sessions[index] = action.payload;
+        state.error = null;
+        const payload = action.payload?.attendance || action.payload;
+        if (!payload || (!payload._id && !payload.id)) return;
+        const payloadId = String(payload._id || payload.id);
+        const index = state.sessions.findIndex(
+          s => String(s._id || s.id) === payloadId
+        );
+        if (index !== -1) {
+          state.sessions[index] = payload;
+        } else {
+          state.sessions = [payload];
+        }
       })
       .addCase(clockOut.rejected, rejected)
 
@@ -394,8 +404,14 @@ const attendanceSlice = createSlice({
       .addCase(breakOut.fulfilled, (state, action) => {
         state.loading = false;
         state.breakSession = null;
-        const index = state.sessions.findIndex(s => s._id === action.payload._id);
-        if (index !== -1) state.sessions[index] = action.payload;
+        const payload = action.payload?.attendance || action.payload;
+        if (payload && (payload._id || payload.id)) {
+          const payloadId = String(payload._id || payload.id);
+          const index = state.sessions.findIndex(
+            s => String(s._id || s.id) === payloadId
+          );
+          if (index !== -1) state.sessions[index] = payload;
+        }
       })
       .addCase(breakOut.rejected, rejected)
 

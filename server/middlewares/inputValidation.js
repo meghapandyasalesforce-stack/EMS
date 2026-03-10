@@ -191,8 +191,8 @@ export const employeeValidations = {
             .isIn(['Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations', 'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration'])
             .withMessage('Invalid department'),
         body('manager')
-            .trim()
-            .notEmpty().withMessage('Manager is required'),
+            .optional()
+            .trim(),
         body('jobTitle')
             .notEmpty().withMessage('Job title is required')
             .isIn(['Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer'])

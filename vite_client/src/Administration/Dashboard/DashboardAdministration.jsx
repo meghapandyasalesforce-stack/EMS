@@ -190,7 +190,7 @@ const DashboardAdministration = () => {
     const portfolio = portfolioData || {};
 
     return (
-        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gradient-to-br from-gray-50/50 to-white ml-64">
+        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gradient-to-br from-gray-50/50 to-white">
             {/* Header */}
             <div className="mb-6">
                 <div className="flex items-center justify-between">

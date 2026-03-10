@@ -76,7 +76,7 @@ const EmployeeProfile = ({ employeeId }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:ml-64">
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6">
       {/* Mobile top padding to account for navbar */}
       <div className="pt-16 md:pt-0">
         <div className="max-w-5xl mx-auto">
@@ -127,6 +127,9 @@ const EmployeeProfile = ({ employeeId }) => {
                     <InfoField label="Account Name" value={employee.financialDetails.accountName} />
                     <InfoField label="Account Number" value={employee.financialDetails.accountNo} />
                     <InfoField label="IFSC Code" value={employee.financialDetails.ifsc} />
+                    <InfoField label="PAN Number" value={employee.financialDetails.panNumber} />
+                    <InfoField label="EPF UAN" value={employee.financialDetails.epfUan} />
+                    <InfoField label="Tax Regime" value={employee.financialDetails.taxRegime} />
                   </div>
                 </Section>
               )}

@@ -92,7 +92,7 @@ const EmployeeTasks = () => {
 
   if (!currentProject) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-md w-full border border-gray-200">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FiUser size={28} className="text-red-600" />
@@ -116,7 +116,7 @@ const EmployeeTasks = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
       <div className="max-w-6xl mx-auto">
         {/* Header Section */}
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">

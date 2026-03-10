@@ -1,3 +1,6 @@
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import Organization from '../../models/organization.model.js';
 import User from '../../models/user.model.js';
 import Employee from '../../models/employee.model.js';
@@ -11,6 +14,9 @@ import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { autoGenerateIdCard } from '../admin/idCardController.js';
 import mongoose from 'mongoose';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Get organization profile
@@ -168,6 +174,19 @@ export const uploadOrganizationLogo = async (req, res) => {
 
         if (!organization) {
             return sendError(res, 'Organization not found', 404);
+        }
+
+        // Remove previous logo file from disk if it exists
+        if (organization.logo?.filename) {
+            const oldLogoPath = path.join(__dirname, '../../uploads/logos', organization.logo.filename);
+            try {
+                await fs.promises.unlink(oldLogoPath);
+                logger.info('Previous organization logo removed', { organizationId: organization._id, filename: organization.logo.filename });
+            } catch (err) {
+                if (err.code !== 'ENOENT') {
+                    logger.warn('Could not delete previous logo file', { path: oldLogoPath, error: err.message });
+                }
+            }
         }
 
         // Update logo

@@ -7,33 +7,121 @@ import { generatePayrollPDF, generateAttendancePDF, generateReportPDF } from '..
 import Payroll from '../../models/payroll.model.js';
 import Employee from '../../models/employee.model.js';
 import Attendance from '../../models/attendance.model.js';
+import Organization from '../../models/organization.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound } from '../../helpers/responseHelper.js';
 import asyncHandler from '../../helpers/asyncHandler.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import sharp from 'sharp';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
- * Export payroll as PDF
+ * Export payroll as PDF (same format as employee download: org name + bank details)
  * @route GET /api/v1/admin/payroll/:id/export-pdf
  * @access Private (Admin/HR)
  */
 export const exportPayrollPDF = asyncHandler(async (req, res) => {
     try {
         const { id } = req.params;
-        
-        const payroll = await Payroll.findById(id).populate('employeeId');
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+
+        const payroll = await Payroll.findOne({ _id: id, ...(organizationId && { organizationId }) })
+            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 financialDetails');
         if (!payroll) {
             return sendNotFound(res, 'Payroll');
         }
 
-        const employee = await Employee.findById(payroll.employeeId);
-        if (!employee) {
+        const emp = payroll.employeeId;
+        if (!emp) {
             return sendNotFound(res, 'Employee');
         }
 
-        const pdfBuffer = await generatePayrollPDF(payroll, employee);
+        const fin = emp.financialDetails || {};
+        let orgData = { name: 'Paarsiv', email: '', website: '', logoBase64: null };
+        if (organizationId) {
+            const org = await Organization.findById(organizationId).select('name email domain address logo').lean();
+            if (org) {
+                orgData = {
+                    name: org.name || 'Paarsiv',
+                    email: org.email || '',
+                    website: org.domain || '',
+                    address: org.address ? [org.address.street, org.address.city, org.address.state, org.address.country].filter(Boolean).join(', ') : ''
+                };
+                if (org.logo?.url) {
+                    try {
+                        const baseName = path.basename(org.logo.url);
+                        const logosDir = path.join(__dirname, '../../uploads/logos');
+                        const uploadsDir = path.join(__dirname, '../../uploads');
+                        let filePath = path.join(logosDir, baseName);
+                        if (!fs.existsSync(filePath)) filePath = path.join(uploadsDir, baseName);
+                        if (fs.existsSync(filePath)) {
+                            const buf = fs.readFileSync(filePath);
+                            const ext = path.extname(baseName).toLowerCase();
+                            const mime = ext === '.png' ? 'png' : ext === '.jpg' || ext === '.jpeg' ? 'jpeg' : 'png';
+                            orgData.logoBase64 = `data:image/${mime};base64,${buf.toString('base64')}`;
+                            orgData.logoFormat = mime === 'jpeg' ? 'JPEG' : 'PNG';
+                            try {
+                                const meta = await sharp(buf).metadata();
+                                if (meta.width && meta.height) {
+                                    orgData.logoWidth = meta.width;
+                                    orgData.logoHeight = meta.height;
+                                }
+                            } catch (_) { /* ignore */ }
+                        }
+                    } catch (e) {
+                        logger.warn('Could not load organization logo for payslip export', { error: e.message });
+                    }
+                }
+            }
+        }
+
+        const employeeData = {
+            name: emp.name,
+            lastName: emp.lastName || '',
+            employeeId: emp.employeeId,
+            email: emp.email,
+            jobTitle: emp.jobTitle,
+            department: emp.department,
+            joiningDate: emp.joiningDate,
+            phone: emp.phone1 || '',
+            bankName: fin.bankName || '',
+            accountNumber: fin.accountNo || '',
+            ifsc: fin.ifsc || '',
+            accountName: fin.accountName || '',
+            panNumber: fin.panNumber || emp.panNumber || '',
+            epfUan: fin.epfUan || emp.epfUan || '',
+            gender: emp.gender || '',
+            taxRegime: fin.taxRegime || emp.taxRegime || ''
+        };
+
+        const payrollData = {
+            month: payroll.month,
+            year: payroll.year,
+            basicSalary: payroll.basicSalary,
+            earnings: payroll.earnings,
+            deductions: payroll.deductions,
+            ctc: payroll.ctc,
+            inHandSalary: payroll.inHandSalary,
+            status: payroll.status,
+            processedDate: payroll.processedDate,
+            paidDate: payroll.paidDate,
+            payment: payroll.payment,
+            notes: payroll.notes,
+            workingDays: payroll.workingDays,
+            presentDays: payroll.presentDays,
+            unpaidLeave: payroll.unpaidLeave,
+            cumulativeEarnings: payroll.cumulativeEarnings,
+            cumulativeDeductions: payroll.cumulativeDeductions
+        };
+
+        const pdfBuffer = await generatePayrollPDF(payrollData, employeeData, orgData);
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="payroll-${employee.employeeId}-${payroll.month}-${payroll.year}.pdf"`);
+        res.setHeader('Content-Disposition', `attachment; filename="payroll-${emp.employeeId}-${payroll.month}-${payroll.year}.pdf"`);
         res.send(pdfBuffer);
     } catch (error) {
         logger.error('Payroll PDF export failed', {

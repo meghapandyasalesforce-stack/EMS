@@ -18,7 +18,8 @@ import {
   adminRoutes,
   hrRoutes,
   otherRoutes,
-  renderRoutes
+  renderRoutes,
+  renderProtectedRoutes
 } from './routes/index.jsx';
 
 // All routes are now defined in routes/index.jsx
@@ -54,30 +55,30 @@ function App() {
                     {renderRoutes(authRoutes)}
                 </Routes>
             ) : (
-                // Standard layout with sidebar for other pages
-                <div className="flex min-h-[calc(100vh-64px)]">
+                // Push content right of fixed main nav so profile sidebar + content don't sit under it
+                <div className="flex min-h-[calc(100vh-64px)] ml-0 lg:ml-64">
                     {shouldShowSidebar && (
-                        <div className="w-64 bg-white shadow-lg border-r border-gray-100">
+                        <div className="w-64 flex-shrink-0 bg-white shadow-lg border-r border-gray-100">
                             <ProfileSidebar
                                 activeSection={activeSection} // Pass active section
                                 onSectionClick={setActiveSection} // Update active section
                             />
                         </div>
                     )}
-                    <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
+                    <div className="flex-1 min-w-0 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
                         <Routes>
                             {renderRoutes(authRoutes)}
-                            {renderRoutes(dashboardRoutes)}
-                            {renderRoutes(employeeRoutes)}
-                            {renderRoutes(projectRoutes)}
-                            {renderRoutes(profileDetailRoutes)}
-                            {renderRoutes(leaveRoutes)}
-                            {renderRoutes(payrollRoutes)}
-                            {renderRoutes(attendanceRoutes)}
-                            {renderRoutes(organizationRoutes)}
-                            {renderRoutes(adminRoutes)}
-                            {renderRoutes(hrRoutes)}
-                            {renderRoutes(otherRoutes)}
+                            {renderProtectedRoutes(dashboardRoutes)}
+                            {renderProtectedRoutes(employeeRoutes)}
+                            {renderProtectedRoutes(projectRoutes)}
+                            {renderProtectedRoutes(profileDetailRoutes)}
+                            {renderProtectedRoutes(leaveRoutes)}
+                            {renderProtectedRoutes(payrollRoutes)}
+                            {renderProtectedRoutes(attendanceRoutes)}
+                            {renderProtectedRoutes(organizationRoutes)}
+                            {renderProtectedRoutes(adminRoutes)}
+                            {renderProtectedRoutes(hrRoutes)}
+                            {renderProtectedRoutes(otherRoutes)}
                         </Routes>
                     </div>
                 </div>

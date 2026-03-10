@@ -210,8 +210,12 @@ const UpdatePayroll = () => {
   };
 
   const calculateTotals = () => {
-    const earningsTotal = Object.values(formData.earnings).reduce((sum, val) => sum + (val || 0), 0);
-    const deductionsTotal = Object.values(formData.deductions).reduce((sum, val) => sum + (val || 0), 0);
+    const earningsTotal = Object.entries(formData.earnings)
+      .filter(([key]) => key !== 'totalEarnings')
+      .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
+    const deductionsTotal = Object.entries(formData.deductions)
+      .filter(([key]) => key !== 'total')
+      .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
     const inHandSalary = earningsTotal - deductionsTotal;
     return { earningsTotal, deductionsTotal, inHandSalary };
   };
@@ -263,7 +267,7 @@ const UpdatePayroll = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Update Payroll</h2>
 

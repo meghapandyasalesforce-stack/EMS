@@ -3,6 +3,8 @@ import LeavePolicy from '../models/leavePolicy.model.js';
 import Employee from '../models/employee.model.js';
 import Leave from '../models/leave.model.js';
 import logger from '../helpers/logger.js';
+import { normalizeLeaveTypeForPolicy } from '../helpers/leaveTypeHelper.js';
+import leaveBalanceEngine from './leaveBalanceEngine.js';
 
 class LeaveValidationService {
     /**
@@ -24,7 +26,8 @@ class LeaveValidationService {
                 return { valid: false, errors: ['No leave policy found for employee'] };
             }
 
-            const leaveTypeConfig = policy.leaveTypes.find(lt => lt.type === leaveData.leaveType);
+            const normalizedType = normalizeLeaveTypeForPolicy(leaveData.leaveType);
+            const leaveTypeConfig = policy.leaveTypes.find(lt => lt.type === normalizedType);
             if (!leaveTypeConfig) {
                 return { valid: false, errors: [`Leave type ${leaveData.leaveType} not configured in policy`] };
             }
@@ -77,20 +80,22 @@ class LeaveValidationService {
                 warnings.push(...dateHandlingCheck.warnings);
             }
 
-            // 5. Check leave balance
+            // 5. Calculate duration (used for balance check and min/max)
+            const duration = await this.calculateDuration(startDate, endDate, policy.dateHandlingRules, calendar, organizationId);
+
+            // 6. Check leave balance (uses normalized type for policy alignment)
             const balanceCheck = await this.checkLeaveBalance(
-                employeeId, 
-                leaveData.leaveType, 
-                startDate, 
-                endDate, 
+                employeeId,
+                normalizedType,
+                duration,
+                leaveData.isHalfDay,
                 organizationId
             );
             if (!balanceCheck.allowed) {
                 errors.push(balanceCheck.reason);
             }
 
-            // 6. Check minimum/maximum days per request
-            const duration = await this.calculateDuration(startDate, endDate, policy.dateHandlingRules, calendar, organizationId);
+            // 7. Check minimum/maximum days per request
             if (duration < leaveTypeConfig.minDaysPerRequest) {
                 errors.push(`Minimum ${leaveTypeConfig.minDaysPerRequest} days required for ${leaveTypeConfig.displayName}`);
             }
@@ -98,7 +103,7 @@ class LeaveValidationService {
                 errors.push(`Maximum ${leaveTypeConfig.maxDaysPerRequest} days allowed for ${leaveTypeConfig.displayName}`);
             }
 
-            // 7. Check for overlapping leaves
+            // 8. Check for overlapping leaves
             const overlapCheck = await this.checkOverlappingLeaves(
                 employeeId, 
                 startDate, 
@@ -245,12 +250,27 @@ class LeaveValidationService {
     }
 
     /**
-     * Check leave balance
+     * Check leave balance (leaveType should be normalized, e.g. paid not annual)
      */
-    async checkLeaveBalance(employeeId, leaveType, startDate, endDate, organizationId) {
-        // This should integrate with leaveBalanceEngine
-        // For now, return allowed
-        return { allowed: true };
+    async checkLeaveBalance(employeeId, leaveType, requestedDays, isHalfDay, organizationId) {
+        try {
+            const year = new Date().getFullYear();
+            const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+            if (!balance) return { allowed: true }; // no policy – allow and let other checks handle
+            const typeBalance = balance.balances.find(b => b.leaveType === leaveType);
+            if (!typeBalance) return { allowed: true };
+            const required = isHalfDay ? 0.5 : requestedDays;
+            if (typeBalance.available < required) {
+                return {
+                    allowed: false,
+                    reason: `Insufficient leave balance. Available: ${typeBalance.available} days, Requested: ${required} days`
+                };
+            }
+            return { allowed: true };
+        } catch (err) {
+            logger.warn('Leave balance check error', { employeeId, leaveType, error: err.message });
+            return { allowed: true };
+        }
     }
 
     /**

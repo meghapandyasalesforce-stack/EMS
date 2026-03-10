@@ -64,7 +64,7 @@ const MyOnboardingPage = () => {
 
     if (!workflow) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
                 <div className="max-w-4xl mx-auto">
                     <div className="bg-white rounded-lg shadow-md p-8 text-center">
                         <FaTasks className="mx-auto text-6xl text-gray-400 mb-4" />
@@ -119,7 +119,7 @@ const MyOnboardingPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">

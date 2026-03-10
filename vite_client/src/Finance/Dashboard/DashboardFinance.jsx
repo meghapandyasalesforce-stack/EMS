@@ -98,16 +98,16 @@ const DashboardFinance = () => {
     }
     
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-800">Finance Dashboard</h1>
-                <div className="text-sm text-gray-600">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6 space-y-4 sm:space-y-6 transition-all duration-300">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 truncate">Finance Dashboard</h1>
+                <div className="text-xs sm:text-sm text-gray-600 truncate">
                     Welcome, {user?.name || user?.username || 'Finance Manager'}
                 </div>
             </div>
             
             {/* Statistics Cards - Using StatCard component */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <StatCard
                     label="Total Payroll"
                     value={formatCurrency(totalPayroll)}
@@ -142,93 +142,93 @@ const DashboardFinance = () => {
             </div>
             
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                 <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                    className="bg-white rounded-lg shadow-md p-4 sm:p-6 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]"
                     onClick={() => navigate('/admin-payroll')}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-green-100 p-4 rounded-lg">
-                            <FaMoneyBillWave className="w-6 h-6 text-green-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="bg-green-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaMoneyBillWave className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Payroll Management</h3>
-                            <p className="text-sm text-gray-600">Manage employee payroll</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Payroll Management</h3>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">Manage employee payroll</p>
                         </div>
                     </div>
                 </div>
                 
                 <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                    className="bg-white rounded-lg shadow-md p-4 sm:p-6 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]"
                     onClick={() => navigate('/admin/expenses')}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-yellow-100 p-4 rounded-lg">
-                            <FaReceipt className="w-6 h-6 text-yellow-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="bg-yellow-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaReceipt className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Expense Management</h3>
-                            <p className="text-sm text-gray-600">Review and approve expenses</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Expense Management</h3>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">Review and approve expenses</p>
                         </div>
                     </div>
                 </div>
                 
                 <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                    className="bg-white rounded-lg shadow-md p-4 sm:p-6 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]"
                     onClick={() => navigate('/admin/reports')}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-blue-100 p-4 rounded-lg">
-                            <FaChartBar className="w-6 h-6 text-blue-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="bg-blue-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaChartBar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Financial Reports</h3>
-                            <p className="text-sm text-gray-600">Generate financial reports</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Financial Reports</h3>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">Generate financial reports</p>
                         </div>
                     </div>
                 </div>
                 
                 <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                    className="bg-white rounded-lg shadow-md p-4 sm:p-6 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]"
                     onClick={() => navigate('/salary-structure')}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-purple-100 p-4 rounded-lg">
-                            <FaFileInvoiceDollar className="w-6 h-6 text-purple-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="bg-purple-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaFileInvoiceDollar className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Salary Structure</h3>
-                            <p className="text-sm text-gray-600">Manage salary structures</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Salary Structure</h3>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">Manage salary structures</p>
                         </div>
                     </div>
                 </div>
                 
                 <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                    className="bg-white rounded-lg shadow-md p-4 sm:p-6 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]"
                     onClick={() => navigate('/admin-settings')}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-indigo-100 p-4 rounded-lg">
-                            <FaCalculator className="w-6 h-6 text-indigo-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="bg-indigo-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaCalculator className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Financial Settings</h3>
-                            <p className="text-sm text-gray-600">Configure financial rules</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Financial Settings</h3>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">Configure financial rules</p>
                         </div>
                     </div>
                 </div>
                 
                 <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                    className="bg-white rounded-lg shadow-md p-4 sm:p-6 cursor-pointer hover:shadow-lg transition-shadow active:scale-[0.98]"
                     onClick={() => navigate('/admin-payroll')}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gray-100 p-4 rounded-lg">
-                            <FaCreditCard className="w-6 h-6 text-gray-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="bg-gray-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaCreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Budget Management</h3>
-                            <p className="text-sm text-gray-600">Track and manage budgets</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Budget Management</h3>
+                            <p className="text-xs sm:text-sm text-gray-600 truncate">Track and manage budgets</p>
                         </div>
                     </div>
                 </div>

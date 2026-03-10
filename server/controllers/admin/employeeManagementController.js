@@ -231,55 +231,57 @@ export const updateEmployeeStatus = async (req, res) => {
 };
 
 /**
- * Get managers (employees with management positions)
+ * Get managers for assignment dropdown: only employees with management positions (CEO, CTO, CFO, VP, Director, Manager).
+ * When the org has exactly one employee, that person is included so the second employee can be assigned under them.
  * GET /api/v1/admin/employee/managers
+ * Query: limit - optional, use for dropdown (e.g. limit=500 to get full list)
  */
 export const getManagers = async (req, res) => {
     try {
         const user = req.user || req.employee;
 
-        // Access is controlled by middleware (isAdminOrHRAuthenticated)
-        // No need to check role here as middleware handles it
         if (!user) {
             return sendForbidden(res, 'Access denied. Authentication required.');
         }
 
-        // Management positions (in hierarchy order: highest to lowest)
-        const managementPositions = ['CEO', 'CTO', 'CFO', 'VP', 'Director', 'Manager'];
-        
-        // Filter by organizationId and management positions
-        const query = addOrganizationFilter(req, {
-            position: { $in: managementPositions },
-            status: 'active' // Only active managers
-        });
-        
-        // Parse pagination for managers list
-        const { page, limit, skip } = parsePagination(req, { defaultLimit: 50, maxLimit: 200 });
-        
-        // Fetch managers with pagination
+        const { page, limit, skip } = parsePagination(req, { defaultLimit: 100, maxLimit: 500 });
+
+        const organizationId = getOrganizationId(req);
+        const baseQuery = addOrganizationFilter(req, { status: 'active' });
+
+        const managementPositions = ['CEO', 'CTO', 'CFO', 'VP', 'Director', 'Manager', 'Lead', 'Supervisor'];
+        const managementRoles = ['manager', 'ceo', 'cto', 'cfo', 'vp', 'executive'];
+        const employeeCount = await Employee.countDocuments(baseQuery);
+
+        let query = { ...baseQuery };
+        // Include: (1) management positions, or (2) management functionalRoles, or (3) when org has exactly 1 employee, that person
+        if (employeeCount !== 1) {
+            query.$or = [
+                { position: { $in: managementPositions } },
+                { functionalRoles: { $in: managementRoles } }
+            ];
+        }
+
         const [managers, total] = await Promise.all([
             Employee.find(query)
                 .select('name lastName email position department employeeId')
                 .skip(skip)
                 .limit(limit)
-                .lean(), // Use lean() for better performance
+                .sort('name lastName')
+                .lean(),
             Employee.countDocuments(query)
         ]);
-        
-        // Sort by position hierarchy (CEO first, then CTO, CFO, VP, Director, Manager)
-        const positionOrder = { 'CEO': 1, 'CTO': 2, 'CFO': 3, 'VP': 4, 'Director': 5, 'Manager': 6 };
+
+        const positionOrder = { 'CEO': 1, 'CTO': 2, 'CFO': 3, 'VP': 4, 'Director': 5, 'Manager': 6, 'Lead': 7, 'Supervisor': 8 };
         managers.sort((a, b) => {
             const orderA = positionOrder[a.position] || 99;
             const orderB = positionOrder[b.position] || 99;
-            if (orderA !== orderB) {
-                return orderA - orderB; // Sort by position hierarchy
-            }
-            // If same position, sort by name
+            if (orderA !== orderB) return orderA - orderB;
             const nameA = `${a.name} ${a.lastName || ''}`.trim();
             const nameB = `${b.name} ${b.lastName || ''}`.trim();
             return nameA.localeCompare(nameB);
         });
-        
+
         return sendPaginatedResponse(res, managers, page, limit, total, 'Managers retrieved successfully');
     } catch (error) {
         logger.error('Error fetching managers', { error: error.message, stack: error.stack });
@@ -288,14 +290,14 @@ export const getManagers = async (req, res) => {
 };
 
 /**
- * Delete employee (Admin only)
- * DELETE /api/v1/admin/employee/:employeeId
+ * Delete employee (Admin or HR)
+ * DELETE /api/v1/employee/auth/delete-employee/:employeeId
  */
 export const deleteEmployee = async (req, res) => {
     try {
-        // Ensure requester is an admin
-        if (req.user?.role !== 'admin') {
-            return sendForbidden(res, 'Access denied. Admins only.');
+        // Require admin or HR (middleware ensures one of these is set)
+        if (!req.user && !req.employee) {
+            return sendForbidden(res, 'Access denied. Admin or HR required.');
         }
 
         const { employeeId } = req.params;
@@ -319,6 +321,17 @@ export const deleteEmployee = async (req, res) => {
 
         // Optionally delete associated payroll data
         await Payroll.deleteMany({ employeeId: employee._id });
+
+        // Invalidate employee caches so lists refresh
+        const orgIdForCache = organizationId || employee.organizationId;
+        if (orgIdForCache) {
+            try {
+                const { invalidateEmployeesCache } = await import('../../helpers/cacheHelper.js');
+                await invalidateEmployeesCache(orgIdForCache);
+            } catch (e) {
+                logger.warn('Failed to invalidate employees cache after delete', { error: e.message });
+            }
+        }
 
         // Log audit trail
         await logDelete({

@@ -1,6 +1,26 @@
 import axios from 'axios';
 import logger from './logger.js';
 
+/**
+ * Clear persisted auth and UI state before redirecting to login on 401.
+ * Prevents login↔dashboard loop when user was deleted or session expired but Redux still had stale user.
+ */
+function clearAuthAndRedirectToLogin() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('persist:root');
+    localStorage.removeItem('csrfToken');
+    localStorage.removeItem('role');
+    localStorage.removeItem('email');
+    localStorage.removeItem('organizationId');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('isOrganizationLogin');
+  } catch (e) {
+    logger.warn('clearAuthAndRedirectToLogin', e?.message);
+  }
+  window.location.href = '/login';
+}
+
 // Determine base URL: use env var, or default to backend URL in production, or relative path in dev
 const getBaseURL = () => {
   // Priority 1: In development mode, always use relative path (Vite proxy)
@@ -294,10 +314,8 @@ instance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       const errorCode = error.response?.data?.code;
       if (errorCode === 'PASSWORD_CHANGED') {
-        if (typeof window !== 'undefined') {
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-            window.location.href = '/login';
-          }
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          clearAuthAndRedirectToLogin();
         }
         return Promise.reject(error);
       }
@@ -311,9 +329,8 @@ instance.interceptors.response.use(
       );
 
       if (isAuthEndpoint) {
-        // For auth endpoints, redirect to login
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          window.location.href = '/login';
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          clearAuthAndRedirectToLogin();
         }
         return Promise.reject(error);
       }
@@ -361,10 +378,8 @@ instance.interceptors.response.use(
         if (!refreshTokenPresent) {
           isRefreshing = false;
           processQueue(error, null);
-          if (typeof window !== 'undefined') {
-            if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-              window.location.href = '/login';
-            }
+          if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            clearAuthAndRedirectToLogin();
           }
           return Promise.reject(error);
         }
@@ -458,18 +473,12 @@ instance.interceptors.response.use(
         // Retry the original request
         return instance(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, redirect to login
-        // SECURITY FIX: Tokens are in httpOnly cookies, cleared by server on logout
-        // No need to clear localStorage (tokens aren't stored there anymore)
+        // Refresh failed - clear persisted auth so login page doesn't redirect back to dashboard (fixes loop when user deleted or session invalid)
         processQueue(refreshError, null);
         isRefreshing = false;
 
-        if (typeof window !== 'undefined') {
-          // Clear only non-sensitive localStorage data if needed
-          // Tokens are in cookies and will be cleared by server
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-            window.location.href = '/login';
-          }
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          clearAuthAndRedirectToLogin();
         }
 
         return Promise.reject(refreshError);

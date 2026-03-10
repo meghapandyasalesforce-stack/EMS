@@ -138,6 +138,8 @@ const getAdminNavigation = () => [
     { path: "/today-attendance", name: "Attendance", icon: <IoBookmarks /> },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
     { path: "/role-hierarchy", name: "Role Management", icon: <FaShieldAlt /> },
+    { path: "/admin/approval-workflows", name: "Approval Workflows", icon: <FaTasks /> },
+    { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock /> },
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
     { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign /> },

@@ -1,6 +1,6 @@
 
 import express from "express";
-import { getAllEmployeesPayroll, getAllPayrolls, getEmployeePayroll, updatePayroll, createPayroll, getEmployeePayrollForAdmin, getCurrentMonthPayrollForAdmin, getPayrollByEmployeeMonthYear, togglePayrollVisibility, generatePayrollsForMonthYear, disbursePayrolls } from "../../controllers/admin/payrollController.js";
+import { getAllEmployeesPayroll, getAllPayrolls, getEmployeePayroll, createPayroll, updatePayroll, getEmployeePayrollForAdmin, getCurrentMonthPayrollForAdmin, getPayrollByEmployeeMonthYear, getPayrollById, togglePayrollVisibility, generatePayrollsForMonthYear, disbursePayrolls } from "../../controllers/admin/payrollController.js";
 import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
@@ -42,6 +42,9 @@ router.route("/admin-current-payroll/:employeeId")
     .get(isAdminOrManagerOrHRAuthenticated, payrollValidationsExtended.getByEmployee, cacheMiddleware('payroll:current', 120), getCurrentMonthPayrollForAdmin);
 router.route("/admin-payroll/:employeeId/:month/:year")
     .get(isAdminOrManagerOrHRAuthenticated, payrollValidationsExtended.getByMonthYear, cacheMiddleware('payroll:monthyear', 120), getPayrollByEmployeeMonthYear);
+
+router.route("/details/:id")
+    .get(isAdminOrManagerOrHRAuthenticated, payrollLimiter, getPayrollById);
  
 router.route("/get-employee-payroll").get(isAuthenticated, cacheMiddleware('payroll:my', 120), getEmployeePayroll)
 router.route("/get-all-payroll").get(isAuthenticated, cacheMiddleware('payroll:all', 120), getAllPayrolls)

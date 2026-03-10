@@ -284,7 +284,7 @@ const CalendarManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ml-0 lg:ml-64 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6 lg:space-y-8">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">

@@ -6,6 +6,7 @@ import leaveBalanceEngine from "../../services/leaveBalanceEngine.js";
 import leaveValidationService from "../../services/leaveValidationService.js";
 import Calendar from "../../models/calendar.model.js";
 import { logCreate } from "../../helpers/auditLogger.js";
+import { normalizeLeaveTypeForPolicy } from "../../helpers/leaveTypeHelper.js";
 
 
 /**
@@ -133,12 +134,14 @@ export const createLeave = async (req, res) => {
         );
 
         if (!validation.valid) {
+            // Return human-readable validation errors directly in message
+            // and put the code into details to avoid i18n key strings like "errors.LEAVE_VALIDATION_FAILED"
             return sendError(
                 res,
                 validation.errors.join('; '),
                 400,
-                'LEAVE_VALIDATION_FAILED',
-                { warnings: validation.warnings }
+                null,
+                { code: 'LEAVE_VALIDATION_FAILED', warnings: validation.warnings }
             );
         }
 
@@ -152,7 +155,8 @@ export const createLeave = async (req, res) => {
         const duration = validation.duration || Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1);
         const workingDays = validation.workingDays || duration;
 
-        // Check leave balance before creating request (skip for loss_of_pay)
+        // Check leave balance before creating request (skip for loss_of_pay; use normalized type for policy alignment)
+        const balanceLeaveType = normalizeLeaveTypeForPolicy(leaveType);
         if (leaveType !== 'loss_of_pay') {
             const year = new Date(startDate).getFullYear();
             try {
@@ -163,7 +167,7 @@ export const createLeave = async (req, res) => {
                 );
 
                 if (balance) {
-                    const typeBalance = balance.balances.find(b => b.leaveType === leaveType);
+                    const typeBalance = balance.balances.find(b => b.leaveType === balanceLeaveType);
                     const requestedDays = isHalfDay ? 0.5 : duration;
                     if (typeBalance && typeBalance.available < requestedDays) {
                         return sendError(
@@ -295,10 +299,11 @@ export const createLeave = async (req, res) => {
         return sendInternalError(res, "Error submitting leave application", error);
     }
 };
-// Get current user's leaves
+// Get current user's leaves (statistics from actual policy/balance)
 export const getMyLeaves = async (req, res) => {
     try {
         const employeeId = req.employee._id;
+        const organizationId = req.organizationId || req.employee?.organizationId;
         const year = new Date().getFullYear();
 
         const leaves = await Leave.find({ employee: employeeId }).sort({ createdAt: -1 });
@@ -308,17 +313,34 @@ export const getMyLeaves = async (req, res) => {
             leave.status === 'approved'
         );
 
-        const statistics = {
-            totalLeaves: 36,
-            leavesTaken: currentYearLeaves.reduce((acc, leave) => acc + leave.duration, 0),
-            leavesByType: {
-                sick: currentYearLeaves.filter(l => l.leaveType === 'sick').reduce((acc, l) => acc + l.duration, 0),
-                annual: currentYearLeaves.filter(l => l.leaveType === 'annual').reduce((acc, l) => acc + l.duration, 0),
-                casual: currentYearLeaves.filter(l => l.leaveType === 'casual').reduce((acc, l) => acc + l.duration, 0)
-            }
+        const leavesTaken = currentYearLeaves.reduce((acc, leave) => acc + (leave.duration || 0), 0);
+        const leavesByType = {
+            sick: currentYearLeaves.filter(l => l.leaveType === 'sick').reduce((acc, l) => acc + (l.duration || 0), 0),
+            annual: currentYearLeaves.filter(l => l.leaveType === 'annual' || l.leaveType === 'paid').reduce((acc, l) => acc + (l.duration || 0), 0),
+            casual: currentYearLeaves.filter(l => l.leaveType === 'casual').reduce((acc, l) => acc + (l.duration || 0), 0),
+            paid: currentYearLeaves.filter(l => l.leaveType === 'paid').reduce((acc, l) => acc + (l.duration || 0), 0)
         };
 
-        statistics.remainingLeaves = statistics.totalLeaves - statistics.leavesTaken;
+        let totalLeaves = 0;
+        let remainingLeaves = 0;
+        if (organizationId) {
+            try {
+                const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+                if (balance && balance.balances && balance.balances.length) {
+                    totalLeaves = balance.balances.reduce((sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0), 0);
+                    remainingLeaves = balance.balances.reduce((sum, b) => sum + (b.available || 0), 0);
+                }
+            } catch (e) {
+                logger.warn('Get My Leaves: balance fetch failed', { employeeId, error: e.message });
+            }
+        }
+
+        const statistics = {
+            totalLeaves,
+            leavesTaken,
+            remainingLeaves: totalLeaves > 0 ? remainingLeaves : Math.max(0, totalLeaves - leavesTaken),
+            leavesByType
+        };
 
         res.json({ leaves, statistics });
     } catch (error) {

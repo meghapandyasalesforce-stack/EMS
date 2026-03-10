@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FaBell, FaTimes, FaCheck, FaTrash } from 'react-icons/fa';
 import axios from '../utils/axios';
 import { toast } from 'react-toastify';
@@ -11,7 +12,7 @@ const NotificationDropdown = () => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
     const buttonRef = useRef(null);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
@@ -67,45 +68,42 @@ const NotificationDropdown = () => {
         };
     }, [authUser]);
 
-    // Calculate dropdown position when opening
+    // Calculate dropdown position when opening – panel opens to the right of the button, stays in viewport
+    const DROPDOWN_WIDTH_PX = 320; // w-80 = 20rem
+    const DROPDOWN_MAX_HEIGHT_PX = 512;
+
     useEffect(() => {
         if (isOpen && buttonRef.current && typeof window !== 'undefined') {
             try {
                 const buttonRect = buttonRef.current.getBoundingClientRect();
                 const viewportHeight = window.innerHeight;
                 const viewportWidth = window.innerWidth;
-                const dropdownMaxHeight = 512; // max-h-[32rem] = 32 * 16px = 512px
-                const spacing = 8; // 8px spacing
-                const spaceAbove = buttonRect.top;
-                const spaceBelow = viewportHeight - buttonRect.bottom;
+                const spacing = 8;
 
-                // Determine best position: above if enough space, otherwise below
-                // Also check if positioning above would go negative (above viewport)
-                const positionAboveTop = buttonRect.top - dropdownMaxHeight - spacing;
-                const positionBelowTop = buttonRect.bottom + spacing;
-
-                if (spaceAbove > spaceBelow && spaceAbove > dropdownMaxHeight && positionAboveTop >= 0) {
-                    // Position above (but ensure it doesn't go above viewport)
-                    setDropdownPosition({
-                        top: Math.max(0, positionAboveTop),
-                        right: viewportWidth - buttonRect.right
-                    });
-                } else {
-                    // Position below (ensure it doesn't go below viewport)
-                    const maxBottom = viewportHeight - spacing;
-                    const calculatedTop = positionBelowTop;
-                    setDropdownPosition({
-                        top: Math.min(calculatedTop, maxBottom - dropdownMaxHeight),
-                        right: viewportWidth - buttonRect.right
-                    });
+                // Horizontal: open to the right of the button (e.g. right of sidebar), never overflow right
+                let left = buttonRect.right + spacing;
+                if (left + DROPDOWN_WIDTH_PX > viewportWidth - spacing) {
+                    left = Math.max(spacing, viewportWidth - DROPDOWN_WIDTH_PX - spacing);
                 }
+                if (left < spacing) left = spacing;
+
+                // Vertical: prefer below button, keep within viewport
+                const spaceBelow = viewportHeight - buttonRect.bottom - spacing;
+                const spaceAbove = buttonRect.top - spacing;
+                const openBelow = spaceBelow >= Math.min(DROPDOWN_MAX_HEIGHT_PX, spaceBelow) || spaceBelow >= spaceAbove;
+                let top;
+                if (openBelow) {
+                    top = buttonRect.bottom + spacing;
+                    const maxTop = viewportHeight - DROPDOWN_MAX_HEIGHT_PX - spacing;
+                    if (top > maxTop) top = Math.max(spacing, maxTop);
+                } else {
+                    top = buttonRect.top - spacing - DROPDOWN_MAX_HEIGHT_PX;
+                    if (top < spacing) top = spacing;
+                }
+
+                setDropdownPosition({ top, left });
             } catch (error) {
-                // Fallback positioning if calculation fails
-                // Removed console.error for production
-                setDropdownPosition({
-                    top: 0,
-                    right: 0
-                });
+                setDropdownPosition({ top: 80, left: 24 });
             }
         }
     }, [isOpen]);
@@ -309,20 +307,24 @@ const NotificationDropdown = () => {
                 )}
             </button>
 
-            {isOpen && (
+            {isOpen && typeof document !== 'undefined' && createPortal(
                 <>
                     {/* Backdrop to close on click outside */}
                     <div 
-                        className="fixed inset-0 z-40 bg-transparent"
+                        className="fixed inset-0 z-[9998] bg-black/20"
                         onClick={() => setIsOpen(false)}
+                        aria-hidden="true"
                     />
                     <div 
                         ref={dropdownRef}
-                        className="fixed w-[15rem] sm:w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-[32rem] flex flex-col"
+                        className="fixed w-80 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] flex flex-col"
                         style={{
                             top: `${dropdownPosition.top}px`,
-                            right: `${dropdownPosition.right}px`
+                            left: `${dropdownPosition.left}px`,
+                            maxHeight: 'min(32rem, calc(100vh - 2rem))'
                         }}
+                        role="dialog"
+                        aria-label="Notifications"
                     >
                     <div className="p-4 border-b border-gray-200 flex-shrink-0">
                         <div className="flex items-center justify-between gap-2">
@@ -420,7 +422,8 @@ const NotificationDropdown = () => {
                         </div>
                     )}
                     </div>
-                </>
+                </>,
+                document.body
             )}
         </div>
     );

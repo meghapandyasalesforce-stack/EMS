@@ -18,15 +18,16 @@ const PDF_CONFIG = {
     margin: 15
 };
 
+// Salary slip palette: green #1cca9b, hard black #0e2b3d (headers), soft black #666 (sub-headers)
 const COLORS = {
-    header: { r: 59, g: 130, b: 246 },      // Blue
-    success: { r: 34, g: 197, b: 94 },      // Green
-    error: { r: 239, g: 68, b: 68 },        // Red
-    warning: { r: 251, g: 191, b: 36 },     // Amber/Yellow
-    tableHeader: { r: 240, g: 240, b: 240 }, // Light Gray
-    border: { r: 200, g: 200, b: 200 },     // Gray
-    text: { r: 0, g: 0, b: 0 },             // Black
-    textLight: { r: 100, g: 100, b: 100 }   // Dark Gray
+    header: { r: 14, g: 43, b: 61 },         // #0e2b3d hard black – section headers
+    success: { r: 28, g: 202, b: 155 },      // #1cca9b green – highlights, net amount bar
+    error: { r: 239, g: 68, b: 68 },         // Red
+    warning: { r: 251, g: 191, b: 36 },      // Amber/Yellow
+    tableHeader: { r: 230, g: 248, b: 241 }, // Light green tint (from #1cca9b) – table header bg
+    border: { r: 200, g: 200, b: 200 },      // Gray
+    text: { r: 14, g: 43, b: 61 },           // #0e2b3d hard black – main text
+    textLight: { r: 102, g: 102, b: 102 }   // #666 soft black – sub-headers, secondary text
 };
 
 /**
@@ -96,6 +97,42 @@ const formatDate = (date) => {
         logger.warn('Date formatting error', { error: error.message, date });
         return '';
     }
+};
+
+/**
+ * Convert number to words for Indian currency (e.g. "INR Sixty Five Thousand Five Hundred Eighty Seven Only")
+ * Handles integers only (rupees); decimal part is ignored.
+ *
+ * @param {number|string} num - Amount to convert
+ * @returns {string} Amount in words
+ */
+const numberToWordsINR = (num) => {
+    const n = Math.floor(Number(num) || 0);
+    if (n === 0) return 'INR Zero Only';
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+        'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const toWordsUpTo99 = (x) => {
+        if (x < 20) return ones[x];
+        return tens[Math.floor(x / 10)] + (x % 10 ? ' ' + ones[x % 10] : '');
+    };
+    const toWordsUpTo999 = (x) => {
+        if (x === 0) return '';
+        if (x < 100) return toWordsUpTo99(x);
+        return ones[Math.floor(x / 100)] + ' Hundred' + (x % 100 ? ' ' + toWordsUpTo99(x % 100) : '');
+    };
+    let s = n.toString().replace(/^0+/, '') || '0';
+    while (s.length < 9) s = '0' + s;
+    const crore = parseInt(s.slice(0, 2), 10);
+    const lakh = parseInt(s.slice(2, 4), 10);
+    const thousand = parseInt(s.slice(4, 6), 10);
+    const hundred = parseInt(s.slice(6, 9), 10);
+    const parts = [];
+    if (crore > 0) parts.push(toWordsUpTo99(crore) + ' Crore');
+    if (lakh > 0) parts.push(toWordsUpTo99(lakh) + ' Lakh');
+    if (thousand > 0) parts.push(toWordsUpTo99(thousand) + ' Thousand');
+    if (hundred > 0) parts.push(toWordsUpTo999(hundred));
+    return 'INR ' + parts.join(' ').trim().replace(/\s+/g, ' ') + ' Only';
 };
 
 /**
@@ -214,23 +251,24 @@ const drawTableRow = (doc, x, y, width, label, value, isBold = false, drawLine =
  *   }
  * );
  */
-export const generatePayrollPDF = async (payrollData, employeeData) => {
+export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}) => {
     const startTime = Date.now();
-    
+    const companyName = orgData?.name || 'Paarsiv';
+
     try {
         // Input validation
         if (!payrollData || typeof payrollData !== 'object') {
             throw new Error('Invalid payrollData: must be an object');
         }
-        
+
         if (!employeeData || typeof employeeData !== 'object') {
             throw new Error('Invalid employeeData: must be an object');
         }
-        
+
         if (!employeeData.name || !employeeData.employeeId) {
             throw new Error('Invalid employeeData: name and employeeId are required');
         }
-        
+
         // Initialize PDF document
         const doc = new jsPDF({
             orientation: PDF_CONFIG.orientation,
@@ -242,357 +280,276 @@ export const generatePayrollPDF = async (payrollData, employeeData) => {
         const pageHeight = doc.internal.pageSize.getHeight();
         const margin = PDF_CONFIG.margin;
         const contentWidth = pageWidth - (2 * margin);
+        const halfWidth = contentWidth / 2;
         let yPos = margin;
+        const period = `${payrollData.month || 'N/A'}-${payrollData.year || 'N/A'}`;
 
-        // ==================== HEADER SECTION ====================
-        doc.setFillColor(COLORS.header.r, COLORS.header.g, COLORS.header.b);
-        doc.rect(0, 0, pageWidth, 40, 'F');
-        
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(24);
+        // ==================== HEADER: Left = company logo, Right = company name only ====================
+        const logoMaxSize = 30; // max width/height in mm – logo fits inside this box, aspect ratio preserved
+        const headerBlockY = yPos;
+        let logoWidthMm = logoMaxSize;
+        let logoHeightMm = logoMaxSize;
+        if (orgData?.logoWidth && orgData?.logoHeight && orgData.logoWidth > 0 && orgData.logoHeight > 0) {
+            const ratio = orgData.logoWidth / orgData.logoHeight;
+            if (ratio >= 1) {
+                logoWidthMm = logoMaxSize;
+                logoHeightMm = logoMaxSize / ratio;
+            } else {
+                logoWidthMm = logoMaxSize * ratio;
+                logoHeightMm = logoMaxSize;
+            }
+        }
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        if (orgData?.logoBase64) {
+            try {
+                const logoFormat = orgData.logoFormat || 'PNG';
+                doc.addImage(orgData.logoBase64, logoFormat, margin, headerBlockY, logoWidthMm, logoHeightMm);
+            } catch (e) {
+                logger.warn('Payslip header: could not embed logo image', { error: e.message });
+            }
+        }
         doc.setFont('helvetica', 'bold');
-        doc.text('PAYSLIP', pageWidth / 2, 20, { align: 'center' });
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        const period = `${payrollData.month || 'N/A'} ${payrollData.year || 'N/A'}`;
-        doc.text(`Period: ${period}`, pageWidth / 2, 30, { align: 'center' });
-
-        yPos = 50;
-        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-
-        // ==================== SYSTEM INFO ====================
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Generated by Paarsiv HRMS', margin, yPos);
-        
-        yPos += 5;
-        doc.setFontSize(8);
-        doc.setTextColor(COLORS.textLight.r, COLORS.textLight.g, COLORS.textLight.b);
-        const generatedOn = formatTimestamp(new Date());
-        doc.text(`Generated on: ${generatedOn}`, margin, yPos);
-        
-        yPos += 15;
-        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-
-        // ==================== EMPLOYEE INFORMATION BOX ====================
-        const employeeBoxHeight = 35;
-        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
-        doc.setLineWidth(0.5);
-        doc.rect(margin, yPos, contentWidth, employeeBoxHeight);
-        
-        yPos += 10;
         doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Employee Information', margin + 5, yPos);
-        
-        yPos += 8;
-        doc.setFontSize(10);
+        const companyNameY = headerBlockY + logoHeightMm / 2 - 2;
+        doc.text(sanitizeText(companyName), pageWidth - margin, companyNameY, { align: 'right' });
         doc.setFont('helvetica', 'normal');
-        
+        yPos += logoHeightMm + 4;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(COLORS.header.r, COLORS.header.g, COLORS.header.b);
+        const titleText = `Pay Slip for ${period}`;
+        doc.text(titleText, pageWidth / 2, yPos, { align: 'center' });
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        doc.setFont('helvetica', 'normal');
+        yPos += 12;
+
+        // ==================== EMPLOYEE AND ACCOUNT DETAILS (two-column table) ====================
         const employeeName = `${employeeData.name || ''} ${employeeData.lastName || ''}`.trim();
-        doc.text(`Name: ${employeeName}`, margin + 5, yPos);
-        doc.text(`Employee ID: ${employeeData.employeeId || 'N/A'}`, margin + 5, yPos + 5);
-        
-        if (employeeData.jobTitle) {
-            doc.text(`Designation: ${employeeData.jobTitle}`, margin + 5, yPos + 10);
-        }
-        if (employeeData.department) {
-            doc.text(`Department: ${employeeData.department}`, margin + 5, yPos + 15);
-        }
-
-        yPos += employeeBoxHeight + 10;
-
-        // ==================== PAYROLL DETAILS SECTION ====================
-        yPos = checkPageBreak(doc, yPos, pageHeight, margin, 30);
-        
-        doc.setFontSize(12);
+        const leftRows = [
+            ['Name', employeeName || ''],
+            ['E - Mail ID', employeeData.email || ''],
+            ['Designation', employeeData.jobTitle || ''],
+            ['Bank Name', employeeData.bankName || ''],
+            ['Date Of Joining', employeeData.joiningDate ? formatDate(employeeData.joiningDate) : ''],
+            ['EPF UAN', employeeData.epfUan || '']
+        ];
+        const rightRows = [
+            ['Phone No', employeeData.phone || ''],
+            ['PAN No', employeeData.panNumber || ''],
+            ['Staff ID', employeeData.employeeId || ''],
+            ['Bank Account Number', employeeData.accountNumber || ''],
+            ['Gender', employeeData.gender || ''],
+            ['Tax Regime', employeeData.taxRegime || '']
+        ];
+        const leftLabelMax = 38;
+        const rightLabelMax = 48;
+        const cellPad = 6;
+        const leftValueWidth = halfWidth - leftLabelMax - cellPad;
+        const rightValueWidth = halfWidth - rightLabelMax - cellPad;
+        const rowHeight = 6;
+        const tableTop = yPos + 6;
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.text('PAYROLL DETAILS', margin, yPos);
-        
-        yPos += 5;
+        doc.setTextColor(COLORS.header.r, COLORS.header.g, COLORS.header.b);
+        doc.text('Employee and Account Details', margin, yPos);
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        yPos = tableTop;
         doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
         doc.setLineWidth(0.3);
-        
-        // Table header
-        doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
-        doc.rect(margin, yPos, contentWidth, 8, 'F');
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Description', margin + 3, yPos + 5.5);
-        doc.text('Amount', pageWidth - margin - 3, yPos + 5.5, { align: 'right' });
-        
-        yPos += 8;
+        // Slightly taller box so the last row text stays comfortably inside the border
+        const detailsBoxHeight = leftRows.length * rowHeight + 8;
+        doc.rect(margin, yPos, contentWidth, detailsBoxHeight, 'S');
+        doc.line(margin + halfWidth, yPos, margin + halfWidth, yPos + detailsBoxHeight);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
-        
-        // Basic Salary
-        const basicSalary = Number(payrollData.basicSalary) || 0;
-        drawTableRow(doc, margin + 3, yPos + 5, contentWidth - 6, 'Basic Salary', formatCurrency(basicSalary));
-        yPos += 7;
-        
-        // CTC (Cost to Company) - Optional
-        if (payrollData.ctc && Number(payrollData.ctc) > 0) {
+        const leftValueRightEdge = margin + halfWidth - 5;
+        const rightValueRightEdge = pageWidth - margin - 5;
+        leftRows.forEach(([label, value], i) => {
+            const yy = yPos + 4 + (i + 1) * rowHeight;
             doc.setFont('helvetica', 'bold');
-            drawTableRow(doc, margin + 3, yPos + 5, contentWidth - 6, 'Cost to Company (CTC)', formatCurrency(payrollData.ctc));
+            doc.text(sanitizeText(label + ':'), margin + 3, yy);
             doc.setFont('helvetica', 'normal');
+            const val = sanitizeText(String(value || ''));
+            const lines = doc.splitTextToSize(val, leftValueWidth);
+            doc.text(lines[0] || '', leftValueRightEdge, yy, { align: 'right' });
+        });
+        rightRows.forEach(([label, value], i) => {
+            const yy = yPos + 4 + (i + 1) * rowHeight;
+            doc.setFont('helvetica', 'bold');
+            doc.text(sanitizeText(label + ':'), margin + halfWidth + 3, yy);
+            doc.setFont('helvetica', 'normal');
+            const val = sanitizeText(String(value || ''));
+            const lines = doc.splitTextToSize(val, rightValueWidth);
+            doc.text(lines[0] || '', rightValueRightEdge, yy, { align: 'right' });
+        });
+        yPos += leftRows.length * rowHeight + 14;
+
+        // ==================== SALARY DETAILS (Attendance) – 3 columns to avoid overlap ====================
+        yPos = checkPageBreak(doc, yPos, pageHeight, margin, 35);
+        const salaryPaidFor = payrollData.salaryPaidFor || `${period} (${payrollData.presentDays ?? payrollData.workingDays ?? 21} Days)`;
+        const presentDaysVal = payrollData.presentDays ?? payrollData.workingDays ?? 21;
+        const unpaidLeaveVal = payrollData.unpaidLeave ?? 0;
+        const col1End = margin + contentWidth * 0.52;
+        const col2End = margin + contentWidth * 0.76;
+        const cellPadSalary = 4;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(COLORS.header.r, COLORS.header.g, COLORS.header.b);
+        doc.text('Salary Details', margin, yPos);
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        yPos += 6;
+        doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
+        doc.rect(margin, yPos, contentWidth, 8, 'F');
+        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
+        doc.line(col1End, yPos, col1End, yPos + 8);
+        doc.line(col2End, yPos, col2End, yPos + 8);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Salary Paid for', margin + cellPadSalary, yPos + 5.5);
+        doc.setFont('helvetica', 'normal');
+        const salaryPaidLines = doc.splitTextToSize(sanitizeText(salaryPaidFor), col1End - margin - 28);
+        doc.text(salaryPaidLines[0] || '', col1End - cellPadSalary, yPos + 5.5, { align: 'right' });
+        doc.setFont('helvetica', 'bold');
+        doc.text('Present', col1End + cellPadSalary, yPos + 5.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${presentDaysVal} Days`, col2End - cellPadSalary, yPos + 5.5, { align: 'right' });
+        doc.setFont('helvetica', 'bold');
+        doc.text('Unpaid Leave', col2End + cellPadSalary, yPos + 5.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${unpaidLeaveVal} Days`, pageWidth - margin - cellPadSalary, yPos + 5.5, { align: 'right' });
+        yPos += 12;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text('Balance Leaves as on last day of ' + period + ' is:', margin, yPos);
+        yPos += 6;
+        doc.text('Note:', margin, yPos);
+        yPos += 10;
+
+        // ==================== EARNING AND DEDUCTION (Earning Head | Amount | Deduction Head | Amount) ====================
+        yPos = checkPageBreak(doc, yPos, pageHeight, margin, 50);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(COLORS.header.r, COLORS.header.g, COLORS.header.b);
+        doc.text('Earning and Deduction', margin, yPos);
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        yPos += 6;
+        const earningsExclude = ['totalEarnings', 'total'];
+        const deductionsExclude = ['total', 'totalDeductions'];
+        let earningsTotal = 0;
+        let deductionsTotal = 0;
+        const earningsEntries = (payrollData.earnings && typeof payrollData.earnings === 'object')
+            ? Object.entries(payrollData.earnings)
+                .filter(([key, value]) => {
+                    const numValue = Number(value);
+                    return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
+                })
+                .sort((a, b) => Number(b[1]) - Number(a[1]))
+            : [];
+        const deductionsEntries = (payrollData.deductions && typeof payrollData.deductions === 'object')
+            ? Object.entries(payrollData.deductions)
+                .filter(([key, value]) => {
+                    const numValue = Number(value);
+                    return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
+                })
+                .sort((a, b) => Number(b[1]) - Number(a[1]))
+            : [];
+        earningsEntries.forEach(([, value]) => { earningsTotal += Number(value); });
+        deductionsEntries.forEach(([, value]) => { deductionsTotal += Number(value); });
+        const totalEarnings = Number(payrollData.earnings?.totalEarnings) || earningsTotal;
+        const totalDeductions = Number(payrollData.deductions?.total) || deductionsTotal;
+        const maxRows = Math.max(earningsEntries.length, deductionsEntries.length, 1);
+        const colW1 = contentWidth * 0.38;
+        const colW2 = contentWidth * 0.12;
+        const colW3 = contentWidth * 0.38;
+        const colW4 = contentWidth * 0.12;
+        const leftHalf = colW1 + colW2;
+        const tableTopY = yPos;
+        doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
+        doc.rect(margin, yPos, leftHalf, 8, 'F');
+        doc.rect(margin + leftHalf, yPos, colW3 + colW4, 8, 'F');
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Earning Head', margin + 2, yPos + 5.5);
+        doc.text(period, margin + colW1 + 2, yPos + 5.5);
+        doc.text('Deduction Head', margin + leftHalf + 2, yPos + 5.5);
+        doc.text(period, margin + leftHalf + colW3 + 2, yPos + 5.5);
+        yPos += 8;
+        doc.setFont('helvetica', 'normal');
+        for (let i = 0; i < maxRows; i++) {
+            yPos = checkPageBreak(doc, yPos, pageHeight, margin, 8);
+            const earn = earningsEntries[i];
+            const ded = deductionsEntries[i];
+            const earnLabel = earn ? formatLabel(earn[0]) : '';
+            const earnAmt = earn ? formatCurrency(earn[1]) : '';
+            const dedLabel = ded ? formatLabel(ded[0]) : '';
+            const dedAmt = ded ? formatCurrency(ded[1]) : '';
+            const earnLabelLine = doc.splitTextToSize(sanitizeText(earnLabel), colW1 - 2)[0] || '';
+            const dedLabelLine = doc.splitTextToSize(sanitizeText(dedLabel), colW3 - 2)[0] || '';
+            doc.text(earnLabelLine, margin + 2, yPos + 5);
+            doc.text(earnAmt, margin + colW1 + 2, yPos + 5);
+            doc.text(dedLabelLine, margin + leftHalf + 2, yPos + 5);
+            doc.text(dedAmt, margin + leftHalf + colW3 + 2, yPos + 5);
+            doc.line(margin, yPos + 6, pageWidth - margin, yPos + 6);
             yPos += 7;
         }
-        
-        yPos += 5;
-
-        // ==================== EARNINGS SECTION ====================
-        yPos = checkPageBreak(doc, yPos, pageHeight, margin, 40);
-        
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('EARNINGS', margin, yPos);
-        
-        yPos += 5;
-        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
-        doc.setLineWidth(0.3);
-        
-        // Table header
-        doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
-        doc.rect(margin, yPos, contentWidth, 8, 'F');
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Description', margin + 3, yPos + 5.5);
-        doc.text('Amount', pageWidth - margin - 3, yPos + 5.5, { align: 'right' });
-        
-        yPos += 8;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        
-        // Process earnings
-        const earningsExclude = ['totalEarnings', 'total'];
-        let earningsTotal = 0;
-        
-        if (payrollData.earnings && typeof payrollData.earnings === 'object') {
-            const earningsEntries = Object.entries(payrollData.earnings)
-                .filter(([key, value]) => {
-                    const numValue = Number(value);
-                    return !earningsExclude.includes(key) && 
-                           !isNaN(numValue) && 
-                           numValue > 0;
-                })
-                .sort((a, b) => Number(b[1]) - Number(a[1]));
-            
-            earningsEntries.forEach(([key, value]) => {
-                yPos = checkPageBreak(doc, yPos, pageHeight, margin, 10);
-                
-                const numValue = Number(value);
-                earningsTotal += numValue;
-                const label = formatLabel(key);
-                const amountText = formatCurrency(numValue);
-                
-                drawTableRow(doc, margin + 3, yPos + 5, contentWidth - 6, label, amountText);
-                yPos += 7;
-            });
-        }
-        
-        // Earnings Total
-        yPos += 2;
         doc.setDrawColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-        doc.setLineWidth(0.5);
+        doc.setLineWidth(0.4);
         doc.line(margin, yPos, pageWidth - margin, yPos);
         yPos += 5;
-        
-        const totalEarnings = Number(payrollData.earnings?.totalEarnings) || earningsTotal;
-        drawTableRow(doc, margin + 3, yPos + 5, contentWidth - 6, 'Total Earnings', formatCurrency(totalEarnings), true, false);
-        
-        yPos += 15;
-
-        // ==================== DEDUCTIONS SECTION ====================
-        yPos = checkPageBreak(doc, yPos, pageHeight, margin, 40);
-        
-        doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('DEDUCTIONS', margin, yPos);
-        
-        yPos += 5;
-        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
-        doc.setLineWidth(0.3);
-        
-        // Table header
-        doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
-        doc.rect(margin, yPos, contentWidth, 8, 'F');
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Description', margin + 3, yPos + 5.5);
-        doc.text('Amount', pageWidth - margin - 3, yPos + 5.5, { align: 'right' });
-        
-        yPos += 8;
+        doc.text('Total Earnings', margin + 2, yPos + 5);
+        doc.text(formatCurrency(totalEarnings), margin + colW1 + 2, yPos + 5);
+        doc.text('Total Deductions', margin + leftHalf + 2, yPos + 5);
+        doc.text(formatCurrency(totalDeductions), margin + leftHalf + colW3 + 2, yPos + 5);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        
-        // Process deductions
-        const deductionsExclude = ['total', 'totalDeductions'];
-        let deductionsTotal = 0;
-        
-        if (payrollData.deductions && typeof payrollData.deductions === 'object') {
-            const deductionsEntries = Object.entries(payrollData.deductions)
-                .filter(([key, value]) => {
-                    const numValue = Number(value);
-                    return !deductionsExclude.includes(key) && 
-                           !isNaN(numValue) && 
-                           numValue > 0;
-                })
-                .sort((a, b) => Number(b[1]) - Number(a[1]));
-            
-            deductionsEntries.forEach(([key, value]) => {
-                yPos = checkPageBreak(doc, yPos, pageHeight, margin, 10);
-                
-                const numValue = Number(value);
-                deductionsTotal += numValue;
-                const label = formatLabel(key);
-                const amountText = formatCurrency(numValue);
-                
-                drawTableRow(doc, margin + 3, yPos + 5, contentWidth - 6, label, amountText);
-                yPos += 7;
-            });
-        }
-        
-        // Deductions Total
-        yPos += 2;
-        doc.setDrawColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-        doc.setLineWidth(0.5);
-        doc.line(margin, yPos, pageWidth - margin, yPos);
-        yPos += 5;
-        
-        const totalDeductions = Number(payrollData.deductions?.total) || deductionsTotal;
-        drawTableRow(doc, margin + 3, yPos + 5, contentWidth - 6, 'Total Deductions', formatCurrency(totalDeductions), true, false);
-        
-        yPos += 15;
+        const tableBottomY = yPos + 12;
+        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
+        doc.setLineWidth(0.4);
+        doc.line(margin + leftHalf, tableTopY, margin + leftHalf, tableBottomY);
+        yPos += 14;
 
-        // ==================== NET SALARY SECTION ====================
+        // ==================== NET AMOUNT + AMOUNT IN WORDS ====================
         yPos = checkPageBreak(doc, yPos, pageHeight, margin, 25);
-        
-        doc.setFillColor(COLORS.success.r, COLORS.success.g, COLORS.success.b);
-        doc.rect(margin, yPos, contentWidth, 20, 'F');
-        
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('NET SALARY', margin + 5, yPos + 8);
-        
         const netSalary = Number(payrollData.inHandSalary) || (totalEarnings - totalDeductions);
-        const netSalaryText = sanitizeText(formatCurrency(netSalary));
-        doc.setFontSize(16);
-        doc.text(netSalaryText, pageWidth - margin - 5, yPos + 8, { align: 'right' });
-        
-        yPos += 25;
-
-        // ==================== PAYMENT INFORMATION SECTION ====================
-        if (payrollData.payment && typeof payrollData.payment === 'object') {
-            yPos = checkPageBreak(doc, yPos, pageHeight, margin, 30);
-            
-            doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            doc.text('PAYMENT INFORMATION', margin, yPos);
-            yPos += 8;
-            
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
-            
-            if (payrollData.payment.provider) {
-                doc.text(`Payment Provider: ${payrollData.payment.provider}`, margin, yPos);
-                yPos += 6;
-            }
-            
-            if (payrollData.payment.reference) {
-                doc.text(`Transaction Reference: ${payrollData.payment.reference}`, margin, yPos);
-                yPos += 6;
-            }
-            
-            if (payrollData.payment.status) {
-                const status = String(payrollData.payment.status);
-                const statusColor = status === 'Success' ? COLORS.success :
-                                   status === 'Failed' ? COLORS.error :
-                                   COLORS.warning;
-                
-                doc.setTextColor(statusColor.r, statusColor.g, statusColor.b);
-                doc.setFont('helvetica', 'bold');
-                doc.text(`Payment Status: ${status}`, margin, yPos);
-                doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-                doc.setFont('helvetica', 'normal');
-                yPos += 6;
-            }
-            
-            if (payrollData.payment.processedAt) {
-                const processedDate = formatDate(payrollData.payment.processedAt);
-                if (processedDate) {
-                    doc.text(`Processed At: ${processedDate}`, margin, yPos);
-                    yPos += 6;
-                }
-            }
-            
-            yPos += 5;
-        }
-
-        // ==================== ADDITIONAL INFORMATION ====================
-        if (payrollData.status) {
-            yPos = checkPageBreak(doc, yPos, pageHeight, margin, 15);
-            
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'normal');
-            const status = String(payrollData.status);
-            const statusColor = status === 'Paid' ? COLORS.success :
-                               status === 'Processed' ? COLORS.header :
-                               COLORS.warning;
-            
-            doc.setTextColor(statusColor.r, statusColor.g, statusColor.b);
-            doc.setFont('helvetica', 'bold');
-            doc.text(`Payroll Status: ${status}`, margin, yPos);
-            doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
-            doc.setFont('helvetica', 'normal');
-            yPos += 5;
-        }
-        
-        if (payrollData.processedDate) {
-            const processedDate = formatDate(payrollData.processedDate);
-            if (processedDate) {
-                doc.text(`Processed Date: ${processedDate}`, margin, yPos);
-                yPos += 5;
-            }
-        }
-        
-        if (payrollData.paidDate) {
-            const paidDate = formatDate(payrollData.paidDate);
-            if (paidDate) {
-                doc.text(`Paid Date: ${paidDate}`, margin, yPos);
-                yPos += 5;
-            }
-        }
-        
-        // ==================== NOTES SECTION ====================
-        if (payrollData.notes && typeof payrollData.notes === 'string' && payrollData.notes.trim()) {
-            yPos = checkPageBreak(doc, yPos, pageHeight, margin, 20);
-            yPos += 5;
-            
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Notes:', margin, yPos);
-            yPos += 5;
-            
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            
-            const notesLines = doc.splitTextToSize(payrollData.notes.trim(), contentWidth - 4);
-            notesLines.forEach(line => {
-                yPos = checkPageBreak(doc, yPos, pageHeight, margin, 5);
-                doc.text(line, margin + 2, yPos);
-                yPos += 4;
-            });
-        }
-
-        // ==================== FOOTER ====================
-        const footerY = pageHeight - 10;
+        const netAmountBarHeight = 14;
+        doc.setFillColor(COLORS.success.r, COLORS.success.g, COLORS.success.b);
+        doc.rect(margin, yPos - 2, contentWidth, netAmountBarHeight, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Net Amount:', margin + 4, yPos + 6);
+        doc.text('R ' + (netSalary.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')), pageWidth - margin - 4, yPos + 6, { align: 'right' });
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        yPos += netAmountBarHeight + 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
         doc.setTextColor(COLORS.textLight.r, COLORS.textLight.g, COLORS.textLight.b);
+        doc.text('Amount In Words:', margin, yPos + 5);
+        doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
+        yPos += 5;
+        const amountWords = numberToWordsINR(netSalary);
+        const wordsLines = doc.splitTextToSize(sanitizeText(amountWords), contentWidth - 4);
+        wordsLines.forEach(line => {
+            doc.text(line, margin, yPos + 4);
+            yPos += 5;
+        });
+        yPos += 8;
+
+        // ==================== FOOTER (Disclaimer + Copyright) ====================
+        yPos = checkPageBreak(doc, yPos, pageHeight, margin, 28);
+        doc.setFontSize(8);
+        doc.setTextColor(COLORS.textLight.r, COLORS.textLight.g, COLORS.textLight.b);
+        const disclaimer = 'Please review your salary slip and contact HR for any discrepancies within 15 calendar days.';
+        const disclaimerLines = doc.splitTextToSize(disclaimer, contentWidth);
+        disclaimerLines.forEach(line => {
+            doc.text(line, margin, yPos);
+            yPos += 4;
+        });
+        yPos += 4;
         doc.setFontSize(7);
-        doc.text('This is a system-generated document and does not require a signature.', 
-            pageWidth / 2, footerY, { align: 'center' });
+        doc.text(`© ${payrollData.year || new Date().getFullYear()} ${companyName}. All rights reserved.`, pageWidth / 2, yPos, { align: 'center' });
+        const footerY = pageHeight - 8;
+        doc.text(`Generated on: ${formatTimestamp(new Date())}`, pageWidth / 2, footerY, { align: 'center' });
 
         // ==================== GENERATE BUFFER ====================
         const pdfBuffer = Buffer.from(doc.output('arraybuffer'));

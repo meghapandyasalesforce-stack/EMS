@@ -67,7 +67,7 @@ const GuarantorDetails = () => {
   };
 
   return (
-    <div className="ml-0 lg:ml-64 p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
       <div className="max-w-4xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow">
         <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-800">Guarantor Details</h2>
 

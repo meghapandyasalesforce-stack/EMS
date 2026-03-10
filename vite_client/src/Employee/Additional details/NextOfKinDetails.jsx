@@ -75,8 +75,8 @@ function NextOfKinDetails() {
     // );
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 md:p-8 ml-0 md:ml-64 lg:ml-64 transition-all duration-300">
-            <div className="max-w-2xl mx-auto lg:mx-4 lg:ml-32 xl:mx-auto">
+        <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
+            <div className="max-w-2xl mx-auto">
                 <div className="bg-white p-4 md:p-6 rounded-lg shadow">
                     <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-800">Next of Kin Details</h2>
 

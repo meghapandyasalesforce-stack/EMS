@@ -74,7 +74,7 @@ const LeaveEncashment = () => {
     ];
 
     return (
-        <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 ml-0 lg:ml-64 transition-all duration-300">
+        <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
             <div className="p-4 md:p-8 max-w-screen-2xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Leave Encashment</h1>

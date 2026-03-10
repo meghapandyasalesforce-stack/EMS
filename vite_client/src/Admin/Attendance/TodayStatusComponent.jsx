@@ -59,7 +59,7 @@ const TodayStatusComponent = () => {
   };
 
   return (
-    <div className="transition-all duration-300 ml-0 lg:ml-64 mt-5 lg:mt-0">
+    <div className="transition-all duration-300 mt-5 lg:mt-0">
       <div className="p-4 sm:p-6">
         <div className='flex justify-between'> 
 

@@ -10,10 +10,11 @@ import asyncHandler from '../../helpers/asyncHandler.js';
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
 import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
 import { autoGenerateIdCard } from '../admin/idCardController.js';
-
+import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 
 // Generate token with employeeId instead of email
-import Payroll from '../../models/payroll.model.js'; // Make sure this path is correct
+import Payroll from '../../models/payroll.model.js';
+import { computeEarningsFromGross } from '../../helpers/salaryCalculation.js';
 
 
 /**
@@ -133,13 +134,37 @@ export const registerEmployee = async (req, res) => {
             jobTitle, jobCategory, salary
         } = req.body;
 
-        // Validate required fields (password is optional - will be generated if not provided)
+        // Validate required fields (password and manager optional - manager defaults to 'CEO' for first employee only)
         if (!name || !lastName || !email || !position ||
-            !department || !manager || !jobTitle || !jobCategory || !salary) {
+            !department || !jobTitle || !jobCategory || !salary) {
             return sendValidationError(res, 
                 'All fields are required (password will be auto-generated if not provided)'
             );
         }
+
+        // Get organizationId early so we can enforce "manager required after first employee"
+        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.body.organizationId;
+        if (!organizationId) {
+            return sendError(res, 
+                'Organization ID is required. Please ensure you are authenticated as an admin.',
+                400,
+                'MISSING_ORGANIZATION_ID'
+            );
+        }
+
+        const existingEmployeeCount = await Employee.countDocuments({ organizationId });
+        const managerTrimmed = manager && String(manager).trim();
+        // First employee (count === 0) can have no manager / CEO; every employee after must have a manager selected
+        if (existingEmployeeCount >= 1) {
+            if (!managerTrimmed || managerTrimmed === 'CEO') {
+                return sendError(res, 
+                    'Manager is required. Please select a manager from the list. Only the first employee can be added without a manager (CEO/Manager).',
+                    400,
+                    'MANAGER_REQUIRED'
+                );
+            }
+        }
+        const managerValue = managerTrimmed || 'CEO';
         
         // Generate secure password if not provided
         const employeePassword = password || generateSecurePassword(16);
@@ -160,17 +185,6 @@ export const registerEmployee = async (req, res) => {
         const validPositions = ["Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager", "Director", "VP", "CTO", "CFO", "CEO", "Developer"];
         if (!validPositions.includes(position)) {
             return sendValidationError(res, { position: `Invalid position. Must be one of: ${validPositions.join(', ')}` });
-        }
-
-        // Get organizationId from authenticated admin or request body
-        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.body.organizationId;
-        
-        if (!organizationId) {
-            return sendError(res, 
-                'Organization ID is required. Please ensure you are authenticated as an admin.',
-                400,
-                'MISSING_ORGANIZATION_ID'
-            );
         }
 
         // Normalize email (lowercase and trim) for case-insensitive check
@@ -257,7 +271,7 @@ export const registerEmployee = async (req, res) => {
             password: employeePassword, // Will be hashed automatically by model's pre-save hook
             position,
             department,
-            manager,
+            manager: managerValue,
             jobTitle,
             jobCategory,
             salary,
@@ -289,6 +303,13 @@ export const registerEmployee = async (req, res) => {
             // Re-throw other errors
             throw saveError;
         }
+
+        // Invalidate employees and managers cache so new employee appears in lists/dropdowns
+        try {
+            await invalidateEmployeesCache(organizationId);
+        } catch (cacheErr) {
+            logger.warn('Failed to invalidate employees cache after registration', { error: cacheErr.message });
+        }
         
         // Send welcome email BEFORE creating payroll (so if email fails, we can still rollback)
         let emailSent = false;
@@ -315,32 +336,47 @@ export const registerEmployee = async (req, res) => {
             // Don't fail registration - employee is already created
         }
         
-        // Create associated default payroll (only if employee was created)
+        // Create associated default payroll using salary formula (Basic 50%, HRA 40% of Basic, Gratuity 4.81%, Special = balance)
         try {
             const currentDate = new Date();
+            const gross = Number(salary) || 0;
+            const formula = computeEarningsFromGross(gross);
+            const basicSalary = formula.basicWage;
+            const earnings = {
+                basicWage: formula.basicWage,
+                houseRentAllowance: formula.houseRentAllowance,
+                transportAllowance: 0,
+                medicalAllowance: 0,
+                overtime: 0,
+                gratuity: formula.gratuity,
+                specialAllowance: formula.specialAllowance,
+                performanceBonus: 0,
+                projectBonus: 0,
+                attendanceBonus: 0,
+                pfEmployer: 0,
+                esiEmployer: 0
+            };
+            earnings.totalEarnings = formula.totalEarnings;
+            const deductions = {
+                pfEmployee: 0,
+                esiEmployee: 0,
+                professionalTax: 0,
+                incomeTax: 0,
+                advanceSalary: 0,
+                loanDeduction: 0,
+                otherDeductions: 0
+            };
+            deductions.total = 0;
             const defaultPayroll = {
-                organizationId, // Add organizationId
+                organizationId,
                 employeeId: employee._id,
                 month: currentDate.toLocaleString('default', { month: 'long' }),
                 year: currentDate.getFullYear(),
-                basicSalary: salary,
-                earnings: {
-                    basicWage: salary,
-                    houseRentAllowance: 0,
-                    overtime: 0,
-                    gratuity: 0,
-                    specialAllowance: 0,
-                    pfEmployer: 0,
-                    esiEmployer: 0
-                },
-                deductions: {
-                    pfEmployee: 0,
-                    esiEmployee: 0,
-                    tax: 0,
-                    otherDeductions: 0
-                },
-                ctc: 0,
-                inHandSalary: 0,
+                basicSalary,
+                earnings,
+                deductions,
+                ctc: formula.totalEarnings,
+                inHandSalary: formula.totalEarnings,
                 status: 'Pending'
             };
 

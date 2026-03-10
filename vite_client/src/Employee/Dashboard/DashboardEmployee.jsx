@@ -245,7 +245,7 @@ function DashboardEmployee() {
 
     if (user?.mustResetPassword) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
                 <PasswordResetPopup onClose={() => navigate('/login')} />
             </div>
         );
@@ -253,7 +253,7 @@ function DashboardEmployee() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
                     <p className="text-gray-600">Loading dashboard...</p>
@@ -264,7 +264,7 @@ function DashboardEmployee() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-red-600 font-medium mb-4">Error: {error}</p>
                     <button 
@@ -280,7 +280,7 @@ function DashboardEmployee() {
 
     if (!user) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-gray-600 font-medium mb-4">Please log in to access the dashboard</p>
                     <button 
@@ -295,7 +295,7 @@ function DashboardEmployee() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 ml-0 lg:ml-64 transition-all duration-300">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
             
             {/* Welcome Header */}

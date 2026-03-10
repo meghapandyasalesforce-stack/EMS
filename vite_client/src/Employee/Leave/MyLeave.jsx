@@ -194,7 +194,7 @@ const MyLeavePage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 ml-0 lg:ml-64 transition-all duration-300">
+    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
       <div className="p-4 md:p-8 max-w-screen-2xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">My Leave Dashboard</h1>
@@ -296,7 +296,9 @@ const MyLeavePage = () => {
           ) : (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="text-yellow-800">
-                No leave policy configured yet. Please contact HR to set up your leave policy.
+                {leavesData.length > 0
+                  ? 'Leave balance is not yet configured. Your applied leaves are shown below. Contact HR for entitlement details.'
+                  : 'No leave policy configured yet. Please contact HR to set up your leave policy.'}
               </p>
             </div>
           )}

@@ -14,19 +14,23 @@ const LeaveManagement = () => {
   const [selectedLeaveId, setSelectedLeaveId] = useState(null);
   const [selectedLeaveDetails, setSelectedLeaveDetails] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [filterStatus, setFilterStatus] = useState('pending');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    dispatch(getAllLeaves());
-    
+    const params = { year: filterYear };
+    if (filterStatus !== 'all') params.status = filterStatus;
+    dispatch(getAllLeaves(params));
+  }, [dispatch, filterStatus, filterYear]);
+
+  useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [dispatch]);
+  }, []);
 
   const handleViewDetails = (leaveId) => {
     const leave = (leaves || []).find((l) => l._id === leaveId);

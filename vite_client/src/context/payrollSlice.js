@@ -21,10 +21,12 @@ export const fetchPayrolls = createAsyncThunk(
   async ({ month, year }, thunkAPI) => {
     try {
       const response = await axios.get(
-        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${month}&year=${year}`
+        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${encodeURIComponent(month)}&year=${year}`
       );
-      // Assuming the API returns an array directly
-      return Array.isArray(response.data) ? response.data : [response.data];
+      const data = response.data;
+      // API returns { success, message, data: [...], pagination }
+      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      return list;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
     }
@@ -102,6 +104,7 @@ const payrollSlice = createSlice({
       })
       .addCase(createPayroll.pending, (state) => {
         state.status = 'loading';
+        state.error = null;
       })
       .addCase(createPayroll.fulfilled, (state, action) => {
         state.status = 'succeeded';

@@ -6,8 +6,18 @@ import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerMatchQuery } from "../../helpers/managerHelper.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
+import { computeEarningsFromGross } from "../../helpers/salaryCalculation.js";
 
+const MONTH_ORDER = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
+function sortPayrollsByYearMonth(payrolls, descending = true) {
+    return payrolls.slice().sort((a, b) => {
+        const yA = a.year || 0, yB = b.year || 0;
+        if (yA !== yB) return descending ? yB - yA : yA - yB;
+        const mA = MONTH_ORDER[a.month] || 0, mB = MONTH_ORDER[b.month] || 0;
+        return descending ? mB - mA : mA - mB;
+    });
+}
 
 // Update payroll details
 export const updatePayroll = async (req, res) => {
@@ -94,6 +104,9 @@ export const updatePayroll = async (req, res) => {
             }
         });
 
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
+
         res.status(200).json({
             success: true,
             message: 'Payroll updated successfully',
@@ -146,28 +159,37 @@ export const getEmployeePayroll = async (req, res) => {
                 });
             }
 
-            const basicSalary = employee.salary;
+            const gross = employee.salary || 0;
+            const formula = computeEarningsFromGross(gross);
+            const basicSalary = formula.basicWage;
 
-            // Default earnings
             const earnings = {
-                basicWage: basicSalary,
-                houseRentAllowance: 0,
+                basicWage: formula.basicWage,
+                houseRentAllowance: formula.houseRentAllowance,
+                transportAllowance: 0,
+                medicalAllowance: 0,
                 overtime: 0,
-                gratuity: 0,
-                specialAllowance: 0,
+                gratuity: formula.gratuity,
+                specialAllowance: formula.specialAllowance,
+                performanceBonus: 0,
+                projectBonus: 0,
+                attendanceBonus: 0,
                 pfEmployer: 0,
                 esiEmployer: 0
             };
-            earnings.totalEarnings = Object.values(earnings).reduce((sum, val) => sum + (val || 0), 0);
+            earnings.totalEarnings = formula.totalEarnings;
 
-            // Default deductions
+            // Default deductions (schema: professionalTax, incomeTax - no tax)
             const deductions = {
                 pfEmployee: 0,
                 esiEmployee: 0,
-                tax: 0,
+                professionalTax: 0,
+                incomeTax: 0,
+                advanceSalary: 0,
+                loanDeduction: 0,
                 otherDeductions: 0
             };
-            deductions.total = Object.values(deductions).reduce((sum, val) => sum + (val || 0), 0);
+            deductions.total = (deductions.pfEmployee || 0) + (deductions.esiEmployee || 0) + (deductions.professionalTax || 0) + (deductions.incomeTax || 0) + (deductions.advanceSalary || 0) + (deductions.loanDeduction || 0) + (deductions.otherDeductions || 0);
 
             // Calculate CTC and In-Hand
             const ctc = earnings.totalEarnings;
@@ -197,7 +219,7 @@ export const getEmployeePayroll = async (req, res) => {
 };
 
 
-// Get all payrolls for a specific month and year (for employees - only visible ones)
+// Get all payrolls (optionally filtered by month/year) for the current organization
 export const getAllPayrolls = async (req, res) => {
     try {
         // Import organization helper for multi-tenancy support
@@ -207,8 +229,21 @@ export const getAllPayrolls = async (req, res) => {
         const isAdmin = req.user?.role === 'admin';
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
         
-        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
-        const query = addOrganizationFilter(req, { month, year });
+        // Build base query: only add month/year when explicitly provided
+        // Dashboard calls this endpoint without params to fetch all payrolls
+        const baseQuery = {};
+        if (month != null && month !== '') {
+            baseQuery.month = month;
+        }
+        if (year != null && year !== '') {
+            const yearNum = parseInt(year, 10);
+            if (!Number.isNaN(yearNum)) {
+                baseQuery.year = yearNum;
+            }
+        }
+
+        // Add organization filter for multi-tenancy isolation
+        const query = addOrganizationFilter(req, baseQuery);
         
         if (!isAdmin) {
             query.isVisible = true;
@@ -230,11 +265,40 @@ export const getAllPayrolls = async (req, res) => {
         }
 
         const payrolls = await Payroll.find(query)
-            .populate('employeeId', 'name designation salary jobTitle department');
+            .sort({ year: -1, createdAt: -1 })
+            .populate('employeeId', 'name designation salary jobTitle department')
+            .lean();
+
+        // Enrich response with flattened fields for dashboards (without removing raw data)
+        // Filter out records that have lost their employee reference (orphaned test data)
+        const enrichedPayrolls = payrolls
+          .filter((p) => !!p.employeeId)
+          .map((p) => {
+            const employeeName =
+                p.employeeName ||
+                (p.employeeId && (p.employeeId.name || p.employeeId.fullName)) ||
+                'Unknown Employee';
+
+            const amount =
+                p.amount ??
+                p.totalAmount ??
+                p.inHandSalary ??
+                p.ctc ??
+                (p.earnings && p.earnings.totalEarnings) ??
+                p.basicSalary ??
+                0;
+
+            return {
+                ...p,
+                employeeName,
+                amount,
+                totalAmount: p.totalAmount ?? amount,
+            };
+        });
 
         res.json({
             success: true,
-            payrolls: payrolls,
+            payrolls: enrichedPayrolls,
             message: 'Payrolls retrieved successfully'
         });
     } catch (error) {
@@ -276,6 +340,26 @@ export const createPayroll = async (req, res) => {
                 });
             }
         }
+
+        const { month, year } = payrollData;
+        if (!month || year == null) {
+            return res.status(400).json({
+                success: false,
+                message: 'Month and year are required to create payroll.'
+            });
+        }
+        const existing = await Payroll.findOne({
+            organizationId,
+            employeeId: payrollData.employeeId,
+            month,
+            year: parseInt(year, 10)
+        });
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                message: `Payroll already exists for this employee for ${month} ${year}. Use update to modify.`
+            });
+        }
         
         // Calculate totals
         const earnings = payrollData.earnings || {};
@@ -316,6 +400,9 @@ export const createPayroll = async (req, res) => {
                 ctc: payroll.ctc
             }
         });
+
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
         
         res.status(201).json(populatedPayroll);
     } catch (error) {
@@ -361,6 +448,7 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
         }
 
         const skip = (page - 1) * limit;
+        const limitNum = Math.min(parseInt(limit, 10) || 12, 24);
 
         // Import organization helper for multi-tenancy support
         const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
@@ -368,18 +456,20 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
         // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
         const query = addOrganizationFilter(req, { employeeId });
 
-        const payrolls = await Payroll.find(query)
-            .sort({ year: -1, month: -1 })
-            .skip(skip)
-            .limit(parseInt(limit))
-            .populate('employeeId', 'name lastName email jobTitle department employeeId');
-
         const total = await Payroll.countDocuments(query);
+        const fetchSize = Math.min(skip + limitNum, 120);
+        const raw = await Payroll.find(query)
+            .sort({ year: -1 })
+            .limit(fetchSize)
+            .populate('employeeId', 'name lastName email jobTitle department employeeId')
+            .lean();
+        const sorted = sortPayrollsByYearMonth(raw, true);
+        const payrolls = sorted.slice(skip, skip + limitNum);
 
         res.json({
             payrolls,
-            totalPages: Math.ceil(total / limit),
-            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / limitNum),
+            currentPage: parseInt(page, 10),
             total
         });
     } catch (error) {
@@ -423,27 +513,110 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
             }
         }
         
-        // Import organization helper for multi-tenancy support
-        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
-        
-        // Build query with organization filter - SECURITY: Ensures multi-tenancy isolation
+        const { addOrganizationFilter, getOrganizationId } = await import('../../helpers/organizationHelper.js');
+
+        const monthDecoded = decodeURIComponent(month);
+        const yearNum = parseInt(year, 10);
         const query = addOrganizationFilter(req, {
             employeeId,
-            month: decodeURIComponent(month),
-            year: parseInt(year)
+            month: monthDecoded,
+            year: yearNum
         });
-        
-        const payroll = await Payroll.findOne(query)
+
+        let payroll = await Payroll.findOne(query)
             .populate('employeeId', 'name lastName email jobTitle department employeeId');
 
         if (!payroll) {
-            return res.status(404).json({ message: 'Payroll not found' });
+            const organizationId = getOrganizationId(req);
+            const employee = await Employee.findById(employeeId);
+            if (!employee) {
+                return res.status(404).json({ success: false, message: 'Employee not found' });
+            }
+            if (!organizationId) {
+                return res.status(400).json({ success: false, message: 'Organization ID is required.' });
+            }
+            const gross = employee.salary || 0;
+            const formula = computeEarningsFromGross(gross);
+            const basicSalary = formula.basicWage;
+            const earnings = {
+                basicWage: formula.basicWage,
+                houseRentAllowance: formula.houseRentAllowance,
+                transportAllowance: 2000,
+                medicalAllowance: 1500,
+                overtime: 0,
+                gratuity: formula.gratuity,
+                specialAllowance: formula.specialAllowance,
+                performanceBonus: 0,
+                projectBonus: 0,
+                attendanceBonus: 0,
+                pfEmployer: Math.round(basicSalary * 0.12),
+                esiEmployer: Math.round(basicSalary * 0.0325)
+            };
+            earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
+            const deductions = {
+                pfEmployee: Math.round(basicSalary * 0.12),
+                esiEmployee: Math.round(basicSalary * 0.0075),
+                professionalTax: 200,
+                incomeTax: Math.round(basicSalary * 0.1),
+                advanceSalary: 0,
+                loanDeduction: 0,
+                otherDeductions: 0
+            };
+            deductions.total = (deductions.pfEmployee || 0) + (deductions.esiEmployee || 0) + (deductions.professionalTax || 0) + (deductions.incomeTax || 0) + (deductions.advanceSalary || 0) + (deductions.loanDeduction || 0) + (deductions.otherDeductions || 0);
+            payroll = new Payroll({
+                organizationId,
+                employeeId,
+                month: monthDecoded,
+                year: yearNum,
+                basicSalary,
+                earnings,
+                deductions,
+                ctc: earnings.totalEarnings,
+                inHandSalary: earnings.totalEarnings - deductions.total,
+                status: 'Pending'
+            });
+            await payroll.save();
+            payroll = await Payroll.findById(payroll._id)
+                .populate('employeeId', 'name lastName email jobTitle department employeeId');
         }
 
         res.json(payroll);
     } catch (error) {
         logger.error('Get Payroll by Employee Month Year Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
+    }
+};
+
+// Get single payroll by ID (admin/manager view) - for details modal
+export const getPayrollById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+
+        const query = addOrganizationFilter(req, { _id: id });
+        const payroll = await Payroll.findOne(query)
+            .populate('employeeId', 'name lastName email jobTitle department employeeId')
+            .lean();
+
+        if (!payroll) {
+            return res.status(404).json({ success: false, message: 'Payroll not found' });
+        }
+
+        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManager && req.employee && payroll.employeeId) {
+            const employee = await Employee.findById(payroll.employeeId._id || payroll.employeeId).select('manager').lean();
+            if (employee && !isEmployeeLinkedToManager(employee, req.employee)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'You can only view payroll for employees linked to you.'
+                });
+            }
+        }
+
+        res.json(payroll);
+    } catch (error) {
+        logger.error('Get Payroll by ID Error', { error: error.message, stack: error.stack });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -508,43 +681,42 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
                 });
             }
 
-            const basicSalary = employee.salary || 0;
-            
-            // Default earnings calculation
+            const gross = employee.salary || 0;
+            const formula = computeEarningsFromGross(gross);
+            const basicSalary = formula.basicWage;
+
             const earnings = {
-                basicWage: basicSalary,
-                houseRentAllowance: Math.round(basicSalary * 0.4), // 40% of basic
+                basicWage: formula.basicWage,
+                houseRentAllowance: formula.houseRentAllowance,
                 transportAllowance: 2000,
                 medicalAllowance: 1500,
                 overtime: 0,
-                gratuity: 0,
-                specialAllowance: 0,
+                gratuity: formula.gratuity,
+                specialAllowance: formula.specialAllowance,
                 performanceBonus: 0,
                 projectBonus: 0,
                 attendanceBonus: 0,
-                pfEmployer: Math.round(basicSalary * 0.12), // 12% of basic
-                esiEmployer: Math.round(basicSalary * 0.0325) // 3.25% of basic
+                pfEmployer: Math.round(basicSalary * 0.12),
+                esiEmployer: Math.round(basicSalary * 0.0325)
             };
-            earnings.totalEarnings = Object.values(earnings).reduce((sum, val) => sum + (val || 0), 0);
+            earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
 
-            // Default deductions calculation
             const deductions = {
-                pfEmployee: Math.round(basicSalary * 0.12), // 12% of basic
-                esiEmployee: Math.round(basicSalary * 0.0075), // 0.75% of basic
+                pfEmployee: Math.round(basicSalary * 0.12),
+                esiEmployee: Math.round(basicSalary * 0.0075),
                 professionalTax: 200,
-                incomeTax: Math.round(basicSalary * 0.1), // 10% of basic
+                incomeTax: Math.round(basicSalary * 0.1),
                 advanceSalary: 0,
                 loanDeduction: 0,
                 otherDeductions: 0
             };
-            deductions.total = Object.values(deductions).reduce((sum, val) => sum + (val || 0), 0);
+            deductions.total = (deductions.pfEmployee || 0) + (deductions.esiEmployee || 0) + (deductions.professionalTax || 0) + (deductions.incomeTax || 0) + (deductions.advanceSalary || 0) + (deductions.loanDeduction || 0) + (deductions.otherDeductions || 0);
 
-            // Calculate CTC and in-hand salary
             const ctc = earnings.totalEarnings;
             const inHandSalary = earnings.totalEarnings - deductions.total;
 
             payroll = new Payroll({
-                organizationId: organizationId, // Multi-tenancy: ensure organizationId is set
+                organizationId: organizationId,
                 employeeId,
                 month,
                 year,
@@ -683,6 +855,9 @@ export const togglePayrollVisibility = async (req, res) => {
             }
         }
 
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
+
         res.status(200).json({
             success: true,
             message: `Payroll ${isVisible ? 'visible' : 'hidden'} successfully`,
@@ -703,6 +878,26 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         const { month, year } = req.body;
         if (!month || !year) {
             return res.status(400).json({ success: false, message: 'month and year are required' });
+        }
+
+        // Prevent generating payrolls for future periods.
+        // Only allow current month and past months.
+        const targetYear = parseInt(year, 10);
+        const targetMonthIndex = new Date(`${month} 1, ${year}`).getMonth();
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonthIndex = now.getMonth();
+
+        if (Number.isNaN(targetYear)) {
+            return res.status(400).json({ success: false, message: 'Invalid year value' });
+        }
+
+        // If target period is in the future, block it
+        if (targetYear > currentYear || (targetYear === currentYear && targetMonthIndex > currentMonthIndex)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot generate payrolls for future months. Only current and past months are allowed.'
+            });
         }
 
         // Get organizationId from request context (multi-tenancy)
@@ -736,6 +931,21 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             return working || 1; // avoid division by zero
         })();
 
+        /** Count working days of a leave that fall within the payroll month (no double-count across months) */
+        const leaveWorkingDaysInMonth = (lv) => {
+            const start = new Date(lv.startDate);
+            const end = new Date(lv.endDate);
+            const overlapStart = start < startOfMonth ? new Date(startOfMonth) : new Date(start);
+            const overlapEnd = end > endOfMonth ? new Date(endOfMonth) : new Date(end);
+            if (overlapStart > overlapEnd) return 0;
+            let working = 0;
+            for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
+                const day = d.getDay();
+                if (day !== 0 && day !== 6) working += 1;
+            }
+            return working;
+        };
+
         for (const emp of employees) {
             // Check if payroll already exists (filtered by organizationId for multi-tenancy)
             const exists = await Payroll.findOne({ 
@@ -746,8 +956,6 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             });
             if (exists) continue;
 
-            const basicSalary = emp.salary || 0;
-            
             // Attendance aggregation for the month (filtered by organizationId for multi-tenancy)
             const attendanceRecords = await Attendance.find({
                 userId: emp._id,
@@ -759,7 +967,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             const halfDays = attendanceRecords.filter(r => r.status === 'half-day').length;
             const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
 
-            // Approved leaves within month (filtered by organizationId for multi-tenancy)
+            // Approved leaves overlapping this month – count only working days within the month
             const approvedLeaves = await Leave.find({
                 employee: emp._id,
                 organizationId: emp.organizationId || organizationId,
@@ -768,30 +976,33 @@ export const generatePayrollsForMonthYear = async (req, res) => {
                     { startDate: { $lte: endOfMonth }, endDate: { $gte: startOfMonth } }
                 ]
             });
-            const leaveDays = approvedLeaves.reduce((sum, lv) => sum + (lv.duration || 0), 0);
+            const leaveDays = approvedLeaves.reduce((sum, lv) => sum + leaveWorkingDaysInMonth(lv), 0);
 
             const effectivePresent = presentDays + (halfDays * 0.5) + leaveDays;
             const unpaidDays = Math.max(0, workingDaysInMonth - effectivePresent);
-            const perDayRate = basicSalary / workingDaysInMonth;
-            const adjustedBasic = Math.max(0, Math.round(basicSalary - unpaidDays * perDayRate));
+            const fullGross = emp.salary || 0;
+            const effectiveGross = workingDaysInMonth > 0 ? Math.round(fullGross * effectivePresent / workingDaysInMonth) : 0;
+            const formula = computeEarningsFromGross(effectiveGross);
+            const basicSalary = Math.round(0.5 * fullGross);
+            const perDayRate = fullGross / workingDaysInMonth;
             const overtimeRatePerHour = perDayRate / 8;
             const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
 
             const earnings = {
-                basicWage: adjustedBasic,
-                houseRentAllowance: Math.round(basicSalary * 0.4),
+                basicWage: formula.basicWage,
+                houseRentAllowance: formula.houseRentAllowance,
                 transportAllowance: 2000,
                 medicalAllowance: 1500,
                 overtime: overtimePay,
-                gratuity: 0,
-                specialAllowance: 0,
+                gratuity: formula.gratuity,
+                specialAllowance: formula.specialAllowance,
                 performanceBonus: 0,
                 projectBonus: 0,
                 attendanceBonus: unpaidDays === 0 ? 0 : 0,
                 pfEmployer: Math.round(basicSalary * 0.12),
                 esiEmployer: Math.round(basicSalary * 0.0325)
             };
-            earnings.totalEarnings = Object.values(earnings).reduce((s, v) => s + (v || 0), 0);
+            earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.overtime || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
 
             const deductions = {
                 pfEmployee: Math.round(basicSalary * 0.12),
@@ -802,10 +1013,10 @@ export const generatePayrollsForMonthYear = async (req, res) => {
                 loanDeduction: 0,
                 otherDeductions: 0
             };
-            deductions.total = Object.values(deductions).reduce((s, v) => s + (v || 0), 0);
+            deductions.total = (deductions.pfEmployee || 0) + (deductions.esiEmployee || 0) + (deductions.professionalTax || 0) + (deductions.incomeTax || 0) + (deductions.advanceSalary || 0) + (deductions.loanDeduction || 0) + (deductions.otherDeductions || 0);
 
             const payroll = new Payroll({
-                organizationId: emp.organizationId || organizationId, // Multi-tenancy: ensure organizationId is set
+                organizationId: emp.organizationId || organizationId,
                 employeeId: emp._id,
                 month,
                 year,
@@ -819,6 +1030,9 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             await payroll.save();
             created += 1;
         }
+
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
 
         return res.json({ success: true, created });
     } catch (error) {

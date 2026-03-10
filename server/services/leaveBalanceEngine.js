@@ -3,6 +3,7 @@ import LeavePolicy from '../models/leavePolicy.model.js';
 import Leave from '../models/leave.model.js';
 import Employee from '../models/employee.model.js';
 import logger from '../helpers/logger.js';
+import { getLeaveTypeVariantsForBalance } from '../helpers/leaveTypeHelper.js';
 
 class LeaveBalanceEngine {
     /**
@@ -203,13 +204,14 @@ class LeaveBalanceEngine {
     }
 
     /**
-     * Calculate used balance (approved leaves)
+     * Calculate used balance (approved leaves). Uses variants so 'paid' includes 'annual' leaves.
      */
     async calculateUsedBalance(employeeId, leaveType, year, organizationId) {
+        const types = getLeaveTypeVariantsForBalance(leaveType);
         const leaves = await Leave.find({
             organizationId,
             employee: employeeId,
-            leaveType,
+            leaveType: { $in: types },
             year,
             status: 'approved'
         });
@@ -218,13 +220,14 @@ class LeaveBalanceEngine {
     }
 
     /**
-     * Calculate pending balance
+     * Calculate pending balance. Uses variants so 'paid' includes 'annual' leaves.
      */
     async calculatePendingBalance(employeeId, leaveType, year, organizationId) {
+        const types = getLeaveTypeVariantsForBalance(leaveType);
         const leaves = await Leave.find({
             organizationId,
             employee: employeeId,
-            leaveType,
+            leaveType: { $in: types },
             year,
             status: 'pending'
         });

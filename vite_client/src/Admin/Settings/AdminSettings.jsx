@@ -72,7 +72,7 @@ const AdminSettings = () => {
     const activeComponent = settingsTabs.find(tab => tab.id === activeTab)?.component;
 
     return (
-        <div className="min-h-screen bg-gray-50 ml-0 lg:ml-64">
+        <div className="min-h-screen bg-gray-50">
             <div className="max-w-6xl mx-auto space-y-6 lg:space-y-8 p-4 md:p-6 lg:p-8">
                 {/* Header */}
                 <div className="bg-white rounded-lg shadow-md p-6 mb-6">

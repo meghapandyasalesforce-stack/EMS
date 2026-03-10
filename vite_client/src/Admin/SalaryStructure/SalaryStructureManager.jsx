@@ -247,7 +247,7 @@ const SalaryStructureManager = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 ml-0 lg:ml-64 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 md:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header Section */}
         <div className="bg-white/80 backdrop-blur-lg rounded-3xl p-6 md:p-8 shadow-2xl border border-white/20">

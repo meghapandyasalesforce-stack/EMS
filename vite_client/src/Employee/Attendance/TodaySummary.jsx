@@ -16,6 +16,7 @@ const TodaySummary = () => {
   const dispatch = useDispatch();
   const {
     dailyStats,
+    sessions,
     loading,
     error
   } = useSelector((state) => state.attendance);
@@ -23,19 +24,22 @@ const TodaySummary = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Calculate derived values
+  // Calculate derived values - backend dailyStats uses effectiveHours/grossHours per date
   const todayKey = format(new Date(), 'yyyy-MM-dd');
-  const todayStats = dailyStats?.[todayKey] || { 
-    sessions: [], 
-    totalEffectiveHours: 0, 
-    totalGrossHours: 0 
-  };
+  const todayStatsFromApi = dailyStats?.[todayKey] || {};
+  const totalHours = todayStatsFromApi.effectiveHours ?? 0;
+  const grossHours = todayStatsFromApi.grossHours ?? 0;
+  const breakTime = Math.max(0, grossHours - totalHours);
+  const overtime = todayStatsFromApi.overtimeHours ?? Math.max(0, totalHours - 8);
+  const progressPercentage = Math.min(totalHours / 8 * 100, 100);
 
-  const totalSessions = todayStats.sessions.length;
-  const totalHours = todayStats.totalEffectiveHours || 0;
-  const breakTime = (todayStats.totalGrossHours || 0) - (todayStats.totalEffectiveHours || 0);
-  const overtime = Math.max(0, (todayStats.totalEffectiveHours || 0) - 8);
-  const progressPercentage = Math.min((todayStats.totalEffectiveHours || 0) / 8 * 100, 100);
+  // Session count for today from sessions (same-day date match)
+  const totalSessions = (sessions || []).filter((s) => {
+    if (!s?.date) return false;
+    const d = new Date(s.date);
+    const key = format(d, 'yyyy-MM-dd');
+    return key === todayKey;
+  }).length;
 
   // Fetch attendance data on component mount
   useEffect(() => {
