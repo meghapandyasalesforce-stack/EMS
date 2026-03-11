@@ -77,7 +77,10 @@ const employeeLeaveSlice = createSlice({
       .addCase(submitLeave.fulfilled, (state, action) => {
         state.loading = false;
         state.success = true;
-        state.myLeaves.push(action.payload);
+        const newLeave = action.payload.leave || action.payload;
+        if (newLeave) {
+          state.myLeaves = [newLeave, ...(state.myLeaves || [])];
+        }
       })
       .addCase(submitLeave.rejected, (state, action) => {
         state.loading = false;

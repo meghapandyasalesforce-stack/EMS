@@ -12,6 +12,7 @@ import {
   usePayrolls, 
   useEmployeesOnBreak 
 } from "../Hooks/useDashboardData";
+import { useAttendanceRealtime } from "../Hooks/useAttendanceRealtime";
 import { handleApiError } from "../utils/errorHandler";
 
 // Memoized selectors
@@ -44,6 +45,9 @@ function DashboardAdmin() {
     isLoading: breaksLoading,
     error: breaksError 
   } = useEmployeesOnBreak();
+
+  // Real-time: when an employee starts/ends break, server emits; we invalidate and refetch
+  useAttendanceRealtime();
 
   const isLoading = employeesLoading || projectsLoading || payrollsLoading;
   const employeeCount = employees?.length || 0;

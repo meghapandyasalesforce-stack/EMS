@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import Header from './Shared/Header';
 import ProfileSidebar from './Employee/ProfileSidebar';
@@ -40,6 +40,24 @@ function App() {
     ]; // Routes where ProfileSidebar should be shown
 
     const [activeSection, setActiveSection] = useState('Personal Details'); // Track active section
+
+    // Keep sidebar selection in sync with current URL (handles refresh / deep link)
+    useEffect(() => {
+        const pathToSectionMap = {
+            '/profile-details': 'Personal Details',
+            '/contact-details': 'Contact Details',
+            '/next-of-kin-details': 'Next of kin Details',
+            '/education-qualifications': 'Education Qualifications',
+            '/guarantor-details': 'Guarantor Details',
+            '/family-details': 'Family Details',
+            '/job-details': 'Job Details',
+            '/financial-details': 'Financial Details',
+        };
+        const mapped = pathToSectionMap[location.pathname];
+        if (mapped && mapped !== activeSection) {
+            setActiveSection(mapped);
+        }
+    }, [location.pathname, activeSection]);
 
     // Check if pathname is in hideHeaderRoutes or starts with /reset-password (for token routes)
     const shouldHideLayout = hideHeaderRoutes.includes(location.pathname) || location.pathname.startsWith('/reset-password');

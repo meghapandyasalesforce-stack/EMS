@@ -340,6 +340,12 @@ export default defineConfig(({ mode }) => {
   },
   server: {
     proxy: {
+      '/socket.io': {
+        target: 'http://localhost:10000',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
       '/api': {
         target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,

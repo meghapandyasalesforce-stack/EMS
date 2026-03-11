@@ -88,24 +88,27 @@ const MyLeavePage = () => {
   const leavesData = state.myLeaves || [];
   const statsData = state.leaveStats || null;
 
-  const calculatedStats = statsData && {
+  // Safely derive stats even if backend statistics are missing or still loading.
+  // This prevents crashes when navigating here right after submitting a leave.
+  const safeLeavesByType = statsData?.leavesByType || {};
+  const calculatedStats = {
     totalLeaves: leaveBalance?.balances 
       ? leaveBalance.balances.reduce((sum, b) => sum + (b.accrued + b.carriedForward), 0)
-      : statsData.totalLeaves,
+      : (statsData?.totalLeaves || 0),
     remainingLeaves: leaveBalance?.balances
       ? leaveBalance.balances.reduce((sum, b) => sum + b.available, 0)
-      : statsData.remainingLeaves,
+      : (statsData?.remainingLeaves || 0),
     sickLeaves: {
-      taken: statsData.leavesByType?.sick || 0,
-      remaining: MAX_LEAVES.sick - (statsData.leavesByType?.sick || 0)
+      taken: safeLeavesByType.sick || 0,
+      remaining: MAX_LEAVES.sick - (safeLeavesByType.sick || 0)
     },
     annualLeaves: {
-      taken: statsData.leavesByType?.annual || 0,
-      remaining: MAX_LEAVES.annual - (statsData.leavesByType?.annual || 0)
+      taken: safeLeavesByType.annual || 0,
+      remaining: MAX_LEAVES.annual - (safeLeavesByType.annual || 0)
     },
     casualLeaves: {
-      taken: statsData.leavesByType?.casual || 0,
-      remaining: MAX_LEAVES.casual - (statsData.leavesByType?.casual || 0)
+      taken: safeLeavesByType.casual || 0,
+      remaining: MAX_LEAVES.casual - (safeLeavesByType.casual || 0)
     }
   };
 
@@ -147,14 +150,36 @@ const MyLeavePage = () => {
 
   const monthlyLeaves = getMonthlyLeaves();
 
-  const leaveHistory = leavesData.map((leave) => ({
-    id: leave._id,
-    type: leave.leaveType?.charAt(0).toUpperCase() + leave.leaveType?.slice(1),
-    startDate: new Date(leave.startDate).toISOString().split('T')[0],
-    endDate: new Date(leave.endDate).toISOString().split('T')[0],
-    status: leave.status?.charAt(0).toUpperCase() + leave.status?.slice(1),
-    days: leave.duration
-  }));
+  const leaveHistory = (leavesData || [])
+    .map((raw) => {
+      const leave = raw?.leave || raw;
+      if (!leave || !leave.startDate || !leave.endDate) return null;
+
+      let start, end;
+      try {
+        start = new Date(leave.startDate);
+        end = new Date(leave.endDate);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+
+      return {
+        id: leave._id,
+        type: leave.leaveType
+          ? leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)
+          : 'Unknown',
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0],
+        status: leave.status
+          ? leave.status.charAt(0).toUpperCase() + leave.status.slice(1)
+          : 'Unknown',
+        days: leave.duration ?? 0
+      };
+    })
+    .filter(Boolean);
 
   if (state.loading || balanceLoading) {
     return <div className="text-center py-10 text-gray-500">Loading leave data...</div>;

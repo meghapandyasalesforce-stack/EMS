@@ -308,13 +308,7 @@ const AttendanceBox = () => {
       // Try to punch in
       try {
         const result = await dispatch(clockIn(clockInData)).unwrap();
-        
-        const today = format(new Date(), 'yyyy-MM-dd');
-        dispatch(fetchLogs({
-          startDate: today,
-          endDate: today
-        }));
-        
+        // State is updated in clockIn.fulfilled; don't refetch or cached get-logs can overwrite with stale data
         const successMessage = result?.message || 'Punched in successfully!';
         toast.success(successMessage);
         
@@ -442,20 +436,8 @@ const AttendanceBox = () => {
         return;
       }
 
-      const result = await dispatch(clockOut(clockOutData)).unwrap();
-      
-      // Update the currentSession with the clockOut data
-      if (result) {
-        setCurrentSession(result);
-      }
-      
-      // Refetch logs to update the state (don't await to avoid blocking)
-      const today = format(new Date(), 'yyyy-MM-dd');
-      dispatch(fetchLogs({
-        startDate: today,
-        endDate: today
-      }));
-      
+      await dispatch(clockOut(clockOutData)).unwrap();
+      // State is updated in clockOut.fulfilled; don't refetch or cached get-logs can overwrite with stale data
       toast.success('Punched out successfully!');
       setIsOnBreak(false);
       setBreakCount(0);
@@ -497,29 +479,15 @@ const AttendanceBox = () => {
     
     try {
       await dispatch(breakIn()).unwrap();
-      
-      // Refetch logs to update the state (but don't await to avoid blocking)
-      const today = format(new Date(), 'yyyy-MM-dd');
-      dispatch(fetchLogs({
-        startDate: today,
-        endDate: today
-      }));
-      
+      // State is updated in breakIn.fulfilled; do not refetch here or cached get-logs can overwrite with stale data
       toast.success('Break started!');
     } catch (err) {
       const errorMessage = err?.message || 'Failed to start break';
       toast.error(errorMessage);
-      // If server says already on break, sync state immediately
+      // If server says already on break, refetch to sync UI (cache is invalidated on break-in so this gets fresh data)
       if (errorMessage.toLowerCase().includes('already on break')) {
-        try {
-          const today = format(new Date(), 'yyyy-MM-dd');
-          dispatch(fetchLogs({
-            startDate: today,
-            endDate: today
-          }));
-        } catch {
-          // Ignore refresh errors
-        }
+        const today = format(new Date(), 'yyyy-MM-dd');
+        dispatch(fetchLogs({ startDate: today, endDate: today }));
       }
     }
   };
@@ -532,14 +500,7 @@ const AttendanceBox = () => {
     
     try {
       await dispatch(breakOut()).unwrap();
-      
-      // Refetch logs to update the state (but don't await to avoid blocking)
-      const today = format(new Date(), 'yyyy-MM-dd');
-      dispatch(fetchLogs({
-        startDate: today,
-        endDate: today
-      }));
-      
+      // State is updated in breakOut.fulfilled; do not refetch or cached get-logs can overwrite with stale data
       toast.success('Break ended!');
     } catch (err) {
       const errorMessage = err?.message || 'Failed to end break';

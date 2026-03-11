@@ -86,8 +86,9 @@ const CheckInOut = () => {
     }
   };
 
-  // Calculate derived values
-  const isOnBreak = !!breakSession;
+  // Calculate derived values: breakSession from Redux may be the break object or (legacy) full attendance
+  const activeBreak = (breakSession?.breakIn != null ? breakSession : currentSession?.breaks?.find(b => b.breakIn && !b.breakOut)) ?? null;
+  const isOnBreak = !!(breakSession || (currentSession?.breaks?.some(b => b.breakIn && !b.breakOut)));
   const canTakeBreak = currentSession && !isOnBreak;
   const canEndBreak = isOnBreak;
 
@@ -1314,7 +1315,7 @@ const CheckInOut = () => {
                       {isOnBreak && !currentSession.clockOut && (
                         <div className="flex items-center gap-2 mt-2 text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
                           <FiCoffee className="w-4 h-4" />
-                          <span className="text-sm font-medium">On break since {formatTime(breakSession.breakIn)}</span>
+                          <span className="text-sm font-medium">On break since {formatTime(activeBreak?.breakIn)}</span>
                         </div>
                       )}
                     </div>
@@ -1407,7 +1408,7 @@ const CheckInOut = () => {
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-amber-800">On Break</h3>
-                        <p className="text-sm text-amber-600 font-medium">Since {formatTime(breakSession.breakIn)}</p>
+                        <p className="text-sm text-amber-600 font-medium">Since {formatTime(activeBreak?.breakIn)}</p>
                       </div>
                     </div>
                     <div className="text-right">

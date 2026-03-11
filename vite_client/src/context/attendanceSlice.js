@@ -396,7 +396,25 @@ const attendanceSlice = createSlice({
       .addCase(breakIn.pending, pending)
       .addCase(breakIn.fulfilled, (state, action) => {
         state.loading = false;
-        state.breakSession = action.payload;
+        state.error = null;
+        const attendance = action.payload?.attendance || action.payload;
+        if (attendance && (attendance._id || attendance.id)) {
+          const payloadId = String(attendance._id || attendance.id);
+          const index = state.sessions.findIndex(
+            s => String(s._id || s.id) === payloadId
+          );
+          if (index !== -1) {
+            state.sessions[index] = attendance;
+          } else {
+            state.sessions = [attendance];
+          }
+          // Set breakSession to the active break object (for "On break since" display)
+          const breaks = attendance.breaks || [];
+          const activeBreak = breaks.find(b => b.breakIn && !b.breakOut) || breaks[breaks.length - 1];
+          state.breakSession = activeBreak && activeBreak.breakIn ? activeBreak : null;
+        } else {
+          state.breakSession = null;
+        }
       })
       .addCase(breakIn.rejected, rejected)
 

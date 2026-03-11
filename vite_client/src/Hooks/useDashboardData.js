@@ -235,8 +235,8 @@ export const useEmployeesOnBreak = (options = {}) => {
         return [];
       }
     },
-    staleTime: 1000 * 30, // 30 seconds (real-time data)
-    refetchInterval: 1000 * 30, // Auto-refetch every 30 seconds
+    staleTime: 1000 * 30, // 30 seconds
+    refetchInterval: 1000 * 60, // Fallback poll every 60s; real-time updates via Socket.IO
     ...options,
   });
 };
