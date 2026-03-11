@@ -8,6 +8,7 @@ import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/no
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
 import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
+import { deleteCacheByPattern } from "../../helpers/cache.js";
 
 
 const OFFICE_START_TIME = 9;  // 9 AM
@@ -575,6 +576,17 @@ export const clockIn = async (req, res) => {
       // Don't fail the check-in if notification fails
     }
 
+    // Invalidate caches so employee and admin UIs get fresh data without delay
+    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    try {
+      const { getIO } = await import('../../config/websocket.js');
+      getIO().to(`org:${organizationId}`).emit('attendance:today_status_changed', {});
+    } catch (e) {
+      logger.warn('Socket emit after clock-in', { error: e?.message });
+    }
+
     // Return attendance object directly with additional metadata
     const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
     res.status(201).json({
@@ -712,7 +724,20 @@ export const breakIn = async (req, res) => {
     attendance.status = "onBreak";
 
     await attendance.save();
-    
+
+    // Invalidate caches so admin dashboard and employee UI get fresh data without delay
+    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+
+    // Real-time: notify admin dashboard to refresh employees on break
+    try {
+      const { getIO } = await import('../../config/websocket.js');
+      getIO().to(`org:${organizationId}`).emit('attendance:employees_on_break_changed', {});
+    } catch (e) {
+      logger.warn('Socket emit after break-in', { error: e?.message });
+    }
+
     // Get employee details and send notification to admins
     try {
       const employee = await Employee.findById(req.employee._id).select('name lastName email organizationId');
@@ -723,7 +748,7 @@ export const breakIn = async (req, res) => {
       logger.error('Error sending break notification', { error: notifError.message });
       // Don't fail the break request if notification fails
     }
-    
+
     res.json(attendance);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -766,6 +791,20 @@ export const breakOut = async (req, res) => {
     }
 
     await attendance.save();
+
+    // Invalidate caches so admin dashboard and employee UI get fresh data without delay
+    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+
+    // Real-time: notify admin dashboard to refresh employees on break
+    try {
+      const { getIO } = await import('../../config/websocket.js');
+      getIO().to(`org:${organizationId}`).emit('attendance:employees_on_break_changed', {});
+    } catch (e) {
+      logger.warn('Socket emit after break-out', { error: e?.message });
+    }
+
     res.json(attendance);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1130,6 +1169,17 @@ export const clockOut = async (req, res) => {
     }
 
     await attendance.save();
+
+    // Invalidate caches so employee and admin UIs get fresh data without delay
+    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    try {
+      const { getIO } = await import('../../config/websocket.js');
+      getIO().to(`org:${organizationId}`).emit('attendance:today_status_changed', {});
+    } catch (e) {
+      logger.warn('Socket emit after clock-out', { error: e?.message });
+    }
 
     res.json(attendance);
   } catch (error) {

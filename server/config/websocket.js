@@ -38,9 +38,18 @@ export const initializeWebSocket = (httpServer) => {
   // Authentication middleware
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth?.token || 
-                   socket.handshake.headers?.authorization?.replace('Bearer ', '') ||
-                   socket.handshake.query?.token;
+      let token = socket.handshake.auth?.token ||
+                 socket.handshake.headers?.authorization?.replace('Bearer ', '') ||
+                 socket.handshake.query?.token;
+
+      // Fallback: parse JWT from Cookie header (httpOnly cookies are sent by browser with withCredentials)
+      if (!token && socket.handshake.headers?.cookie) {
+        const jwtCookie = socket.handshake.headers.cookie
+          .split(';')
+          .map(c => c.trim())
+          .find(c => c.startsWith('jwt='));
+        if (jwtCookie) token = jwtCookie.split('=')[1]?.trim();
+      }
 
       if (!token) {
         logger.warn('WebSocket connection rejected: No token provided', {
