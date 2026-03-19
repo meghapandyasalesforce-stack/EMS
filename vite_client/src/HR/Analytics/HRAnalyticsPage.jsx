@@ -216,13 +216,13 @@ const HRAnalyticsPage = () => {
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                             <input
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                         </div>
                     </div>
@@ -230,20 +230,20 @@ const HRAnalyticsPage = () => {
 
                 {/* Key Metrics Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+                    <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-theme-secondary">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 mb-1">Total Employees</p>
                                 <p className="text-3xl font-bold text-gray-900">{employeeStats.total || 0}</p>
                                 <p className="text-sm text-gray-500 mt-1">{employeeStats.active || 0} active</p>
                             </div>
-                            <div className="bg-blue-100 p-4 rounded-full">
-                                <FaUsers className="w-8 h-8 text-blue-600" />
+                            <div className="bg-theme-secondary/10 p-4 rounded-full">
+                                <FaUsers className="w-8 h-8 text-theme-secondary" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+                    <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-theme-primary">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-600 mb-1">Attendance Rate</p>
@@ -254,8 +254,8 @@ const HRAnalyticsPage = () => {
                                     {attendanceStats.totalHours || 0} total hours
                                 </p>
                             </div>
-                            <div className="bg-green-100 p-4 rounded-full">
-                                <FaCalendarAlt className="w-8 h-8 text-green-600" />
+                            <div className="bg-theme-primary/10 p-4 rounded-full">
+                                <FaCalendarAlt className="w-8 h-8 text-theme-primary" />
                             </div>
                         </div>
                     </div>
@@ -333,17 +333,17 @@ const HRAnalyticsPage = () => {
                     {/* Recruitment Metrics */}
                     <div className="bg-white rounded-xl shadow-lg p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                            <FaHandshake className="w-5 h-5 text-blue-600" />
+                            <FaHandshake className="w-5 h-5 text-theme-secondary" />
                             Recruitment Metrics
                         </h3>
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-theme-secondary/10 rounded-lg">
                                 <span className="text-gray-700">Total Postings</span>
-                                <span className="font-bold text-blue-600">{recruitmentStats.totalPostings || 0}</span>
+                                <span className="font-bold text-theme-secondary">{recruitmentStats.totalPostings || 0}</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-theme-primary/10 rounded-lg">
                                 <span className="text-gray-700">Open Postings</span>
-                                <span className="font-bold text-green-600">{recruitmentStats.openPostings || 0}</span>
+                                <span className="font-bold text-theme-primary">{recruitmentStats.openPostings || 0}</span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
                                 <span className="text-gray-700">Total Candidates</span>
@@ -361,17 +361,17 @@ const HRAnalyticsPage = () => {
                     {/* Learning & Development */}
                     <div className="bg-white rounded-xl shadow-lg p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                            <FaGraduationCap className="w-5 h-5 text-green-600" />
+                            <FaGraduationCap className="w-5 h-5 text-theme-primary" />
                             Learning Metrics
                         </h3>
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-theme-primary/10 rounded-lg">
                                 <span className="text-gray-700">Total Courses</span>
-                                <span className="font-bold text-green-600">{learningStats.totalCourses || 0}</span>
+                                <span className="font-bold text-theme-primary">{learningStats.totalCourses || 0}</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-theme-secondary/10 rounded-lg">
                                 <span className="text-gray-700">Total Enrollments</span>
-                                <span className="font-bold text-blue-600">{learningStats.totalEnrollments || 0}</span>
+                                <span className="font-bold text-theme-secondary">{learningStats.totalEnrollments || 0}</span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
                                 <span className="text-gray-700">Completion Rate</span>
@@ -399,13 +399,13 @@ const HRAnalyticsPage = () => {
                                     {performanceStats.avgRating ? performanceStats.avgRating.toFixed(1) : 'N/A'}
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-theme-secondary/10 rounded-lg">
                                 <span className="text-gray-700">Survey Responses</span>
-                                <span className="font-bold text-blue-600">{engagementStats.totalResponses || 0}</span>
+                                <span className="font-bold text-theme-secondary">{engagementStats.totalResponses || 0}</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-theme-primary/10 rounded-lg">
                                 <span className="text-gray-700">Helpdesk Tickets</span>
-                                <span className="font-bold text-green-600">{helpdeskStats.total || 0}</span>
+                                <span className="font-bold text-theme-primary">{helpdeskStats.total || 0}</span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
                                 <span className="text-gray-700">Resolved Tickets</span>

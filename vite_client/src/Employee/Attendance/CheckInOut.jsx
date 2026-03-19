@@ -1087,7 +1087,7 @@ const CheckInOut = () => {
   return (
     <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
       {/* Enhanced Header */}
-      <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 px-8 py-6 relative overflow-hidden">
+      <div className="bg-theme-primary px-8 py-6 relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent"></div>
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
@@ -1146,7 +1146,7 @@ const CheckInOut = () => {
       {loading || initialLoading ? (
         <div className="flex flex-col items-center justify-center p-12">
           <div className="relative">
-            <div className="w-16 h-16 border-4 border-indigo-200 rounded-full animate-spin border-t-indigo-600"></div>
+            <div className="w-16 h-16 border-4 border-theme-accent rounded-full animate-spin border-t-indigo-600"></div>
             <div className="absolute inset-0 w-16 h-16 border-4 border-transparent rounded-full animate-ping border-t-indigo-400"></div>
           </div>
           <div className="mt-6 text-center">
@@ -1172,7 +1172,7 @@ const CheckInOut = () => {
                     showNotification('All permissions are granted!', 'success');
                   }
                 }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                className="text-xs text-theme-secondary hover:opacity-80 font-medium"
               >
                 Request Permissions
               </button>
@@ -1187,7 +1187,7 @@ const CheckInOut = () => {
           {attendanceRule && attendanceRule.locationRequired && !attendanceRule.enableSimplePunches && attendanceRule.coordinates && (
             <div className={`mb-6 rounded-xl p-4 border-2 shadow-lg ${
               isWithinRadius === true 
-                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300' 
+                ? 'bg-gradient-to-r from-white to-theme-primary/10 border-theme-primary' 
                 : isWithinRadius === false
                 ? 'bg-gradient-to-r from-red-50 to-rose-50 border-red-300'
                 : 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300'
@@ -1196,13 +1196,13 @@ const CheckInOut = () => {
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                     isWithinRadius === true 
-                      ? 'bg-green-100' 
+                      ? 'bg-theme-primary/10' 
                       : isWithinRadius === false
                       ? 'bg-red-100'
                       : 'bg-yellow-100'
                   }`}>
                     {isWithinRadius === true ? (
-                      <FiCheckCircle className="w-6 h-6 text-green-600" />
+                      <FiCheckCircle className="w-6 h-6 text-theme-primary" />
                     ) : isWithinRadius === false ? (
                       <FiXCircle className="w-6 h-6 text-red-600" />
                     ) : (
@@ -1212,7 +1212,7 @@ const CheckInOut = () => {
                   <div>
                     <h3 className={`font-bold text-lg ${
                       isWithinRadius === true 
-                        ? 'text-green-800' 
+                        ? 'text-theme-primary' 
                         : isWithinRadius === false
                         ? 'text-red-800'
                         : 'text-yellow-800'
@@ -1226,7 +1226,7 @@ const CheckInOut = () => {
                     {distanceFromOffice !== null && (
                       <p className={`text-sm font-medium ${
                         isWithinRadius === true 
-                          ? 'text-green-600' 
+                          ? 'text-theme-primary' 
                           : 'text-red-600'
                       }`}>
                         Distance: {distanceFromOffice}m from office
@@ -1287,26 +1287,26 @@ const CheckInOut = () => {
               {/* Enhanced Status Card */}
               <div className={`bg-gradient-to-br rounded-3xl p-6 shadow-lg border ${
                 currentSession.clockOut 
-                  ? 'from-blue-50 via-indigo-50 to-purple-50 border-blue-200' 
-                  : 'from-emerald-50 via-green-50 to-teal-50 border-emerald-200'
+                  ? 'from-white via-indigo-50 to-purple-50 border-theme-secondary' 
+                  : 'from-white via-theme-primary/10 to-theme-secondary/10 border-theme-primary'
               }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${
                       currentSession.clockOut 
-                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600' 
-                        : 'bg-gradient-to-br from-emerald-500 to-green-600'
+                        ? 'bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)]' 
+                        : 'bg-gradient-to-br from-emerald-500 to-[var(--color-primary)]'
                     }`}>
                       <FiCheckCircle className="w-8 h-8 text-white" />
                     </div>
                     <div>
                       <h3 className={`text-2xl font-bold mb-1 ${
-                        currentSession.clockOut ? 'text-blue-800' : 'text-emerald-800'
+                        currentSession.clockOut ? 'text-theme-secondary' : 'text-theme-primary'
                       }`}>
                         {currentSession.clockOut ? 'Checked Out' : 'Checked In'}
                       </h3>
                       <p className={`text-sm font-medium ${
-                        currentSession.clockOut ? 'text-blue-600' : 'text-emerald-600'
+                        currentSession.clockOut ? 'text-theme-secondary' : 'text-theme-primary'
                       }`}>
                         {currentSession.clockOut 
                           ? `Check-Out: ${formatTime(currentSession.clockOut)}` 
@@ -1322,12 +1322,12 @@ const CheckInOut = () => {
                   </div>
                   <div className="text-right">
                     <div className={`text-3xl font-bold font-mono mb-1 ${
-                      currentSession.clockOut ? 'text-blue-600' : 'text-emerald-600'
+                      currentSession.clockOut ? 'text-theme-secondary' : 'text-theme-primary'
                     }`}>
                       {formatElapsedTime(elapsedTime)}
                     </div>
                     <div className={`text-sm font-medium ${
-                      currentSession.clockOut ? 'text-blue-600' : 'text-emerald-600'
+                      currentSession.clockOut ? 'text-theme-secondary' : 'text-theme-primary'
                     }`}>
                       {currentSession.clockOut 
                         ? 'Total work duration' 
@@ -1339,14 +1339,14 @@ const CheckInOut = () => {
 
               {/* Enhanced Session Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 shadow-sm">
+                <div className="bg-gradient-to-br from-white to-indigo-50 border border-theme-secondary rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FiMapPin className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 bg-theme-secondary/10 rounded-xl flex items-center justify-center">
+                      <FiMapPin className="w-5 h-5 text-theme-secondary" />
                     </div>
                     <div>
-                      <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Work Location</p>
-                      <p className="text-lg font-bold text-blue-800">
+                      <p className="text-xs text-theme-secondary font-medium uppercase tracking-wide">Work Location</p>
+                      <p className="text-lg font-bold text-theme-secondary">
                         {currentSession.workLocation === 'office' ? 'Office' : 'Home'}
                       </p>
                     </div>
@@ -1368,17 +1368,17 @@ const CheckInOut = () => {
 
               {/* Enhanced Working Hours Display */}
               {currentSession && !isOnBreak && (
-                <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border border-emerald-200 rounded-3xl p-6 shadow-lg">
+                <div className="bg-gradient-to-br from-white via-theme-primary/10 to-theme-secondary/10 border border-theme-primary rounded-3xl p-6 shadow-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse shadow-lg"></div>
-                      <span className="text-emerald-800 font-bold text-lg">Active Working Time</span>
+                      <span className="text-theme-primary font-bold text-lg">Active Working Time</span>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-emerald-600 font-mono">
+                      <div className="text-2xl font-bold text-theme-primary font-mono">
                         {formatElapsedTime(elapsedTime)}
                       </div>
-                      <div className="text-sm text-emerald-600 font-medium">
+                      <div className="text-sm text-theme-primary font-medium">
                         {formatHours(elapsedTime)} hours
                       </div>
                     </div>
@@ -1387,11 +1387,11 @@ const CheckInOut = () => {
                   {/* Enhanced Progress Bar */}
                   <div className="w-full bg-emerald-200 rounded-full h-3 shadow-inner">
                     <div 
-                      className="bg-gradient-to-r from-emerald-500 to-green-500 h-3 rounded-full transition-all duration-700 shadow-lg"
+                      className="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary)] h-3 rounded-full transition-all duration-700 shadow-lg"
                       style={{ width: `${Math.min((elapsedTime / 3600) / 8 * 100, 100)}%` }}
                     ></div>
                   </div>
-                  <div className="flex justify-between text-sm text-emerald-600 mt-2 font-medium">
+                  <div className="flex justify-between text-sm text-theme-primary mt-2 font-medium">
                     <span>0h</span>
                     <span>8h Target</span>
                   </div>
@@ -1425,15 +1425,15 @@ const CheckInOut = () => {
 
               {/* Checked Out Status */}
               {currentSession.clockOut ? (
-                <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-3xl p-8 border border-blue-200 shadow-xl">
+                <div className="bg-gradient-to-br from-white via-indigo-50 to-purple-50 rounded-3xl p-8 border border-theme-secondary shadow-xl">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <div className="w-16 h-16 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                       <FiCheckCircle className="w-8 h-8 text-white" />
                     </div>
                     <h3 className="text-xl font-bold text-gray-800 mb-2">Checked Out</h3>
                     <p className="text-gray-600 text-sm mb-4">Check-Out Time: {formatTime(currentSession.clockOut)}</p>
                     <div className="bg-white rounded-2xl p-4 shadow-md">
-                      <div className="text-2xl font-bold text-emerald-600 font-mono mb-1">
+                      <div className="text-2xl font-bold text-theme-primary font-mono mb-1">
                         {formatElapsedTime(elapsedTime)}
                       </div>
                       <div className="text-sm text-gray-600 font-medium">
@@ -1538,7 +1538,7 @@ const CheckInOut = () => {
                         className={`py-4 px-6 rounded-2xl text-white font-bold flex items-center gap-2 text-lg shadow-lg transition-all duration-200 ${
                           loading 
                             ? 'bg-gray-400 cursor-not-allowed' 
-                            : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl transform hover:scale-105'
+                            : 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 hover:shadow-xl transform hover:scale-105'
                         }`}
                       >
                         <FiPlay className="w-5 h-5" />
@@ -1552,7 +1552,7 @@ const CheckInOut = () => {
           ) : (
             <div className="text-center py-8">
               <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                <FiClock className="w-10 h-10 text-indigo-600" />
+                <FiClock className="w-10 h-10 text-theme-accent" />
               </div>
               <h3 className="text-2xl font-bold text-gray-800 mb-3">Ready to Start Your Day?</h3>
               <p className="text-gray-600 text-base mb-8 max-w-md mx-auto">Select your work location and check in to begin tracking your time with enhanced security features</p>
@@ -1563,8 +1563,8 @@ const CheckInOut = () => {
                 <div className="flex justify-center space-x-6">
                   <label className={`flex items-center cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 ${
                     workLocation === 'office' 
-                      ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50' 
-                      : 'border-gray-200 bg-white hover:border-blue-300'
+                      ? 'border-theme-secondary bg-gradient-to-br from-white to-indigo-50' 
+                      : 'border-gray-200 bg-white hover:border-theme-secondary'
                   }`}>
                     <input
                       type="radio"
@@ -1572,18 +1572,18 @@ const CheckInOut = () => {
                       value="office"
                       checked={workLocation === 'office'}
                       onChange={(e) => setWorkLocation(e.target.value)}
-                      className="mr-4 text-blue-500 w-5 h-5"
+                      className="mr-4 text-theme-secondary w-5 h-5"
                     />
                     <div className="flex flex-col items-center">
-                      <FiMapPin className={`text-2xl mb-2 ${workLocation === 'office' ? 'text-blue-600' : 'text-gray-500'}`} />
-                      <span className={`font-semibold ${workLocation === 'office' ? 'text-blue-800' : 'text-gray-700'}`}>Office</span>
+                      <FiMapPin className={`text-2xl mb-2 ${workLocation === 'office' ? 'text-theme-secondary' : 'text-gray-500'}`} />
+                      <span className={`font-semibold ${workLocation === 'office' ? 'text-theme-secondary' : 'text-gray-700'}`}>Office</span>
                     </div>
                   </label>
 
                   <label className={`flex items-center cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 ${
                     workLocation === 'home' 
-                      ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50' 
-                      : 'border-gray-200 bg-white hover:border-green-300'
+                      ? 'border-theme-primary bg-gradient-to-br from-white to-theme-primary/10' 
+                      : 'border-gray-200 bg-white hover:border-theme-primary'
                   }`}>
                     <input
                       type="radio"
@@ -1591,11 +1591,11 @@ const CheckInOut = () => {
                       value="home"
                       checked={workLocation === 'home'}
                       onChange={(e) => setWorkLocation(e.target.value)}
-                      className="mr-4 text-green-500 w-5 h-5"
+                      className="mr-4 text-theme-primary w-5 h-5"
                     />
                     <div className="flex flex-col items-center">
-                      <FiHome className={`text-2xl mb-2 ${workLocation === 'home' ? 'text-green-600' : 'text-gray-500'}`} />
-                      <span className={`font-semibold ${workLocation === 'home' ? 'text-green-800' : 'text-gray-700'}`}>Home</span>
+                      <FiHome className={`text-2xl mb-2 ${workLocation === 'home' ? 'text-theme-primary' : 'text-gray-500'}`} />
+                      <span className={`font-semibold ${workLocation === 'home' ? 'text-theme-primary' : 'text-gray-700'}`}>Home</span>
                     </div>
                   </label>
                 </div>
@@ -1608,7 +1608,7 @@ const CheckInOut = () => {
                   {!capturedImage ? (
                     <button
                       onClick={startCamera}
-                      className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 text-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                      className="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 text-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
                       <FiCamera className="w-6 h-6" />
                       Take Photo
@@ -1619,7 +1619,7 @@ const CheckInOut = () => {
                         <img
                           src={capturedImage}
                           alt="Captured"
-                          className="w-20 h-20 object-cover rounded-2xl border-3 border-green-500 shadow-lg"
+                          className="w-20 h-20 object-cover rounded-2xl border-3 border-theme-primary shadow-lg"
                         />
                         <button
                           onClick={() => setCapturedImage(null)}
@@ -1628,7 +1628,7 @@ const CheckInOut = () => {
                           <FiXCircle className="w-4 h-4" />
                         </button>
                       </div>
-                      <span className="text-green-600 font-bold flex items-center gap-2 text-lg">
+                      <span className="text-theme-primary font-bold flex items-center gap-2 text-lg">
                         <FiCheckCircle className="w-6 h-6" />
                         Photo Captured
                       </span>
@@ -1639,17 +1639,17 @@ const CheckInOut = () => {
 
               {/* Enhanced Location and Network Status */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-lg">
+                <div className="bg-gradient-to-br from-white to-indigo-50 border border-theme-secondary rounded-2xl p-6 shadow-lg">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FiNavigation className="text-blue-600 w-5 h-5" />
+                    <div className="w-10 h-10 bg-theme-secondary/10 rounded-xl flex items-center justify-center">
+                      <FiNavigation className="text-theme-secondary w-5 h-5" />
                     </div>
                     <span className="font-bold text-gray-800 text-lg">Location</span>
                   </div>
                   <div className="text-sm text-gray-700">
                     {location ? (
                       <div>
-                        <div className="flex items-center gap-2 text-green-600 mb-2">
+                        <div className="flex items-center gap-2 text-theme-primary mb-2">
                           <FiCheckCircle className="w-5 h-5" />
                           <span className="font-semibold">Detected</span>
                         </div>
@@ -1664,17 +1664,17 @@ const CheckInOut = () => {
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-lg">
+                <div className="bg-gradient-to-br from-white to-theme-primary/10 border border-theme-primary rounded-2xl p-6 shadow-lg">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                      <FiWifi className="text-green-600 w-5 h-5" />
+                    <div className="w-10 h-10 bg-theme-primary/10 rounded-xl flex items-center justify-center">
+                      <FiWifi className="text-theme-primary w-5 h-5" />
                     </div>
                     <span className="font-bold text-gray-800 text-lg">Network</span>
                   </div>
                   <div className="text-sm text-gray-700">
                     {networkInfo ? (
                       <div>
-                        <div className="flex items-center gap-2 text-green-600 mb-2">
+                        <div className="flex items-center gap-2 text-theme-primary mb-2">
                           <FiCheckCircle className="w-5 h-5" />
                           <span className="font-semibold">Connected</span>
                         </div>
@@ -1697,7 +1697,7 @@ const CheckInOut = () => {
                 className={`w-full max-w-md py-5 px-8 rounded-2xl text-white font-bold text-xl shadow-xl transition-all duration-200 ${
                   loading || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)
                     ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-2xl transform hover:scale-105'
+                    : 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 hover:shadow-2xl transform hover:scale-105'
                 }`}
                 title={attendanceRule?.locationRequired && isWithinRadius === false 
                   ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
@@ -1731,8 +1731,8 @@ const CheckInOut = () => {
           <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-gray-200">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center">
-                  <FiCamera className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 bg-theme-secondary/10 rounded-2xl flex items-center justify-center">
+                  <FiCamera className="w-5 h-5 text-theme-secondary" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-800">Capture Photo</h3>
               </div>
@@ -1757,7 +1757,7 @@ const CheckInOut = () => {
             <div className="flex gap-4">
               <button
                 onClick={captureImage}
-                className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-4 px-6 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                className="flex-1 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 text-white py-4 px-6 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
               >
                 <FiCamera className="w-5 h-5" />
                 Capture Photo
@@ -1776,7 +1776,7 @@ const CheckInOut = () => {
       {/* Enhanced Notification System */}
       {notification.show && (
         <div className={`fixed bottom-6 right-6 p-6 rounded-2xl shadow-2xl text-white z-50 max-w-md border-2 ${
-          notification.type === 'success' ? 'bg-gradient-to-r from-green-500 to-emerald-600 border-green-400' : 
+          notification.type === 'success' ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] border-theme-primary' : 
           notification.type === 'warning' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 border-yellow-400' : 
           'bg-gradient-to-r from-red-500 to-rose-600 border-red-400'
         }`}>

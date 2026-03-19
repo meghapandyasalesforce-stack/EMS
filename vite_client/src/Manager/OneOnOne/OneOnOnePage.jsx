@@ -174,8 +174,8 @@ const OneOnOnePage = () => {
 
     const getStatusBadge = (status) => {
         const badges = {
-            'Scheduled': 'bg-blue-100 text-blue-800 border-blue-200',
-            'Completed': 'bg-green-100 text-green-800 border-green-200',
+            'Scheduled': 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary',
+            'Completed': 'bg-theme-primary/10 text-theme-primary border-theme-primary',
             'Cancelled': 'bg-red-100 text-red-800 border-red-200',
             'Rescheduled': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'No Show': 'bg-gray-100 text-gray-800 border-gray-200'
@@ -203,7 +203,7 @@ const OneOnOnePage = () => {
                                     resetForm();
                                     setShowCreateModal(true);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 <FaPlus />
                                 Schedule Meeting
@@ -219,7 +219,7 @@ const OneOnOnePage = () => {
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 font-medium text-sm transition-colors ${
                                     filterStatus === status
-                                        ? 'border-b-2 border-blue-500 text-blue-600'
+                                        ? 'border-b-2 border-theme-secondary text-theme-secondary'
                                         : 'text-gray-600 hover:text-gray-800'
                                 }`}
                             >
@@ -235,7 +235,7 @@ const OneOnOnePage = () => {
                             <p className="text-gray-600 mb-4">No one-on-one meetings found</p>
                             <button
                                 onClick={() => setShowCreateModal(true)}
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 Schedule Your First Meeting
                             </button>
@@ -277,7 +277,7 @@ const OneOnOnePage = () => {
                                                 {meeting.meetingLink && (
                                                     <div className="flex items-center gap-2">
                                                         <FaVideo />
-                                                        <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                        <a href={meeting.meetingLink} target="_blank" rel="noopener noreferrer" className="text-theme-secondary hover:underline">
                                                             Join Meeting
                                                         </a>
                                                     </div>
@@ -317,7 +317,7 @@ const OneOnOnePage = () => {
                                                             });
                                                             setShowCreateModal(true);
                                                         }}
-                                                        className="p-2 text-blue-500 hover:bg-blue-50 rounded"
+                                                        className="p-2 text-theme-secondary hover:bg-theme-secondary/10 rounded"
                                                     >
                                                         <FaEdit />
                                                     </button>
@@ -444,7 +444,7 @@ const OneOnOnePage = () => {
                                     <button
                                         type="button"
                                         onClick={addAgendaItem}
-                                        className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                                        className="flex items-center gap-2 px-3 py-1 bg-theme-secondary text-white rounded text-sm hover:bg-theme-primary"
                                     >
                                         <FaPlus />
                                         Add Item
@@ -483,9 +483,9 @@ const OneOnOnePage = () => {
                             </div>
 
                             {!selectedMeeting && (
-                                <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2">
-                                    <FaBell className="text-blue-500 mt-1" />
-                                    <p className="text-sm text-blue-700">
+                                <div className="bg-theme-secondary/10 p-3 rounded-lg flex items-start gap-2">
+                                    <FaBell className="text-theme-secondary mt-1" />
+                                    <p className="text-sm text-theme-secondary">
                                         A notification will be automatically sent to the employee when you schedule this meeting.
                                     </p>
                                 </div>
@@ -506,7 +506,7 @@ const OneOnOnePage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     {submitting ? (
                                         <>

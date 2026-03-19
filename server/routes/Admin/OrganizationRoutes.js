@@ -8,7 +8,9 @@ import {
     updateSubscriptionPlan,
     getOrganizationStatistics,
     getOrganizationUsers,
-    getOrganizationActivity
+    getOrganizationActivity,
+    getOrganizationBranding,
+    updateOrganizationBranding
 } from '../../controllers/organization/organizationController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
@@ -68,6 +70,8 @@ router.put('/subscription', isAdminAuthenticated, organizationValidations.update
 router.get('/statistics', isAdminOrExecutiveAuthenticated, getOrganizationStatistics);
 router.get('/users', isAdminAuthenticated, organizationValidations.getUsers, getOrganizationUsers);
 router.get('/activity', isAdminOrExecutiveAuthenticated, organizationValidations.getActivity, getOrganizationActivity);
+router.get('/branding', isAdminAuthenticated, getOrganizationBranding);
+router.put('/branding', isAdminAuthenticated, updateOrganizationBranding);
 
 export default router;
 

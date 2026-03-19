@@ -181,7 +181,7 @@ const BenefitsPage = () => {
         switch (status) {
             case 'Active':
             case 'Enrolled':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'Pending':
                 return 'bg-yellow-100 text-yellow-800';
             case 'Cancelled':
@@ -226,7 +226,7 @@ const BenefitsPage = () => {
                                 resetForm();
                                 setShowCreateModal(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                            className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                         >
                             <FaPlus />
                             Create Benefit Plan
@@ -243,7 +243,7 @@ const BenefitsPage = () => {
                             placeholder="Search by name, description, or provider..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                         />
                     </div>
                     <div className="relative">
@@ -251,7 +251,7 @@ const BenefitsPage = () => {
                         <select
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value)}
-                            className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                            className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                         >
                             <option value="all">All Categories</option>
                             <option value="Health Insurance">Health Insurance</option>
@@ -269,7 +269,7 @@ const BenefitsPage = () => {
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                            className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                         >
                             <option value="all">All Status</option>
                             <option value="active">Active</option>
@@ -282,7 +282,7 @@ const BenefitsPage = () => {
                     {filteredPlans.map((plan) => (
                         <div key={plan._id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
                             <div className="flex items-center gap-4 mb-4">
-                                <div className="bg-green-100 p-3 rounded-lg">
+                                <div className="bg-theme-primary/10 p-3 rounded-lg">
                                     {getIcon(plan.category)}
                                 </div>
                                 <div className="flex-1">
@@ -308,7 +308,7 @@ const BenefitsPage = () => {
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => navigate(`/benefits/${plan._id}`)}
-                                    className="flex-1 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm flex items-center justify-center gap-1"
+                                    className="flex-1 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm flex items-center justify-center gap-1"
                                 >
                                     <FaEye /> View
                                 </button>
@@ -320,7 +320,7 @@ const BenefitsPage = () => {
                                                 fetchEnrollments(plan._id);
                                                 setShowEnrollments(true);
                                             }}
-                                            className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm flex items-center justify-center gap-1"
+                                            className="px-3 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition text-sm flex items-center justify-center gap-1"
                                         >
                                             <FaUsers />
                                         </button>
@@ -577,7 +577,7 @@ const BenefitsPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>
@@ -660,7 +660,7 @@ const BenefitsPage = () => {
                                                             toast.error('Failed to update enrollment');
                                                         }
                                                     }}
-                                                    className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition flex items-center gap-1"
+                                                    className="px-3 py-1 bg-theme-primary text-white rounded text-sm hover:bg-theme-primary transition flex items-center gap-1"
                                                 >
                                                     <FaCheckCircle /> Approve
                                                 </button>

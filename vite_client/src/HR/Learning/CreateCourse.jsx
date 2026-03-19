@@ -207,7 +207,7 @@ const CreateCourse = () => {
                                 value={formData.title}
                                 onChange={handleInputChange}
                                 required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                         </div>
 
@@ -221,7 +221,7 @@ const CreateCourse = () => {
                                 onChange={handleInputChange}
                                 required
                                 rows="4"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                         </div>
 
@@ -235,7 +235,7 @@ const CreateCourse = () => {
                                     value={formData.category}
                                     onChange={handleInputChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     <option value="Technical">Technical</option>
                                     <option value="Soft Skills">Soft Skills</option>
@@ -257,7 +257,7 @@ const CreateCourse = () => {
                                     name="level"
                                     value={formData.level}
                                     onChange={handleInputChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     <option value="Beginner">Beginner</option>
                                     <option value="Intermediate">Intermediate</option>
@@ -278,7 +278,7 @@ const CreateCourse = () => {
                                     required
                                     min="0"
                                     step="0.5"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
                         </div>
@@ -291,7 +291,7 @@ const CreateCourse = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowModuleForm(!showModuleForm)}
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                             >
                                 <FaPlus className="w-4 h-4" />
                                 Add Module
@@ -310,7 +310,7 @@ const CreateCourse = () => {
                                             name="moduleTitle"
                                             value={newModule.moduleTitle}
                                             onChange={handleModuleInputChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                     </div>
                                     <div>
@@ -321,7 +321,7 @@ const CreateCourse = () => {
                                             name="contentType"
                                             value={newModule.contentType}
                                             onChange={handleModuleInputChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         >
                                             <option value="Video">Video</option>
                                             <option value="Document">Document</option>
@@ -341,7 +341,7 @@ const CreateCourse = () => {
                                         value={newModule.moduleDescription}
                                         onChange={handleModuleInputChange}
                                         rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -355,7 +355,7 @@ const CreateCourse = () => {
                                             value={newModule.contentUrl}
                                             onChange={handleModuleInputChange}
                                             placeholder="https://..."
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                     </div>
                                     <div>
@@ -368,7 +368,7 @@ const CreateCourse = () => {
                                             value={newModule.duration}
                                             onChange={handleModuleInputChange}
                                             min="0"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                     </div>
                                 </div>
@@ -386,7 +386,7 @@ const CreateCourse = () => {
                                     <button
                                         type="button"
                                         onClick={addModule}
-                                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                                        className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition"
                                     >
                                         Add Module
                                     </button>
@@ -433,24 +433,24 @@ const CreateCourse = () => {
                                     onChange={(e) => setNewSkill(e.target.value)}
                                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                                     placeholder="Add skill"
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                                 <button
                                     type="button"
                                     onClick={addSkill}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                                 >
                                     <FaPlus className="w-4 h-4" />
                                 </button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {formData.skills.map((skill, index) => (
-                                    <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2">
+                                    <span key={index} className="px-3 py-1 bg-theme-secondary/10 text-theme-secondary rounded-full text-sm flex items-center gap-2">
                                         {skill}
                                         <button
                                             type="button"
                                             onClick={() => removeSkill(skill)}
-                                            className="text-blue-600 hover:text-blue-800"
+                                            className="text-theme-secondary hover:text-theme-secondary"
                                         >
                                             <FaTimes className="w-3 h-3" />
                                         </button>
@@ -468,24 +468,24 @@ const CreateCourse = () => {
                                     onChange={(e) => setNewTag(e.target.value)}
                                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                                     placeholder="Add tag"
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                                 <button
                                     type="button"
                                     onClick={addTag}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                                 >
                                     <FaPlus className="w-4 h-4" />
                                 </button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {formData.tags.map((tag, index) => (
-                                    <span key={index} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm flex items-center gap-2">
+                                    <span key={index} className="px-3 py-1 bg-theme-primary/10 text-theme-primary rounded-full text-sm flex items-center gap-2">
                                         {tag}
                                         <button
                                             type="button"
                                             onClick={() => removeTag(tag)}
-                                            className="text-green-600 hover:text-green-800"
+                                            className="text-theme-primary hover:text-theme-primary"
                                         >
                                             <FaTimes className="w-3 h-3" />
                                         </button>
@@ -508,7 +508,7 @@ const CreateCourse = () => {
                                     name="enrollmentType"
                                     value={formData.enrollmentType}
                                     onChange={handleInputChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     <option value="Open">Open</option>
                                     <option value="Approval Required">Approval Required</option>
@@ -526,7 +526,7 @@ const CreateCourse = () => {
                                     value={formData.maxEnrollments}
                                     onChange={handleInputChange}
                                     min="1"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
                         </div>
@@ -541,7 +541,7 @@ const CreateCourse = () => {
                                     name="startDate"
                                     value={formData.startDate}
                                     onChange={handleInputChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
 
@@ -554,7 +554,7 @@ const CreateCourse = () => {
                                     name="endDate"
                                     value={formData.endDate}
                                     onChange={handleInputChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
                         </div>
@@ -570,7 +570,7 @@ const CreateCourse = () => {
                                 onChange={handleInputChange}
                                 min="0"
                                 max="100"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                         </div>
 
@@ -598,7 +598,7 @@ const CreateCourse = () => {
                                             value={formData.certificate.validityPeriod}
                                             onChange={handleInputChange}
                                             min="1"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                     </div>
                                 </div>
@@ -613,7 +613,7 @@ const CreateCourse = () => {
                                 name="status"
                                 value={formData.status}
                                 onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             >
                                 <option value="Draft">Draft</option>
                                 <option value="Published">Published</option>
@@ -633,7 +633,7 @@ const CreateCourse = () => {
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                            className="px-6 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                         >
                             <FaSave className="w-4 h-4" />
                             Create Course

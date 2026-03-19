@@ -82,7 +82,7 @@ const DomainVerification = () => {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
@@ -110,7 +110,7 @@ const DomainVerification = () => {
                         </p>
                         <a
                             href="/organization/settings"
-                            className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            className="inline-block px-6 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90"
                         >
                             Go to Settings
                         </a>
@@ -126,7 +126,7 @@ const DomainVerification = () => {
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     {isVerified ? (
-                                        <div className="flex items-center space-x-2 text-green-600">
+                                        <div className="flex items-center space-x-2 text-theme-primary">
                                             <FiCheckCircle className="w-6 h-6" />
                                             <span className="font-semibold">Verified</span>
                                         </div>
@@ -139,7 +139,7 @@ const DomainVerification = () => {
                                     <button
                                         onClick={verifyDomain}
                                         disabled={verifying}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                                        className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center space-x-2"
                                     >
                                         <FiRefreshCw className={`w-4 h-4 ${verifying ? 'animate-spin' : ''}`} />
                                         <span>{verifying ? 'Verifying...' : 'Verify Domain'}</span>
@@ -161,7 +161,7 @@ const DomainVerification = () => {
                                         <p className="text-sm font-medium text-gray-700">TXT Record</p>
                                         <button
                                             onClick={() => copyDNSEntry(`ems-verification=${verificationToken}`)}
-                                            className="text-blue-600 hover:text-blue-700"
+                                            className="text-theme-secondary hover:text-theme-secondary"
                                         >
                                             <FiCopy className="w-4 h-4" />
                                         </button>
@@ -182,10 +182,10 @@ const DomainVerification = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4">
                                     <div className="flex items-start space-x-2">
-                                        <FiInfo className="w-5 h-5 text-blue-600 mt-0.5" />
-                                        <div className="text-sm text-blue-800">
+                                        <FiInfo className="w-5 h-5 text-theme-secondary mt-0.5" />
+                                        <div className="text-sm text-theme-secondary">
                                             <p className="font-semibold mb-1">Instructions:</p>
                                             <ol className="list-decimal list-inside space-y-1">
                                                 <li>Log in to your domain registrar or DNS provider</li>
@@ -213,7 +213,7 @@ const DomainVerification = () => {
                                             </div>
                                             <div className="flex items-center space-x-2">
                                                 {record.verified ? (
-                                                    <FiCheckCircle className="w-5 h-5 text-green-600" />
+                                                    <FiCheckCircle className="w-5 h-5 text-theme-primary" />
                                                 ) : (
                                                     <FiXCircle className="w-5 h-5 text-red-600" />
                                                 )}

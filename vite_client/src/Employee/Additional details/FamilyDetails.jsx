@@ -77,7 +77,7 @@ const FamilyDetails = () => {
     ))}
 
     <button
-      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
+      className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 transition"
       onClick={() => {
   setFormData(initialFormData);  // clear form
   setIsEditing(true);
@@ -102,7 +102,7 @@ const FamilyDetails = () => {
                 value={formData[field]}
                 onChange={handleChange}
                 required={['fullName', 'relationship', 'phoneNo', 'address'].includes(field)}
-                className="mt-1 px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
               />
             </div>
           ))}
@@ -112,7 +112,7 @@ const FamilyDetails = () => {
               type="submit"
               disabled={addingFamilyDetail}
               className={`${
-                addingFamilyDetail ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                addingFamilyDetail ? 'bg-theme-secondary' : 'bg-theme-primary hover:opacity-90'
               } text-white px-4 py-2 rounded transition`}
             >
               {addingFamilyDetail ? 'Saving...' : 'Save Family Details'}

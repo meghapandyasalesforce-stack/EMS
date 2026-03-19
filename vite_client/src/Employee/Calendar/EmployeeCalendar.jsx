@@ -90,8 +90,8 @@ const EmployeeCalendar = () => {
     const colors = {
       national: 'bg-red-100 text-red-800 border-red-200',
       religious: 'bg-purple-100 text-purple-800 border-purple-200',
-      company: 'bg-blue-100 text-blue-800 border-blue-200',
-      regional: 'bg-green-100 text-green-800 border-green-200'
+      company: 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary',
+      regional: 'bg-theme-primary/10 text-theme-primary border-theme-primary'
     };
     return colors[type] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
@@ -120,7 +120,7 @@ const EmployeeCalendar = () => {
     return (
       <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
           <p className="text-gray-600">Loading calendar...</p>
         </div>
       </div>
@@ -164,7 +164,7 @@ const EmployeeCalendar = () => {
             <select
               value={currentYear}
               onChange={(e) => setCurrentYear(parseInt(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-sm"
             >
               {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i).map(year => (
                 <option key={year} value={year}>{year}</option>
@@ -178,7 +178,7 @@ const EmployeeCalendar = () => {
             <select
               value={currentMonth}
               onChange={(e) => setCurrentMonth(parseInt(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-sm"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                 <option key={month} value={month}>{getMonthName(month)}</option>
@@ -191,23 +191,23 @@ const EmployeeCalendar = () => {
         {(workingDays || workingHours) && (
           <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200">
             <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-              <FiClock className="w-4 h-4 mr-2 text-blue-500" />
+              <FiClock className="w-4 h-4 mr-2 text-theme-secondary" />
               Working Schedule
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {workingDays && (
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <h4 className="text-xs font-semibold text-blue-800 mb-2">Working Days</h4>
-                  <p className="text-sm text-blue-700 font-medium">{workingDays.join(', ')}</p>
+                <div className="bg-theme-secondary/10 rounded-lg p-4 border border-theme-secondary">
+                  <h4 className="text-xs font-semibold text-theme-secondary mb-2">Working Days</h4>
+                  <p className="text-sm text-theme-secondary font-medium">{workingDays.join(', ')}</p>
                 </div>
               )}
               {workingHours && (
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <h4 className="text-xs font-semibold text-green-800 mb-2">Working Hours</h4>
-                  <p className="text-sm text-green-700 font-medium">
+                <div className="bg-theme-primary/10 rounded-lg p-4 border border-theme-primary">
+                  <h4 className="text-xs font-semibold text-theme-primary mb-2">Working Hours</h4>
+                  <p className="text-sm text-theme-primary font-medium">
                     {workingHours.start} - {workingHours.end} 
                     {workingHours.break > 0 && (
-                      <span className="block text-xs text-green-600 mt-1">
+                      <span className="block text-xs text-theme-primary mt-1">
                         Break: {workingHours.break} minutes
                       </span>
                     )}
@@ -225,7 +225,7 @@ const EmployeeCalendar = () => {
               <FiCalendar className="w-4 h-4 mr-2 text-green-500" />
               Holidays in {getMonthName(currentMonth)} {currentYear}
               {holidays.length > 0 && (
-                <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-lg">
+                <span className="ml-2 px-2 py-1 bg-theme-primary/10 text-theme-primary text-xs rounded-lg">
                   {holidays.length} {holidays.length === 1 ? 'holiday' : 'holidays'}
                 </span>
               )}
@@ -289,11 +289,11 @@ const EmployeeCalendar = () => {
               <span className="text-sm text-gray-600 font-medium">Religious</span>
             </div>
             <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-blue-100 border border-blue-200 rounded-full"></div>
+              <div className="w-4 h-4 bg-theme-secondary/10 border border-theme-secondary rounded-full"></div>
               <span className="text-sm text-gray-600 font-medium">Company</span>
             </div>
             <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-green-100 border border-green-200 rounded-full"></div>
+              <div className="w-4 h-4 bg-theme-primary/10 border border-theme-primary rounded-full"></div>
               <span className="text-sm text-gray-600 font-medium">Regional</span>
             </div>
           </div>

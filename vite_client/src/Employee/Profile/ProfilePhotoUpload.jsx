@@ -236,7 +236,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
           <canvas ref={canvasRef} className="hidden" />
           <button
             onClick={capturePhoto}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
+            className="w-full bg-theme-secondary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
           >
             <FiCamera className="mr-2" />
             Capture Photo
@@ -268,7 +268,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
           {/* Camera Option */}
           <button
             onClick={startCamera}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
+            className="w-full bg-theme-secondary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
           >
             <FiCamera className="mr-2" />
             Take Photo
@@ -282,7 +282,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
           <button
             onClick={uploadPhoto}
             disabled={uploading}
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
+            className="w-full bg-theme-primary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
           >
             <FiUpload className="mr-2" />
             {uploading ? 'Uploading...' : 'Upload Photo'}
@@ -306,9 +306,9 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       )}
 
       {/* Instructions */}
-      <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-        <h4 className="text-sm font-medium text-blue-800 mb-1">Instructions:</h4>
-        <ul className="text-xs text-blue-700 space-y-1">
+      <div className="mt-4 p-3 bg-theme-secondary/10 rounded-lg">
+        <h4 className="text-sm font-medium text-theme-secondary mb-1">Instructions:</h4>
+        <ul className="text-xs text-theme-secondary space-y-1">
           <li>• Maximum file size: 5MB</li>
           <li>• Supported formats: JPG, PNG, GIF</li>
           <li>• Recommended size: 400x400 pixels</li>

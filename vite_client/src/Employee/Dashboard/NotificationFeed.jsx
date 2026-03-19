@@ -124,7 +124,7 @@ const NotificationFeed = () => {
               className={`border rounded-lg p-4 flex justify-between items-start transition-all duration-300 hover:shadow-md ${
                 recentIds.has(note._id) 
                   ? 'bg-gradient-to-r from-red-50 to-pink-50 border-red-300 shadow-lg' 
-                  : 'bg-white border-gray-200 hover:border-blue-300'
+                  : 'bg-white border-gray-200 hover:border-theme-secondary'
               }`}
             >
               <div className="flex-1">
@@ -135,7 +135,7 @@ const NotificationFeed = () => {
               </div>
               <button
                 onClick={() => handleRead(note._id)}
-                className="ml-4 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-2 rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
+                className="ml-4 bg-gradient-to-r from-green-500 to-[var(--color-primary)] text-white px-3 py-2 rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
               >
                 Mark as Read
               </button>

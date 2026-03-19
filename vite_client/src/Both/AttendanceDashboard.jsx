@@ -126,10 +126,10 @@ const AttendanceDashboard = () => {
                         Web Clock-out
                     </button>
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
-                        <span className="text-blue-400 text-xs sm:text-sm flex items-center justify-center sm:justify-start gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-blue-400">
+                        <span className="text-theme-secondary text-xs sm:text-sm flex items-center justify-center sm:justify-start gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-theme-secondary">
                             Work From Home
                         </span>
-                        <span className="text-blue-400 text-xs sm:text-sm flex items-center justify-center sm:justify-start gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-blue-400">
+                        <span className="text-theme-secondary text-xs sm:text-sm flex items-center justify-center sm:justify-start gap-2 before:content-[''] before:inline-block before:w-2 before:h-2 before:rounded-full before:bg-theme-secondary">
                             On Duty
                         </span>
                     </div>
@@ -139,7 +139,7 @@ const AttendanceDashboard = () => {
             <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-semibold mb-4">Attendance Log</h2>
                 <div className="flex flex-wrap gap-2 sm:gap-4 mb-6 sm:mb-8 mt-4">
-                    <button className="bg-blue-500 text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">30 DAYS</button>
+                    <button className="bg-theme-secondary text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">30 DAYS</button>
                     <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">FEB</button>
                     <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">JAN</button>
                     <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">DEC</button>
@@ -164,7 +164,7 @@ const AttendanceDashboard = () => {
                                     <td className="p-3 sm:p-4 border-b border-gray-700">
                                         <div className="bg-gray-700 h-2 rounded relative w-full">
                                             <div 
-                                                className="absolute h-full bg-blue-400 rounded"
+                                                className="absolute h-full bg-theme-secondary rounded"
                                                 style={{
                                                     left: '30%',
                                                     width: '40%'

@@ -125,9 +125,9 @@ const OnboardingDetailPage = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'Completed':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'In Progress':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-theme-secondary/10 text-theme-secondary';
             case 'Not Started':
                 return 'bg-gray-100 text-gray-800';
             case 'On Hold':
@@ -142,9 +142,9 @@ const OnboardingDetailPage = () => {
     const getTaskStatusColor = (status) => {
         switch (status) {
             case 'Completed':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'In Progress':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-theme-secondary/10 text-theme-secondary';
             case 'Pending':
                 return 'bg-gray-100 text-gray-800';
             case 'Overdue':
@@ -190,18 +190,18 @@ const OnboardingDetailPage = () => {
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
                             <div 
-                                className="bg-blue-600 h-3 rounded-full transition-all"
+                                className="bg-theme-primary h-3 rounded-full transition-all"
                                 style={{ width: `${progress}%` }}
                             ></div>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                        <div className="text-center p-4 bg-blue-50 rounded-lg">
-                            <div className="text-2xl font-bold text-blue-600">{totalTasks}</div>
+                        <div className="text-center p-4 bg-theme-secondary/10 rounded-lg">
+                            <div className="text-2xl font-bold text-theme-secondary">{totalTasks}</div>
                             <div className="text-sm text-gray-600">Total Tasks</div>
                         </div>
-                        <div className="text-center p-4 bg-green-50 rounded-lg">
-                            <div className="text-2xl font-bold text-green-600">{completedTasks}</div>
+                        <div className="text-center p-4 bg-theme-primary/10 rounded-lg">
+                            <div className="text-2xl font-bold text-theme-primary">{completedTasks}</div>
                             <div className="text-sm text-gray-600">Completed</div>
                         </div>
                         <div className="text-center p-4 bg-yellow-50 rounded-lg">
@@ -221,7 +221,7 @@ const OnboardingDetailPage = () => {
                                 <h2 className="text-xl font-semibold">Tasks</h2>
                                 <button
                                     onClick={() => setShowAddTaskModal(true)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
+                                    className="flex items-center gap-2 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm"
                                 >
                                     <FaPlus /> Add Task
                                 </button>
@@ -275,7 +275,7 @@ const OnboardingDetailPage = () => {
                                                         <button
                                                             onClick={() => updateTaskStatus(task._id, 'In Progress')}
                                                             disabled={submitting}
-                                                            className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition disabled:opacity-50"
+                                                            className="px-3 py-1 bg-theme-secondary text-white rounded text-sm hover:bg-theme-primary transition disabled:opacity-50"
                                                         >
                                                             Start Task
                                                         </button>
@@ -284,7 +284,7 @@ const OnboardingDetailPage = () => {
                                                         <button
                                                             onClick={() => updateTaskStatus(task._id, 'Completed')}
                                                             disabled={submitting}
-                                                            className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition disabled:opacity-50 flex items-center gap-1"
+                                                            className="px-3 py-1 bg-theme-primary text-white rounded text-sm hover:bg-theme-primary transition disabled:opacity-50 flex items-center gap-1"
                                                         >
                                                             <FaCheck /> Complete
                                                         </button>
@@ -326,7 +326,7 @@ const OnboardingDetailPage = () => {
                                 {workflow.actualCompletionDate && (
                                     <div>
                                         <span className="text-gray-500">Actual Completion:</span>
-                                        <span className="ml-2 font-medium text-green-600">
+                                        <span className="ml-2 font-medium text-theme-primary">
                                             {format(new Date(workflow.actualCompletionDate), 'MMM dd, yyyy')}
                                         </span>
                                     </div>
@@ -478,7 +478,7 @@ const OnboardingDetailPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

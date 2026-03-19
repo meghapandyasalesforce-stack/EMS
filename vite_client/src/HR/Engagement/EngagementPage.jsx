@@ -59,7 +59,7 @@ const EngagementPage = () => {
                     {activeTab === 'surveys' && isHRUser && (
                         <button
                             onClick={() => navigate('/engagement/create-survey')}
-                            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                            className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                         >
                             <FaPlus className="w-4 h-4" />
                             Create Survey
@@ -71,14 +71,14 @@ const EngagementPage = () => {
                     <div className="flex border-b">
                         <button
                             onClick={() => setActiveTab('surveys')}
-                            className={`px-6 py-3 font-medium ${activeTab === 'surveys' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'surveys' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaClipboardList className="inline mr-2" />
                             Surveys ({surveys.length})
                         </button>
                         <button
                             onClick={() => setActiveTab('feedback')}
-                            className={`px-6 py-3 font-medium ${activeTab === 'feedback' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'feedback' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaComments className="inline mr-2" />
                             Feedback ({feedback.length})
@@ -94,7 +94,7 @@ const EngagementPage = () => {
                                 <p className="text-gray-600 mb-4 text-sm">{survey.description}</p>
                                 <div className="flex items-center justify-between">
                                     <span className={`px-3 py-1 rounded-full text-sm ${
-                                        survey.status === 'Active' ? 'bg-green-100 text-green-800' :
+                                        survey.status === 'Active' ? 'bg-theme-primary/10 text-theme-primary' :
                                         survey.status === 'Closed' ? 'bg-gray-100 text-gray-800' :
                                         'bg-yellow-100 text-yellow-800'
                                     }`}>
@@ -106,7 +106,7 @@ const EngagementPage = () => {
                                 </div>
                                 <button
                                     onClick={() => navigate(`/engagement/surveys/${survey._id}`)}
-                                    className="mt-4 w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
+                                    className="mt-4 w-full bg-theme-secondary text-white py-2 rounded-lg hover:bg-theme-primary transition"
                                 >
                                     View Survey
                                 </button>
@@ -129,13 +129,13 @@ const EngagementPage = () => {
                                     <tr key={item._id}>
                                         <td className="px-6 py-4">{item.subject}</td>
                                         <td className="px-6 py-4">
-                                            <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                                            <span className="px-2 py-1 rounded text-xs bg-theme-secondary/10 text-theme-secondary">
                                                 {item.type}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded text-xs ${
-                                                item.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                                                item.status === 'Resolved' ? 'bg-theme-primary/10 text-theme-primary' :
                                                 item.status === 'Open' ? 'bg-yellow-100 text-yellow-800' :
                                                 'bg-gray-100 text-gray-800'
                                             }`}>

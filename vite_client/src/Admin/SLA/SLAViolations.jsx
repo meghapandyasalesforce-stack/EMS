@@ -4,13 +4,13 @@ import { formatDistanceToNow } from 'date-fns';
 
 const SLAViolations = ({ violations, onRefresh }) => {
   const getViolationIcon = (violation) => {
-    if (violation.status === 'Resolved') return <FiCheckCircle className="w-5 h-5 text-green-600" />;
+    if (violation.status === 'Resolved') return <FiCheckCircle className="w-5 h-5 text-theme-primary" />;
     if (violation.status === 'Active') return <FiAlertTriangle className="w-5 h-5 text-red-600" />;
     return <FiClock className="w-5 h-5 text-gray-600" />;
   };
 
   const getViolationColor = (violation) => {
-    if (violation.status === 'Resolved') return 'bg-green-50 border-green-200';
+    if (violation.status === 'Resolved') return 'bg-theme-primary/10 border-theme-primary';
     if (violation.status === 'Active') return 'bg-red-50 border-red-200';
     return 'bg-gray-50 border-gray-200';
   };
@@ -40,7 +40,7 @@ const SLAViolations = ({ violations, onRefresh }) => {
                     </h3>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                       violation.status === 'Active' ? 'bg-red-100 text-red-800' :
-                      violation.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                      violation.status === 'Resolved' ? 'bg-theme-primary/10 text-theme-primary' :
                       'bg-gray-100 text-gray-800'
                     }`}>
                       {violation.status}

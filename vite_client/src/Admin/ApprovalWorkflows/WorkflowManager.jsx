@@ -73,7 +73,7 @@ const WorkflowManager = () => {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+            className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
           >
             <FiPlus className="w-5 h-5" />
             Create Workflow
@@ -88,7 +88,7 @@ const WorkflowManager = () => {
               <select
                 value={filter.entityType}
                 onChange={(e) => setFilter({ ...filter, entityType: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
               >
                 <option value="">All Types</option>
                 <option value="Leave">Leave</option>
@@ -103,7 +103,7 @@ const WorkflowManager = () => {
               <select
                 value={filter.isActive}
                 onChange={(e) => setFilter({ ...filter, isActive: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
               >
                 <option value="">All</option>
                 <option value="true">Active</option>
@@ -127,7 +127,7 @@ const WorkflowManager = () => {
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
                         workflow.isActive
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-theme-primary/10 text-theme-primary'
                           : 'bg-gray-100 text-gray-800'
                       }`}
                     >
@@ -149,7 +149,7 @@ const WorkflowManager = () => {
                     setSelectedWorkflow(workflow);
                     setShowDetail(true);
                   }}
-                  className="flex-1 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors font-medium text-sm"
+                  className="flex-1 bg-theme-secondary/10 text-theme-secondary px-4 py-2 rounded-lg hover:bg-theme-secondary/10 transition-colors font-medium text-sm"
                 >
                   View Details
                 </button>
@@ -158,7 +158,7 @@ const WorkflowManager = () => {
                     setSelectedWorkflow(workflow);
                     setShowEditModal(true);
                   }}
-                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
                   title="Edit"
                 >
                   <FiEdit className="w-5 h-5" />
@@ -168,7 +168,7 @@ const WorkflowManager = () => {
                   className={`p-2 rounded-lg transition-colors ${
                     workflow.isActive
                       ? 'text-orange-600 hover:bg-orange-50'
-                      : 'text-green-600 hover:bg-green-50'
+                      : 'text-theme-primary hover:bg-theme-primary/10'
                   }`}
                   title={workflow.isActive ? 'Deactivate' : 'Activate'}
                 >
@@ -192,7 +192,7 @@ const WorkflowManager = () => {
             <p className="text-gray-600 text-lg">No workflows found</p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+              className="mt-4 text-theme-secondary hover:text-theme-secondary font-medium"
             >
               Create your first workflow
             </button>

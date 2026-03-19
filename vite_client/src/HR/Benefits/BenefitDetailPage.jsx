@@ -85,7 +85,7 @@ const BenefitDetailPage = () => {
         switch (status) {
             case 'Active':
             case 'Enrolled':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'Pending':
                 return 'bg-yellow-100 text-yellow-800';
             case 'Cancelled':
@@ -120,7 +120,7 @@ const BenefitDetailPage = () => {
                     </button>
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-4">
-                            <div className="bg-green-100 p-4 rounded-lg">
+                            <div className="bg-theme-primary/10 p-4 rounded-lg">
                                 {getIcon(plan.category)}
                             </div>
                             <div>
@@ -237,7 +237,7 @@ const BenefitDetailPage = () => {
                                 <h2 className="text-xl font-semibold">Enrollments</h2>
                                 <div className="flex gap-4 text-sm">
                                     <div className="text-center">
-                                        <div className="font-bold text-green-600">{activeEnrollments}</div>
+                                        <div className="font-bold text-theme-primary">{activeEnrollments}</div>
                                         <div className="text-gray-600">Active</div>
                                     </div>
                                     <div className="text-center">
@@ -288,7 +288,7 @@ const BenefitDetailPage = () => {
                                                 <div className="flex gap-2">
                                                     <button
                                                         onClick={() => updateEnrollmentStatus(enrollment._id, 'Active')}
-                                                        className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition flex items-center gap-1"
+                                                        className="px-3 py-1 bg-theme-primary text-white rounded text-sm hover:bg-theme-primary transition flex items-center gap-1"
                                                     >
                                                         <FaCheckCircle /> Approve
                                                     </button>
@@ -324,7 +324,7 @@ const BenefitDetailPage = () => {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-600">Active:</span>
-                                    <span className="font-semibold text-green-600">{activeEnrollments}</span>
+                                    <span className="font-semibold text-theme-primary">{activeEnrollments}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-600">Pending:</span>
@@ -343,7 +343,7 @@ const BenefitDetailPage = () => {
                                             <span className="font-medium text-gray-700">Employment Type:</span>
                                             <div className="mt-1">
                                                 {plan.eligibility.employmentType.map((type, idx) => (
-                                                    <span key={idx} className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-1 mb-1">
+                                                    <span key={idx} className="inline-block bg-theme-secondary/10 text-theme-secondary px-2 py-1 rounded mr-1 mb-1">
                                                         {type}
                                                     </span>
                                                 ))}

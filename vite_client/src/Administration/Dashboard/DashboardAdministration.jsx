@@ -130,10 +130,10 @@ const DashboardAdministration = () => {
     }, [employeesError]);
 
     const formatCurrency = (amount) => {
-        if (!amount || isNaN(amount)) return '$0';
-        return new Intl.NumberFormat('en-US', {
+        if (!amount || isNaN(amount)) return '₹0';
+        return new Intl.NumberFormat('en-IN', {
             style: 'currency',
-            currency: 'USD',
+            currency: 'INR',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         }).format(amount);
@@ -175,7 +175,7 @@ const DashboardAdministration = () => {
         switch(severity) {
             case 'high': return 'bg-red-100 border-red-500 text-red-700';
             case 'medium': return 'bg-yellow-100 border-yellow-500 text-yellow-700';
-            case 'low': return 'bg-blue-100 border-blue-500 text-blue-700';
+            case 'low': return 'bg-theme-secondary/10 border-theme-secondary text-theme-secondary';
             default: return 'bg-gray-100 border-gray-500 text-gray-700';
         }
     };
@@ -207,7 +207,7 @@ const DashboardAdministration = () => {
                                 onClick={() => setSelectedPeriod(period)}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                                     selectedPeriod === period
-                                        ? 'bg-green-600 text-white shadow-md'
+                                        ? 'bg-theme-primary text-white shadow-md'
                                         : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
                                 }`}
                             >
@@ -257,7 +257,7 @@ const DashboardAdministration = () => {
                 {/* KPI Cards */}
                 <div className="lg:col-span-2 space-y-4">
                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <FaChartBar className="w-5 h-5 text-green-600" />
+                        <FaChartBar className="w-5 h-5 text-theme-primary" />
                         Key Performance Indicators
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -295,12 +295,12 @@ const DashboardAdministration = () => {
                 {/* Financial Summary Widget - Phase 1 */}
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaMoneyBillWave className="w-5 h-5 text-green-600" />
+                        <FaMoneyBillWave className="w-5 h-5 text-theme-primary" />
                         Financial Summary
                     </h2>
                     {financialLoading ? (
                         <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -310,7 +310,7 @@ const DashboardAdministration = () => {
                                     {formatCurrency(financialSummary.totalPayroll || 0)}
                                 </p>
                                 {financialSummary.growth !== undefined && (
-                                    <div className={`flex items-center gap-1 mt-1 ${financialSummary.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    <div className={`flex items-center gap-1 mt-1 ${financialSummary.growth >= 0 ? 'text-theme-primary' : 'text-red-600'}`}>
                                         {financialSummary.growth >= 0 ? (
                                             <FaArrowUp className="w-4 h-4" />
                                         ) : (
@@ -384,29 +384,29 @@ const DashboardAdministration = () => {
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <FaProjectDiagram className="w-5 h-5 text-green-600" />
+                            <FaProjectDiagram className="w-5 h-5 text-theme-primary" />
                             Project Portfolio
                         </h2>
                         <button
                             onClick={() => navigate('/projects')}
-                            className="text-sm text-green-600 hover:text-green-700 font-medium"
+                            className="text-sm text-theme-primary hover:opacity-80 font-medium"
                         >
                             View All →
                         </button>
                     </div>
                     {portfolioLoading ? (
                         <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             <div className="grid grid-cols-3 gap-4">
-                                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                                    <p className="text-2xl font-bold text-blue-600">{portfolio.overview?.total || 0}</p>
+                                <div className="text-center p-4 bg-theme-secondary/10 rounded-lg">
+                                    <p className="text-2xl font-bold text-theme-secondary">{portfolio.overview?.total || 0}</p>
                                     <p className="text-xs text-gray-600 mt-1">Total</p>
                                 </div>
-                                <div className="text-center p-4 bg-green-50 rounded-lg">
-                                    <p className="text-2xl font-bold text-green-600">{portfolio.overview?.active || 0}</p>
+                                <div className="text-center p-4 bg-theme-primary/10 rounded-lg">
+                                    <p className="text-2xl font-bold text-theme-primary">{portfolio.overview?.active || 0}</p>
                                     <p className="text-xs text-gray-600 mt-1">Active</p>
                                 </div>
                                 <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -436,12 +436,12 @@ const DashboardAdministration = () => {
                 {/* Recent Projects */}
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaClock className="w-5 h-5 text-green-600" />
+                        <FaClock className="w-5 h-5 text-theme-primary" />
                         Recent Projects
                     </h2>
                     {portfolioLoading ? (
                         <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
                         </div>
                     ) : (
                         <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -460,8 +460,8 @@ const DashboardAdministration = () => {
                                                 </p>
                                             </div>
                                             <div className={`px-2 py-1 rounded text-xs font-medium ${
-                                                project.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                project.status === 'active' || project.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                                project.status === 'completed' ? 'bg-theme-primary/10 text-theme-primary' :
+                                                project.status === 'active' || project.status === 'in-progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
                                                 'bg-gray-100 text-gray-700'
                                             }`}>
                                                 {project.status || 'N/A'}
@@ -484,7 +484,7 @@ const DashboardAdministration = () => {
                     onClick={() => navigate('/employees')}
                 >
                     <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-4 rounded-xl shadow-lg">
+                        <div className="bg-gradient-to-br from-[var(--color-secondary)] to-[var(--color-secondary)] p-4 rounded-xl shadow-lg">
                             <FaUsers className="w-6 h-6 text-white" />
                         </div>
                         <div>
@@ -499,7 +499,7 @@ const DashboardAdministration = () => {
                     onClick={() => navigate('/projects')}
                 >
                     <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-green-400 to-green-600 p-4 rounded-xl shadow-lg">
+                        <div className="bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)] p-4 rounded-xl shadow-lg">
                             <FaProjectDiagram className="w-6 h-6 text-white" />
                         </div>
                         <div>
@@ -559,13 +559,13 @@ const DashboardAdministration = () => {
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <FaChartBar className="w-5 h-5 text-green-600" />
+                        <FaChartBar className="w-5 h-5 text-theme-primary" />
                         Department Performance
                     </h2>
                 </div>
                 {departmentLoading ? (
                     <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
                     </div>
                 ) : (
                     <div className="space-y-4">
@@ -578,7 +578,7 @@ const DashboardAdministration = () => {
                                             <div className="flex justify-between">
                                                 <span className="text-gray-600">Performance Score:</span>
                                                 <span className={`font-bold ${
-                                                    dept.metrics?.performanceScore >= 80 ? 'text-green-600' :
+                                                    dept.metrics?.performanceScore >= 80 ? 'text-theme-primary' :
                                                     dept.metrics?.performanceScore >= 60 ? 'text-yellow-600' :
                                                     'text-red-600'
                                                 }`}>
@@ -608,12 +608,12 @@ const DashboardAdministration = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaChartLine className="w-5 h-5 text-green-600" />
+                        <FaChartLine className="w-5 h-5 text-theme-primary" />
                         Employee Growth Trends
                     </h2>
                     {trendsLoading ? (
                         <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -630,7 +630,7 @@ const DashboardAdministration = () => {
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-gray-600">Growth Rate:</span>
                                         <span className={`font-bold ${
-                                            trendsData.growthRates.employees >= 0 ? 'text-green-600' : 'text-red-600'
+                                            trendsData.growthRates.employees >= 0 ? 'text-theme-primary' : 'text-red-600'
                                         }`}>
                                             {trendsData.growthRates.employees >= 0 ? '+' : ''}{trendsData.growthRates.employees}%
                                         </span>
@@ -643,12 +643,12 @@ const DashboardAdministration = () => {
 
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaChartLine className="w-5 h-5 text-green-600" />
+                        <FaChartLine className="w-5 h-5 text-theme-primary" />
                         Payroll Trends
                     </h2>
                     {trendsLoading ? (
                         <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -665,7 +665,7 @@ const DashboardAdministration = () => {
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-gray-600">Growth Rate:</span>
                                         <span className={`font-bold ${
-                                            trendsData.growthRates.payroll >= 0 ? 'text-green-600' : 'text-red-600'
+                                            trendsData.growthRates.payroll >= 0 ? 'text-theme-primary' : 'text-red-600'
                                         }`}>
                                             {trendsData.growthRates.payroll >= 0 ? '+' : ''}{trendsData.growthRates.payroll}%
                                         </span>
@@ -688,7 +688,7 @@ const DashboardAdministration = () => {
                         <div className="flex gap-4 text-sm">
                             <span className="text-red-600 font-semibold">{insightsData.summary.critical || 0} Critical</span>
                             <span className="text-yellow-600 font-semibold">{insightsData.summary.warnings || 0} Warnings</span>
-                            <span className="text-green-600 font-semibold">{insightsData.summary.successes || 0} Positive</span>
+                            <span className="text-theme-primary font-semibold">{insightsData.summary.successes || 0} Positive</span>
                         </div>
                     )}
                 </div>
@@ -705,14 +705,14 @@ const DashboardAdministration = () => {
                                     className={`p-4 rounded-lg border-l-4 ${
                                         insight.type === 'critical' ? 'bg-red-50 border-red-500' :
                                         insight.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
-                                        'bg-green-50 border-green-500'
+                                        'bg-theme-primary/10 border-theme-primary'
                                     }`}
                                 >
                                     <div className="flex items-start gap-3">
                                         <div className={`mt-1 ${
                                             insight.type === 'critical' ? 'text-red-600' :
                                             insight.type === 'warning' ? 'text-yellow-600' :
-                                            'text-green-600'
+                                            'text-theme-primary'
                                         }`}>
                                             {insight.type === 'critical' || insight.type === 'warning' ? 
                                                 <FaExclamationTriangle className="w-5 h-5" /> :
@@ -744,7 +744,7 @@ const DashboardAdministration = () => {
                         <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
                             predictiveData.riskIndicators.riskLevel === 'high' ? 'bg-red-100 text-red-700' :
                             predictiveData.riskIndicators.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-green-100 text-green-700'
+                            'bg-theme-primary/10 text-theme-primary'
                         }`}>
                             Risk: {predictiveData.riskIndicators.riskLevel?.toUpperCase()}
                         </div>
@@ -772,7 +772,7 @@ const DashboardAdministration = () => {
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm text-gray-600">Trend:</span>
                                         {predictiveData.trends.payroll.direction === 'increasing' ? (
-                                            <FaArrowUp className="w-4 h-4 text-green-600" />
+                                            <FaArrowUp className="w-4 h-4 text-theme-primary" />
                                         ) : predictiveData.trends.payroll.direction === 'decreasing' ? (
                                             <FaArrowDown className="w-4 h-4 text-red-600" />
                                         ) : (
@@ -802,7 +802,7 @@ const DashboardAdministration = () => {
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm text-gray-600">Trend:</span>
                                         {predictiveData.trends.employees.direction === 'increasing' ? (
-                                            <FaArrowUp className="w-4 h-4 text-green-600" />
+                                            <FaArrowUp className="w-4 h-4 text-theme-primary" />
                                         ) : predictiveData.trends.employees.direction === 'decreasing' ? (
                                             <FaArrowDown className="w-4 h-4 text-red-600" />
                                         ) : (

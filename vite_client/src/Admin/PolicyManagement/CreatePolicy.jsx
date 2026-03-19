@@ -83,7 +83,7 @@ const CreatePolicy = () => {
                         name="policyType"
                         value={formData.policyType}
                         onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                         required
                     >
                         {policyTypes.map(type => (
@@ -104,7 +104,7 @@ const CreatePolicy = () => {
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                         required
                     />
                 </div>
@@ -119,7 +119,7 @@ const CreatePolicy = () => {
                         value={formData.description}
                         onChange={handleChange}
                         rows="3"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                         required
                     />
                 </div>
@@ -134,7 +134,7 @@ const CreatePolicy = () => {
                         value={formData.content}
                         onChange={handleChange}
                         rows="10"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                         placeholder="Enter the full policy content here..."
                         required
                     />
@@ -151,7 +151,7 @@ const CreatePolicy = () => {
                             name="effectiveDate"
                             value={formData.effectiveDate}
                             onChange={handleChange}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                             required
                         />
                     </div>
@@ -164,7 +164,7 @@ const CreatePolicy = () => {
                             name="expiryDate"
                             value={formData.expiryDate}
                             onChange={handleChange}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                         />
                     </div>
                 </div>
@@ -208,7 +208,7 @@ const CreatePolicy = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
                     >
                         {loading ? 'Creating...' : 'Create Policy'}
                     </button>

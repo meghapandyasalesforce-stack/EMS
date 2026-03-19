@@ -80,7 +80,7 @@ const SLAManager = () => {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+            className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
           >
             <FiPlus className="w-5 h-5" />
             Create SLA
@@ -95,7 +95,7 @@ const SLAManager = () => {
                 <p className="text-sm text-gray-600">Total SLAs</p>
                 <p className="text-2xl font-bold text-gray-900">{slas.length}</p>
               </div>
-              <FiCheckCircle className="w-8 h-8 text-blue-600" />
+              <FiCheckCircle className="w-8 h-8 text-theme-secondary" />
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-md p-6">
@@ -106,7 +106,7 @@ const SLAManager = () => {
                   {slas.filter(s => s.isActive).length}
                 </p>
               </div>
-              <FiClock className="w-8 h-8 text-green-600" />
+              <FiClock className="w-8 h-8 text-theme-primary" />
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-md p-6">
@@ -137,7 +137,7 @@ const SLAManager = () => {
                 onClick={() => setActiveTab('slas')}
                 className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
                   activeTab === 'slas'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-theme-secondary text-theme-secondary'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -147,7 +147,7 @@ const SLAManager = () => {
                 onClick={() => setActiveTab('violations')}
                 className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
                   activeTab === 'violations'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-theme-secondary text-theme-secondary'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -172,7 +172,7 @@ const SLAManager = () => {
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           sla.isActive
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-theme-primary/10 text-theme-primary'
                             : 'bg-gray-100 text-gray-800'
                         }`}
                       >
@@ -183,7 +183,7 @@ const SLAManager = () => {
                           sla.priority === 'Critical' ? 'bg-red-100 text-red-800' :
                           sla.priority === 'High' ? 'bg-orange-100 text-orange-800' :
                           sla.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-blue-100 text-blue-800'
+                          'bg-theme-secondary/10 text-theme-secondary'
                         }`}
                       >
                         {sla.priority}
@@ -209,7 +209,7 @@ const SLAManager = () => {
                       setSelectedSLA(sla);
                       setShowEditModal(true);
                     }}
-                    className="flex-1 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors font-medium text-sm"
+                    className="flex-1 bg-theme-secondary/10 text-theme-secondary px-4 py-2 rounded-lg hover:bg-theme-secondary/10 transition-colors font-medium text-sm"
                   >
                     Edit
                   </button>
@@ -218,7 +218,7 @@ const SLAManager = () => {
                     className={`p-2 rounded-lg transition-colors ${
                       sla.isActive
                         ? 'text-orange-600 hover:bg-orange-50'
-                        : 'text-green-600 hover:bg-green-50'
+                        : 'text-theme-primary hover:bg-theme-primary/10'
                     }`}
                     title={sla.isActive ? 'Deactivate' : 'Activate'}
                   >
@@ -245,7 +245,7 @@ const SLAManager = () => {
             <p className="text-gray-600 text-lg">No SLAs found</p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+              className="mt-4 text-theme-secondary hover:text-theme-secondary font-medium"
             >
               Create your first SLA
             </button>

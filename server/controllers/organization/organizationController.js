@@ -190,8 +190,9 @@ export const uploadOrganizationLogo = async (req, res) => {
         }
 
         // Update logo
+        // Files are stored in uploads/logos, so expose that full relative path
         organization.logo = {
-            url: `/uploads/${req.file.filename}`,
+            url: `/uploads/logos/${req.file.filename}`,
             filename: req.file.filename,
             uploadedAt: new Date()
         };
@@ -530,6 +531,155 @@ export const updateSubscriptionPlan = async (req, res) => {
     } catch (error) {
         logger.error('Error updating subscription plan', { error: error.message });
         return sendError(res, error.message || 'Failed to update subscription plan', 500);
+    }
+};
+
+/**
+ * Get organization branding / theme settings
+ * @route GET /api/v1/admin/organization/branding
+ * @access Private (Admin only)
+ */
+export const getOrganizationBranding = async (req, res) => {
+    try {
+        const organizationId = getOrganizationId(req);
+
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400);
+        }
+
+        const organization = await Organization.findById(organizationId).select('branding themePresets');
+
+        if (!organization) {
+            return sendError(res, 'Organization not found', 404);
+        }
+
+        return sendSuccess(res, {
+            branding: organization.branding || {},
+            themePresets: organization.themePresets || []
+        }, 'Organization branding retrieved successfully');
+    } catch (error) {
+        logger.error('Error fetching organization branding', { error: error.message });
+        return sendError(res, error.message || 'Failed to fetch organization branding', 500);
+    }
+};
+
+/**
+ * Update organization branding / theme settings
+ * @route PUT /api/v1/admin/organization/branding
+ * @access Private (Admin only)
+ */
+export const updateOrganizationBranding = async (req, res) => {
+    try {
+        const organizationId = getOrganizationId(req);
+        const {
+            primaryColor,
+            secondaryColor,
+            theme,
+            accentColor,
+            backgroundColor,
+            textColor,
+            savePreset,
+            applyPreset
+        } = req.body;
+
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400);
+        }
+
+        const organization = await Organization.findById(organizationId);
+
+        if (!organization) {
+            return sendError(res, 'Organization not found', 404);
+        }
+
+        // Basic hex color validation helper
+        const isHexColor = (value) => {
+            if (!value) return false;
+            return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(value);
+        };
+
+        // Ensure branding and themePresets exist
+        if (!organization.branding) {
+            organization.branding = {};
+        }
+        if (!organization.themePresets) {
+            organization.themePresets = [];
+        }
+
+        // Apply a saved preset by index
+        if (typeof applyPreset === 'number' && applyPreset >= 0 && organization.themePresets[applyPreset]) {
+            const preset = organization.themePresets[applyPreset];
+            if (preset.primaryColor) organization.branding.primaryColor = preset.primaryColor;
+            if (preset.secondaryColor) organization.branding.secondaryColor = preset.secondaryColor;
+            if (preset.accentColor) organization.branding.accentColor = preset.accentColor;
+            if (preset.backgroundColor !== undefined) organization.branding.backgroundColor = preset.backgroundColor;
+            if (preset.textColor !== undefined) organization.branding.textColor = preset.textColor;
+        }
+        // Save current theme as a new preset
+        else if (typeof savePreset === 'string' && savePreset.trim()) {
+            const branding = organization.branding;
+            organization.themePresets.push({
+                name: savePreset.trim(),
+                primaryColor: branding.primaryColor,
+                secondaryColor: branding.secondaryColor,
+                accentColor: branding.accentColor,
+                backgroundColor: branding.backgroundColor,
+                textColor: branding.textColor
+            });
+        }
+        // Normal color updates
+        else {
+            if (primaryColor !== undefined) {
+                if (primaryColor && !isHexColor(primaryColor)) {
+                    return sendError(res, 'Invalid primaryColor value. Expected hex color like #16a34a', 400);
+                }
+                organization.branding.primaryColor = primaryColor;
+            }
+
+            if (secondaryColor !== undefined) {
+                if (secondaryColor && !isHexColor(secondaryColor)) {
+                    return sendError(res, 'Invalid secondaryColor value. Expected hex color like #2563eb', 400);
+                }
+                organization.branding.secondaryColor = secondaryColor;
+            }
+
+            if (accentColor !== undefined) {
+                if (accentColor && !isHexColor(accentColor)) {
+                    return sendError(res, 'Invalid accentColor value. Expected hex color', 400);
+                }
+                organization.branding.accentColor = accentColor;
+            }
+
+            if (backgroundColor !== undefined) {
+                if (backgroundColor && !isHexColor(backgroundColor)) {
+                    return sendError(res, 'Invalid backgroundColor value. Expected hex color', 400);
+                }
+                organization.branding.backgroundColor = backgroundColor;
+            }
+
+            if (textColor !== undefined) {
+                if (textColor && !isHexColor(textColor)) {
+                    return sendError(res, 'Invalid textColor value. Expected hex color', 400);
+                }
+                organization.branding.textColor = textColor;
+            }
+
+            if (theme !== undefined) {
+                organization.branding.theme = theme;
+            }
+        }
+
+        await organization.save();
+
+        logger.info('Organization branding updated', { organizationId: organization._id });
+
+        return sendSuccess(res, {
+            branding: organization.branding,
+            themePresets: organization.themePresets
+        }, 'Organization branding updated successfully');
+    } catch (error) {
+        logger.error('Error updating organization branding', { error: error.message });
+        return sendError(res, error.message || 'Failed to update organization branding', 500);
     }
 };
 

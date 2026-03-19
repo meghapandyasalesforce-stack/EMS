@@ -140,16 +140,16 @@ const ActivityTimeline = ({ organizationId, entityType, entityId, limit = 50 }) 
   };
 
   const getActivityColor = (type, action) => {
-    if (action === 'Approved' || action === 'Checked In') return 'text-green-600 bg-green-100';
+    if (action === 'Approved' || action === 'Checked In') return 'text-theme-primary bg-theme-primary/10';
     if (action === 'Rejected') return 'text-red-600 bg-red-100';
-    if (action === 'Requested') return 'text-blue-600 bg-blue-100';
+    if (action === 'Requested') return 'text-theme-secondary bg-theme-secondary/10';
     return 'text-gray-600 bg-gray-100';
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-secondary"></div>
       </div>
     );
   }
@@ -224,7 +224,7 @@ const ActivityTimeline = ({ organizationId, entityType, entityId, limit = 50 }) 
                         )}
                         {activity.metadata.status && (
                           <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                            activity.metadata.status === 'approved' ? 'bg-green-100 text-green-800' :
+                            activity.metadata.status === 'approved' ? 'bg-theme-primary/10 text-theme-primary' :
                             activity.metadata.status === 'rejected' ? 'bg-red-100 text-red-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>

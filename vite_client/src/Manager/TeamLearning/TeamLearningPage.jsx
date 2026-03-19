@@ -204,8 +204,8 @@ const TeamLearningPage = () => {
     const getCategoryColor = (category) => {
         const colors = {
             'MERN': 'bg-purple-100 text-purple-800',
-            'Technical': 'bg-blue-100 text-blue-800',
-            'Soft Skills': 'bg-green-100 text-green-800',
+            'Technical': 'bg-theme-secondary/10 text-theme-secondary',
+            'Soft Skills': 'bg-theme-primary/10 text-theme-primary',
             'Leadership': 'bg-yellow-100 text-yellow-800',
             'Other': 'bg-gray-100 text-gray-800'
         };
@@ -232,7 +232,7 @@ const TeamLearningPage = () => {
                                     resetForm();
                                     setShowCreateModal(true);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 <FaPlus />
                                 Create Learning Resource
@@ -264,7 +264,7 @@ const TeamLearningPage = () => {
                             {isManagerUser && (
                                 <button
                                     onClick={() => setShowCreateModal(true)}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                                 >
                                     Create Your First Resource
                                 </button>
@@ -302,7 +302,7 @@ const TeamLearningPage = () => {
                                                         });
                                                         setShowCreateModal(true);
                                                     }}
-                                                    className="p-2 text-blue-500 hover:bg-blue-50 rounded"
+                                                    className="p-2 text-theme-secondary hover:bg-theme-secondary/10 rounded"
                                                 >
                                                     <FaEdit />
                                                 </button>
@@ -474,7 +474,7 @@ const TeamLearningPage = () => {
                                     <button
                                         type="button"
                                         onClick={addResource}
-                                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                                        className="flex items-center gap-2 px-3 py-2 bg-theme-primary text-white rounded text-sm hover:bg-theme-primary"
                                     >
                                         <FaPlus />
                                         Add Resource
@@ -489,7 +489,7 @@ const TeamLearningPage = () => {
                                             return (
                                                 <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                                                     <div className="flex items-center gap-3">
-                                                        <Icon className="text-blue-500" />
+                                                        <Icon className="text-theme-secondary" />
                                                         <div>
                                                             <p className="font-medium text-sm">{resource.title}</p>
                                                             <p className="text-xs text-gray-500">{resource.type}</p>
@@ -548,7 +548,7 @@ const TeamLearningPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     {submitting ? (
                                         <>

@@ -97,7 +97,7 @@ const OrganizationVerification = () => {
         const status = organization?.verificationStatus || 'pending';
         const statusConfig = {
             pending: { color: 'bg-yellow-100 text-yellow-800', icon: <FiClock className="w-4 h-4" />, label: 'Pending Review' },
-            verified: { color: 'bg-green-100 text-green-800', icon: <FiCheckCircle className="w-4 h-4" />, label: 'Verified' },
+            verified: { color: 'bg-theme-primary/10 text-theme-primary', icon: <FiCheckCircle className="w-4 h-4" />, label: 'Verified' },
             rejected: { color: 'bg-red-100 text-red-800', icon: <FiXCircle className="w-4 h-4" />, label: 'Rejected' }
         };
         const config = statusConfig[status] || statusConfig.pending;
@@ -113,7 +113,7 @@ const OrganizationVerification = () => {
     if (loading && !organization) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
@@ -156,7 +156,7 @@ const OrganizationVerification = () => {
                                 type="text"
                                 value={formData.businessRegistrationNumber}
                                 onChange={(e) => setFormData(prev => ({ ...prev, businessRegistrationNumber: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                                 placeholder="Enter your business registration number"
                             />
                             <p className="mt-1 text-xs text-gray-500">
@@ -172,7 +172,7 @@ const OrganizationVerification = () => {
                                 type="text"
                                 value={formData.taxId}
                                 onChange={(e) => setFormData(prev => ({ ...prev, taxId: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                                 placeholder="Enter your tax identification number"
                             />
                             <p className="mt-1 text-xs text-gray-500">
@@ -183,7 +183,7 @@ const OrganizationVerification = () => {
                         <button
                             onClick={handleSave}
                             disabled={loading}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            className="px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                         >
                             {loading ? 'Saving...' : 'Save Information'}
                         </button>
@@ -209,7 +209,7 @@ const OrganizationVerification = () => {
                                         className="hidden"
                                         disabled={uploading}
                                     />
-                                    <span className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-block">
+                                    <span className="px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 inline-block">
                                         {uploading ? 'Uploading...' : 'Upload Business License'}
                                     </span>
                                 </label>
@@ -228,7 +228,7 @@ const OrganizationVerification = () => {
                                         className="hidden"
                                         disabled={uploading}
                                     />
-                                    <span className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-block">
+                                    <span className="px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 inline-block">
                                         {uploading ? 'Uploading...' : 'Upload Tax Document'}
                                     </span>
                                 </label>
@@ -256,7 +256,7 @@ const OrganizationVerification = () => {
                                                 href={doc.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-blue-600 hover:text-blue-700 text-sm"
+                                                className="text-theme-secondary hover:text-theme-secondary text-sm"
                                             >
                                                 View
                                             </a>

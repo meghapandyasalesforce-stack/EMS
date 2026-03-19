@@ -40,7 +40,7 @@ const HRReportsPage = () => {
                     <div className="relative">
                         <button 
                             onClick={() => setShowExportMenu(!showExportMenu)}
-                            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                            className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                         >
                             <FaDownload className="w-4 h-4" />
                             Export Report
@@ -64,7 +64,7 @@ const HRReportsPage = () => {
                                     }}
                                     className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2"
                                 >
-                                    <FaFileExcel className="w-4 h-4 text-green-600" />
+                                    <FaFileExcel className="w-4 h-4 text-theme-primary" />
                                     Export as Excel
                                 </button>
                                 <button
@@ -91,8 +91,8 @@ const HRReportsPage = () => {
                                     <p className="text-2xl font-bold text-gray-800">{analytics.employees?.total || 0}</p>
                                     <p className="text-xs text-gray-500 mt-1">{analytics.employees?.active || 0} active</p>
                                 </div>
-                                <div className="bg-blue-100 p-3 rounded-lg">
-                                    <FaChartLine className="w-6 h-6 text-blue-600" />
+                                <div className="bg-theme-secondary/10 p-3 rounded-lg">
+                                    <FaChartLine className="w-6 h-6 text-theme-secondary" />
                                 </div>
                             </div>
                         </div>
@@ -101,11 +101,11 @@ const HRReportsPage = () => {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-gray-600">New Hires (30d)</p>
-                                    <p className="text-2xl font-bold text-green-600">{analytics.employees?.newHires || 0}</p>
+                                    <p className="text-2xl font-bold text-theme-primary">{analytics.employees?.newHires || 0}</p>
                                     <p className="text-xs text-gray-500 mt-1">This month</p>
                                 </div>
-                                <div className="bg-green-100 p-3 rounded-lg">
-                                    <FaFileAlt className="w-6 h-6 text-green-600" />
+                                <div className="bg-theme-primary/10 p-3 rounded-lg">
+                                    <FaFileAlt className="w-6 h-6 text-theme-primary" />
                                 </div>
                             </div>
                         </div>

@@ -59,6 +59,15 @@ const UpdatePayroll = () => {
   const [success, setSuccess] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
 
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+  };
+
   // Find payroll data for current employee/month/year
   useEffect(() => {
     const loadPayrollData = async () => {
@@ -258,7 +267,7 @@ const UpdatePayroll = () => {
       <div className="p-5 max-w-screen-xl mx-auto">
         <div className="flex items-center justify-center min-h-96">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Loading payroll data...</p>
           </div>
         </div>
@@ -272,7 +281,7 @@ const UpdatePayroll = () => {
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Update Payroll</h2>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">{error}</div>}
-        {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg mb-4 text-sm">{success}</div>}
+        {success && <div className="bg-theme-primary/10 border border-theme-primary text-theme-primary px-4 py-2 rounded-lg mb-4 text-sm">{success}</div>}
 
         <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg px-6 py-5 mb-4 border border-gray-200">
         {/* Employee Select - disabled */}
@@ -320,7 +329,7 @@ const UpdatePayroll = () => {
                 name="basicWage"
                 value={formData.earnings.basicWage || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -333,7 +342,7 @@ const UpdatePayroll = () => {
                 name="houseRentAllowance"
                 value={formData.earnings.houseRentAllowance || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -346,7 +355,7 @@ const UpdatePayroll = () => {
                 name="overtime"
                 value={formData.earnings.overtime || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -359,7 +368,7 @@ const UpdatePayroll = () => {
                 name="gratuity"
                 value={formData.earnings.gratuity || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -372,7 +381,7 @@ const UpdatePayroll = () => {
                 name="specialAllowance"
                 value={formData.earnings.specialAllowance || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -385,7 +394,7 @@ const UpdatePayroll = () => {
                 name="pfEmployer"
                 value={formData.earnings.pfEmployer || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -398,7 +407,7 @@ const UpdatePayroll = () => {
                 name="esiEmployer"
                 value={formData.earnings.esiEmployer || 0}
                 onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -418,7 +427,7 @@ const UpdatePayroll = () => {
                 name="pfEmployee"
                 value={formData.deductions.pfEmployee || 0}
                 onChange={handleDeductionsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -431,7 +440,7 @@ const UpdatePayroll = () => {
                 name="esiEmployee"
                 value={formData.deductions.esiEmployee || 0}
                 onChange={handleDeductionsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -444,7 +453,7 @@ const UpdatePayroll = () => {
                 name="tax"
                 value={formData.deductions.tax || 0}
                 onChange={handleDeductionsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -457,7 +466,7 @@ const UpdatePayroll = () => {
                 name="otherDeductions"
                 value={formData.deductions.otherDeductions || 0}
                 onChange={handleDeductionsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"
                 step="0.01"
               />
@@ -469,17 +478,17 @@ const UpdatePayroll = () => {
         <div className="mb-5">
           <h3 className="text-base font-semibold mb-3">Summary</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-              <h4 className="text-xs font-medium text-blue-800 mb-1">Total Earnings</h4>
-              <p className="text-lg font-semibold">${earningsTotal.toFixed(2)}</p>
+            <div className="bg-theme-secondary/10 p-3 rounded-lg border border-theme-secondary">
+              <h4 className="text-xs font-medium text-theme-secondary mb-1">Total Earnings</h4>
+              <p className="text-lg font-semibold">{formatCurrency(earningsTotal)}</p>
             </div>
             <div className="bg-red-50 p-3 rounded-lg border border-red-200">
               <h4 className="text-xs font-medium text-red-800 mb-1">Total Deductions</h4>
-              <p className="text-lg font-semibold">${deductionsTotal.toFixed(2)}</p>
+              <p className="text-lg font-semibold">{formatCurrency(deductionsTotal)}</p>
             </div>
-            <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-              <h4 className="text-xs font-medium text-green-800 mb-1">In-Hand Salary</h4>
-              <p className="text-lg font-semibold">${inHandSalary.toFixed(2)}</p>
+            <div className="bg-theme-primary/10 p-3 rounded-lg border border-theme-primary">
+              <h4 className="text-xs font-medium text-theme-primary mb-1">In-Hand Salary</h4>
+              <p className="text-lg font-semibold">{formatCurrency(inHandSalary)}</p>
             </div>
           </div>
         </div>
@@ -492,7 +501,7 @@ const UpdatePayroll = () => {
             name="status"
             value={formData.status}
             onChange={handleChange}
-            className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
           >
             <option value="Pending">Pending</option>
             <option value="Processed">Processed</option>
@@ -504,7 +513,7 @@ const UpdatePayroll = () => {
         <div className="flex items-center justify-between">
           <button
             type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition text-sm disabled:opacity-50"
+            className="bg-theme-primary hover:opacity-90 text-white font-medium py-2 px-4 rounded-lg transition text-sm disabled:opacity-50"
             disabled={loading}
           >
             {loading ? 'Updating...' : 'Update Payroll'}

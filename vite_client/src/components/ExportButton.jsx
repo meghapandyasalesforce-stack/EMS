@@ -25,7 +25,7 @@ const ExportButton = ({ data, filename, type = 'data', columns = null }) => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
       >
         <FaDownload className="w-4 h-4" />
         <span>Export</span>
@@ -43,14 +43,14 @@ const ExportButton = ({ data, filename, type = 'data', columns = null }) => {
                 onClick={() => handleExport('csv')}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
               >
-                <FaFileCsv className="w-4 h-4 text-green-600" />
+                <FaFileCsv className="w-4 h-4 text-theme-primary" />
                 Export as CSV
               </button>
               <button
                 onClick={() => handleExport('json')}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
               >
-                <FaFileAlt className="w-4 h-4 text-blue-600" />
+                <FaFileAlt className="w-4 h-4 text-theme-secondary" />
                 Export as JSON
               </button>
             </div>

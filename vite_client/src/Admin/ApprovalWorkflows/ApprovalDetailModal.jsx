@@ -67,24 +67,24 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                   <div
                     key={index}
                     className={`border rounded-lg p-4 ${
-                      isPending ? 'border-blue-300 bg-blue-50' :
-                      isApproved ? 'border-green-300 bg-green-50' :
+                      isPending ? 'border-theme-secondary bg-theme-secondary/10' :
+                      isApproved ? 'border-green-300 bg-theme-primary/10' :
                       isRejected ? 'border-red-300 bg-red-50' :
                       'border-gray-200 bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-3 mb-2">
-                      {isApproved && <FiCheckCircle className="w-5 h-5 text-green-600" />}
+                      {isApproved && <FiCheckCircle className="w-5 h-5 text-theme-primary" />}
                       {isRejected && <FiXCircle className="w-5 h-5 text-red-600" />}
-                      {isPending && <FiClock className="w-5 h-5 text-blue-600" />}
+                      {isPending && <FiClock className="w-5 h-5 text-theme-secondary" />}
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900">{step.stepName}</h4>
                         <p className="text-sm text-gray-600">Approver: {step.approverName || 'N/A'}</p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        isApproved ? 'bg-green-100 text-green-800' :
+                        isApproved ? 'bg-theme-primary/10 text-theme-primary' :
                         isRejected ? 'bg-red-100 text-red-800' :
-                        'bg-blue-100 text-blue-800'
+                        'bg-theme-secondary/10 text-theme-secondary'
                       }`}>
                         {step.status}
                       </span>
@@ -113,7 +113,7 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                   <textarea
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                     rows="3"
                     placeholder="Add comments (optional)"
                   />
@@ -124,8 +124,8 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                     onClick={() => setAction('Approve')}
                     className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
                       action === 'Approve'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-green-50 text-green-700 hover:bg-green-100'
+                        ? 'bg-theme-primary text-white'
+                        : 'bg-theme-primary/10 text-theme-primary hover:bg-theme-primary/10'
                     }`}
                   >
                     <FiCheckCircle className="w-5 h-5" />
@@ -147,7 +147,7 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                 {action && (
                   <button
                     onClick={handleSubmit}
-                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    className="w-full px-6 py-3 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium"
                   >
                     Submit {action}
                   </button>

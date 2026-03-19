@@ -113,7 +113,7 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                 required
               />
             </div>
@@ -122,7 +122,7 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
               <select
                 value={formData.entityType}
                 onChange={(e) => setFormData({ ...formData, entityType: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                 required
               >
                 <option value="Leave">Leave</option>
@@ -139,7 +139,7 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
               rows="3"
             />
           </div>
@@ -151,7 +151,7 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
               <button
                 type="button"
                 onClick={addStep}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
               >
                 <FiPlus className="w-4 h-4" />
                 Add Step
@@ -248,7 +248,7 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+              className="px-6 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium disabled:opacity-50"
             >
               {loading ? 'Saving...' : workflow ? 'Update' : 'Create'}
             </button>

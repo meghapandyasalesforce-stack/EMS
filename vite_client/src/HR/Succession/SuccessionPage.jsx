@@ -176,18 +176,18 @@ const SuccessionPage = () => {
             case 'Medium':
                 return 'bg-yellow-100 text-yellow-800';
             default:
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
         }
     };
 
     const getPotentialColor = (potential) => {
         switch (potential) {
             case 'High Potential':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-theme-secondary/10 text-theme-secondary';
             case 'Medium Potential':
                 return 'bg-yellow-100 text-yellow-800';
             default:
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
         }
     };
 
@@ -233,7 +233,7 @@ const SuccessionPage = () => {
                                     resetPlanForm();
                                     setShowCreatePlanModal(true);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 <FaPlus />
                                 Create Plan
@@ -244,7 +244,7 @@ const SuccessionPage = () => {
                                     resetTalentForm();
                                     setShowAddTalentModal(true);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                                className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 <FaPlus />
                                 Add Talent
@@ -263,7 +263,7 @@ const SuccessionPage = () => {
                                 setRiskFilter('all');
                                 setStatusFilter('all');
                             }}
-                            className={`px-6 py-3 font-medium ${activeTab === 'plans' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'plans' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaUserTie className="inline mr-2" />
                             Succession Plans ({successionPlans.length})
@@ -274,7 +274,7 @@ const SuccessionPage = () => {
                                 setSearchTerm('');
                                 setPotentialFilter('all');
                             }}
-                            className={`px-6 py-3 font-medium ${activeTab === 'talent' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'talent' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaUsers className="inline mr-2" />
                             Talent Pool ({talentPool.length})
@@ -291,7 +291,7 @@ const SuccessionPage = () => {
                             placeholder={activeTab === 'plans' ? 'Search by position or department...' : 'Search by employee name or email...'}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                         />
                     </div>
                     {activeTab === 'plans' ? (
@@ -301,7 +301,7 @@ const SuccessionPage = () => {
                                 <select
                                     value={riskFilter}
                                     onChange={(e) => setRiskFilter(e.target.value)}
-                                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                                 >
                                     <option value="all">All Risk Levels</option>
                                     <option value="Low">Low</option>
@@ -314,7 +314,7 @@ const SuccessionPage = () => {
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                                    className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                                 >
                                     <option value="all">All Status</option>
                                     <option value="Draft">Draft</option>
@@ -330,7 +330,7 @@ const SuccessionPage = () => {
                             <select
                                 value={potentialFilter}
                                 onChange={(e) => setPotentialFilter(e.target.value)}
-                                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                             >
                                 <option value="all">All Potential</option>
                                 <option value="High Potential">High Potential</option>
@@ -364,7 +364,7 @@ const SuccessionPage = () => {
 
                                 <div className="mb-4">
                                     <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                                        <FaUsers className="text-blue-500" />
+                                        <FaUsers className="text-theme-secondary" />
                                         <span>Successors: {plan.successors?.length || 0}</span>
                                     </div>
                                     {plan.developmentActivities && plan.developmentActivities.length > 0 && (
@@ -377,7 +377,7 @@ const SuccessionPage = () => {
 
                                 <div className="flex items-center justify-between">
                                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                        plan.status === 'Active' ? 'bg-green-100 text-green-800' :
+                                        plan.status === 'Active' ? 'bg-theme-primary/10 text-theme-primary' :
                                         plan.status === 'Draft' ? 'bg-gray-100 text-gray-800' :
                                         plan.status === 'On Hold' ? 'bg-yellow-100 text-yellow-800' :
                                         'bg-gray-100 text-gray-800'
@@ -387,7 +387,7 @@ const SuccessionPage = () => {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => navigate(`/succession/${plan._id}`)}
-                                            className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition"
+                                            className="px-3 py-1 bg-theme-secondary text-white rounded text-sm hover:bg-theme-primary transition"
                                         >
                                             <FaEye />
                                         </button>
@@ -588,7 +588,7 @@ const SuccessionPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>
@@ -682,7 +682,7 @@ const SuccessionPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

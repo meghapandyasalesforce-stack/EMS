@@ -161,7 +161,7 @@ const LeaveManagement = () => {
               key={leave._id}
               className={`bg-white p-4 rounded shadow border-l-4 ${
                 leave.status === 'approved'
-                  ? 'border-green-500'
+                  ? 'border-theme-primary'
                   : leave.status === 'rejected'
                   ? 'border-red-500'
                   : 'border-yellow-500'
@@ -175,7 +175,7 @@ const LeaveManagement = () => {
                 <span
                   className={`text-xs font-medium px-2 py-1 rounded uppercase ${
                     leave.status === 'approved'
-                      ? 'bg-green-100 text-green-700'
+                      ? 'bg-theme-primary/10 text-theme-primary'
                       : leave.status === 'rejected'
                       ? 'bg-red-100 text-red-700'
                       : 'bg-yellow-100 text-yellow-700'
@@ -202,7 +202,7 @@ const LeaveManagement = () => {
                   <>
                     <button
                       onClick={() => handleApprove(leave._id)}
-                      className="flex-1 min-w-[100px] bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm"
+                      className="flex-1 min-w-[100px] bg-theme-primary hover:bg-theme-primary text-white px-3 py-2 rounded text-sm"
                     >
                       Approve
                     </button>
@@ -216,7 +216,7 @@ const LeaveManagement = () => {
                 )}
                 <button
                   onClick={() => handleViewDetails(leave._id)}
-                  className="flex-1 min-w-[100px] bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm"
+                  className="flex-1 min-w-[100px] bg-theme-secondary hover:opacity-90 text-white px-3 py-2 rounded text-sm"
                 >
                   View Details
                 </button>
@@ -296,7 +296,7 @@ const LeaveManagement = () => {
                   <span
                     className={`uppercase font-semibold ${
                       selectedLeaveDetails.status === 'approved'
-                        ? 'text-green-600'
+                        ? 'text-theme-primary'
                         : selectedLeaveDetails.status === 'rejected'
                         ? 'text-red-600'
                         : 'text-yellow-600'

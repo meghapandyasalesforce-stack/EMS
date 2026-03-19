@@ -64,7 +64,7 @@ function App() {
     const shouldShowSidebar = showSidebarRoutes.includes(location.pathname);
     
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
             {!shouldHideLayout && <Header />} {/* Conditionally render Header */}
             <InstallPrompt /> {/* PWA Install Prompt */}
             {shouldHideLayout ? (
@@ -83,7 +83,7 @@ function App() {
                             />
                         </div>
                     )}
-                    <div className="flex-1 min-w-0 overflow-auto bg-gradient-to-br from-gray-50/50 to-white">
+                    <div className="flex-1 min-w-0 overflow-auto bg-[var(--color-bg)]">
                         <Routes>
                             {renderRoutes(authRoutes)}
                             {renderProtectedRoutes(dashboardRoutes)}

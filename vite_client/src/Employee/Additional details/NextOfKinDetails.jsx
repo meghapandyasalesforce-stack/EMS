@@ -103,7 +103,7 @@ function NextOfKinDetails() {
                                         </div>
                                         <button
                                             onClick={() => handleEditKin(kin, index)}
-                                            className="mt-2 md:mt-3 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm"
+                                            className="mt-2 md:mt-3 bg-theme-primary hover:opacity-90 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm"
                                         >
                                             Edit
                                         </button>
@@ -125,7 +125,7 @@ function NextOfKinDetails() {
                                     setActiveKinIndex(null);
                                     setIsEditing(true);
                                 }}
-                                className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full sm:w-auto"
+                                className="mt-4 bg-theme-primary hover:opacity-90 text-white px-4 py-2 rounded w-full sm:w-auto"
                             >
                                 Add New Next of Kin
                             </button>
@@ -199,7 +199,7 @@ function NextOfKinDetails() {
                             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
                                 <button
                                     type="submit"
-                                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded disabled:bg-green-400 text-sm md:text-base"
+                                    className="bg-theme-primary hover:opacity-90 text-white px-4 py-2 rounded disabled:bg-green-400 text-sm md:text-base"
                                     disabled={addingNextOfKin}
                                 >
                                     {addingNextOfKin ? 'Saving...' : 'Save'}

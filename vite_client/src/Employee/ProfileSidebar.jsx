@@ -72,7 +72,7 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
       <div className="lg:hidden">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="fixed top-4 left-4 z-50 p-2 bg-blue-100 rounded-lg shadow-md"
+          className="fixed top-4 left-4 z-50 p-2 bg-theme-primary/10 rounded-lg shadow-md"
         >
           {isOpen ? <FiX size={24} /> : <FiMenu size={24} />}
         </button>
@@ -86,8 +86,8 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
                     key={index}
                     className={`text-center font-medium px-5 py-3 rounded-lg cursor-pointer transition-colors duration-300 ${
                       activeSection === section
-                        ? 'bg-green-500 text-white font-semibold border-l-4 border-green-800'
-                        : 'bg-blue-50 text-gray-800 hover:bg-blue-200'
+                        ? 'bg-theme-primary text-white font-semibold border-l-4 border-theme-primary'
+                        : 'bg-theme-secondary/10 text-gray-800 hover:bg-blue-200'
                     }`}
                     onClick={() => handleSectionClick(section)}
                   >
@@ -105,15 +105,15 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
   // Desktop view - fills App's sidebar wrapper (w-64); no extra width/margin so main content has room
   return (
     <div className="hidden lg:block w-full h-full min-h-screen overflow-y-auto sticky top-0">
-      <div className="bg-blue-50/80 p-4 rounded-xl h-full border-r border-gray-100">
+      <div className="bg-theme-primary/10 p-4 rounded-xl h-full border-r border-gray-100">
         <ul className="space-y-2">
           {sections.map((section, index) => (
             <li
               key={index}
               className={`text-center font-medium px-5 py-3 rounded-lg cursor-pointer transition-colors duration-300 ${
                 activeSection === section
-                  ? 'bg-green-500 text-white font-semibold border-l-4 border-green-800'
-                  : 'bg-blue-50 text-gray-800 hover:bg-blue-200'
+                  ? 'bg-theme-primary text-white font-semibold border-l-4 border-theme-primary'
+                  : 'bg-theme-secondary/10 text-gray-800 hover:bg-blue-200'
               }`}
               onClick={() => handleSectionClick(section)}
             >

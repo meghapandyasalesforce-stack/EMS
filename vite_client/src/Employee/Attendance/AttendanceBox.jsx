@@ -539,7 +539,7 @@ const AttendanceBox = () => {
   return (
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5">
+      <div className="px-6 py-5 bg-theme-primary" style={{ background: 'var(--color-primary)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -562,17 +562,17 @@ const AttendanceBox = () => {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-white">Attendance Tracker</h2>
-              <p className="text-blue-100 text-xs">Track your work hours</p>
+              <p className="text-white/80 text-xs">Track your work hours</p>
             </div>
           </div>
           
           {/* Real-time Clock */}
           <div className="text-white">
             <div className="flex items-center gap-2 text-lg font-bold">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full animate-pulse bg-theme-primary" style={{ backgroundColor: 'var(--color-primary)' }}></div>
               {format(currentTime, 'h:mm:ss a')}
             </div>
-            <div className="text-xs text-blue-100">{format(currentTime, 'EEEE, MMM dd')}</div>
+            <div className="text-xs text-white/80">{format(currentTime, 'EEEE, MMM dd')}</div>
           </div>
         </div>
       </div>
@@ -601,30 +601,30 @@ const AttendanceBox = () => {
             {/* Checked In/Out Status */}
             <div className={`rounded-xl p-6 border ${
               currentSession.clockOut 
-                ? 'bg-blue-50 border-blue-200' 
-                : 'bg-green-50 border-green-200'
+                ? 'bg-theme-primary/10 border-theme-primary' 
+                : 'bg-theme-secondary/10 border-theme-secondary'
             }`}>
               <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                   <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
                     currentSession.clockOut 
-                      ? 'bg-blue-500' 
-                      : 'bg-green-500'
+                      ? 'bg-theme-primary' 
+                      : 'bg-theme-primary'
                   }`}>
                     <FiCheckCircle className="w-7 h-7 text-white" />
                   </div>
                   <div>
                     <h3 className={`text-xl font-bold mb-1 ${
                       currentSession.clockOut 
-                        ? 'text-blue-800' 
-                        : 'text-green-800'
+                        ? 'text-theme-primary' 
+                        : 'text-theme-primary'
                     }`}>
                       {currentSession.clockOut ? 'Punched Out' : 'Punched In'}
                     </h3>
                     <p className={`text-sm font-medium ${
                       currentSession.clockOut 
-                        ? 'text-blue-600' 
-                        : 'text-green-600'
+                        ? 'text-theme-primary' 
+                        : 'text-theme-primary'
                     }`}>
                       {currentSession.clockOut 
                         ? `Punch-Out Time: ${formatTime(currentSession.clockOut)}` 
@@ -635,15 +635,15 @@ const AttendanceBox = () => {
                 <div className="text-right">
                   <div className={`text-2xl font-bold font-mono mb-1 ${
                     currentSession.clockOut 
-                      ? 'text-blue-600' 
-                      : 'text-green-600'
+                      ? 'text-theme-primary' 
+                      : 'text-theme-primary'
                   }`}>
                     {formatElapsedTime(elapsedTime)}
                   </div>
                   <div className={`text-sm font-medium ${
                     currentSession.clockOut 
-                      ? 'text-blue-600' 
-                      : 'text-green-600'
+                      ? 'text-theme-primary' 
+                      : 'text-theme-primary'
                   }`}>
                     {currentSession.clockOut 
                       ? 'Total work duration' 
@@ -664,8 +664,8 @@ const AttendanceBox = () => {
 
               {/* Checked Out Status */}
               {currentSession?.clockOut && (
-                <div className="bg-blue-50 border border-blue-300 rounded-lg p-3 mb-4">
-                  <div className="flex items-center justify-between text-blue-800">
+                <div className="border rounded-lg p-3 mb-4 bg-theme-primary/10 border-theme-primary">
+                  <div className="flex items-center justify-between text-theme-primary" style={{ color: 'var(--color-primary)' }}>
                     <div className="flex items-center gap-2">
                       <FiCheckCircle className="w-5 h-5" />
                       <span className="font-medium">Punched Out</span>
@@ -686,7 +686,7 @@ const AttendanceBox = () => {
                     className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
                       loading 
                         ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-green-500 hover:bg-green-600'
+                        : 'bg-theme-primary hover:opacity-90'
                     }`}
                   >
                     {loading ? (
@@ -705,7 +705,7 @@ const AttendanceBox = () => {
                     className={`w-full py-3 px-4 rounded-lg text-white font-semibold shadow-md transition-all duration-200 flex items-center justify-center gap-2 ${
                       loading || breakCount >= 4
                           ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-blue-500 hover:bg-blue-600'
+                        : 'bg-theme-primary hover:opacity-90'
                       }`}
                     >
                     {loading ? (
@@ -747,8 +747,8 @@ const AttendanceBox = () => {
                 </div>
         ) : (
           <div className="text-center py-6">
-            <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <FiClock className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 rounded-xl bg-theme-primary/10 flex items-center justify-center mx-auto mb-4">
+              <FiClock className="w-8 h-8 text-theme-primary" style={{ color: 'var(--color-primary)' }} />
                       </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Ready to Start?</h3>
             <p className="text-gray-600 text-sm mb-6 max-w-md mx-auto">
@@ -762,7 +762,7 @@ const AttendanceBox = () => {
               className={`w-full py-4 px-6 rounded-lg text-white font-semibold shadow-lg transition-all duration-200 ${
                 isProcessing || loading 
                     ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-green-500 hover:bg-green-600'
+                  : 'bg-theme-primary hover:opacity-90'
                 }`}
               >
               {isProcessing || loading ? (

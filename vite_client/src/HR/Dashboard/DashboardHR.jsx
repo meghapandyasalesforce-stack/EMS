@@ -276,7 +276,7 @@ const DashboardHR = () => {
         return (
             <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
                     <p className="text-gray-600">Loading dashboard...</p>
                 </div>
             </div>
@@ -290,7 +290,7 @@ const DashboardHR = () => {
                     <p className="text-red-600 font-medium mb-4">Error: {error}</p>
                     <button 
                         onClick={() => window.location.reload()} 
-                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+                        className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90 transition"
                     >
                         Retry
                     </button>
@@ -306,7 +306,7 @@ const DashboardHR = () => {
                     <p className="text-gray-600 font-medium mb-4">Please log in to access the dashboard</p>
                     <button 
                         onClick={() => navigate('/login')} 
-                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+                        className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90 transition"
                     >
                         Go to Login
                     </button>
@@ -338,7 +338,7 @@ const DashboardHR = () => {
                         <div className="flex gap-2 flex-shrink-0">
                             <button 
                                 onClick={handleEditProfile}
-                                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2 text-sm font-medium"
+                                className="bg-theme-primary text-white px-4 py-2 rounded-lg hover:opacity-90 transition flex items-center gap-2 text-sm font-medium"
                             >
                                 <FaEdit className="w-4 h-4" />
                                 Edit
@@ -363,8 +363,8 @@ const DashboardHR = () => {
                         onClick={() => navigate('/employees')}
                     >
                         <div className="flex items-center gap-4">
-                            <div className="bg-blue-100 p-4 rounded-lg">
-                                <FaUsers className="w-6 h-6 text-blue-600" />
+                            <div className="bg-theme-primary/10 p-4 rounded-lg">
+                                <FaUsers className="w-6 h-6 text-theme-primary" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800">Employee Management</h3>
@@ -378,8 +378,8 @@ const DashboardHR = () => {
                         onClick={() => navigate('/admin/policies')}
                     >
                         <div className="flex items-center gap-4">
-                            <div className="bg-green-100 p-4 rounded-lg">
-                                <FaFileAlt className="w-6 h-6 text-green-600" />
+                            <div className="bg-theme-secondary/10 p-4 rounded-lg">
+                                <FaFileAlt className="w-6 h-6 text-theme-secondary" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800">Company Policies</h3>
@@ -424,7 +424,7 @@ const DashboardHR = () => {
                     >
                         <div className="flex items-center gap-4">
                             <div className="bg-indigo-100 p-4 rounded-lg">
-                                <FaChartLine className="w-6 h-6 text-indigo-600" />
+                                <FaChartLine className="w-6 h-6 text-theme-accent" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800">HR Reports</h3>
@@ -455,7 +455,7 @@ const DashboardHR = () => {
                     >
                         <div className="flex items-center gap-4">
                             <div className="bg-indigo-100 p-4 rounded-lg">
-                                <FaUserTie className="w-6 h-6 text-indigo-600" />
+                                <FaUserTie className="w-6 h-6 text-theme-accent" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800">Recruitment</h3>
@@ -484,8 +484,8 @@ const DashboardHR = () => {
                         onClick={() => navigate('/learning')}
                     >
                         <div className="flex items-center gap-4">
-                            <div className="bg-cyan-100 p-4 rounded-lg">
-                                <FaFileAlt className="w-6 h-6 text-cyan-600" />
+                            <div className="bg-theme-secondary/10 p-4 rounded-lg">
+                                <FaFileAlt className="w-6 h-6 text-theme-secondary" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800">Learning & Development</h3>
@@ -530,7 +530,7 @@ const DashboardHR = () => {
                     >
                         <div className="flex items-center gap-4">
                             <div className="bg-emerald-100 p-4 rounded-lg">
-                                <FaMoneyBillWave className="w-6 h-6 text-emerald-600" />
+                                <FaMoneyBillWave className="w-6 h-6 text-theme-primary" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800">Benefits</h3>
@@ -592,10 +592,10 @@ const DashboardHR = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-xs text-gray-500">Today's Hours</p>
-                            <p className="text-xl font-semibold text-blue-600">{statsLoading ? '...' : dashboardStats.todayHours}</p>
+                            <p className="text-xl font-semibold text-theme-primary">{statsLoading ? '...' : dashboardStats.todayHours}</p>
                         </div>
-                        <div className="bg-blue-100 p-2 rounded-lg">
-                            <FaClock className="w-5 h-5 text-blue-600" />
+                        <div className="bg-theme-primary/10 p-2 rounded-lg">
+                            <FaClock className="w-5 h-5 text-theme-primary" />
                         </div>
                     </div>
                 </div>
@@ -604,10 +604,10 @@ const DashboardHR = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-xs text-gray-500">This Month</p>
-                            <p className="text-xl font-semibold text-green-600">{statsLoading ? '...' : dashboardStats.thisMonth}</p>
+                            <p className="text-xl font-semibold text-theme-secondary">{statsLoading ? '...' : dashboardStats.thisMonth}</p>
                         </div>
-                        <div className="bg-green-100 p-2 rounded-lg">
-                            <FaMoneyBillWave className="w-5 h-5 text-green-600" />
+                        <div className="bg-theme-secondary/10 p-2 rounded-lg">
+                            <FaMoneyBillWave className="w-5 h-5 text-theme-secondary" />
                         </div>
                     </div>
                 </div>
@@ -683,7 +683,7 @@ const DashboardHR = () => {
                 <div className="lg:col-span-2 space-y-6">
                     {/* Notifications */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-blue-500 p-3">
+                        <div className="bg-theme-primary p-3">
                             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                 <FaBell className="w-4 h-4" />
                                 Announcements
@@ -712,7 +712,7 @@ const DashboardHR = () => {
                 <div className="space-y-6">
                     {/* Payroll Card */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-green-500 p-3">
+                        <div className="bg-theme-primary p-3">
                             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                 <FaMoneyBillWave className="w-4 h-4" />
                                 Payroll
@@ -720,21 +720,21 @@ const DashboardHR = () => {
                         </div>
                         <div className="p-6">
                             <div className="space-y-4">
-                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                                <div className="bg-gradient-to-r from-white to-theme-primary/10 rounded-lg p-4 border border-theme-primary">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-sm font-medium text-gray-600">Current Month</span>
-                                        <span className="text-lg font-bold text-green-700">{statsLoading ? '...' : dashboardStats.currentMonthSalary}</span>
+                                        <span className="text-lg font-bold text-theme-primary">{statsLoading ? '...' : dashboardStats.currentMonthSalary}</span>
                                     </div>
                                     <div className="text-xs text-gray-500">Net Salary</div>
                                 </div>
                                 
                                 <div className="space-y-2 text-sm text-gray-600">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                        <div className="w-2 h-2 bg-theme-secondary rounded-full"></div>
                                         <span>View detailed breakdown</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                        <div className="w-2 h-2 bg-theme-primary rounded-full"></div>
                                         <span>Download payslips</span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -744,7 +744,7 @@ const DashboardHR = () => {
                                 </div>
                                 
                                 <Link to="/employee-payroll" className="block">
-                                    <button className="w-full bg-green-500 text-white py-2 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 text-sm">
+                                    <button className="w-full bg-theme-primary text-white py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2 text-sm">
                                         <FaDownload className="w-4 h-4" />
                                         View All Payslips
                                     </button>
@@ -773,7 +773,7 @@ const DashboardHR = () => {
                                 <div className="space-y-3">
                                     <button 
                                         onClick={() => navigate('/leave')}
-                                        className="w-full bg-green-500 text-white py-2 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 text-sm"
+                                        className="w-full bg-theme-primary text-white py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2 text-sm"
                                     >
                                         <FaPlus className="w-4 h-4" />
                                         Apply for Leave
@@ -781,7 +781,7 @@ const DashboardHR = () => {
                                     
                                     <button 
                                         onClick={() => navigate('/my-leave')}
-                                        className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 text-sm"
+                                        className="w-full bg-theme-primary text-white py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2 text-sm"
                                     >
                                         <FaEye className="w-4 h-4" />
                                         View My Leaves

@@ -326,7 +326,8 @@ function AddEmployee() {
                         <button
                             type="submit"
                             disabled={employeeStatus === 'loading'}
-                            className="w-full lg:w-auto px-6 py-3 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                            className="w-full lg:w-auto px-6 py-3 text-white rounded transition-colors bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
                         >
                             {employeeStatus === 'loading' ? 'Adding...' : 'Add Employee'}
                         </button>

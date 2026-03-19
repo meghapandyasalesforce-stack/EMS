@@ -61,8 +61,8 @@ const PolicyManager = () => {
 
     const getPolicyTypeBadge = (type) => {
         const colors = {
-            leave: 'bg-blue-100 text-blue-800',
-            attendance: 'bg-green-100 text-green-800',
+            leave: 'bg-theme-secondary/10 text-theme-secondary',
+            attendance: 'bg-theme-primary/10 text-theme-primary',
             payroll: 'bg-yellow-100 text-yellow-800',
             work_hours: 'bg-purple-100 text-purple-800',
             code_of_conduct: 'bg-red-100 text-red-800',
@@ -81,7 +81,7 @@ const PolicyManager = () => {
                 <h1 className="text-3xl font-bold text-gray-800">Company Policies</h1>
                 <button
                     onClick={() => navigate('/admin/policies/create')}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                    className="bg-theme-primary text-white px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-2"
                 >
                     <FaPlus /> Create Policy
                 </button>
@@ -92,7 +92,7 @@ const PolicyManager = () => {
                 <button
                     onClick={() => setFilter('all')}
                     className={`px-4 py-2 rounded-lg ${
-                        filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                        filter === 'all' ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-700'
                     }`}
                 >
                     All Policies
@@ -100,7 +100,7 @@ const PolicyManager = () => {
                 <button
                     onClick={() => setFilter('active')}
                     className={`px-4 py-2 rounded-lg ${
-                        filter === 'active' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                        filter === 'active' ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-700'
                     }`}
                 >
                     Active
@@ -108,7 +108,7 @@ const PolicyManager = () => {
                 <button
                     onClick={() => setFilter('inactive')}
                     className={`px-4 py-2 rounded-lg ${
-                        filter === 'inactive' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                        filter === 'inactive' ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-700'
                     }`}
                 >
                     Inactive
@@ -126,7 +126,7 @@ const PolicyManager = () => {
                         <p className="text-gray-600 mb-4">{error}</p>
                         <button
                             onClick={() => navigate('/dashboard')}
-                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            className="mt-4 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90"
                         >
                             Go to Dashboard
                         </button>
@@ -137,7 +137,7 @@ const PolicyManager = () => {
                         <p className="text-gray-600 text-lg">No policies found</p>
                         <button
                             onClick={() => navigate('/admin/policies/create')}
-                            className="mt-4 text-blue-600 hover:underline"
+                            className="mt-4 text-theme-secondary hover:underline"
                         >
                             Create your first policy
                         </button>
@@ -153,7 +153,7 @@ const PolicyManager = () => {
                                             {policy.policyType.replace('_', ' ')}
                                         </span>
                                         {policy.isActive ? (
-                                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-theme-primary/10 text-theme-primary">
                                                 Active
                                             </span>
                                         ) : (
@@ -170,21 +170,21 @@ const PolicyManager = () => {
                                         )}
                                         <span>Version: {policy.version}</span>
                                         {policy.requiresAcknowledgment && (
-                                            <span className="text-blue-600">Requires Acknowledgment</span>
+                                            <span className="text-theme-secondary">Requires Acknowledgment</span>
                                         )}
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => navigate(`/admin/policies/${policy._id}`)}
-                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                        className="p-2 text-theme-secondary hover:bg-theme-secondary/10 rounded-lg"
                                         title="View"
                                     >
                                         <FaEye />
                                     </button>
                                     <button
                                         onClick={() => navigate(`/admin/policies/${policy._id}/edit`)}
-                                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                                        className="p-2 text-theme-primary hover:bg-theme-primary/10 rounded-lg"
                                         title="Edit"
                                     >
                                         <FaEdit />

@@ -70,7 +70,7 @@ function ProfileDetails() {
                     {user?.employeeId || 'N/A'}
                   </p>
                   {isFetchingFreshData && (
-                    <span className="text-xs text-blue-500 animate-pulse">Updating...</span>
+                    <span className="text-xs text-theme-secondary animate-pulse">Updating...</span>
                   )}
                 </div>
               </div>

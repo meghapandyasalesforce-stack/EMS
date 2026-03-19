@@ -80,7 +80,7 @@ const LeaveEncashment = () => {
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Leave Encashment</h1>
                     <button
                         onClick={() => setShowRequestForm(!showRequestForm)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                        className="bg-theme-primary text-white px-4 py-2 rounded-lg hover:opacity-90"
                     >
                         {showRequestForm ? 'Cancel' : 'Request Encashment'}
                     </button>
@@ -149,7 +149,7 @@ const LeaveEncashment = () => {
                                 className={`w-full px-4 py-2 rounded-md ${
                                     loading
                                         ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                        : 'bg-theme-primary hover:opacity-90 text-white'
                                 }`}
                             >
                                 {loading ? 'Submitting...' : 'Submit Request'}
@@ -195,7 +195,7 @@ const LeaveEncashment = () => {
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 <span className={`px-2 py-1 rounded text-xs font-semibold ${
                                                     encashment.status === 'approved'
-                                                        ? 'bg-green-100 text-green-800'
+                                                        ? 'bg-theme-primary/10 text-theme-primary'
                                                         : encashment.status === 'rejected'
                                                         ? 'bg-red-100 text-red-800'
                                                         : 'bg-yellow-100 text-yellow-800'

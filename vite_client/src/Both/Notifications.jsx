@@ -49,7 +49,7 @@ const Notifications = () => {
           <h1 className="text-xl font-semibold text-gray-800">Notifications</h1>
           <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={load} className="px-3 py-2 text-sm sm:text-base bg-gray-100 hover:bg-gray-200 rounded transition">Refresh</button>
-            <button onClick={markAll} className="px-3 py-2 text-sm sm:text-base bg-blue-500 hover:bg-blue-600 text-white rounded transition">Mark all read</button>
+            <button onClick={markAll} className="px-3 py-2 text-sm sm:text-base bg-theme-secondary hover:bg-theme-primary text-white rounded transition">Mark all read</button>
           </div>
         </div>
 
@@ -60,14 +60,14 @@ const Notifications = () => {
         ) : (
           <ul className="divide-y divide-gray-200">
             {notifications.map(n => (
-              <li key={n._id} className={`flex items-start justify-between p-4 ${n.isRead ? '' : 'bg-blue-50'}`}>
+              <li key={n._id} className={`flex items-start justify-between p-4 ${n.isRead ? '' : 'bg-theme-secondary/10'}`}>
                 <div className="pr-4">
                   <p className="text-sm font-medium text-gray-800">{n.message}</p>
                   <p className="text-xs text-gray-500 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                 </div>
                 <div className="flex gap-2">
                   {!n.isRead && (
-                    <button onClick={() => markOne(n._id)} className="p-2 rounded bg-blue-100 hover:bg-blue-200 text-blue-700" title="Mark as read">
+                    <button onClick={() => markOne(n._id)} className="p-2 rounded bg-theme-secondary/10 hover:bg-blue-200 text-theme-secondary" title="Mark as read">
                       <FaCheck />
                     </button>
                   )}

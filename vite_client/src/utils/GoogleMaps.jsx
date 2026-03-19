@@ -63,7 +63,7 @@ const GoogleMapsComponent = ({ latitude, longitude, onMarkerDrag, onLocationSele
                             href={`https://www.google.com/maps?q=${latitude},${longitude}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline mt-4 inline-block"
+                            className="text-theme-secondary hover:underline mt-4 inline-block"
                         >
                             View on Google Maps →
                         </a>
@@ -77,7 +77,7 @@ const GoogleMapsComponent = ({ latitude, longitude, onMarkerDrag, onLocationSele
         return (
             <div className="bg-gray-100 rounded-lg p-4 h-64 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto"></div>
                     <p className="mt-4 text-gray-600">Loading map...</p>
                 </div>
             </div>

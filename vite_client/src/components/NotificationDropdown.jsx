@@ -260,9 +260,9 @@ const NotificationDropdown = () => {
     const getNotificationColor = (type) => {
         switch (type) {
             case 'task_completed':
-                return 'text-green-600';
+                return 'text-theme-primary';
             case 'task_created':
-                return 'text-blue-600';
+                return 'text-theme-secondary';
             case 'task_updated':
                 return 'text-yellow-600';
             case 'system':
@@ -270,7 +270,7 @@ const NotificationDropdown = () => {
             case 'break':
                 return 'text-orange-600';
             case 'announcement':
-                return 'text-indigo-600';
+                return 'text-theme-accent';
             default:
                 return 'text-gray-600';
         }
@@ -333,7 +333,8 @@ const NotificationDropdown = () => {
                                 {unreadCount > 0 && (
                                     <button
                                         onClick={markAllAsRead}
-                                        className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap font-medium"
+                                        className="text-xs whitespace-nowrap font-medium text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                                     >
                                         Mark all read
                                     </button>
@@ -352,7 +353,7 @@ const NotificationDropdown = () => {
                     <div className="flex-1 overflow-y-auto min-h-0">
                         {loading ? (
                             <div className="p-4 text-center">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-theme-primary mx-auto"></div>
                             </div>
                         ) : notifications.length === 0 ? (
                             <div className="p-4 text-center text-gray-500">
@@ -363,7 +364,7 @@ const NotificationDropdown = () => {
                                 <div
                                     key={notification._id}
                                     className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
-                                        !notification.isRead ? 'bg-blue-50' : ''
+                                        !notification.isRead ? 'bg-theme-secondary/10' : ''
                                     }`}
                                 >
                                     <div className="flex items-start space-x-3">
@@ -387,7 +388,8 @@ const NotificationDropdown = () => {
                                             {!notification.isRead && (
                                                 <button
                                                     onClick={() => markAsRead(notification._id)}
-                                                    className="text-blue-600 hover:text-blue-800 text-xs"
+                                                    className="text-xs text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                                                     title="Mark as read"
                                                 >
                                                     <FaCheck />
@@ -415,7 +417,8 @@ const NotificationDropdown = () => {
                                     // Navigate to full notifications page
                                     navigate('/notifications');
                                 }}
-                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                className="text-sm font-medium text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                             >
                                 View all notifications
                             </button>

@@ -206,7 +206,7 @@ const IdCardGenerator = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      active: 'bg-green-100 text-green-800',
+      active: 'bg-theme-primary/10 text-theme-primary',
       expired: 'bg-red-100 text-red-800',
       suspended: 'bg-yellow-100 text-yellow-800',
       cancelled: 'bg-gray-100 text-gray-800'
@@ -216,7 +216,7 @@ const IdCardGenerator = () => {
 
   const getCardTypeColor = (type) => {
     const colors = {
-      employee: 'bg-blue-100 text-blue-800',
+      employee: 'bg-theme-secondary/10 text-theme-secondary',
       visitor: 'bg-purple-100 text-purple-800',
       contractor: 'bg-orange-100 text-orange-800',
       temporary: 'bg-pink-100 text-pink-800'
@@ -234,7 +234,7 @@ const IdCardGenerator = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-6"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-theme-secondary border-t-blue-600 mx-auto mb-6"></div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading ID Cards</h3>
           <p className="text-gray-600">Please wait while we fetch your ID card data...</p>
         </div>
@@ -256,7 +256,7 @@ const IdCardGenerator = () => {
               <div className="flex-shrink-0">
                 <button
                   onClick={() => setShowGenerateModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 shadow-sm hover:shadow-md transition-all duration-200 font-medium"
+                  className="bg-theme-primary hover:opacity-90 text-white px-6 py-3 rounded-lg flex items-center space-x-2 shadow-sm hover:shadow-md transition-all duration-200 font-medium"
                 >
                   <FiPlus className="w-5 h-5" />
                   <span>Generate ID Card</span>
@@ -273,7 +273,7 @@ const IdCardGenerator = () => {
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 bg-white"
                 >
                   <option value="">All Statuses</option>
                   <option value="active">Active</option>
@@ -287,7 +287,7 @@ const IdCardGenerator = () => {
                 <select
                   value={filters.cardType}
                   onChange={(e) => setFilters({ ...filters, cardType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 bg-white"
                 >
                   <option value="">All Types</option>
                   <option value="employee">Employee</option>
@@ -317,7 +317,7 @@ const IdCardGenerator = () => {
                 <p className="text-gray-500 mb-6">Get started by generating your first ID card for an employee.</p>
                 <button
                   onClick={() => setShowGenerateModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all duration-200 font-medium"
+                  className="bg-theme-primary hover:opacity-90 text-white px-6 py-3 rounded-lg transition-all duration-200 font-medium"
                 >
                   <FiPlus className="w-4 h-4 inline mr-2" />
                   Generate your first ID card
@@ -331,7 +331,7 @@ const IdCardGenerator = () => {
                     <div className="p-6 pb-4">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-sm">
+                          <div className="w-12 h-12 bg-theme-secondary rounded-xl flex items-center justify-center shadow-sm">
                             <FiUser className="w-6 h-6 text-white" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -349,14 +349,14 @@ const IdCardGenerator = () => {
                               setSelectedCard(card);
                               setShowPreviewModal(true);
                             }}
-                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                            className="p-2 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-all duration-200"
                             title="View card"
                           >
                             <FiEye className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDownloadCard(card._id)}
-                            className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-all duration-200"
+                            className="p-2 text-gray-400 hover:text-green-500 hover:bg-theme-primary/10 rounded-lg transition-all duration-200"
                             title="Download card"
                           >
                             <FiDownload className="w-4 h-4" />
@@ -476,7 +476,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
                   // Removed console.log statements for production
                   setFormData({ ...formData, employeeId: e.target.value });
                 }}
-                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
                 required
               >
                 <option value="">Choose an employee...</option>
@@ -507,7 +507,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
                     onClick={() => applyTheme(key)}
                     className={`p-4 rounded-2xl border-2 transition-all duration-200 hover:shadow-lg ${
                       formData.cardDesign.template === key
-                        ? 'border-blue-500 bg-blue-50 shadow-lg'
+                        ? 'border-theme-secondary bg-theme-secondary/10 shadow-lg'
                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
@@ -537,7 +537,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
                 <select
                   value={formData.cardType}
                   onChange={(e) => setFormData({ ...formData, cardType: e.target.value })}
-                  className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+                  className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
                 >
                   <option value="employee">Employee</option>
                   <option value="visitor">Visitor</option>
@@ -553,7 +553,7 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
                 <select
                   value={formData.accessLevel}
                   onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
-                  className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+                  className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
                 >
                   <option value="basic">Basic</option>
                   <option value="standard">Standard</option>
@@ -589,8 +589,14 @@ const GenerateModal = ({ formData, setFormData, onSubmit, onClose, employees, th
 // Preview Modal Component
 const PreviewModal = ({ card, onClose, onDownload }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-gray-100">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">

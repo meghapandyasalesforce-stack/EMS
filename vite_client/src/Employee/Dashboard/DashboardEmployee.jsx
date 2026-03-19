@@ -255,7 +255,7 @@ function DashboardEmployee() {
         return (
             <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-primary mx-auto mb-4" style={{ borderBottomColor: 'var(--color-primary)' }}></div>
                     <p className="text-gray-600">Loading dashboard...</p>
                 </div>
             </div>
@@ -269,7 +269,8 @@ function DashboardEmployee() {
                     <p className="text-red-600 font-medium mb-4">Error: {error}</p>
                     <button 
                         onClick={() => window.location.reload()} 
-                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+                        className="text-white px-6 py-2 rounded-lg transition bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
                     >
                         Retry
                     </button>
@@ -285,7 +286,8 @@ function DashboardEmployee() {
                     <p className="text-gray-600 font-medium mb-4">Please log in to access the dashboard</p>
                     <button 
                         onClick={() => navigate('/login')} 
-                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition"
+                        className="text-white px-6 py-2 rounded-lg transition bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
                     >
                         Go to Login
                     </button>
@@ -317,7 +319,8 @@ function DashboardEmployee() {
                         <div className="flex gap-2 flex-shrink-0">
                             <button 
                                 onClick={handleEditProfile}
-                                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2 text-sm font-medium"
+                                className="text-white px-4 py-2 rounded-lg transition flex items-center gap-2 text-sm font-medium bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
                             >
                                 <FaEdit className="w-4 h-4" />
                                 Edit
@@ -339,10 +342,10 @@ function DashboardEmployee() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-xs text-gray-500">Today's Hours</p>
-                            <p className="text-xl font-semibold text-blue-600">{statsLoading ? '...' : dashboardStats.todayHours}</p>
+                            <p className="text-xl font-semibold text-theme-primary" style={{ color: 'var(--color-primary)' }}>{statsLoading ? '...' : dashboardStats.todayHours}</p>
                         </div>
-                        <div className="bg-blue-100 p-2 rounded-lg">
-                            <FaClock className="w-5 h-5 text-blue-600" />
+                        <div className="p-2 rounded-lg bg-theme-primary/10" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)' }}>
+                            <FaClock className="w-5 h-5 text-theme-primary" style={{ color: 'var(--color-primary)' }} />
                         </div>
                     </div>
                             </div>
@@ -351,10 +354,10 @@ function DashboardEmployee() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-xs text-gray-500">This Month</p>
-                            <p className="text-xl font-semibold text-green-600">{statsLoading ? '...' : dashboardStats.thisMonth}</p>
+                            <p className="text-xl font-semibold text-theme-secondary" style={{ color: 'var(--color-secondary)' }}>{statsLoading ? '...' : dashboardStats.thisMonth}</p>
                         </div>
-                        <div className="bg-green-100 p-2 rounded-lg">
-                            <FaMoneyBillWave className="w-5 h-5 text-green-600" />
+                        <div className="p-2 rounded-lg bg-theme-secondary/10" style={{ backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)' }}>
+                            <FaMoneyBillWave className="w-5 h-5 text-theme-secondary" style={{ color: 'var(--color-secondary)' }} />
                         </div>
                     </div>
                 </div>
@@ -395,7 +398,7 @@ function DashboardEmployee() {
                 <div className="lg:col-span-2 space-y-6 min-h-[400px]">
                     {/* Attendance Summary */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-indigo-500 p-3">
+                        <div className="p-3 bg-theme-accent" style={{ backgroundColor: 'var(--color-accent)' }}>
                             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                 <FaChartLine className="w-4 h-4" />
                                 Attendance Summary
@@ -403,41 +406,41 @@ function DashboardEmployee() {
                         </div>
                         <div className="p-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-4 border border-indigo-200">
+                                <div className="rounded-lg p-4 border border-theme-accent bg-theme-accent/10" style={{ borderColor: 'var(--color-accent)', backgroundColor: 'color-mix(in srgb, var(--color-accent) 10%, transparent)' }}>
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm font-medium text-gray-600">This Month</span>
-                                        <FaClock className="w-4 h-4 text-indigo-600" />
+                                        <FaClock className="w-4 h-4 text-theme-accent" style={{ color: 'var(--color-accent)' }} />
                                     </div>
-                                    <div className="text-2xl font-bold text-indigo-700">
+                                    <div className="text-2xl font-bold text-theme-accent" style={{ color: 'var(--color-accent)' }}>
                                         {statsLoading ? '...' : `${dashboardStats.monthHours.toFixed(1)}h`}
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">Total Hours</div>
                                 </div>
                                 
-                                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                                <div className="rounded-lg p-4 border border-theme-primary bg-theme-primary/10" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)' }}>
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm font-medium text-gray-600">Attendance Rate</span>
-                                        <FaCheckCircle className="w-4 h-4 text-green-600" />
+                                        <FaCheckCircle className="w-4 h-4 text-theme-primary" style={{ color: 'var(--color-primary)' }} />
                                     </div>
-                                    <div className="text-2xl font-bold text-green-700">
+                                    <div className="text-2xl font-bold text-theme-primary" style={{ color: 'var(--color-primary)' }}>
                                         {statsLoading ? '...' : `${dashboardStats.attendanceRate}%`}
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">This Month</div>
                                 </div>
                                 
-                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
+                                <div className="rounded-lg p-4 border border-theme-secondary bg-theme-secondary/10" style={{ borderColor: 'var(--color-secondary)', backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)' }}>
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm font-medium text-gray-600">Today</span>
-                                        <FaClock className="w-4 h-4 text-blue-600" />
+                                        <FaClock className="w-4 h-4 text-theme-secondary" style={{ color: 'var(--color-secondary)' }} />
                                     </div>
-                                    <div className="text-2xl font-bold text-blue-700">
+                                    <div className="text-2xl font-bold text-theme-secondary" style={{ color: 'var(--color-secondary)' }}>
                                         {statsLoading ? '...' : dashboardStats.todayHours}
                                     </div>
                                     <div className="text-xs text-gray-500 mt-1">Hours Worked</div>
                                 </div>
                             </div>
                             <div className="mt-4 pt-4 border-t border-gray-200">
-                                <Link to="/attendance-stats" className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                                <Link to="/attendance-stats" className="inline-flex items-center text-sm text-theme-accent hover:opacity-80 font-medium">
                                     View Detailed Stats <FaArrowRight className="w-3 h-3 ml-2" />
                                 </Link>
                             </div>
@@ -480,8 +483,8 @@ function DashboardEmployee() {
                                                     </p>
                                                     <div className="flex items-center gap-4 text-xs text-gray-500">
                                                         <span className={`px-2 py-1 rounded-full ${
-                                                            project.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                            project.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                                            project.status === 'completed' ? 'bg-theme-primary/10 text-theme-primary' :
+                                                            project.status === 'in-progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
                                                             project.status === 'on-hold' ? 'bg-yellow-100 text-yellow-700' :
                                                             'bg-gray-100 text-gray-700'
                                                         }`}>
@@ -519,7 +522,7 @@ function DashboardEmployee() {
 
                     {/* Notifications */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-blue-500 p-3">
+                        <div className="p-3 bg-theme-primary" style={{ backgroundColor: 'var(--color-primary)' }}>
                             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                 <FaBell className="w-4 h-4" />
                                 Announcements
@@ -548,7 +551,7 @@ function DashboardEmployee() {
                 <div className="space-y-6">
                     {/* Payroll Card */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-green-500 p-3">
+                        <div className="p-3 bg-theme-secondary" style={{ backgroundColor: 'var(--color-secondary)' }}>
                             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                 <FaMoneyBillWave className="w-4 h-4" />
                                 Payroll
@@ -556,21 +559,21 @@ function DashboardEmployee() {
                         </div>
                         <div className="p-6">
                             <div className="space-y-4">
-                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                                <div className="rounded-lg p-4 border border-theme-primary bg-theme-primary/10" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)' }}>
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-sm font-medium text-gray-600">Current Month</span>
-                                        <span className="text-lg font-bold text-green-700">{statsLoading ? '...' : dashboardStats.currentMonthSalary}</span>
+                                        <span className="text-lg font-bold text-theme-primary" style={{ color: 'var(--color-primary)' }}>{statsLoading ? '...' : dashboardStats.currentMonthSalary}</span>
                                     </div>
                                     <div className="text-xs text-gray-500">Net Salary</div>
                                 </div>
                                 
                                 <div className="space-y-2 text-sm text-gray-600">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                        <div className="w-2 h-2 rounded-full bg-theme-secondary" style={{ backgroundColor: 'var(--color-secondary)' }}></div>
                                         <span>View detailed breakdown</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                        <div className="w-2 h-2 rounded-full bg-theme-primary" style={{ backgroundColor: 'var(--color-primary)' }}></div>
                                         <span>Download payslips</span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -580,7 +583,7 @@ function DashboardEmployee() {
                                 </div>
                                 
                                 <Link to="/employee-payroll" className="block">
-                                    <button className="w-full bg-green-500 text-white py-2 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 text-sm">
+                                    <button className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-primary hover:opacity-90" style={{ backgroundColor: 'var(--color-primary)' }}>
                                         <FaDownload className="w-4 h-4" />
                                         View All Payslips
                         </button>
@@ -609,7 +612,8 @@ function DashboardEmployee() {
                                 <div className="space-y-3">
                         <button 
                             onClick={() => navigate('/leave')}
-                                        className="w-full bg-green-500 text-white py-2 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 text-sm"
+                                        className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
                         >
                                         <FaPlus className="w-4 h-4" />
                             Apply for Leave
@@ -617,7 +621,8 @@ function DashboardEmployee() {
                                     
                                     <button 
                                         onClick={() => navigate('/my-leave')}
-                                        className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 text-sm"
+                                        className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-secondary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-secondary)' }}
                                     >
                                         <FaEye className="w-4 h-4" />
                                         View My Leaves
@@ -629,7 +634,7 @@ function DashboardEmployee() {
 
                     {/* Manager Features Section */}
                     <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-indigo-500 p-3">
+                        <div className="p-3 bg-theme-accent" style={{ backgroundColor: 'var(--color-accent)' }}>
                             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                 <FaUserTie className="w-4 h-4" />
                                 Manager Resources
@@ -639,7 +644,8 @@ function DashboardEmployee() {
                             <div className="space-y-3">
                                 <button 
                                     onClick={() => navigate('/one-on-one')}
-                                    className="w-full bg-indigo-500 text-white py-2 rounded-lg font-medium hover:bg-indigo-600 transition flex items-center justify-center gap-2 text-sm"
+                                    className="w-full bg-theme-accent text-white py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center justify-center gap-2 text-sm"
+            style={{ backgroundColor: 'var(--color-accent)' }}
                                 >
                                     <FaUserTie className="w-4 h-4" />
                                     One-on-One Meetings
@@ -655,7 +661,8 @@ function DashboardEmployee() {
                                 
                                 <button 
                                     onClick={() => navigate('/my-attendance-regularization')}
-                                    className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 text-sm"
+                                    className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-secondary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-secondary)' }}
                                 >
                                     <FaClock className="w-4 h-4" />
                                     Attendance Regularization
@@ -684,7 +691,8 @@ function DashboardEmployee() {
                                 
                                 <button 
                                     onClick={() => navigate('/documents')}
-                                    className="w-full bg-green-500 text-white py-2 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2 text-sm"
+                                    className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
                                 >
                                     <FaFolderOpen className="w-4 h-4" />
                                     My Documents
@@ -692,7 +700,8 @@ function DashboardEmployee() {
                                 
                                 <button 
                                     onClick={() => navigate('/onboarding')}
-                                    className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 text-sm"
+                                    className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-secondary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-secondary)' }}
                                 >
                                     <FaHandshake className="w-4 h-4" />
                                     Onboarding Status

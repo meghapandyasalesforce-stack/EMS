@@ -33,7 +33,7 @@ const OrganizationDashboard = () => {
     if (loading && !statistics) {
         return (
             <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
@@ -75,7 +75,7 @@ const OrganizationDashboard = () => {
                 <button
                     type="button"
                     onClick={() => navigate('/organization/profile')}
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-theme-primary text-white text-sm font-medium hover:opacity-90 transition-colors"
                 >
                     Organization Profile
                 </button>
@@ -94,8 +94,8 @@ const OrganizationDashboard = () => {
                                 {statistics.employees?.active || 0} active
                             </p>
                         </div>
-                        <div className="bg-blue-100 p-3 rounded-full ml-4 flex-shrink-0">
-                            <FiUsers className="w-6 h-6 text-blue-600" />
+                        <div className="bg-theme-secondary/10 p-3 rounded-full ml-4 flex-shrink-0">
+                            <FiUsers className="w-6 h-6 text-theme-secondary" />
                         </div>
                     </div>
                     {statistics.subscription && (
@@ -106,7 +106,7 @@ const OrganizationDashboard = () => {
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div
-                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                    className="bg-theme-primary h-2 rounded-full transition-all duration-300"
                                     style={{ width: `${Math.min(statistics.subscription.employeeUsage || 0, 100)}%` }}
                                 ></div>
                             </div>
@@ -124,12 +124,12 @@ const OrganizationDashboard = () => {
                             <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-2">
                                 {statistics.attendance?.total || 0}
                             </p>
-                            <p className="text-sm text-green-600 mt-1 font-medium">
+                            <p className="text-sm text-theme-primary mt-1 font-medium">
                                 {statistics.attendance?.recent || 0} this week
                             </p>
                         </div>
-                        <div className="bg-green-100 p-3 rounded-full ml-4 flex-shrink-0">
-                            <FiCalendar className="w-6 h-6 text-green-600" />
+                        <div className="bg-theme-primary/10 p-3 rounded-full ml-4 flex-shrink-0">
+                            <FiCalendar className="w-6 h-6 text-theme-primary" />
                         </div>
                     </div>
                 </div>
@@ -277,7 +277,7 @@ const OrganizationDashboard = () => {
                                 {activity.recentEmployees.slice(0, 5).map((emp, idx) => (
                                     <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
                                         <div className="flex items-center">
-                                            <FiUserCheck className="text-green-600 mr-2" />
+                                            <FiUserCheck className="text-theme-primary mr-2" />
                                             <span className="text-sm">{emp.name}</span>
                                         </div>
                                         <span className="text-xs text-gray-500">
@@ -304,7 +304,7 @@ const OrganizationDashboard = () => {
                                     <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
                                         <div className="flex items-center">
                                             {leave.status === 'approved' ? (
-                                                <FiCheckCircle className="text-green-600 mr-2" />
+                                                <FiCheckCircle className="text-theme-primary mr-2" />
                                             ) : leave.status === 'pending' ? (
                                                 <FiAlertCircle className="text-yellow-600 mr-2" />
                                             ) : (

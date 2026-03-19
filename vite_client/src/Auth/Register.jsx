@@ -91,7 +91,7 @@ const Register = () => {
                 className="w-full max-w-md p-8 bg-white rounded-lg shadow-md text-center"
                 onSubmit={handleSubmit}
             >
-                <h1 className="text-green-500 text-2xl font-bold mb-6">Welcome to Paarsiv</h1>
+                <h1 className="text-2xl font-bold mb-6 text-theme-primary" style={{ color: 'var(--color-primary)' }}>Welcome to Paarsiv</h1>
                 {error && <p className="text-red-600 mb-4 p-2 bg-red-100 rounded">{error}</p>}
 
                 <div className="mb-4">
@@ -101,7 +101,7 @@ const Register = () => {
                         value={formData.name}
                         onChange={handleChange}
                         required
-                        className="w-full p-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-primary)] focus:outline-none"
                     />
                 </div>
 
@@ -113,7 +113,7 @@ const Register = () => {
                         value={formData.email}
                         onChange={handleChange}
                         required
-                        className="w-full p-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-primary)] focus:outline-none"
                     />
                 </div>
 
@@ -125,7 +125,7 @@ const Register = () => {
                         value={formData.password}
                         onChange={handleChange}
                         required
-                        className="w-full p-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-primary)] focus:outline-none"
                     />
                 </div>
 
@@ -137,7 +137,7 @@ const Register = () => {
                         value={formData.confirmPassword}
                         onChange={handleChange}
                         required
-                        className="w-full p-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-primary)] focus:outline-none"
                     />
                 </div>
 
@@ -157,8 +157,9 @@ const Register = () => {
 
                 <button
                     className={`w-full p-3 rounded-md text-white font-medium transition-colors ${
-                        loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'
+                        loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-theme-primary hover:opacity-90'
                     }`}
+                    style={!loading ? { backgroundColor: 'var(--color-primary)' } : undefined}
                     type="submit"
                     disabled={loading}
                 >
@@ -167,7 +168,7 @@ const Register = () => {
 
                 <p className="mt-4 text-gray-600">
                     Already have an account?{' '}
-                    <Link to="/login" className="text-green-500 font-medium hover:underline">
+                    <Link to="/login" className="font-medium hover:underline text-theme-primary" style={{ color: 'var(--color-primary)' }}>
                         Log In
                     </Link>
                 </p>

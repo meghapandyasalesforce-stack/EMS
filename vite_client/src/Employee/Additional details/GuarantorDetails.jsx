@@ -102,7 +102,7 @@ const GuarantorDetails = () => {
                       });
                       setIsEditing(true);
                     }}
-                    className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
+                    className="mt-3 bg-theme-primary hover:opacity-90 text-white px-4 py-2 rounded text-sm"
                   >
                     Edit
                   </button>
@@ -114,7 +114,7 @@ const GuarantorDetails = () => {
 
             <button
               onClick={() => setIsEditing(true)}
-              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full md:w-auto"
+              className="mt-4 bg-theme-primary hover:opacity-90 text-white px-4 py-2 rounded w-full md:w-auto"
             >
               Add New Guarantor
             </button>
@@ -188,7 +188,7 @@ const GuarantorDetails = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <button
                 type="submit"
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded disabled:bg-green-400 flex-1"
+                className="bg-theme-primary hover:opacity-90 text-white px-4 py-2 rounded disabled:bg-green-400 flex-1"
                 disabled={addingGuarantor || !formData.name || !formData.occupation || !formData.phoneNumber}
               >
                 {addingGuarantor ? 'Saving...' : 'Save'}

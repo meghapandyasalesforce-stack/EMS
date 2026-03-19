@@ -153,7 +153,7 @@ const OnboardingPage = () => {
                     </div>
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                        className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                     >
                         <FaPlus />
                         Create Workflow
@@ -169,7 +169,7 @@ const OnboardingPage = () => {
                             placeholder="Search by employee name or email..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                         />
                     </div>
                     <div className="relative">
@@ -177,7 +177,7 @@ const OnboardingPage = () => {
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                            className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                         >
                             <option value="all">All Status</option>
                             <option value="Not Started">Not Started</option>
@@ -202,8 +202,8 @@ const OnboardingPage = () => {
                                         {workflow.employeeId?.name || 'Employee'}
                                     </h3>
                                     <span className={`px-3 py-1 rounded-full text-sm ${
-                                        workflow.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                                        workflow.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                        workflow.status === 'Completed' ? 'bg-theme-primary/10 text-theme-primary' :
+                                        workflow.status === 'In Progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
                                         'bg-gray-100 text-gray-800'
                                     }`}>
                                         {workflow.status}
@@ -217,7 +217,7 @@ const OnboardingPage = () => {
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2">
                                         <div 
-                                            className="bg-blue-600 h-2 rounded-full transition-all"
+                                            className="bg-theme-primary h-2 rounded-full transition-all"
                                             style={{ width: `${progress}%` }}
                                         ></div>
                                     </div>
@@ -229,7 +229,7 @@ const OnboardingPage = () => {
 
                                 <button
                                     onClick={() => navigate(`/onboarding/${workflow._id}`)}
-                                    className="mt-4 w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
+                                    className="mt-4 w-full bg-theme-secondary text-white py-2 rounded-lg hover:bg-theme-primary transition"
                                 >
                                     View Details
                                 </button>
@@ -353,7 +353,7 @@ const OnboardingPage = () => {
                                     <button
                                         type="button"
                                         onClick={addTask}
-                                        className="text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                                        className="text-theme-secondary hover:text-theme-secondary flex items-center gap-1"
                                     >
                                         <FaPlus /> Add Task
                                     </button>
@@ -468,7 +468,7 @@ const OnboardingPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

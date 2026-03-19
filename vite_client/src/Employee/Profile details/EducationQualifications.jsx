@@ -105,7 +105,7 @@ const EducationQualifications = () => {
         )}
 
         {successMessage && (
-          <div className="mb-4 p-4 bg-green-100 border-l-4 border-green-500 text-green-700">
+          <div className="mb-4 p-4 bg-theme-primary/10 border-l-4 border-theme-primary text-theme-primary">
             <p>{successMessage}</p>
           </div>
         )}
@@ -121,7 +121,7 @@ const EducationQualifications = () => {
                 setApiError(null);
                 setSuccessMessage(null);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition w-full sm:w-auto"
+              className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
             >
               {showAcademicForm ? 'Cancel' : 'Add Academic Record'}
             </button>
@@ -130,20 +130,20 @@ const EducationQualifications = () => {
           {showAcademicForm && (
             <div className="mb-6 space-y-3">
               <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Institution"
                 value={academicInput.institution}
                 onChange={(e) => setAcademicInput({ ...academicInput, institution: e.target.value })}
               />
               <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Details (e.g., Degree, Dates)"
                 value={academicInput.details}
                 onChange={(e) => setAcademicInput({ ...academicInput, details: e.target.value })}
               />
               <button
                 onClick={handleAddAcademic}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition w-full sm:w-auto"
+                className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
                 disabled={loading}
               >
                 {loading ? 'Saving...' : 'Save'}
@@ -179,7 +179,7 @@ const EducationQualifications = () => {
                 setApiError(null);
                 setSuccessMessage(null);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition w-full sm:w-auto"
+              className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
             >
               {showProfessionalForm ? 'Cancel' : 'Add Professional Qualification'}
             </button>
@@ -188,32 +188,32 @@ const EducationQualifications = () => {
           {showProfessionalForm && (
             <div className="mb-6 space-y-3">
               <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Title"
                 value={professionalInput.title}
                 onChange={(e) => setProfessionalInput({ ...professionalInput, title: e.target.value })}
               />
               <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Organization"
                 value={professionalInput.organization}
                 onChange={(e) => setProfessionalInput({ ...professionalInput, organization: e.target.value })}
               />
               <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Duration"
                 value={professionalInput.duration}
                 onChange={(e) => setProfessionalInput({ ...professionalInput, duration: e.target.value })}
               />
               <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Description (optional)"
                 value={professionalInput.description}
                 onChange={(e) => setProfessionalInput({ ...professionalInput, description: e.target.value })}
               />
               <button
                 onClick={handleAddProfessional}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition w-full sm:w-auto"
+                className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
                 disabled={loading}
               >
                 {loading ? 'Saving...' : 'Save'}

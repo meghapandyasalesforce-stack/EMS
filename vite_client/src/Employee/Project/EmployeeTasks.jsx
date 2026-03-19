@@ -105,7 +105,7 @@ const EmployeeTasks = () => {
           </p>
           <button 
             onClick={() => navigate('/employee/projects')} 
-            className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-4 py-2 rounded-lg transition shadow flex items-center gap-2 mx-auto text-sm"
+            className="bg-theme-secondary hover:bg-theme-primary text-white font-medium px-4 py-2 rounded-lg transition shadow flex items-center gap-2 mx-auto text-sm"
           >
             <FiArrowLeft size={16} />
             Back to Projects
@@ -124,7 +124,7 @@ const EmployeeTasks = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <button 
                 onClick={() => navigate('/employee/projects')}
-                className="border border-blue-500 text-blue-500 hover:bg-blue-50 font-medium px-3 py-1.5 rounded-lg transition flex items-center gap-2 text-sm"
+                className="border border-theme-secondary text-theme-secondary hover:bg-theme-secondary/10 font-medium px-3 py-1.5 rounded-lg transition flex items-center gap-2 text-sm"
               >
                 <FiArrowLeft size={16} />
                 Back
@@ -140,8 +140,8 @@ const EmployeeTasks = () => {
               </div>
             </div>
             <div className={`inline-flex items-center px-3 py-1 rounded-lg font-medium text-sm ${
-              currentProject.status === 'Completed' ? 'bg-green-100 text-green-800' :
-              currentProject.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+              currentProject.status === 'Completed' ? 'bg-theme-primary/10 text-theme-primary' :
+              currentProject.status === 'In Progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
               currentProject.status === 'On Hold' ? 'bg-yellow-100 text-yellow-800' : 
               'bg-gray-100 text-gray-800'
             }`}>
@@ -159,7 +159,7 @@ const EmployeeTasks = () => {
       {/* Task Input Form */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 bg-blue-500 rounded-lg flex items-center justify-center">
+          <div className="w-9 h-9 bg-theme-secondary rounded-lg flex items-center justify-center">
             {editingTaskId ? <FiEdit3 size={18} className="text-white" /> : <FiPlus size={18} className="text-white" />}
           </div>
           <div>
@@ -181,7 +181,7 @@ const EmployeeTasks = () => {
               type="text"
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition text-sm"
               placeholder="Describe what needs to be done..."
             />
           </div>
@@ -193,7 +193,7 @@ const EmployeeTasks = () => {
             <select
               value={taskStatus}
               onChange={(e) => setTaskStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition text-sm"
             >
               <option value="Not Started">
                 <div className="flex items-center gap-2">
@@ -230,7 +230,7 @@ const EmployeeTasks = () => {
               value={comments}
               onChange={(e) => setComments(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none text-sm"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition resize-none text-sm"
               placeholder="Add any additional notes or comments..."
             />
           </div>
@@ -249,7 +249,7 @@ const EmployeeTasks = () => {
                 () => handleUpdateTask(editingTaskId) : 
                 handleCreateTask}
               disabled={!taskDescription.trim() || status === 'loading'}
-              className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white font-medium px-4 py-2 rounded-lg transition shadow disabled:shadow-none flex items-center gap-2 text-sm"
+              className="bg-theme-secondary hover:bg-theme-primary disabled:bg-gray-300 text-white font-medium px-4 py-2 rounded-lg transition shadow disabled:shadow-none flex items-center gap-2 text-sm"
             >
               {editingTaskId ? <FiSave size={16} /> : <FiPlus size={16} />}
               {editingTaskId ? 'Update Task' : '+ Add Task'}
@@ -262,7 +262,7 @@ const EmployeeTasks = () => {
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 border border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center">
+            <div className="w-9 h-9 bg-theme-primary rounded-lg flex items-center justify-center">
               <FiCheck size={18} className="text-white" />
             </div>
             <div>
@@ -275,7 +275,7 @@ const EmployeeTasks = () => {
             </div>
           </div>
           <div className="relative">
-            <div className="bg-blue-500 text-white px-3 py-1 rounded-lg font-medium text-sm">
+            <div className="bg-theme-secondary text-white px-3 py-1 rounded-lg font-medium text-sm">
               {myTasks.length} Tasks
             </div>
           </div>
@@ -283,7 +283,7 @@ const EmployeeTasks = () => {
         
         {status === 'loading' ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary"></div>
           </div>
         ) : myTasks.length === 0 ? (
           <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -300,15 +300,15 @@ const EmployeeTasks = () => {
             {myTasks.map((task) => (
               <div 
                 key={task._id}
-                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition"
+                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-theme-secondary transition"
               >
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-sm font-semibold text-gray-900 flex-1 mr-2 leading-tight">
                     {task.taskDescription}
                   </h3>
                   <span className={`px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${
-                    task.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                    task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                    task.status === 'Completed' ? 'bg-theme-primary/10 text-theme-primary' :
+                    task.status === 'In Progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
                     task.status === 'On Hold' ? 'bg-yellow-100 text-yellow-800' : 
                     'bg-gray-100 text-gray-800'
                   }`}>
@@ -339,7 +339,7 @@ const EmployeeTasks = () => {
                   <div className="flex justify-end">
                     <button
                       onClick={() => handleEditTask(task)}
-                      className="w-8 h-8 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition shadow-sm hover:shadow-md"
+                      className="w-8 h-8 bg-theme-secondary hover:bg-theme-primary text-white rounded-lg flex items-center justify-center transition shadow-sm hover:shadow-md"
                       title="Edit Task"
                     >
                       <FiEdit3 size={14} />

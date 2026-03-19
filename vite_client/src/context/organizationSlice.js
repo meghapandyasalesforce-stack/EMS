@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../utils/axios';
 import { ORGANIZATION_ENDPOINT } from '../utils/constant';
+import { applyBranding } from '../utils/theme';
 
 // Async thunks
 export const fetchOrganizationProfile = createAsyncThunk(
@@ -151,6 +152,10 @@ const organizationSlice = createSlice({
             .addCase(fetchOrganizationProfile.fulfilled, (state, action) => {
                 state.loading = false;
                 state.profile = action.payload;
+                // Apply organization branding/theme when profile is loaded
+                if (action.payload?.branding) {
+                    applyBranding(action.payload.branding);
+                }
             })
             .addCase(fetchOrganizationProfile.rejected, (state, action) => {
                 state.loading = false;

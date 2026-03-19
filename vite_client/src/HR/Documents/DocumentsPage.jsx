@@ -119,7 +119,7 @@ const DocumentsPage = () => {
                         <p className="text-gray-600 mt-1">Manage company documents and employee uploads</p>
                     </div>
                     {isHRUser && (
-                        <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2">
+                        <button className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2">
                             <FaUpload className="w-4 h-4" />
                             Upload Document
                         </button>
@@ -131,14 +131,14 @@ const DocumentsPage = () => {
                     <div className="flex border-b">
                         <button
                             onClick={() => setActiveTab('all')}
-                            className={`px-6 py-3 font-medium ${activeTab === 'all' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'all' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             All Documents ({documents.length})
                         </button>
                         {isHRUser && (
                             <button
                                 onClick={() => setActiveTab('pending')}
-                                className={`px-6 py-3 font-medium relative ${activeTab === 'pending' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                                className={`px-6 py-3 font-medium relative ${activeTab === 'pending' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                             >
                                 Pending Approval ({pendingCount})
                                 {pendingCount > 0 && (
@@ -159,7 +159,7 @@ const DocumentsPage = () => {
                                 onClick={() => setFilter('all')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     filter === 'all' 
-                                        ? 'bg-blue-500 text-white' 
+                                        ? 'bg-theme-secondary text-white' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
@@ -169,7 +169,7 @@ const DocumentsPage = () => {
                                 onClick={() => setFilter('Employee')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     filter === 'Employee' 
-                                        ? 'bg-blue-500 text-white' 
+                                        ? 'bg-theme-secondary text-white' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
@@ -179,7 +179,7 @@ const DocumentsPage = () => {
                                 onClick={() => setFilter('Company')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     filter === 'Company' 
-                                        ? 'bg-blue-500 text-white' 
+                                        ? 'bg-theme-secondary text-white' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
@@ -189,7 +189,7 @@ const DocumentsPage = () => {
                                 onClick={() => setFilter('Policy')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     filter === 'Policy' 
-                                        ? 'bg-blue-500 text-white' 
+                                        ? 'bg-theme-secondary text-white' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
@@ -227,8 +227,8 @@ const DocumentsPage = () => {
                                         <tr key={doc._id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="bg-blue-100 p-2 rounded-lg">
-                                                        <FaFileAlt className="w-5 h-5 text-blue-600" />
+                                                    <div className="bg-theme-secondary/10 p-2 rounded-lg">
+                                                        <FaFileAlt className="w-5 h-5 text-theme-secondary" />
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-gray-900">{doc.name}</div>
@@ -252,7 +252,7 @@ const DocumentsPage = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                                                <span className="px-2 py-1 rounded text-xs bg-theme-secondary/10 text-theme-secondary">
                                                     {doc.category}
                                                 </span>
                                             </td>
@@ -268,7 +268,7 @@ const DocumentsPage = () => {
                                                         href={doc.fileUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-blue-800"
+                                                        className="text-theme-secondary hover:text-theme-secondary"
                                                         title="View Document"
                                                     >
                                                         <FaDownload className="w-4 h-4" />
@@ -277,7 +277,7 @@ const DocumentsPage = () => {
                                                         <>
                                                             <button
                                                                 onClick={() => handleApprove(doc._id)}
-                                                                className="text-green-600 hover:text-green-800"
+                                                                className="text-theme-primary hover:text-theme-primary"
                                                                 title="Approve"
                                                             >
                                                                 <FaCheckCircle className="w-5 h-5" />
@@ -310,8 +310,8 @@ const DocumentsPage = () => {
                         {documents.map((doc) => (
                             <div key={doc._id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
                                 <div className="flex items-center gap-4 mb-4">
-                                    <div className="bg-blue-100 p-3 rounded-lg">
-                                        <FaFileAlt className="w-6 h-6 text-blue-600" />
+                                    <div className="bg-theme-secondary/10 p-3 rounded-lg">
+                                        <FaFileAlt className="w-6 h-6 text-theme-secondary" />
                                     </div>
                                     <div className="flex-1">
                                         <h3 className="font-semibold text-gray-800">{doc.name}</h3>
@@ -337,7 +337,7 @@ const DocumentsPage = () => {
                                     <div className="mb-3">
                                         <span className={`px-2 py-1 rounded text-xs ${
                                             doc.approvalStatus === 'Approved' 
-                                                ? 'bg-green-100 text-green-800' 
+                                                ? 'bg-theme-primary/10 text-theme-primary' 
                                                 : doc.approvalStatus === 'Rejected'
                                                 ? 'bg-red-100 text-red-800'
                                                 : 'bg-yellow-100 text-yellow-800'
@@ -355,7 +355,7 @@ const DocumentsPage = () => {
                                     <div className="mb-3 flex gap-2">
                                         <button
                                             onClick={() => handleApprove(doc._id)}
-                                            className="flex-1 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition"
+                                            className="flex-1 bg-theme-primary text-white px-3 py-1 rounded text-sm hover:bg-theme-primary transition"
                                         >
                                             <FaCheckCircle className="inline mr-1" />
                                             Approve
@@ -401,7 +401,7 @@ const DocumentsPage = () => {
                                             href={doc.fileUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800"
+                                            className="text-theme-secondary hover:text-theme-secondary"
                                             title="Download"
                                         >
                                             <FaDownload className="w-5 h-5" />
@@ -436,7 +436,7 @@ const DocumentsPage = () => {
                                 <textarea
                                     value={rejectReason}
                                     onChange={(e) => setRejectReason(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                     rows="4"
                                     placeholder="Please provide a reason for rejection..."
                                 />

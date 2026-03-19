@@ -105,14 +105,14 @@ const PendingApprovals = () => {
                         setSelectedApproval(approval);
                         setShowDetail(true);
                       }}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
                       title="View Details"
                     >
                       <FiEye className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => handleAction(approval._id, pendingStep?.stepNumber, 'Approve')}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium"
                     >
                       <FiCheckCircle className="w-4 h-4" />
                       Approve

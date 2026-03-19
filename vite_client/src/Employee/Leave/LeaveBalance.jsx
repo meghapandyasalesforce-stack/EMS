@@ -67,8 +67,8 @@ const LeaveBalance = () => {
             </div>
 
             {balance.policy && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <p className="text-blue-800">
+                <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4 mb-6">
+                    <p className="text-theme-secondary">
                         <strong>Policy:</strong> {balance.policy.policyName}
                     </p>
                 </div>
@@ -78,7 +78,7 @@ const LeaveBalance = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white rounded-lg shadow p-4">
                     <p className="text-sm text-gray-600 mb-1">Total Accrued</p>
-                    <p className="text-2xl font-bold text-blue-600">
+                    <p className="text-2xl font-bold text-theme-secondary">
                         {balance.balances?.reduce((sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0), 0) || 0} days
                     </p>
                 </div>
@@ -96,7 +96,7 @@ const LeaveBalance = () => {
                 </div>
                 <div className="bg-white rounded-lg shadow p-4">
                     <p className="text-sm text-gray-600 mb-1">Available</p>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-2xl font-bold text-theme-primary">
                         {balance.balances?.reduce((sum, b) => sum + (b.available || 0), 0) || 0} days
                     </p>
                 </div>
@@ -171,7 +171,7 @@ const LeaveBalance = () => {
                                 {typeBalance.carriedForward > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">Carried Forward:</span>
-                                        <span className="font-medium text-blue-600">
+                                        <span className="font-medium text-theme-secondary">
                                             +{typeBalance.carriedForward} days
                                         </span>
                                     </div>
@@ -202,7 +202,7 @@ const LeaveBalance = () => {
                                     <div className="flex justify-between mb-2">
                                         <span className="font-semibold">Available:</span>
                                         <span className={`font-bold text-lg ${
-                                            typeBalance.available > 0 ? 'text-green-600' : 'text-red-600'
+                                            typeBalance.available > 0 ? 'text-theme-primary' : 'text-red-600'
                                         }`}>
                                             {typeBalance.available} days
                                         </span>
@@ -211,7 +211,7 @@ const LeaveBalance = () => {
                                         <div className="w-full bg-gray-200 rounded-full h-2">
                                             <div
                                                 className={`h-2 rounded-full ${
-                                                    usedPercent > 80 ? 'bg-red-500' : usedPercent > 50 ? 'bg-yellow-500' : 'bg-green-500'
+                                                    usedPercent > 80 ? 'bg-red-500' : usedPercent > 50 ? 'bg-yellow-500' : 'bg-theme-primary'
                                                 }`}
                                                 style={{ width: `${Math.min(usedPercent, 100)}%` }}
                                             />

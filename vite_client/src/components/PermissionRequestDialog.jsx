@@ -146,11 +146,11 @@ const PermissionRequestDialog = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-blue-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-theme-secondary">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-white to-indigo-50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-theme-primary rounded-full flex items-center justify-center">
               <FiMapPin className="w-6 h-6 text-white" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800">
@@ -171,7 +171,7 @@ const PermissionRequestDialog = ({
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
+          <div className="bg-theme-secondary/10 border-l-4 border-theme-secondary p-4 mb-6 rounded-r-lg">
             <p className="text-gray-700 font-medium mb-2">
               {requestedPermissions.includes('location') && requestedPermissions.length === 1
                 ? 'Location access is required to check in and track your attendance. Please grant location permission to continue.'
@@ -196,7 +196,7 @@ const PermissionRequestDialog = ({
                 key={type}
                 className={`border-2 rounded-lg p-4 ${
                   isGranted
-                    ? 'border-green-500 bg-green-50'
+                    ? 'border-theme-primary bg-theme-primary/10'
                     : isDenied
                     ? 'border-red-500 bg-red-50'
                     : 'border-gray-300 bg-gray-50'
@@ -206,10 +206,10 @@ const PermissionRequestDialog = ({
                   <div
                     className={`p-3 rounded-full ${
                       isGranted
-                        ? 'bg-green-100 text-green-600'
+                        ? 'bg-theme-primary/10 text-theme-primary'
                         : isDenied
                         ? 'bg-red-100 text-red-600'
-                        : 'bg-blue-100 text-blue-600'
+                        : 'bg-theme-secondary/10 text-theme-secondary'
                     }`}
                   >
                     {getPermissionIcon(type)}
@@ -221,7 +221,7 @@ const PermissionRequestDialog = ({
                         {getPermissionTitle(type)}
                       </h3>
                       {isGranted && (
-                        <FiCheckCircle className="w-5 h-5 text-green-600" />
+                        <FiCheckCircle className="w-5 h-5 text-theme-primary" />
                       )}
                       {isDenied && (
                         <FiAlertCircle className="w-5 h-5 text-red-600" />
@@ -249,14 +249,14 @@ const PermissionRequestDialog = ({
                       <button
                         onClick={() => handleRequestPermission(type)}
                         disabled={requesting}
-                        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                        className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                       >
                         {requesting ? 'Requesting...' : 'Grant Permission'}
                       </button>
                     )}
 
                     {isGranted && (
-                      <p className="text-sm text-green-700 font-medium mt-2">
+                      <p className="text-sm text-theme-primary font-medium mt-2">
                         ✓ Permission granted
                       </p>
                     )}
@@ -290,7 +290,7 @@ const PermissionRequestDialog = ({
               disabled={requesting || requestedPermissions.every(type => 
                 results[type]?.granted || permissions[type]?.status === 'granted'
               )}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="px-6 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {requesting ? 'Requesting All...' : 'Grant All Permissions'}
             </button>

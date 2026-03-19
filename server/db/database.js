@@ -17,8 +17,26 @@ const calculateBackoffDelay = (attempt, baseDelay = 5000, maxDelay = 30000) => {
 };
 
 const connectDB = async (retries = 5, baseDelay = 5000) => { 
-    const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/paarsiv_hr';
-    
+    // Use MONGO_URI from environment (or local fallback) so you control the DB URL.
+    let mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/paarsiv_hr";
+    console.log("MONGO_URI at runtime:", mongoURI);
+
+    // Optional: if you ever accidentally use mongodb+srv://, normalize it to mongodb://
+    if (mongoURI.startsWith("mongodb+srv://")) {
+        mongoURI = mongoURI.replace("mongodb+srv://", "mongodb://");
+        if (!mongoURI.includes("retryWrites=")) {
+            mongoURI += mongoURI.includes("?")
+                ? "&retryWrites=true&w=majority"
+                : "?retryWrites=true&w=majority";
+        }
+        if (!mongoURI.includes("directConnection=")) {
+            mongoURI += mongoURI.includes("?")
+                ? "&directConnection=true"
+                : "?directConnection=true";
+        }
+        console.log("MONGO_URI after SRV normalization:", mongoURI);
+    }
+
     // Connection pool configuration
     const connectionOptions = {
         maxPoolSize: parseInt(process.env.MONGODB_MAX_POOL_SIZE || '10'),

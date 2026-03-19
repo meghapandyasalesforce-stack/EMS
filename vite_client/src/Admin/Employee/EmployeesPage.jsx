@@ -103,7 +103,7 @@ const EmployeesPage = () => {
     return (
       <div className="min-h-screen bg-gray-100 p-4 sm:p-5 transition-all duration-300">
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
         </div>
       </div>
     );
@@ -140,7 +140,7 @@ const EmployeesPage = () => {
               {canAddEmployee && (
                 <button
                   onClick={() => navigate('/add-employee')}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition-colors shadow-sm"
                 >
                   <FaUserPlus className="h-4 w-4" />
                   <span>Add Employee</span>
@@ -159,7 +159,7 @@ const EmployeesPage = () => {
               placeholder="Search employees by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
             />
             {searchTerm && (
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
@@ -239,7 +239,7 @@ const EmployeesPage = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         employee.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
+                          ? 'bg-theme-primary/10 text-theme-primary' 
                           : employee.status === 'inactive'
                           ? 'bg-yellow-100 text-yellow-800'
                           : employee.status === 'suspended'
@@ -262,7 +262,7 @@ const EmployeesPage = () => {
                             e.stopPropagation();
                             handleRowClick(employee._id);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-theme-secondary hover:text-[var(--color-text)]"
                         >
                           <FaEye className="h-4 w-4" />
                         </button>
@@ -271,7 +271,7 @@ const EmployeesPage = () => {
                             e.stopPropagation();
                             // Handle edit
                           }}
-                          className="text-indigo-600 hover:text-indigo-900"
+                          className="text-theme-accent hover:text-indigo-900"
                         >
                           <FaEdit className="h-4 w-4" />
                         </button>

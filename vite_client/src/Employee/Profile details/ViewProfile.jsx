@@ -47,7 +47,7 @@ const EmployeeProfile = ({ employeeId }) => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading employee data...</p>
         </div>
       </div>
@@ -97,7 +97,7 @@ const EmployeeProfile = ({ employeeId }) => {
                   <p className="text-blue-100">{employee.position} Position</p>
                   {employee.active !== undefined && (
                     <p className={`text-xs font-medium px-2 py-1 rounded-full inline-block mt-1 ${
-                      employee.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      employee.active ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'
                     }`}>
                       {employee.active ? 'Active' : 'Inactive'}
                     </p>
@@ -216,7 +216,7 @@ const EmployeeProfile = ({ employeeId }) => {
                           <p className="text-gray-500 text-sm">{doc.fileName}</p>
                           <p className="text-gray-400 text-xs mt-1">Uploaded: {formatDate(doc.uploadedAt)}</p>
                         </div>
-                        <button className="bg-blue-50 text-blue-600 px-3 py-1 rounded-md text-sm hover:bg-blue-100">
+                        <button className="bg-theme-secondary/10 text-theme-secondary px-3 py-1 rounded-md text-sm hover:bg-theme-secondary/10">
                           Download
                         </button>
                       </div>

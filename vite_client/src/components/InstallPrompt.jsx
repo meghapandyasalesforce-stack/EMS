@@ -117,7 +117,7 @@ const InstallPrompt = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleInstallClick}
-            className="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2"
+            className="bg-white text-theme-secondary px-4 py-2 rounded-lg font-semibold text-sm hover:bg-theme-secondary/10 transition-colors flex items-center gap-2"
           >
             <FiDownload className="w-4 h-4" />
             Install

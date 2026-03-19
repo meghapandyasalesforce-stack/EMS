@@ -163,13 +163,13 @@ const SuccessionDetailPage = () => {
             case 'Medium':
                 return 'bg-yellow-100 text-yellow-800';
             default:
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
         }
     };
 
     const getReadinessColor = (readiness) => {
-        if (readiness === 'Ready Now') return 'bg-green-100 text-green-800';
-        if (readiness.includes('1-2')) return 'bg-blue-100 text-blue-800';
+        if (readiness === 'Ready Now') return 'bg-theme-primary/10 text-theme-primary';
+        if (readiness.includes('1-2')) return 'bg-theme-secondary/10 text-theme-secondary';
         if (readiness.includes('3-5')) return 'bg-yellow-100 text-yellow-800';
         return 'bg-gray-100 text-gray-800';
     };
@@ -177,9 +177,9 @@ const SuccessionDetailPage = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'Completed':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'In Progress':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-theme-secondary/10 text-theme-secondary';
             default:
                 return 'bg-gray-100 text-gray-800';
         }
@@ -214,7 +214,7 @@ const SuccessionDetailPage = () => {
                                 {plan.riskLevel} Risk
                             </span>
                             <span className={`px-4 py-2 rounded-full text-sm font-medium ${
-                                plan.status === 'Active' ? 'bg-green-100 text-green-800' :
+                                plan.status === 'Active' ? 'bg-theme-primary/10 text-theme-primary' :
                                 plan.status === 'Draft' ? 'bg-gray-100 text-gray-800' :
                                 'bg-yellow-100 text-yellow-800'
                             }`}>
@@ -232,8 +232,8 @@ const SuccessionDetailPage = () => {
                             <div className="bg-white rounded-lg shadow-md p-6">
                                 <h2 className="text-xl font-semibold mb-4">Current Incumbent</h2>
                                 <div className="flex items-center gap-4">
-                                    <div className="bg-blue-100 p-3 rounded-lg">
-                                        <FaUserTie className="w-6 h-6 text-blue-600" />
+                                    <div className="bg-theme-secondary/10 p-3 rounded-lg">
+                                        <FaUserTie className="w-6 h-6 text-theme-secondary" />
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-gray-800">
@@ -256,7 +256,7 @@ const SuccessionDetailPage = () => {
                                 <h2 className="text-xl font-semibold">Successors ({plan.successors?.length || 0})</h2>
                                 <button
                                     onClick={() => setShowAddSuccessorModal(true)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
+                                    className="flex items-center gap-2 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm"
                                 >
                                     <FaPlus /> Add Successor
                                 </button>
@@ -285,7 +285,7 @@ const SuccessionDetailPage = () => {
                                                     <span className="text-xs font-medium text-gray-600">Strengths: </span>
                                                     <div className="flex flex-wrap gap-1 mt-1">
                                                         {successor.strengths.map((strength, idx) => (
-                                                            <span key={idx} className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                                            <span key={idx} className="px-2 py-1 bg-theme-primary/10 text-theme-primary rounded text-xs">
                                                                 {strength}
                                                             </span>
                                                         ))}
@@ -328,7 +328,7 @@ const SuccessionDetailPage = () => {
                                 </h2>
                                 <button
                                     onClick={() => setShowAddActivityModal(true)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm"
+                                    className="flex items-center gap-2 px-3 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition text-sm"
                                 >
                                     <FaPlus /> Add Activity
                                 </button>
@@ -362,7 +362,7 @@ const SuccessionDetailPage = () => {
                                                     {activity.status === 'Not Started' && (
                                                         <button
                                                             onClick={() => updateActivityStatus(index, 'In Progress')}
-                                                            className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition"
+                                                            className="px-3 py-1 bg-theme-secondary text-white rounded text-sm hover:bg-theme-primary transition"
                                                         >
                                                             Start
                                                         </button>
@@ -370,7 +370,7 @@ const SuccessionDetailPage = () => {
                                                     {activity.status === 'In Progress' && (
                                                         <button
                                                             onClick={() => updateActivityStatus(index, 'Completed')}
-                                                            className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition flex items-center gap-1"
+                                                            className="px-3 py-1 bg-theme-primary text-white rounded text-sm hover:bg-theme-primary transition flex items-center gap-1"
                                                         >
                                                             <FaCheckCircle /> Complete
                                                         </button>
@@ -545,7 +545,7 @@ const SuccessionDetailPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>
@@ -630,7 +630,7 @@ const SuccessionDetailPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

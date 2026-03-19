@@ -71,10 +71,10 @@ const DashboardFinance = () => {
         .reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-US', {
+        return new Intl.NumberFormat('en-IN', {
             style: 'currency',
-            currency: 'USD'
-        }).format(amount);
+            currency: 'INR'
+        }).format(amount || 0);
     };
 
     // Handle errors
@@ -148,8 +148,8 @@ const DashboardFinance = () => {
                     onClick={() => navigate('/admin-payroll')}
                 >
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <div className="bg-green-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
-                            <FaMoneyBillWave className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                        <div className="bg-theme-primary/10 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaMoneyBillWave className="w-5 h-5 sm:w-6 sm:h-6 text-theme-primary" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Payroll Management</h3>
@@ -178,8 +178,8 @@ const DashboardFinance = () => {
                     onClick={() => navigate('/admin/reports')}
                 >
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <div className="bg-blue-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
-                            <FaChartBar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                        <div className="bg-theme-secondary/10 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaChartBar className="w-5 h-5 sm:w-6 sm:h-6 text-theme-secondary" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Financial Reports</h3>
@@ -208,8 +208,8 @@ const DashboardFinance = () => {
                     onClick={() => navigate('/admin-settings')}
                 >
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <div className="bg-indigo-100 p-3 sm:p-4 rounded-lg flex-shrink-0">
-                            <FaCalculator className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+                        <div className="bg-theme-accent/10 p-3 sm:p-4 rounded-lg flex-shrink-0">
+                            <FaCalculator className="w-5 h-5 sm:w-6 sm:h-6 text-theme-accent" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate">Financial Settings</h3>

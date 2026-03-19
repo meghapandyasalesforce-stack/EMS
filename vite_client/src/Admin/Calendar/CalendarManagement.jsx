@@ -230,8 +230,8 @@ const CalendarManagement = () => {
     const colors = {
       national: 'bg-red-100 text-red-800',
       religious: 'bg-purple-100 text-purple-800',
-      company: 'bg-blue-100 text-blue-800',
-      regional: 'bg-green-100 text-green-800'
+      company: 'bg-theme-secondary/10 text-theme-secondary',
+      regional: 'bg-theme-primary/10 text-theme-primary'
     };
     return colors[type] || 'bg-gray-100 text-gray-800';
   };
@@ -273,7 +273,7 @@ const CalendarManagement = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="relative">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-500 mx-auto mb-6"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-theme-secondary border-t-blue-500 mx-auto mb-6"></div>
             <div className="absolute inset-0 rounded-full h-16 w-16 border-4 border-transparent border-t-blue-300 animate-spin mx-auto" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Calendar</h3>
@@ -297,7 +297,7 @@ const CalendarManagement = () => {
               <select
                 value={currentYear}
                 onChange={(e) => setCurrentYear(parseInt(e.target.value))}
-                className="px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[120px] shadow-sm transition-all duration-200 hover:shadow-md font-medium"
+                className="px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary bg-white min-w-[120px] shadow-sm transition-all duration-200 hover:shadow-md font-medium"
               >
                 {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map(year => (
                   <option key={year} value={year}>{year}</option>
@@ -305,14 +305,14 @@ const CalendarManagement = () => {
               </select>
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+                className="bg-theme-primary hover:opacity-90 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg font-medium"
               >
                 <FiUpload className="w-4 h-4" />
                 <span>Upload Calendar</span>
               </button>
               <button
                 onClick={() => setShowHolidayModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+                className="bg-theme-primary hover:opacity-90 text-white px-6 py-3 rounded-xl flex items-center space-x-2 whitespace-nowrap transition-all duration-200 shadow-md hover:shadow-lg font-medium"
               >
                 <FiPlus className="w-4 h-4" />
                 <span>Add Holiday</span>
@@ -338,7 +338,7 @@ const CalendarManagement = () => {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="px-6 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[180px] shadow-sm transition-all duration-200 hover:shadow-md font-medium"
+              className="px-6 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary bg-white min-w-[180px] shadow-sm transition-all duration-200 hover:shadow-md font-medium"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                 <option key={month} value={month}>{getMonthName(month)}</option>
@@ -389,7 +389,7 @@ const CalendarManagement = () => {
                             {holiday.type.charAt(0).toUpperCase() + holiday.type.slice(1)}
                           </span>
                         </div>
-                        <h4 className="font-bold text-blue-600 text-xl mb-2 break-words">
+                        <h4 className="font-bold text-theme-secondary text-xl mb-2 break-words">
                           {holiday.name}
                         </h4>
                         <div className="flex items-center text-gray-600 mb-2">
@@ -410,7 +410,7 @@ const CalendarManagement = () => {
                       <div className="flex items-center space-x-2 sm:ml-6 flex-shrink-0">
                         <button
                           onClick={() => openEditHoliday(holiday)}
-                          className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                          className="p-2 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-all duration-200"
                           title="Edit holiday"
                         >
                           <FiEdit className="w-4 h-4" />
@@ -479,8 +479,8 @@ const CalendarManagement = () => {
                   <div key={index} className="bg-gray-50 border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all duration-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-blue-50 rounded-xl">
-                          <FiFile className="w-6 h-6 text-blue-600" />
+                        <div className="p-3 bg-theme-secondary/10 rounded-xl">
+                          <FiFile className="w-6 h-6 text-theme-secondary" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900 break-words text-lg">
@@ -506,7 +506,7 @@ const CalendarManagement = () => {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <button className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all duration-200">
+                        <button className="p-2 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-all duration-200">
                           <FiDownload className="w-4 h-4" />
                         </button>
                       </div>
@@ -545,7 +545,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
               placeholder="Enter holiday name"
               required
             />
@@ -559,7 +559,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
               type="date"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
               required
             />
           </div>
@@ -571,7 +571,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
             >
               <option value="national">National</option>
               <option value="religious">Religious</option>
@@ -587,7 +587,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 resize-none"
+              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 resize-none"
               rows="3"
               placeholder="Enter holiday description (optional)"
             />
@@ -599,7 +599,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
                 type="checkbox"
                 checked={formData.isRecurring}
                 onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                className="w-4 h-4 text-theme-secondary bg-gray-100 border-gray-300 rounded focus:ring-2 focus:ring-[var(--color-primary)]"
               />
               <span className="font-medium text-gray-700">Recurring Holiday</span>
             </label>
@@ -612,7 +612,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
                 <select
                   value={formData.recurringPattern}
                   onChange={(e) => setFormData({ ...formData, recurringPattern: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
                 >
                   <option value="yearly">Yearly</option>
                   <option value="monthly">Monthly</option>
@@ -663,7 +663,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
           {/* Working Days */}
           <div>
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-theme-secondary rounded-full mr-3"></div>
               Working Days
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -679,7 +679,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
                         [day]: e.target.checked
                       }
                     })}
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-theme-secondary bg-gray-100 border-gray-300 rounded focus:ring-2 focus:ring-[var(--color-primary)]"
                   />
                   <span className="capitalize font-medium text-gray-700">{day}</span>
                 </label>
@@ -690,7 +690,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
           {/* Working Hours */}
           <div>
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+              <div className="w-2 h-2 bg-theme-primary rounded-full mr-3"></div>
               Working Hours
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -705,7 +705,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
                     ...formData,
                     workingHours: { ...formData.workingHours, startTime: e.target.value }
                   })}
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
                 />
               </div>
               <div>
@@ -719,7 +719,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
                     ...formData,
                     workingHours: { ...formData.workingHours, endTime: e.target.value }
                   })}
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
                 />
               </div>
               <div>
@@ -735,7 +735,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
                     ...formData,
                     workingHours: { ...formData.workingHours, breakDuration: parseInt(e.target.value) }
                   })}
-                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
                 />
               </div>
             </div>
@@ -781,11 +781,11 @@ const UploadModal = ({ onSubmit, onClose, uploading }) => {
             <label className="block text-sm font-semibold text-gray-700 mb-3">
               Select Calendar File
             </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-green-400 hover:bg-green-50 transition-all duration-300 group">
+            <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-green-400 hover:bg-theme-primary/10 transition-all duration-300 group">
               <div className="relative">
                 <FiUpload className="w-12 h-12 text-gray-400 mx-auto mb-4 group-hover:text-green-500 transition-colors duration-300" />
-                <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-green-600 text-sm">📄</span>
+                <div className="absolute -top-1 -right-1 w-6 h-6 bg-theme-primary/10 rounded-full flex items-center justify-center">
+                  <span className="text-theme-primary text-sm">📄</span>
                 </div>
               </div>
               <p className="text-sm text-gray-600 mb-4 font-medium">
@@ -815,26 +815,26 @@ const UploadModal = ({ onSubmit, onClose, uploading }) => {
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4">
-            <h4 className="text-sm font-semibold text-blue-800 mb-3 flex items-center">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+          <div className="bg-gradient-to-r from-white to-indigo-50 border border-theme-secondary rounded-2xl p-4">
+            <h4 className="text-sm font-semibold text-theme-secondary mb-3 flex items-center">
+              <div className="w-2 h-2 bg-theme-secondary rounded-full mr-2"></div>
               Supported Features
             </h4>
-            <ul className="text-sm text-blue-700 space-y-2">
+            <ul className="text-sm text-theme-secondary space-y-2">
               <li className="flex items-center">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-3"></span>
+                <span className="w-1.5 h-1.5 bg-theme-secondary rounded-full mr-3"></span>
                 Automatic holiday detection from PDF text
               </li>
               <li className="flex items-center">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-3"></span>
+                <span className="w-1.5 h-1.5 bg-theme-secondary rounded-full mr-3"></span>
                 Common holidays (New Year, Christmas, etc.)
               </li>
               <li className="flex items-center">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-3"></span>
+                <span className="w-1.5 h-1.5 bg-theme-secondary rounded-full mr-3"></span>
                 Date pattern recognition
               </li>
               <li className="flex items-center">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-3"></span>
+                <span className="w-1.5 h-1.5 bg-theme-secondary rounded-full mr-3"></span>
                 Duplicate prevention
               </li>
             </ul>

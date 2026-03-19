@@ -38,7 +38,7 @@ const NotFound = () => {
           <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center">
             <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center">
               <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                <div className="w-8 h-8 bg-blue-500 rounded-full"></div>
+                <div className="w-8 h-8 bg-theme-secondary rounded-full"></div>
               </div>
             </div>
           </div>
@@ -49,7 +49,7 @@ const NotFound = () => {
       {/* Main Content */}
       <div className="text-center px-4 z-10 relative">
         <h1 className="text-8xl md:text-9xl font-bold text-white mb-4 animate-pulse">
-          4<span className="text-blue-400">0</span>4
+          4<span className="text-theme-secondary">0</span>4
         </h1>
         
         <p className="text-xl md:text-2xl text-gray-300 mb-8">

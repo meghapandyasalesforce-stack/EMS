@@ -369,8 +369,8 @@ const EnhancedAttendanceBox = () => {
 
       {/* Location Info */}
       {location && (
-        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-          <div className="flex items-center text-sm text-blue-700">
+        <div className="mb-4 p-3 bg-theme-secondary/10 rounded-lg">
+          <div className="flex items-center text-sm text-theme-secondary">
             <FiMapPin className="mr-2" />
             <span>Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</span>
           </div>
@@ -379,8 +379,8 @@ const EnhancedAttendanceBox = () => {
 
       {/* Network Info */}
       {networkInfo && (
-        <div className="mb-4 p-3 bg-green-50 rounded-lg">
-          <div className="flex items-center text-sm text-green-700">
+        <div className="mb-4 p-3 bg-theme-primary/10 rounded-lg">
+          <div className="flex items-center text-sm text-theme-primary">
             <FiWifi className="mr-2" />
             <span>Network: {networkInfo.networkType} ({networkInfo.connectionSpeed} Mbps)</span>
           </div>
@@ -395,7 +395,7 @@ const EnhancedAttendanceBox = () => {
         <select
           value={workLocation}
           onChange={(e) => setWorkLocation(e.target.value)}
-          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         >
           <option value="office">Office</option>
           <option value="work_from_home">Work from Home</option>
@@ -404,19 +404,19 @@ const EnhancedAttendanceBox = () => {
 
       {/* Current Session Display */}
       {currentSession && (
-        <div className="mb-4 p-4 bg-green-50 rounded-lg">
+        <div className="mb-4 p-4 bg-theme-primary/10 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-800">Currently Clocked In</p>
-              <p className="text-xs text-green-600">
+              <p className="text-sm font-medium text-theme-primary">Currently Clocked In</p>
+              <p className="text-xs text-theme-primary">
                 Since: {formatTime(currentSession.clockIn)}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm font-medium text-green-800">
+              <p className="text-sm font-medium text-theme-primary">
                 {formatDuration(Math.floor((new Date() - new Date(currentSession.clockIn)) / 1000))}
               </p>
-              <p className="text-xs text-green-600">Elapsed Time</p>
+              <p className="text-xs text-theme-primary">Elapsed Time</p>
             </div>
           </div>
         </div>
@@ -428,7 +428,7 @@ const EnhancedAttendanceBox = () => {
           <button
             onClick={handleClockIn}
             disabled={loading}
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
+            className="w-full bg-theme-primary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
           >
             <FiCamera className="mr-2" />
             {loading ? 'Processing...' : 'Clock In with Photo'}
@@ -457,7 +457,7 @@ const EnhancedAttendanceBox = () => {
               <button
                 onClick={handleBreakOut}
                 disabled={loading}
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
+                className="w-full bg-theme-secondary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
               >
                 <FiPlay className="mr-2" />
                 End Break
@@ -470,7 +470,7 @@ const EnhancedAttendanceBox = () => {
       {/* Notification */}
       {notification.show && (
         <div className={`mt-4 p-3 rounded-lg ${
-          notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          notification.type === 'success' ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'
         }`}>
           {notification.message}
         </div>

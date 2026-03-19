@@ -192,7 +192,7 @@ const LeavePolicyManagement = () => {
                             resetForm();
                         }
                     }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className="bg-theme-primary text-white px-4 py-2 rounded-lg hover:opacity-90"
                 >
                     {showForm ? 'Cancel' : (policies.length > 0 ? 'Update Policy' : 'Create Policy')}
                 </button>
@@ -260,7 +260,7 @@ const LeavePolicyManagement = () => {
                             <button
                                 type="button"
                                 onClick={addLeaveType}
-                                className="text-blue-600 hover:text-blue-700 text-sm"
+                                className="text-theme-secondary hover:text-theme-secondary text-sm"
                             >
                                 + Add Leave Type
                             </button>
@@ -613,7 +613,7 @@ const LeavePolicyManagement = () => {
                                         ]
                                     });
                                 }}
-                                className="text-blue-600 hover:text-blue-700 text-sm"
+                                className="text-theme-secondary hover:text-theme-secondary text-sm"
                             >
                                 + Add Blackout Period
                             </button>
@@ -695,7 +695,7 @@ const LeavePolicyManagement = () => {
                     <div className="flex gap-4">
                         <button
                             type="submit"
-                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                            className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90"
                             disabled={loading}
                         >
                             {loading ? 'Saving...' : 'Save Policy'}
@@ -735,7 +735,7 @@ const LeavePolicyManagement = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap capitalize">{policy.applicableTo}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 py-1 rounded ${policy.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    <span className={`px-2 py-1 rounded ${policy.isActive ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'}`}>
                                         {policy.isActive ? 'Active' : 'Inactive'}
                                     </span>
                                 </td>
@@ -746,7 +746,7 @@ const LeavePolicyManagement = () => {
                                             setFormData(policy);
                                             setShowForm(true);
                                         }}
-                                        className="text-blue-600 hover:text-blue-800 mr-3"
+                                        className="text-theme-secondary hover:text-theme-secondary mr-3"
                                     >
                                         Edit
                                     </button>

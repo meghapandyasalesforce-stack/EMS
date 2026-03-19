@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt } from 'react-icons/fa';
+import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
 import AttendanceRules from '../Attendance/AttendanceRules';
 import NotificationSettings from './NotificationSettings';
 import EmailSettings from './EmailSettings';
 import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
+import ThemeSettings from './ThemeSettings';
 import { toast } from 'react-toastify';
 import {
     fetchOrganizationProfile,
@@ -62,6 +63,12 @@ const AdminSettings = () => {
             component: <ReportsSettings />
         },
         {
+            id: 'theme',
+            name: 'Theme & Branding',
+            icon: <FaPalette />,
+            component: <ThemeSettings />
+        },
+        {
             id: 'general',
             name: 'General Settings',
             icon: <FaCog />,
@@ -72,12 +79,12 @@ const AdminSettings = () => {
     const activeComponent = settingsTabs.find(tab => tab.id === activeTab)?.component;
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
             <div className="max-w-6xl mx-auto space-y-6 lg:space-y-8 p-4 md:p-6 lg:p-8">
                 {/* Header */}
                 <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                     <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                        <FaCog className="mr-3 text-blue-600" />
+                        <FaCog className="mr-3 text-[var(--color-primary)]" />
                         Admin Settings
                     </h1>
                     <p className="text-gray-600 mt-2">Manage system settings and configurations</p>
@@ -95,7 +102,7 @@ const AdminSettings = () => {
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                                             activeTab === tab.id
-                                                ? 'bg-blue-600 text-white'
+                                                ? 'bg-[var(--color-primary)] text-white'
                                                 : 'text-gray-700 hover:bg-gray-100'
                                         }`}
                                     >
@@ -128,7 +135,7 @@ const SecuritySettings = () => (
             <div className="p-4 bg-gray-50 rounded-lg">
                 <h3 className="font-medium mb-2">Password Policy</h3>
                 <p className="text-sm text-gray-600">Configure password requirements for all users</p>
-                <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <button className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90">
                     Configure
                 </button>
             </div>
@@ -143,7 +150,7 @@ const PermissionsSettings = () => (
             <div className="p-4 bg-gray-50 rounded-lg">
                 <h3 className="font-medium mb-2">Role-based Access Control</h3>
                 <p className="text-sm text-gray-600">Manage access permissions for different user roles</p>
-                <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <button className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90">
                     Manage Roles
                 </button>
             </div>
@@ -158,7 +165,7 @@ const ReportsSettings = () => (
             <div className="p-4 bg-gray-50 rounded-lg">
                 <h3 className="font-medium mb-2">Report Generation</h3>
                 <p className="text-sm text-gray-600">Configure report settings and schedules</p>
-                <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <button className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90">
                     Configure Reports
                 </button>
             </div>
@@ -321,7 +328,7 @@ const GeneralSettingsContent = () => {
     if (loading && !profile) {
         return (
             <div className="p-6">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-primary mx-auto" style={{ borderBottomColor: 'var(--color-primary)' }}></div>
             </div>
         );
     }
@@ -333,7 +340,7 @@ const GeneralSettingsContent = () => {
                 <button
                     onClick={handleSaveSettings}
                     disabled={isSaving}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                 >
                     {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>
@@ -355,7 +362,7 @@ const GeneralSettingsContent = () => {
                         className="ml-4"
                     >
                         {settings.allowEmployeeRegistration ? (
-                            <FiToggleRight className="w-12 h-6 text-green-600" />
+                            <FiToggleRight className="w-12 h-6 text-theme-primary" />
                         ) : (
                             <FiToggleLeft className="w-12 h-6 text-gray-400" />
                         )}
@@ -377,7 +384,7 @@ const GeneralSettingsContent = () => {
                         className="ml-4"
                     >
                         {settings.requireEmailVerification ? (
-                            <FiToggleRight className="w-12 h-6 text-green-600" />
+                            <FiToggleRight className="w-12 h-6 text-theme-primary" />
                         ) : (
                             <FiToggleLeft className="w-12 h-6 text-gray-400" />
                         )}
@@ -399,7 +406,7 @@ const GeneralSettingsContent = () => {
                         className="ml-4"
                     >
                         {settings.allowSelfService ? (
-                            <FiToggleRight className="w-12 h-6 text-green-600" />
+                            <FiToggleRight className="w-12 h-6 text-theme-primary" />
                         ) : (
                             <FiToggleLeft className="w-12 h-6 text-gray-400" />
                         )}
@@ -461,15 +468,16 @@ const GeneralSettingsContent = () => {
 
             {/* Migration Status Banner */}
             {showMigrationStatus && (
-                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
-                    <FaCheckCircle className="text-green-600 mr-3 text-xl" />
+                <div className="mt-6 p-4 rounded-lg flex items-center border" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-primary) 40%, transparent)' }}>
+                    <FaCheckCircle className="mr-3 text-xl" style={{ color: 'var(--color-primary)' }} />
                     <div className="flex-1">
-                        <p className="text-green-800 font-semibold">Employee ID Migration Completed</p>
-                        <p className="text-green-700 text-sm">All employee IDs have been successfully updated to the new format.</p>
+                        <p className="font-semibold text-[var(--color-text)]">Employee ID Migration Completed</p>
+                        <p className="text-sm opacity-80 text-[var(--color-text)]">All employee IDs have been successfully updated to the new format.</p>
                     </div>
                     <button
                         onClick={() => setShowMigrationStatus(false)}
-                        className="text-green-600 hover:text-green-800"
+                        className="hover:opacity-80 transition-opacity"
+                        style={{ color: 'var(--color-primary)' }}
                     >
                         <FiX className="text-xl" />
                     </button>
@@ -495,7 +503,7 @@ const GeneralSettingsContent = () => {
                                     <li>Replace current IDs (e.g., "EMP-RAD-2025-7780") with the new format</li>
                                     <li>Assign sequential IDs starting from your configured start number</li>
                                 </ul>
-                                <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                                <div className="bg-theme-secondary/10 border border-theme-secondary rounded p-3">
                                     <p className="text-sm text-gray-700">
                                         <strong>New Format Preview:</strong> {pendingSettings?.employeeIdPrefix || 'EMP'}
                                         {String(pendingSettings?.employeeIdStartNumber || 1).padStart(pendingSettings?.employeeIdMinDigits || 3, '0')}
@@ -514,7 +522,7 @@ const GeneralSettingsContent = () => {
                                 <button
                                     onClick={handleConfirmMigration}
                                     disabled={isSaving}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                                 >
                                     {isSaving ? 'Migrating...' : 'Confirm & Migrate'}
                                 </button>

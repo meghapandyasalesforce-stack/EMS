@@ -109,7 +109,7 @@ const NotificationSettings = () => {
         return (
             <div className="p-6">
                 <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
                 </div>
             </div>
         );
@@ -119,7 +119,7 @@ const NotificationSettings = () => {
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                    <FaBell className="mr-3 text-blue-600" />
+                    <FaBell className="mr-3 text-theme-secondary" />
                     Notification Settings
                 </h2>
                 <div className="flex space-x-3">
@@ -133,7 +133,7 @@ const NotificationSettings = () => {
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center disabled:opacity-50"
+                        className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition flex items-center disabled:opacity-50"
                     >
                         <FaSave className="mr-2" />
                         {saving ? 'Saving...' : 'Save Settings'}
@@ -145,7 +145,7 @@ const NotificationSettings = () => {
                 {/* Email Notifications */}
                 <div className="bg-gray-50 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <FaEnvelope className="mr-2 text-blue-600" />
+                        <FaEnvelope className="mr-2 text-theme-secondary" />
                         Email Notifications
                     </h3>
                     <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
@@ -160,7 +160,7 @@ const NotificationSettings = () => {
                                 checked={settings.emailNotifications}
                                 onChange={(e) => handleToggle('emailNotifications', e.target.checked)}
                             />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-primary"></div>
                         </label>
                     </div>
                 </div>
@@ -168,7 +168,7 @@ const NotificationSettings = () => {
                 {/* Task Notifications */}
                 <div className="bg-gray-50 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <FaTasks className="mr-2 text-green-600" />
+                        <FaTasks className="mr-2 text-theme-primary" />
                         Task Notifications
                     </h3>
                     
@@ -185,7 +185,7 @@ const NotificationSettings = () => {
                                 checked={settings.taskNotifications.enabled}
                                 onChange={(e) => handleToggle('taskNotifications.enabled', e.target.checked)}
                             />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-primary"></div>
                         </label>
                     </div>
 
@@ -207,7 +207,7 @@ const NotificationSettings = () => {
                                                 checked={settings.taskNotifications.taskCreated}
                                                 onChange={(e) => handleToggle('taskNotifications.taskCreated', e.target.checked)}
                                             />
-                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -222,7 +222,7 @@ const NotificationSettings = () => {
                                                 checked={settings.taskNotifications.taskUpdated}
                                                 onChange={(e) => handleToggle('taskNotifications.taskUpdated', e.target.checked)}
                                             />
-                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -237,7 +237,7 @@ const NotificationSettings = () => {
                                                 checked={settings.taskNotifications.taskCompleted}
                                                 onChange={(e) => handleToggle('taskNotifications.taskCompleted', e.target.checked)}
                                             />
-                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
                                 </div>
@@ -262,7 +262,7 @@ const NotificationSettings = () => {
                                                 checked={settings.taskNotifications.notifyAdmins}
                                                 onChange={(e) => handleToggle('taskNotifications.notifyAdmins', e.target.checked)}
                                             />
-                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -277,7 +277,7 @@ const NotificationSettings = () => {
                                                 checked={settings.taskNotifications.notifyManagers}
                                                 onChange={(e) => handleToggle('taskNotifications.notifyManagers', e.target.checked)}
                                             />
-                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -292,7 +292,7 @@ const NotificationSettings = () => {
                                                 checked={settings.taskNotifications.notifyProjectManagers}
                                                 onChange={(e) => handleToggle('taskNotifications.notifyProjectManagers', e.target.checked)}
                                             />
-                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
                                 </div>
@@ -320,7 +320,7 @@ const NotificationSettings = () => {
                                 checked={settings.generalNotifications.enabled}
                                 onChange={(e) => handleToggle('generalNotifications.enabled', e.target.checked)}
                             />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-primary"></div>
                         </label>
                     </div>
 
@@ -338,7 +338,7 @@ const NotificationSettings = () => {
                                         checked={settings.generalNotifications.systemUpdates}
                                         onChange={(e) => handleToggle('generalNotifications.systemUpdates', e.target.checked)}
                                     />
-                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                 </label>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm">
@@ -353,7 +353,7 @@ const NotificationSettings = () => {
                                         checked={settings.generalNotifications.announcements}
                                         onChange={(e) => handleToggle('generalNotifications.announcements', e.target.checked)}
                                     />
-                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                 </label>
                             </div>
                         </div>
@@ -384,7 +384,7 @@ const NotificationSettings = () => {
                                 <h4 className="font-medium text-gray-900">Enable Push Notifications</h4>
                                 <p className="text-sm text-gray-600">Receive real-time push notifications in the browser</p>
                                 {isSubscribed && (
-                                    <p className="text-xs text-green-600 mt-1">✓ Push notifications are active</p>
+                                    <p className="text-xs text-theme-primary mt-1">✓ Push notifications are active</p>
                                 )}
                                 {!isSubscribed && isSupported && !pushLoading && (
                                     <p className="text-xs text-gray-500 mt-1">Click to enable browser push notifications</p>
@@ -392,7 +392,7 @@ const NotificationSettings = () => {
                             </div>
                             <div className="flex items-center space-x-3">
                                 {pushLoading && (
-                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-theme-secondary"></div>
                                 )}
                                 <label className="relative inline-flex items-center cursor-pointer">
                                     <input
@@ -416,7 +416,7 @@ const NotificationSettings = () => {
                                             }
                                         }}
                                     />
-                                    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${!isSupported || pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+                                    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-theme-primary ${!isSupported || pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
                                 </label>
                             </div>
                         </div>
@@ -433,7 +433,7 @@ const NotificationSettings = () => {
                         <select
                             value={settings.frequency}
                             onChange={(e) => handleToggle('frequency', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                         >
                             <option value="immediate">Immediate</option>
                             <option value="hourly">Hourly Digest</option>

@@ -72,7 +72,7 @@ const ContactDetails = () => {
                                     name="phone1"
                                     value={formData.phone1}
                                     onChange={handleChange}
-                                    className="w-full p-2 md:p-2.5 border rounded bg-blue-50 text-sm"
+                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
                                     required
                                 />
                             </div>
@@ -83,7 +83,7 @@ const ContactDetails = () => {
                                     name="phone2"
                                     value={formData.phone2}
                                     onChange={handleChange}
-                                    className="w-full p-2 md:p-2.5 border rounded bg-blue-50 text-sm"
+                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
                                 />
                             </div>
                         </div>
@@ -95,7 +95,7 @@ const ContactDetails = () => {
                                 name="personalEmail"
                                 value={formData.personalEmail}
                                 onChange={handleChange}
-                                className="w-full p-2 md:p-2.5 border rounded bg-blue-50 text-sm"
+                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
                                 required
                             />
                         </div>
@@ -106,7 +106,7 @@ const ContactDetails = () => {
                                 name="address"
                                 value={formData.address}
                                 onChange={handleChange}
-                                className="w-full p-2 md:p-2.5 border rounded bg-blue-50 text-sm resize-none"
+                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm resize-none"
                                 rows={4}
                                 required
                             />
@@ -116,7 +116,7 @@ const ContactDetails = () => {
                             <button
                                 type="submit"
                                 disabled={updatingInfo}
-                                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 sm:px-6 rounded"
+                                className="bg-theme-primary hover:bg-theme-primary text-white font-semibold py-2 px-4 sm:px-6 rounded"
                             >
                                 {updatingInfo ? 'Saving...' : 'Save'}
                             </button>
@@ -141,7 +141,7 @@ const ContactDetails = () => {
                         </div>
                         <button
                             onClick={() => setIsEditing(true)}
-                            className="mt-5 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded w-full sm:w-auto"
+                            className="mt-5 bg-theme-secondary hover:bg-theme-primary text-white font-semibold py-2 px-4 rounded w-full sm:w-auto"
                         >
                             Edit
                         </button>

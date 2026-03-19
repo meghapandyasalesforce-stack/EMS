@@ -264,17 +264,17 @@ function Login() {
         <div className="flex justify-center items-center min-h-screen bg-cover bg-center bg-fixed"
              style={{ backgroundImage: "url('../media/Untitled-2 (2).png')" }}>
             <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm text-center">
-                <h1 className="text-2xl font-bold text-green-500 mb-2">Login</h1>
-                <p className="text-green-500 mb-5">Login to your account.</p>
+                <h1 className="text-2xl font-bold mb-2 text-theme-primary" style={{ color: 'var(--color-primary)' }}>Login</h1>
+                <p className="mb-5 text-theme-primary opacity-90" style={{ color: 'var(--color-primary)' }}>Login to your account.</p>
 
                 {/* Show login type indicator */}
                 {loginType === 'organization' && (
-                    <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                    <div className="mb-4 p-2 rounded text-sm border border-theme-secondary bg-theme-secondary/10 text-theme-secondary" style={{ borderColor: 'var(--color-secondary)', backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)', color: 'var(--color-secondary)' }}>
                         <p>Organization email detected. Will try Organization Login first.</p>
                     </div>
                 )}
                 {loginType === 'employee_admin' && (
-                    <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                    <div className="mb-4 p-2 rounded text-sm border border-theme-primary bg-theme-primary/10 text-theme-primary" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', color: 'var(--color-primary)' }}>
                         <p>Organization domain detected. Will try Employee/Admin Login.</p>
                     </div>
                 )}
@@ -288,11 +288,11 @@ function Login() {
                             onChange={handleChange}
                             value={form.email}
                             required
-                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                         />
                         {isCheckingEmail && (
                             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-theme-primary" style={{ borderBottomColor: 'var(--color-primary)' }}></div>
                             </div>
                         )}
                     </div>
@@ -323,7 +323,8 @@ function Login() {
                     <button
                         type="submit"
                         disabled={loading || isCheckingEmail}
-                        className={`w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors ${loading || isCheckingEmail ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`w-full py-2 text-white rounded-md transition-colors bg-theme-primary hover:opacity-90 ${loading || isCheckingEmail ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    style={{ backgroundColor: 'var(--color-primary)' }}
                     >
                         {loading ? 'Signing In...' : isCheckingEmail ? 'Checking...' : 'Sign In'}
                     </button>
@@ -331,12 +332,12 @@ function Login() {
 
                 <div className="flex flex-col space-y-2 mt-5">
                     <div className="flex justify-between items-center">
-                        <Link to="/forgot-password" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
+                        <Link to="/forgot-password" className="text-sm hover:underline text-theme-secondary" style={{ color: 'var(--color-secondary)' }}>
                             Forgot Password?
                         </Link>
                     </div>
                     <div className="text-center">
-                        <Link to="/organization/register" className='text-sm text-blue-500 hover:text-blue-700 hover:underline'>
+                        <Link to="/organization/register" className="text-sm hover:underline text-theme-secondary" style={{ color: 'var(--color-secondary)' }}>
                             Register Your Organization
                         </Link>
                     </div>
@@ -355,13 +356,15 @@ function Login() {
                     <div className="space-y-3">
                         <button
                             onClick={() => handleLoginTypeSelection('organization')}
-                            className="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                            className="w-full py-2 text-white rounded-md transition-colors bg-theme-secondary hover:opacity-90"
+                            style={{ backgroundColor: 'var(--color-secondary)' }}
                         >
                             Organization Login
                         </button>
                         <button
                             onClick={() => handleLoginTypeSelection('employee_admin')}
-                            className="w-full py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                            className="w-full py-2 text-white rounded-md transition-colors bg-theme-primary hover:opacity-90"
+                            style={{ backgroundColor: 'var(--color-primary)' }}
                         >
                             Employee/Admin Login
                         </button>

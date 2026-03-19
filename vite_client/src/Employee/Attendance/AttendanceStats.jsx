@@ -120,8 +120,8 @@ const AttendanceStats = () => {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4 flex items-center">
-            <div className="bg-blue-100 p-2 rounded-full mr-3">
-              <FiCalendar className="text-blue-600 text-lg" />
+            <div className="bg-theme-secondary/10 p-2 rounded-full mr-3">
+              <FiCalendar className="text-theme-secondary text-lg" />
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Days</p>
@@ -129,8 +129,8 @@ const AttendanceStats = () => {
             </div>
           </div>
           <div className="bg-white rounded-lg shadow p-4 flex items-center">
-            <div className="bg-green-100 p-2 rounded-full mr-3">
-              <FiClock className="text-green-600 text-lg" />
+            <div className="bg-theme-primary/10 p-2 rounded-full mr-3">
+              <FiClock className="text-theme-primary text-lg" />
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Effective Hours</p>
@@ -164,7 +164,7 @@ const AttendanceStats = () => {
           <h2 className="text-lg font-semibold text-gray-800 mb-3">Work Location Distribution</h2>
           <div className="flex justify-between">
             <div className="text-center">
-              <div className="text-xl font-bold text-blue-600">{workLocationCounts.office}</div>
+              <div className="text-xl font-bold text-theme-secondary">{workLocationCounts.office}</div>
               <div className="text-xs text-gray-500">Office</div>
             </div>
             <div className="text-center">
@@ -237,7 +237,7 @@ const AttendanceStats = () => {
                             Partial
                           </span>
                         ) : (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-theme-primary/10 text-theme-primary">
                             Present
                           </span>
                         )

@@ -106,7 +106,7 @@ const ProfilePicture = ({
             }}
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-inner">
+          <div className="w-full h-full bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-secondary)] to-[var(--color-accent)] flex items-center justify-center shadow-inner">
             <span className={`text-white font-bold ${sizeClasses[size].replace('w-', '')}`}>
               {getInitials()}
             </span>
@@ -117,7 +117,8 @@ const ProfilePicture = ({
       {showEditButton && onEditClick && (
         <button
           onClick={onEditClick}
-          className="absolute -bottom-1 -right-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1 shadow-lg transition-colors"
+          className="absolute -bottom-1 -right-1 text-white rounded-full p-1 shadow-lg transition-colors hover:opacity-90"
+          style={{ backgroundColor: 'var(--color-primary)' }}
           title="Update Profile Photo"
         >
           <FiCamera className="w-3 h-3" />

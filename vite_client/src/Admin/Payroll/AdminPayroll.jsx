@@ -203,6 +203,16 @@ const AdminPayroll = () => {
         return employee.inHandSalary !== undefined && employee.inHandSalary > 0 ? 'Generated' : 'Not Generated';
     };
 
+    // Helper to format amounts in Indian Rupees
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount || 0);
+    };
+
     return (
         <div className="p-5 transition-all duration-300 ease-in-out min-h-screen bg-gray-50">
             {/* Mobile header - only shown on small screens */}
@@ -218,12 +228,12 @@ const AdminPayroll = () => {
                             await dispatch(generatePayrolls({ month: months[selectedMonth].label, year: selectedYear }));
                             dispatch(fetchPayrolls({ month: months[selectedMonth].label, year: selectedYear }));
                         }}
-                        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
+                        className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 text-sm"
                     >
                         Auto Generate
                     </button>
                     <button
-                        className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+                        className="px-3 py-2 bg-theme-secondary text-white rounded disabled:opacity-50"
                         onClick={handleDisburse}
                         disabled={disburseLoading || !isCEO}
                         title={isCEO ? "Disburse in-hand amounts to employees' bank accounts (CEO only)" : "Only CEO can disburse payroll"}
@@ -233,7 +243,7 @@ const AdminPayroll = () => {
                     <Link to="/add-payroll">
                         <button
                             onClick={handleCreatePayroll}
-                            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
+                            className="bg-theme-secondary text-white px-4 py-2 rounded hover:opacity-90 text-sm"
                         >
                             + Create Payroll
                         </button>
@@ -242,7 +252,7 @@ const AdminPayroll = () => {
             </div>
 
             {disburseResult && (
-                <div className={`p-3 rounded mb-4 ${disburseResult.success ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div className={`p-3 rounded mb-4 ${disburseResult.success ? 'bg-theme-primary/10' : 'bg-red-50'}`}>
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="font-medium">{disburseResult.success ? 'Disbursement complete' : 'Disbursement failed'}</div>
@@ -278,9 +288,9 @@ const AdminPayroll = () => {
                                         <tr key={idx} className="border-t">
                                             <td className="px-2 py-1">{r.employeeName || r.employee}</td>
                                             <td className="px-2 py-1">{r.employeeEmail || '-'}</td>
-                                            <td className="px-2 py-1">${`$${(r.amount || 0).toLocaleString()}`}</td>
+                                            <td className="px-2 py-1">{formatCurrency(r.amount || 0)}</td>
                                             <td className="px-2 py-1">
-                                                <span className={`px-2 py-0.5 rounded text-white ${r.status === 'Success' ? 'bg-green-600' : 'bg-red-600'}`}>
+                                                <span className={`px-2 py-0.5 rounded text-white ${r.status === 'Success' ? 'bg-theme-primary' : 'bg-red-600'}`}>
                                                     {r.status}
                                                 </span>
                                             </td>
@@ -363,13 +373,13 @@ const AdminPayroll = () => {
                                     return (
                                         <tr key={employee._id || employee.employeeId || `employee-${index}`} className="hover:bg-gray-50">
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.name}</td>
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">${employee.totalEarnings}</td>
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.totalEarnings)}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">${employee.inHandSalary}</td>
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.inHandSalary)}</td>
                                             <td className="py-2 px-2 sm:px-4">
                                                 <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full text-xs font-medium ${
                                                     status === 'Generated' 
-                                                        ? 'bg-green-100 text-green-800' 
+                                                        ? 'bg-theme-primary/10 text-theme-primary' 
                                                         : 'bg-red-100 text-red-800'
                                                 }`}>
                                                     {status}
@@ -378,13 +388,13 @@ const AdminPayroll = () => {
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">
                                                 <div className="flex space-x-2">
                                                     <button
-                                                        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
+                                                        className="bg-theme-primary text-white px-3 py-1 rounded hover:opacity-90 text-sm"
                                                         onClick={() => handleViewDetails(employee)}
                                                     >
                                                         View Details
                                                     </button>
                                                     <Link to={`/admin-employee-payroll/${employee.employeeId}`}>
-                                                        <button className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm">
+                                                        <button className="bg-theme-secondary text-white px-3 py-1 rounded hover:opacity-90 text-sm">
                                                             Manage Payroll
                                                         </button>
                                                     </Link>
@@ -433,7 +443,7 @@ const AdminPayroll = () => {
                                         <p><span className="font-medium">Status:</span> 
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ml-2 ${
                                                 getPayrollStatus(selectedEmployee) === 'Generated' 
-                                                    ? 'bg-green-100 text-green-800' 
+                                                    ? 'bg-theme-primary/10 text-theme-primary' 
                                                     : 'bg-red-100 text-red-800'
                                             }`}>
                                                 {getPayrollStatus(selectedEmployee)}
@@ -445,10 +455,10 @@ const AdminPayroll = () => {
                                 <div>
                                     <h4 className="font-medium text-gray-700 mb-2">Salary Breakdown</h4>
                                     <div className="space-y-2">
-                                        <p><span className="font-medium">Basic Salary:</span> ${selectedEmployee.basicSalary || '0'}</p>
-                                        <p><span className="font-medium">Allowances:</span> ${selectedEmployee.totalEarnings || '0'}</p>
-                                        <p><span className="font-medium">Deductions:</span> ${selectedEmployee.totalDeductions || '0'}</p>
-                                        <p><span className="font-medium">Net Salary:</span> ${selectedEmployee.inHandSalary || '0'}</p>
+                                        <p><span className="font-medium">Basic Salary:</span> {formatCurrency(selectedEmployee.basicSalary || 0)}</p>
+                                        <p><span className="font-medium">Allowances:</span> {formatCurrency(selectedEmployee.totalEarnings || 0)}</p>
+                                        <p><span className="font-medium">Deductions:</span> {formatCurrency(selectedEmployee.totalDeductions || 0)}</p>
+                                        <p><span className="font-medium">Net Salary:</span> {formatCurrency(selectedEmployee.inHandSalary || 0)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -461,7 +471,7 @@ const AdminPayroll = () => {
                                             {selectedEmployee.allowances.map((allowance, index) => (
                                                 <li key={index} className="py-2 flex justify-between">
                                                     <span>{allowance.type}:</span>
-                                                    <span>${allowance.amount}</span>
+                                                    <span>{formatCurrency(allowance.amount)}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -479,7 +489,7 @@ const AdminPayroll = () => {
                                             {selectedEmployee.deductions.map((deduction, index) => (
                                                 <li key={index} className="py-2 flex justify-between">
                                                     <span>{deduction.type}:</span>
-                                                    <span>${deduction.amount}</span>
+                                                    <span>{formatCurrency(deduction.amount)}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -501,7 +511,7 @@ const AdminPayroll = () => {
                                     onClick={() => {
                                         closeDialog();
                                     }}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-md hover:opacity-90"
                                 >
                                     Edit Payroll
                                 </button> </Link>

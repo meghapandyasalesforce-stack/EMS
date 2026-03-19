@@ -40,7 +40,7 @@ const HelpdeskPage = () => {
                         <h1 className="text-3xl font-bold text-gray-800">HR Helpdesk</h1>
                         <p className="text-gray-600 mt-1">Manage employee tickets</p>
                     </div>
-                    <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2">
+                    <button className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2">
                         <FaPlus className="w-4 h-4" />
                         New Ticket
                     </button>
@@ -54,7 +54,7 @@ const HelpdeskPage = () => {
                                 onClick={() => setFilter(status.toLowerCase())}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                                     filter === status.toLowerCase() 
-                                        ? 'bg-blue-500 text-white' 
+                                        ? 'bg-theme-secondary text-white' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
@@ -83,7 +83,7 @@ const HelpdeskPage = () => {
                                     <td className="px-6 py-4 font-mono text-sm">{ticket.ticketNumber}</td>
                                     <td className="px-6 py-4">{ticket.subject}</td>
                                     <td className="px-6 py-4">
-                                        <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                                        <span className="px-2 py-1 rounded text-xs bg-theme-secondary/10 text-theme-secondary">
                                             {ticket.category}
                                         </span>
                                     </td>
@@ -99,9 +99,9 @@ const HelpdeskPage = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded text-xs ${
-                                            ticket.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                                            ticket.status === 'Resolved' ? 'bg-theme-primary/10 text-theme-primary' :
                                             ticket.status === 'Open' ? 'bg-yellow-100 text-yellow-800' :
-                                            ticket.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                            ticket.status === 'In Progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
                                             'bg-gray-100 text-gray-800'
                                         }`}>
                                             {ticket.status}
@@ -109,7 +109,7 @@ const HelpdeskPage = () => {
                                     </td>
                                     <td className="px-6 py-4">{ticket.requestedBy?.name || 'N/A'}</td>
                                     <td className="px-6 py-4">
-                                        <button className="text-blue-600 hover:text-blue-800">
+                                        <button className="text-theme-secondary hover:text-theme-secondary">
                                             View
                                         </button>
                                     </td>

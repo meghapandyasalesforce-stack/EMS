@@ -22,9 +22,9 @@ const OrganizationLogin = () => {
 
     // Show loading while redirecting
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center">
             <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
                 <p className="text-gray-600">Redirecting to login...</p>
             </div>
         </div>
@@ -103,11 +103,11 @@ const OrganizationLogin = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
-                        <FaBuilding className="h-12 w-12 text-blue-600" />
+                        <FaBuilding className="h-12 w-12 text-theme-primary" />
                     </div>
                     <h2 className="text-3xl font-extrabold text-gray-900">
                         Organization Login
@@ -136,7 +136,7 @@ const OrganizationLogin = () => {
                                     required
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                                     placeholder="your-email@example.com"
                                 />
                             </div>
@@ -159,7 +159,7 @@ const OrganizationLogin = () => {
                                     required
                                     value={formData.password}
                                     onChange={handleChange}
-                                    className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                                     placeholder="Enter your password"
                                 />
                                 <button
@@ -179,7 +179,7 @@ const OrganizationLogin = () => {
 
                     <div className="flex items-center justify-between">
                         <div className="text-sm">
-                            <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
+                            <Link to="/forgot-password" className="font-medium text-theme-primary hover:text-theme-secondary">
                                 Forgot password?
                             </Link>
                         </div>
@@ -189,7 +189,7 @@ const OrganizationLogin = () => {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-theme-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             {isSubmitting ? (
                                 <span className="flex items-center">
@@ -208,13 +208,13 @@ const OrganizationLogin = () => {
                     <div className="text-center space-y-2">
                         <p className="text-sm text-gray-600">
                             Don't have an organization account?{' '}
-                            <Link to="/organization/register" className="font-medium text-blue-600 hover:text-blue-500">
+                            <Link to="/organization/register" className="font-medium text-theme-primary hover:text-theme-secondary">
                                 Register your organization
                             </Link>
                         </p>
                         <p className="text-sm text-gray-600">
                             Regular user?{' '}
-                            <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                            <Link to="/login" className="font-medium text-theme-primary hover:text-theme-secondary">
                                 Employee/Admin Login
                             </Link>
                         </p>

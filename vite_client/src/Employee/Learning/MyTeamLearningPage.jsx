@@ -74,7 +74,7 @@ const MyTeamLearningPage = () => {
             case 'Document':
                 return <FaFilePdf className="text-red-500" />;
             case 'Link':
-                return <FaLink className="text-blue-500" />;
+                return <FaLink className="text-theme-secondary" />;
             case 'YouTube':
                 return <FaYoutube className="text-red-500" />;
             default:
@@ -84,8 +84,8 @@ const MyTeamLearningPage = () => {
 
     const getCategoryColor = (category) => {
         const colors = {
-            'Technical': 'bg-blue-100 text-blue-800',
-            'Soft Skills': 'bg-green-100 text-green-800',
+            'Technical': 'bg-theme-secondary/10 text-theme-secondary',
+            'Soft Skills': 'bg-theme-primary/10 text-theme-primary',
             'Leadership': 'bg-purple-100 text-purple-800',
             'Compliance': 'bg-red-100 text-red-800',
             'Other': 'bg-gray-100 text-gray-800'
@@ -124,7 +124,7 @@ const MyTeamLearningPage = () => {
                                 onClick={() => setFilterCategory(category)}
                                 className={`px-4 py-2 font-medium text-sm transition-colors ${
                                     filterCategory === category
-                                        ? 'border-b-2 border-blue-500 text-blue-600'
+                                        ? 'border-b-2 border-theme-secondary text-theme-secondary'
                                         : 'text-gray-600 hover:text-gray-800'
                                 }`}
                             >
@@ -174,7 +174,7 @@ const MyTeamLearningPage = () => {
                                                                 href={resource.url}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="text-blue-600 hover:underline"
+                                                                className="text-theme-secondary hover:underline"
                                                             >
                                                                 <FaDownload className="text-xs" />
                                                             </a>
@@ -214,7 +214,7 @@ const MyTeamLearningPage = () => {
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-2">
                                                 <div 
-                                                    className="bg-blue-600 h-2 rounded-full transition-all"
+                                                    className="bg-theme-primary h-2 rounded-full transition-all"
                                                     style={{ width: `${learning.progress || 0}%` }}
                                                 ></div>
                                             </div>
@@ -242,7 +242,7 @@ const MyTeamLearningPage = () => {
                                                 updateProgress(learning._id, newProgress);
                                             }}
                                             disabled={updatingProgress === learning._id}
-                                            className="w-full mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                            className="w-full mt-4 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
                                             {updatingProgress === learning._id ? (
                                                 <>

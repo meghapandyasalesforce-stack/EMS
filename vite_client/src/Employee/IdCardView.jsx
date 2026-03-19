@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiCreditCard, FiDownload, FiUser, FiCalendar, FiMapPin, FiBriefcase, FiTag } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
+import { FiCreditCard, FiDownload, FiUser, FiCalendar, FiMapPin, FiBriefcase, FiTag, FiArrowLeft } from 'react-icons/fi';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
@@ -38,6 +39,7 @@ const IdCardView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const cardRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchIdCard();
@@ -236,7 +238,7 @@ const IdCardView = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      active: 'text-green-600 bg-green-100',
+      active: 'text-theme-primary bg-theme-primary/10',
       expired: 'text-red-600 bg-red-100',
       suspended: 'text-yellow-600 bg-yellow-100',
       cancelled: 'text-gray-600 bg-gray-100'
@@ -250,7 +252,7 @@ const IdCardView = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your ID card...</p>
         </div>
       </div>
@@ -266,7 +268,7 @@ const IdCardView = () => {
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={fetchIdCard}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
           >
             Try Again
           </button>
@@ -291,9 +293,29 @@ const IdCardView = () => {
     <div className="min-h-screen bg-gray-50 py-8" ref={cardRef}>
       <div className="max-w-4xl mx-auto px-4">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">My ID Card</h1>
-          <p className="text-gray-600">View and download your employee identification card</p>
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              aria-label="Go back"
+            >
+              <FiArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-1">My ID Card</h1>
+              <p className="text-gray-600 text-sm">View and download your employee identification card</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="hidden sm:inline-flex items-center px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors text-sm"
+          >
+            <FiDownload className="w-4 h-4 mr-2" />
+            Download
+          </button>
         </div>
 
         {/* ID Card Display */}
@@ -428,7 +450,7 @@ const IdCardView = () => {
               <div className="mt-6 text-center">
                 <button
                   onClick={handleDownload}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
                 >
                   <FiDownload className="w-4 h-4 mr-2" />
                   Download ID Card

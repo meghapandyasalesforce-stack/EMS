@@ -91,7 +91,7 @@ const SubscriptionManagement = () => {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
@@ -110,17 +110,17 @@ const SubscriptionManagement = () => {
 
                 {/* Current Plan Banner */}
                 {currentPlan && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+                    <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-6 mb-8">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-lg font-semibold text-blue-900">Current Plan</h3>
-                                <p className="text-blue-700">
+                                <h3 className="text-lg font-semibold text-[var(--color-text)]">Current Plan</h3>
+                                <p className="text-theme-secondary">
                                     You are currently on the <strong>{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong> plan
                                 </p>
                             </div>
                             <div className="flex items-center space-x-2">
-                                <FiCalendar className="w-5 h-5 text-blue-600" />
-                                <span className="text-blue-700">Active</span>
+                                <FiCalendar className="w-5 h-5 text-theme-secondary" />
+                                <span className="text-theme-secondary">Active</span>
                             </div>
                         </div>
                     </div>
@@ -138,12 +138,12 @@ const SubscriptionManagement = () => {
                                 key={plan.id}
                                 className={`relative bg-white rounded-lg shadow-lg border-2 overflow-hidden ${
                                     isCurrent
-                                        ? 'border-blue-600 ring-2 ring-blue-200'
+                                        ? 'border-theme-secondary ring-2 ring-blue-200'
                                         : 'border-gray-200'
                                 }`}
                             >
                                 {isCurrent && (
-                                    <div className="absolute top-0 left-0 right-0 bg-blue-600 text-white text-center py-1 text-sm font-semibold">
+                                    <div className="absolute top-0 left-0 right-0 bg-theme-primary text-white text-center py-1 text-sm font-semibold">
                                         Current Plan
                                     </div>
                                 )}
@@ -185,7 +185,7 @@ const SubscriptionManagement = () => {
                                                     handleUpgrade(plan.id);
                                                 }}
                                                 disabled={upgrading}
-                                                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
+                                                className="w-full px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50 flex items-center justify-center"
                                             >
                                                 {upgrading && selectedPlan === plan.id ? (
                                                     <>
@@ -244,7 +244,7 @@ const SubscriptionManagement = () => {
                                 <FiCreditCard className="w-5 h-5 text-gray-400" />
                                 <span className="text-gray-600">No payment method on file</span>
                             </div>
-                            <button className="mt-2 text-sm text-blue-600 hover:text-blue-700">
+                            <button className="mt-2 text-sm text-theme-secondary hover:text-theme-secondary">
                                 Add Payment Method
                             </button>
                         </div>

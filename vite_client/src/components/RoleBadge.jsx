@@ -12,8 +12,8 @@ const RoleBadge = ({ user, className = '' }) => {
     
     const colorClasses = {
         purple: 'bg-purple-100 text-purple-800 border-purple-200',
-        blue: 'bg-blue-100 text-blue-800 border-blue-200',
-        green: 'bg-green-100 text-green-800 border-green-200',
+        blue: 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary',
+        green: 'bg-theme-primary/10 text-theme-primary border-theme-primary',
         gray: 'bg-gray-100 text-gray-800 border-gray-200'
     };
     

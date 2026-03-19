@@ -7,6 +7,7 @@ import {
     uploadOrganizationLogo,
     deleteOrganizationLogo
 } from '../../context/organizationSlice';
+import { getUploadUrl } from '../../utils/axios';
 import {
     FiMail,
     FiPhone,
@@ -58,8 +59,15 @@ const OrganizationProfile = () => {
                     zipCode: profile.address?.zipCode || ''
                 }
             });
+
+            // Normalize logo URL so it always points to the correct backend /uploads path
             if (profile.logo?.url) {
-                setLogoPreview(profile.logo.url);
+                setLogoPreview(getUploadUrl(profile.logo.url));
+            } else if (profile.logo) {
+                // Handle cases where backend stored only filename or a logo object
+                setLogoPreview(getUploadUrl(profile.logo));
+            } else {
+                setLogoPreview(null);
             }
         }
     }, [profile]);
@@ -131,8 +139,17 @@ const OrganizationProfile = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Make domain clearable: if input is empty, explicitly clear it on the backend
+        const payload = { ...formData };
+        if (!payload.domain || !payload.domain.trim()) {
+            // Send an empty string so backend's updateOrganizationProfile
+            // treats it as "remove domain" and sets organization.domain = undefined
+            payload.domain = '';
+        }
+
         try {
-            await dispatch(updateOrganizationProfile(formData)).unwrap();
+            await dispatch(updateOrganizationProfile(payload)).unwrap();
             toast.success('Organization profile updated successfully');
             setIsEditing(false);
         } catch (error) {
@@ -143,7 +160,7 @@ const OrganizationProfile = () => {
     if (loading && !profile) {
         return (
             <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
@@ -159,7 +176,7 @@ const OrganizationProfile = () => {
                     {!isEditing && (
                         <button
                             onClick={() => setIsEditing(true)}
-                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                            className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90"
                         >
                             <FiEdit2 className="mr-2" />
                             Edit Profile
@@ -209,7 +226,7 @@ const OrganizationProfile = () => {
                                 {logoFile && (
                                     <button
                                         onClick={handleLogoUpload}
-                                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                                        className="px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90"
                                     >
                                         Save Logo
                                     </button>
@@ -236,7 +253,7 @@ const OrganizationProfile = () => {
                                     onChange={handleChange}
                                     disabled={!isEditing}
                                     required
-                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                 />
                             </div>
                         </div>
@@ -255,7 +272,7 @@ const OrganizationProfile = () => {
                                     onChange={handleChange}
                                     disabled={!isEditing}
                                     required
-                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                 />
                             </div>
                         </div>
@@ -273,7 +290,7 @@ const OrganizationProfile = () => {
                                     value={formData.phone}
                                     onChange={handleChange}
                                     disabled={!isEditing}
-                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                 />
                             </div>
                         </div>
@@ -292,7 +309,7 @@ const OrganizationProfile = () => {
                                     onChange={handleChange}
                                     disabled={!isEditing}
                                     placeholder="example.com"
-                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                 />
                             </div>
                         </div>
@@ -312,7 +329,7 @@ const OrganizationProfile = () => {
                                         onChange={handleChange}
                                         disabled={!isEditing}
                                         placeholder="Street Address"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                     />
                                 </div>
                                 <div>
@@ -323,7 +340,7 @@ const OrganizationProfile = () => {
                                         onChange={handleChange}
                                         disabled={!isEditing}
                                         placeholder="City"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                     />
                                 </div>
                                 <div>
@@ -334,7 +351,7 @@ const OrganizationProfile = () => {
                                         onChange={handleChange}
                                         disabled={!isEditing}
                                         placeholder="State/Province"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                     />
                                 </div>
                                 <div>
@@ -345,7 +362,7 @@ const OrganizationProfile = () => {
                                         onChange={handleChange}
                                         disabled={!isEditing}
                                         placeholder="Country"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                     />
                                 </div>
                                 <div>
@@ -356,7 +373,7 @@ const OrganizationProfile = () => {
                                         onChange={handleChange}
                                         disabled={!isEditing}
                                         placeholder="ZIP/Postal Code"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-gray-100"
                                     />
                                 </div>
                             </div>
@@ -420,7 +437,7 @@ const OrganizationProfile = () => {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                    className="flex items-center px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                                 >
                                     <FiSave className="mr-2" />
                                     {loading ? 'Saving...' : 'Save Changes'}

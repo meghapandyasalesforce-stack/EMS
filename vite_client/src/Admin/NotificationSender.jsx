@@ -44,7 +44,7 @@ const NotificationSender = () => {
               ? 'bg-red-100 text-red-800' 
               : message.length > 400 
               ? 'bg-yellow-100 text-yellow-800'
-              : 'bg-blue-100 text-blue-800'
+              : 'bg-theme-secondary/10 text-theme-secondary'
           }`}>
             {message.length}/500
           </span>
@@ -53,7 +53,7 @@ const NotificationSender = () => {
       
       <textarea
         rows={4}
-        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-4 transition-all resize-none text-sm"
+        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary mb-4 transition-all resize-none text-sm"
         placeholder="Type your important announcement here..."
         value={message}
         onChange={(e) => setMessage(e.target.value.slice(0, 500))}
@@ -74,8 +74,8 @@ const NotificationSender = () => {
           disabled={status === 'loading' || !message.trim()}
           className={`px-4 py-2 rounded-md font-medium transition-colors ${
             status === 'loading' || !message.trim()
-              ? 'bg-blue-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700'
+              ? 'bg-theme-secondary cursor-not-allowed'
+              : 'bg-theme-primary hover:opacity-90'
           } text-white text-sm`}
         >
           {status === 'loading' ? (

@@ -115,7 +115,7 @@ const MyRegularizationRequests = () => {
     const getStatusBadge = (status) => {
         const badges = {
             pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-            approved: 'bg-green-100 text-green-800 border-green-200',
+            approved: 'bg-theme-primary/10 text-theme-primary border-theme-primary',
             rejected: 'bg-red-100 text-red-800 border-red-200',
             cancelled: 'bg-gray-100 text-gray-800 border-gray-200'
         };
@@ -148,7 +148,7 @@ const MyRegularizationRequests = () => {
                         </div>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                            className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                         >
                             <FaPlus />
                             New Request
@@ -163,7 +163,7 @@ const MyRegularizationRequests = () => {
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 font-medium text-sm transition-colors ${
                                     filterStatus === status
-                                        ? 'border-b-2 border-blue-500 text-blue-600'
+                                        ? 'border-b-2 border-theme-secondary text-theme-secondary'
                                         : 'text-gray-600 hover:text-gray-800'
                                 }`}
                             >
@@ -179,7 +179,7 @@ const MyRegularizationRequests = () => {
                             <p className="text-gray-600 mb-4">No regularization requests found</p>
                             <button
                                 onClick={() => setShowCreateModal(true)}
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 Create Your First Request
                             </button>
@@ -216,7 +216,7 @@ const MyRegularizationRequests = () => {
                                                     <p className="text-red-600"><strong>Rejection Reason:</strong> {request.rejectionReason}</p>
                                                 )}
                                                 {request.managerResponse && (
-                                                    <p className="text-green-600"><strong>Manager Response:</strong> {request.managerResponse}</p>
+                                                    <p className="text-theme-primary"><strong>Manager Response:</strong> {request.managerResponse}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -344,7 +344,7 @@ const MyRegularizationRequests = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     {submitting ? (
                                         <>

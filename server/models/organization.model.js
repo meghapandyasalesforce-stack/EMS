@@ -273,11 +273,23 @@ const organizationSchema = new mongoose.Schema({
     },
     // Branding
     branding: {
-        primaryColor: { type: String, default: '#3B82F6' },
-        secondaryColor: { type: String, default: '#1E40AF' },
+        primaryColor: { type: String, default: '#16a34a' },
+        secondaryColor: { type: String, default: '#2563eb' },
+        accentColor: { type: String, default: '#f97316' },
+        backgroundColor: { type: String },
+        textColor: { type: String },
         theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'light' },
         customDomain: { type: String }
     },
+    // Saved theme presets so admin can switch back to a previous theme
+    themePresets: [{
+        name: { type: String, required: true },
+        primaryColor: { type: String },
+        secondaryColor: { type: String },
+        accentColor: { type: String },
+        backgroundColor: { type: String },
+        textColor: { type: String }
+    }],
     createdAt: {
         type: Date,
         default: Date.now

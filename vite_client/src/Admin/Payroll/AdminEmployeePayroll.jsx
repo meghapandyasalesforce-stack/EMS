@@ -150,9 +150,9 @@ const AdminEmployeePayroll = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'Paid':
-                return 'text-green-600 bg-green-100';
+                return 'text-theme-primary bg-theme-primary/10';
             case 'Processed':
-                return 'text-blue-600 bg-blue-100';
+                return 'text-theme-secondary bg-theme-secondary/10';
             case 'Pending':
                 return 'text-orange-600 bg-orange-100';
             default:
@@ -177,7 +177,7 @@ const AdminEmployeePayroll = () => {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="flex items-center space-x-2">
-                    <FiLoader className="animate-spin w-6 h-6 text-blue-600" />
+                    <FiLoader className="animate-spin w-6 h-6 text-theme-secondary" />
                     <span className="text-gray-600">Loading payroll data...</span>
                 </div>
             </div>
@@ -199,7 +199,7 @@ const AdminEmployeePayroll = () => {
                         </button>
                         <button
                             onClick={handleCreatePayroll}
-                            className="flex items-center gap-2 bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition text-sm font-medium"
+                            className="flex items-center gap-2 bg-theme-primary text-white px-3 py-1.5 rounded-lg hover:bg-theme-primary transition text-sm font-medium"
                         >
                             <FiPlus className="w-4 h-4" />
                             <span>+ Create Payroll</span>
@@ -207,7 +207,7 @@ const AdminEmployeePayroll = () => {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                        <div className="w-12 h-12 bg-theme-secondary rounded-lg flex items-center justify-center">
                             <FiUser className="w-6 h-6 text-white" />
                         </div>
                         <div>
@@ -256,7 +256,7 @@ const AdminEmployeePayroll = () => {
                                 </div>
                                 <button
                                     onClick={() => handleEditPayroll(currentMonthPayroll)}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    className="flex items-center space-x-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
                                 >
                                     <FiEdit className="w-4 h-4" />
                                     <span>Edit</span>
@@ -265,27 +265,27 @@ const AdminEmployeePayroll = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4">
+                            <div className="bg-gradient-to-br from-white to-theme-primary/10 rounded-xl p-4">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-sm text-gray-600 mb-1">In-Hand Salary</p>
-                                        <p className="text-2xl font-bold text-green-700">
+                                        <p className="text-2xl font-bold text-theme-primary">
                                             {formatCurrency(currentMonthPayroll.inHandSalary)}
                                         </p>
                                     </div>
-                                    <FiTrendingUp className="w-8 h-8 text-green-600" />
+                                    <FiTrendingUp className="w-8 h-8 text-theme-primary" />
                                 </div>
                             </div>
 
-                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
+                            <div className="bg-gradient-to-br from-white to-indigo-50 rounded-xl p-4">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-sm text-gray-600 mb-1">Total Earnings</p>
-                                        <p className="text-2xl font-bold text-blue-700">
+                                        <p className="text-2xl font-bold text-theme-secondary">
                                             {formatCurrency(currentMonthPayroll.earnings?.totalEarnings)}
                                         </p>
                                     </div>
-                                    <FiTrendingUp className="w-8 h-8 text-blue-600" />
+                                    <FiTrendingUp className="w-8 h-8 text-theme-secondary" />
                                 </div>
                             </div>
 
@@ -305,14 +305,14 @@ const AdminEmployeePayroll = () => {
                         <div className="mt-6 flex space-x-4">
                             <button
                                 onClick={() => handleViewDetails(currentMonthPayroll._id)}
-                                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                className="flex items-center space-x-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
                             >
                                 <FiEye className="w-4 h-4" />
                                 <span>View Details</span>
                             </button>
                             <button
                                 onClick={() => handleDownloadPayslip(currentMonthPayroll._id)}
-                                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                className="flex items-center space-x-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
                             >
                                 <FiDownload className="w-4 h-4" />
                                 <span>Download Payslip</span>
@@ -334,7 +334,7 @@ const AdminEmployeePayroll = () => {
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
                             <div className="flex items-center space-x-2">
-                                <FiLoader className="animate-spin w-6 h-6 text-blue-600" />
+                                <FiLoader className="animate-spin w-6 h-6 text-theme-secondary" />
                                 <span className="text-gray-600">Loading history...</span>
                             </div>
                         </div>
@@ -351,7 +351,7 @@ const AdminEmployeePayroll = () => {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-4">
                                             <div className="w-12 h-12 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
-                                                <FiCalendar className="w-6 h-6 text-indigo-600" />
+                                                <FiCalendar className="w-6 h-6 text-theme-accent" />
                                             </div>
                                             <div>
                                                 <h3 className="font-semibold text-gray-900">
@@ -370,7 +370,7 @@ const AdminEmployeePayroll = () => {
                                             <div className="flex space-x-2">
                                                 <button
                                                     onClick={() => handleViewDetails(payroll._id)}
-                                                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
                                                     title="View Details"
                                                 >
                                                     <FiEye className="w-4 h-4" />
@@ -384,7 +384,7 @@ const AdminEmployeePayroll = () => {
                                                 </button>
                                                 <button
                                                     onClick={() => handleDownloadPayslip(payroll._id)}
-                                                    className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                                    className="p-2 text-gray-600 hover:text-theme-primary hover:bg-theme-primary/10 rounded-lg transition-colors"
                                                     title="Download Payslip"
                                                 >
                                                     <FiDownload className="w-4 h-4" />
@@ -466,7 +466,7 @@ const AdminEmployeePayroll = () => {
                             {/* Earnings Breakdown */}
                             <div className="mb-6">
                                 <h4 className="text-lg font-semibold text-gray-900 mb-3">Earnings</h4>
-                                <div className="bg-green-50 rounded-xl p-4">
+                                <div className="bg-theme-primary/10 rounded-xl p-4">
                                     <div className="space-y-2">
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Basic Wage</span>
@@ -492,8 +492,8 @@ const AdminEmployeePayroll = () => {
                                             <span className="text-gray-600">Performance Bonus</span>
                                             <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.performanceBonus)}</span>
                                         </div>
-                                        <div className="border-t border-green-200 pt-2 mt-2">
-                                            <div className="flex justify-between font-bold text-green-700">
+                                        <div className="border-t border-theme-primary pt-2 mt-2">
+                                            <div className="flex justify-between font-bold text-theme-primary">
                                                 <span>Total Earnings</span>
                                                 <span>{formatCurrency(selectedPayroll.earnings?.totalEarnings)}</span>
                                             </div>
@@ -542,7 +542,7 @@ const AdminEmployeePayroll = () => {
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-lg">
                                         <span className="font-semibold text-gray-900">In-Hand Salary</span>
-                                        <span className="font-bold text-green-600">{formatCurrency(selectedPayroll.inHandSalary)}</span>
+                                        <span className="font-bold text-theme-primary">{formatCurrency(selectedPayroll.inHandSalary)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">CTC</span>

@@ -98,7 +98,7 @@ const EmployeeLeaveBalanceViewer = () => {
                             key={emp._id}
                             onClick={() => setSelectedEmployee(emp)}
                             className={`p-3 border-b cursor-pointer hover:bg-gray-50 ${
-                                selectedEmployee?._id === emp._id ? 'bg-blue-50' : ''
+                                selectedEmployee?._id === emp._id ? 'bg-theme-secondary/10' : ''
                             }`}
                         >
                             <div className="font-medium">{emp.name} {emp.lastName || ''}</div>
@@ -122,8 +122,8 @@ const EmployeeLeaveBalanceViewer = () => {
                     </h3>
 
                     {balance.policy && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                            <p className="text-blue-800">
+                        <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4 mb-6">
+                            <p className="text-theme-secondary">
                                 <strong>Policy:</strong> {balance.policy.policyName}
                             </p>
                         </div>
@@ -145,7 +145,7 @@ const EmployeeLeaveBalanceViewer = () => {
                                         {typeBalance.carriedForward > 0 && (
                                             <div className="flex justify-between">
                                                 <span className="text-gray-600">Carried Forward:</span>
-                                                <span className="font-medium text-blue-600">
+                                                <span className="font-medium text-theme-secondary">
                                                     +{typeBalance.carriedForward} days
                                                 </span>
                                             </div>
@@ -176,7 +176,7 @@ const EmployeeLeaveBalanceViewer = () => {
                                             <div className="flex justify-between">
                                                 <span className="font-semibold">Available:</span>
                                                 <span className={`font-bold text-lg ${
-                                                    typeBalance.available > 0 ? 'text-green-600' : 'text-red-600'
+                                                    typeBalance.available > 0 ? 'text-theme-primary' : 'text-red-600'
                                                 }`}>
                                                     {typeBalance.available} days
                                                 </span>

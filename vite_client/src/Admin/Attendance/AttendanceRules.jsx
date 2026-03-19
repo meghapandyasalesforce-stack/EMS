@@ -225,7 +225,7 @@ const AttendanceRules = () => {
             {/* Header */}
             <div className="mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                    <FaRuler className="mr-3 text-blue-600" />
+                    <FaRuler className="mr-3 text-theme-secondary" />
                     Attendance Rules
                 </h2>
                 <p className="text-gray-600 mt-1">Configure location-based attendance and rules</p>
@@ -233,7 +233,7 @@ const AttendanceRules = () => {
 
             {loading ? (
                 <div className="flex justify-center items-center h-96">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
                 </div>
             ) : (
                 <form onSubmit={handleSubmit}>
@@ -248,14 +248,14 @@ const AttendanceRules = () => {
                                 value={formData.address}
                                 onChange={handleLocationSelect}
                                 placeholder="Enter office address"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                             />
                             {hasAddress && (
                                 <a
                                     href={googleMapsUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                                    className="text-sm text-theme-secondary hover:underline mt-2 inline-block"
                                 >
                                     View on Google Maps
                                 </a>
@@ -274,7 +274,7 @@ const AttendanceRules = () => {
                                     value={formData.coordinates.latitude || 0}
                                     onChange={handleCoordinateChange}
                                     step="any"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
                             <div>
@@ -287,7 +287,7 @@ const AttendanceRules = () => {
                                     value={formData.coordinates.longitude || 0}
                                     onChange={handleCoordinateChange}
                                     step="any"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
                         </div>
@@ -372,7 +372,7 @@ const AttendanceRules = () => {
                                         value={formData.coordinates.latitude || 0}
                                         onChange={handleCoordinateChange}
                                         step="any"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                                 <div>
@@ -385,7 +385,7 @@ const AttendanceRules = () => {
                                         value={formData.coordinates.longitude || 0}
                                         onChange={handleCoordinateChange}
                                         step="any"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                             </div>
@@ -403,7 +403,7 @@ const AttendanceRules = () => {
                                         type="time"
                                         value={formData.officeHours.startTime}
                                         onChange={(e) => handleTimeChange('officeHours', 'startTime', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                                 <div>
@@ -414,7 +414,7 @@ const AttendanceRules = () => {
                                         type="time"
                                         value={formData.officeHours.endTime}
                                         onChange={(e) => handleTimeChange('officeHours', 'endTime', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                             </div>
@@ -433,7 +433,7 @@ const AttendanceRules = () => {
                                         type="time"
                                         value={formData.checkInOutTimes.checkInStartTime}
                                         onChange={(e) => handleTimeChange('checkInOutTimes', 'checkInStartTime', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                                 <div>
@@ -444,7 +444,7 @@ const AttendanceRules = () => {
                                         type="time"
                                         value={formData.checkInOutTimes.checkInEndTime}
                                         onChange={(e) => handleTimeChange('checkInOutTimes', 'checkInEndTime', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                             </div>
@@ -458,7 +458,7 @@ const AttendanceRules = () => {
                                         type="time"
                                         value={formData.checkInOutTimes.checkOutStartTime}
                                         onChange={(e) => handleTimeChange('checkInOutTimes', 'checkOutStartTime', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                                 <div>
@@ -469,7 +469,7 @@ const AttendanceRules = () => {
                                         type="time"
                                         value={formData.checkInOutTimes.checkOutEndTime}
                                         onChange={(e) => handleTimeChange('checkInOutTimes', 'checkOutEndTime', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                 </div>
                             </div>
@@ -486,7 +486,7 @@ const AttendanceRules = () => {
                                         max="120"
                                         value={formData.checkInOutTimes.checkInGracePeriod}
                                         onChange={(e) => handleNumberChange('checkInOutTimes', 'checkInGracePeriod', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">Employees can check-in within this grace period without penalty</p>
                                 </div>
@@ -500,7 +500,7 @@ const AttendanceRules = () => {
                                         max="120"
                                         value={formData.checkInOutTimes.checkOutGracePeriod}
                                         onChange={(e) => handleNumberChange('checkInOutTimes', 'checkOutGracePeriod', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">Employees can check-out within this grace period without penalty</p>
                                 </div>
@@ -518,7 +518,7 @@ const AttendanceRules = () => {
                                     type="button"
                                     onClick={() => handleTimeChange('autoCheckOut', 'enabled', !formData.autoCheckOut.enabled)}
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                        formData.autoCheckOut.enabled ? 'bg-blue-600' : 'bg-gray-300'
+                                        formData.autoCheckOut.enabled ? 'bg-theme-primary' : 'bg-gray-300'
                                     }`}
                                 >
                                     <span
@@ -539,7 +539,7 @@ const AttendanceRules = () => {
                                             type="time"
                                             value={formData.autoCheckOut.time}
                                             onChange={(e) => handleTimeChange('autoCheckOut', 'time', e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                     </div>
                                     <div>
@@ -552,7 +552,7 @@ const AttendanceRules = () => {
                                             max="60"
                                             value={formData.autoCheckOut.notifyBeforeMinutes}
                                             onChange={(e) => handleNumberChange('autoCheckOut', 'notifyBeforeMinutes', e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                         <p className="text-xs text-gray-500 mt-1">Send notification X minutes before auto check-out</p>
                                     </div>
@@ -571,7 +571,7 @@ const AttendanceRules = () => {
                                     type="button"
                                     onClick={() => handleTimeChange('timeStop', 'enabled', !formData.timeStop.enabled)}
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                        formData.timeStop.enabled ? 'bg-blue-600' : 'bg-gray-300'
+                                        formData.timeStop.enabled ? 'bg-theme-primary' : 'bg-gray-300'
                                     }`}
                                 >
                                     <span
@@ -592,7 +592,7 @@ const AttendanceRules = () => {
                                             type="time"
                                             value={formData.timeStop.time}
                                             onChange={(e) => handleTimeChange('timeStop', 'time', e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                         />
                                     </div>
                                     <div>
@@ -602,7 +602,7 @@ const AttendanceRules = () => {
                                         <select
                                             value={formData.timeStop.action}
                                             onChange={(e) => handleTimeChange('timeStop', 'action', e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
                                         >
                                             <option value="stop_tracking">Stop Tracking</option>
                                             <option value="auto_checkout">Auto Check-Out</option>
@@ -627,7 +627,7 @@ const AttendanceRules = () => {
                                     type="button"
                                     onClick={() => toggleFeature('enableCompOff')}
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                        formData.enableCompOff ? 'bg-blue-600' : 'bg-gray-300'
+                                        formData.enableCompOff ? 'bg-theme-primary' : 'bg-gray-300'
                                     }`}
                                 >
                                     <span
@@ -639,7 +639,7 @@ const AttendanceRules = () => {
                             </div>
 
                             {formData.enableCompOff && (
-                                <div className="ml-8 flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                                <div className="ml-8 flex items-center justify-between p-4 bg-theme-secondary/10 rounded-lg">
                                     <div>
                                         <h4 className="font-medium text-gray-900">Auto Approve</h4>
                                         <p className="text-sm text-gray-600">Automatically approve comp off requests</p>
@@ -648,7 +648,7 @@ const AttendanceRules = () => {
                                         type="button"
                                         onClick={() => toggleFeature('autoApprove')}
                                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                            formData.autoApprove ? 'bg-blue-600' : 'bg-gray-300'
+                                            formData.autoApprove ? 'bg-theme-primary' : 'bg-gray-300'
                                         }`}
                                     >
                                         <span
@@ -670,7 +670,7 @@ const AttendanceRules = () => {
                                     type="button"
                                     onClick={() => toggleFeature('enableSimplePunches')}
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                        formData.enableSimplePunches ? 'bg-blue-600' : 'bg-gray-300'
+                                        formData.enableSimplePunches ? 'bg-theme-primary' : 'bg-gray-300'
                                     }`}
                                 >
                                     <span
@@ -691,7 +691,7 @@ const AttendanceRules = () => {
                                     type="button"
                                     onClick={() => toggleFeature('enablePenaltyRules')}
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                        formData.enablePenaltyRules ? 'bg-blue-600' : 'bg-gray-300'
+                                        formData.enablePenaltyRules ? 'bg-theme-primary' : 'bg-gray-300'
                                     }`}
                                 >
                                     <span
@@ -716,7 +716,7 @@ const AttendanceRules = () => {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center disabled:opacity-50"
+                                className="px-6 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition flex items-center disabled:opacity-50"
                             >
                                 <FaSave className="mr-2" />
                                 {saving ? 'Saving...' : 'Save'}

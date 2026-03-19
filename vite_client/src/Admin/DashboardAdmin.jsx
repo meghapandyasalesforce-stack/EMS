@@ -92,11 +92,11 @@ function DashboardAdmin() {
 
   const formatCurrency = (amount) => {
     if (!amount || isNaN(amount)) {
-      return '$0';
+      return '₹0';
     }
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount);
@@ -135,7 +135,7 @@ function DashboardAdmin() {
             </div>
             {user && (
               <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-sm bg-theme-primary" style={{ backgroundColor: 'var(--color-primary)' }}>
                   <FiUser className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -163,21 +163,21 @@ function DashboardAdmin() {
             label="Employees"
             value={employeeCount}
             icon={<FaUsers className="w-6 h-6" />}
-            color="blue"
+            color="primary"
           />
           
           <StatCard
             label="Projects"
             value={projects.length}
             icon={<FaFolder className="w-6 h-6" />}
-            color="green"
+            color="secondary"
           />
           
           <StatCard
             label="Payrolls"
             value={payrolls.length}
             icon={<FaMoneyBillWave className="w-6 h-6" />}
-            color="purple"
+            color="accent"
           />
         </div>
 
@@ -197,7 +197,8 @@ function DashboardAdmin() {
               </div>
               <button
                 onClick={() => navigate("/add-project")}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap"
+                className="text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
               >
                 <span className="mr-1.5">+</span> Add Project
               </button>
@@ -210,7 +211,8 @@ function DashboardAdmin() {
                   <p className="text-gray-500 text-sm mb-2">No projects found</p>
                   <button
                     onClick={() => navigate("/add-project")}
-                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                    className="mt-2 text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                   >
                     Create your first project →
                   </button>
@@ -240,7 +242,8 @@ function DashboardAdmin() {
                     <div className="text-center mt-4 pt-3 border-t border-gray-100">
                       <button 
                         onClick={() => navigate("/projects")}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                        className="text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                       >
                         View All Projects →
                       </button>
@@ -260,7 +263,8 @@ function DashboardAdmin() {
               </div>
               <button
                 onClick={() => navigate("/add-employee")}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap"
+                className="text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
               >
                 <span className="mr-1.5">+</span> Add Employee
               </button>
@@ -269,7 +273,8 @@ function DashboardAdmin() {
             <div className="overflow-x-auto">
               {employeesLoading ? (
                 <div className="text-center py-10">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"
+            style={{ borderBottomColor: 'var(--color-primary)' }}></div>
                   <p className="text-gray-500 mt-2 text-sm">Loading employees...</p>
                 </div>
               ) : !Array.isArray(employees) || employees.length === 0 ? (
@@ -278,7 +283,8 @@ function DashboardAdmin() {
                   <p className="text-gray-500 text-sm mb-2">No employees found</p>
                   <button
                     onClick={() => navigate("/add-employee")}
-                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                    className="mt-2 text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                   >
                     Add your first employee →
                   </button>
@@ -293,8 +299,8 @@ function DashboardAdmin() {
                         onClick={() => navigate(`/employees/${emp._id || emp.id}`)}
                       >
                         <div className="flex items-center flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
-                            <FiUser className="w-5 h-5 text-blue-600" />
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0 bg-theme-secondary/10" style={{ backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)' }}>
+                            <FiUser className="w-5 h-5 text-theme-secondary" style={{ color: 'var(--color-secondary)' }} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm md:text-base text-gray-800 truncate">
@@ -312,7 +318,8 @@ function DashboardAdmin() {
                     <div className="text-center mt-4 pt-3 border-t border-gray-100">
                       <button 
                         onClick={() => navigate("/employees")}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                        className="text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                       >
                         View All Employees →
                       </button>
@@ -409,13 +416,15 @@ function DashboardAdmin() {
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
               <button
                 onClick={() => navigate("/today-attendance")}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap"
+                className="text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap bg-theme-primary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
               >
                 Today's Attendance
               </button>
               <button
                 onClick={() => navigate("/all-attendance-history")}
-                className="bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap"
+                className="text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap bg-theme-secondary hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-secondary)' }}
               >
                 All Attendance Report
               </button>
@@ -436,7 +445,8 @@ function DashboardAdmin() {
                 <p className="text-gray-500 text-sm mb-2">No payroll records found</p>
                 <button
                   onClick={() => navigate("/add-payroll")}
-                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                  className="mt-2 text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                 >
                   Create your first payroll →
                 </button>
@@ -473,7 +483,8 @@ function DashboardAdmin() {
                   <div className="text-center mt-4 pt-3 border-t border-gray-100">
                     <button 
                       onClick={() => navigate("/admin-payroll")}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                      className="text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
+            style={{ color: 'var(--color-secondary)' }}
                     >
                       View All Payrolls →
                     </button>

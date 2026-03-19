@@ -193,9 +193,9 @@ const WorkforcePage = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'Approved':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'In Progress':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-theme-secondary/10 text-theme-secondary';
             case 'Completed':
                 return 'bg-purple-100 text-purple-800';
             case 'Draft':
@@ -254,7 +254,7 @@ const WorkforcePage = () => {
                                     resetPlanForm();
                                     setShowCreatePlanModal(true);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 <FaPlus />
                                 Create Plan
@@ -265,7 +265,7 @@ const WorkforcePage = () => {
                                     resetForecastForm();
                                     setShowCreateForecastModal(true);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                                className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition"
                             >
                                 <FaPlus />
                                 Create Forecast
@@ -285,7 +285,7 @@ const WorkforcePage = () => {
                                 setYearFilter('all');
                                 setDepartmentFilter('all');
                             }}
-                            className={`px-6 py-3 font-medium ${activeTab === 'plans' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'plans' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaChartLine className="inline mr-2" />
                             Workforce Plans ({workforcePlans.length})
@@ -296,7 +296,7 @@ const WorkforcePage = () => {
                                 setSearchTerm('');
                                 setDepartmentFilter('all');
                             }}
-                            className={`px-6 py-3 font-medium ${activeTab === 'forecasts' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'forecasts' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaCalendar className="inline mr-2" />
                             Forecasts ({forecasts.length})
@@ -313,7 +313,7 @@ const WorkforcePage = () => {
                             placeholder={activeTab === 'plans' ? 'Search by plan name or department...' : 'Search by department...'}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                         />
                     </div>
                     {activeTab === 'plans' ? (
@@ -323,7 +323,7 @@ const WorkforcePage = () => {
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                                 >
                                     <option value="all">All Status</option>
                                     <option value="Draft">Draft</option>
@@ -337,7 +337,7 @@ const WorkforcePage = () => {
                                 <select
                                     value={yearFilter}
                                     onChange={(e) => setYearFilter(e.target.value)}
-                                    className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                                    className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                                 >
                                     <option value="all">All Years</option>
                                     {years.map(year => (
@@ -351,7 +351,7 @@ const WorkforcePage = () => {
                         <select
                             value={departmentFilter}
                             onChange={(e) => setDepartmentFilter(e.target.value)}
-                            className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                            className="pl-4 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent appearance-none bg-white"
                         >
                             <option value="all">All Departments</option>
                             {departments.map(dept => (
@@ -388,15 +388,15 @@ const WorkforcePage = () => {
                                             <p className="text-xs text-gray-600 mb-1">Current</p>
                                             <p className="text-2xl font-bold text-gray-800">{plan.currentHeadcount}</p>
                                         </div>
-                                        <div className="bg-blue-50 p-3 rounded-lg">
+                                        <div className="bg-theme-secondary/10 p-3 rounded-lg">
                                             <p className="text-xs text-gray-600 mb-1">Target</p>
-                                            <p className="text-2xl font-bold text-blue-600">{plan.targetHeadcount}</p>
+                                            <p className="text-2xl font-bold text-theme-secondary">{plan.targetHeadcount}</p>
                                         </div>
                                     </div>
 
                                     {gap !== 0 && (
                                         <div className={`mb-4 p-2 rounded text-sm text-center ${
-                                            gap > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            gap > 0 ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'
                                         }`}>
                                             {gap > 0 ? '+' : ''}{gap} ({gapPercent > 0 ? '+' : ''}{gapPercent}%)
                                         </div>
@@ -410,7 +410,7 @@ const WorkforcePage = () => {
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-2">
                                                 <div 
-                                                    className="bg-blue-600 h-2 rounded-full"
+                                                    className="bg-theme-primary h-2 rounded-full"
                                                     style={{ width: `${plan.budget.allocated > 0 ? Math.min((plan.budget.spent / plan.budget.allocated) * 100, 100) : 0}%` }}
                                                 ></div>
                                             </div>
@@ -430,7 +430,7 @@ const WorkforcePage = () => {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => navigate(`/workforce/${plan._id}`)}
-                                            className="flex-1 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm flex items-center justify-center gap-1"
+                                            className="flex-1 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm flex items-center justify-center gap-1"
                                         >
                                             <FaEye /> View
                                         </button>
@@ -479,13 +479,13 @@ const WorkforcePage = () => {
                                             </td>
                                             <td className="px-6 py-4">{forecast.department || 'All'}</td>
                                             <td className="px-6 py-4 font-medium">{forecast.currentHeadcount}</td>
-                                            <td className="px-6 py-4 font-semibold text-blue-600">{forecast.projectedHeadcount}</td>
-                                            <td className={`px-6 py-4 font-medium ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            <td className="px-6 py-4 font-semibold text-theme-secondary">{forecast.projectedHeadcount}</td>
+                                            <td className={`px-6 py-4 font-medium ${change >= 0 ? 'text-theme-primary' : 'text-red-600'}`}>
                                                 {change >= 0 ? '+' : ''}{change}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 rounded text-xs ${
-                                                    forecast.confidenceLevel === 'High' ? 'bg-green-100 text-green-800' :
+                                                    forecast.confidenceLevel === 'High' ? 'bg-theme-primary/10 text-theme-primary' :
                                                     forecast.confidenceLevel === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
                                                     'bg-red-100 text-red-800'
                                                 }`}>
@@ -681,7 +681,7 @@ const WorkforcePage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>
@@ -825,7 +825,7 @@ const WorkforcePage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

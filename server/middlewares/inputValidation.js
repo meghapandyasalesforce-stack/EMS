@@ -491,7 +491,8 @@ export const organizationValidations = {
             .trim()
             .matches(/^\+?[\d\s-()]+$/).withMessage('Invalid phone number format'),
         body('domain')
-            .optional()
+            // Make domain truly optional: skip validation when empty or falsy
+            .optional({ checkFalsy: true })
             .trim()
             .matches(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i).withMessage('Invalid domain format'),
         body('address')

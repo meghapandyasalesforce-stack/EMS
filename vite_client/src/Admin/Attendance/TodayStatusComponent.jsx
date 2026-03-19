@@ -48,11 +48,11 @@ const TodayStatusComponent = () => {
   const getDeviceIcon = (deviceType) => {
     switch (deviceType) {
       case 'mobile':
-        return <FiSmartphone className="w-4 h-4 text-blue-600" />;
+        return <FiSmartphone className="w-4 h-4 text-theme-secondary" />;
       case 'tablet':
         return <FiSmartphone className="w-4 h-4 text-purple-600" />;
       case 'desktop':
-        return <FiMonitor className="w-4 h-4 text-green-600" />;
+        return <FiMonitor className="w-4 h-4 text-theme-primary" />;
       default:
         return <FiMonitor className="w-4 h-4 text-gray-400" />;
     }
@@ -66,7 +66,7 @@ const TodayStatusComponent = () => {
         <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-800">Today's Attendance Overview</h2>
          <button
                 onClick={() => navigate("/all-attendance-history")}
-                className="bg-green-600 hover:bg-green-700 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
+                className="bg-theme-primary hover:opacity-90 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
               >
                 All Attendance Report
               </button>
@@ -74,7 +74,7 @@ const TodayStatusComponent = () => {
         </div>
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <div className="bg-white p-3 sm:p-4 rounded-lg shadow border-l-4 border-green-500">
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow border-l-4 border-theme-primary">
             <h3 className="text-sm sm:text-base text-gray-600 font-medium">Present</h3>
             <p className="text-xl sm:text-2xl font-bold">{counts.present}</p>
           </div>
@@ -145,7 +145,7 @@ const TodayStatusComponent = () => {
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {locationMatch ? (
-                            <div className="flex items-center space-x-1 text-green-600" title={locationDistance ? `${locationAddress} (${Math.round(locationDistance)}m away)` : locationAddress}>
+                            <div className="flex items-center space-x-1 text-theme-primary" title={locationDistance ? `${locationAddress} (${Math.round(locationDistance)}m away)` : locationAddress}>
                               <FiCheckCircle className="w-4 h-4" />
                               <span className="text-xs">Verified</span>
                             </div>
@@ -157,7 +157,7 @@ const TodayStatusComponent = () => {
                           )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                          <span className="px-2 py-1 text-xs rounded-full bg-theme-primary/10 text-theme-primary">
                             Present
                           </span>
                         </td>

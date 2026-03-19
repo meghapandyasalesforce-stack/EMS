@@ -159,7 +159,7 @@ const OrganizationAnalytics = () => {
                     <select
                         value={timeRange}
                         onChange={(e) => setTimeRange(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
                     >
                         <option value="7d">Last 7 days</option>
                         <option value="30d">Last 30 days</option>
@@ -177,13 +177,13 @@ const OrganizationAnalytics = () => {
                                 <p className="text-3xl font-bold text-gray-900 mt-2">
                                     {stats.totalEmployees || 0}
                                 </p>
-                                <p className="text-sm text-green-600 mt-2 flex items-center">
+                                <p className="text-sm text-theme-primary mt-2 flex items-center">
                                     <FiTrendingUp className="w-4 h-4 mr-1" />
                                     {trends.employeeGrowth || 0}% growth
                                 </p>
                             </div>
-                            <div className="bg-blue-100 rounded-full p-3">
-                                <FiUsers className="w-8 h-8 text-blue-600" />
+                            <div className="bg-theme-secondary/10 rounded-full p-3">
+                                <FiUsers className="w-8 h-8 text-theme-secondary" />
                             </div>
                         </div>
                     </div>
@@ -195,13 +195,13 @@ const OrganizationAnalytics = () => {
                                 <p className="text-3xl font-bold text-gray-900 mt-2">
                                     {stats.activeProjects || 0}
                                 </p>
-                                <p className="text-sm text-blue-600 mt-2 flex items-center">
+                                <p className="text-sm text-theme-secondary mt-2 flex items-center">
                                     <FiActivity className="w-4 h-4 mr-1" />
                                     {stats.completedProjects || 0} completed
                                 </p>
                             </div>
-                            <div className="bg-green-100 rounded-full p-3">
-                                <FiCalendar className="w-8 h-8 text-green-600" />
+                            <div className="bg-theme-primary/10 rounded-full p-3">
+                                <FiCalendar className="w-8 h-8 text-theme-primary" />
                             </div>
                         </div>
                     </div>
@@ -267,13 +267,13 @@ const OrganizationAnalytics = () => {
                     <div className="bg-white rounded-lg shadow-lg p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Attendance Overview</h3>
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-theme-primary/10 rounded-lg">
                                 <span className="text-gray-700">Average Attendance Rate</span>
-                                <span className="text-2xl font-bold text-green-600">{stats.attendanceRate || 0}%</span>
+                                <span className="text-2xl font-bold text-theme-primary">{stats.attendanceRate || 0}%</span>
                             </div>
-                            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-theme-secondary/10 rounded-lg">
                                 <span className="text-gray-700">Total Hours Logged</span>
-                                <span className="text-xl font-semibold text-blue-600">
+                                <span className="text-xl font-semibold text-theme-secondary">
                                     {stats.totalHours || 0} hrs
                                 </span>
                             </div>
@@ -294,8 +294,8 @@ const OrganizationAnalytics = () => {
                         {analytics?.recentActivity?.length > 0 ? (
                             analytics.recentActivity.map((activity, idx) => (
                                 <div key={idx} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                                    <div className="bg-blue-100 rounded-full p-2">
-                                        <FiActivity className="w-5 h-5 text-blue-600" />
+                                    <div className="bg-theme-secondary/10 rounded-full p-2">
+                                        <FiActivity className="w-5 h-5 text-theme-secondary" />
                                     </div>
                                     <div className="flex-1">
                                         <p className="text-sm font-medium text-gray-900">{activity.title}</p>

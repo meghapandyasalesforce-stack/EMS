@@ -65,7 +65,7 @@ function DailyReport() {
                                     <td className="border border-gray-300 p-2 text-center">
                                         {totalHours.toFixed(2)} hrs
                                     </td>
-                                    <td className={`border border-gray-300 p-2 text-center ${isMatched ? 'text-green-600' : 'text-red-600'}`}>
+                                    <td className={`border border-gray-300 p-2 text-center ${isMatched ? 'text-theme-primary' : 'text-red-600'}`}>
                                         {isMatched ? 'Matched' : 'Not Matched'}
                                     </td>
                                 </tr>

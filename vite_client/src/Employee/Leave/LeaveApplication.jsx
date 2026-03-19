@@ -148,7 +148,7 @@ const LeaveApplication = () => {
               value={leaveForm.leaveType}
               onChange={handleChange}
               disabled={submitting}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
             >
               <option value="">Select leave type</option>
               <option value="sick">Sick Leave</option>
@@ -179,7 +179,7 @@ const LeaveApplication = () => {
                   onChange={handleChange}
                   disabled={submitting}
                   min={field === 'endDate' ? leaveForm.startDate : new Date().toISOString().split('T')[0]}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
                 />
                 {errors[field] && <p className="text-red-500 text-xs md:text-sm mt-1">{errors[field]}</p>}
               </div>
@@ -189,7 +189,7 @@ const LeaveApplication = () => {
           {/* Half Day Option */}
           {leaveForm.startDate && leaveForm.endDate && 
            new Date(leaveForm.startDate).toDateString() === new Date(leaveForm.endDate).toDateString() && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4">
               <label className="flex items-center mb-2">
                 <input
                   type="checkbox"
@@ -214,7 +214,7 @@ const LeaveApplication = () => {
                     value={leaveForm.halfDayType}
                     onChange={handleChange}
                     disabled={submitting}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
                   >
                     <option value="first_half">First Half (Morning)</option>
                     <option value="second_half">Second Half (Afternoon)</option>
@@ -233,7 +233,7 @@ const LeaveApplication = () => {
               onChange={handleChange}
               rows="3"
               disabled={submitting}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
             />
             {errors.reason && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.reason}</p>}
           </div>
@@ -249,7 +249,7 @@ const LeaveApplication = () => {
                 className={`cursor-pointer inline-flex items-center px-3 py-1 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded ${
                   submitting 
                     ? 'bg-gray-400 text-gray-700' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-theme-primary text-white hover:opacity-90'
                 }`}
               >
                 Upload File
@@ -278,7 +278,7 @@ const LeaveApplication = () => {
             className={`w-full px-4 py-2 md:px-6 md:py-3 rounded-md ${
               submitting
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-theme-primary hover:opacity-90 text-white'
             } text-sm md:text-base`}
           >
             {submitting ? (

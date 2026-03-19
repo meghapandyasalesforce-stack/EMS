@@ -227,7 +227,7 @@ const MyLeavePage = () => {
             <button
               onClick={() => setActiveTab('leaves')}
               className={`px-3 py-1 md:px-4 md:py-2 rounded-lg text-sm md:text-base ${
-                activeTab === 'leaves' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                activeTab === 'leaves' ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-700'
               }`}
             >
               <FaCalendarAlt className="inline mr-1 md:mr-2" />
@@ -236,7 +236,7 @@ const MyLeavePage = () => {
             <button
               onClick={() => setActiveTab('stats')}
               className={`px-3 py-1 md:px-4 md:py-2 rounded-lg text-sm md:text-base ${
-                activeTab === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                activeTab === 'stats' ? 'bg-theme-primary text-white' : 'bg-gray-200 text-gray-700'
               }`}
             >
               <FaChartPie className="inline mr-1 md:mr-2" />
@@ -244,7 +244,7 @@ const MyLeavePage = () => {
             </button>
             <button 
               onClick={() => navigate('/leave')}
-              className="bg-green-500 text-white rounded-xl px-3 py-1 md:px-4 md:py-2  hover:bg-green-800 transition text-sm md:text-base"
+              className="bg-theme-primary text-white rounded-xl px-3 py-1 md:px-4 md:py-2  hover:opacity-90 transition text-sm md:text-base"
             >
               Apply for Leave
             </button>
@@ -289,7 +289,7 @@ const MyLeavePage = () => {
                         {typeBalance.carriedForward > 0 && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">Carried Forward:</span>
-                            <span className="font-medium text-blue-600">+{typeBalance.carriedForward} days</span>
+                            <span className="font-medium text-theme-secondary">+{typeBalance.carriedForward} days</span>
                           </div>
                         )}
                         <div className="flex justify-between">
@@ -306,7 +306,7 @@ const MyLeavePage = () => {
                           <div className="flex justify-between">
                             <span className="font-semibold">Available:</span>
                             <span className={`font-bold text-lg ${
-                              typeBalance.available > 0 ? 'text-green-600' : 'text-red-600'
+                              typeBalance.available > 0 ? 'text-theme-primary' : 'text-red-600'
                             }`}>
                               {typeBalance.available} days
                             </span>
@@ -371,7 +371,7 @@ const MyLeavePage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="bg-white p-4 rounded-lg shadow-md">
                 <div className="flex items-center">
-                  <div className="p-2 rounded-full bg-blue-100 text-blue-600 mr-3">
+                  <div className="p-2 rounded-full bg-theme-secondary/10 text-theme-secondary mr-3">
                     <FaCalendarAlt size={20} />
                   </div>
                   <div>
@@ -383,7 +383,7 @@ const MyLeavePage = () => {
 
               <div className="bg-white p-4 rounded-lg shadow-md">
                 <div className="flex items-center">
-                  <div className="p-2 rounded-full bg-green-100 text-green-600 mr-3">
+                  <div className="p-2 rounded-full bg-theme-primary/10 text-theme-primary mr-3">
                     <BsCalendarCheck size={20} />
                   </div>
                   <div>
@@ -440,7 +440,7 @@ const MyLeavePage = () => {
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                             ${leave.type === 'Sick' ? 'bg-red-100 text-red-800' :
                               leave.type === 'Annual' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-blue-100 text-blue-800'}`}>
+                                'bg-theme-secondary/10 text-theme-secondary'}`}>
                             {leave.type}
                           </span>
                         </td>
@@ -449,7 +449,7 @@ const MyLeavePage = () => {
                         <td className="px-4 py-3 whitespace-nowrap text-xs md:text-sm text-gray-500">{leave.days}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${leave.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                            ${leave.status === 'Approved' ? 'bg-theme-primary/10 text-theme-primary' :
                               leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                                 'bg-red-100 text-red-800'}`}>
                             {leave.status}
@@ -547,14 +547,14 @@ const MyLeavePage = () => {
 
                 <div className="border border-gray-200 rounded-lg p-3">
                   <h3 className="font-medium text-gray-700 mb-2 flex items-center">
-                    <FaCalendarAlt className="mr-2 text-blue-500" /> Casual Leaves
+                    <FaCalendarAlt className="mr-2 text-theme-secondary" /> Casual Leaves
                   </h3>
                   <div className="space-y-2">
                     <p className="text-xs md:text-sm text-gray-600">Taken: {calculatedStats.casualLeaves.taken}</p>
                     <p className="text-xs md:text-sm text-gray-600">Remaining: {calculatedStats.casualLeaves.remaining}</p>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
-                        className="bg-blue-500 h-2.5 rounded-full"
+                        className="bg-theme-primary h-2.5 rounded-full"
                         style={{ width: `${(calculatedStats.casualLeaves.taken / MAX_LEAVES.casual) * 100}%` }}>
                       </div>
                     </div>

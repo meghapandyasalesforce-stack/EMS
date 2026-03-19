@@ -45,8 +45,8 @@ const EmployeeOneOnOnePage = () => {
 
     const getStatusBadge = (status) => {
         const badges = {
-            'Scheduled': 'bg-blue-100 text-blue-800 border-blue-200',
-            'Completed': 'bg-green-100 text-green-800 border-green-200',
+            'Scheduled': 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary',
+            'Completed': 'bg-theme-primary/10 text-theme-primary border-theme-primary',
             'Cancelled': 'bg-red-100 text-red-800 border-red-200',
             'Rescheduled': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'No Show': 'bg-gray-100 text-gray-800 border-gray-200'
@@ -83,7 +83,7 @@ const EmployeeOneOnOnePage = () => {
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 font-medium text-sm transition-colors ${
                                     filterStatus === status
-                                        ? 'border-b-2 border-blue-500 text-blue-600'
+                                        ? 'border-b-2 border-theme-secondary text-theme-secondary'
                                         : 'text-gray-600 hover:text-gray-800'
                                 }`}
                             >
@@ -118,12 +118,12 @@ const EmployeeOneOnOnePage = () => {
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600">
                                                 <div className="flex items-center gap-2">
-                                                    <FaCalendar className="text-blue-500" />
+                                                    <FaCalendar className="text-theme-secondary" />
                                                     <span>{format(new Date(meeting.scheduledDate), 'EEEE, MMMM dd, yyyy')}</span>
                                                 </div>
                                                 {meeting.scheduledTime && (
                                                     <div className="flex items-center gap-2">
-                                                        <FaClock className="text-blue-500" />
+                                                        <FaClock className="text-theme-secondary" />
                                                         <span>{meeting.scheduledTime}</span>
                                                     </div>
                                                 )}
@@ -146,7 +146,7 @@ const EmployeeOneOnOnePage = () => {
                                                             href={meeting.meetingLink} 
                                                             target="_blank" 
                                                             rel="noopener noreferrer"
-                                                            className="text-blue-600 hover:underline"
+                                                            className="text-theme-secondary hover:underline"
                                                         >
                                                             Join Meeting
                                                         </a>

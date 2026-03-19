@@ -23,7 +23,7 @@ const OrganizationOnboarding = () => {
     const [formData, setFormData] = useState({
         logo: null,
         timezone: 'UTC',
-        currency: 'USD',
+        currency: 'INR',
         dateFormat: 'MM/DD/YYYY',
         language: 'en',
         workingDays: [1, 2, 3, 4, 5],
@@ -172,7 +172,7 @@ const OrganizationOnboarding = () => {
     if (loading && !organization) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-primary"></div>
             </div>
         );
     }
@@ -182,8 +182,8 @@ const OrganizationOnboarding = () => {
             case 'welcome':
                 return (
                     <div className="text-center space-y-6">
-                        <div className="mx-auto w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center">
-                            <FaBuilding className="w-12 h-12 text-blue-600" />
+                        <div className="mx-auto w-24 h-24 bg-theme-primary/10 rounded-full flex items-center justify-center">
+                            <FaBuilding className="w-12 h-12 text-theme-primary" />
                         </div>
                         <h3 className="text-2xl font-bold text-gray-900">
                             Welcome to {organization?.name || 'Your Organization'}!
@@ -193,11 +193,11 @@ const OrganizationOnboarding = () => {
                         </p>
                         <div className="space-y-4 mt-8">
                             <div className="flex items-center justify-center space-x-2 text-gray-600">
-                                <FiCheckCircle className="w-5 h-5 text-green-500" />
+                                <FiCheckCircle className="w-5 h-5 text-theme-primary" />
                                 <span>Organization created</span>
                             </div>
                             <div className="flex items-center justify-center space-x-2 text-gray-600">
-                                <FiCheckCircle className="w-5 h-5 text-green-500" />
+                                <FiCheckCircle className="w-5 h-5 text-theme-primary" />
                                 <span>Admin account ready</span>
                             </div>
                         </div>
@@ -216,8 +216,8 @@ const OrganizationOnboarding = () => {
                             Please check your inbox and click the verification link.
                         </p>
                         {organization?.emailVerified ? (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                <div className="flex items-center justify-center space-x-2 text-green-700">
+                            <div className="bg-theme-primary/10 border border-theme-primary rounded-lg p-4">
+                                <div className="flex items-center justify-center space-x-2 text-theme-primary">
                                     <FiCheckCircle className="w-5 h-5" />
                                     <span>Email verified successfully!</span>
                                 </div>
@@ -226,7 +226,7 @@ const OrganizationOnboarding = () => {
                             <div className="space-y-4">
                                 <button
                                     onClick={handleResendVerification}
-                                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                    className="px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90"
                                 >
                                     Resend Verification Email
                                 </button>
@@ -248,7 +248,7 @@ const OrganizationOnboarding = () => {
                                     Organization Description
                                 </label>
                                 <textarea
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     rows="4"
                                     placeholder="Tell us about your organization..."
                                 />
@@ -260,7 +260,7 @@ const OrganizationOnboarding = () => {
                                     </label>
                                     <input
                                         type="url"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                         placeholder="https://example.com"
                                     />
                                 </div>
@@ -270,7 +270,7 @@ const OrganizationOnboarding = () => {
                                     </label>
                                     <input
                                         type="text"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                         placeholder={organization?.industry || 'IT'}
                                     />
                                 </div>
@@ -317,7 +317,7 @@ const OrganizationOnboarding = () => {
                                     className="hidden"
                                     disabled={uploading}
                                 />
-                                <span className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-block">
+                                <span className="px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 inline-block">
                                     {uploading ? 'Uploading...' : formData.logo ? 'Change Logo' : 'Upload Logo'}
                                 </span>
                             </label>
@@ -339,7 +339,7 @@ const OrganizationOnboarding = () => {
                                 <select
                                     value={formData.timezone}
                                     onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                 >
                                     <option value="UTC">UTC</option>
                                     <option value="America/New_York">Eastern Time (ET)</option>
@@ -362,12 +362,12 @@ const OrganizationOnboarding = () => {
                                 <select
                                     value={formData.currency}
                                     onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                 >
+                                    <option value="INR">INR (₹)</option>
                                     <option value="USD">USD ($)</option>
                                     <option value="EUR">EUR (€)</option>
                                     <option value="GBP">GBP (£)</option>
-                                    <option value="INR">INR (₹)</option>
                                     <option value="JPY">JPY (¥)</option>
                                     <option value="AED">AED (د.إ)</option>
                                 </select>
@@ -380,7 +380,7 @@ const OrganizationOnboarding = () => {
                                 <select
                                     value={formData.dateFormat}
                                     onChange={(e) => setFormData(prev => ({ ...prev, dateFormat: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                 >
                                     <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                                     <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -401,7 +401,7 @@ const OrganizationOnboarding = () => {
                                             ...prev,
                                             workingHours: { ...prev.workingHours, start: e.target.value }
                                         }))}
-                                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     />
                                     <input
                                         type="time"
@@ -410,7 +410,7 @@ const OrganizationOnboarding = () => {
                                             ...prev,
                                             workingHours: { ...prev.workingHours, end: e.target.value }
                                         }))}
-                                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     />
                                 </div>
                             </div>
@@ -418,7 +418,7 @@ const OrganizationOnboarding = () => {
                         <button
                             onClick={handleSaveSettings}
                             disabled={loading}
-                            className="w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            className="w-full px-6 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                         >
                             {loading ? 'Saving...' : 'Save Settings'}
                         </button>
@@ -428,8 +428,8 @@ const OrganizationOnboarding = () => {
             case 'complete':
                 return (
                     <div className="text-center space-y-6">
-                        <div className="mx-auto w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
-                            <FiCheckCircle className="w-12 h-12 text-green-600" />
+                        <div className="mx-auto w-24 h-24 bg-theme-primary/10 rounded-full flex items-center justify-center">
+                            <FiCheckCircle className="w-12 h-12 text-theme-primary" />
                         </div>
                         <h3 className="text-2xl font-bold text-gray-900">You're All Set!</h3>
                         <p className="text-gray-600 max-w-md mx-auto">
@@ -438,7 +438,7 @@ const OrganizationOnboarding = () => {
                         <div className="space-y-4 mt-8">
                             <button
                                 onClick={handleComplete}
-                                className="px-8 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                                className="px-8 py-3 bg-theme-primary text-white rounded-md hover:opacity-90 font-medium"
                             >
                                 Go to Dashboard
                             </button>
@@ -462,7 +462,7 @@ const OrganizationOnboarding = () => {
                                 <div key={step.id} className="flex items-center flex-1">
                                     <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                                         index <= currentStep
-                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                            ? 'bg-theme-primary border-theme-primary text-white'
                                             : 'border-gray-300 text-gray-400'
                                     }`}>
                                         {index < currentStep ? (
@@ -473,7 +473,7 @@ const OrganizationOnboarding = () => {
                                     </div>
                                     {index < steps.length - 1 && (
                                         <div className={`flex-1 h-1 mx-2 ${
-                                            index < currentStep ? 'bg-blue-600' : 'bg-gray-300'
+                                            index < currentStep ? 'bg-theme-primary' : 'bg-gray-300'
                                         }`} />
                                     )}
                                 </div>
@@ -510,7 +510,7 @@ const OrganizationOnboarding = () => {
                             {currentStep < steps.length - 1 && (
                                 <button
                                     onClick={() => setCurrentStep(currentStep + 1)}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                    className="px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90"
                                 >
                                     Next
                                     <FiArrowRight className="inline ml-2" />

@@ -138,9 +138,9 @@ const WorkforceDetailPage = () => {
         switch (status) {
             case 'Approved':
             case 'Filled':
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
             case 'In Progress':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-theme-secondary/10 text-theme-secondary';
             case 'Planned':
                 return 'bg-yellow-100 text-yellow-800';
             default:
@@ -157,7 +157,7 @@ const WorkforceDetailPage = () => {
             case 'Medium':
                 return 'bg-yellow-100 text-yellow-800';
             default:
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
         }
     };
 
@@ -168,7 +168,7 @@ const WorkforceDetailPage = () => {
             case 'Medium':
                 return 'bg-yellow-100 text-yellow-800';
             default:
-                return 'bg-green-100 text-green-800';
+                return 'bg-theme-primary/10 text-theme-primary';
         }
     };
 
@@ -222,14 +222,14 @@ const WorkforceDetailPage = () => {
                                     <p className="text-sm text-gray-600 mb-1">Current</p>
                                     <p className="text-3xl font-bold text-gray-800">{plan.currentHeadcount}</p>
                                 </div>
-                                <div className="bg-blue-50 p-4 rounded-lg text-center">
+                                <div className="bg-theme-secondary/10 p-4 rounded-lg text-center">
                                     <p className="text-sm text-gray-600 mb-1">Target</p>
-                                    <p className="text-3xl font-bold text-blue-600">{plan.targetHeadcount}</p>
+                                    <p className="text-3xl font-bold text-theme-secondary">{plan.targetHeadcount}</p>
                                 </div>
                             </div>
                             {gap !== 0 && (
                                 <div className={`p-3 rounded text-center ${
-                                    gap > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                    gap > 0 ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'
                                 }`}>
                                     <span className="font-semibold">
                                         {gap > 0 ? '+' : ''}{gap} ({gapPercent > 0 ? '+' : ''}{gapPercent}%)
@@ -256,13 +256,13 @@ const WorkforceDetailPage = () => {
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-3">
                                         <div 
-                                            className="bg-blue-600 h-3 rounded-full"
+                                            className="bg-theme-primary h-3 rounded-full"
                                             style={{ width: `${plan.budget.allocated > 0 ? Math.min((plan.budget.spent / plan.budget.allocated) * 100, 100) : 0}%` }}
                                         ></div>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-600">Remaining:</span>
-                                        <span className="font-semibold text-green-600">
+                                        <span className="font-semibold text-theme-primary">
                                             ${plan.budget.remaining?.toLocaleString() || 0}
                                         </span>
                                     </div>
@@ -278,7 +278,7 @@ const WorkforceDetailPage = () => {
                                 </h2>
                                 <button
                                     onClick={() => setShowAddHiringModal(true)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm"
+                                    className="flex items-center gap-2 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm"
                                 >
                                     <FaPlus /> Add Position
                                 </button>
@@ -321,7 +321,7 @@ const WorkforceDetailPage = () => {
                                             </div>
                                         </div>
                                     ))}
-                                    <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
+                                    <div className="mt-4 p-3 bg-theme-secondary/10 rounded-lg text-sm">
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Total Positions:</span>
                                             <span className="font-semibold">{plan.hiringPlan.reduce((sum, p) => sum + (p.numberOfPositions || 0), 0)}</span>
@@ -442,7 +442,7 @@ const WorkforceDetailPage = () => {
                                                 <span className="font-medium">{skill.skill}</span>
                                                 {skill.gap !== undefined && (
                                                     <span className={`px-2 py-1 rounded text-xs ${
-                                                        skill.gap > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                                                        skill.gap > 0 ? 'bg-red-100 text-red-800' : 'bg-theme-primary/10 text-theme-primary'
                                                     }`}>
                                                         Gap: {skill.gap}
                                                     </span>
@@ -574,7 +574,7 @@ const WorkforceDetailPage = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

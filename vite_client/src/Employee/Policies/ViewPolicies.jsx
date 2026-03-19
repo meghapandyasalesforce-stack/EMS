@@ -66,7 +66,7 @@ const ViewPolicies = () => {
                                         <h3 className="text-xl font-semibold text-gray-800">{policy.title}</h3>
                                         {policy.requiresAcknowledgment && (
                                             policy.acknowledged ? (
-                                                <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 flex items-center gap-1">
+                                                <span className="px-3 py-1 rounded-full text-xs font-medium bg-theme-primary/10 text-theme-primary flex items-center gap-1">
                                                     <FaCheckCircle /> Acknowledged
                                                 </span>
                                             ) : (
@@ -89,7 +89,7 @@ const ViewPolicies = () => {
                                             <span>Expires: {new Date(policy.expiryDate).toLocaleDateString()}</span>
                                         )}
                                         {policy.acknowledgedAt && (
-                                            <span className="text-green-600">
+                                            <span className="text-theme-primary">
                                                 Acknowledged: {new Date(policy.acknowledgedAt).toLocaleDateString()}
                                             </span>
                                         )}
@@ -99,7 +99,7 @@ const ViewPolicies = () => {
                             {policy.requiresAcknowledgment && !policy.acknowledged && (
                                 <button
                                     onClick={() => handleAcknowledge(policy._id)}
-                                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                    className="bg-theme-primary text-white px-6 py-2 rounded-lg hover:opacity-90 flex items-center gap-2"
                                 >
                                     <FaCheckCircle /> Acknowledge Policy
                                 </button>

@@ -97,7 +97,7 @@ const FinancialDetails = () => {
               className={`${
                 updatingFinancialDetails 
                   ? 'bg-green-400 cursor-not-allowed' 
-                  : 'bg-green-500 hover:bg-green-600'
+                  : 'bg-theme-primary hover:bg-theme-primary'
               } text-white px-6 py-2 rounded-lg font-medium transition`}
             >
               {updatingFinancialDetails ? 'Saving...' : 'Save'}
@@ -138,7 +138,7 @@ const FinancialDetails = () => {
           </p>
           <button
             onClick={() => setIsEditing(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
+            className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 transition"
           >
             Edit
           </button>

@@ -126,7 +126,7 @@ const OrganizationSettings = () => {
     if (loading && !profile) {
         return (
             <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
             </div>
         );
     }
@@ -143,7 +143,7 @@ const OrganizationSettings = () => {
                     <button
                         onClick={handleSaveSettings}
                         disabled={isSaving}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                     >
                         <FiSave className="mr-2" />
                         {isSaving ? 'Saving...' : 'Save Settings'}
@@ -167,7 +167,7 @@ const OrganizationSettings = () => {
                             className="ml-4"
                         >
                             {settings.allowEmployeeRegistration ? (
-                                <FiToggleRight className="w-12 h-6 text-green-600" />
+                                <FiToggleRight className="w-12 h-6 text-theme-primary" />
                             ) : (
                                 <FiToggleLeft className="w-12 h-6 text-gray-400" />
                             )}
@@ -190,7 +190,7 @@ const OrganizationSettings = () => {
                             className="ml-4"
                         >
                             {settings.requireEmailVerification ? (
-                                <FiToggleRight className="w-12 h-6 text-green-600" />
+                                <FiToggleRight className="w-12 h-6 text-theme-primary" />
                             ) : (
                                 <FiToggleLeft className="w-12 h-6 text-gray-400" />
                             )}
@@ -213,7 +213,7 @@ const OrganizationSettings = () => {
                             className="ml-4"
                         >
                             {settings.allowSelfService ? (
-                                <FiToggleRight className="w-12 h-6 text-green-600" />
+                                <FiToggleRight className="w-12 h-6 text-theme-primary" />
                             ) : (
                                 <FiToggleLeft className="w-12 h-6 text-gray-400" />
                             )}
@@ -285,7 +285,7 @@ const OrganizationSettings = () => {
                     <button
                         onClick={handleSaveSubscription}
                         disabled={isSaving}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
                     >
                         <FiSave className="mr-2" />
                         {isSaving ? 'Saving...' : 'Update Plan'}
@@ -302,7 +302,7 @@ const OrganizationSettings = () => {
                             name="subscriptionPlan"
                             value={subscription.subscriptionPlan}
                             onChange={handleSubscriptionChange}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                         >
                             <option value="free">Free (10 employees)</option>
                             <option value="basic">Basic (50 employees)</option>
@@ -325,7 +325,7 @@ const OrganizationSettings = () => {
                             value={subscription.maxEmployees}
                             onChange={handleSubscriptionChange}
                             min="1"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                         />
                         <p className="text-sm text-gray-500 mt-1">
                             Maximum number of employees allowed in your organization

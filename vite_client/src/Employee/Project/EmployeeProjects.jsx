@@ -22,9 +22,9 @@ const EmployeeProjects = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Completed':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-theme-primary/10 text-theme-primary border-theme-primary';
       case 'In Progress':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary';
       case 'On Hold':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       default:
@@ -36,7 +36,7 @@ const EmployeeProjects = () => {
     return (
       <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
           <p className="text-gray-600">Loading projects...</p>
         </div>
       </div>
@@ -68,7 +68,7 @@ const EmployeeProjects = () => {
               <p className="text-sm text-gray-600 mt-0.5">Manage and track your assigned projects</p>
             </div>
             <div className="flex gap-2">
-              <button className="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-600 transition">
+              <button className="bg-theme-secondary text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-theme-primary transition">
                 Active Projects
               </button>
               <button className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
@@ -83,22 +83,22 @@ const EmployeeProjects = () => {
           <SummaryCard 
             title="Total Projects" 
             count={projects.length} 
-            icon={<FiFolder className="w-6 h-6 text-blue-600" />} 
-            bg="bg-blue-50" 
-            iconBg="bg-blue-100"
+            icon={<FiFolder className="w-6 h-6 text-theme-secondary" />} 
+            bg="bg-theme-secondary/10" 
+            iconBg="bg-theme-secondary/10"
           />
           <SummaryCard 
             title="In Progress" 
             count={projects.filter(p => p.status === 'In Progress').length} 
             icon={<CheckIcon />} 
-            bg="bg-green-50" 
-            iconBg="bg-green-100"
+            bg="bg-theme-primary/10" 
+            iconBg="bg-theme-primary/10"
           />
           <SummaryCard 
             title="Completed" 
             count={projects.filter(p => p.status === 'Completed').length} 
             icon={<DoneIcon />} 
-            bg="bg-emerald-50" 
+            bg="bg-theme-primary/10" 
             iconBg="bg-emerald-100"
           />
           <SummaryCard 
@@ -119,8 +119,8 @@ const EmployeeProjects = () => {
 
           {projects.length === 0 ? (
             <div className="p-8 text-center">
-              <div className="flex items-center justify-center w-14 h-14 bg-blue-50 rounded-full mx-auto mb-3">
-                <FiFolder className="w-7 h-7 text-blue-500" />
+              <div className="flex items-center justify-center w-14 h-14 bg-theme-secondary/10 rounded-full mx-auto mb-3">
+                <FiFolder className="w-7 h-7 text-theme-secondary" />
               </div>
               <h3 className="text-base font-semibold text-gray-900 mb-1">No Projects Assigned</h3>
               <p className="text-sm text-gray-500 mb-1">You are not assigned to any projects yet.</p>
@@ -152,14 +152,14 @@ const EmployeeProjects = () => {
                   {projects.map((project) => (
                     <tr
                       key={project._id}
-                      className="hover:bg-blue-50 cursor-pointer transition-all duration-200 hover:shadow-sm"
+                      className="hover:bg-theme-secondary/10 cursor-pointer transition-all duration-200 hover:shadow-sm"
                       onClick={() => handleProjectClick(project._id)}
                     >
                       {/* Project name */}
                       <td className="px-5 py-3">
                         <div className="flex items-center">
-                          <div className="h-9 w-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <FiFolder className="w-5 h-5 text-blue-600" />
+                          <div className="h-9 w-9 bg-theme-secondary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <FiFolder className="w-5 h-5 text-theme-secondary" />
                           </div>
                           <div className="ml-3 min-w-0 flex-1">
                             <div className="text-sm font-semibold text-gray-900 truncate">{project.name}</div>
@@ -173,8 +173,8 @@ const EmployeeProjects = () => {
                       {/* Leader */}
                       <td className="px-5 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <FiUser className="w-4 h-4 text-blue-600" />
+                          <div className="h-8 w-8 bg-theme-secondary/10 rounded-full flex items-center justify-center">
+                            <FiUser className="w-4 h-4 text-theme-secondary" />
                           </div>
                           <span className="text-sm font-medium text-gray-900">
                             {project.projectLeader?.name || 'Not assigned'}
@@ -215,8 +215,8 @@ const EmployeeProjects = () => {
 
                       {/* Action */}
                       <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-blue-50 transition">
-                          <FiChevronRight className="w-4 h-4 text-gray-400 hover:text-blue-600 transition" />
+                        <div className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-theme-secondary/10 transition">
+                          <FiChevronRight className="w-4 h-4 text-gray-400 hover:text-theme-secondary transition" />
                         </div>
                       </td>
                     </tr>
@@ -247,13 +247,13 @@ const SummaryCard = ({ title, count, icon, bg, iconBg }) => (
 );
 
 const CheckIcon = () => (
-  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-5 h-5 text-theme-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 
 const DoneIcon = () => (
-  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-5 h-5 text-theme-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
   </svg>
 );

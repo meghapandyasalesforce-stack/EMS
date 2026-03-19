@@ -75,7 +75,7 @@ const AllAttendanceStatsComponent = () => {
                   id="timeRange"
                   value={timeRange}
                   onChange={handleTimeRangeChange}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm lg:text-base"
+                  className="rounded-md border-gray-300 shadow-sm focus:border-theme-secondary focus:ring-2 focus:ring-[var(--color-primary)] text-sm lg:text-base"
                 >
                   <option value="daily">Daily</option>
                   <option value="monthly">Monthly</option>
@@ -90,7 +90,7 @@ const AllAttendanceStatsComponent = () => {
                     id="year"
                     value={year}
                     onChange={(e) => setYear(parseInt(e.target.value))}
-                    className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm lg:text-base"
+                    className="rounded-md border-gray-300 shadow-sm focus:border-theme-secondary focus:ring-2 focus:ring-[var(--color-primary)] text-sm lg:text-base"
                   >
                     {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
                       <option key={y} value={y}>{y}</option>
@@ -106,7 +106,7 @@ const AllAttendanceStatsComponent = () => {
                     id="month"
                     value={month}
                     onChange={(e) => setMonth(parseInt(e.target.value))}
-                    className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm lg:text-base"
+                    className="rounded-md border-gray-300 shadow-sm focus:border-theme-secondary focus:ring-2 focus:ring-[var(--color-primary)] text-sm lg:text-base"
                   >
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                       <option key={m} value={m}>{new Date(2000, m - 1, 1).toLocaleString('default', { month: 'short' })}</option>
@@ -121,7 +121,7 @@ const AllAttendanceStatsComponent = () => {
                   id="department"
                   value={departmentFilter}
                   onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm lg:text-base"
+                  className="rounded-md border-gray-300 shadow-sm focus:border-theme-secondary focus:ring-2 focus:ring-[var(--color-primary)] text-sm lg:text-base"
                 >
                   <option value="">All</option>
                   <option value="Engineering">Engineering</option>
@@ -154,14 +154,14 @@ const AllAttendanceStatsComponent = () => {
                         <td className="px-3 py-2 lg:px-6 lg:py-4 whitespace-nowrap text-sm">{employee.position}</td>
                         <td className="px-3 py-2 lg:px-6 lg:py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${employee.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            ${employee.active ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'}`}>
                             {employee.active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="px-3 py-2 lg:px-6 lg:py-4 whitespace-nowrap">
                           <button
                             onClick={() => handleEmployeeSelect(employee._id)}
-                            className="text-blue-600 hover:text-blue-900 text-sm lg:text-base"
+                            className="text-theme-secondary hover:text-[var(--color-text)] text-sm lg:text-base"
                           >
                             View Details
                           </button>
@@ -177,7 +177,7 @@ const AllAttendanceStatsComponent = () => {
           <div>
             <button 
               onClick={handleBackToList}
-              className="mb-4 flex items-center text-blue-600 hover:text-blue-800 text-sm lg:text-base"
+              className="mb-4 flex items-center text-theme-secondary hover:text-theme-secondary text-sm lg:text-base"
             >
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -257,7 +257,7 @@ const AllAttendanceStatsComponent = () => {
                         </td>
                         <td className="px-3 py-2 lg:px-6 lg:py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${record.status === 'present' ? 'bg-green-100 text-green-800' :
+                            ${record.status === 'present' ? 'bg-theme-primary/10 text-theme-primary' :
                               record.status === 'half-day' ? 'bg-yellow-100 text-yellow-800' :
                               'bg-red-100 text-red-800'}`}>
                             {record.status}

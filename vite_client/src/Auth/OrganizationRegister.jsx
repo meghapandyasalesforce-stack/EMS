@@ -110,9 +110,9 @@ const OrganizationRegister = () => {
         } else if (strengthCount <= 2) {
             return { label: 'Fair', color: 'text-yellow-600' };
         } else if (strengthCount <= 4) {
-            return { label: 'Good', color: 'text-blue-600' };
+            return { label: 'Good', color: 'text-theme-secondary' };
         } else {
-            return { label: 'Strong', color: 'text-green-600' };
+            return { label: 'Strong', color: 'text-theme-primary' };
         }
     };
 
@@ -327,7 +327,7 @@ const OrganizationRegister = () => {
                         <div className="flex items-center">
                             <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                                 currentStep >= step 
-                                    ? 'bg-blue-600 border-blue-600 text-white' 
+                                    ? 'bg-theme-primary border-theme-secondary text-white' 
                                     : 'border-gray-300 text-gray-400'
                             }`}>
                                 {currentStep > step ? (
@@ -338,7 +338,7 @@ const OrganizationRegister = () => {
                             </div>
                             {step < totalSteps && (
                                 <div className={`w-16 h-1 mx-2 ${
-                                    currentStep > step ? 'bg-blue-600' : 'bg-gray-300'
+                                    currentStep > step ? 'bg-theme-primary' : 'bg-gray-300'
                                 }`} />
                             )}
                         </div>
@@ -382,7 +382,7 @@ const OrganizationRegister = () => {
                         required
                         value={formData.name}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="Enter organization name"
                     />
                 </div>
@@ -404,7 +404,7 @@ const OrganizationRegister = () => {
                         required
                         value={formData.email}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="your-email@example.com"
                     />
                 </div>
@@ -426,7 +426,7 @@ const OrganizationRegister = () => {
                         required
                         value={formData.password}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="Minimum 8 characters"
                     />
                     <button
@@ -450,23 +450,23 @@ const OrganizationRegister = () => {
                             </span>
                         </div>
                         <div className="space-y-1 text-xs">
-                            <div className={`flex items-center ${passwordStrength.length ? 'text-green-600' : 'text-gray-400'}`}>
+                            <div className={`flex items-center ${passwordStrength.length ? 'text-theme-primary' : 'text-gray-400'}`}>
                                 {passwordStrength.length ? <FiCheck className="mr-1" /> : <FiX className="mr-1" />}
                                 At least 8 characters
                             </div>
-                            <div className={`flex items-center ${passwordStrength.uppercase ? 'text-green-600' : 'text-gray-400'}`}>
+                            <div className={`flex items-center ${passwordStrength.uppercase ? 'text-theme-primary' : 'text-gray-400'}`}>
                                 {passwordStrength.uppercase ? <FiCheck className="mr-1" /> : <FiX className="mr-1" />}
                                 One uppercase letter
                             </div>
-                            <div className={`flex items-center ${passwordStrength.lowercase ? 'text-green-600' : 'text-gray-400'}`}>
+                            <div className={`flex items-center ${passwordStrength.lowercase ? 'text-theme-primary' : 'text-gray-400'}`}>
                                 {passwordStrength.lowercase ? <FiCheck className="mr-1" /> : <FiX className="mr-1" />}
                                 One lowercase letter
                             </div>
-                            <div className={`flex items-center ${passwordStrength.number ? 'text-green-600' : 'text-gray-400'}`}>
+                            <div className={`flex items-center ${passwordStrength.number ? 'text-theme-primary' : 'text-gray-400'}`}>
                                 {passwordStrength.number ? <FiCheck className="mr-1" /> : <FiX className="mr-1" />}
                                 One number
                             </div>
-                            <div className={`flex items-center ${passwordStrength.special ? 'text-green-600' : 'text-gray-400'}`}>
+                            <div className={`flex items-center ${passwordStrength.special ? 'text-theme-primary' : 'text-gray-400'}`}>
                                 {passwordStrength.special ? <FiCheck className="mr-1" /> : <FiX className="mr-1" />}
                                 One special character
                             </div>
@@ -491,7 +491,7 @@ const OrganizationRegister = () => {
                         required
                         value={formData.confirmPassword}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="Confirm your password"
                     />
                     <button
@@ -524,7 +524,7 @@ const OrganizationRegister = () => {
                         name="industry"
                         value={formData.industry}
                         onChange={handleChange}
-                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                     >
                         <option value="">Select Industry</option>
                         {industries.map(industry => (
@@ -542,7 +542,7 @@ const OrganizationRegister = () => {
                         name="companySize"
                         value={formData.companySize}
                         onChange={handleChange}
-                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                     >
                         <option value="">Select Company Size</option>
                         {companySizes.map(size => (
@@ -566,7 +566,7 @@ const OrganizationRegister = () => {
                         type="tel"
                         value={formData.phone}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="+1 (555) 123-4567"
                     />
                 </div>
@@ -582,7 +582,7 @@ const OrganizationRegister = () => {
                     type="text"
                     value={formData.domain}
                     onChange={handleChange}
-                    className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                    className={`appearance-none block w-full px-3 py-2 border rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm ${
                         formData.domain && !validateDomain(formData.domain) 
                             ? 'border-red-300' 
                             : 'border-gray-300'
@@ -606,7 +606,7 @@ const OrganizationRegister = () => {
                             type="text"
                             value={formData.address.street}
                             onChange={handleChange}
-                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="Street Address"
                         />
                     </div>
@@ -616,7 +616,7 @@ const OrganizationRegister = () => {
                             type="text"
                             value={formData.address.city}
                             onChange={handleChange}
-                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="City"
                         />
                     </div>
@@ -626,7 +626,7 @@ const OrganizationRegister = () => {
                             type="text"
                             value={formData.address.state}
                             onChange={handleChange}
-                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="State/Province"
                         />
                     </div>
@@ -636,7 +636,7 @@ const OrganizationRegister = () => {
                             type="text"
                             value={formData.address.country}
                             onChange={handleChange}
-                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="Country"
                         />
                     </div>
@@ -646,7 +646,7 @@ const OrganizationRegister = () => {
                             type="text"
                             value={formData.address.zipCode}
                             onChange={handleChange}
-                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="ZIP/Postal Code"
                         />
                     </div>
@@ -663,7 +663,7 @@ const OrganizationRegister = () => {
                     type="text"
                     value={formData.referredBy}
                     onChange={handleChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                     placeholder="Enter referral code if you have one"
                 />
             </div>
@@ -691,7 +691,7 @@ const OrganizationRegister = () => {
                         type="text"
                         value={formData.adminName}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="Leave blank to use organization name + Admin"
                     />
                 </div>
@@ -711,7 +711,7 @@ const OrganizationRegister = () => {
                         type="email"
                         value={formData.adminEmail}
                         onChange={handleChange}
-                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                         placeholder="Leave blank to use organization email"
                     />
                 </div>
@@ -732,7 +732,7 @@ const OrganizationRegister = () => {
                             type="tel"
                             value={formData.adminPhone}
                             onChange={handleChange}
-                            className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="+1 (555) 123-4567"
                         />
                     </div>
@@ -752,7 +752,7 @@ const OrganizationRegister = () => {
                             type="text"
                             value={formData.adminTitle}
                             onChange={handleChange}
-                            className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                             placeholder="e.g., CEO, Manager"
                         />
                     </div>
@@ -769,7 +769,7 @@ const OrganizationRegister = () => {
                     type="text"
                     value={formData.adminPosition}
                     onChange={handleChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary sm:text-sm"
                     placeholder="e.g., Director, VP"
                 />
             </div>
@@ -785,7 +785,7 @@ const OrganizationRegister = () => {
 
             {loadingPlans ? (
                 <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto"></div>
                     <p className="mt-4 text-gray-600">Loading plans...</p>
                 </div>
             ) : (
@@ -796,13 +796,13 @@ const OrganizationRegister = () => {
                             onClick={() => setFormData(prev => ({ ...prev, subscriptionPlan: plan.id }))}
                             className={`relative border-2 rounded-lg p-6 cursor-pointer transition-all ${
                                 formData.subscriptionPlan === plan.id
-                                    ? 'border-blue-600 bg-blue-50 shadow-lg'
+                                    ? 'border-theme-secondary bg-theme-secondary/10 shadow-lg'
                                     : 'border-gray-200 hover:border-gray-300'
                             }`}
                         >
                             {formData.subscriptionPlan === plan.id && (
                                 <div className="absolute top-4 right-4">
-                                    <FaCheckCircle className="w-6 h-6 text-blue-600" />
+                                    <FaCheckCircle className="w-6 h-6 text-theme-secondary" />
                                 </div>
                             )}
                             <div className="text-center">
@@ -822,7 +822,7 @@ const OrganizationRegister = () => {
                                         </li>
                                     ))}
                                     {plan.features.length > 4 && (
-                                        <li className="text-blue-600 font-medium">
+                                        <li className="text-theme-secondary font-medium">
                                             +{plan.features.length - 4} more features
                                         </li>
                                     )}
@@ -842,17 +842,17 @@ const OrganizationRegister = () => {
                             type="checkbox"
                             checked={termsAccepted}
                             onChange={(e) => setTermsAccepted(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-theme-secondary focus:ring-2 focus:ring-[var(--color-primary)] border-gray-300 rounded"
                         />
                     </div>
                     <div className="ml-3 text-sm">
                         <label htmlFor="terms" className="text-gray-700">
                             I agree to the{' '}
-                            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 underline">
+                            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-theme-secondary hover:text-theme-secondary underline">
                                 Terms and Conditions
                             </a>
                             {' '}and{' '}
-                            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 underline">
+                            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-theme-secondary hover:text-theme-secondary underline">
                                 Privacy Policy
                             </a>
                             <span className="text-red-500">*</span>
@@ -864,11 +864,11 @@ const OrganizationRegister = () => {
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
-                        <FaBuilding className="h-12 w-12 text-blue-600" />
+                        <FaBuilding className="h-12 w-12 text-theme-secondary" />
                     </div>
                     <h2 className="text-3xl font-extrabold text-gray-900">
                         Register Your Organization
@@ -888,7 +888,7 @@ const OrganizationRegister = () => {
                             type="button"
                             onClick={handleBack}
                             disabled={currentStep === 1}
-                            className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-2 focus:ring-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <FiArrowLeft className="mr-2" />
                             Back
@@ -898,7 +898,7 @@ const OrganizationRegister = () => {
                             <button
                                 type="button"
                                 onClick={handleNext}
-                                className="flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                className="flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-theme-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-2 focus:ring-[var(--color-primary)]"
                             >
                                 Next
                                 <FiArrowRight className="ml-2" />
@@ -907,7 +907,7 @@ const OrganizationRegister = () => {
                             <button
                                 type="submit"
                                 disabled={isSubmitting || !termsAccepted}
-                                className="flex items-center px-6 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center px-6 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-theme-primary hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-2 focus:ring-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isSubmitting ? (
                                     <>
@@ -928,13 +928,13 @@ const OrganizationRegister = () => {
                 <div className="text-center space-y-2 mt-6">
                     <p className="text-sm text-gray-600">
                         Already have an organization account?{' '}
-                        <Link to="/organization/login" className="font-medium text-blue-600 hover:text-blue-500">
+                        <Link to="/organization/login" className="font-medium text-theme-secondary hover:text-theme-secondary">
                             Sign in here
                         </Link>
                     </p>
                     <p className="text-sm text-gray-600">
                         Regular user?{' '}
-                        <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                        <Link to="/login" className="font-medium text-theme-secondary hover:text-theme-secondary">
                             Employee/Admin Login
                         </Link>
                     </p>

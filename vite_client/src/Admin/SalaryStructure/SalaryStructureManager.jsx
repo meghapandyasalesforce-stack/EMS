@@ -239,7 +239,7 @@ const SalaryStructureManager = () => {
           <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <FaMoneyBillWave className="w-8 h-8 text-white animate-pulse" />
           </div>
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-theme-accent border-t-indigo-500 mx-auto"></div>
           <p className="text-gray-600 mt-4 font-medium">Loading salary structures...</p>
         </div>
       </div>
@@ -317,14 +317,14 @@ const SalaryStructureManager = () => {
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <button
                       onClick={() => openCalculateModal(structure)}
-                      className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 hover:scale-110"
+                      className="p-2 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 hover:scale-110"
                       title="Calculate Salary"
                     >
                       <FaCalculator className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => openApplyModal(structure)}
-                      className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all duration-200 hover:scale-110"
+                      className="p-2 text-gray-400 hover:text-green-500 hover:bg-theme-primary/10 rounded-xl transition-all duration-200 hover:scale-110"
                       title="Apply to Employee"
                     >
                       <FiUsers className="w-4 h-4" />
@@ -372,7 +372,7 @@ const SalaryStructureManager = () => {
                     </span>
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
                       structure.isActive 
-                        ? 'bg-green-100 text-green-800' 
+                        ? 'bg-theme-primary/10 text-theme-primary' 
                         : 'bg-red-100 text-red-800'
                     }`}>
                       {structure.isActive ? (
@@ -586,7 +586,7 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
           </div>
 
           {/* Earnings Section */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6">
+          <div className="bg-gradient-to-r from-white to-theme-primary/10 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                 <FiTrendingUp className="w-4 h-4 text-white" />
@@ -605,13 +605,13 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
                       step="0.01"
                       value={config.isPercentage ? config.percentage : config.fixedAmount}
                       onChange={(e) => handleEarningChange(field, config.isPercentage ? 'percentage' : 'fixedAmount', parseFloat(e.target.value) || 0)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-theme-primary transition-all duration-200"
                       placeholder="0.00"
                     />
                     <select
                       value={config.isPercentage ? 'percentage' : 'fixed'}
                       onChange={(e) => handleEarningChange(field, 'isPercentage', e.target.value === 'percentage')}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-theme-primary transition-all duration-200"
                     >
                       <option value="percentage">%</option>
                       <option value="fixed">₹</option>
@@ -831,7 +831,7 @@ const ApplyModal = ({ structure, employees, selectedEmployee, setSelectedEmploye
             <select
               value={selectedEmployee || ''}
               onChange={(e) => setSelectedEmployee(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-theme-primary transition-all duration-200"
               required
             >
               <option value="">Choose an employee...</option>
@@ -900,7 +900,7 @@ const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmp
             <select
               value={selectedEmployee || ''}
               onChange={(e) => setSelectedEmployee(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
             >
               <option value="">Choose an employee...</option>
               {employees.map(employee => (
@@ -922,7 +922,7 @@ const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmp
           )}
 
           {calculatedSalary && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+            <div className="bg-gradient-to-r from-white to-theme-primary/10 rounded-2xl p-6 border border-theme-primary">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                   <FiDollarSign className="w-4 h-4 text-white" />
@@ -939,7 +939,7 @@ const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmp
                 <div className="bg-white rounded-xl p-4 border border-gray-200">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-semibold text-gray-600">Total Earnings:</span>
-                    <span className="text-lg font-bold text-green-600">₹{calculatedSalary.calculatedSalary.totalEarnings}</span>
+                    <span className="text-lg font-bold text-theme-primary">₹{calculatedSalary.calculatedSalary.totalEarnings}</span>
                   </div>
                 </div>
                 <div className="bg-white rounded-xl p-4 border border-gray-200">

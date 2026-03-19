@@ -53,8 +53,8 @@ const DocumentVersions = () => {
 
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="bg-blue-100 p-3 rounded-lg">
-                            <FaHistory className="w-6 h-6 text-blue-600" />
+                        <div className="bg-theme-secondary/10 p-3 rounded-lg">
+                            <FaHistory className="w-6 h-6 text-theme-secondary" />
                         </div>
                         <div>
                             <h2 className="text-xl font-semibold text-gray-800">{document?.name}</h2>
@@ -70,7 +70,7 @@ const DocumentVersions = () => {
                                 key={index}
                                 className={`border rounded-lg p-4 ${
                                     version.isCurrent
-                                        ? 'border-blue-500 bg-blue-50'
+                                        ? 'border-theme-secondary bg-theme-secondary/10'
                                         : 'border-gray-200 bg-white'
                                 }`}
                             >
@@ -79,7 +79,7 @@ const DocumentVersions = () => {
                                         <div className="flex items-center gap-3 mb-2">
                                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                                                 version.isCurrent
-                                                    ? 'bg-blue-500 text-white'
+                                                    ? 'bg-theme-secondary text-white'
                                                     : 'bg-gray-200 text-gray-700'
                                             }`}>
                                                 Version {version.version}
@@ -103,7 +103,7 @@ const DocumentVersions = () => {
                                         href={version.fileUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                                        className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                                     >
                                         <FaDownload className="w-4 h-4" />
                                         Download

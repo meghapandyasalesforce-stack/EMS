@@ -47,6 +47,19 @@ export function useAttendanceRealtime() {
 
     socket.on('attendance:employees_on_break_changed', onBreakChanged);
 
+    // Make realtime optional and resilient: if socket fails, the rest of the app keeps working.
+    socket.on('connect_error', () => {
+      // In development we could log, but avoid noisy console in production.
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn('Realtime connection unavailable (socket.io connect_error).');
+      }
+    });
+
+    socket.on('disconnect', () => {
+      // No-op; queries will still update via normal refetches.
+    });
+
     return () => {
       socket.off('attendance:employees_on_break_changed', onBreakChanged);
       socket.disconnect();

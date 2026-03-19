@@ -63,7 +63,7 @@ const EmployeePayroll = () => {
   if (!payrollData || !employeeData)
     return (
       <div className="max-w-6xl mx-auto p-8">
-        <div className="bg-blue-100 text-blue-700 p-4 rounded">
+        <div className="bg-theme-secondary/10 text-theme-secondary p-4 rounded">
           No payroll data available
         </div>
       </div>
@@ -83,7 +83,7 @@ const EmployeePayroll = () => {
                 className="w-40 h-40 rounded-xl object-cover"
               />
             ) : (
-              <div className="w-40 h-40 flex items-center justify-center rounded-xl bg-blue-600 text-white text-4xl font-semibold">
+              <div className="w-40 h-40 flex items-center justify-center rounded-xl bg-theme-primary text-white text-4xl font-semibold">
                 {employeeData.name?.charAt(0)}
               </div>
             )}

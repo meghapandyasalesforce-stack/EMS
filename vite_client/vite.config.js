@@ -84,6 +84,8 @@ export default defineConfig(({ mode }) => {
   // This properly handles VITE_* prefixed variables in config files
   const env = loadEnv(mode, process.cwd(), '');
   
+  const proxyTarget = env.VITE_PROXY_TARGET || env.VITE_BACKEND_URL || 'http://localhost:10000';
+
   return {
   // Suppress verbose logging for proxy errors
   logLevel: env.VITE_LOG_LEVEL || 'warn',
@@ -341,13 +343,28 @@ export default defineConfig(({ mode }) => {
   server: {
     proxy: {
       '/socket.io': {
-        target: 'http://localhost:10000',
+        target: proxyTarget,
         changeOrigin: true,
         secure: false,
         ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, req, res) => {
+            // Silently handle dev-time connection issues to backend (e.g. server not running or wrong port)
+            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' ||
+                err.message?.includes('ECONNREFUSED') || err.message?.includes('ECONNRESET')) {
+              if (res && !res.headersSent) {
+                // For WebSocket upgrade failures we can just end the response; the client will retry gracefully.
+                res.end();
+              }
+              return;
+            }
+            // Only log unexpected errors
+            console.error('Socket.io proxy error:', err.message);
+          });
+        },
       },
       '/api': {
-        target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)
+        target: proxyTarget, // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,
         secure: false,
         // Handle connection errors gracefully - suppress ECONNREFUSED errors
@@ -419,7 +436,7 @@ export default defineConfig(({ mode }) => {
         timeout: 300000, // 5 minutes timeout (SSE endpoints handled per-request above)
       },
       '/uploads': {
-        target: 'http://localhost:10000', // Backend default port is 10000 (or PORT env var)
+        target: proxyTarget, // Backend default port is 10000 (or PORT env var)
         changeOrigin: true,
         secure: false,
         // Handle connection errors gracefully - suppress ECONNREFUSED errors

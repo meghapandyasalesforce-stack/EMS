@@ -172,13 +172,13 @@ const Todo = () => {
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && saveEdit(todo.id)}
-                    className="flex-1 px-2 py-1 border border-gray-300 rounded-md mr-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-md mr-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                     autoFocus
                   />
                   <div className="flex space-x-1">
                     <button
                       onClick={() => saveEdit(todo.id)}
-                      className="text-green-500 hover:text-green-700 p-1"
+                      className="text-green-500 hover:text-theme-primary p-1"
                       title="Save"
                     >
                       <FaCheck />

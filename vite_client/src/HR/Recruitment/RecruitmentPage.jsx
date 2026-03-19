@@ -47,7 +47,7 @@ const RecruitmentPage = () => {
                     </div>
                     <button
                         onClick={() => navigate('/recruitment/create-job')}
-                        className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                        className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                     >
                         <FaPlus className="w-4 h-4" />
                         Post New Job
@@ -59,14 +59,14 @@ const RecruitmentPage = () => {
                     <div className="flex border-b">
                         <button
                             onClick={() => setActiveTab('jobs')}
-                            className={`px-6 py-3 font-medium ${activeTab === 'jobs' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'jobs' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaBriefcase className="inline mr-2" />
                             Job Postings ({jobPostings.length})
                         </button>
                         <button
                             onClick={() => setActiveTab('candidates')}
-                            className={`px-6 py-3 font-medium ${activeTab === 'candidates' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'}`}
+                            className={`px-6 py-3 font-medium ${activeTab === 'candidates' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
                         >
                             <FaUsers className="inline mr-2" />
                             Candidates ({candidates.length})
@@ -83,7 +83,7 @@ const RecruitmentPage = () => {
                                 <p className="text-gray-600 mb-4">{job.department}</p>
                                 <div className="flex items-center justify-between">
                                     <span className={`px-3 py-1 rounded-full text-sm ${
-                                        job.status === 'Open' ? 'bg-green-100 text-green-800' :
+                                        job.status === 'Open' ? 'bg-theme-primary/10 text-theme-primary' :
                                         job.status === 'Closed' ? 'bg-gray-100 text-gray-800' :
                                         'bg-yellow-100 text-yellow-800'
                                     }`}>
@@ -91,7 +91,7 @@ const RecruitmentPage = () => {
                                     </span>
                                     <button
                                         onClick={() => navigate(`/recruitment/jobs/${job._id}`)}
-                                        className="text-blue-600 hover:text-blue-800"
+                                        className="text-theme-secondary hover:text-theme-secondary"
                                     >
                                         View Details
                                     </button>
@@ -127,7 +127,7 @@ const RecruitmentPage = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 py-1 rounded-full text-xs ${
-                                                candidate.status === 'Offer Accepted' ? 'bg-green-100 text-green-800' :
+                                                candidate.status === 'Offer Accepted' ? 'bg-theme-primary/10 text-theme-primary' :
                                                 candidate.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                                                 'bg-yellow-100 text-yellow-800'
                                             }`}>
@@ -140,7 +140,7 @@ const RecruitmentPage = () => {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <button
                                                 onClick={() => navigate(`/recruitment/candidates/${candidate._id}`)}
-                                                className="text-blue-600 hover:text-blue-800"
+                                                className="text-theme-secondary hover:text-theme-secondary"
                                             >
                                                 View
                                             </button>

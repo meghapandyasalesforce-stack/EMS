@@ -79,7 +79,7 @@ const RegularizationRequests = () => {
     const getStatusBadge = (status) => {
         const badges = {
             pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-            approved: 'bg-green-100 text-green-800 border-green-200',
+            approved: 'bg-theme-primary/10 text-theme-primary border-theme-primary',
             rejected: 'bg-red-100 text-red-800 border-red-200',
             cancelled: 'bg-gray-100 text-gray-800 border-gray-200'
         };
@@ -120,7 +120,7 @@ const RegularizationRequests = () => {
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 font-medium text-sm transition-colors ${
                                     filterStatus === status
-                                        ? 'border-b-2 border-blue-500 text-blue-600'
+                                        ? 'border-b-2 border-theme-secondary text-theme-secondary'
                                         : 'text-gray-600 hover:text-gray-800'
                                 }`}
                             >
@@ -172,7 +172,7 @@ const RegularizationRequests = () => {
                                                     <button
                                                         onClick={() => handleApprove(request._id)}
                                                         disabled={actionLoading === request._id}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                                        className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition"
                                                     >
                                                         {actionLoading === request._id ? (
                                                             <FaSpinner className="animate-spin" />
@@ -192,7 +192,7 @@ const RegularizationRequests = () => {
                                             )}
                                             <button
                                                 onClick={() => setSelectedRequest(request)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                                             >
                                                 <FaEye />
                                                 View
@@ -269,7 +269,7 @@ const RegularizationRequests = () => {
                         </div>
                         <button
                             onClick={() => setSelectedRequest(null)}
-                            className="mt-4 w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                            className="mt-4 w-full px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                         >
                             Close
                         </button>

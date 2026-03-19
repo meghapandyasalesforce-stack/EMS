@@ -113,31 +113,48 @@ const AddPayroll = () => {
     };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type } = e.target;
+
+        // For numeric inputs (e.g. basicSalary), keep a numeric value so we don't get leading zeros like "012"
+        let nextValue;
+        if (type === 'number') {
+            // Allow the field to be cleared completely
+            if (value === '') {
+                nextValue = '';
+            } else {
+                nextValue = Number(value);
+            }
+        } else {
+            nextValue = value;
+        }
+
         setFormData(prev => ({
             ...prev,
-            [name]: value
+            [name]: nextValue
         }));
     };
 
     const handleEarningsChange = (e) => {
         const { name, value } = e.target;
+        // Strip leading zeros when there are multiple digits so \"0\" + \"12\" doesn't become \"012\"
+        const normalized = value.replace(/^0+(?=\\d)/, '');
         setFormData(prev => ({
             ...prev,
             earnings: {
                 ...prev.earnings,
-                [name]: parseFloat(value) || 0
+                [name]: normalized
             }
         }));
     };
 
     const handleDeductionsChange = (e) => {
         const { name, value } = e.target;
+        const normalized = value.replace(/^0+(?=\\d)/, '');
         setFormData(prev => ({
             ...prev,
             deductions: {
                 ...prev.deductions,
-                [name]: parseFloat(value) || 0
+                [name]: normalized
             }
         }));
     };
@@ -243,7 +260,7 @@ const AddPayroll = () => {
                                 <select
                                     value={formData.employeeId}
                                     onChange={(e) => handleEmployeeSelect(e.target.value)}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     required
                                     disabled={!!employeeId} // Disable if employee is pre-selected
                                 >
@@ -257,15 +274,15 @@ const AddPayroll = () => {
                             </div>
 
                             {selectedEmployee && (
-                                <div className="bg-blue-50 rounded-lg p-4">
-                                    <h3 className="font-medium text-blue-900 mb-2">Selected Employee</h3>
-                                    <p className="text-blue-800">
+                                <div className="bg-theme-secondary/10 rounded-lg p-4">
+                                    <h3 className="font-medium text-[var(--color-text)] mb-2">Selected Employee</h3>
+                                    <p className="text-theme-secondary">
                                         <strong>{selectedEmployee.name} {selectedEmployee.lastName}</strong>
                                     </p>
-                                    <p className="text-sm text-blue-600">
+                                    <p className="text-sm text-theme-secondary">
                                         {selectedEmployee.jobTitle} • {selectedEmployee.department}
                                     </p>
-                                    <p className="text-sm text-blue-600">
+                                    <p className="text-sm text-theme-secondary">
                                         Current Salary: ₹{selectedEmployee.salary?.toLocaleString() || 'Not set'}
                                     </p>
                                 </div>
@@ -287,7 +304,7 @@ const AddPayroll = () => {
                                     name="month"
                                     value={formData.month}
                                     onChange={handleInputChange}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     required
                                 >
                                     {months.map(month => (
@@ -302,7 +319,7 @@ const AddPayroll = () => {
                                     name="year"
                                     value={formData.year}
                                     onChange={handleInputChange}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     required
                                 >
                                     {years.map(year => (
@@ -327,7 +344,7 @@ const AddPayroll = () => {
                                 name="basicSalary"
                                 value={formData.basicSalary}
                                 onChange={handleInputChange}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                 placeholder="Enter basic salary"
                                 required
                             />
@@ -348,7 +365,7 @@ const AddPayroll = () => {
                                         name={key}
                                         value={value}
                                         onChange={handleEarningsChange}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                         placeholder="0"
                                     />
                                 </div>
@@ -370,7 +387,7 @@ const AddPayroll = () => {
                                         name={key}
                                         value={value}
                                         onChange={handleDeductionsChange}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                         placeholder="0"
                                     />
                                 </div>
@@ -382,17 +399,17 @@ const AddPayroll = () => {
                     <div className="mb-8 bg-gray-50 rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4">Payroll Summary</h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-green-50 rounded-lg p-4">
-                                <h3 className="font-medium text-green-800 mb-2">Total Earnings</h3>
-                                <p className="text-2xl font-bold text-green-700">₹{earningsTotal.toLocaleString()}</p>
+                            <div className="bg-theme-primary/10 rounded-lg p-4">
+                                <h3 className="font-medium text-theme-primary mb-2">Total Earnings</h3>
+                                <p className="text-2xl font-bold text-theme-primary">₹{earningsTotal.toLocaleString()}</p>
                             </div>
                             <div className="bg-red-50 rounded-lg p-4">
                                 <h3 className="font-medium text-red-800 mb-2">Total Deductions</h3>
                                 <p className="text-2xl font-bold text-red-700">₹{deductionsTotal.toLocaleString()}</p>
                             </div>
-                            <div className="bg-blue-50 rounded-lg p-4">
-                                <h3 className="font-medium text-blue-800 mb-2">In-Hand Salary</h3>
-                                <p className="text-2xl font-bold text-blue-700">₹{inHandSalary.toLocaleString()}</p>
+                            <div className="bg-theme-secondary/10 rounded-lg p-4">
+                                <h3 className="font-medium text-theme-secondary mb-2">In-Hand Salary</h3>
+                                <p className="text-2xl font-bold text-theme-secondary">₹{inHandSalary.toLocaleString()}</p>
                             </div>
                         </div>
                     </div>
@@ -409,7 +426,7 @@ const AddPayroll = () => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                            className="px-6 py-3 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50"
                         >
                             <FiSave className="w-4 h-4" />
                             <span>{loading ? 'Saving...' : (isEditMode ? 'Update Payroll' : 'Create Payroll')}</span>

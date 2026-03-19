@@ -121,7 +121,7 @@ const JobDetails = () => {
                             <button
                                 onClick={() => handleUpload(offerLetterRef.current.files[0], 'OFFER_LETTER')}
                                 disabled={isLoading}
-                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-blue-400 text-sm md:text-base w-full md:w-auto md:self-end"
+                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >
                                 {isLoading ? 'Uploading...' : 'Upload'}
                             </button>
@@ -144,7 +144,7 @@ const JobDetails = () => {
                             <button
                                 onClick={() => handleUpload(birthCertificateRef.current.files[0], 'BIRTH_CERTIFICATE')}
                                 disabled={isLoading}
-                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-blue-400 text-sm md:text-base w-full md:w-auto md:self-end"
+                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >
                                 {isLoading ? 'Uploading...' : 'Upload'}
                             </button>
@@ -189,7 +189,7 @@ const JobDetails = () => {
                             <button
                                 onClick={() => handleUpload(guarantorFormRef.current.files[0], 'GUARANTOR_FORM')}
                                 disabled={isLoading}
-                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-blue-400 text-sm md:text-base w-full md:w-auto md:self-end"
+                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >
                                 {isLoading ? 'Uploading...' : 'Upload'}
                             </button>
@@ -234,7 +234,7 @@ const JobDetails = () => {
                             <button
                                 onClick={() => handleUpload(degreeCertificateRef.current.files[0], 'DEGREE_CERTIFICATE')}
                                 disabled={isLoading}
-                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-blue-400 text-sm md:text-base w-full md:w-auto md:self-end"
+                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >
                                 {isLoading ? 'Uploading...' : 'Upload'}
                             </button>

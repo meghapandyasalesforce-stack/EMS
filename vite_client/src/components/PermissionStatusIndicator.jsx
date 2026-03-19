@@ -33,7 +33,7 @@ const PermissionStatusIndicator = ({ type, showLabel = true, size = 'md' }) => {
   };
 
   const getStatusColor = () => {
-    if (granted) return 'text-green-600';
+    if (granted) return 'text-theme-primary';
     if (denied) return 'text-red-600';
     return 'text-yellow-600';
   };

@@ -148,33 +148,33 @@ const TodaySummary = () => {
           {/* Main Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
             {/* Total Hours */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-white to-indigo-50 border border-theme-secondary rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
-                  <FiClock className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-theme-secondary/10 rounded-2xl flex items-center justify-center">
+                  <FiClock className="w-6 h-6 text-theme-secondary" />
                 </div>
                 <div>
-                  <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Total Hours</p>
-                  <p className="text-2xl font-bold text-blue-800">{totalHours.toFixed(1)}h</p>
+                  <p className="text-xs text-theme-secondary font-medium uppercase tracking-wide">Total Hours</p>
+                  <p className="text-2xl font-bold text-theme-secondary">{totalHours.toFixed(1)}h</p>
                 </div>
               </div>
-              <div className="text-sm text-blue-600 font-medium">
+              <div className="text-sm text-theme-secondary font-medium">
                 {totalSessions} session{totalSessions !== 1 ? 's' : ''}
               </div>
             </div>
 
             {/* Break Time */}
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-white to-theme-primary/10 border border-theme-primary rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
-                  <FiCoffee className="w-6 h-6 text-green-600" />
+                <div className="w-12 h-12 bg-theme-primary/10 rounded-2xl flex items-center justify-center">
+                  <FiCoffee className="w-6 h-6 text-theme-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-green-600 font-medium uppercase tracking-wide">Break Time</p>
-                  <p className="text-2xl font-bold text-green-800">{breakTime.toFixed(1)}h</p>
+                  <p className="text-xs text-theme-primary font-medium uppercase tracking-wide">Break Time</p>
+                  <p className="text-2xl font-bold text-theme-primary">{breakTime.toFixed(1)}h</p>
                 </div>
               </div>
-              <div className="text-sm text-green-600 font-medium">
+              <div className="text-sm text-theme-primary font-medium">
                 {breakTime > 0 ? 'Well deserved!' : 'No breaks taken'}
               </div>
             </div>
@@ -213,10 +213,10 @@ const TodaySummary = () => {
           </div>
 
           {/* Progress Section */}
-          <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 rounded-3xl p-8 border border-indigo-200 shadow-xl mb-8">
+          <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-theme-secondary/10 rounded-3xl p-8 border border-theme-accent shadow-xl mb-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center">
-                <FiTarget className="w-6 h-6 text-indigo-600" />
+                <FiTarget className="w-6 h-6 text-theme-accent" />
               </div>
               <h3 className="text-2xl font-bold text-gray-800">Daily Progress</h3>
             </div>
@@ -225,7 +225,7 @@ const TodaySummary = () => {
               <div className="flex justify-between items-center mb-4">
                 <span className="text-lg font-bold text-gray-700">8-Hour Target</span>
                 <div className="text-right">
-                  <span className="text-2xl font-bold text-indigo-600">
+                  <span className="text-2xl font-bold text-theme-accent">
                     {progressPercentage.toFixed(0)}%
                   </span>
                   <p className="text-sm text-gray-600 font-medium">
@@ -244,7 +244,7 @@ const TodaySummary = () => {
               
               <div className="flex justify-between text-sm text-gray-600 font-medium">
                 <span>0h</span>
-                <span className="text-indigo-600 font-bold">{totalHours.toFixed(1)}h worked</span>
+                <span className="text-theme-accent font-bold">{totalHours.toFixed(1)}h worked</span>
                 <span>8h Target</span>
               </div>
             </div>
@@ -253,15 +253,15 @@ const TodaySummary = () => {
           {/* Achievement Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Sessions Completed */}
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-6 shadow-lg">
+            <div className="bg-gradient-to-br from-white to-teal-50 border border-theme-primary rounded-2xl p-6 shadow-lg">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-                  <FiCalendar className="w-5 h-5 text-emerald-600" />
+                  <FiCalendar className="w-5 h-5 text-theme-primary" />
                 </div>
                 <h4 className="font-bold text-gray-800">Sessions</h4>
               </div>
-              <div className="text-3xl font-bold text-emerald-600 mb-2">{totalSessions}</div>
-              <p className="text-sm text-emerald-600 font-medium">
+              <div className="text-3xl font-bold text-theme-primary mb-2">{totalSessions}</div>
+              <p className="text-sm text-theme-primary font-medium">
                 {totalSessions === 0 ? 'No sessions today' : 
                  totalSessions === 1 ? '1 session completed' : 
                  `${totalSessions} sessions completed`}
@@ -307,17 +307,17 @@ const TodaySummary = () => {
 
           {/* Motivational Message */}
           {totalHours > 0 && (
-            <div className="mt-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-lg">
+            <div className="mt-8 bg-gradient-to-r from-white to-theme-primary/10 border border-theme-primary rounded-2xl p-6 shadow-lg">
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FiAward className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-theme-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <FiAward className="w-8 h-8 text-theme-primary" />
                 </div>
-                <h3 className="text-xl font-bold text-green-800 mb-2">
+                <h3 className="text-xl font-bold text-theme-primary mb-2">
                   {totalHours >= 8 ? '🎉 Outstanding Work!' : 
                    totalHours >= 6 ? '💪 Great Progress!' : 
                    '🚀 Keep Going!'}
                 </h3>
-                <p className="text-green-700 font-medium">
+                <p className="text-theme-primary font-medium">
                   {totalHours >= 8 ? 
                     `You've exceeded your daily target with ${overtime.toFixed(1)} hours of overtime!` :
                     totalHours >= 6 ?

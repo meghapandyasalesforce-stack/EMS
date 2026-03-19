@@ -16,21 +16,24 @@ const StatCard = ({
   label, 
   value, 
   icon, 
-  color = 'blue', 
+  color = 'primary', 
   subtitle, 
   className = '',
   onClick 
 }) => {
   const colorClasses = {
+    primary: { border: 'border-theme-primary', bg: 'bg-theme-primary/10', text: 'text-theme-primary' },
+    secondary: { border: 'border-theme-secondary', bg: 'bg-theme-secondary/10', text: 'text-theme-secondary' },
+    accent: { border: 'border-theme-accent', bg: 'bg-theme-accent/10', text: 'text-theme-accent' },
     blue: {
-      border: 'border-blue-500',
-      bg: 'bg-blue-100',
-      text: 'text-blue-600',
+      border: 'border-theme-secondary',
+      bg: 'bg-theme-secondary/10',
+      text: 'text-theme-secondary',
     },
     green: {
-      border: 'border-green-500',
-      bg: 'bg-green-100',
-      text: 'text-green-600',
+      border: 'border-theme-primary',
+      bg: 'bg-theme-primary/10',
+      text: 'text-theme-primary',
     },
     yellow: {
       border: 'border-yellow-500',
@@ -55,7 +58,7 @@ const StatCard = ({
     indigo: {
       border: 'border-indigo-500',
       bg: 'bg-indigo-100',
-      text: 'text-indigo-600',
+      text: 'text-theme-accent',
     },
     gray: {
       border: 'border-gray-500',
@@ -64,23 +67,26 @@ const StatCard = ({
     },
   };
 
-  const colors = colorClasses[color] || colorClasses.blue;
+  const colors = colorClasses[color] || colorClasses.primary;
 
   const isHighlighted = className.includes('border-purple-500');
   
-  // Modern gradient backgrounds for icons
+  // Theme and gradient backgrounds for icons
   const gradientClasses = {
-    blue: 'bg-gradient-to-br from-blue-400 to-blue-600',
-    green: 'bg-gradient-to-br from-green-400 to-green-600',
+    primary: 'bg-theme-primary',
+    secondary: 'bg-theme-secondary',
+    accent: 'bg-theme-accent',
+    blue: 'bg-gradient-to-br from-[var(--color-secondary)] to-[var(--color-secondary)]',
+    green: 'bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]',
     yellow: 'bg-gradient-to-br from-yellow-400 to-yellow-600',
     purple: 'bg-gradient-to-br from-purple-400 to-purple-600',
     orange: 'bg-gradient-to-br from-orange-400 to-orange-600',
     red: 'bg-gradient-to-br from-red-400 to-red-600',
-    indigo: 'bg-gradient-to-br from-indigo-400 to-indigo-600',
+    indigo: 'bg-theme-accent',
     gray: 'bg-gradient-to-br from-gray-400 to-gray-600',
   };
 
-  const iconGradient = gradientClasses[color] || gradientClasses.blue;
+  const iconGradient = gradientClasses[color] || gradientClasses.primary;
 
   return (
     <div 
@@ -105,7 +111,7 @@ const StatCard = ({
               {value}
             </p>
             {subtitle && (
-              <p className={`text-xs md:text-sm mt-2 font-medium ${subtitle.includes('active') || subtitle.includes('completed') || subtitle.includes('green') ? 'text-green-600' : 'text-gray-500'}`}>
+              <p className={`text-xs md:text-sm mt-2 font-medium ${subtitle.includes('active') || subtitle.includes('completed') || subtitle.includes('green') ? 'text-theme-primary' : 'text-gray-500'}`}>
                 {subtitle}
               </p>
             )}
@@ -127,7 +133,7 @@ StatCard.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   icon: PropTypes.node,
-  color: PropTypes.oneOf(['blue', 'green', 'yellow', 'purple', 'orange', 'red', 'indigo', 'gray']),
+  color: PropTypes.oneOf(['primary', 'secondary', 'accent', 'blue', 'green', 'yellow', 'purple', 'orange', 'red', 'indigo', 'gray']),
   subtitle: PropTypes.string,
   className: PropTypes.string,
   onClick: PropTypes.func,

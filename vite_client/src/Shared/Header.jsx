@@ -140,7 +140,7 @@ const Header = () => {
                                 <div className="mt-4 flex justify-end space-x-3">
                                     <button
                                         type="button"
-                                        className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                        className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2"
                                         onClick={closeLogoutModal}
                                     >
                                         Cancel
@@ -166,11 +166,11 @@ const Header = () => {
         <div className="fixed top-0 left-0 h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white w-64 flex flex-col z-40 overflow-hidden shadow-2xl border-r border-gray-700/50">
             <div className="flex items-center justify-between p-5 border-b border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
                 <h3 className="font-extrabold text-3xl tracking-tight">
-                    <span className="text-green-400 drop-shadow-lg">p</span>
+                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
                     <span className="text-white">a</span>
                     <span className="text-white">a</span>
                     <span className="text-white">r</span>
-                    <span className="text-green-400 drop-shadow-lg">s</span>
+                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
                     <span className="text-white">i</span>
                     <span className="text-white">v</span>
                 </h3>
@@ -184,10 +184,15 @@ const Header = () => {
                         to={item.path}
                         className={`group flex items-center p-3.5 mx-2 rounded-xl transition-all duration-300 mb-1 ${
                             isActive(item.path) 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105' 
+                                ? 'text-white shadow-lg scale-105' 
                                 : 'hover:bg-gray-700/50 text-gray-300 hover:text-white hover:translate-x-1'
                         }`}
-                        style={{ animationDelay: `${index * 50}ms` }}
+                        style={{
+                            animationDelay: `${index * 50}ms`,
+                            ...(isActive(item.path)
+                                ? { backgroundColor: 'var(--color-primary)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)' }
+                                : {}),
+                        }}
                     >
                         <span className={`text-lg flex-shrink-0 transition-transform duration-300 ${isActive(item.path) ? 'scale-110' : 'group-hover:scale-110'}`}>
                             {item.icon}
@@ -237,13 +242,13 @@ const Header = () => {
                 <div className="flex items-center gap-3">
                     <NotificationDropdown />
 
-                    <div className="relative text-xl text-white cursor-pointer hover:text-blue-300 transition-colors p-2 rounded-lg hover:bg-gray-700/50">
-                        <FaEnvelope />
+                    <div className="relative text-xl text-white cursor-pointer transition-colors p-2 rounded-lg hover:bg-gray-700/50" style={{ ['--hover-color']: 'var(--color-secondary)' }}>
+                        <FaEnvelope className="hover:opacity-80" />
                     </div>
 
                     <div className="relative">
                         <FaUserCircle
-                            className="text-2xl text-white cursor-pointer hover:text-blue-300 transition-colors p-1 rounded-lg hover:bg-gray-700/50"
+                            className="text-2xl text-white cursor-pointer transition-colors p-1 rounded-lg hover:bg-gray-700/50 hover:opacity-90"
                             onClick={toggleDropdown}
                         />
                         {dropdownOpen && (
@@ -270,11 +275,11 @@ const Header = () => {
                 <div className="bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl animate-slideDown border-b border-gray-700/50">
                     <div className="px-4 py-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/50 backdrop-blur-sm">
                         <h3 className="font-extrabold text-2xl tracking-tight">
-                            <span className="text-green-400 drop-shadow-lg">p</span>
+                            <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
                             <span className="text-white">a</span>
                             <span className="text-white">a</span>
                             <span className="text-white">r</span>
-                            <span className="text-green-400 drop-shadow-lg">s</span>
+                            <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
                             <span className="text-white">i</span>
                             <span className="text-white">v</span>
                         </h3>
@@ -292,11 +297,14 @@ const Header = () => {
                                 to={item.path}
                                 className={`flex items-center p-4 mx-2 rounded-xl transition-all duration-300 ${
                                     isActive(item.path) 
-                                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg' 
+                                        ? 'text-white shadow-lg' 
                                         : 'hover:bg-gray-700/50 text-gray-300'
                                 }`}
                                 onClick={() => setMobileMenuOpen(false)}
-                                style={{ animationDelay: `${index * 50}ms` }}
+                                style={{
+                                    animationDelay: `${index * 50}ms`,
+                                    ...(isActive(item.path) ? { backgroundColor: 'var(--color-primary)' } : {}),
+                                }}
                             >
                                 <span className={`text-lg mr-3 transition-transform ${isActive(item.path) ? 'scale-110' : ''}`}>
                                     {item.icon}

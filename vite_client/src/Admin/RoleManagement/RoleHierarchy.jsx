@@ -125,27 +125,27 @@ const RoleHierarchy = () => {
 
     return (
       <div key={role._id} className={`${level > 0 ? 'ml-8' : ''}`}>
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl mb-4 hover:shadow-lg hover:border-blue-200 transition-all duration-300 group">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-2xl mb-4 hover:shadow-lg hover:border-theme-secondary transition-all duration-300 group">
           <div className="flex items-center space-x-4 flex-1 min-w-0">
             {hasChildren && (
               <button
                 onClick={() => toggleRoleExpansion(role._id)}
-                className="p-2 hover:bg-blue-100 rounded-xl transition-all duration-200 group-hover:bg-blue-50 flex-shrink-0"
+                className="p-2 hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 group-hover:bg-theme-secondary/10 flex-shrink-0"
               >
-                {isExpanded ? <FiChevronDown className="w-5 h-5 text-blue-600" /> : <FiChevronRight className="w-5 h-5 text-blue-600" />}
+                {isExpanded ? <FiChevronDown className="w-5 h-5 text-theme-secondary" /> : <FiChevronRight className="w-5 h-5 text-theme-secondary" />}
               </button>
             )}
             {!hasChildren && <div className="w-9 flex-shrink-0" />}
             
             <div className="flex items-center space-x-4 flex-1 min-w-0">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 flex-shrink-0">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-[var(--color-secondary)] rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 flex-shrink-0">
                 <FiShield className="w-7 h-7 text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 text-xl mb-1 truncate">{role.name}</h3>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
                   <span className="px-2 py-1 bg-gray-100 rounded-lg font-medium">Level {role.level}</span>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg font-medium">{role.permissions?.length || 0} permissions</span>
+                  <span className="px-2 py-1 bg-theme-secondary/10 text-theme-secondary rounded-lg font-medium">{role.permissions?.length || 0} permissions</span>
                 </div>
                 {role.description && (
                   <p className="text-sm text-gray-600 mt-2 max-w-md line-clamp-2">{role.description}</p>
@@ -155,13 +155,13 @@ const RoleHierarchy = () => {
           </div>
 
           <div className="flex items-center space-x-3 mt-4 lg:mt-0 lg:ml-4">
-            <span className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-xl shadow-md whitespace-nowrap">
+            <span className="px-4 py-2 bg-gradient-to-r from-blue-500 to-[var(--color-secondary)] text-white text-sm font-semibold rounded-xl shadow-md whitespace-nowrap">
               {role.permissions?.length || 0} permissions
             </span>
             <div className="flex space-x-2">
               <button
                 onClick={() => openEditModal(role)}
-                className="p-3 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group-hover:bg-blue-50"
+                className="p-3 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 group-hover:bg-theme-secondary/10"
                 title="Edit Role"
               >
                 <FiEdit className="w-5 h-5" />
@@ -207,7 +207,7 @@ const RoleHierarchy = () => {
               <p className="text-gray-600 mt-1">Manage and organize your role structure</p>
             </div>
             <div className="p-16 text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-6"></div>
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-theme-secondary border-t-blue-600 mx-auto mb-6"></div>
               <p className="text-gray-600 text-lg font-medium">Loading roles...</p>
             </div>
           </div>
@@ -228,12 +228,12 @@ const RoleHierarchy = () => {
           <div className="flex gap-3 flex-shrink-0">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap font-medium"
+              className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg whitespace-nowrap font-medium"
             >
               <FiPlus className="w-5 h-5" />
               Create Role
             </button>
-            <button className="bg-blue-50 text-blue-700 border border-blue-200 px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-blue-100 transition-all duration-200 shadow-sm hover:shadow-md whitespace-nowrap font-medium">
+            <button className="bg-theme-secondary/10 text-theme-secondary border border-theme-secondary px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-theme-secondary/10 transition-all duration-200 shadow-sm hover:shadow-md whitespace-nowrap font-medium">
               <FiShield className="w-5 h-5" />
               Permissions
             </button>
@@ -249,7 +249,7 @@ const RoleHierarchy = () => {
                 <p className="text-4xl font-bold text-gray-900 mb-1">{roles.length}</p>
                 <p className="text-xs text-gray-400">All roles in system</p>
               </div>
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-[var(--color-secondary)] rounded-2xl flex items-center justify-center shadow-lg">
                 <FiShield className="w-8 h-8 text-white" />
               </div>
             </div>
@@ -262,7 +262,7 @@ const RoleHierarchy = () => {
                 <p className="text-4xl font-bold text-gray-900 mb-1">{getTopLevelRoles().length}</p>
                 <p className="text-xs text-gray-400">Primary roles</p>
               </div>
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-[var(--color-primary)] rounded-2xl flex items-center justify-center shadow-lg">
                 <FiUsers className="w-8 h-8 text-white" />
               </div>
             </div>
@@ -312,8 +312,8 @@ const RoleHierarchy = () => {
           
           {getTopLevelRoles().length === 0 ? (
             <div className="p-16 text-center">
-              <div className="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-3xl mx-auto mb-8">
-                <FiShield className="w-12 h-12 text-blue-600" />
+              <div className="flex items-center justify-center w-24 h-24 bg-gradient-to-br from-[var(--color-secondary)] to-blue-200 rounded-3xl mx-auto mb-8">
+                <FiShield className="w-12 h-12 text-theme-secondary" />
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-3">No roles created yet</h3>
               <p className="text-gray-500 mb-8 text-lg">Get started by creating your first role to organize permissions and access levels.</p>
@@ -421,7 +421,7 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
                 placeholder="Enter role name"
                 required
               />
@@ -436,7 +436,7 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
                 max="10"
                 value={formData.level}
                 onChange={(e) => setFormData({ ...formData, level: parseInt(e.target.value) })}
-                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+                className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
                 placeholder="1-10"
                 required
               />
@@ -450,7 +450,7 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+              className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
               rows="3"
               placeholder="Describe the role's purpose and responsibilities"
             />
@@ -464,7 +464,7 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
             <select
               value={formData.parentRole || ''}
               onChange={(e) => setFormData({ ...formData, parentRole: e.target.value || null })}
-              className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
+              className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
             >
               <option value="">No Parent Role</option>
               {roles.map(role => (
@@ -489,7 +489,7 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
                     type="checkbox"
                     checked={formData[permission.key]}
                     onChange={(e) => setFormData({ ...formData, [permission.key]: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-3"
+                    className="w-5 h-5 text-theme-secondary border-gray-300 rounded focus:ring-2 focus:ring-[var(--color-primary)] mr-3"
                   />
                   <span className="text-2xl mr-3">{permission.icon}</span>
                   <span className="font-medium text-gray-900">{permission.label}</span>
@@ -507,12 +507,12 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
                   <h4 className="font-bold text-gray-900 capitalize mb-4 text-lg">{module}</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {actions.map(action => (
-                      <label key={action} className="flex items-center p-3 bg-white rounded-lg hover:bg-blue-50 cursor-pointer transition-colors border border-gray-100">
+                      <label key={action} className="flex items-center p-3 bg-white rounded-lg hover:bg-theme-secondary/10 cursor-pointer transition-colors border border-gray-100">
                         <input
                           type="checkbox"
                           checked={formData.permissions.find(p => p.module === module)?.actions.includes(action) || false}
                           onChange={(e) => handlePermissionChange(module, action, e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-3"
+                          className="w-4 h-4 text-theme-secondary border-gray-300 rounded focus:ring-2 focus:ring-[var(--color-primary)] mr-3"
                         />
                         <span className="font-medium text-gray-700 capitalize">{action}</span>
                       </label>

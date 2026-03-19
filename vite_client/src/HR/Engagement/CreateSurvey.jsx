@@ -217,7 +217,7 @@ const CreateSurvey = () => {
                                 value={formData.title}
                                 onChange={handleInputChange}
                                 required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                         </div>
 
@@ -230,7 +230,7 @@ const CreateSurvey = () => {
                                 value={formData.description}
                                 onChange={handleInputChange}
                                 rows="3"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             />
                         </div>
 
@@ -244,7 +244,7 @@ const CreateSurvey = () => {
                                     value={formData.type}
                                     onChange={handleInputChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     <option value="Pulse">Pulse</option>
                                     <option value="Annual">Annual</option>
@@ -262,7 +262,7 @@ const CreateSurvey = () => {
                                     name="status"
                                     value={formData.status}
                                     onChange={handleInputChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     <option value="Draft">Draft</option>
                                     <option value="Active">Active</option>
@@ -283,7 +283,7 @@ const CreateSurvey = () => {
                                     value={formData.startDate}
                                     onChange={handleInputChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
 
@@ -297,7 +297,7 @@ const CreateSurvey = () => {
                                     value={formData.endDate}
                                     onChange={handleInputChange}
                                     required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 />
                             </div>
                         </div>
@@ -310,7 +310,7 @@ const CreateSurvey = () => {
                                 name="targetAudience"
                                 value={formData.targetAudience}
                                 onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             >
                                 <option value="All Employees">All Employees</option>
                                 <option value="Department">Department</option>
@@ -350,7 +350,7 @@ const CreateSurvey = () => {
                                         order: 0
                                     });
                                 }}
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                             >
                                 <FaPlus className="w-4 h-4" />
                                 Add Question
@@ -358,7 +358,7 @@ const CreateSurvey = () => {
                         </div>
 
                         {showQuestionForm && (
-                            <div className="bg-gray-50 p-4 rounded-lg space-y-4 border-2 border-blue-200">
+                            <div className="bg-gray-50 p-4 rounded-lg space-y-4 border-2 border-theme-secondary">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Question <span className="text-red-500">*</span>
@@ -369,7 +369,7 @@ const CreateSurvey = () => {
                                         onChange={handleQuestionInputChange}
                                         required
                                         rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         placeholder="Enter your question here..."
                                     />
                                 </div>
@@ -390,7 +390,7 @@ const CreateSurvey = () => {
                                                     setNewQuestion(prev => ({ ...prev, options: ['1', '2', '3', '4', '5'] }));
                                                 }
                                             }}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                         >
                                             <option value="Multiple Choice">Multiple Choice</option>
                                             <option value="Rating">Rating (1-5)</option>
@@ -424,7 +424,7 @@ const CreateSurvey = () => {
                                                     value={option}
                                                     onChange={(e) => handleOptionChange(index, e.target.value)}
                                                     placeholder={`Option ${index + 1}`}
-                                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                                 />
                                                 {newQuestion.options.length > 1 && (
                                                     <button
@@ -452,7 +452,7 @@ const CreateSurvey = () => {
                                     <button
                                         type="button"
                                         onClick={addQuestion}
-                                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                                        className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition"
                                     >
                                         {editingIndex !== null ? 'Update Question' : 'Add Question'}
                                     </button>
@@ -493,7 +493,7 @@ const CreateSurvey = () => {
                                                             Required
                                                         </span>
                                                     )}
-                                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                                    <span className="text-xs bg-theme-secondary/10 text-theme-secondary px-2 py-1 rounded">
                                                         {question.type}
                                                     </span>
                                                 </div>
@@ -511,7 +511,7 @@ const CreateSurvey = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => moveQuestion(index, 'up')}
-                                                        className="px-2 py-1 text-blue-500 hover:text-blue-700"
+                                                        className="px-2 py-1 text-theme-secondary hover:text-theme-secondary"
                                                         title="Move Up"
                                                     >
                                                         ↑
@@ -521,7 +521,7 @@ const CreateSurvey = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => moveQuestion(index, 'down')}
-                                                        className="px-2 py-1 text-blue-500 hover:text-blue-700"
+                                                        className="px-2 py-1 text-theme-secondary hover:text-theme-secondary"
                                                         title="Move Down"
                                                     >
                                                         ↓
@@ -530,7 +530,7 @@ const CreateSurvey = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => editQuestion(index)}
-                                                    className="px-2 py-1 text-green-500 hover:text-green-700"
+                                                    className="px-2 py-1 text-green-500 hover:text-theme-primary"
                                                     title="Edit"
                                                 >
                                                     Edit
@@ -562,7 +562,7 @@ const CreateSurvey = () => {
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+                            className="px-6 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
                         >
                             <FaSave className="w-4 h-4" />
                             Create Survey
