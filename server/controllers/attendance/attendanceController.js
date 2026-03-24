@@ -580,6 +580,10 @@ export const clockIn = async (req, res) => {
     deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
     deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
     deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
     try {
       const { getIO } = await import('../../config/websocket.js');
       getIO().to(`org:${organizationId}`).emit('attendance:today_status_changed', {});
@@ -729,6 +733,10 @@ export const breakIn = async (req, res) => {
     deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
     deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
     deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
 
     // Real-time: notify admin dashboard to refresh employees on break
     try {
@@ -796,6 +804,10 @@ export const breakOut = async (req, res) => {
     deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
     deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
     deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
 
     // Real-time: notify admin dashboard to refresh employees on break
     try {
@@ -1174,6 +1186,10 @@ export const clockOut = async (req, res) => {
     deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
     deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
     deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
+    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
     try {
       const { getIO } = await import('../../config/websocket.js');
       getIO().to(`org:${organizationId}`).emit('attendance:today_status_changed', {});
@@ -1181,7 +1197,13 @@ export const clockOut = async (req, res) => {
       logger.warn('Socket emit after clock-out', { error: e?.message });
     }
 
-    res.json(attendance);
+    const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
+    res.json({
+      ...attendanceObj,
+      success: true,
+      message: "Clocked out successfully",
+      attendance: attendanceObj
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

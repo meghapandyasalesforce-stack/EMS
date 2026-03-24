@@ -88,7 +88,7 @@ export const clockOut = createAsyncThunk(
   async (clockOutData, { rejectWithValue }) => {
     try {
       // Normalize location coordinates similar to clockIn
-      const normalizeCoord = (value) => {
+      const normalizeCoord = (value, isLatitude) => {
         if (value == null || value === '' || value === 'null' || value === 'undefined') {
           return undefined;
         }
@@ -97,13 +97,16 @@ export const clockOut = createAsyncThunk(
           return undefined;
         }
         // Validate coordinate ranges
-        if (num < -90 || num > 90) return undefined; // Invalid latitude
-        if (num < -180 || num > 180) return undefined; // Invalid longitude
+        if (isLatitude) {
+          if (num < -90 || num > 90) return undefined; // Invalid latitude
+        } else {
+          if (num < -180 || num > 180) return undefined; // Invalid longitude
+        }
         return num;
       };
 
-      const lat = normalizeCoord(clockOutData.latitude);
-      const lng = normalizeCoord(clockOutData.longitude);
+      const lat = normalizeCoord(clockOutData.latitude, true);
+      const lng = normalizeCoord(clockOutData.longitude, false);
       
       const payload = {
         ...clockOutData,
