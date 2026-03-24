@@ -27,3 +27,8 @@ export function computeEarningsFromGross(gross) {
         totalEarnings
     };
 }
+
+/** Employee PF deduction: 12% of basic wage (rounded). */
+export function employeePfFromBasicWage(basicWage) {
+    return Math.round((Number(basicWage) || 0) * 0.12);
+}

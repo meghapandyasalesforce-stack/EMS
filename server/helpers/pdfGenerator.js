@@ -36,28 +36,27 @@ const COLORS = {
  * Note: Using "Rs." instead of ₹ for better PDF font compatibility
  * 
  * @param {number|string} amount - Amount to format
- * @returns {string} Formatted currency string (e.g., "Rs. 15,000.00")
+ * @returns {string} Formatted currency string (e.g., "INR (15,000.00)")
  */
 const formatCurrency = (amount) => {
     try {
         const num = Number(amount || 0);
         if (isNaN(num)) {
             logger.warn('Invalid amount provided to formatCurrency', { amount });
-            return 'Rs. 0.00';
+            return 'INR (0.00)';
         }
         
         // Format number with Indian numbering system (lakhs, crores)
-        const formatted = new Intl.NumberFormat('en-IN', {
+        const formattedAbs = new Intl.NumberFormat('en-IN', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(Math.abs(num));
         
-        // Use "Rs." instead of ₹ for better PDF font compatibility
-        // The ₹ symbol requires special font support which may not be available in jsPDF
-        return `Rs. ${formatted}`;
+        const sign = num < 0 ? '-' : '';
+        return `Rs ${sign}${formattedAbs}`;
     } catch (error) {
         logger.error('Currency formatting error', { error: error.message, amount });
-        return 'Rs. 0.00';
+        return 'INR (0.00)';
     }
 };
 
@@ -69,11 +68,30 @@ const formatCurrency = (amount) => {
  */
 const formatLabel = (key) => {
     if (!key || typeof key !== 'string') return '';
-    
-    return key
+
+    const formatted = key
         .replace(/([A-Z])/g, ' $1')
         .replace(/^./, str => str.toUpperCase())
         .trim();
+
+    const acronymMap = {
+        Pf: 'PF',
+        Epf: 'EPF',
+        Esi: 'ESI',
+        Uan: 'UAN',
+        Pan: 'PAN',
+        Ifsc: 'IFSC',
+        Id: 'ID',
+        Ctc: 'CTC',
+        Hr: 'HR',
+        Tds: 'TDS',
+        Pt: 'PT'
+    };
+
+    return formatted
+        .split(' ')
+        .map((word) => acronymMap[word] || word)
+        .join(' ');
 };
 
 /**
@@ -100,7 +118,7 @@ const formatDate = (date) => {
 };
 
 /**
- * Convert number to words for Indian currency (e.g. "INR Sixty Five Thousand Five Hundred Eighty Seven Only")
+ * Convert number to words for Indian currency (e.g. "INR (Sixty Five Thousand Five Hundred Eighty Seven Only)")
  * Handles integers only (rupees); decimal part is ignored.
  *
  * @param {number|string} num - Amount to convert
@@ -108,7 +126,7 @@ const formatDate = (date) => {
  */
 const numberToWordsINR = (num) => {
     const n = Math.floor(Number(num) || 0);
-    if (n === 0) return 'INR Zero Only';
+    if (n === 0) return 'INR (Zero Only)';
     const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
         'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
     const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
@@ -132,7 +150,8 @@ const numberToWordsINR = (num) => {
     if (lakh > 0) parts.push(toWordsUpTo99(lakh) + ' Lakh');
     if (thousand > 0) parts.push(toWordsUpTo99(thousand) + ' Thousand');
     if (hundred > 0) parts.push(toWordsUpTo999(hundred));
-    return 'INR ' + parts.join(' ').trim().replace(/\s+/g, ' ') + ' Only';
+    const words = parts.join(' ').trim().replace(/\s+/g, ' ');
+    return `INR (${words} Only)`;
 };
 
 /**
@@ -327,14 +346,14 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
         const employeeName = `${employeeData.name || ''} ${employeeData.lastName || ''}`.trim();
         const leftRows = [
             ['Name', employeeName || ''],
-            ['E - Mail ID', employeeData.email || ''],
+            ['E-Mail ID', employeeData.email || ''],
             ['Designation', employeeData.jobTitle || ''],
             ['Bank Name', employeeData.bankName || ''],
-            ['Date Of Joining', employeeData.joiningDate ? formatDate(employeeData.joiningDate) : ''],
+            ['Date of Joining', employeeData.joiningDate ? formatDate(employeeData.joiningDate) : ''],
             ['EPF UAN', employeeData.epfUan || '']
         ];
         const rightRows = [
-            ['Phone No', employeeData.phone || ''],
+            ['Mobile No', employeeData.phone || ''],
             ['PAN No', employeeData.panNumber || ''],
             ['Staff ID', employeeData.employeeId || ''],
             ['Bank Account Number', employeeData.accountNumber || ''],
@@ -445,18 +464,27 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
                 })
                 .sort((a, b) => Number(b[1]) - Number(a[1]))
             : [];
-        const deductionsEntries = (payrollData.deductions && typeof payrollData.deductions === 'object')
-            ? Object.entries(payrollData.deductions)
+        const normalizedDeductions = (payrollData.deductions && typeof payrollData.deductions === 'object')
+            ? { ...payrollData.deductions }
+            : {};
+        // Keep payslip behavior aligned with payroll: PF auto-calculated as 12% of basic wage.
+        const basicWageForPf = Number(payrollData.earnings?.basicWage) || 0;
+        const autoPfEmployee = Math.round(basicWageForPf * 0.12);
+        if (!(Number(normalizedDeductions.pfEmployee) > 0) && autoPfEmployee > 0) {
+            normalizedDeductions.pfEmployee = autoPfEmployee;
+        }
+        const deductionsEntries = Object.entries(normalizedDeductions)
                 .filter(([key, value]) => {
                     const numValue = Number(value);
                     return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
                 })
-                .sort((a, b) => Number(b[1]) - Number(a[1]))
-            : [];
+                .sort((a, b) => Number(b[1]) - Number(a[1]));
         earningsEntries.forEach(([, value]) => { earningsTotal += Number(value); });
         deductionsEntries.forEach(([, value]) => { deductionsTotal += Number(value); });
-        const totalEarnings = Number(payrollData.earnings?.totalEarnings) || earningsTotal;
-        const totalDeductions = Number(payrollData.deductions?.total) || deductionsTotal;
+        // Recompute totals from the exact rows we are going to render (after PF normalization),
+        // so "Total Earnings / Total Deductions / Net Amount" always match the table.
+        const totalEarnings = earningsTotal;
+        const totalDeductions = deductionsTotal;
         const maxRows = Math.max(earningsEntries.length, deductionsEntries.length, 1);
         const colW1 = contentWidth * 0.38;
         const colW2 = contentWidth * 0.12;
@@ -510,7 +538,7 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
 
         // ==================== NET AMOUNT + AMOUNT IN WORDS ====================
         yPos = checkPageBreak(doc, yPos, pageHeight, margin, 25);
-        const netSalary = Number(payrollData.inHandSalary) || (totalEarnings - totalDeductions);
+        const netSalary = totalEarnings - totalDeductions;
         const netAmountBarHeight = 14;
         doc.setFillColor(COLORS.success.r, COLORS.success.g, COLORS.success.b);
         doc.rect(margin, yPos - 2, contentWidth, netAmountBarHeight, 'F');
@@ -518,7 +546,7 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.text('Net Amount:', margin + 4, yPos + 6);
-        doc.text('R ' + (netSalary.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')), pageWidth - margin - 4, yPos + 6, { align: 'right' });
+        doc.text(formatCurrency(netSalary), pageWidth - margin - 4, yPos + 6, { align: 'right' });
         doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
         yPos += netAmountBarHeight + 6;
         doc.setFont('helvetica', 'normal');

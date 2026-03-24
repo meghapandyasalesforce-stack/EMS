@@ -128,6 +128,10 @@ export const invalidatePayrollCache = async () => {
         const { deleteCacheByPattern } = await import('./cache.js');
         await deleteCacheByPattern('payroll:all-employees*');
         await deleteCacheByPattern('payroll:all*');
+        await deleteCacheByPattern('payroll:employee*');
+        await deleteCacheByPattern('payroll:current*');
+        await deleteCacheByPattern('payroll:monthyear*');
+        await deleteCacheByPattern('payroll:my*');
         return true;
     } catch (error) {
         logger.error('Error invalidating payroll cache', { error: error.message });

@@ -6,7 +6,7 @@ import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerMatchQuery } from "../../helpers/managerHelper.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
-import { computeEarningsFromGross } from "../../helpers/salaryCalculation.js";
+import { computeEarningsFromGross, employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
 
 const MONTH_ORDER = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
@@ -19,6 +19,50 @@ function sortPayrollsByYearMonth(payrolls, descending = true) {
     });
 }
 
+function normalizePayrollForDisplay(payroll) {
+    if (!payroll || typeof payroll !== 'object') return payroll;
+
+    const earnings = payroll.earnings && typeof payroll.earnings === 'object' ? { ...payroll.earnings } : {};
+    const deductions = payroll.deductions && typeof payroll.deductions === 'object' ? { ...payroll.deductions } : {};
+
+    deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+
+    const earningsFields = [
+        'basicWage',
+        'houseRentAllowance',
+        'transportAllowance',
+        'medicalAllowance',
+        'overtime',
+        'gratuity',
+        'specialAllowance',
+        'performanceBonus',
+        'projectBonus',
+        'attendanceBonus',
+        'pfEmployer',
+        'esiEmployer'
+    ];
+    const deductionFields = [
+        'pfEmployee',
+        'esiEmployee',
+        'professionalTax',
+        'incomeTax',
+        'advanceSalary',
+        'loanDeduction',
+        'otherDeductions'
+    ];
+
+    earnings.totalEarnings = earningsFields.reduce((sum, key) => sum + (Number(earnings[key]) || 0), 0);
+    deductions.total = deductionFields.reduce((sum, key) => sum + (Number(deductions[key]) || 0), 0);
+
+    return {
+        ...payroll,
+        earnings,
+        deductions,
+        ctc: earnings.totalEarnings,
+        inHandSalary: earnings.totalEarnings - deductions.total
+    };
+}
+
 // Update payroll details
 export const updatePayroll = async (req, res) => {
     try {
@@ -29,6 +73,7 @@ export const updatePayroll = async (req, res) => {
         // Ensure earnings and deductions are objects
         const earnings = updates.earnings || {};
         const deductions = updates.deductions || {};
+        deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
 
         // Calculate total earnings
         earnings.totalEarnings = 
@@ -146,6 +191,7 @@ export const getEmployeePayroll = async (req, res) => {
 
         // Try to find visible payroll
         let payroll = await Payroll.findOne(query)
+            .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name designation salary jobTitle department');
 
         // If not found, create a default payroll
@@ -211,7 +257,8 @@ export const getEmployeePayroll = async (req, res) => {
             await payroll.save();
         }
 
-        res.json(payroll);
+        const normalizedPayroll = normalizePayrollForDisplay(payroll);
+        res.json(normalizedPayroll);
     } catch (error) {
         logger.error('Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
@@ -364,7 +411,8 @@ export const createPayroll = async (req, res) => {
         // Calculate totals
         const earnings = payrollData.earnings || {};
         const deductions = payrollData.deductions || {};
-        
+        deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+
         earnings.totalEarnings = Object.values(earnings).reduce((sum, val) => sum + (val || 0), 0);
         deductions.total = Object.values(deductions).reduce((sum, val) => sum + (val || 0), 0);
         
@@ -464,7 +512,7 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
             .populate('employeeId', 'name lastName email jobTitle department employeeId')
             .lean();
         const sorted = sortPayrollsByYearMonth(raw, true);
-        const payrolls = sorted.slice(skip, skip + limitNum);
+        const payrolls = sorted.slice(skip, skip + limitNum).map(normalizePayrollForDisplay);
 
         res.json({
             payrolls,
@@ -524,6 +572,7 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
         });
 
         let payroll = await Payroll.findOne(query)
+            .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId');
 
         if (!payroll) {
@@ -580,7 +629,8 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
                 .populate('employeeId', 'name lastName email jobTitle department employeeId');
         }
 
-        res.json(payroll);
+        const normalizedPayroll = normalizePayrollForDisplay(payroll);
+        res.json(normalizedPayroll);
     } catch (error) {
         logger.error('Get Payroll by Employee Month Year Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
@@ -613,7 +663,8 @@ export const getPayrollById = async (req, res) => {
             }
         }
 
-        res.json(payroll);
+        const normalizedPayroll = normalizePayrollForDisplay(payroll);
+        res.json(normalizedPayroll);
     } catch (error) {
         logger.error('Get Payroll by ID Error', { error: error.message, stack: error.stack });
         res.status(500).json({ success: false, message: error.message });
@@ -663,7 +714,9 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
             employeeId,
             month,
             year
-        }).populate('employeeId', 'name lastName email jobTitle department employeeId');
+        })
+            .sort({ updatedAt: -1, createdAt: -1 })
+            .populate('employeeId', 'name lastName email jobTitle department employeeId');
 
         // If no payroll exists for current month, create a default one
         if (!payroll) {
@@ -731,7 +784,8 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
             await payroll.save();
         }
 
-        res.json(payroll);
+        const normalizedPayroll = normalizePayrollForDisplay(payroll.toObject ? payroll.toObject() : payroll);
+        res.json(normalizedPayroll);
     } catch (error) {
         logger.error('Get Current Month Payroll for Admin Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
@@ -787,12 +841,17 @@ export const getAllEmployeesPayroll = async (req, res) => {
             employeeId: { $in: employeeIds },
             month,
             year
-        }).lean();
+        })
+            .sort({ updatedAt: -1, createdAt: -1 })
+            .lean();
 
         // Create a map for O(1) lookup
         const payrollMap = new Map();
         payrolls.forEach(payroll => {
-            payrollMap.set(payroll.employeeId.toString(), payroll);
+            const key = payroll.employeeId.toString();
+            if (!payrollMap.has(key)) {
+                payrollMap.set(key, payroll);
+            }
         });
 
         // Build payroll summary per employee

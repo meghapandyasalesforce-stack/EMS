@@ -22,6 +22,51 @@ function sortPayrollsByYearMonth(payrolls, descending = true) {
     });
 }
 
+function normalizePayrollForDisplay(payroll) {
+    if (!payroll || typeof payroll !== 'object') return payroll;
+
+    const earnings = payroll.earnings && typeof payroll.earnings === 'object' ? { ...payroll.earnings } : {};
+    const deductions = payroll.deductions && typeof payroll.deductions === 'object' ? { ...payroll.deductions } : {};
+
+    const basicWage = Number(earnings.basicWage) || 0;
+    deductions.pfEmployee = Math.round(basicWage * 0.12);
+
+    const earningsFields = [
+        'basicWage',
+        'houseRentAllowance',
+        'transportAllowance',
+        'medicalAllowance',
+        'overtime',
+        'gratuity',
+        'specialAllowance',
+        'performanceBonus',
+        'projectBonus',
+        'attendanceBonus',
+        'pfEmployer',
+        'esiEmployer'
+    ];
+    const deductionFields = [
+        'pfEmployee',
+        'esiEmployee',
+        'professionalTax',
+        'incomeTax',
+        'advanceSalary',
+        'loanDeduction',
+        'otherDeductions'
+    ];
+
+    earnings.totalEarnings = earningsFields.reduce((sum, key) => sum + (Number(earnings[key]) || 0), 0);
+    deductions.total = deductionFields.reduce((sum, key) => sum + (Number(deductions[key]) || 0), 0);
+
+    return {
+        ...payroll,
+        earnings,
+        deductions,
+        ctc: earnings.totalEarnings,
+        inHandSalary: earnings.totalEarnings - deductions.total
+    };
+}
+
 // Get employee's payroll history (1 year = 12 months, sorted Jan→Dec within year, newest first)
 export const getEmployeePayrollHistory = async (req, res) => {
     try {
@@ -42,7 +87,7 @@ export const getEmployeePayrollHistory = async (req, res) => {
             .limit(fetchSize)
             .populate('employeeId', 'name lastName email jobTitle department')
             .lean();
-        const sorted = sortPayrollsByYearMonth(raw, true);
+        const sorted = sortPayrollsByYearMonth(raw, true).map(normalizePayrollForDisplay);
         const payrolls = sorted.slice(skip, skip + limitNum);
 
         res.json({
@@ -68,13 +113,15 @@ export const getPayrollDetails = async (req, res) => {
         if (organizationId) query.organizationId = organizationId;
 
         const payroll = await Payroll.findOne(query)
+            .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId');
 
         if (!payroll) {
             return res.status(404).json({ message: 'Payroll not found' });
         }
 
-        res.json(payroll);
+        const normalizedPayroll = normalizePayrollForDisplay(payroll.toObject());
+        res.json(normalizedPayroll);
     } catch (error) {
         logger.error('Get Payroll Details Error', { error: error.message, stack: error.stack, payrollId: req.params.id });
         res.status(500).json({ message: error.message });
@@ -92,6 +139,7 @@ export const downloadPayslip = async (req, res) => {
         if (organizationId) query.organizationId = organizationId;
 
         const payroll = await Payroll.findOne(query)
+            .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 financialDetails');
 
         if (!payroll) {
@@ -235,6 +283,7 @@ export const getCurrentMonthPayroll = async (req, res) => {
         }
 
         let payroll = await Payroll.findOne(query)
+            .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId')
             .lean();
 
@@ -251,10 +300,12 @@ export const getCurrentMonthPayroll = async (req, res) => {
 
             const gross = employee.salary || 0;
             const formula = computeEarningsFromGross(gross);
-            const basicSalary = formula.basicWage;
+            // Basic wage is used for PF/tax calculations.
+            // payroll.basicSalary (legacy field name) will store gross/current salary for display/reporting.
+            const basicWage = formula.basicWage;
 
             const earnings = {
-                basicWage: formula.basicWage,
+                basicWage,
                 houseRentAllowance: formula.houseRentAllowance,
                 transportAllowance: 2000,
                 medicalAllowance: 1500,
@@ -264,16 +315,16 @@ export const getCurrentMonthPayroll = async (req, res) => {
                 performanceBonus: 0,
                 projectBonus: 0,
                 attendanceBonus: 0,
-                pfEmployer: Math.round(basicSalary * 0.12),
-                esiEmployer: Math.round(basicSalary * 0.0325)
+                pfEmployer: Math.round(basicWage * 0.12),
+                esiEmployer: Math.round(basicWage * 0.0325)
             };
             earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
 
             const deductions = {
-                pfEmployee: Math.round(basicSalary * 0.12),
-                esiEmployee: Math.round(basicSalary * 0.0075),
+                pfEmployee: Math.round(basicWage * 0.12),
+                esiEmployee: Math.round(basicWage * 0.0075),
                 professionalTax: 200,
-                incomeTax: Math.round(basicSalary * 0.1),
+                incomeTax: Math.round(basicWage * 0.1),
                 advanceSalary: 0,
                 loanDeduction: 0,
                 otherDeductions: 0
@@ -288,7 +339,8 @@ export const getCurrentMonthPayroll = async (req, res) => {
                 employeeId,
                 month,
                 year,
-                basicSalary,
+                // Store gross/current salary in the legacy "basicSalary" field name.
+                basicSalary: gross,
                 earnings,
                 deductions,
                 ctc,
@@ -307,10 +359,10 @@ export const getCurrentMonthPayroll = async (req, res) => {
         }
 
         // Return response in expected format
+        const normalizedPayroll = normalizePayrollForDisplay(payroll);
         res.json({
             success: true,
-            ...payroll,
-            inHandSalary: payroll.inHandSalary || (payroll.earnings?.totalEarnings || 0) - (payroll.deductions?.total || 0)
+            ...normalizedPayroll
         });
     } catch (error) {
         logger.error('Get Current Month Payroll Error', { 
@@ -334,9 +386,11 @@ async function createDefaultPayrollForMonth(employeeId, month, year, organizatio
     if (!employee) return null;
     const gross = employee.salary || 0;
     const formula = computeEarningsFromGross(gross);
-    const basicSalary = formula.basicWage;
+    // Basic wage is used for PF/tax calculations.
+    // payroll.basicSalary (legacy field name) will store gross/current salary for display/reporting.
+    const basicWage = formula.basicWage;
     const earnings = {
-        basicWage: formula.basicWage,
+        basicWage,
         houseRentAllowance: formula.houseRentAllowance,
         transportAllowance: 2000,
         medicalAllowance: 1500,
@@ -346,15 +400,15 @@ async function createDefaultPayrollForMonth(employeeId, month, year, organizatio
         performanceBonus: 0,
         projectBonus: 0,
         attendanceBonus: 0,
-        pfEmployer: Math.round(basicSalary * 0.12),
-        esiEmployer: Math.round(basicSalary * 0.0325)
+        pfEmployer: Math.round(basicWage * 0.12),
+        esiEmployer: Math.round(basicWage * 0.0325)
     };
     earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
     const deductions = {
-        pfEmployee: Math.round(basicSalary * 0.12),
-        esiEmployee: Math.round(basicSalary * 0.0075),
+        pfEmployee: Math.round(basicWage * 0.12),
+        esiEmployee: Math.round(basicWage * 0.0075),
         professionalTax: 200,
-        incomeTax: Math.round(basicSalary * 0.1),
+        incomeTax: Math.round(basicWage * 0.1),
         advanceSalary: 0,
         loanDeduction: 0,
         otherDeductions: 0
@@ -366,7 +420,8 @@ async function createDefaultPayrollForMonth(employeeId, month, year, organizatio
         employeeId,
         month,
         year,
-        basicSalary,
+        // Store gross/current salary in the legacy "basicSalary" field name.
+        basicSalary: gross,
         earnings,
         deductions,
         ctc,
@@ -395,6 +450,7 @@ export const getPayrollByMonth = async (req, res) => {
         const query = { employeeId, month, year };
         if (organizationId) query.organizationId = organizationId;
         let payroll = await Payroll.findOne(query)
+            .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId')
             .lean();
         if (!payroll) {
@@ -406,10 +462,10 @@ export const getPayrollByMonth = async (req, res) => {
                 .populate('employeeId', 'name lastName email jobTitle department employeeId')
                 .lean();
         }
+        const normalizedPayroll = normalizePayrollForDisplay(payroll);
         res.json({
             success: true,
-            ...payroll,
-            inHandSalary: payroll.inHandSalary || (payroll.earnings?.totalEarnings || 0) - (payroll.deductions?.total || 0)
+            ...normalizedPayroll
         });
     } catch (error) {
         logger.error('Get Payroll by Month Error', { error: error.message, stack: error.stack });
