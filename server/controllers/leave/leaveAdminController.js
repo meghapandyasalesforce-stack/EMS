@@ -157,7 +157,15 @@ export const updateLeaveStatus = async (req, res) => {
         const { id } = req.params;
         const { status, rejectionReason } = req.body;
 
-        const leave = await Leave.findById(id).populate('employee', 'department');
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.'
+            });
+        }
+
+        const leave = await Leave.findOne({ _id: id, organizationId }).populate('employee', 'department');
         if (!leave) {
             return res.status(404).json({ message: 'Leave application not found' });
         }
@@ -403,8 +411,20 @@ export const getLeaveStatistics = async (req, res) => {
             return res.status(403).json({ message: 'Access denied. Admin or HR privileges required.' });
         }
 
-        // Step 4: Find all leave records for this employee
-        const leaves = await Leave.find({ employee: employeeObjectId });
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        const employee = await Employee.findById(employeeObjectId).select('organizationId').lean();
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+        if (organizationId && employee.organizationId?.toString() !== organizationId.toString()) {
+            return res.status(403).json({ message: 'Access denied. Employee is not in your organization.' });
+        }
+
+        const leaveQuery = { employee: employeeObjectId };
+        if (organizationId) {
+            leaveQuery.organizationId = organizationId;
+        }
+        const leaves = await Leave.find(leaveQuery);
 
         // Step 5: Compute statistics
         const statistics = {

@@ -306,7 +306,11 @@ export const getMyLeaves = async (req, res) => {
         const organizationId = req.organizationId || req.employee?.organizationId;
         const year = new Date().getFullYear();
 
-        const leaves = await Leave.find({ employee: employeeId }).sort({ createdAt: -1 });
+        const leaveQuery = { employee: employeeId };
+        if (organizationId) {
+            leaveQuery.organizationId = organizationId;
+        }
+        const leaves = await Leave.find(leaveQuery).sort({ createdAt: -1 });
 
         const currentYearLeaves = leaves.filter(leave =>
             new Date(leave.startDate).getFullYear() === year &&

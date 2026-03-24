@@ -83,13 +83,14 @@ class LeaveValidationService {
             // 5. Calculate duration (used for balance check and min/max)
             const duration = await this.calculateDuration(startDate, endDate, policy.dateHandlingRules, calendar, organizationId);
 
-            // 6. Check leave balance (uses normalized type for policy alignment)
+            // 6. Check leave balance (policy year = leave start year; LOP skips balance)
             const balanceCheck = await this.checkLeaveBalance(
                 employeeId,
                 normalizedType,
                 duration,
                 leaveData.isHalfDay,
-                organizationId
+                organizationId,
+                startDate.getFullYear()
             );
             if (!balanceCheck.allowed) {
                 errors.push(balanceCheck.reason);
@@ -251,10 +252,14 @@ class LeaveValidationService {
 
     /**
      * Check leave balance (leaveType should be normalized, e.g. paid not annual)
+     * @param {number} [balanceYear] - accrual year for the leave (defaults to current calendar year)
      */
-    async checkLeaveBalance(employeeId, leaveType, requestedDays, isHalfDay, organizationId) {
+    async checkLeaveBalance(employeeId, leaveType, requestedDays, isHalfDay, organizationId, balanceYear) {
         try {
-            const year = new Date().getFullYear();
+            if (!leaveType || String(leaveType).toLowerCase() === 'loss_of_pay') {
+                return { allowed: true };
+            }
+            const year = Number.isFinite(balanceYear) ? balanceYear : new Date().getFullYear();
             const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
             if (!balance) return { allowed: true }; // no policy – allow and let other checks handle
             const typeBalance = balance.balances.find(b => b.leaveType === leaveType);

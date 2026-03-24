@@ -7,7 +7,7 @@ import { useLocation } from 'react-router-dom';
 
 const LeaveApplication = () => {
   const dispatch = useDispatch();
-  const { submitting, success, error } = useSelector((state) => state.employeeLeave);
+  const { loading: submitting, success, error } = useSelector((state) => state.employeeLeave);
   const user = useSelector((state) => state.auth.user);
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
   const location = useLocation();
