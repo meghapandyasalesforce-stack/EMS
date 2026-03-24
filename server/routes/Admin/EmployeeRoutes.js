@@ -4,7 +4,7 @@ import {
   getEmployeeWorkInfo,
   calculateEmployeeStats
 } from '../../controllers/admin/employeeController.js';
-import { getManagers, getAllEmployees } from '../../controllers/admin/employeeManagementController.js';
+import { getManagers, getAllEmployees, getOrganizationJobTitles } from '../../controllers/admin/employeeManagementController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
@@ -25,9 +25,13 @@ router.route('/')
 router.route('/managers')
   .get(isAdminOrHRAuthenticated, employeeListLimiter, getManagers);
 
+// Get organization-specific job titles for dropdowns
+router.route('/job-titles')
+  .get(isAdminOrHRAuthenticated, employeeListLimiter, getOrganizationJobTitles);
+
 // Update employee work information - write operations have stricter limits
 router.route('/:employeeId/work-info')
-  .put(isAdminAuthenticated, generalWriteLimiter, updateEmployeeWorkInfo)
+  .put(isAdminOrHRAuthenticated, generalWriteLimiter, updateEmployeeWorkInfo)
   .get(isAdminAuthenticated, employeeListLimiter, getEmployeeWorkInfo);
 
 // Calculate employee statistics - resource intensive

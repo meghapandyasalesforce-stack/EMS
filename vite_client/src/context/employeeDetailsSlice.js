@@ -275,6 +275,10 @@ const employeeDetailsSlice = createSlice({
     clearEmployeeDetails: (state) => {
       state.employee = null;
       state.error = null;
+      state.statusUpdateError = null;
+      state.workInfoError = null;
+      state.updatingStatus = false;
+      state.updatingWorkInfo = false;
     }
   },
   extraReducers: (builder) => {
@@ -283,10 +287,14 @@ const employeeDetailsSlice = createSlice({
       .addCase(fetchEmployeeDetails.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.statusUpdateError = null;
+        state.workInfoError = null;
       })
       .addCase(fetchEmployeeDetails.fulfilled, (state, action) => {
         state.loading = false;
         state.employee = action.payload;
+        state.statusUpdateError = null;
+        state.workInfoError = null;
       })
       .addCase(fetchEmployeeDetails.rejected, (state, action) => {
         state.loading = false;

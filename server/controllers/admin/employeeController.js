@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import Attendance from '../../models/attendance.model.js';
 import Project from '../../models/project.model.js';
 import logger from '../../helpers/logger.js';
+import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
 
 // Update employee work information (Admin only)
 export const updateEmployeeWorkInfo = async (req, res) => {
@@ -18,8 +20,9 @@ export const updateEmployeeWorkInfo = async (req, res) => {
       });
     }
 
-    // Check if employee exists
-    const employee = await Employee.findById(employeeId);
+    // Check if employee exists within requester's organization
+    const organizationId = getOrganizationId(req);
+    const employee = await Employee.findOne({ _id: employeeId, organizationId });
     if (!employee) {
       return res.status(404).json({ 
         success: false,
@@ -39,11 +42,20 @@ export const updateEmployeeWorkInfo = async (req, res) => {
 
     // Update employee work information
     // Explicitly include salary field in the response
-    const updatedEmployee = await Employee.findByIdAndUpdate(
-      employeeId,
+    const updatedEmployee = await Employee.findOneAndUpdate(
+      { _id: employeeId, organizationId },
       updateData,
       { new: true, runValidators: true }
     ).select('-password -role').lean();
+
+    // Ensure employee list caches reflect work-info changes immediately.
+    if (updatedEmployee?.organizationId) {
+      try {
+        await invalidateEmployeesCache(updatedEmployee.organizationId);
+      } catch (e) {
+        logger.warn('Failed to invalidate employees cache after work-info update', { error: e.message });
+      }
+    }
 
     // Ensure salary is explicitly included in the response
     if (updatedEmployee && updatedEmployee.salary === undefined) {

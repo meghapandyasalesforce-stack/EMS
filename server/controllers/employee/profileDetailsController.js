@@ -358,19 +358,14 @@ export const updateFinancialDetails = async (req, res) => {
 
 export const getEmployeeInfoByAdmin = async (req, res) => {
   try {
-    // Check if requester is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admins only.' });
-    }
-
     const { employeeId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
       return res.status(400).json({ message: 'Invalid employee ID' });
     }
 
-    // Get organizationId from admin user
-    const organizationId = req.user?.organizationId;
+    // Get organizationId from authenticated context
+    const organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
     if (!organizationId) {
       return res.status(400).json({ message: 'Organization ID is required' });
     }

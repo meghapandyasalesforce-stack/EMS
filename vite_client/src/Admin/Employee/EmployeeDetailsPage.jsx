@@ -21,7 +21,7 @@ import {
 } from '../../context/employeeDetailsSlice';
 import { deleteEmployee } from '../../context/employeeSlice';
 import { BOTH_DOCUMENT_ENDPOINT } from '../../utils/constant';
-import { getBackendBaseURL } from '../../utils/axios';
+import axiosInstance, { getBackendBaseURL } from '../../utils/axios';
 import { 
   FiUser, 
   FiMail, 
@@ -44,6 +44,7 @@ import {
   FiStar,
   FiActivity
 } from 'react-icons/fi';
+import { MdOutlineCurrencyRupee } from "react-icons/md";
 
 const EmployeeDetailsPage = () => {
   const theme = useTheme();
@@ -70,6 +71,9 @@ const EmployeeDetailsPage = () => {
   // Check if mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [deletingEmployee, setDeletingEmployee] = useState(false);
+  const [managerOptions, setManagerOptions] = useState([]);
+  const [jobTitleOptions, setJobTitleOptions] = useState([]);
+  const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -94,6 +98,38 @@ const EmployeeDetailsPage = () => {
       dispatch(clearEmployeeDetails());
     };
   }, [dispatch, employeeId]);
+
+  const fetchDropdownOptions = useCallback(async () => {
+    try {
+      setLoadingDropdownOptions(true);
+      const [managersRes, jobTitlesRes] = await Promise.all([
+        axiosInstance.get('/v1/admin/employee/managers?limit=500', { withCredentials: true }),
+        axiosInstance.get('/v1/admin/employee/job-titles', { withCredentials: true }),
+      ]);
+
+      const managersData = managersRes?.data;
+      const managerList = Array.isArray(managersData?.data)
+        ? managersData.data
+        : (Array.isArray(managersData) ? managersData : []);
+
+      const titlesData = jobTitlesRes?.data;
+      const titleList = Array.isArray(titlesData?.data?.jobTitles)
+        ? titlesData.data.jobTitles
+        : (Array.isArray(titlesData?.jobTitles) ? titlesData.jobTitles : []);
+
+      setManagerOptions(managerList);
+      setJobTitleOptions(titleList);
+    } catch (e) {
+      setManagerOptions([]);
+      setJobTitleOptions([]);
+    } finally {
+      setLoadingDropdownOptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDropdownOptions();
+  }, [fetchDropdownOptions]);
 
   const handleStatusChangeClick = () => {
     setOpenDialog(true);
@@ -711,11 +747,15 @@ const EmployeeDetailsPage = () => {
                     <TableRow>
                       <TableCell sx={{ fontWeight: 'bold' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiDollarSign size={16} />
+                          <MdOutlineCurrencyRupee size={16} />
                           Salary
                         </Box>
                       </TableCell>
-                      <TableCell>${employee.salary?.toLocaleString() || 'N/A'}</TableCell>
+                      <TableCell>
+                        {employee.salary !== undefined && employee.salary !== null
+                          ? `₹${Number(employee.salary).toLocaleString('en-IN')}`
+                          : 'N/A'}
+                      </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 'bold' }}>
@@ -1352,14 +1392,22 @@ const EmployeeDetailsPage = () => {
           <Box sx={{ pt: 2 }}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Job Title"
-                  value={editWorkForm.jobTitle}
-                  onChange={handleEditWorkFormChange('jobTitle')}
-                  variant="outlined"
-                  size="small"
-                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Job Title</InputLabel>
+                  <Select
+                    value={editWorkForm.jobTitle}
+                    onChange={handleEditWorkFormChange('jobTitle')}
+                    label="Job Title"
+                    disabled={loadingDropdownOptions}
+                  >
+                    {editWorkForm.jobTitle && !jobTitleOptions.includes(editWorkForm.jobTitle) && (
+                      <MenuItem value={editWorkForm.jobTitle}>{editWorkForm.jobTitle}</MenuItem>
+                    )}
+                    {jobTitleOptions.map((title) => (
+                      <MenuItem key={title} value={title}>{title}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth size="small">
@@ -1409,14 +1457,27 @@ const EmployeeDetailsPage = () => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Manager"
-                  value={editWorkForm.manager}
-                  onChange={handleEditWorkFormChange('manager')}
-                  variant="outlined"
-                  size="small"
-                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Manager</InputLabel>
+                  <Select
+                    value={editWorkForm.manager}
+                    onChange={handleEditWorkFormChange('manager')}
+                    label="Manager"
+                    disabled={loadingDropdownOptions}
+                  >
+                    {editWorkForm.manager && !managerOptions.some((m) => `${m?.name || ''} ${m?.lastName || ''}`.trim() === editWorkForm.manager) && (
+                      <MenuItem value={editWorkForm.manager}>{editWorkForm.manager}</MenuItem>
+                    )}
+                    {managerOptions.map((manager) => {
+                      const managerName = `${manager?.name || ''} ${manager?.lastName || ''}`.trim();
+                      return (
+                        <MenuItem key={manager?._id || managerName} value={managerName}>
+                          {managerName || 'N/A'}
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
@@ -1428,7 +1489,7 @@ const EmployeeDetailsPage = () => {
                   variant="outlined"
                   size="small"
                   InputProps={{
-                    startAdornment: <Typography sx={{ mr: 1 }}>$</Typography>
+                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>
                   }}
                 />
               </Grid>

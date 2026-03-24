@@ -17,9 +17,19 @@ const memoryCacheTTL = new Map();
  * @returns {string} Cache key
  */
 export const generateCacheKey = (prefix, identifier) => {
+    const stableSerialize = (value) => {
+        if (value === null || value === undefined) return String(value);
+        if (typeof value !== 'object') return String(value);
+        if (Array.isArray(value)) {
+            return `[${value.map(stableSerialize).join(',')}]`;
+        }
+        const keys = Object.keys(value).sort();
+        return `{${keys.map((k) => `${k}:${stableSerialize(value[k])}`).join(',')}}`;
+    };
+
     if (typeof identifier === 'object') {
         const sortedKeys = Object.keys(identifier).sort();
-        const keyString = sortedKeys.map(key => `${key}:${identifier[key]}`).join('|');
+        const keyString = sortedKeys.map(key => `${key}:${stableSerialize(identifier[key])}`).join('|');
         return `${prefix}:${keyString}`;
     }
     return `${prefix}:${identifier}`;

@@ -13,7 +13,7 @@ import {
     updateLocationPermission
 } from "../../controllers/employee/profileDetailsController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
-import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
+import isAdminOrHRAuthenticated from './../../middlewares/isAdminOrHRAuthenticated.js';
 import { updateEmployeeStatus } from "../../controllers/admin/employeeManagementController.js";
 
 
@@ -22,7 +22,7 @@ const router = express.Router();
 
 
 router.route("/update-info").put(isAuthenticated, updateEmployeeInfo);
-router.route("/admin/get-info/:employeeId").get( isAdminAuthenticated, getEmployeeInfoByAdmin);
+router.route("/admin/get-info/:employeeId").get(isAdminOrHRAuthenticated, getEmployeeInfoByAdmin);
 router.route("/get-my-details").get(isAuthenticated, getEmployeeInfoByEmployee);
 router.route("/add-academic-record").post(isAuthenticated, addAcademicRecord);
 router.route("/add-professional-qualification").post(isAuthenticated, addProfessionalQualification);
@@ -34,7 +34,7 @@ router.route("/update-location-permission").put(isAuthenticated, updateLocationP
 router.route("/upcoming-birthdays").get(isAuthenticated, getUpcomingBirthdays);
 
 // update status(active or inactive)
-router.route("/admin/update-status/:employeeId").patch(isAdminAuthenticated,updateEmployeeStatus );
+router.route("/admin/update-status/:employeeId").patch(isAdminOrHRAuthenticated, updateEmployeeStatus);
 
 
 

@@ -5,16 +5,17 @@ import { fetchEmployees } from '../../context/employeeSlice';
 import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye, FaUserPlus } from 'react-icons/fa';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import RoleBadge from '../../components/RoleBadge';
-import { filterEmployeesByManager, isManager } from '../../utils/managerHelper';
 
 const EmployeesPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { employees, status, error } = useSelector((state) => state.employees);
+  const { employees, status, error, pagination } = useSelector((state) => state.employees);
   const user = useSelector((state) => state.auth?.user);
   const employee = useSelector((state) => state.employeeDetails?.employee);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   // Check if user is HR or Admin
   const canAddEmployee = useMemo(() => {
@@ -43,8 +44,8 @@ const EmployeesPage = () => {
   }, [user, employee]);
 
   useEffect(() => {
-    dispatch(fetchEmployees());
-  }, [dispatch]);
+    dispatch(fetchEmployees({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }));
+  }, [dispatch, currentPage, debouncedSearchTerm]);
 
   // Debounce the search term
   useEffect(() => {
@@ -56,6 +57,10 @@ const EmployeesPage = () => {
       clearTimeout(timerId);
     };
   }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm]);
 
   const handleRowClick = (employeeId) => {
     navigate(`/employees/${employeeId}`);
@@ -77,47 +82,9 @@ const EmployeesPage = () => {
            (position.includes('hr') && position.includes('manager'));
   }, [user, employee]);
 
-  // Filter employees by manager if user is a manager (but NOT if user is HR)
-  // HR should see ALL employees
   const displayUser = user || employee;
-  const isUserManager = isManager(displayUser) && !isHR;
-  const managerFilteredEmployees = isUserManager 
-    ? filterEmployeesByManager(employees || [], displayUser)
-    : (employees || []);
 
-  // Sort employees by createdAt date (newest first)
-  const sortedEmployees = [...managerFilteredEmployees].sort((a, b) => {
-    const dateA = new Date(a.createdAt || 0);
-    const dateB = new Date(b.createdAt || 0);
-    return dateB - dateA; // Newest first
-  });
-
-  // Filter employees based on debounced search term
-  const filteredEmployees = sortedEmployees.filter(employee => {
-    if (!debouncedSearchTerm) return true;
-    const fullName = `${employee.name} ${employee.lastName}`.toLowerCase();
-    return fullName.includes(debouncedSearchTerm.toLowerCase());
-  });
-
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-gray-100 p-4 sm:p-5 transition-all duration-300">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'failed') {
-    return (
-      <div className="min-h-screen bg-gray-100 p-4 sm:p-5 transition-all duration-300">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          Error loading employees: {error || 'Unknown error occurred'}
-        </div>
-      </div>
-    );
-  }
+  const isInitialLoading = status === 'loading' && (!employees || employees.length === 0);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-5 transition-all duration-300">
@@ -128,10 +95,8 @@ const EmployeesPage = () => {
               <h1 className="text-2xl font-bold text-gray-800">Employees Management</h1>
               <p className="text-sm text-gray-600 mt-1">
                 {isHR 
-                  ? `Showing all employees (${filteredEmployees.length} employees)`
-                  : isUserManager 
-                    ? `Showing your team members (${filteredEmployees.length} employees)`
-                    : `Showing employees (${filteredEmployees.length} employees)`
+                  ? `Showing all employees (${pagination?.total || 0} employees)`
+                  : `Showing employees (${pagination?.total || 0} employees)`
                 }
               </p>
             </div>
@@ -173,6 +138,16 @@ const EmployeesPage = () => {
             )}
           </div>
 
+          {status === 'failed' && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              Error loading employees: {error || 'Unknown error occurred'}
+            </div>
+          )}
+
+          {status === 'loading' && !isInitialLoading && (
+            <div className="text-xs text-gray-500 mb-3">Updating results...</div>
+          )}
+
           {/* Employees Table */}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -202,7 +177,7 @@ const EmployeesPage = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredEmployees.map((employee) => (
+                {(employees || []).map((employee) => (
                   <tr
                     key={employee._id}
                     className="hover:bg-gray-50 cursor-pointer"
@@ -292,13 +267,41 @@ const EmployeesPage = () => {
             </table>
           </div>
 
-          {filteredEmployees.length === 0 && (
+          {isInitialLoading && (
+            <div className="flex justify-center items-center h-40">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary"></div>
+            </div>
+          )}
+
+          {!isInitialLoading && (employees || []).length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500 text-lg">
                 {searchTerm ? 'No employees found matching your search.' : 'No employees found.'}
               </p>
             </div>
           )}
+
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-sm text-gray-600">
+              Page {pagination?.page || currentPage} of {pagination?.pages || 1} • Total {pagination?.total || 0}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={!pagination?.hasPrev || status === 'loading'}
+                className="px-3 py-1.5 rounded-md border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => p + 1)}
+                disabled={!pagination?.hasNext || status === 'loading'}
+                className="px-3 py-1.5 rounded-md border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

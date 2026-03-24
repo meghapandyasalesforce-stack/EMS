@@ -390,19 +390,18 @@ export const registerEmployee = async (req, res) => {
             });
         }
 
-        // SECURITY FIX: Do NOT generate tokens when admin creates employee
-        // This prevents overwriting the admin's session cookies
-        // Employee will get tokens when they log in themselves
-        // Only generate tokens if this is self-registration (which shouldn't happen with admin auth)
-        const isAdminCreating = !!req.user; // Check if admin is creating (has req.user from isAdminAuthenticated)
+        // SECURITY FIX: Do NOT generate tokens when admin/HR creates employee.
+        // This prevents overwriting the creator's session cookies.
+        // Employee will get tokens when they log in themselves.
+        const isPrivilegedCreating = !!(req.user || req.employee);
         
         let token = undefined;
         let refreshToken = undefined;
         let csrfToken = undefined;
         
-        // Only generate tokens if NOT created by admin (self-registration scenario)
-        // This should rarely happen since the route requires admin auth, but kept for safety
-        if (!isAdminCreating) {
+        // Only generate tokens if NOT created by authenticated admin/HR (self-registration scenario)
+        // This should rarely happen since the route requires admin/HR auth, but kept for safety.
+        if (!isPrivilegedCreating) {
             const passwordChangedAt = employee.passwordChangedAt || employee.createdAt;
             const tokenResult = generateToken(employee._id, "employee", organizationId, res, passwordChangedAt);
             token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;

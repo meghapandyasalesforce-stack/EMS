@@ -24,29 +24,46 @@ export const createEmployee = createAsyncThunk(
 
 export const fetchEmployees = createAsyncThunk(
   'employees/fetchEmployees',
-  async (_, thunkAPI) => {
+  async (params = {}, thunkAPI) => {
     try {
       const role = getUserRole();
       const useAdminEndpoint = role === 'admin';
+      const page = Number(params.page) > 0 ? Number(params.page) : 1;
+      const limit = Number(params.limit) > 0 ? Number(params.limit) : 20;
+      const search = typeof params.search === 'string' ? params.search.trim() : '';
+      const queryParams = { page, limit };
+      if (search) queryParams.search = search;
 
       const fetchFromAdmin = async () => {
-        const adminResponse = await axios.get('/v1/admin/employee', { withCredentials: true });
+        const adminResponse = await axios.get('/v1/admin/employee', { withCredentials: true, params: queryParams });
         if (adminResponse.data?.data && Array.isArray(adminResponse.data.data)) {
-          return adminResponse.data.data;
+          return {
+            employees: adminResponse.data.data,
+            pagination: adminResponse.data.pagination || { page, limit, total: adminResponse.data.data.length, pages: 1, hasNext: false, hasPrev: false }
+          };
         }
-        return [];
+        return { employees: [], pagination: { page, limit, total: 0, pages: 0, hasNext: false, hasPrev: false } };
       };
 
       const fetchFromEmployee = async () => {
-        const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, { withCredentials: true });
-        if (response.data.employees) {
-          return response.data.employees;
+        const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, { withCredentials: true, params: queryParams });
+        if (response.data?.data && Array.isArray(response.data.data)) {
+          return {
+            employees: response.data.data,
+            pagination: response.data.pagination || { page, limit, total: response.data.data.length, pages: 1, hasNext: false, hasPrev: false }
+          };
+        } else if (response.data?.employees && Array.isArray(response.data.employees)) {
+          return {
+            employees: response.data.employees,
+            pagination: { page, limit, total: response.data.employees.length, pages: 1, hasNext: false, hasPrev: false }
+          };
         } else if (Array.isArray(response.data)) {
-          return response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          return response.data.data;
+          return {
+            employees: response.data,
+            pagination: { page, limit, total: response.data.length, pages: 1, hasNext: false, hasPrev: false }
+          };
         }
-        return [];
+        return { employees: [], pagination: { page, limit, total: 0, pages: 0, hasNext: false, hasPrev: false } };
       };
 
       if (useAdminEndpoint) {
@@ -92,6 +109,14 @@ const employeeSlice = createSlice({
     employees: [],
     status: 'idle',
     error: null,
+    pagination: {
+      page: 1,
+      limit: 20,
+      total: 0,
+      pages: 0,
+      hasNext: false,
+      hasPrev: false
+    }
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -119,7 +144,8 @@ const employeeSlice = createSlice({
       })
       .addCase(fetchEmployees.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.employees = action.payload;
+        state.employees = action.payload?.employees || [];
+        state.pagination = action.payload?.pagination || state.pagination;
       })
       .addCase(fetchEmployees.rejected, (state, action) => {
         state.status = 'failed';

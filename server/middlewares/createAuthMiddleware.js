@@ -129,8 +129,27 @@ export const createAuthMiddleware = (options = {}) => {
                 }
             }
 
-            // Attach user/employee to request
+            // Preserve any enriched identity data added during customCheck.
+            const enrichedEmployee = req.employee ? { ...req.employee } : null;
+            const enrichedUser = req.user ? { ...req.user } : null;
+
+            // Attach base identity from token payload.
             attachUserToRequest(req, decoded);
+
+            // Merge customCheck enrichments back after base attach to avoid overwrite.
+            if (decoded.role === 'employee' && enrichedEmployee) {
+                req.employee = {
+                    ...req.employee,
+                    ...enrichedEmployee
+                };
+            }
+
+            if (decoded.role === 'admin' && enrichedUser) {
+                req.user = {
+                    ...req.user,
+                    ...enrichedUser
+                };
+            }
 
             next();
         } catch (error) {

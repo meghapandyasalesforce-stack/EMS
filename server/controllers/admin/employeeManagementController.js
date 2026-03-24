@@ -11,7 +11,7 @@ import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendForbidden, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 import { addOrganizationFilter, getOrganizationId } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
-import { getCachedEmployees, setCachedEmployees } from '../../helpers/cacheHelper.js';
+import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 
@@ -127,11 +127,34 @@ export const getAllEmployees = async (req, res) => {
             });
         }
 
-        // Try cache first (only for first page)
-        if (page === 1) {
-            const cached = await getCachedEmployees(organizationId, query);
-            if (cached) {
-                return sendPaginatedResponse(res, cached.data, page, limit, cached.total, 'Employees retrieved successfully');
+        // Optional server-side search (name, last name, email, employeeId)
+        const search = String(req.query.search || '').trim();
+        if (search) {
+            const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchRegex = new RegExp(escaped, 'i');
+            const searchClause = {
+                $or: [
+                    { name: searchRegex },
+                    { lastName: searchRegex },
+                    { email: searchRegex },
+                    { employeeId: searchRegex }
+                ]
+            };
+
+            // If query already has an $or (e.g., manager filter), combine safely with $and.
+            if (query.$or) {
+                const existingOr = query.$or;
+                delete query.$or;
+                query.$and = [
+                    ...(Array.isArray(query.$and) ? query.$and : []),
+                    { $or: existingOr },
+                    searchClause
+                ];
+            } else {
+                query.$and = [
+                    ...(Array.isArray(query.$and) ? query.$and : []),
+                    searchClause
+                ];
             }
         }
 
@@ -147,11 +170,6 @@ export const getAllEmployees = async (req, res) => {
             Employee.countDocuments(query)
         ]);
 
-        // Cache first page results
-        if (page === 1) {
-            await setCachedEmployees(organizationId, query, employees, total);
-        }
-
         return sendPaginatedResponse(res, employees, page, limit, total, 'Employees retrieved successfully');
     } catch (error) {
         logger.error('Error fetching employees', { error: error.message, stack: error.stack });
@@ -160,16 +178,11 @@ export const getAllEmployees = async (req, res) => {
 };
 
 /**
- * Update employee active status (Admin only)
+ * Update employee active status (Admin/HR)
  * PATCH /api/v1/admin/employee/:employeeId/status
  */
 export const updateEmployeeStatus = async (req, res) => {
     try {
-        // Check if requester is admin
-        if (req.user?.role !== 'admin') {
-            return sendForbidden(res, 'Access denied. Admins only.');
-        }
-
         const { employeeId } = req.params;
         const { active } = req.body;
 
@@ -202,6 +215,16 @@ export const updateEmployeeStatus = async (req, res) => {
             updateData,
             { new: true, runValidators: true }
         ).select('-password');
+
+        // Invalidate employee list caches so status changes are reflected immediately.
+        const orgIdForCache = organizationId || updatedEmployee?.organizationId || employeeBefore?.organizationId;
+        if (orgIdForCache) {
+            try {
+                await invalidateEmployeesCache(orgIdForCache);
+            } catch (e) {
+                logger.warn('Failed to invalidate employees cache after status update', { error: e.message });
+            }
+        }
 
         // Log audit trail
         await logUpdate({
@@ -286,6 +309,64 @@ export const getManagers = async (req, res) => {
     } catch (error) {
         logger.error('Error fetching managers', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to fetch managers', error);
+    }
+};
+
+/**
+ * Get distinct job titles within the requester's organization.
+ * GET /api/v1/admin/employee/job-titles
+ */
+export const getOrganizationJobTitles = async (req, res) => {
+    try {
+        const user = req.user || req.employee;
+        if (!user) {
+            return sendForbidden(res, 'Access denied. Authentication required.');
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendValidationError(res, { organizationId: 'Organization ID is required' });
+        }
+
+        const jobTitles = await Employee.distinct('jobTitle', {
+            organizationId,
+            jobTitle: { $exists: true, $ne: '' }
+        });
+
+        // Master catalog used across the app (kept in backend so dropdowns are consistent per role).
+        const defaultJobTitles = [
+            'Software Engineer',
+            'Frontend Developer',
+            'Backend Developer',
+            'DevOps Engineer',
+            'HR Manager',
+            'Financial Analyst',
+            'Marketing Executive',
+            'Sales Representative',
+            'Product Manager',
+            'QA Tester',
+            'Customer Support Specialist',
+            'UX/UI Designer',
+            'Project Manager',
+            'Legal Advisor',
+            'Operations Coordinator',
+            'Full Stack Developer'
+        ];
+
+        const normalizedOrgTitles = jobTitles
+            .map((title) => String(title || '').trim())
+            .filter(Boolean);
+
+        const normalized = Array.from(new Set([
+            ...defaultJobTitles,
+            ...normalizedOrgTitles
+        ]))
+            .sort((a, b) => a.localeCompare(b));
+
+        return sendSuccess(res, { jobTitles: normalized }, 'Job titles retrieved successfully');
+    } catch (error) {
+        logger.error('Error fetching organization job titles', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to fetch job titles', error);
     }
 };
 
