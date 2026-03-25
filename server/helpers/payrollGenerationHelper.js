@@ -231,8 +231,8 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     const earnings = {
         basicWage: formula.basicWage,
         houseRentAllowance: formula.houseRentAllowance,
-        transportAllowance: 2000,
-        medicalAllowance: 1500,
+        transportAllowance: 0,
+        medicalAllowance: 0,
         overtime: overtimePay,
         gratuity: formula.gratuity,
         specialAllowance: formula.specialAllowance,
