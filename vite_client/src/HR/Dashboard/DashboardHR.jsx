@@ -51,11 +51,13 @@ const DashboardHR = () => {
     const [statsLoading, setStatsLoading] = useState(true);
     
     // Use React Query hooks for parallel data fetching
-    const { 
-      data: employees = [], 
+    const {
+      data: employeeData = { employees: [], total: 0 },
       isLoading: employeesLoading,
-      error: employeesError 
+      error: employeesError
     } = useEmployees();
+    const employees = employeeData?.employees ?? [];
+    const employeeTotal = employeeData?.total ?? employees.length;
 
     const { 
       data: leaves = [], 
@@ -79,7 +81,7 @@ const DashboardHR = () => {
     const isLoading = employeesLoading || leavesLoading || complianceLoading || attendanceLoading;
 
     // Calculate statistics
-    const totalEmployees = employees.length;
+    const totalEmployees = employeeTotal;
     const activeEmployees = employees.filter(emp => emp.status === 'active').length;
     const pendingLeaves = leaves.filter(leave => leave.status === 'pending').length;
     const newHires = employees.filter(emp => {

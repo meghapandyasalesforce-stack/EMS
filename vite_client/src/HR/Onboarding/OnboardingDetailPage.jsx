@@ -17,7 +17,8 @@ const OnboardingDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [showAddTaskModal, setShowAddTaskModal] = useState(false);
-    const { data: employees = [] } = useEmployees();
+    const { data: employeeData = { employees: [], total: 0 } } = useEmployees();
+    const employees = employeeData?.employees ?? [];
 
     const [newTask, setNewTask] = useState({
         title: '',

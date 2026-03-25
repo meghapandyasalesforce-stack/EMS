@@ -24,11 +24,13 @@ function DashboardAdmin() {
   const user = authState?.user;
 
   // Use React Query hooks for data fetching with caching
-  const { 
-    data: employees = [], 
+  const {
+    data: employeeData = { employees: [], total: 0 },
     isLoading: employeesLoading,
-    error: employeesError 
+    error: employeesError
   } = useEmployees();
+  const employees = employeeData?.employees ?? [];
+  const employeeTotal = employeeData?.total ?? employees.length;
 
   const { 
     data: projects = [], 
@@ -50,7 +52,7 @@ function DashboardAdmin() {
   useAttendanceRealtime();
 
   const isLoading = employeesLoading || projectsLoading || payrollsLoading;
-  const employeeCount = employees?.length || 0;
+  const employeeCount = employeeTotal;
 
   useEffect(() => {
     // Check authentication

@@ -18,11 +18,13 @@ const DashboardTech = () => {
     const department = employee?.department || user?.department || '';
     
     // Use React Query hooks for parallel data fetching
-    const { 
-        data: employeesData, 
-        isLoading: employeesLoading, 
-        error: employeesError 
+    const {
+        data: employeeData = { employees: [], total: 0 },
+        isLoading: employeesLoading,
+        error: employeesError
     } = useEmployees();
+    const employees = employeeData?.employees ?? [];
+    const employeeTotal = employeeData?.total ?? employees.length;
     
     const { 
         data: projectsData, 
@@ -54,7 +56,7 @@ const DashboardTech = () => {
         return <LoadingSpinner message="Loading technology dashboard..." />;
     }
     
-    const totalEmployees = employeesData?.length || 0;
+    const totalEmployees = employeeTotal;
     const totalProjects = projectsData?.length || 0;
     const totalPayrolls = payrollsData?.length || 0;
     const attendanceRate = attendanceData?.attendanceRate || 0;

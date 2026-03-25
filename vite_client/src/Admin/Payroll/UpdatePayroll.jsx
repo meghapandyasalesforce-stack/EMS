@@ -3,6 +3,10 @@ import { useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
 import useUpdatePayroll from '../../Hooks/useUpdatePayroll';
 
+function pfEmployeeFromBasicWage(basicWage) {
+  return Math.round((Number(basicWage) || 0) * 0.12);
+}
+
 const UpdatePayroll = () => {
   const navigate = useNavigate();
   const { employeeId, month, year } = useParams();
@@ -46,7 +50,8 @@ const UpdatePayroll = () => {
       deductions: {
         pfEmployee: 0,
         esiEmployee: 0,
-        tax: 0,
+        professionalTax: 0,
+        incomeTax: 0,
         otherDeductions: 0,
       },
       status: 'Pending',
@@ -58,6 +63,12 @@ const UpdatePayroll = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
+
+  const extractId = (value) => {
+    if (!value) return '';
+    if (typeof value === 'object') return value._id || value.id || '';
+    return String(value);
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -80,34 +91,40 @@ const UpdatePayroll = () => {
       setIsFetching(true);
       
       if (employeeId && month && year) {
-        // First try to find in selectedPayroll (from admin employee payroll page)
-        if (selectedPayroll && selectedPayroll.employeeId === employeeId) {
-          setFormData({
-            employeeId: selectedPayroll.employeeId,
-            payrollId: selectedPayroll._id,
-            month: months.indexOf(selectedPayroll.month),
-            year: selectedPayroll.year,
-            earnings: selectedPayroll.earnings || {},
-            deductions: selectedPayroll.deductions || {},
-            status: selectedPayroll.status || 'Pending',
-          });
-          setDataLoading(false);
-          setIsFetching(false);
-          setError(null);
-          return;
+        // 1) Deterministic lookup: route param may actually be payrollId in some edit flows.
+        try {
+          const { default: axiosInstance } = await import('../../utils/axios');
+          const detailsResponse = await axiosInstance.get(`/v1/admin/payroll/details/${employeeId}`);
+          const detailsData = detailsResponse.data?.data || detailsResponse.data;
+          if (detailsData?._id) {
+            setFormData({
+              employeeId: detailsData.employeeId?._id || detailsData.employeeId || employeeId,
+              payrollId: detailsData._id,
+              month: months.indexOf(detailsData.month),
+              year: detailsData.year,
+              earnings: detailsData.earnings || {},
+              deductions: detailsData.deductions || {},
+              status: detailsData.status || 'Pending',
+            });
+            setDataLoading(false);
+            setIsFetching(false);
+            setError(null);
+            return;
+          }
+        } catch (_) {
+          // Ignore and continue with employeeId + month/year lookup.
         }
 
-        // If not found in selectedPayroll, try to find in payrolls array
+        // Try local payroll list first (fresh list data when available)
         if (payrolls.length > 0) {
-          const payroll = payrolls.find(
-            (p) =>
-              p.employeeId === employeeId &&
-              p.month === months[parseInt(month)] &&
-              p.year === parseInt(year)
-          );
+          const payroll = payrolls.find((p) => (
+            extractId(p.employeeId) === String(employeeId) &&
+            p.month === months[parseInt(month)] &&
+            p.year === parseInt(year)
+          ));
           if (payroll) {
             setFormData({
-              employeeId: payroll.employeeId,
+              employeeId: extractId(payroll.employeeId),
               payrollId: payroll._id,
               month: months.indexOf(payroll.month),
               year: payroll.year,
@@ -122,7 +139,7 @@ const UpdatePayroll = () => {
           }
         }
 
-        // If still not found, try to fetch from API
+        // Always fetch canonical record from API before falling back to selectedPayroll.
         try {
           // Handle month - it could be a number (index) or string (month name)
           let monthName;
@@ -156,28 +173,70 @@ const UpdatePayroll = () => {
             });
             setError(null);
           } else {
-            // Payroll doesn't exist yet - that's okay, user can create it
-            setFormData(prev => ({
-              ...prev,
-              employeeId,
-              month: parseInt(month),
-              year: parseInt(year),
-              payrollId: '', // No existing payroll, will create on update
-            }));
-            setError(null);
+            // Last fallback for navigation from details modal state
+            if (selectedPayroll && extractId(selectedPayroll.employeeId) === String(employeeId)) {
+              setFormData({
+                employeeId: extractId(selectedPayroll.employeeId),
+                payrollId: selectedPayroll._id,
+                month: months.indexOf(selectedPayroll.month),
+                year: selectedPayroll.year,
+                earnings: selectedPayroll.earnings || {},
+                deductions: selectedPayroll.deductions || {},
+                status: selectedPayroll.status || 'Pending',
+              });
+              setError(null);
+            } else {
+              setFormData(prev => ({
+                ...prev,
+                employeeId,
+                month: parseInt(month),
+                year: parseInt(year),
+                payrollId: '', // No existing payroll, will create on update
+              }));
+              setError(null);
+            }
           }
         } catch (error) {
           // Removed console.error for production
           if (error.response?.status === 404) {
-            // Payroll doesn't exist yet - that's okay, user can create it
-            setFormData(prev => ({
-              ...prev,
-              employeeId,
-              month: parseInt(month),
-              year: parseInt(year),
-              payrollId: '', // No existing payroll, will create on update
-            }));
-            setError(null);
+            // Fallback for routes where param can be a payrollId.
+            try {
+              const { default: axiosInstance } = await import('../../utils/axios');
+              const detailsResponse = await axiosInstance.get(`/v1/admin/payroll/details/${employeeId}`);
+              const detailsData = detailsResponse.data?.data || detailsResponse.data;
+
+              if (detailsData?._id) {
+                setFormData({
+                  employeeId: detailsData.employeeId?._id || detailsData.employeeId || employeeId,
+                  payrollId: detailsData._id,
+                  month: months.indexOf(detailsData.month),
+                  year: detailsData.year,
+                  earnings: detailsData.earnings || {},
+                  deductions: detailsData.deductions || {},
+                  status: detailsData.status || 'Pending',
+                });
+                setError(null);
+              } else {
+                setFormData(prev => ({
+                  ...prev,
+                  employeeId,
+                  month: parseInt(month),
+                  year: parseInt(year),
+                  payrollId: '', // No existing payroll, will create on update
+                }));
+                setError(null);
+              }
+            } catch (_) {
+              // Payroll doesn't exist yet - that's okay, user can create it
+              setFormData(prev => ({
+                ...prev,
+                employeeId,
+                month: parseInt(month),
+                year: parseInt(year),
+                payrollId: '', // No existing payroll, will create on update
+              }));
+              setError(null);
+            }
           } else if (!error.message?.includes('Failed to fetch') && !error.message?.includes('ERR_INSUFFICIENT')) {
             setError(error.response?.data?.message || 'Failed to load payroll data. Please check your connection.');
           } else {
@@ -222,14 +281,16 @@ const UpdatePayroll = () => {
     const earningsTotal = Object.entries(formData.earnings)
       .filter(([key]) => key !== 'totalEarnings')
       .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
-    const deductionsTotal = Object.entries(formData.deductions)
-      .filter(([key]) => key !== 'total')
-      .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
+    const pfEmployee = pfEmployeeFromBasicWage(formData.earnings.basicWage);
+    const deductionsTotal =
+      Object.entries(formData.deductions)
+        .filter(([key]) => key !== 'total' && key !== 'pfEmployee')
+        .reduce((sum, [, val]) => sum + (Number(val) || 0), 0) + pfEmployee;
     const inHandSalary = earningsTotal - deductionsTotal;
-    return { earningsTotal, deductionsTotal, inHandSalary };
+    return { earningsTotal, deductionsTotal, inHandSalary, pfEmployee };
   };
 
-  const { earningsTotal, deductionsTotal, inHandSalary } = calculateTotals();
+  const { earningsTotal, deductionsTotal, inHandSalary, pfEmployee } = calculateTotals();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -237,11 +298,21 @@ const UpdatePayroll = () => {
     setError(null);
     setSuccess(null);
 
+    const monthName = months[formData.month];
+    if (!formData.payrollId) {
+      setLoading(false);
+      setError('No payroll record exists for this period. Redirecting to create payroll.');
+      setTimeout(() => {
+        navigate(`/add-payroll/${employeeId}/${encodeURIComponent(monthName)}/${formData.year}`);
+      }, 800);
+      return;
+    }
+
     const payload = {
       ...formData,
-      month: months[formData.month],
+      month: monthName,
       earnings: { ...formData.earnings, totalEarnings: earningsTotal },
-      deductions: { ...formData.deductions, total: deductionsTotal },
+      deductions: { ...formData.deductions, pfEmployee, total: deductionsTotal },
       ctc: earningsTotal,
       inHandSalary,
     };
@@ -420,16 +491,15 @@ const UpdatePayroll = () => {
           <h3 className="text-base font-semibold mb-3">Deductions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div key="pfEmployee">
-              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="deductions-pfEmployee">PF Employee</label>
+              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="deductions-pfEmployee">
+                PF Employee (12% of basic wage)
+              </label>
               <input
                 type="number"
                 id="deductions-pfEmployee"
-                name="pfEmployee"
-                value={formData.deductions.pfEmployee || 0}
-                onChange={handleDeductionsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                min="0"
-                step="0.01"
+                readOnly
+                value={pfEmployee}
+                className="border border-gray-200 rounded-lg w-full py-2 px-3 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
               />
             </div>
             <div key="esiEmployee">
@@ -445,13 +515,26 @@ const UpdatePayroll = () => {
                 step="0.01"
               />
             </div>
-            <div key="tax">
-              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="deductions-tax">Tax</label>
+            <div key="professionalTax">
+              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="deductions-professionalTax">Professional Tax</label>
               <input
                 type="number"
-                id="deductions-tax"
-                name="tax"
-                value={formData.deductions.tax || 0}
+                id="deductions-professionalTax"
+                name="professionalTax"
+                value={formData.deductions.professionalTax || 0}
+                onChange={handleDeductionsChange}
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div key="incomeTax">
+              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="deductions-incomeTax">Income Tax</label>
+              <input
+                type="number"
+                id="deductions-incomeTax"
+                name="incomeTax"
+                value={formData.deductions.incomeTax || 0}
                 onChange={handleDeductionsChange}
                 className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"

@@ -18,7 +18,8 @@ const SuccessionDetailPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [showAddSuccessorModal, setShowAddSuccessorModal] = useState(false);
     const [showAddActivityModal, setShowAddActivityModal] = useState(false);
-    const { data: employees = [] } = useEmployees();
+    const { data: employeeData = { employees: [], total: 0 } } = useEmployees();
+    const employees = employeeData?.employees ?? [];
 
     const [successorForm, setSuccessorForm] = useState({
         employeeId: '',

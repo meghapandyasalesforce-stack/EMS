@@ -1,8 +1,8 @@
 import Payroll from "../../models/payroll.model.js";
-import Employee from "../../models/employee.model.js";
 import logger from "../../helpers/logger.js";
 import { generatePayrollPDF } from "../../helpers/pdfGenerator.js";
-import { computeEarningsFromGross } from "../../helpers/salaryCalculation.js";
+import { pickDisplayPayroll } from "../../helpers/payrollGenerationHelper.js";
+import { aggregatePayrollPeriod } from "../../helpers/payrollAggregationHelper.js";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -77,7 +77,8 @@ export const getEmployeePayrollHistory = async (req, res) => {
         const skip = (page - 1) * limit;
         const limitNum = Math.min(parseInt(limit, 10) || 12, 24);
 
-        const query = { employeeId };
+        // Employee history should show published (non-provisional) payrolls only.
+        const query = { employeeId, isVisible: true, isProvisional: false, type: 'monthly' };
         if (organizationId) query.organizationId = organizationId;
 
         const total = await Payroll.countDocuments(query);
@@ -87,11 +88,38 @@ export const getEmployeePayrollHistory = async (req, res) => {
             .limit(fetchSize)
             .populate('employeeId', 'name lastName email jobTitle department')
             .lean();
-        const sorted = sortPayrollsByYearMonth(raw, true).map(normalizePayrollForDisplay);
-        const payrolls = sorted.slice(skip, skip + limitNum);
+        const sortedRaw = sortPayrollsByYearMonth(raw, true);
+        const pagedRaw = sortedRaw.slice(skip, skip + limitNum);
+
+        const payrolls = await Promise.all(
+            pagedRaw.map(async (monthlyPayroll) => {
+                const normalized = normalizePayrollForDisplay(monthlyPayroll);
+
+                const adjustmentsQuery = {
+                    employeeId,
+                    month: monthlyPayroll.month,
+                    year: monthlyPayroll.year,
+                    type: 'off_cycle',
+                    isVisible: true,
+                    status: { $in: ['Processed', 'Paid'] }
+                };
+                if (organizationId) adjustmentsQuery.organizationId = organizationId;
+
+                const adjustmentDocs = await Payroll.find(adjustmentsQuery).lean();
+                const aggregated = aggregatePayrollPeriod([monthlyPayroll, ...adjustmentDocs]);
+
+                normalized.earnings.totalEarnings = aggregated.final.earningsTotal;
+                normalized.deductions.total = aggregated.final.deductionsTotal;
+                normalized.ctc = aggregated.final.earningsTotal;
+                normalized.inHandSalary = aggregated.final.net;
+                normalized.adjustments = aggregated.adjustments;
+
+                return normalized;
+            })
+        );
 
         res.json({
-            payrolls: sorted,
+            payrolls,
             totalPages: Math.ceil(total / limitNum),
             currentPage: parseInt(page, 10),
             total
@@ -109,7 +137,8 @@ export const getPayrollDetails = async (req, res) => {
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
         const { payrollId } = req.params;
 
-        const query = { _id: payrollId, employeeId };
+        // Only allow downloading payslips after final payment.
+        const query = { _id: payrollId, employeeId, isVisible: true, status: 'Paid', payrollLocked: true };
         if (organizationId) query.organizationId = organizationId;
 
         const payroll = await Payroll.findOne(query)
@@ -120,7 +149,26 @@ export const getPayrollDetails = async (req, res) => {
             return res.status(404).json({ message: 'Payroll not found' });
         }
 
+        const adjustmentsQuery = {
+            employeeId,
+            month: payroll.month,
+            year: payroll.year,
+            type: 'off_cycle',
+            isVisible: true,
+            status: { $in: ['Processed', 'Paid'] }
+        };
+        if (organizationId) adjustmentsQuery.organizationId = organizationId;
+
+        const adjustmentDocs = await Payroll.find(adjustmentsQuery).lean();
+        const aggregated = aggregatePayrollPeriod([payroll.toObject(), ...adjustmentDocs]);
+
         const normalizedPayroll = normalizePayrollForDisplay(payroll.toObject());
+        normalizedPayroll.earnings.totalEarnings = aggregated.final.earningsTotal;
+        normalizedPayroll.deductions.total = aggregated.final.deductionsTotal;
+        normalizedPayroll.ctc = aggregated.final.earningsTotal;
+        normalizedPayroll.inHandSalary = aggregated.final.net;
+        normalizedPayroll.adjustments = aggregated.adjustments;
+
         res.json(normalizedPayroll);
     } catch (error) {
         logger.error('Get Payroll Details Error', { error: error.message, stack: error.stack, payrollId: req.params.id });
@@ -135,7 +183,8 @@ export const downloadPayslip = async (req, res) => {
         const { payrollId } = req.params;
 
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
-        const query = { _id: payrollId, employeeId };
+        // Only allow downloading payslips after final payment.
+        const query = { _id: payrollId, employeeId, isVisible: true, status: 'Paid', payrollLocked: true };
         if (organizationId) query.organizationId = organizationId;
 
         const payroll = await Payroll.findOne(query)
@@ -211,14 +260,27 @@ export const downloadPayslip = async (req, res) => {
         };
 
         // Prepare payroll data for PDF (optional: workingDays, presentDays, unpaidLeave for attendance section)
+        const adjustmentsQuery = {
+            employeeId,
+            month: payroll.month,
+            year: payroll.year,
+            type: 'off_cycle',
+            isVisible: true,
+            status: { $in: ['Processed', 'Paid'] }
+        };
+        if (organizationId) adjustmentsQuery.organizationId = organizationId;
+
+        const adjustmentDocs = await Payroll.find(adjustmentsQuery).lean();
+        const aggregated = aggregatePayrollPeriod([payroll.toObject(), ...adjustmentDocs]);
+
         const payrollData = {
             month: payroll.month,
             year: payroll.year,
             basicSalary: payroll.basicSalary,
             earnings: payroll.earnings,
             deductions: payroll.deductions,
-            ctc: payroll.ctc,
-            inHandSalary: payroll.inHandSalary,
+            ctc: aggregated.final.earningsTotal,
+            inHandSalary: aggregated.final.net,
             status: payroll.status,
             processedDate: payroll.processedDate,
             paidDate: payroll.paidDate,
@@ -230,6 +292,12 @@ export const downloadPayslip = async (req, res) => {
             cumulativeEarnings: payroll.cumulativeEarnings,
             cumulativeDeductions: payroll.cumulativeDeductions
         };
+
+        // Overwrite totals so the PDF reflects monthly + off-cycle adjustments.
+        payrollData.earnings = payrollData.earnings || {};
+        payrollData.earnings.totalEarnings = aggregated.final.earningsTotal;
+        payrollData.deductions = payrollData.deductions || {};
+        payrollData.deductions.total = aggregated.final.deductionsTotal;
 
         // Generate PDF (new format with org name + bank details)
         const pdfBuffer = await generatePayrollPDF(payrollData, employeeData, orgData);
@@ -276,93 +344,39 @@ export const getCurrentMonthPayroll = async (req, res) => {
         const query = {
             employeeId,
             month,
-            year
+            year,
+            isVisible: true
         };
         if (organizationId) {
             query.organizationId = organizationId;
         }
 
-        let payroll = await Payroll.findOne(query)
+        const rawList = await Payroll.find(query)
             .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId')
             .lean();
 
-        // If no payroll exists for current month, create a default one
-        if (!payroll) {
-            const employee = await Employee.findById(employeeId).lean();
-            if (!employee) {
-                logger.warn('Get Current Month Payroll - Employee not found', { employeeId });
-                return res.status(404).json({ 
-                    success: false,
-                    message: 'Employee not found' 
-                });
-            }
-
-            const gross = employee.salary || 0;
-            const formula = computeEarningsFromGross(gross);
-            // Basic wage is used for PF/tax calculations.
-            // payroll.basicSalary (legacy field name) will store gross/current salary for display/reporting.
-            const basicWage = formula.basicWage;
-
-            const earnings = {
-                basicWage,
-                houseRentAllowance: formula.houseRentAllowance,
-                transportAllowance: 2000,
-                medicalAllowance: 1500,
-                overtime: 0,
-                gratuity: formula.gratuity,
-                specialAllowance: formula.specialAllowance,
-                performanceBonus: 0,
-                projectBonus: 0,
-                attendanceBonus: 0,
-                pfEmployer: Math.round(basicWage * 0.12),
-                esiEmployer: Math.round(basicWage * 0.0325)
-            };
-            earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
-
-            const deductions = {
-                pfEmployee: Math.round(basicWage * 0.12),
-                esiEmployee: Math.round(basicWage * 0.0075),
-                professionalTax: 200,
-                incomeTax: Math.round(basicWage * 0.1),
-                advanceSalary: 0,
-                loanDeduction: 0,
-                otherDeductions: 0
-            };
-            deductions.total = (deductions.pfEmployee || 0) + (deductions.esiEmployee || 0) + (deductions.professionalTax || 0) + (deductions.incomeTax || 0) + (deductions.advanceSalary || 0) + (deductions.loanDeduction || 0) + (deductions.otherDeductions || 0);
-
-            // Calculate CTC and in-hand salary
-            const ctc = earnings.totalEarnings;
-            const inHandSalary = earnings.totalEarnings - deductions.total;
-
-            const payrollData = {
-                employeeId,
-                month,
-                year,
-                // Store gross/current salary in the legacy "basicSalary" field name.
-                basicSalary: gross,
-                earnings,
-                deductions,
-                ctc,
-                inHandSalary,
-                status: 'Pending'
-            };
-
-            // Add organizationId if available
-            if (organizationId) {
-                payrollData.organizationId = organizationId;
-            }
-
-            payroll = new Payroll(payrollData);
-            await payroll.save();
-            payroll = payroll.toObject();
+        const aggregated = aggregatePayrollPeriod(rawList);
+        if (!aggregated?.monthly) {
+            return res.status(404).json({
+                success: false,
+                message: 'No payroll has been published for this month yet.'
+            });
         }
 
-        // Return response in expected format
-        const normalizedPayroll = normalizePayrollForDisplay(payroll);
+        const monthly = aggregated.monthly;
+        const normalizedPayroll = normalizePayrollForDisplay(monthly);
+
+        // Replace totals with final aggregated totals (monthly + off-cycle adjustments).
+        normalizedPayroll.earnings.totalEarnings = aggregated.final.earningsTotal;
+        normalizedPayroll.deductions.total = aggregated.final.deductionsTotal;
+        normalizedPayroll.ctc = aggregated.final.earningsTotal;
+        normalizedPayroll.inHandSalary = aggregated.final.net;
+
         res.json({
             success: true,
-            ...normalizedPayroll
+            ...normalizedPayroll,
+            adjustments: aggregated.adjustments
         });
     } catch (error) {
         logger.error('Get Current Month Payroll Error', { 
@@ -380,61 +394,7 @@ export const getCurrentMonthPayroll = async (req, res) => {
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-/** Create default payroll for an employee for given month/year (auto-create on view) */
-async function createDefaultPayrollForMonth(employeeId, month, year, organizationId) {
-    const employee = await Employee.findById(employeeId).lean();
-    if (!employee) return null;
-    const gross = employee.salary || 0;
-    const formula = computeEarningsFromGross(gross);
-    // Basic wage is used for PF/tax calculations.
-    // payroll.basicSalary (legacy field name) will store gross/current salary for display/reporting.
-    const basicWage = formula.basicWage;
-    const earnings = {
-        basicWage,
-        houseRentAllowance: formula.houseRentAllowance,
-        transportAllowance: 2000,
-        medicalAllowance: 1500,
-        overtime: 0,
-        gratuity: formula.gratuity,
-        specialAllowance: formula.specialAllowance,
-        performanceBonus: 0,
-        projectBonus: 0,
-        attendanceBonus: 0,
-        pfEmployer: Math.round(basicWage * 0.12),
-        esiEmployer: Math.round(basicWage * 0.0325)
-    };
-    earnings.totalEarnings = formula.totalEarnings + (earnings.transportAllowance || 0) + (earnings.medicalAllowance || 0) + (earnings.pfEmployer || 0) + (earnings.esiEmployer || 0);
-    const deductions = {
-        pfEmployee: Math.round(basicWage * 0.12),
-        esiEmployee: Math.round(basicWage * 0.0075),
-        professionalTax: 200,
-        incomeTax: Math.round(basicWage * 0.1),
-        advanceSalary: 0,
-        loanDeduction: 0,
-        otherDeductions: 0
-    };
-    deductions.total = (deductions.pfEmployee || 0) + (deductions.esiEmployee || 0) + (deductions.professionalTax || 0) + (deductions.incomeTax || 0) + (deductions.advanceSalary || 0) + (deductions.loanDeduction || 0) + (deductions.otherDeductions || 0);
-    const ctc = earnings.totalEarnings;
-    const inHandSalary = earnings.totalEarnings - deductions.total;
-    const payrollData = {
-        employeeId,
-        month,
-        year,
-        // Store gross/current salary in the legacy "basicSalary" field name.
-        basicSalary: gross,
-        earnings,
-        deductions,
-        ctc,
-        inHandSalary,
-        status: 'Pending'
-    };
-    if (organizationId) payrollData.organizationId = organizationId;
-    const payroll = new Payroll(payrollData);
-    await payroll.save();
-    return payroll.toObject();
-}
-
-// Get payroll for a specific month/year (employee). Auto-creates if missing (on view).
+// Get payroll for a specific month/year (employee).
 export const getPayrollByMonth = async (req, res) => {
     try {
         if (!req.employee?._id) {
@@ -447,25 +407,30 @@ export const getPayrollByMonth = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid month or year' });
         }
         const organizationId = req.organizationId || req.employee?.organizationId || req.user?.organizationId;
-        const query = { employeeId, month, year };
+        const query = { employeeId, month, year, isVisible: true };
         if (organizationId) query.organizationId = organizationId;
-        let payroll = await Payroll.findOne(query)
+        const rawList = await Payroll.find(query)
             .sort({ updatedAt: -1, createdAt: -1 })
             .populate('employeeId', 'name lastName email jobTitle department employeeId')
             .lean();
-        if (!payroll) {
-            payroll = await createDefaultPayrollForMonth(employeeId, month, year, organizationId);
-            if (!payroll) {
-                return res.status(404).json({ success: false, message: 'Employee not found' });
-            }
-            payroll = await Payroll.findById(payroll._id)
-                .populate('employeeId', 'name lastName email jobTitle department employeeId')
-                .lean();
+        const aggregated = aggregatePayrollPeriod(rawList);
+        if (!aggregated?.monthly) {
+            return res.status(404).json({
+                success: false,
+                message: 'No payroll has been published for this period.'
+            });
         }
-        const normalizedPayroll = normalizePayrollForDisplay(payroll);
+        const monthly = aggregated.monthly;
+        const normalizedPayroll = normalizePayrollForDisplay(monthly);
+        normalizedPayroll.earnings.totalEarnings = aggregated.final.earningsTotal;
+        normalizedPayroll.deductions.total = aggregated.final.deductionsTotal;
+        normalizedPayroll.ctc = aggregated.final.earningsTotal;
+        normalizedPayroll.inHandSalary = aggregated.final.net;
+
         res.json({
             success: true,
-            ...normalizedPayroll
+            ...normalizedPayroll,
+            adjustments: aggregated.adjustments
         });
     } catch (error) {
         logger.error('Get Payroll by Month Error', { error: error.message, stack: error.stack });

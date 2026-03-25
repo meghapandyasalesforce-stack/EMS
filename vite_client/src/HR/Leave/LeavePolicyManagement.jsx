@@ -7,6 +7,7 @@ const LeavePolicyManagement = () => {
     const [loading, setLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingPolicy, setEditingPolicy] = useState(null);
+    const [togglingPolicyId, setTogglingPolicyId] = useState(null);
     const [formData, setFormData] = useState({
         policyName: '',
         description: '',
@@ -96,6 +97,38 @@ const LeavePolicyManagement = () => {
             toast.error('Error saving policy: ' + (error.response?.data?.message || error.message));
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleTogglePolicy = async (policy) => {
+        if (!policy?._id) return;
+        try {
+            setTogglingPolicyId(policy._id);
+            const newIsActive = !policy.isActive;
+
+            const ok = window.confirm(
+                newIsActive
+                    ? `Activate policy "${policy.policyName}"? This will affect leave requests immediately.`
+                    : `Deactivate policy "${policy.policyName}"? This will stop it from applying to employees.`
+            );
+            if (!ok) return;
+
+            await axios.put(`/v1/admin/leave-policy/${policy._id}`, {
+                isActive: newIsActive
+            });
+
+            // Auto-recalculate balances so changes reflect immediately.
+            // Current UI shows balances by year; we recalculate current year.
+            await axios.post('/v1/admin/leave-policy/balance/recalculate', {
+                year: new Date().getFullYear()
+            });
+
+            toast.success(`Policy ${newIsActive ? 'activated' : 'deactivated'} and balances recalculated`);
+            await fetchPolicies();
+        } catch (error) {
+            toast.error('Failed to update policy: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setTogglingPolicyId(null);
         }
     };
 
@@ -735,9 +768,33 @@ const LeavePolicyManagement = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap capitalize">{policy.applicableTo}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 py-1 rounded ${policy.isActive ? 'bg-theme-primary/10 text-theme-primary' : 'bg-red-100 text-red-800'}`}>
-                                        {policy.isActive ? 'Active' : 'Inactive'}
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                        <span
+                                            className={`px-2 py-1 rounded ${
+                                                policy.isActive
+                                                    ? 'bg-theme-primary/10 text-theme-primary'
+                                                    : 'bg-red-100 text-red-800'
+                                            }`}
+                                        >
+                                            {policy.isActive ? 'Active' : 'Inactive'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTogglePolicy(policy)}
+                                            disabled={togglingPolicyId === policy._id}
+                                            className={`text-xs font-semibold px-3 py-1 rounded ${
+                                                policy.isActive
+                                                    ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                                                    : 'bg-green-50 text-green-700 hover:bg-green-100'
+                                            } ${togglingPolicyId === policy._id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        >
+                                            {togglingPolicyId === policy._id
+                                                ? 'Updating...'
+                                                : policy.isActive
+                                                    ? 'Deactivate'
+                                                    : 'Activate'}
+                                        </button>
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <button

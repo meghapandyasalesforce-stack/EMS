@@ -53,11 +53,12 @@ const DashboardManager = () => {
     const [statsLoading, setStatsLoading] = useState(true);
     
     // Use React Query hooks for parallel data fetching
-    const { 
-      data: employees = [], 
+    const {
+      data: employeeData = { employees: [], total: 0 },
       isLoading: employeesLoading,
-      error: employeesError 
+      error: employeesError
     } = useEmployees();
+    const employees = employeeData?.employees ?? [];
 
     const { 
       data: projects = [], 

@@ -416,6 +416,12 @@ export const payrollValidationsExtended = {
         body('year')
             .notEmpty().withMessage('Year is required')
             .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        body('mode')
+            .optional()
+            .isIn(['preview', 'final']).withMessage('mode must be preview or final'),
+        body('forceFinalBeforePeriodEnd')
+            .optional()
+            .isBoolean().withMessage('forceFinalBeforePeriodEnd must be a boolean'),
         handleValidationErrors
     ],
     disburse: [

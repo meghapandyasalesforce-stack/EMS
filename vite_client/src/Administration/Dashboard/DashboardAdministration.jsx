@@ -42,11 +42,13 @@ const DashboardAdministration = () => {
     const executiveTitle = employee?.position || user?.position || 'Executive';
     
     // Use React Query hooks for parallel data fetching
-    const { 
-      data: employees = [], 
+    const {
+      data: employeeData = { employees: [], total: 0 },
       isLoading: employeesLoading,
-      error: employeesError 
+      error: employeesError
     } = useEmployees();
+    const employees = employeeData?.employees ?? [];
+    const employeeTotal = employeeData?.total ?? employees.length;
 
     const { 
       data: projects = [], 
@@ -112,7 +114,7 @@ const DashboardAdministration = () => {
     const isLoading = employeesLoading || projectsLoading || payrollsLoading || attendanceLoading;
 
     // Calculate statistics
-    const totalEmployees = employees.length;
+    const totalEmployees = employeeTotal;
     const activeEmployees = employees.filter(emp => emp.status === 'active' || emp.active).length;
     const totalProjects = projects.length;
     const activeProjects = projects.filter(proj => proj.status === 'active' || proj.status === 'in-progress').length;

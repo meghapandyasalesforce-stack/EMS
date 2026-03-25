@@ -13,9 +13,6 @@ import { autoGenerateIdCard } from '../admin/idCardController.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 
 // Generate token with employeeId instead of email
-import Payroll from '../../models/payroll.model.js';
-import { computeEarningsFromGross } from '../../helpers/salaryCalculation.js';
-
 
 /**
  * @swagger
@@ -336,60 +333,6 @@ export const registerEmployee = async (req, res) => {
             // Don't fail registration - employee is already created
         }
         
-        // Create associated default payroll using salary formula (Basic 50%, HRA 40% of Basic, Gratuity 4.81%, Special = balance)
-        try {
-            const currentDate = new Date();
-            const gross = Number(salary) || 0;
-            const formula = computeEarningsFromGross(gross);
-            const basicSalary = formula.basicWage;
-            const earnings = {
-                basicWage: formula.basicWage,
-                houseRentAllowance: formula.houseRentAllowance,
-                transportAllowance: 0,
-                medicalAllowance: 0,
-                overtime: 0,
-                gratuity: formula.gratuity,
-                specialAllowance: formula.specialAllowance,
-                performanceBonus: 0,
-                projectBonus: 0,
-                attendanceBonus: 0,
-                pfEmployer: 0,
-                esiEmployer: 0
-            };
-            earnings.totalEarnings = formula.totalEarnings;
-            const deductions = {
-                pfEmployee: 0,
-                esiEmployee: 0,
-                professionalTax: 0,
-                incomeTax: 0,
-                advanceSalary: 0,
-                loanDeduction: 0,
-                otherDeductions: 0
-            };
-            deductions.total = 0;
-            const defaultPayroll = {
-                organizationId,
-                employeeId: employee._id,
-                month: currentDate.toLocaleString('default', { month: 'long' }),
-                year: currentDate.getFullYear(),
-                basicSalary,
-                earnings,
-                deductions,
-                ctc: formula.totalEarnings,
-                inHandSalary: formula.totalEarnings,
-                status: 'Pending'
-            };
-
-            await Payroll.create(defaultPayroll);
-        } catch (payrollError) {
-            // Log payroll creation error but don't fail - employee is already created
-            logger.error('Failed to create default payroll', {
-                employeeId: employee._id,
-                error: payrollError.message,
-                stack: payrollError.stack
-            });
-        }
-
         // SECURITY FIX: Do NOT generate tokens when admin/HR creates employee.
         // This prevents overwriting the creator's session cookies.
         // Employee will get tokens when they log in themselves.

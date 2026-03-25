@@ -18,15 +18,14 @@ function getCookie(name) {
 
 export const fetchPayrolls = createAsyncThunk(
   'payroll/fetchPayrolls',
-  async ({ month, year }, thunkAPI) => {
+  async ({ month, year, page = 1, limit = 20 }, thunkAPI) => {
     try {
       const response = await axios.get(
-        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${encodeURIComponent(month)}&year=${year}`
+        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${encodeURIComponent(month)}&year=${year}&page=${page}&limit=${limit}`
       );
       const data = response.data;
-      // API returns { success, message, data: [...], pagination }
-      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-      return list;
+      const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      return { list, pagination: data?.pagination ?? null };
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
     }
@@ -67,11 +66,11 @@ export const updatePayroll = createAsyncThunk(
 
 export const generatePayrolls = createAsyncThunk(
   'payroll/generatePayrolls',
-  async ({ month, year }, thunkAPI) => {
+  async ({ month, year, mode = 'final', forceFinalBeforePeriodEnd = false }, thunkAPI) => {
     try {
       const response = await axios.post(
         `${ADMIN_PAYROLL_ENDPOINT}/generate-bulk`,
-        { month, year }
+        { month, year, mode, forceFinalBeforePeriodEnd }
       );
       return response.data;
     } catch (error) {
@@ -85,6 +84,7 @@ const payrollSlice = createSlice({
   name: 'payroll',
   initialState: {
     data: [],
+    pagination: null,
     status: 'idle',
     error: null,
   },
@@ -96,11 +96,12 @@ const payrollSlice = createSlice({
       })
       .addCase(fetchPayrolls.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.data = action.payload;
+        state.data = action.payload.list;
+        state.pagination = action.payload.pagination;
       })
       .addCase(fetchPayrolls.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.error.message;
+        state.error = action.payload ?? action.error.message;
       })
       .addCase(createPayroll.pending, (state) => {
         state.status = 'loading';
@@ -108,18 +109,50 @@ const payrollSlice = createSlice({
       })
       .addCase(createPayroll.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.data.push(action.payload);
+        // This endpoint returns a full Payroll document, while `state.data`
+        // is a list of summary rows from `get-all-employee-payroll`.
+        // To avoid mixing shapes, we rely on the next explicit refresh.
       })
       .addCase(createPayroll.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload;
       })
       .addCase(updatePayroll.fulfilled, (state, action) => {
-        const updated = action.payload;
-        const index = state.data.findIndex((p) => p._id === updated._id);
-        if (index !== -1) {
-          state.data[index] = updated;
-        }
+        // Controller returns: { success, message, data: payrollDoc }
+        const updated = action.payload?.data ?? action.payload;
+        const updatedId = updated?._id;
+        if (!updatedId) return;
+
+        const index = state.data.findIndex(
+          (p) => String(p?.payrollId ?? p?._id) === String(updatedId)
+        );
+        if (index === -1) return;
+
+        const earningsTotal = updated?.earnings?.totalEarnings;
+        const deductionsTotal = updated?.deductions?.total;
+
+        state.data[index] = {
+          ...state.data[index],
+          status: updated?.status ?? state.data[index].status,
+          isVisible:
+            updated?.isVisible ?? state.data[index].isVisible,
+          generationType:
+            updated?.generationType ?? state.data[index].generationType,
+          isProvisional:
+            updated?.isProvisional ?? state.data[index].isProvisional,
+          computedAsOf:
+            updated?.computedAsOf ?? state.data[index].computedAsOf,
+          totalEarnings:
+            earningsTotal ?? state.data[index].totalEarnings,
+          totalDeductions:
+            deductionsTotal ?? state.data[index].totalDeductions,
+          inHandSalary:
+            updated?.inHandSalary ?? state.data[index].inHandSalary,
+          payrollLocked:
+            updated?.payrollLocked ?? state.data[index].payrollLocked,
+          earnings: updated?.earnings ?? state.data[index].earnings,
+          deductions: updated?.deductions ?? state.data[index].deductions
+        };
       })
       .addCase(generatePayrolls.pending, (state) => {
         state.status = 'loading';

@@ -24,7 +24,8 @@ const SuccessionPage = () => {
     const [riskFilter, setRiskFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [potentialFilter, setPotentialFilter] = useState('all');
-    const { data: employees = [] } = useEmployees();
+    const { data: employeeData = { employees: [], total: 0 } } = useEmployees();
+    const employees = employeeData?.employees ?? [];
 
     const [planFormData, setPlanFormData] = useState({
         positionName: '',

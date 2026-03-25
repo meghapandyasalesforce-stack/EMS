@@ -265,9 +265,10 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    // Hash new password before saving
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(req.body.password, salt);
+    // IMPORTANT: Do NOT bcrypt-hash here.
+    // Employee/User models already hash `password` in their `pre('save')` hooks.
+    // If we hash again here, the stored password becomes double-hashed and login will fail.
+    user.password = req.body.password;
     // Invalidate reset token immediately after use (prevents reuse)
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;

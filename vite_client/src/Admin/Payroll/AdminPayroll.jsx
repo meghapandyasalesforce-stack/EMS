@@ -3,12 +3,13 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchPayrolls, generatePayrolls } from '../../context/payrollSlice'; // adjust path as needed
+import { fetchPayrolls, generatePayrolls } from '../../context/payrollSlice';
 import axios from '../../utils/axios';
 
 const AdminPayroll = () => {
     const dispatch = useDispatch();
     const payrollData = useSelector((state) => state.payroll.data) || [];
+    const payrollPagination = useSelector((state) => state.payroll.pagination);
     const loading = useSelector((state) => state.payroll.status === 'loading');
     const error = useSelector((state) => state.payroll.error);
 
@@ -18,6 +19,7 @@ const AdminPayroll = () => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [disburseLoading, setDisburseLoading] = useState(false);
     const [disburseResult, setDisburseResult] = useState(null);
+    const [listPage, setListPage] = useState(1);
     const resultsRef = useRef(null);
     const navigate = useNavigate();
 
@@ -57,24 +59,64 @@ const AdminPayroll = () => {
             return;
         }
 
-        dispatch(fetchPayrolls({
-            month: months[selectedMonth].label,
-            year: selectedYear
-        }));
-    }, [selectedMonth, selectedYear, dispatch, navigate, months, currentUser, employee]);
+        dispatch(
+            fetchPayrolls({
+                month: months[selectedMonth].label,
+                year: selectedYear,
+                page: listPage,
+                limit: 20
+            })
+        );
+    }, [selectedMonth, selectedYear, listPage, dispatch, navigate, months, currentUser, employee]);
+
+    const runGenerate = async (mode) => {
+        if (mode === 'final') {
+            const ok = window.confirm(
+                'Run FINAL payroll for this period? This is meant for month-end closes; the server will reject early final runs unless you use a forced flag. Continue?'
+            );
+            if (!ok) return;
+        }
+        const monthLabel = months[selectedMonth].label;
+        const result = await dispatch(
+            generatePayrolls({
+                month: monthLabel,
+                year: selectedYear,
+                mode,
+                forceFinalBeforePeriodEnd: false
+            })
+        );
+        if (generatePayrolls.fulfilled.match(result)) {
+            dispatch(
+                fetchPayrolls({
+                    month: monthLabel,
+                    year: selectedYear,
+                    page: listPage,
+                    limit: 20
+                })
+            );
+        }
+    };
+
+    const hasProvisional = useMemo(
+        () =>
+            (payrollData || []).some(
+                (row) => row.isProvisional || row.generationType === 'preview'
+            ),
+        [payrollData]
+    );
 
     // Ensure selected month is not in the future for the selected year
     useEffect(() => {
         // For past years, all months are allowed
         if (selectedYear < currentYear) return;
 
-        // For the current year, restrict to months strictly before the current month
-        const allowedMonths = months.filter((m) => m.value < currentMonthIndex);
+        // For the current year, allow months up to and including the current month
+        const allowedMonths = months.filter((m) => m.value <= currentMonthIndex);
         if (!allowedMonths.length) return;
 
         const isSelectedAllowed = allowedMonths.some((m) => m.value === selectedMonth);
         if (!isSelectedAllowed) {
-            // Default to the latest allowed month (previous month or earlier)
+            setListPage(1);
             setSelectedMonth(allowedMonths[allowedMonths.length - 1].value);
         }
     }, [selectedYear, currentYear, currentMonthIndex, months, selectedMonth]);
@@ -91,8 +133,14 @@ const AdminPayroll = () => {
             // Use configured axios instance - baseURL already includes /api
             const res = await axios.post('/v1/admin/payroll/disburse', payload);
             setDisburseResult(res.data);
-            // Refresh list to reflect Paid statuses
-            dispatch(fetchPayrolls(payload));
+            dispatch(
+                fetchPayrolls({
+                    month: payload.month,
+                    year: payload.year,
+                    page: listPage,
+                    limit: 20
+                })
+            );
         } catch (e) {
             setDisburseResult({ success: false, message: e?.response?.data?.message || e.message });
         } finally {
@@ -190,7 +238,7 @@ const AdminPayroll = () => {
     };
 
     const handleCreatePayroll = () => {
-        navigate('/payroll/add');
+        navigate('/add-payroll');
     };
 
     const closeDialog = () => {
@@ -200,7 +248,24 @@ const AdminPayroll = () => {
 
     // Function to determine payroll status
     const getPayrollStatus = (employee) => {
-        return employee.inHandSalary !== undefined && employee.inHandSalary > 0 ? 'Generated' : 'Not Generated';
+        const base =
+            employee?.status ||
+            (employee?.inHandSalary !== undefined && employee.inHandSalary > 0
+                ? 'Generated'
+                : 'Not Generated');
+        if (employee?.isProvisional || employee?.generationType === 'preview') {
+            if (base === 'Not Generated') return 'Provisional';
+            return `${base} · Provisional`;
+        }
+        return base;
+    };
+
+    const getStatusBadgeClass = (status) => {
+        if (status === 'Paid') return 'bg-theme-primary/10 text-theme-primary';
+        if (status === 'Processed') return 'bg-theme-secondary/10 text-theme-secondary';
+        if (status === 'Pending') return 'bg-orange-100 text-orange-700';
+        if (status === 'Generated') return 'bg-theme-primary/10 text-theme-primary';
+        return 'bg-red-100 text-red-800';
     };
 
     // Helper to format amounts in Indian Rupees
@@ -222,15 +287,22 @@ const AdminPayroll = () => {
 
             <div className="flex justify-between items-center mb-5">
                 <h2 className="text-2xl font-semibold text-gray-800 hidden sm:hidden lg:block">Employee Payroll</h2>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <button
-                        onClick={async () => {
-                            await dispatch(generatePayrolls({ month: months[selectedMonth].label, year: selectedYear }));
-                            dispatch(fetchPayrolls({ month: months[selectedMonth].label, year: selectedYear }));
-                        }}
-                        className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 text-sm"
+                        type="button"
+                        onClick={() => runGenerate('preview')}
+                        disabled={loading}
+                        className="bg-slate-700 text-white px-4 py-2 rounded hover:opacity-90 text-sm disabled:opacity-50"
                     >
-                        Auto Generate
+                        Preview payroll
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => runGenerate('final')}
+                        disabled={loading}
+                        className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 text-sm disabled:opacity-50"
+                    >
+                        Run final payroll
                     </button>
                     <button
                         className="px-3 py-2 bg-theme-secondary text-white rounded disabled:opacity-50"
@@ -311,7 +383,10 @@ const AdminPayroll = () => {
                         <select
                             className="p-2 border border-gray-300 rounded-md text-sm"
                             value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                            onChange={(e) => {
+                                setListPage(1);
+                                setSelectedMonth(parseInt(e.target.value, 10));
+                            }}
                             disabled={loading}
                         >
                             {months
@@ -319,8 +394,8 @@ const AdminPayroll = () => {
                                     // For previous years: allow all months
                                     selectedYear < currentYear
                                         ? true
-                                        // For current year: only months strictly before current month
-                                        : month.value < currentMonthIndex
+                                        // For current year: allow months up to current month
+                                        : month.value <= currentMonthIndex
                                 )
                                 .map((month) => (
                                     <option key={month.value} value={month.value}>
@@ -334,7 +409,10 @@ const AdminPayroll = () => {
                         <select
                             className="p-2 border border-gray-300 rounded-md text-sm"
                             value={selectedYear}
-                            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                            onChange={(e) => {
+                                setListPage(1);
+                                setSelectedYear(parseInt(e.target.value, 10));
+                            }}
                             disabled={loading}
                         >
                             {years.map((year) => (
@@ -352,6 +430,14 @@ const AdminPayroll = () => {
                     </div>
                 )}
 
+                {hasProvisional && (
+                    <div className="mb-4 p-3 rounded bg-amber-50 text-amber-950 text-sm border border-amber-200">
+                        This list includes <strong>provisional preview</strong> payroll data. Run{' '}
+                        <strong>final payroll</strong> after month-end so employee-facing numbers match the closed
+                        period.
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="text-center text-gray-500 py-6">Loading payroll data...</div>
                 ) : payrollData.length > 0 ? (
@@ -360,7 +446,7 @@ const AdminPayroll = () => {
                             <thead>
                                 <tr className="bg-gray-100">
                                     <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Name</th>
-                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Allowance</th>
+                                    <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Total Earnings</th>
                                     <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Leaves</th>
                                     <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Net Salary</th>
                                     <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Status</th>
@@ -377,11 +463,7 @@ const AdminPayroll = () => {
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.inHandSalary)}</td>
                                             <td className="py-2 px-2 sm:px-4">
-                                                <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full text-xs font-medium ${
-                                                    status === 'Generated' 
-                                                        ? 'bg-theme-primary/10 text-theme-primary' 
-                                                        : 'bg-red-100 text-red-800'
-                                                }`}>
+                                                <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(status)}`}>
                                                     {status}
                                                 </span>
                                             </td>
@@ -409,6 +491,32 @@ const AdminPayroll = () => {
                 ) : (
                     <div className="text-center text-gray-600 bg-gray-100 p-4 rounded">
                         No payroll data available for the selected period
+                    </div>
+                )}
+
+                {payrollPagination && payrollPagination.pages > 1 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-200 text-sm">
+                        <span className="text-gray-600">
+                            Page {payrollPagination.page} of {payrollPagination.pages} ({payrollPagination.total} employees)
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                disabled={loading || !payrollPagination.hasPrev}
+                                onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                                className="px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                type="button"
+                                disabled={loading || !payrollPagination.hasNext}
+                                onClick={() => setListPage((p) => p + 1)}
+                                className="px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -441,11 +549,7 @@ const AdminPayroll = () => {
                                         <p><span className="font-medium">Department:</span> {selectedEmployee.department || 'N/A'}</p>
                                         <p><span className="font-medium">Position:</span> {selectedEmployee.position || 'N/A'}</p>
                                         <p><span className="font-medium">Status:</span> 
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ml-2 ${
-                                                getPayrollStatus(selectedEmployee) === 'Generated' 
-                                                    ? 'bg-theme-primary/10 text-theme-primary' 
-                                                    : 'bg-red-100 text-red-800'
-                                            }`}>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ml-2 ${getStatusBadgeClass(getPayrollStatus(selectedEmployee))}`}>
                                                 {getPayrollStatus(selectedEmployee)}
                                             </span>
                                         </p>
@@ -455,10 +559,12 @@ const AdminPayroll = () => {
                                 <div>
                                     <h4 className="font-medium text-gray-700 mb-2">Salary Breakdown</h4>
                                     <div className="space-y-2">
-                                        <p><span className="font-medium">Basic Salary:</span> {formatCurrency(selectedEmployee.basicSalary || 0)}</p>
-                                        <p><span className="font-medium">Allowances:</span> {formatCurrency(selectedEmployee.totalEarnings || 0)}</p>
-                                        <p><span className="font-medium">Deductions:</span> {formatCurrency(selectedEmployee.totalDeductions || 0)}</p>
-                                        <p><span className="font-medium">Net Salary:</span> {formatCurrency(selectedEmployee.inHandSalary || 0)}</p>
+                                        <p><span className="font-medium">Gross/Current Salary:</span> {formatCurrency(selectedEmployee.basicSalary || 0)}</p>
+                                        <p><span className="font-medium">Base Earnings:</span> {formatCurrency(selectedEmployee.earnings?.totalEarnings || 0)}</p>
+                                        <p><span className="font-medium">Base Deductions:</span> {formatCurrency(selectedEmployee.deductions?.total || 0)}</p>
+                                        <p className="pt-1"><span className="font-medium">Final Earnings (Base + Adjustments):</span> {formatCurrency(selectedEmployee.totalEarnings || 0)}</p>
+                                        <p><span className="font-medium">Final Deductions (Base + Adjustments):</span> {formatCurrency(selectedEmployee.totalDeductions || 0)}</p>
+                                        <p><span className="font-medium">Final Net Salary:</span> {formatCurrency(selectedEmployee.inHandSalary || 0)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -466,35 +572,103 @@ const AdminPayroll = () => {
                             <div className="mb-6">
                                 <h4 className="font-medium text-gray-700 mb-2">Allowances</h4>
                                 <div className="bg-gray-50 p-3 rounded">
-                                    {Array.isArray(selectedEmployee.allowances) && selectedEmployee.allowances.length > 0 ? (
-                                        <ul className="divide-y divide-gray-200">
-                                            {selectedEmployee.allowances.map((allowance, index) => (
-                                                <li key={index} className="py-2 flex justify-between">
-                                                    <span>{allowance.type}:</span>
-                                                    <span>{formatCurrency(allowance.amount)}</span>
+                                    <ul className="divide-y divide-gray-200">
+                                        {selectedEmployee.earnings ? (
+                                            [
+                                                ['basicWage', 'Basic Wage'],
+                                                ['houseRentAllowance', 'House Rent'],
+                                                ['transportAllowance', 'Transport'],
+                                                ['medicalAllowance', 'Medical'],
+                                                ['overtime', 'Overtime'],
+                                                ['gratuity', 'Gratuity'],
+                                                ['specialAllowance', 'Special Allowance'],
+                                                ['performanceBonus', 'Performance Bonus'],
+                                                ['projectBonus', 'Project Bonus'],
+                                                ['attendanceBonus', 'Attendance Bonus']
+                                            ].map(([key, label]) => (
+                                                <li key={key} className="py-2 flex justify-between">
+                                                    <span>{label}:</span>
+                                                    <span>{formatCurrency(selectedEmployee.earnings?.[key] || 0)}</span>
                                                 </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p>No allowances for this period</p>
-                                    )}
+                                            ))
+                                        ) : (
+                                            <li className="py-2 flex justify-between">
+                                                <span>Total Earnings:</span>
+                                                <span>{formatCurrency(selectedEmployee.totalEarnings || 0)}</span>
+                                            </li>
+                                        )}
+                                        <li className="py-2 flex justify-between font-semibold">
+                                            <span>Total Earnings (Base):</span>
+                                            <span>{formatCurrency(selectedEmployee.earnings?.totalEarnings || 0)}</span>
+                                        </li>
+                                    </ul>
                                 </div>
                             </div>
 
                             <div className="mb-6">
                                 <h4 className="font-medium text-gray-700 mb-2">Deductions</h4>
                                 <div className="bg-gray-50 p-3 rounded">
-                                    {Array.isArray(selectedEmployee.deductions) && selectedEmployee.deductions.length > 0 ? (
+                                    <ul className="divide-y divide-gray-200">
+                                        {selectedEmployee.deductions ? (
+                                            [
+                                                ['pfEmployee', 'PF (Employee)'],
+                                                ['esiEmployee', 'ESI (Employee)'],
+                                                ['professionalTax', 'Professional Tax'],
+                                                ['incomeTax', 'Income Tax'],
+                                                ['advanceSalary', 'Advance Salary'],
+                                                ['loanDeduction', 'Loan Deduction'],
+                                                ['otherDeductions', 'Other Deductions']
+                                            ].map(([key, label]) => (
+                                                <li key={key} className="py-2 flex justify-between">
+                                                    <span>{label}:</span>
+                                                    <span>{formatCurrency(selectedEmployee.deductions?.[key] || 0)}</span>
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li className="py-2 flex justify-between">
+                                                <span>Total Deductions:</span>
+                                                <span>{formatCurrency(selectedEmployee.totalDeductions || 0)}</span>
+                                            </li>
+                                        )}
+                                        <li className="py-2 flex justify-between font-semibold">
+                                            <span>Total Deductions (Base):</span>
+                                            <span>{formatCurrency(selectedEmployee.deductions?.total || 0)}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div className="mb-6">
+                                <h4 className="font-medium text-gray-700 mb-2">Adjustments (Off-cycle)</h4>
+                                <div className="bg-gray-50 p-3 rounded">
+                                    {Array.isArray(selectedEmployee.adjustments) && selectedEmployee.adjustments.length > 0 ? (
                                         <ul className="divide-y divide-gray-200">
-                                            {selectedEmployee.deductions.map((deduction, index) => (
-                                                <li key={index} className="py-2 flex justify-between">
-                                                    <span>{deduction.type}:</span>
-                                                    <span>{formatCurrency(deduction.amount)}</span>
+                                            {selectedEmployee.adjustments.map((adj) => (
+                                                <li key={adj.payrollId || adj._id} className="py-2">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div className="text-sm font-medium text-gray-800">
+                                                            {adj.subType || 'off-cycle'}{" "}
+                                                            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(adj.status || 'Pending')}`}>
+                                                                {adj.status || 'Pending'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-sm font-semibold">
+                                                            {formatCurrency(adj.netDelta || 0)}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-xs text-gray-600 mt-1">
+                                                        Earnings: {formatCurrency(adj.earningsTotal || 0)} • Deductions: {formatCurrency(adj.deductionsTotal || 0)}
+                                                    </div>
+                                                    <div className="text-xs text-gray-600 mt-1">
+                                                        Paid Amount: {formatCurrency(adj.paidAmount || 0)}
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
                                     ) : (
-                                        <p>No deductions for this period</p>
+                                        <div className="py-2 text-sm text-gray-600">
+                                            No off-cycle adjustments for this period.
+                                        </div>
                                     )}
                                 </div>
                             </div>

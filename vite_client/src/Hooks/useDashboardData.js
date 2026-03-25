@@ -10,45 +10,63 @@ import { retryAxios } from '../utils/retry';
 /**
  * Fetch employees data
  * Tries admin endpoint first, falls back to employee endpoint for HR/Manager users
+ *
+ * Returns { employees, total } where `total` is pagination.total (full org count), not page length.
  */
 export const useEmployees = (options = {}) => {
   return useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      // Try admin endpoint first
+      const empty = { employees: [], total: 0 };
+      const fromPaginated = (payload) => {
+        const list = payload?.data || payload?.employees || [];
+        const rawTotal =
+          payload?.pagination?.total != null
+            ? Number(payload.pagination.total)
+            : payload?.total != null
+              ? Number(payload.total)
+              : Array.isArray(list)
+                ? list.length
+                : 0;
+        return {
+          employees: Array.isArray(list) ? list : [],
+          total: Number.isFinite(rawTotal) ? rawTotal : 0
+        };
+      };
+
       try {
-        const response = await retryAxios(() => 
-          axios.get('/v1/admin/employee', { withCredentials: true }),
+        const response = await retryAxios(
+          () =>
+            axios.get('/v1/admin/employee', {
+              params: { page: 1, limit: 100 },
+              withCredentials: true
+            }),
           { maxRetries: 1, delay: 500 }
         );
-        // Backend returns: { success: true, data: [...], pagination: {...} }
-        return response.data?.data || response.data?.employees || [];
+        return fromPaginated(response.data);
       } catch (error) {
-        // Handle backend unavailable (503) gracefully
         if (error.response?.status === 503 || error.isBackendUnavailable) {
-          return [];
+          return empty;
         }
-        // Try employee endpoint as fallback for HR/Manager users
         if (error.response?.status === 403 || error.response?.status === 401) {
           try {
-            const response = await retryAxios(() => 
-              axios.get('/v1/employee', { withCredentials: true }),
+            const response = await retryAxios(
+              () =>
+                axios.get('/v1/employee', {
+                  params: { page: 1, limit: 100 },
+                  withCredentials: true
+                }),
               { maxRetries: 1, delay: 500 }
             );
-            // Backend returns: { success: true, employees: [...], total: ... }
-            // For managers, this returns department employees
-            return response.data?.employees || response.data?.data || [];
+            return fromPaginated(response.data);
           } catch (fallbackError) {
-            // Handle 503 in fallback too
             if (fallbackError.response?.status === 503 || fallbackError.isBackendUnavailable) {
-              return [];
+              return empty;
             }
-            // Silently fail - user might not have access
-            return [];
+            return empty;
           }
         }
-        // Silently fail for other errors
-        return [];
+        return empty;
       }
     },
     staleTime: 1000 * 60 * 2, // 2 minutes

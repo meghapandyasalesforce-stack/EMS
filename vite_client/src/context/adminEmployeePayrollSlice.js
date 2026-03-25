@@ -135,6 +135,7 @@ const adminEmployeePayrollSlice = createSlice({
             .addCase(fetchAdminCurrentMonthPayroll.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
+                state.currentMonthPayroll = null;
             })
             // Fetch Payroll Details
             .addCase(fetchAdminPayrollDetails.pending, (state) => {

@@ -6,7 +6,8 @@ import {
     fetchAdminEmployeePayrollHistory, 
     fetchAdminCurrentMonthPayroll, 
     fetchAdminPayrollDetails,
-    downloadAdminPayslip 
+    downloadAdminPayslip,
+    clearSelectedPayroll
 } from '../../context/adminEmployeePayrollSlice';
 import { 
     FiDollarSign, 
@@ -111,10 +112,11 @@ const AdminEmployeePayroll = () => {
     };
 
     const handleEditPayroll = (payroll) => {
+        dispatch(clearSelectedPayroll());
         // Removed console.log for production
         
         // Get employee ID from various sources - employeeId from URL param is most reliable
-        let empId = employeeId || selectedEmployee?._id;
+        let empId = payroll?._id || employeeId || selectedEmployee?._id;
         
         // If still no employee ID, try to get it from payroll object
         if (!empId && payroll?.employeeId) {

@@ -14,7 +14,8 @@ const OnboardingPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const { data: employees = [], isLoading: employeesLoading } = useEmployees();
+    const { data: employeeData = { employees: [], total: 0 }, isLoading: employeesLoading } = useEmployees();
+    const employees = employeeData?.employees ?? [];
 
     const [formData, setFormData] = useState({
         employeeId: '',

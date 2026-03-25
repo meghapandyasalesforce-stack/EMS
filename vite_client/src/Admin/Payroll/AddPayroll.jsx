@@ -16,6 +16,10 @@ function computeEarningsFromGross(gross) {
     return { basicWage, houseRentAllowance, gratuity, specialAllowance };
 }
 
+function pfEmployeeFromBasicWage(basicWage) {
+    return Math.round((Number(basicWage) || 0) * 0.12);
+}
+
 const AddPayroll = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -80,13 +84,19 @@ const AddPayroll = () => {
                 setFormData(prev => ({
                     ...prev,
                     employeeId: employee._id,
-                    basicSalary: formula.basicWage,
+                    // Store gross/current salary into the top "basicSalary" field (backend field name),
+                    // while earnings.basicWage below remains derived from gross.
+                    basicSalary: gross,
                     earnings: {
                         ...prev.earnings,
                         basicWage: formula.basicWage,
                         houseRentAllowance: formula.houseRentAllowance,
                         gratuity: formula.gratuity,
                         specialAllowance: formula.specialAllowance
+                    },
+                    deductions: {
+                        ...prev.deductions,
+                        pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
                     }
                 }));
             }
@@ -101,13 +111,18 @@ const AddPayroll = () => {
         setFormData(prev => ({
             ...prev,
             employeeId: selectedEmployeeId,
-            basicSalary: formula.basicWage,
+            // Top field should represent gross/current salary for this employee.
+            basicSalary: gross,
             earnings: {
                 ...prev.earnings,
                 basicWage: formula.basicWage,
                 houseRentAllowance: formula.houseRentAllowance,
                 gratuity: formula.gratuity,
                 specialAllowance: formula.specialAllowance
+            },
+            deductions: {
+                ...prev.deductions,
+                pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
             }
         }));
     };
@@ -128,6 +143,33 @@ const AddPayroll = () => {
             nextValue = value;
         }
 
+        // If the top salary (gross/current) changes, recompute earnings breakdown from that gross.
+        if (name === 'basicSalary') {
+            if (nextValue === '') {
+                setFormData(prev => ({ ...prev, basicSalary: '' }));
+                return;
+            }
+
+            const gross = Number(nextValue) || 0;
+            const formula = computeEarningsFromGross(gross);
+            setFormData(prev => ({
+                ...prev,
+                basicSalary: gross,
+                earnings: {
+                    ...prev.earnings,
+                    basicWage: formula.basicWage,
+                    houseRentAllowance: formula.houseRentAllowance,
+                    gratuity: formula.gratuity,
+                    specialAllowance: formula.specialAllowance
+                },
+                deductions: {
+                    ...prev.deductions,
+                    pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+                }
+            }));
+            return;
+        }
+
         setFormData(prev => ({
             ...prev,
             [name]: nextValue
@@ -138,13 +180,21 @@ const AddPayroll = () => {
         const { name, value } = e.target;
         // Strip leading zeros when there are multiple digits so \"0\" + \"12\" doesn't become \"012\"
         const normalized = value.replace(/^0+(?=\\d)/, '');
-        setFormData(prev => ({
-            ...prev,
-            earnings: {
+        setFormData(prev => {
+            const nextEarnings = {
                 ...prev.earnings,
                 [name]: normalized
-            }
-        }));
+            };
+            const basicWage = Number(nextEarnings.basicWage) || 0;
+            return {
+                ...prev,
+                earnings: nextEarnings,
+                deductions: {
+                    ...prev.deductions,
+                    pfEmployee: pfEmployeeFromBasicWage(basicWage)
+                }
+            };
+        });
     };
 
     const handleDeductionsChange = (e) => {
@@ -330,22 +380,22 @@ const AddPayroll = () => {
                         </div>
                     </div>
 
-                    {/* Basic Salary */}
+                    {/* Gross / Current Salary */}
                     <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                             <FiDollarSign className="w-5 h-5 mr-2" />
-                            Basic Salary
+                            Gross/Current Salary
                         </h2>
                         
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Basic Salary (₹)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Gross/Current Salary (₹)</label>
                             <input
                                 type="number"
                                 name="basicSalary"
                                 value={formData.basicSalary}
                                 onChange={handleInputChange}
                                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
-                                placeholder="Enter basic salary"
+                                placeholder="Enter gross/current salary"
                                 required
                             />
                         </div>
@@ -377,7 +427,20 @@ const AddPayroll = () => {
                     <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4">Deductions</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {Object.entries(formData.deductions).map(([key, value]) => (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Pf Employee — 12% of basic wage (₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    readOnly
+                                    value={formData.deductions.pfEmployee}
+                                    className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                                />
+                            </div>
+                            {Object.entries(formData.deductions)
+                                .filter(([key]) => key !== 'pfEmployee')
+                                .map(([key, value]) => (
                                 <div key={key}>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} (₹)
