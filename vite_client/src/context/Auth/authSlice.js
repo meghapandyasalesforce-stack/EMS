@@ -2,6 +2,22 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../../utils/axios';
 import { ADMIN_AUTH_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT } from './../../utils/constant';
 
+export const checkAuthSession = createAsyncThunk(
+  'auth/checkAuthSession',
+  async (_, { rejectWithValue }) => {
+    try {
+      // Lightweight session verification used on app bootstrap.
+      // If this fails (401/404), caller should treat session as invalid.
+      const response = await axios.get('/v1/both/profile-details/get-my-details', {
+        withCredentials: true
+      });
+      return response.data?.employee || null;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Session invalid');
+    }
+  }
+);
+
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (userRole, { rejectWithValue }) => {
@@ -35,6 +51,7 @@ const authSlice = createSlice({
     loading: false,
     user: null,
     error: null,
+    authChecked: false,
   },
   reducers: {
     setLoading: (state, action) => {
@@ -46,6 +63,22 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(checkAuthSession.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(checkAuthSession.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.error = null;
+        state.authChecked = true;
+      })
+      .addCase(checkAuthSession.rejected, (state, action) => {
+        state.loading = false;
+        state.user = null;
+        state.error = action.payload || null;
+        state.authChecked = true;
+      })
       .addCase(logoutUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -54,12 +87,14 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = null;
         state.error = null;
+        state.authChecked = true;
         // Attendance will be cleared by redux-persist purge in logout handler
       })
       .addCase(logoutUser.rejected, (state, action) => {
         state.loading = false;
         state.user = null; // Still clear user even if API fails
         state.error = action.payload;
+        state.authChecked = true;
       });
   },
 });

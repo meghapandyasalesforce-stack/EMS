@@ -19,7 +19,7 @@ function Login() {
     const [isCheckingEmail, setIsCheckingEmail] = useState(false);
     const dispatch = useDispatch();
     const navigate = useNavigate();
-    const { loading, user } = useSelector(state => state.auth);
+    const { loading, user, authChecked } = useSelector(state => state.auth);
 
     // Pre-fill email from URL params (when redirected from organization login)
     useEffect(() => {
@@ -30,12 +30,12 @@ function Login() {
     }, [searchParams]);
 
     useEffect(() => {
-        if (user) {
+        if (authChecked && user) {
             // Navigate to /dashboard which will automatically determine the correct dashboard
             // based on Position and Department via RoleBasedDashboard component
             navigate('/dashboard');
         }
-    }, [user, navigate]);
+    }, [authChecked, user, navigate]);
 
     // Debounced email domain check for smart login routing
     useEffect(() => {

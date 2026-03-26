@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import Header from './Shared/Header';
 import ProfileSidebar from './Employee/ProfileSidebar';
 import InstallPrompt from './components/InstallPrompt';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
+import { checkAuthSession } from './context/Auth/authSlice';
+import { clearEmployeeDetails } from './context/employeeDetailsSlice';
 import {
   authRoutes,
   dashboardRoutes,
@@ -27,6 +30,8 @@ import {
 
 function App() {
     const location = useLocation();
+    const dispatch = useDispatch();
+    const authChecked = useSelector((state) => state.auth.authChecked);
     const hideHeaderRoutes = ['/', '/login', '/register', '/organization/register', '/organization/login', '/forgot-password']; // Routes where Header and Sidebar should not be shown
     const showSidebarRoutes = [
         '/profile-details',
@@ -40,6 +45,30 @@ function App() {
     ]; // Routes where ProfileSidebar should be shown
 
     const [activeSection, setActiveSection] = useState('Personal Details'); // Track active section
+
+    useEffect(() => {
+        let cancelled = false;
+        const bootstrapSession = async () => {
+            try {
+                const result = await dispatch(checkAuthSession());
+                if (cancelled) return;
+                if (checkAuthSession.rejected.match(result)) {
+                    // Remove stale persisted employee details when session is invalid/deleted.
+                    dispatch(clearEmployeeDetails());
+                }
+            } catch {
+                if (!cancelled) {
+                    dispatch(clearEmployeeDetails());
+                }
+            }
+        };
+        if (!authChecked) {
+            bootstrapSession();
+        }
+        return () => {
+            cancelled = true;
+        };
+    }, [authChecked, dispatch]);
 
     // Keep sidebar selection in sync with current URL (handles refresh / deep link)
     useEffect(() => {
@@ -63,6 +92,10 @@ function App() {
     const shouldHideLayout = hideHeaderRoutes.includes(location.pathname) || location.pathname.startsWith('/reset-password');
     const shouldShowSidebar = showSidebarRoutes.includes(location.pathname);
     
+    if (!authChecked) {
+        return <LoadingSpinner message="Initializing session..." />;
+    }
+
     return (
         <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
             {!shouldHideLayout && <Header />} {/* Conditionally render Header */}

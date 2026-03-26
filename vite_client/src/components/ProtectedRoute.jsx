@@ -17,23 +17,15 @@ import { getDefaultDashboardRoute } from '../utils/dashboardRedirect';
  */
 const ProtectedRoute = ({ children, allowedRoles = [], redirectTo }) => {
     const user = useSelector((state) => state.auth.user);
+    const authChecked = useSelector((state) => state.auth.authChecked);
     const employee = useSelector((state) => state.employeeDetails.employee);
-    const [isLoading, setIsLoading] = React.useState(true);
 
-    React.useEffect(() => {
-        // Wait a bit for Redux state to load
-        const timer = setTimeout(() => {
-            setIsLoading(false);
-        }, 100);
-        return () => clearTimeout(timer);
-    }, []);
-
-    if (isLoading) {
+    if (!authChecked) {
         return <LoadingSpinner message="Checking permissions..." />;
     }
 
     // If no user, redirect to login
-    if (!user && !employee) {
+    if (!user) {
         return <Navigate to="/login" replace />;
     }
 
