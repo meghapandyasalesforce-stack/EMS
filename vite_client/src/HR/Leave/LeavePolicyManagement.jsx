@@ -36,6 +36,7 @@ const LeavePolicyManagement = () => {
                 isPaid: true,
                 minDaysPerRequest: 0.5,
                 maxDaysPerRequest: null,
+                maxDaysPerMonth: null,
                 encashment: {
                     enabled: false,
                     maxDaysPerYear: 0,
@@ -169,6 +170,7 @@ const LeavePolicyManagement = () => {
                     isPaid: true,
                     minDaysPerRequest: 0.5,
                     maxDaysPerRequest: null,
+                    maxDaysPerMonth: null,
                     encashment: {
                         enabled: false,
                         maxDaysPerYear: 0,
@@ -429,6 +431,23 @@ const LeavePolicyManagement = () => {
                                             />
                                             Paid Leave
                                         </label>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                Max Days/Month
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={leaveType.maxDaysPerMonth ?? ''}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    updateLeaveType(index, 'maxDaysPerMonth', v === '' ? null : parseFloat(v));
+                                                }}
+                                                placeholder="e.g. 2"
+                                                className="w-full border rounded px-3 py-2"
+                                                min="0"
+                                                step="0.5"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 

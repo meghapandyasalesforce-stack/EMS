@@ -3,7 +3,7 @@ import LeavePolicy from '../models/leavePolicy.model.js';
 import Employee from '../models/employee.model.js';
 import Leave from '../models/leave.model.js';
 import logger from '../helpers/logger.js';
-import { normalizeLeaveTypeForPolicy } from '../helpers/leaveTypeHelper.js';
+import { getLeaveTypeVariantsForBalance, normalizeLeaveTypeForPolicy } from '../helpers/leaveTypeHelper.js';
 import leaveBalanceEngine from './leaveBalanceEngine.js';
 
 class LeaveValidationService {
@@ -104,7 +104,111 @@ class LeaveValidationService {
                 errors.push(`Maximum ${leaveTypeConfig.maxDaysPerRequest} days allowed for ${leaveTypeConfig.displayName}`);
             }
 
-            // 8. Check for overlapping leaves
+            // 8. Check maximum days allowed per calendar month (monthly cap for same leave type)
+            if (leaveTypeConfig.maxDaysPerMonth && Number.isFinite(leaveTypeConfig.maxDaysPerMonth)) {
+                const maxDaysPerMonth = Number(leaveTypeConfig.maxDaysPerMonth);
+                const firstMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+                const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+                // Count pending + approved so employees can't apply multiple times and exceed the cap
+                // before the approvals are completed.
+                const candidateLeaves = await Leave.find({
+                    organizationId,
+                    employee: employeeId,
+                    leaveType: { $in: getLeaveTypeVariantsForBalance(normalizedType) },
+                    status: { $in: ['pending', 'approved'] },
+                    // IMPORTANT: monthly cap must consider the whole month window,
+                    // not only leaves overlapping the current requested dates.
+                    startDate: { $lte: lastMonth },
+                    endDate: { $gte: firstMonth }
+                });
+
+                // Precompute total counted working days per candidate leave.
+                // This prevents recalculating the same total repeatedly for each month segment.
+                const totalLeaveDaysCache = new Map();
+                for (const l of candidateLeaves) {
+                    const lStart = new Date(l.startDate);
+                    const lEnd = new Date(l.endDate);
+                    const totalLeaveDaysCounted = await this.calculateDuration(
+                        lStart,
+                        lEnd,
+                        policy.dateHandlingRules,
+                        calendar,
+                        organizationId
+                    );
+                    totalLeaveDaysCache.set(String(l._id), totalLeaveDaysCounted);
+                }
+
+                // Split the requested leave into month segments and validate each month separately.
+                const firstMonthCursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+                const lastMonthCursor = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+                const monthCursor = new Date(firstMonthCursor);
+                const epsilon = 1e-9;
+
+                while (monthCursor.getTime() <= lastMonthCursor.getTime()) {
+                    const monthStart = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+                    const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0, 23, 59, 59, 999);
+
+                    const segmentStart = new Date(Math.max(startDate.getTime(), monthStart.getTime()));
+                    const segmentEnd = new Date(Math.min(endDate.getTime(), monthEnd.getTime()));
+
+                    if (segmentStart.getTime() <= segmentEnd.getTime()) {
+                        // Requested days in this month segment (half-day requests always count as 0.5)
+                        const requestedSegmentDays = leaveData.isHalfDay
+                            ? 0.5
+                            : await this.calculateDuration(
+                                segmentStart,
+                                segmentEnd,
+                                policy.dateHandlingRules,
+                                calendar,
+                                organizationId
+                            );
+
+                        let usedDays = 0;
+                        for (const l of candidateLeaves) {
+                            const lStart = new Date(l.startDate);
+                            const lEnd = new Date(l.endDate);
+                            if (lEnd.getTime() < monthStart.getTime() || lStart.getTime() > monthEnd.getTime()) {
+                                continue; // no overlap with this month at all
+                            }
+
+                            // For monthly cap, count existing leave usage across the full month window,
+                            // not only the date segment of the current request.
+                            const overlapStart = new Date(Math.max(lStart.getTime(), monthStart.getTime()));
+                            const overlapEnd = new Date(Math.min(lEnd.getTime(), monthEnd.getTime()));
+                            if (overlapStart.getTime() > overlapEnd.getTime()) continue;
+
+                            // Use a proportional split based on counted working days.
+                            // This keeps split logic consistent for half-day leaves too.
+                            const totalLeaveDaysCounted = totalLeaveDaysCache.get(String(l._id)) ?? 0;
+                            const overlapWorkingDays = await this.calculateDuration(
+                                overlapStart,
+                                overlapEnd,
+                                policy.dateHandlingRules,
+                                calendar,
+                                organizationId
+                            );
+
+                            if (totalLeaveDaysCounted > 0) {
+                                const ratio = overlapWorkingDays / totalLeaveDaysCounted;
+                                usedDays += (Number(l.duration) || 0) * ratio;
+                            }
+                        }
+
+                        if (usedDays + requestedSegmentDays > maxDaysPerMonth + epsilon) {
+                            const monthName = monthStart.toLocaleString('default', { month: 'long' });
+                            errors.push(
+                                `Maximum ${maxDaysPerMonth} leave days allowed in ${monthName} for ${leaveTypeConfig.displayName}`
+                            );
+                        }
+                    }
+
+                    // Move to next month
+                    monthCursor.setMonth(monthCursor.getMonth() + 1);
+                }
+            }
+
+            // 9. Check for overlapping leaves
             const overlapCheck = await this.checkOverlappingLeaves(
                 employeeId, 
                 startDate, 

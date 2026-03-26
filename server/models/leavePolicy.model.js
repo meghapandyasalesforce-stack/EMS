@@ -99,6 +99,13 @@ const leavePolicySchema = new mongoose.Schema({
             type: Number,
             min: 0.5
         },
+        // Maximum number of leave days allowed per calendar month (for the same leave type)
+        // Example: 2 means approved/pending leave days in any month cannot exceed 2.
+        // If null/undefined, no monthly cap is enforced.
+        maxDaysPerMonth: {
+            type: Number,
+            min: 0.5
+        },
         maxConsecutiveDays: Number,
         // Whether this leave type requires approval
         requiresApproval: {

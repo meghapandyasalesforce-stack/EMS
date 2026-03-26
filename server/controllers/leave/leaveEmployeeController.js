@@ -129,7 +129,7 @@ export const createLeave = async (req, res) => {
         // Validate leave request using comprehensive validation service
         const validation = await leaveValidationService.validateLeaveRequest(
             employeeId,
-            { startDate, endDate, leaveType },
+            { startDate, endDate, leaveType, isHalfDay, document },
             organizationId
         );
 
