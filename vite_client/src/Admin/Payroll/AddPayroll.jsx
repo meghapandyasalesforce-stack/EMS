@@ -71,7 +71,7 @@ const AddPayroll = () => {
     const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
 
     useEffect(() => {
-        dispatch(fetchEmployees());
+        dispatch(fetchEmployees({ fetchAllPages: true }));
     }, [dispatch]);
 
     useEffect(() => {

@@ -5,6 +5,14 @@ import bcrypt from 'bcryptjs';
 import logger from '../../helpers/logger.js';
 import { createEmailTransporter, getEmailFrom } from '../../config/email.config.js';
 
+const maskEmail = (email = '') => {
+  const normalized = String(email || '').trim().toLowerCase();
+  const [local = '', domain = ''] = normalized.split('@');
+  if (!local || !domain) return 'invalid-email';
+  const visible = local.slice(0, 2);
+  return `${visible}${'*'.repeat(Math.max(0, local.length - 2))}@${domain}`;
+};
+
 // Helper function to generate reset token
 // SECURITY: Use bcrypt to hash tokens instead of SHA-256 to prevent brute force attacks
 const generateResetToken = async () => {
@@ -18,10 +26,20 @@ const generateResetToken = async () => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const maskedEmail = maskEmail(normalizedEmail);
+    logger.info('Forgot password request received', {
+      maskedEmail,
+      ip: req.ip
+    });
     
     // Validate email format
     const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
     if (!email || !emailRegex.test(email)) {
+      logger.warn('Forgot password rejected: invalid email format', {
+        maskedEmail,
+        ip: req.ip
+      });
       return res.status(400).json({ 
         message: 'Please provide a valid email address.' 
       });
@@ -47,6 +65,10 @@ export const forgotPassword = async (req, res) => {
     if (!user) {
       // Return success to prevent email enumeration attacks
       // Still return 200 but don't send email
+      logger.info('Forgot password handled with generic success (user not found)', {
+        maskedEmail,
+        ip: req.ip
+      });
       return res.status(200).json({ 
         message: 'If the email exists, a password reset link has been sent.' 
       });
@@ -56,8 +78,19 @@ export const forgotPassword = async (req, res) => {
     if (user.resetPasswordToken && user.resetPasswordExpire > Date.now()) {
       // Don't create new token if one already exists and is valid
       // Return success to prevent information leakage
+      const resendAfterMinutes = Math.max(
+        1,
+        Math.ceil((new Date(user.resetPasswordExpire).getTime() - Date.now()) / (60 * 1000))
+      );
+      logger.info('Forgot password suppressed: active token already exists', {
+        maskedEmail,
+        userType,
+        resendAfterMinutes,
+        ip: req.ip
+      });
       return res.status(200).json({ 
-        message: 'If the email exists, a password reset link has been sent.' 
+        message: 'If the email exists, a password reset link has been sent succusfully.',
+        resendAfterMinutes
       });
     }
 
@@ -66,6 +99,12 @@ export const forgotPassword = async (req, res) => {
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpire = Date.now() + 1000 * 60 * 15; // 15 mins
     await user.save();
+    logger.info('Forgot password token created', {
+      maskedEmail,
+      userType,
+      expiresAt: new Date(user.resetPasswordExpire).toISOString(),
+      ip: req.ip
+    });
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
@@ -200,10 +239,20 @@ export const forgotPassword = async (req, res) => {
         </html>
       `,
     });
+    logger.info('Forgot password email sent', {
+      maskedEmail,
+      userType,
+      ip: req.ip
+    });
 
     res.status(200).json({ message: 'Reset link sent to your email' });
   } catch (error) {
-    logger.error('Forgot password error', { error: error.message, stack: error.stack });
+    logger.error('Forgot password error', {
+      error: error.message,
+      stack: error.stack,
+      maskedEmail: maskEmail(req.body?.email),
+      ip: req.ip
+    });
     res.status(500).json({ message: 'Error processing request', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
   }
 };
@@ -211,6 +260,10 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const resetToken = req.params.token;
+    logger.info('Reset password request received', {
+      tokenPrefix: String(resetToken || '').slice(0, 8),
+      ip: req.ip
+    });
 
     // SECURITY: Find users with valid (non-expired) reset tokens
     // We need to check all users and compare tokens using bcrypt.compare
@@ -253,6 +306,10 @@ export const resetPassword = async (req, res) => {
     }
 
     if (!user) {
+      logger.warn('Reset password rejected: invalid or expired token', {
+        tokenPrefix: String(resetToken || '').slice(0, 8),
+        ip: req.ip
+      });
       return res.status(400).json({ 
         message: 'Invalid or expired token. Please request a new password reset.' 
       });
@@ -260,6 +317,11 @@ export const resetPassword = async (req, res) => {
 
     // Validate password strength
     if (!req.body.password || req.body.password.length < 8) {
+      logger.warn('Reset password rejected: weak password', {
+        userType,
+        userEmail: user?.email,
+        ip: req.ip
+      });
       return res.status(400).json({ 
         message: 'Password must be at least 8 characters long.' 
       });

@@ -53,18 +53,50 @@ export const apiLimiter = rateLimit({
     }
 });
 
-// Rate limiter specifically for password reset endpoints
-export const passwordResetLimiter = rateLimit({
-    windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS, // 1 hour
-    max: PASSWORD_RESET_RATE_LIMIT_MAX, // Limit to 3 password reset requests per hour per IP
-    message: {
+const getRetryAfterMinutes = (req, fallbackWindowMs) => {
+    const resetTime = req.rateLimit?.resetTime;
+    if (resetTime instanceof Date) {
+        const remainingMs = Math.max(0, resetTime.getTime() - Date.now());
+        return Math.max(1, Math.ceil(remainingMs / (60 * 1000)));
+    }
+    return Math.max(1, Math.ceil(fallbackWindowMs / (60 * 1000)));
+};
+
+const createPasswordResetLimitHandler = (message) => (req, res) => {
+    const retryAfterMinutes = getRetryAfterMinutes(req, PASSWORD_RESET_RATE_LIMIT_WINDOW_MS);
+    res.status(429).json({
         success: false,
-        message: 'Too many password reset attempts. Please try again after 1 hour.'
-    },
+        message,
+        retryAfterMinutes
+    });
+};
+
+// Forgot-password limiter (kept at 3/hour window for security policy)
+export const forgotPasswordLimiter = rateLimit({
+    windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS, // 1 hour
+    max: PASSWORD_RESET_RATE_LIMIT_MAX, // 3 requests per hour
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
+    keyGenerator: (req) => {
+        const email = String(req.body?.email || '').trim().toLowerCase();
+        return `forgot:${req.ip}:${email || 'no-email'}`;
+    },
+    handler: createPasswordResetLimitHandler('Too many password reset attempts. Please try again after 1 hour.')
 });
+
+// Reset-password limiter (kept at 3/hour window for security policy)
+export const resetPasswordLimiter = rateLimit({
+    windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS, // 1 hour
+    max: PASSWORD_RESET_RATE_LIMIT_MAX, // 3 requests per hour
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false,
+    handler: createPasswordResetLimitHandler('Too many password reset attempts. Please try again after 1 hour.')
+});
+
+// Backward-compatible alias (existing imports continue to work if any remain)
+export const passwordResetLimiter = forgotPasswordLimiter;
 
 // Rate limiter for general API endpoints (more lenient)
 export const generalLimiter = rateLimit({

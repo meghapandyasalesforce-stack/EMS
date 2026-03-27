@@ -22,67 +22,148 @@ export const createEmployee = createAsyncThunk(
   }
 );
 
+/** Matches server parsePagination maxLimit for /v1/admin/employee and get-all-employees */
+const EMPLOYEE_LIST_MAX_PAGE_SIZE = 100;
+
 export const fetchEmployees = createAsyncThunk(
   'employees/fetchEmployees',
   async (params = {}, thunkAPI) => {
     try {
       const role = getUserRole();
       const useAdminEndpoint = role === 'admin';
-      const page = Number(params.page) > 0 ? Number(params.page) : 1;
-      const limit = Number(params.limit) > 0 ? Number(params.limit) : 20;
+      const fetchAllPages = params.fetchAllPages === true;
       const search = typeof params.search === 'string' ? params.search.trim() : '';
-      const queryParams = { page, limit };
-      if (search) queryParams.search = search;
+      const page = Number(params.page) > 0 ? Number(params.page) : 1;
+      const limit = fetchAllPages
+        ? EMPLOYEE_LIST_MAX_PAGE_SIZE
+        : Number(params.limit) > 0
+          ? Number(params.limit)
+          : 20;
 
-      const fetchFromAdmin = async () => {
+      const fetchFromAdmin = async (pageNum, pageLimit) => {
+        const queryParams = { page: pageNum, limit: pageLimit };
+        if (search) queryParams.search = search;
         const adminResponse = await axios.get('/v1/admin/employee', { withCredentials: true, params: queryParams });
         if (adminResponse.data?.data && Array.isArray(adminResponse.data.data)) {
           return {
             employees: adminResponse.data.data,
-            pagination: adminResponse.data.pagination || { page, limit, total: adminResponse.data.data.length, pages: 1, hasNext: false, hasPrev: false }
+            pagination:
+              adminResponse.data.pagination || {
+                page: pageNum,
+                limit: pageLimit,
+                total: adminResponse.data.data.length,
+                pages: 1,
+                hasNext: false,
+                hasPrev: false
+              }
           };
         }
-        return { employees: [], pagination: { page, limit, total: 0, pages: 0, hasNext: false, hasPrev: false } };
+        return {
+          employees: [],
+          pagination: { page: pageNum, limit: pageLimit, total: 0, pages: 0, hasNext: false, hasPrev: false }
+        };
       };
 
-      const fetchFromEmployee = async () => {
-        const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, { withCredentials: true, params: queryParams });
+      const fetchFromEmployee = async (pageNum, pageLimit) => {
+        const queryParams = { page: pageNum, limit: pageLimit };
+        if (search) queryParams.search = search;
+        const response = await axios.get(`${EMPLOYEE_AUTH_ENDPOINT}/get-all-employees`, {
+          withCredentials: true,
+          params: queryParams
+        });
         if (response.data?.data && Array.isArray(response.data.data)) {
           return {
             employees: response.data.data,
-            pagination: response.data.pagination || { page, limit, total: response.data.data.length, pages: 1, hasNext: false, hasPrev: false }
+            pagination:
+              response.data.pagination || {
+                page: pageNum,
+                limit: pageLimit,
+                total: response.data.data.length,
+                pages: 1,
+                hasNext: false,
+                hasPrev: false
+              }
           };
-        } else if (response.data?.employees && Array.isArray(response.data.employees)) {
+        }
+        if (response.data?.employees && Array.isArray(response.data.employees)) {
           return {
             employees: response.data.employees,
-            pagination: { page, limit, total: response.data.employees.length, pages: 1, hasNext: false, hasPrev: false }
+            pagination: {
+              page: pageNum,
+              limit: pageLimit,
+              total: response.data.employees.length,
+              pages: 1,
+              hasNext: false,
+              hasPrev: false
+            }
           };
-        } else if (Array.isArray(response.data)) {
+        }
+        if (Array.isArray(response.data)) {
           return {
             employees: response.data,
-            pagination: { page, limit, total: response.data.length, pages: 1, hasNext: false, hasPrev: false }
+            pagination: {
+              page: pageNum,
+              limit: pageLimit,
+              total: response.data.length,
+              pages: 1,
+              hasNext: false,
+              hasPrev: false
+            }
           };
         }
-        return { employees: [], pagination: { page, limit, total: 0, pages: 0, hasNext: false, hasPrev: false } };
+        return {
+          employees: [],
+          pagination: { page: pageNum, limit: pageLimit, total: 0, pages: 0, hasNext: false, hasPrev: false }
+        };
       };
 
-      if (useAdminEndpoint) {
-        return await fetchFromAdmin();
-      }
-
-      if (role) {
-        return await fetchFromEmployee();
-      }
-
-      // Fallback if role is unknown
-      try {
-        return await fetchFromAdmin();
-      } catch (adminError) {
-        if (adminError.response?.status === 403 || adminError.response?.status === 401) {
-          return await fetchFromEmployee();
+      const fetchOnePage = async (pageNum, pageLimit) => {
+        if (useAdminEndpoint) {
+          return await fetchFromAdmin(pageNum, pageLimit);
         }
-        throw adminError;
+        if (role) {
+          return await fetchFromEmployee(pageNum, pageLimit);
+        }
+        try {
+          return await fetchFromAdmin(pageNum, pageLimit);
+        } catch (adminError) {
+          if (adminError.response?.status === 403 || adminError.response?.status === 401) {
+            return await fetchFromEmployee(pageNum, pageLimit);
+          }
+          throw adminError;
+        }
+      };
+
+      if (!fetchAllPages) {
+        return await fetchOnePage(page, limit);
       }
+
+      const allEmployees = [];
+      let pageNum = 1;
+      let lastPagination = null;
+      const maxPages = 500;
+      while (pageNum <= maxPages) {
+        const result = await fetchOnePage(pageNum, limit);
+        allEmployees.push(...(result.employees || []));
+        lastPagination = result.pagination;
+        if (!lastPagination?.hasNext) {
+          break;
+        }
+        pageNum += 1;
+      }
+
+      const total = lastPagination?.total ?? allEmployees.length;
+      return {
+        employees: allEmployees,
+        pagination: {
+          page: 1,
+          limit: allEmployees.length,
+          total,
+          pages: 1,
+          hasNext: false,
+          hasPrev: false
+        }
+      };
     } catch (err) {
       // Removed console.error for production
       return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to fetch employees');
