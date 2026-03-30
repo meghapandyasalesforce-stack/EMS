@@ -7,6 +7,18 @@ function pfEmployeeFromBasicWage(basicWage) {
   return Math.round((Number(basicWage) || 0) * 0.12);
 }
 
+function earningsWithoutGratuity(earnings) {
+  if (!earnings || typeof earnings !== 'object') return {};
+  const gratuityLegacy = Number(earnings.gratuity) || 0;
+  const { gratuity: _omit, ...rest } = earnings;
+  // Legacy split had specialAllowance reduced by gratuity.
+  // Fold gratuity into specialAllowance so SPA becomes gross - (Basic + HRA).
+  if (gratuityLegacy > 0) {
+    rest.specialAllowance = (Number(rest.specialAllowance) || 0) + gratuityLegacy;
+  }
+  return rest;
+}
+
 const UpdatePayroll = () => {
   const navigate = useNavigate();
   const { employeeId, month, year } = useParams();
@@ -42,7 +54,6 @@ const UpdatePayroll = () => {
         basicWage: 0,
         houseRentAllowance: 0,
         overtime: 0,
-        gratuity: 0,
         specialAllowance: 0,
         pfEmployer: 0,
         esiEmployer: 0,
@@ -102,7 +113,7 @@ const UpdatePayroll = () => {
               payrollId: detailsData._id,
               month: months.indexOf(detailsData.month),
               year: detailsData.year,
-              earnings: detailsData.earnings || {},
+              earnings: earningsWithoutGratuity(detailsData.earnings),
               deductions: detailsData.deductions || {},
               status: detailsData.status || 'Pending',
             });
@@ -128,7 +139,7 @@ const UpdatePayroll = () => {
               payrollId: payroll._id,
               month: months.indexOf(payroll.month),
               year: payroll.year,
-              earnings: payroll.earnings || {},
+              earnings: earningsWithoutGratuity(payroll.earnings),
               deductions: payroll.deductions || {},
               status: payroll.status || 'Pending',
             });
@@ -167,7 +178,7 @@ const UpdatePayroll = () => {
               payrollId: payrollData._id,
               month: months.indexOf(payrollData.month),
               year: payrollData.year,
-              earnings: payrollData.earnings || {},
+              earnings: earningsWithoutGratuity(payrollData.earnings),
               deductions: payrollData.deductions || {},
               status: payrollData.status || 'Pending',
             });
@@ -180,7 +191,7 @@ const UpdatePayroll = () => {
                 payrollId: selectedPayroll._id,
                 month: months.indexOf(selectedPayroll.month),
                 year: selectedPayroll.year,
-                earnings: selectedPayroll.earnings || {},
+                earnings: earningsWithoutGratuity(selectedPayroll.earnings),
                 deductions: selectedPayroll.deductions || {},
                 status: selectedPayroll.status || 'Pending',
               });
@@ -211,7 +222,7 @@ const UpdatePayroll = () => {
                   payrollId: detailsData._id,
                   month: months.indexOf(detailsData.month),
                   year: detailsData.year,
-                  earnings: detailsData.earnings || {},
+                  earnings: earningsWithoutGratuity(detailsData.earnings),
                   deductions: detailsData.deductions || {},
                   status: detailsData.status || 'Pending',
                 });
@@ -279,7 +290,7 @@ const UpdatePayroll = () => {
 
   const calculateTotals = () => {
     const earningsTotal = Object.entries(formData.earnings)
-      .filter(([key]) => key !== 'totalEarnings')
+      .filter(([key]) => key !== 'totalEarnings' && key !== 'gratuity')
       .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
     const pfEmployee = pfEmployeeFromBasicWage(formData.earnings.basicWage);
     const deductionsTotal =
@@ -425,19 +436,6 @@ const UpdatePayroll = () => {
                 id="earnings-overtime"
                 name="overtime"
                 value={formData.earnings.overtime || 0}
-                onChange={handleEarningsChange}
-                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div key="gratuity">
-              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="earnings-gratuity">Gratuity</label>
-              <input
-                type="number"
-                id="earnings-gratuity"
-                name="gratuity"
-                value={formData.earnings.gratuity || 0}
                 onChange={handleEarningsChange}
                 className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 min="0"

@@ -6,14 +6,13 @@ import { fetchEmployees } from '../../context/employeeSlice';
 import { createPayroll, updatePayroll } from '../../context/payrollSlice';
 import { FiUser, FiDollarSign, FiCalendar, FiSave, FiArrowLeft } from 'react-icons/fi';
 
-// Salary formula: Basic = 50% Gross, HRA = 40% Basic, Gratuity = 4.81% Basic, Special = balance
+// Salary formula: Basic = 50% Gross, HRA = 40% Basic, Special = Gross − Basic − HRA
 function computeEarningsFromGross(gross) {
     const g = Number(gross) || 0;
     const basicWage = Math.round(0.5 * g);
     const houseRentAllowance = Math.round(0.4 * basicWage);
-    const gratuity = Math.round(0.0481 * basicWage);
-    const specialAllowance = Math.round(g - basicWage - houseRentAllowance - gratuity);
-    return { basicWage, houseRentAllowance, gratuity, specialAllowance };
+    const specialAllowance = Math.round(g - basicWage - houseRentAllowance);
+    return { basicWage, houseRentAllowance, specialAllowance };
 }
 
 function pfEmployeeFromBasicWage(basicWage) {
@@ -39,7 +38,6 @@ const AddPayroll = () => {
             transportAllowance: 0,
             medicalAllowance: 0,
             overtime: 0,
-            gratuity: 0,
             specialAllowance: 0,
             performanceBonus: 0,
             projectBonus: 0,
@@ -91,7 +89,6 @@ const AddPayroll = () => {
                         ...prev.earnings,
                         basicWage: formula.basicWage,
                         houseRentAllowance: formula.houseRentAllowance,
-                        gratuity: formula.gratuity,
                         specialAllowance: formula.specialAllowance
                     },
                     deductions: {
@@ -117,7 +114,6 @@ const AddPayroll = () => {
                 ...prev.earnings,
                 basicWage: formula.basicWage,
                 houseRentAllowance: formula.houseRentAllowance,
-                gratuity: formula.gratuity,
                 specialAllowance: formula.specialAllowance
             },
             deductions: {
@@ -159,7 +155,6 @@ const AddPayroll = () => {
                     ...prev.earnings,
                     basicWage: formula.basicWage,
                     houseRentAllowance: formula.houseRentAllowance,
-                    gratuity: formula.gratuity,
                     specialAllowance: formula.specialAllowance
                 },
                 deductions: {
@@ -211,7 +206,7 @@ const AddPayroll = () => {
 
     const calculateTotals = () => {
         const earningsTotal = Object.entries(formData.earnings)
-            .filter(([key]) => key !== 'totalEarnings')
+            .filter(([key]) => key !== 'totalEarnings' && key !== 'gratuity')
             .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
         const deductionsTotal = Object.entries(formData.deductions)
             .filter(([key]) => key !== 'total')
@@ -405,7 +400,9 @@ const AddPayroll = () => {
                     <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4">Earnings</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {Object.entries(formData.earnings).map(([key, value]) => (
+                            {Object.entries(formData.earnings)
+                                .filter(([key]) => key !== 'gratuity')
+                                .map(([key, value]) => (
                                 <div key={key}>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} (₹)

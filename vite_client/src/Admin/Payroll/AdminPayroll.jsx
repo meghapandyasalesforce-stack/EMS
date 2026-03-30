@@ -580,7 +580,6 @@ const AdminPayroll = () => {
                                                 ['transportAllowance', 'Transport'],
                                                 ['medicalAllowance', 'Medical'],
                                                 ['overtime', 'Overtime'],
-                                                ['gratuity', 'Gratuity'],
                                                 ['specialAllowance', 'Special Allowance'],
                                                 ['performanceBonus', 'Performance Bonus'],
                                                 ['projectBonus', 'Project Bonus'],

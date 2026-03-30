@@ -87,6 +87,95 @@ function mapLeaveTypeForPayroll(leaveType) {
     return 'Other';
 }
 
+/** Full-day standard for attendance weighting (aligned with overtime divisor in this module). */
+const STANDARD_FULL_DAY_HOURS = 8;
+
+function attendanceHoursWorked(record) {
+    const eff = Number(record.effectiveHours);
+    const gross = Number(record.grossHours);
+    if (Number.isFinite(eff) && eff > 0) return eff;
+    if (Number.isFinite(gross) && gross > 0) return gross;
+    return 0;
+}
+
+/**
+ * Paid-day credit (0–1) from one attendance row using worked hours.
+ * present/loggedOut with 0 effective and 0 gross hours → 0 (treat as no paid time).
+ */
+function attendanceDayCredit(record) {
+    const status = (record.status || '').toLowerCase();
+    const h = attendanceHoursWorked(record);
+    if (h <= 0) return 0;
+    if (status === 'half-day') return Math.min(0.5, h / STANDARD_FULL_DAY_HOURS);
+    if (status === 'present' || status === 'loggedout') return Math.min(1, h / STANDARD_FULL_DAY_HOURS);
+    return 0;
+}
+
+function isWorkingDayForPayroll(day, isWorkingDayFn) {
+    return typeof isWorkingDayFn === 'function'
+        ? isWorkingDayFn(day)
+        : day.getDay() !== 0 && day.getDay() !== 6;
+}
+
+/**
+ * Map dateKey → paid leave credit (0–1) for approved non–loss-of-pay leaves overlapping [effStart, effEnd].
+ * Half-day leave: 0.5 on the first overlapping working day only.
+ */
+function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn) {
+    const paidLeaveByDay = new Map();
+    const rangeStart = startOfDay(new Date(effStart));
+    const rangeEnd = startOfDay(new Date(effEnd));
+
+    for (const lv of approvedLeaves) {
+        const isLop = (lv.leaveType || '').toString().toLowerCase() === 'loss_of_pay';
+        if (isLop) continue;
+
+        const isHalf = lv.isHalfDay === true || Number(lv.duration) === 0.5;
+        const start = new Date(lv.startDate);
+        const end = new Date(lv.endDate);
+        const overlapStart = new Date(Math.max(start.getTime(), rangeStart.getTime()));
+        const overlapEnd = new Date(Math.min(end.getTime(), rangeEnd.getTime()));
+        if (overlapStart > overlapEnd) continue;
+
+        if (isHalf) {
+            for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
+                const day = new Date(d);
+                if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
+                const key = dateKey(day);
+                paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 0.5));
+                break;
+            }
+            continue;
+        }
+
+        for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
+            const day = new Date(d);
+            if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
+            const key = dateKey(day);
+            paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 1));
+        }
+    }
+
+    return paidLeaveByDay;
+}
+
+/** Sum daily credits over working days in [walkStart, walkEnd]: each day min(1, attendance + paid leave). */
+function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, isWorkingDayFn) {
+    let total = 0;
+    const a = startOfDay(new Date(walkStart));
+    const b = startOfDay(new Date(walkEnd));
+    if (a > b) return 0;
+    for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+        const day = new Date(d);
+        if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
+        const key = dateKey(day);
+        const att = attByDay.get(key) || 0;
+        const lev = paidLeaveByDay.get(key) || 0;
+        total += Math.min(1, att + lev);
+    }
+    return total;
+}
+
 /**
  * Prefer final (or legacy undifferentiated) payroll over preview; then latest activity.
  * @param {Array<object>} payrolls
@@ -173,10 +262,15 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
               })
             : attendanceRecords;
 
-    const presentDays = attendanceRecordsForCounting.filter((r) =>
-        ['present', 'loggedOut'].includes(r.status)
-    ).length;
-    const halfDays = attendanceRecordsForCounting.filter((r) => r.status === 'half-day').length;
+    const attByDay = new Map();
+    for (const r of attendanceRecordsForCounting) {
+        const d = r?.date ? new Date(r.date) : null;
+        if (!d || Number.isNaN(d.getTime())) continue;
+        const key = dateKey(d);
+        const c = attendanceDayCredit(r);
+        attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
+    }
+
     const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
 
     const approvedLeaves =
@@ -213,10 +307,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         })
         .filter(Boolean);
 
-    const paidLeaveDays = payrollLeaves.reduce((sum, lv) => sum + (lv.isLossOfPay ? 0 : (Number(lv.days) || 0)), 0);
-
-    // Salary scales only with paid days (paid leaves + attendance). Loss-of-pay reduces payable days.
-    const effectivePresent = presentDays + halfDays * 0.5 + paidLeaveDays;
+    const paidLeaveByDay = buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn);
+    // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
+    const effectivePresent = sumEffectivePresentDays(effStart, effEnd, attByDay, paidLeaveByDay, isWorkingDayFn);
     const fullGross = emp.salary || 0;
     const effectiveGross =
         workingDenom > 0 ? Math.round((fullGross * effectivePresent) / workingDenom) : 0;

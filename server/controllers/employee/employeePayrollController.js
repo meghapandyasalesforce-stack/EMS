@@ -25,8 +25,18 @@ function sortPayrollsByYearMonth(payrolls, descending = true) {
 function normalizePayrollForDisplay(payroll) {
     if (!payroll || typeof payroll !== 'object') return payroll;
 
-    const earnings = payroll.earnings && typeof payroll.earnings === 'object' ? { ...payroll.earnings } : {};
+    const rawEarnings = payroll.earnings && typeof payroll.earnings === 'object' ? { ...payroll.earnings } : {};
+    const gratuityLegacy = Number(rawEarnings.gratuity) || 0;
+    delete rawEarnings.gratuity;
+    const earnings = rawEarnings;
     const deductions = payroll.deductions && typeof payroll.deductions === 'object' ? { ...payroll.deductions } : {};
+
+    // Legacy payrolls used to compute specialAllowance as:
+    //   gross - basicWage - houseRentAllowance - gratuity
+    // For SPA we want: gross - (Basic + HRA). So fold legacy gratuity into specialAllowance.
+    if (gratuityLegacy > 0) {
+        earnings.specialAllowance = (Number(earnings.specialAllowance) || 0) + gratuityLegacy;
+    }
 
     const basicWage = Number(earnings.basicWage) || 0;
     deductions.pfEmployee = Math.round(basicWage * 0.12);
@@ -37,7 +47,6 @@ function normalizePayrollForDisplay(payroll) {
         'transportAllowance',
         'medicalAllowance',
         'overtime',
-        'gratuity',
         'specialAllowance',
         'performanceBonus',
         'projectBonus',

@@ -452,18 +452,26 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
         doc.text('Earning and Deduction', margin, yPos);
         doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
         yPos += 6;
-        const earningsExclude = ['totalEarnings', 'total'];
+        const earningsExclude = ['totalEarnings', 'total', 'gratuity'];
         const deductionsExclude = ['total', 'totalDeductions'];
+        const earningsForPdf = (payrollData.earnings && typeof payrollData.earnings === 'object')
+            ? { ...payrollData.earnings }
+            : {};
+        const gratuityLegacyPdf = Number(earningsForPdf.gratuity) || 0;
+        delete earningsForPdf.gratuity;
+        // For legacy payrolls, specialAllowance was reduced by gratuity.
+        // Fold legacy gratuity into specialAllowance so SPA is gross - (Basic + HRA).
+        if (gratuityLegacyPdf > 0) {
+            earningsForPdf.specialAllowance = (Number(earningsForPdf.specialAllowance) || 0) + gratuityLegacyPdf;
+        }
         let earningsTotal = 0;
         let deductionsTotal = 0;
-        const earningsEntries = (payrollData.earnings && typeof payrollData.earnings === 'object')
-            ? Object.entries(payrollData.earnings)
-                .filter(([key, value]) => {
-                    const numValue = Number(value);
-                    return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
-                })
-                .sort((a, b) => Number(b[1]) - Number(a[1]))
-            : [];
+        const earningsEntries = Object.entries(earningsForPdf)
+            .filter(([key, value]) => {
+                const numValue = Number(value);
+                return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
+            })
+            .sort((a, b) => Number(b[1]) - Number(a[1]));
         const normalizedDeductions = (payrollData.deductions && typeof payrollData.deductions === 'object')
             ? { ...payrollData.deductions }
             : {};

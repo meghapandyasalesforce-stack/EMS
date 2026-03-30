@@ -26,8 +26,18 @@ function sortPayrollsByYearMonth(payrolls, descending = true) {
 function normalizePayrollForDisplay(payroll) {
     if (!payroll || typeof payroll !== 'object') return payroll;
 
-    const earnings = payroll.earnings && typeof payroll.earnings === 'object' ? { ...payroll.earnings } : {};
+    const rawEarnings = payroll.earnings && typeof payroll.earnings === 'object' ? { ...payroll.earnings } : {};
+    const gratuityLegacy = Number(rawEarnings.gratuity) || 0;
+    delete rawEarnings.gratuity;
+    const earnings = rawEarnings;
     const deductions = payroll.deductions && typeof payroll.deductions === 'object' ? { ...payroll.deductions } : {};
+
+    // Legacy payrolls used to compute specialAllowance as:
+    //   gross - basicWage - houseRentAllowance - gratuity
+    // For SPA we want: gross - (Basic + HRA). So fold legacy gratuity into specialAllowance.
+    if (gratuityLegacy > 0) {
+        earnings.specialAllowance = (Number(earnings.specialAllowance) || 0) + gratuityLegacy;
+    }
 
     deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
 
@@ -37,7 +47,6 @@ function normalizePayrollForDisplay(payroll) {
         'transportAllowance',
         'medicalAllowance',
         'overtime',
-        'gratuity',
         'specialAllowance',
         'performanceBonus',
         'projectBonus',
@@ -88,13 +97,18 @@ export const updatePayroll = async (req, res) => {
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
 
         // Calculate total earnings
+        const gratuityLegacyUpdate = Number(earnings.gratuity) || 0;
+        if (gratuityLegacyUpdate > 0) {
+            earnings.specialAllowance = (Number(earnings.specialAllowance) || 0) + gratuityLegacyUpdate;
+        }
+        delete earnings.gratuity;
+
         earnings.totalEarnings = 
             (earnings.basicWage || 0) +
             (earnings.houseRentAllowance || 0) +
             (earnings.transportAllowance || 0) +
             (earnings.medicalAllowance || 0) +
             (earnings.overtime || 0) +
-            (earnings.gratuity || 0) +
             (earnings.specialAllowance || 0) +
             (earnings.performanceBonus || 0) +
             (earnings.projectBonus || 0) +
@@ -406,6 +420,15 @@ export const createPayroll = async (req, res) => {
         const earnings = payrollData.earnings || {};
         const deductions = payrollData.deductions || {};
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+
+        // Legacy payrolls used to compute specialAllowance as:
+        //   gross - basicWage - houseRentAllowance - gratuity
+        // For SPA we want: gross - (Basic + HRA). So fold legacy gratuity into specialAllowance.
+        const gratuityLegacyCreate = Number(earnings.gratuity) || 0;
+        if (gratuityLegacyCreate > 0) {
+            earnings.specialAllowance = (Number(earnings.specialAllowance) || 0) + gratuityLegacyCreate;
+        }
+        delete earnings.gratuity;
 
         earnings.totalEarnings = Object.values(earnings).reduce((sum, val) => sum + (val || 0), 0);
         deductions.total = Object.values(deductions).reduce((sum, val) => sum + (val || 0), 0);

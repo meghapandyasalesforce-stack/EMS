@@ -3,8 +3,8 @@
  * Rule: Gross = employee salary (CTC)
  *   Basic = 50% of Gross
  *   HRA = 40% of Basic
- *   Gratuity = 4.81% of Basic
- *   Special Allowance = Balance (Gross - Basic - HRA - Gratuity)
+ *   Special Allowance = Balance (Gross - Basic - HRA)
+ * Gratuity is not part of this monthly split (kept 0 for stored shape / legacy).
  */
 
 /**
@@ -16,9 +16,9 @@ export function computeEarningsFromGross(gross) {
     const g = Number(gross) || 0;
     const basicWage = Math.round(0.5 * g);
     const houseRentAllowance = Math.round(0.4 * basicWage);
-    const gratuity = Math.round(0.0481 * basicWage);
-    const specialAllowance = Math.round(g - basicWage - houseRentAllowance - gratuity);
-    const totalEarnings = basicWage + houseRentAllowance + gratuity + specialAllowance;
+    const gratuity = 0;
+    const specialAllowance = Math.round(g - basicWage - houseRentAllowance);
+    const totalEarnings = basicWage + houseRentAllowance + specialAllowance;
     return {
         basicWage,
         houseRentAllowance,
