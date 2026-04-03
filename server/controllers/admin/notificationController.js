@@ -30,6 +30,68 @@ export const createNotification = async (req, res) => {
   }
 };
 
+/** Broadcast announcements created by admins — list for dashboard history */
+export const getSentAnnouncements = async (req, res) => {
+  try {
+    const adminId = req.user?._id;
+    if (!adminId) {
+      return sendUnauthorized(res, 'Admin authentication required');
+    }
+
+    let organizationId = req.user?.organizationId || req.organizationId;
+    if (!organizationId) {
+      const user = await User.findById(adminId).select('organizationId').lean();
+      organizationId = user?.organizationId;
+    }
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const { page = 1, limit = 20, scope } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(pageNum) || pageNum < 1) {
+      return sendError(res, 'Invalid page number', 400, 'INVALID_PAGE');
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      return sendError(res, 'Invalid limit (must be between 1 and 100)', 400, 'INVALID_LIMIT');
+    }
+
+    const filter = {
+      organizationId,
+      isBroadcast: true,
+      type: 'announcement',
+    };
+    if (scope !== 'organization') {
+      filter.sender = adminId;
+    }
+
+    const announcements = await Notification.find(filter)
+      .populate('sender', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .skip((pageNum - 1) * limitNum);
+
+    const total = await Notification.countDocuments(filter);
+
+    return sendSuccess(
+      res,
+      {
+        announcements,
+        pagination: {
+          current: pageNum,
+          pages: Math.ceil(total / limitNum) || 1,
+          total,
+        },
+      },
+      'Sent announcements retrieved successfully'
+    );
+  } catch (error) {
+    logger.error('Error getting sent announcements', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to get sent announcements', error);
+  }
+};
+
 // Get notifications for current user (including broadcasts) - SSE endpoint
 export const getNotifications = async (req, res) => {
   // Set CORS headers FIRST (before any other headers or errors)
@@ -74,35 +136,44 @@ export const getNotifications = async (req, res) => {
     logger.warn('SSE: Authentication failed, continuing with broadcasts only', { error: authError.message });
   }
 
-  let lastCheck = new Date(Date.now() - 1000 * 60 * 5); // last 5 minutes
+  let lastCheck = new Date(0);
+  let isFirstPoll = true;
   let intervalId = null;
+  const HISTORY_MS = 1000 * 60 * 60 * 24 * 30; // seed last 30 days on first poll
 
   // Function to send notifications
   const sendNotifications = async () => {
     try {
       // Build query: broadcasts OR user-specific notifications
-      const query = {
-        $or: [
-          { isBroadcast: true }
-        ]
-      };
-      
-      // Add user-specific notifications if authenticated
+      const baseOr = [{ isBroadcast: true }];
       if (userId) {
-        query.$or.push({ recipient: userId });
+        baseOr.push({ recipient: userId });
       }
-      
-      // Only get notifications created since last check
-      query.createdAt = { $gt: lastCheck };
-      
-      const notifications = await Notification.find(query)
-        .sort({ createdAt: -1 })
-        .limit(50); // Limit to prevent huge responses
+
+      let notifications;
+      if (isFirstPoll) {
+        isFirstPoll = false;
+        const since = new Date(Date.now() - HISTORY_MS);
+        notifications = await Notification.find({
+          $or: baseOr,
+          createdAt: { $gte: since },
+        })
+          .sort({ createdAt: -1 })
+          .limit(50);
+      } else {
+        notifications = await Notification.find({
+          $or: baseOr,
+          createdAt: { $gt: lastCheck },
+        })
+          .sort({ createdAt: -1 })
+          .limit(50);
+      }
 
       if (notifications.length > 0) {
         res.write(`data: ${JSON.stringify(notifications)}\n\n`);
-        lastCheck = new Date(); // Update last check time
       }
+      // Always advance — avoids getting stuck when the prior window had zero rows
+      lastCheck = new Date();
       
       // Send keepalive ping every 30 seconds to prevent connection timeout
       res.write(': keepalive\n\n');

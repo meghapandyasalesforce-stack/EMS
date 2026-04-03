@@ -75,12 +75,12 @@ export const updateEmployeeWorkInfo = createAsyncThunk(
 // Async thunk for adding academic record
 export const addAcademicRecord = createAsyncThunk(
   'employeeDetails/addAcademicRecord',
-  async ({ institution, details }, { rejectWithValue, getState }) => {
+  async (payload, { rejectWithValue, getState }) => {
     try {
       const { employee } = getState().employeeDetails;
       const response = await axios.post(
         `${BOTH_PROFILE_ENDPOINT}/add-academic-record`,
-        { institution, details },
+        payload,
         {
           withCredentials: true, // Cookies (including httpOnly JWT) are sent automatically
           headers: {
@@ -213,6 +213,33 @@ export const addFamilyDetail = createAsyncThunk(
   }
 );
 
+// Async thunk for updating an existing family member
+export const updateFamilyDetail = createAsyncThunk(
+  'employeeDetails/updateFamilyDetail',
+  async ({ familyMemberId, ...familyFields }, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.put(
+        `${BOTH_PROFILE_ENDPOINT}/update-family-detail`,
+        { familyMemberId, ...familyFields },
+        { withCredentials: true }
+      );
+      const list = response.data.familyDetails;
+      if (!list || !Array.isArray(list)) {
+        return rejectWithValue('Family details not returned from server');
+      }
+      return {
+        ...employee,
+        familyDetails: list
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to update family detail'
+      );
+    }
+  }
+);
+
 // Async thunk for updating financial details
 export const updateFinancialDetails = createAsyncThunk(
   'employeeDetails/updateFinancialDetails',
@@ -269,6 +296,7 @@ const employeeDetailsSlice = createSlice({
     addingQualification: false,
     addingNextOfKin: false,
     addingFamilyDetail: false,
+    updatingFamilyDetail: false,
     updatingFinancialDetails: false
   },
   reducers: {
@@ -426,6 +454,19 @@ const employeeDetailsSlice = createSlice({
       })
       .addCase(addFamilyDetail.rejected, (state, action) => {
         state.addingFamilyDetail = false;
+        state.error = action.payload;
+      })
+
+      // Update family detail cases
+      .addCase(updateFamilyDetail.pending, (state) => {
+        state.updatingFamilyDetail = true;
+      })
+      .addCase(updateFamilyDetail.fulfilled, (state, action) => {
+        state.updatingFamilyDetail = false;
+        state.employee = action.payload;
+      })
+      .addCase(updateFamilyDetail.rejected, (state, action) => {
+        state.updatingFamilyDetail = false;
         state.error = action.payload;
       })
 

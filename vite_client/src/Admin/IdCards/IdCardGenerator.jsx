@@ -108,17 +108,6 @@ const IdCardGenerator = () => {
   };
 
   useEffect(() => {
-    // SECURITY FIX: Tokens are in httpOnly cookies, not localStorage
-    // Check authentication via role from localStorage (UI state only) or Redux store
-    const userRole = localStorage.getItem('role'); // UI state only, not sensitive
-    // Removed console.log statements for production
-    
-    if (userRole !== 'admin') {
-      // Removed console.error for production
-      toast.error('You must be logged in as an admin to access this feature');
-      return;
-    }
-    
     fetchIdCards();
     fetchEmployees();
   }, [fetchIdCards]);
@@ -148,14 +137,29 @@ const IdCardGenerator = () => {
 
   const handleDownloadCard = async (cardId) => {
     try {
-      const response = await axios.get(`/v1/admin/id-cards/${cardId}/download`, {
+      const response = await axios.get(`/v1/admin/id-cards/card/${cardId}/download`, {
         responseType: 'blob'
       });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+
+      const contentType = response.headers?.['content-type'] || '';
+      if (!contentType.includes('application/pdf')) {
+        // Backend may return JSON error as blob; parse and surface meaningful message.
+        const errorText = await response.data.text();
+        let message = 'Failed to download ID card';
+        try {
+          const parsed = JSON.parse(errorText);
+          message = parsed?.message || message;
+        } catch {
+          // keep default message
+        }
+        toast.error(message);
+        return;
+      }
+
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `id-card-${cardId}.png`);
+      link.setAttribute('download', `id-card-${cardId}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -171,8 +175,8 @@ const IdCardGenerator = () => {
   const handleDeactivateCard = async (cardId) => {
     if (window.confirm('Are you sure you want to deactivate this ID card?')) {
       try {
-        await axios.put(`/v1/admin/id-cards/${cardId}/deactivate`, {
-          reason: 'Deactivated by admin'
+        await axios.put(`/v1/admin/id-cards/card/${cardId}`, {
+          status: 'cancelled'
         });
         toast.success('ID card deactivated successfully');
         fetchIdCards();

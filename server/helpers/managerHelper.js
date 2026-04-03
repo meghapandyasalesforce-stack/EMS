@@ -14,13 +14,14 @@ import logger from "./logger.js";
  * @returns {Object} - MongoDB $or query for matching manager field
  */
 export const buildManagerMatchQuery = (managerEmployee) => {
-    if (!managerEmployee || !managerEmployee.name) {
+    if (!managerEmployee || !managerEmployee._id) {
         return null;
     }
 
+    const managerId = managerEmployee._id;
     // Get manager's full name and first name
-    const managerName = `${managerEmployee.name} ${managerEmployee.lastName || ''}`.trim();
-    const managerFirstName = managerEmployee.name;
+    const managerName = `${managerEmployee.name || ''} ${managerEmployee.lastName || ''}`.trim();
+    const managerFirstName = managerEmployee.name || '';
     
     // Escape special regex characters
     const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -29,20 +30,28 @@ export const buildManagerMatchQuery = (managerEmployee) => {
     
     // Build comprehensive matching query
     // This handles: "Arun Kumar", "Arun", "arun kumar", "ARUN KUMAR", etc.
-    const managerQuery = {
-        $or: [
-            // Exact matches (case-sensitive)
+    const orConditions = [
+        // Preferred path: strict manager-id mapping
+        { managerId }
+    ];
+
+    // Legacy fallback for records created before managerId migration.
+    if (managerName) {
+        orConditions.push(
             { manager: managerName },
-            { manager: managerFirstName },
-            // Case-insensitive exact matches
             { manager: { $regex: new RegExp(`^${escapedManagerName}$`, 'i') } },
-            { manager: { $regex: new RegExp(`^${escapedFirstName}$`, 'i') } },
-            // Starts with first name followed by space (handles "Arun Kumar", "Arun Singh", etc.)
-            { manager: { $regex: new RegExp(`^${escapedFirstName}\\s`, 'i') } },
-            // Contains full name anywhere (case-insensitive)
             { manager: { $regex: new RegExp(escapedManagerName, 'i') } }
-        ]
-    };
+        );
+    }
+    if (managerFirstName) {
+        orConditions.push(
+            { manager: managerFirstName },
+            { manager: { $regex: new RegExp(`^${escapedFirstName}$`, 'i') } },
+            { manager: { $regex: new RegExp(`^${escapedFirstName}\\s`, 'i') } }
+        );
+    }
+
+    const managerQuery = { $or: orConditions };
     
     logger.debug('Built manager match query', {
         managerName: managerName,
@@ -60,9 +69,14 @@ export const buildManagerMatchQuery = (managerEmployee) => {
  * @returns {boolean} - True if employee is linked to manager
  */
 export const isEmployeeLinkedToManager = (employee, managerEmployee) => {
-    if (!employee || !employee.manager || !managerEmployee || !managerEmployee.name) {
+    if (!employee || !managerEmployee || !managerEmployee._id) {
         return false;
     }
+
+    if (employee.managerId && String(employee.managerId) === String(managerEmployee._id)) {
+        return true;
+    }
+    if (!employee.manager) return false;
     
     const managerName = `${managerEmployee.name} ${managerEmployee.lastName || ''}`.trim();
     const managerFirstName = managerEmployee.name;
@@ -95,7 +109,7 @@ export const isEmployeeLinkedToManager = (employee, managerEmployee) => {
  * @returns {Promise<Array>} - Array of employee IDs
  */
 export const getManagerEmployeeIds = async (EmployeeModel, organizationId, managerEmployee) => {
-    if (!managerEmployee || !managerEmployee.name) {
+    if (!managerEmployee || !managerEmployee._id) {
         return [];
     }
     

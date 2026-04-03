@@ -2,8 +2,14 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
-import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import Employee from '../../models/employee.model.js';
+import { Document } from '../../models/document.model.js';
+import {
+    createEmployeeJobOrGenericDocument,
+    JOB_DOCUMENT_TYPES,
+} from '../../helpers/employeeDocumentUploadHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,165 +49,136 @@ export const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 }).single('document');
 
-// Employee uploads document 
+// Legacy route: forwards to canonical Document collection (same as POST /both/documents/upload)
 export const addDocument = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
-        const { documentType, additionalInfo } = req.body;
+        const { documentType } = req.body;
 
-        // Validate required fields
         if (!documentType || !req.file) {
-            return res.status(400).json({ 
-                message: 'Document type and file are required' 
+            return res.status(400).json({
+                message: 'Document type and file are required',
             });
         }
 
-        // Define allowed document types with their specific validations
-        const ALLOWED_DOCUMENT_TYPES = {
-            OFFER_LETTER: 'OFFER_LETTER',
-            BIRTH_CERTIFICATE: 'BIRTH_CERTIFICATE',
-            GUARANTOR_FORM: 'GUARANTOR_FORM',
-            DEGREE_CERTIFICATE: 'DEGREE_CERTIFICATE',
-            OTHER: 'OTHER'
-        };
-
-        // Validate document type
-        if (!Object.values(ALLOWED_DOCUMENT_TYPES).includes(documentType)) {
+        if (!Object.values(JOB_DOCUMENT_TYPES).includes(documentType)) {
             return res.status(400).json({
                 message: 'Invalid document type',
-                allowedTypes: Object.values(ALLOWED_DOCUMENT_TYPES)
+                allowedTypes: Object.values(JOB_DOCUMENT_TYPES),
             });
         }
 
-        // Parse additionalInfo safely
-        let parsedInfo = {};
-        if (additionalInfo) {
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
             try {
-                parsedInfo = JSON.parse(additionalInfo);
-            } catch (error) {
-                return res.status(400).json({ 
-                    message: 'Invalid JSON in additionalInfo field' 
-                });
+                if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            } catch {
+                /* ignore */
             }
+            return res.status(400).json({ message: 'Organization ID is required' });
         }
 
-        // Construct document metadata (fileName/size match employee schema for display)
-        const newDocument = {
-            documentType,
-            filePath: `/uploads/documents/${req.file.filename}`,
-            fileName: req.file.originalname,
-            originalName: req.file.originalname,
-            mimeType: req.file.mimetype,
-            size: req.file.size,
-            uploadedAt: new Date(),
-            status: 'PENDING_REVIEW',
-            additionalInfo: parsedInfo
-        };
-
-        // Load employee so we can replace any existing document(s) of this type
-        const employee = await Employee.findById(employeeId).select('documents');
-        if (!employee) {
-            // Clean up uploaded file if employee is missing
+        if (!employeeId) {
             try {
-                if (req.file?.path && fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                }
-            } catch (cleanupErr) {
-                logger.error('Error deleting uploaded file for missing employee', {
-                    error: cleanupErr.message,
-                    filePath: req.file?.path
-                });
+                if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            } catch {
+                /* ignore */
             }
-            return res.status(404).json({ message: 'Employee not found' });
+            return res.status(401).json({ message: 'Employee authentication required' });
         }
 
-        // Delete any existing files for this documentType on disk
-        const existingOfType = (employee.documents || []).filter(doc => doc.documentType === documentType);
-        for (const doc of existingOfType) {
-            if (!doc?.filePath) continue;
-            const basename = path.basename(doc.filePath);
-            const currentPath = path.join(__dirname, '..', '..', 'uploads', 'documents', basename);
-            const legacyPath = path.join(process.cwd(), 'public', doc.filePath);
-            try {
-                if (fs.existsSync(currentPath)) {
-                    fs.unlinkSync(currentPath);
-                } else if (fs.existsSync(legacyPath)) {
-                    fs.unlinkSync(legacyPath);
-                }
-            } catch (unlinkErr) {
-                logger.warn('Failed to delete old document file', {
-                    error: unlinkErr.message,
-                    filePath: doc.filePath
-                });
-            }
-        }
-
-        // Replace documents of this type in the array, keeping others intact
-        employee.documents = (employee.documents || []).filter(doc => doc.documentType !== documentType);
-        employee.documents.push(newDocument);
-        // Sort newest first to match previous behaviour
-        employee.documents.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-
-        const updatedEmployee = await employee.save();
-
-        res.status(201).json({
-            message: 'Document uploaded successfully',
-            document: newDocument,
-            documents: updatedEmployee.documents
+        const document = await createEmployeeJobOrGenericDocument({
+            organizationId,
+            employeeId,
+            file: req.file,
+            body: req.body,
         });
 
+        res.status(201).json({
+            success: true,
+            message: 'Document uploaded successfully. Pending HR approval.',
+            data: document,
+        });
     } catch (error) {
-        logger.error('Error adding document', { error: error.message, stack: error.stack, employeeId: req.params.employeeId });
-        
-        // Clean up uploaded file if error occurred
-        if (req.file) {
+        logger.error('Error adding document', { error: error.message, stack: error.stack });
+
+        if (req.file?.path) {
             try {
-                fs.unlinkSync(req.file.path);
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
             } catch (err) {
-                logger.error('Error deleting uploaded file', { error: err.message, stack: err.stack, filePath: req.file?.path });
+                logger.error('Error deleting uploaded file', { error: err.message, filePath: req.file?.path });
             }
         }
 
-        res.status(500).json({ 
-            message: 'Failed to upload document',
-            error: error.message,
-            ...(error.errors && { detailedErrors: error.errors })
+        const status = error.message?.includes('Invalid JSON') ? 400 : 500;
+        res.status(status).json({
+            message: error.message || 'Failed to upload document',
+            ...(error.errors && { detailedErrors: error.errors }),
         });
     }
 };
 
-// Admin downloads document
+// Admin or HR downloads employee document (same org as requester)
 export const downloadDocument = async (req, res) => {
     try {
         const { employeeId, documentId } = req.params;
 
-        // Check if requester is admin
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Admins only.' });
+        const isAdmin = req.user?.role === 'admin';
+        const isHr = !!req.employee?._id;
+        if (!isAdmin && !isHr) {
+            return res.status(403).json({ message: 'Access denied. Admin or HR only.' });
         }
 
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findById(employeeId).select('organizationId documents');
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        const document = employee.documents.id(documentId);
-        if (!document) {
-            return res.status(404).json({ message: 'Document not found' });
+        const requesterOrgId = getOrganizationId(req);
+        if (
+            requesterOrgId &&
+            employee.organizationId &&
+            employee.organizationId.toString() !== requesterOrgId.toString()
+        ) {
+            return res.status(403).json({ message: 'Access denied.' });
         }
 
-        // Resolve path: prefer server/uploads/documents (new), fallback to public/uploads/documents (legacy)
-        const basename = path.basename(document.filePath);
+        let fileUrl;
+        let downloadName;
+
+        const embedded = employee.documents?.id?.(documentId);
+        if (embedded) {
+            fileUrl = embedded.filePath;
+            downloadName = embedded.originalName || embedded.fileName || path.basename(embedded.filePath || '');
+        } else {
+            const canonQuery = {
+                _id: documentId,
+                uploadedBy: employeeId,
+            };
+            if (employee.organizationId) {
+                canonQuery.organizationId = employee.organizationId;
+            }
+            const canon = await Document.findOne(canonQuery).lean();
+            if (!canon) {
+                return res.status(404).json({ message: 'Document not found' });
+            }
+            fileUrl = canon.fileUrl;
+            downloadName = canon.fileName || path.basename(canon.fileUrl || '');
+        }
+
+        if (!fileUrl) {
+            return res.status(404).json({ message: 'File path not found for document' });
+        }
+
+        const basename = path.basename(fileUrl);
         let filePath = path.join(__dirname, '..', '..', 'uploads', 'documents', basename);
         if (!fs.existsSync(filePath)) {
-            const legacyPath = path.join(process.cwd(), 'public', document.filePath);
+            const legacyPath = path.join(process.cwd(), 'public', fileUrl);
             if (fs.existsSync(legacyPath)) filePath = legacyPath;
         }
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'File not found on server', path: document.filePath });
+            return res.status(404).json({ message: 'File not found on server', path: fileUrl });
         }
-
-        const downloadName = document.originalName || document.fileName || path.basename(document.filePath);
         res.download(filePath, downloadName, (err) => {
             if (err) {
                 logger.error('Error downloading file', { error: err.message, stack: err.stack, filePath });

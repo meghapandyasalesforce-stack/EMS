@@ -1,13 +1,16 @@
 import Employee from '../../models/employee.model.js';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
+import { validateAndNormalizeNationalId } from '../../helpers/nationalIdValidation.js';
+import { mergeLegacyAndCanonicalEmployeeDocuments } from '../../helpers/employeeDocumentUploadHelper.js';
+import Notification from '../../models/notification.model.js';
 
 // Employee updates their additional information
 // Employee updates their additional information
 export const updateEmployeeInfo = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
-        const updateData = req.body;
+        const updateData = { ...req.body };
 
         // Fields that cannot be updated through this endpoint
         const restrictedFields = [
@@ -49,10 +52,83 @@ export const updateEmployeeInfo = async (req, res) => {
             }
         }
 
+        // Normalize optional fields: treat empty string as "not provided"
+        if (typeof updateData.birthDate === 'string' && !updateData.birthDate.trim()) {
+            delete updateData.birthDate;
+        }
+        if (typeof updateData.gender === 'string' && !updateData.gender.trim()) {
+            delete updateData.gender;
+        }
+
+        const unsetFields = {};
+
+        // National ID: explicit clear (empty string) removes stored id + type
+        if (Object.prototype.hasOwnProperty.call(req.body, 'nationalId') && (!req.body.nationalId || !String(req.body.nationalId).trim())) {
+            unsetFields.nationalId = '';
+            unsetFields.nationalIdType = '';
+            delete updateData.nationalId;
+            delete updateData.nationalIdType;
+        } else {
+            if (typeof updateData.nationalIdType === 'string' && !updateData.nationalIdType.trim()) {
+                delete updateData.nationalIdType;
+            }
+            if (typeof updateData.nationalId === 'string' && !updateData.nationalId.trim()) {
+                delete updateData.nationalId;
+            }
+
+            const hasId = !!(updateData.nationalId && String(updateData.nationalId).trim());
+            const hasType = !!(updateData.nationalIdType && String(updateData.nationalIdType).trim());
+
+            if (hasId && !hasType) {
+                return res.status(400).json({ message: 'Select a national ID document type' });
+            }
+            if (hasType && !hasId) {
+                return res.status(400).json({ message: 'Enter the national ID number for the selected document type' });
+            }
+            if (hasId && hasType) {
+                const result = validateAndNormalizeNationalId(updateData.nationalIdType, updateData.nationalId);
+                if (!result.ok) {
+                    return res.status(400).json({ message: result.message });
+                }
+                updateData.nationalId = result.normalized;
+            }
+        }
+
+        // Validate birth date if provided
+        if (updateData.birthDate) {
+            const birthDate = new Date(updateData.birthDate);
+            if (Number.isNaN(birthDate.getTime())) {
+                return res.status(400).json({ message: 'Please provide a valid birth date' });
+            }
+            if (birthDate > new Date()) {
+                return res.status(400).json({ message: 'Birth date cannot be in the future' });
+            }
+        }
+
+        // Validate gender if provided
+        if (updateData.gender) {
+            const allowedGenders = ['Male', 'Female', 'Other', 'Prefer not to say'];
+            if (!allowedGenders.includes(updateData.gender)) {
+                return res.status(400).json({ message: 'Invalid gender value' });
+            }
+        }
+
         // Update the employee document
+        const mongoUpdate = {};
+        if (Object.keys(updateData).length > 0) {
+            mongoUpdate.$set = updateData;
+        }
+        if (Object.keys(unsetFields).length > 0) {
+            mongoUpdate.$unset = unsetFields;
+        }
+
+        if (!mongoUpdate.$set && !mongoUpdate.$unset) {
+            return res.status(400).json({ message: 'No valid fields to update' });
+        }
+
         const updatedEmployee = await Employee.findByIdAndUpdate(
             employeeId,
-            { $set: updateData },
+            mongoUpdate,
             { 
                 new: true, 
                 runValidators: true,
@@ -86,11 +162,44 @@ export const updateEmployeeInfo = async (req, res) => {
 export const addAcademicRecord = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
-        const { institution, details } = req.body;
+        const {
+            institution,
+            details,
+            degree,
+            fieldOfStudy,
+            startDate,
+            endDate,
+            cgpa,
+        } = req.body;
 
-        if (!institution || !details) {
-            return res.status(400).json({ message: 'Institution and details are required' });
+        const inst = institution != null ? String(institution).trim() : '';
+        const deg = degree != null ? String(degree).trim() : '';
+        const det = details != null ? String(details).trim() : '';
+
+        if (!inst || (!deg && !det)) {
+            return res.status(400).json({
+                message: 'Institution and degree (or details) are required',
+            });
         }
+
+        const parseDate = (v) => {
+            if (v == null || v === '') return undefined;
+            const d = new Date(v);
+            return Number.isNaN(d.getTime()) ? undefined : d;
+        };
+
+        const field = fieldOfStudy != null ? String(fieldOfStudy).trim() : '';
+        const cgpaVal = cgpa != null ? String(cgpa).trim() : '';
+
+        const newRecord = { institution: inst };
+        if (deg) newRecord.degree = deg;
+        if (det) newRecord.details = det;
+        if (field) newRecord.fieldOfStudy = field;
+        const sd = parseDate(startDate);
+        const ed = parseDate(endDate);
+        if (sd) newRecord.startDate = sd;
+        if (ed) newRecord.endDate = ed;
+        if (cgpaVal) newRecord.cgpa = cgpaVal;
 
         // Check current count of academic records
         const employee = await Employee.findById(employeeId);
@@ -99,8 +208,6 @@ export const addAcademicRecord = async (req, res) => {
                 message: 'Maximum limit of 3 academic records reached' 
             });
         }
-
-        const newRecord = { institution, details };
 
         const updatedEmployee = await Employee.findByIdAndUpdate(
             employeeId,
@@ -305,6 +412,51 @@ export const addFamilyDetail = async (req, res) => {
     }
 };
 
+// Employee updates an existing family member (by subdocument _id)
+export const updateFamilyDetail = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const { familyMemberId, fullName, relationship, phoneNo, address, occupation } = req.body;
+
+        if (!familyMemberId || !mongoose.isValidObjectId(familyMemberId)) {
+            return res.status(400).json({ message: 'Valid familyMemberId is required' });
+        }
+        if (!fullName || !relationship) {
+            return res.status(400).json({ message: 'Full name and relationship are required' });
+        }
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'familyDetails._id': familyMemberId },
+            {
+                $set: {
+                    'familyDetails.$.fullName': fullName,
+                    'familyDetails.$.relationship': relationship,
+                    'familyDetails.$.phoneNo': phoneNo != null ? String(phoneNo) : '',
+                    'familyDetails.$.address': address != null ? String(address) : '',
+                    'familyDetails.$.occupation': occupation != null ? String(occupation) : ''
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Family member not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('familyDetails');
+
+        res.status(200).json({
+            message: 'Family detail updated successfully',
+            familyDetails: updatedEmployee.familyDetails
+        });
+    } catch (error) {
+        logger.error('Error updating family detail', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to update family detail',
+            error: error.message
+        });
+    }
+};
+
 // Employee updates financial details
 export const updateFinancialDetails = async (req, res) => {
     try {
@@ -399,6 +551,8 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
       logger.info('Admin fetched employee', { employeeId, salary: employee.salary });
     }
 
+    await mergeLegacyAndCanonicalEmployeeDocuments(employee);
+
     res.status(200).json({ employee });
 
   } catch (error) {
@@ -428,8 +582,7 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
         }
 
         const employee = await Employee.findById(employeeId)
-            .select('-password -active -role -salary -manager')
-            .select('guarantors nextOfKins familyDetails academicRecords professionalQualifications');
+            .select('-password -active -role -salary -manager');
 
         if (!employee) {
             return res.status(404).json({ 
@@ -437,9 +590,12 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
             });
         }
 
+        const employeeObj = employee.toObject ? employee.toObject() : employee;
+        await mergeLegacyAndCanonicalEmployeeDocuments(employeeObj);
+
         res.status(200).json({
             message: 'Your information has been retrieved successfully.',
-            employee,
+            employee: employeeObj,
         });
 
     } catch (error) {
@@ -557,6 +713,7 @@ export const getUpcomingBirthdays = async (req, res) => {
                     Math.ceil((thisYearBirthday - today) / (1000 * 60 * 60 * 24));
 
                 return {
+                    employeeId: emp._id,
                     name: `${emp.name} ${emp.lastName}`,
                     birthday: `${birthDate.getDate()} ${birthDate.toLocaleDateString('en-US', { month: 'long' })}`,
                     daysUntil: daysUntilBirthday,
@@ -578,6 +735,75 @@ export const getUpcomingBirthdays = async (req, res) => {
         res.status(500).json({ 
             message: 'Failed to fetch upcoming birthdays',
             error: error.message,
+        });
+    }
+};
+
+// HR/Admin sends birthday wishes to the selected employee
+export const sendBirthdayWishes = async (req, res) => {
+    try {
+        const senderEmployeeId = req.employee?._id;
+        const senderUserId = req.user?._id;
+
+        const recipientEmployeeId = req.body?.employeeId;
+        if (!recipientEmployeeId) {
+            return res.status(400).json({ message: 'employeeId is required' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(recipientEmployeeId)) {
+            return res.status(400).json({ message: 'Invalid employeeId' });
+        }
+
+        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({ message: 'Organization ID is required' });
+        }
+
+        const recipient = await Employee.findOne({
+            _id: recipientEmployeeId,
+            organizationId,
+            status: 'active'
+        }).select('_id name lastName email birthDate').lean();
+
+        if (!recipient) {
+            return res.status(404).json({ message: 'Birthday employee not found' });
+        }
+
+        const senderType = senderEmployeeId ? 'Employee' : 'User';
+        const senderId = senderEmployeeId || senderUserId;
+        if (!senderId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const message = `Happy Birthday ${recipient.name}${recipient.lastName ? ` ${recipient.lastName}` : ''}!`;
+
+        const notification = await Notification.create({
+            organizationId,
+            recipient: recipientEmployeeId,
+            recipientType: 'Employee',
+            sender: senderId,
+            senderType,
+            message,
+            type: 'announcement',
+            priority: 'low',
+            isBroadcast: false,
+            metadata: {
+                birthdayEmployeeId: recipientEmployeeId,
+                birthdayDate: recipient.birthDate,
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Birthday wishes sent successfully',
+            notification
+        });
+    } catch (error) {
+        logger.error('Error sending birthday wishes', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send birthday wishes',
+            error: error.message
         });
     }
 };

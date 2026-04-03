@@ -10,14 +10,25 @@ import {
 } from '../../controllers/document/documentController.js';
 import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
-// Upload middleware - adjust path based on your setup
-// import upload from '../../middlewares/upload.js';
+import { upload } from '../../controllers/fileUpload/uploadConfigController.js';
 
 const router = express.Router();
 
-// Upload Document
+// Upload Document (multipart field name: "document")
 router.route('/upload')
-    .post(isAdminOrHRAuthenticated, writeLimiter, uploadDocument);
+    .post(
+        isAdminOrHRAuthenticated,
+        (req, res, next) => {
+            upload(req, res, (err) => {
+                if (err) {
+                    return res.status(400).json({ success: false, message: err.message });
+                }
+                next();
+            });
+        },
+        writeLimiter,
+        uploadDocument
+    );
 
 // Get pending documents for approval
 router.route('/pending')

@@ -19,7 +19,7 @@ const router = express.Router();
 // Managers will see employees in their department only
 // Cache for 5 minutes
 router.route('/')
-  .get(isAdminOrManagerOrHRAuthenticated, employeeListLimiter, cacheMiddleware('employees:all', 300), getAllEmployees);
+  .get(isAdminOrManagerOrHRAuthenticated, employeeListLimiter, getAllEmployees);
 
 // Get managers (employees with management positions) - no cache so dropdown always shows current list
 router.route('/managers')

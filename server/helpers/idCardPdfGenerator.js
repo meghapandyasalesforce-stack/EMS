@@ -3,7 +3,9 @@
  * Generates PDF files for employee ID cards
  */
 
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
+import fs from 'fs';
+import path from 'path';
 import logger from './logger.js';
 
 /**
@@ -13,131 +15,168 @@ import logger from './logger.js';
  */
 export const generateIdCardPDF = async (idCard) => {
     try {
-        const employee = idCard.employeeId;
+        const employee = idCard.employeeId || {};
         const cardDesign = idCard.cardDesign || {};
-        
-        // Create PDF document (ID card size: 85.6mm x 53.98mm - standard credit card size)
-        // Using mm units, landscape orientation
+
+        // Vertical portrait ID card dimensions (credit-card ratio in portrait)
+        const width = 53.98;
+        const height = 85.6;
+
+        // Create PDF document (ID card size, landscape)
         const pdf = new jsPDF({
-            orientation: 'landscape',
+            orientation: 'portrait',
             unit: 'mm',
-            format: [85.6, 53.98] // Standard ID card dimensions
+            format: [width, height]
         });
 
-        // Set background color
-        if (cardDesign.backgroundColor) {
-            const bgRgb = hexToRgb(cardDesign.backgroundColor);
-            if (bgRgb) {
-                pdf.setFillColor(bgRgb.r, bgRgb.g, bgRgb.b);
-                pdf.rect(0, 0, 85.6, 53.98, 'F');
+        const companyName = cardDesign.companyName || 'COMPANY NAME';
+        const companyAddress = cardDesign.companyAddress || 'Corporate Office Address';
+        const role = employee.jobTitle || employee.position || 'Employee';
+        const employeeName = `${employee.name || ''} ${employee.lastName || ''}`.trim() || 'Employee Name';
+        const employeeCode = employee.employeeId || idCard.cardNumber || '-';
+        const phone = employee.phone1 || employee.phone2 || '-';
+        const email = employee.email || '-';
+        const address = employee.address || '-';
+        const department = employee.department || '-';
+
+        const formatDate = (value) => {
+            if (!value) return '00-00-0000';
+            try {
+                const d = new Date(value);
+                if (Number.isNaN(d.getTime())) return '00-00-0000';
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yy = d.getFullYear();
+                return `${dd}-${mm}-${yy}`;
+            } catch {
+                return '00-00-0000';
             }
+        };
+
+        const joinDate = employee.joiningDate || idCard.issueDate;
+        const expireDate = idCard.expireDate || null;
+
+        const wrapText = (value, maxLen = 34) => {
+            const str = String(value || '-');
+            if (str.length <= maxLen) return str;
+            return `${str.slice(0, maxLen - 1)}...`;
+        };
+
+        const profilePhotoUrl = employee?.profilePhoto?.url || employee?.profilePhoto || null;
+        const qrCodeUrl = idCard?.qrCode?.imageUrl || null;
+        const profilePhotoData = profilePhotoUrl ? getImageDataFromStoredUrl(profilePhotoUrl) : null;
+        const qrCodeData = qrCodeUrl ? getImageDataFromStoredUrl(qrCodeUrl) : null;
+
+        // === FRONT SIDE (Corporate ID Front - portrait only) ===
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(0, 0, width, height, 'F');
+
+        // Header
+        pdf.setFillColor(16, 24, 40);
+        pdf.rect(0, 0, width, 16, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8.4);
+        pdf.text(wrapText(companyName, 22), width / 2, 6.5, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(4.8);
+        pdf.text(wrapText(companyAddress, 28), width / 2, 10.5, { align: 'center' });
+        pdf.setFontSize(5.2);
+        pdf.text('EMPLOYEE ID CARD', width / 2, 14, { align: 'center' });
+
+        // Photo block (centered)
+        const photoW = 14;
+        const photoH = 17;
+        const photoX = (width - photoW) / 2;
+        const photoY = 18.5;
+        pdf.setFillColor(255, 255, 255);
+        pdf.roundedRect(photoX - 0.8, photoY - 0.8, photoW + 1.6, photoH + 1.6, 1.2, 1.2, 'F');
+        pdf.setDrawColor(220, 220, 220);
+        pdf.rect(photoX, photoY, photoW, photoH);
+        if (profilePhotoData) {
+            try {
+                drawImageContain(pdf, profilePhotoData.dataUrl, profilePhotoData.format, photoX + 0.1, photoY + 0.1, photoW - 0.2, photoH - 0.2);
+            } catch (photoError) {
+                logger.warn('Failed to embed profile photo in ID card PDF', {
+                    error: photoError.message,
+                    idCardId: idCard?._id
+                });
+                pdf.setTextColor(150, 150, 150);
+                pdf.setFontSize(3.8);
+                pdf.text('PHOTO', width / 2, photoY + photoH / 2, { align: 'center' });
+            }
+        } else {
+            pdf.setTextColor(150, 150, 150);
+            pdf.setFontSize(3.8);
+            pdf.text('PHOTO', width / 2, photoY + photoH / 2, { align: 'center' });
         }
 
-        // Set text color
-        const textColor = cardDesign.textColor || '#000000';
-        const rgb = hexToRgb(textColor);
-        if (rgb) {
-            pdf.setTextColor(rgb.r, rgb.g, rgb.b);
-        }
+        // Employee identity
+        pdf.setTextColor(17, 24, 39);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.8);
+        pdf.text(wrapText(employeeName, 24), width / 2, 39, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(5.2);
+        pdf.setTextColor(37, 99, 235);
+        pdf.text(wrapText(role, 26), width / 2, 42.5, { align: 'center' });
 
-        // Company name at top
-        if (cardDesign.companyName) {
-            pdf.setFontSize(10);
+        // ID badge
+        pdf.setFillColor(229, 231, 235);
+        pdf.roundedRect((width - 26) / 2, 44.2, 26, 4.4, 0.9, 0.9, 'F');
+        pdf.setTextColor(17, 24, 39);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(4.8);
+        pdf.text(`EMP ID: ${wrapText(employeeCode, 14)}`, width / 2, 47.1, { align: 'center' });
+
+        // Details block (left side)
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(55, 65, 81);
+        pdf.setFontSize(4.2);
+        let y = 53;
+        const printKV = (k, v) => {
             pdf.setFont('helvetica', 'bold');
-            pdf.text(cardDesign.companyName, 42.8, 8, { align: 'center' });
-        }
-
-        // Company address (smaller, below company name)
-        if (cardDesign.companyAddress) {
-            pdf.setFontSize(6);
+            pdf.text(`${k}:`, 3.8, y);
             pdf.setFont('helvetica', 'normal');
-            pdf.text(cardDesign.companyAddress, 42.8, 12, { align: 'center' });
+            pdf.text(wrapText(v, 12), 12.5, y);
+            y += 3.1;
+        };
+
+        printKV('Department', department);
+        printKV('Email', email);
+        printKV('Phone', phone);
+        printKV('Address', address);
+        printKV('Joined', formatDate(joinDate));
+
+        // QR area on front (right side)
+        const qrX = width - 20.5;
+        const qrY = 56;
+        pdf.setDrawColor(31, 41, 55);
+        pdf.roundedRect(qrX, qrY, 16, 16, 1.2, 1.2, 'S');
+        if (qrCodeData) {
+            try {
+                drawImageContain(pdf, qrCodeData.dataUrl, qrCodeData.format, qrX + 1, qrY + 1, 14, 14);
+            } catch (qrError) {
+                logger.warn('Failed to embed QR image in ID card PDF', {
+                    error: qrError.message,
+                    idCardId: idCard?._id
+                });
+                pdf.setFontSize(4.5);
+                pdf.setTextColor(107, 114, 128);
+                pdf.text('QR', qrX + 8, qrY + 8.6, { align: 'center' });
+            }
+        } else {
+            pdf.setFontSize(4.5);
+            pdf.setTextColor(107, 114, 128);
+            pdf.text('QR', qrX + 8, qrY + 8.6, { align: 'center' });
         }
 
-        // Employee photo placeholder (if available)
-        // Note: In production, you would load the actual image
-        // For now, we'll create a placeholder rectangle
-        const photoSize = 25;
-        const photoX = 5;
-        const photoY = 18;
-        
-        if (employee.profilePhoto) {
-            // In production, you would load and embed the image:
-            // const img = await loadImage(employee.profilePhoto);
-            // pdf.addImage(img, 'JPEG', photoX, photoY, photoSize, photoSize);
-            // For now, draw a placeholder
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(photoX, photoY, photoSize, photoSize);
-            pdf.setFontSize(6);
-            pdf.text('Photo', photoX + photoSize / 2, photoY + photoSize / 2, { align: 'center' });
-        }
-
-        // Employee information
-        const infoX = 35;
-        let infoY = 20;
-
-        // Employee name
-        const fullName = `${employee.name || ''} ${employee.lastName || ''}`.trim();
-        if (fullName) {
-            pdf.setFontSize(12);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(fullName, infoX, infoY);
-            infoY += 6;
-        }
-
-        // Employee ID
-        if (employee.employeeId) {
-            pdf.setFontSize(8);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text(`ID: ${employee.employeeId}`, infoX, infoY);
-            infoY += 5;
-        }
-
-        // Department
-        if (employee.department) {
-            pdf.setFontSize(8);
-            pdf.text(`Dept: ${employee.department}`, infoX, infoY);
-            infoY += 5;
-        }
-
-        // Job Title
-        if (employee.jobTitle) {
-            pdf.setFontSize(8);
-            pdf.text(employee.jobTitle, infoX, infoY);
-            infoY += 5;
-        }
-
-        // Card number at bottom
-        if (idCard.cardNumber) {
-            pdf.setFontSize(7);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text(`Card: ${idCard.cardNumber}`, 42.8, 48, { align: 'center' });
-        }
-
-        // QR Code placeholder (if available)
-        if (idCard.qrCode && idCard.qrCode.imageUrl) {
-            // In production, you would load and embed the QR code image:
-            // const qrImg = await loadImage(idCard.qrCode.imageUrl);
-            // pdf.addImage(qrImg, 'PNG', 70, 20, 12, 12);
-            // For now, draw a placeholder
-            pdf.setDrawColor(200, 200, 200);
-            pdf.rect(70, 20, 12, 12);
-            pdf.setFontSize(6);
-            pdf.text('QR', 76, 26, { align: 'center' });
-        }
-
-        // Issue date
-        if (idCard.issueDate) {
-            const issueDate = new Date(idCard.issueDate).toLocaleDateString();
-            pdf.setFontSize(6);
-            pdf.text(`Issued: ${issueDate}`, 5, 50);
-        }
-
-        // Status indicator
-        if (idCard.status === 'active') {
-            pdf.setFillColor(0, 200, 0);
-            pdf.circle(80, 5, 2, 'F');
-        }
+        // Footer strip
+        pdf.setFillColor(16, 24, 40);
+        pdf.rect(0, height - 6, width, 6, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(4.2);
+        pdf.text('If found, please return to HR Department', width / 2, height - 2.2, { align: 'center' });
 
         // Generate PDF buffer
         const pdfBlob = pdf.output('arraybuffer');
@@ -173,6 +212,77 @@ const hexToRgb = (hex) => {
     }
     
     return { r, g, b };
+};
+
+/**
+ * Resolve app-relative upload URL to local file path and return data URL for jsPDF.
+ * Supports values like "/uploads/profile-photos/..." and "/uploads/qrcodes/...".
+ */
+const getImageDataFromStoredUrl = (storedUrl) => {
+    try {
+        if (!storedUrl || typeof storedUrl !== 'string') return null;
+        const cleanUrl = storedUrl.split('?')[0].trim();
+        if (!cleanUrl.startsWith('/')) return null;
+
+        const rel = cleanUrl.replace(/^\//, '');
+        const candidates = [
+            path.join(process.cwd(), rel), // e.g. <cwd>/uploads/...
+            path.join(process.cwd(), 'public', rel), // e.g. <cwd>/public/uploads/...
+            path.join(process.cwd(), '..', rel), // e.g. app root when cwd is /server
+            path.join(process.cwd(), '..', 'public', rel)
+        ];
+
+        const filePath = candidates.find((p) => fs.existsSync(p));
+        if (!filePath) return null;
+
+        const ext = path.extname(filePath).toLowerCase();
+        let mime = 'image/png';
+        let format = 'PNG';
+        if (ext === '.jpg' || ext === '.jpeg') {
+            mime = 'image/jpeg';
+            format = 'JPEG';
+        } else if (ext === '.webp') {
+            // jsPDF doesn't reliably handle WEBP in all setups; skip gracefully.
+            return null;
+        } else if (ext === '.gif') {
+            // unsupported for addImage in common jsPDF setups
+            return null;
+        }
+
+        const buffer = fs.readFileSync(filePath);
+        const base64 = buffer.toString('base64');
+        return {
+            dataUrl: `data:${mime};base64,${base64}`,
+            format
+        };
+    } catch (error) {
+        logger.warn('Failed to resolve image for ID card PDF', {
+            error: error.message,
+            storedUrl
+        });
+        return null;
+    }
+};
+
+/**
+ * Draw an image inside a box while preserving aspect ratio.
+ * Prevents overflow and stretching in tight card layouts.
+ */
+const drawImageContain = (pdf, dataUrl, format, x, y, boxW, boxH) => {
+    const props = pdf.getImageProperties(dataUrl);
+    const imgW = props?.width || boxW;
+    const imgH = props?.height || boxH;
+    if (!imgW || !imgH) {
+        pdf.addImage(dataUrl, format, x, y, boxW, boxH);
+        return;
+    }
+
+    const scale = Math.min(boxW / imgW, boxH / imgH);
+    const drawW = imgW * scale;
+    const drawH = imgH * scale;
+    const drawX = x + (boxW - drawW) / 2;
+    const drawY = y + (boxH - drawH) / 2;
+    pdf.addImage(dataUrl, format, drawX, drawY, drawW, drawH);
 };
 
 /**

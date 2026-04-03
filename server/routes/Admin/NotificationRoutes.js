@@ -3,6 +3,7 @@ import {
   createNotification, 
   getNotifications, 
   getUserNotifications,
+  getSentAnnouncements,
   markAsRead,
   markAllAsRead,
   getUnreadCount,
@@ -26,6 +27,9 @@ router.route("/unread-count").get(isUserAuthenticated, getUnreadCount);
 
 // Create notification (admin only)
 router.route("/create-notification").post(isAdminAuthenticated, createNotification);
+
+// Sent announcement history (admin dashboard)
+router.route("/sent-announcements").get(isAdminAuthenticated, getSentAnnouncements);
 
 // Mark notification as read
 router.route("/:notificationId/read").patch(isUserAuthenticated, markAsRead);

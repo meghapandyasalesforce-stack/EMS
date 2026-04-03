@@ -109,10 +109,13 @@ export const getAllEmployees = async (req, res) => {
         const query = addOrganizationFilter(req, {});
         const organizationId = getOrganizationId(req);
 
-        // If user is a manager (not admin or HR), filter by manager field
-        // Example: Manager "Arun Kumar" will see employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
-        if (isManager && req.employee) {
+        // HR can see all employees.
+        // If not HR but manager, show only employees under that manager.
+        const roles = Array.isArray(req.employee?.functionalRoles) ? req.employee.functionalRoles : [];
+        const isHR = roles.includes('hr') || req.employee?.isHR === true;
+        const isManager = roles.includes('manager') || req.employee?.isManager === true;
+        const shouldApplyManagerFilter = !req.user && isManager && !isHR;
+        if (shouldApplyManagerFilter && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
                 query.$or = managerQuery.$or;

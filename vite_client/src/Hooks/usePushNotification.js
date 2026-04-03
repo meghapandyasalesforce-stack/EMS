@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from '../utils/axios';
-import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
+import { BOTH_PUSH_SUBSCRIPTION_ENDPOINT } from '../utils/constant';
 import logger from '../utils/logger.js';
 
 /**
@@ -74,7 +74,7 @@ export const usePushNotification = () => {
       // Get VAPID public key from server
       let vapidPublicKey;
       try {
-        const { data } = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/vapid-public-key`);
+        const { data } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
         if (!data.success || !data.publicKey) {
           throw new Error('VAPID public key not available');
         }
@@ -106,7 +106,7 @@ export const usePushNotification = () => {
 
       // Send subscription to server
       try {
-        await axios.post(`${BOTH_NOTIFICATION_ENDPOINT}/push-subscribe`, {
+        await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscribe`, {
           subscription: {
             endpoint: sub.endpoint,
             keys: {
@@ -140,7 +140,7 @@ export const usePushNotification = () => {
         
         // Remove from server
         try {
-          await axios.post(`${BOTH_NOTIFICATION_ENDPOINT}/push-unsubscribe`, {
+          await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-unsubscribe`, {
             endpoint: subscription.endpoint
           });
         } catch (serverError) {

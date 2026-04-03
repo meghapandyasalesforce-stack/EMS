@@ -10,7 +10,6 @@ import {
     acknowledgePolicy,
     getPolicyCompliance
 } from '../../controllers/organization/policyController.js';
-import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import { policyValidations } from '../../middlewares/policyValidations.js';
@@ -31,10 +30,10 @@ const policyWriteLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Admin routes (require admin authentication for write operations)
-router.post('/', isAdminAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.create, createPolicy);
-router.put('/:id', isAdminAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.update, updatePolicy);
-router.delete('/:id', isAdminAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.delete, deletePolicy);
+// Admin/HR routes (write operations)
+router.post('/', isAdminOrHRAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.create, createPolicy);
+router.put('/:id', isAdminOrHRAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.update, updatePolicy);
+router.delete('/:id', isAdminOrHRAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.delete, deletePolicy);
 
 // Employee routes (require employee authentication) - MUST come before /:id to avoid route conflicts
 router.get('/employee/policies', isAuthenticated, validateOrganizationId, generalLimiter, getEmployeePolicies);

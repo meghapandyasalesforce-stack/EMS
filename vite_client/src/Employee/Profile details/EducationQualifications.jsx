@@ -1,16 +1,43 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchEmployeeDetails,
+  fetchEmployeeOwnInfo,
   addAcademicRecord,
   addProfessionalQualification
 } from '../../context/employeeDetailsSlice';
 
+const emptyAcademic = {
+  institution: '',
+  degree: '',
+  fieldOfStudy: '',
+  startDate: '',
+  endDate: '',
+  cgpa: '',
+  details: '',
+};
+
+function formatAcademicPeriod(record) {
+  if (record.startDate || record.endDate) {
+    const opts = { year: 'numeric', month: 'short' };
+    const s = record.startDate
+      ? new Date(record.startDate).toLocaleDateString(undefined, opts)
+      : '';
+    const e = record.endDate
+      ? new Date(record.endDate).toLocaleDateString(undefined, opts)
+      : '';
+    if (s && e) return `${s} → ${e}`;
+    if (s) return `${s} → Present`;
+    if (e) return e;
+  }
+  if (record.year) return String(record.year);
+  return '—';
+}
+
 const EducationQualifications = () => {
   const dispatch = useDispatch();
-  const { employee, loading, error } = useSelector(state => state.employeeDetails);
+  const { employee, loading } = useSelector((state) => state.employeeDetails);
 
-  const [academicInput, setAcademicInput] = useState({ institution: '', details: '' });
+  const [academicInput, setAcademicInput] = useState(emptyAcademic);
   const [professionalInput, setProfessionalInput] = useState({
     title: '',
     organization: '',
@@ -24,12 +51,15 @@ const EducationQualifications = () => {
   const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
-    dispatch(fetchEmployeeDetails());
+    dispatch(fetchEmployeeOwnInfo());
   }, [dispatch]);
 
   const handleAddAcademic = async () => {
-    if (!academicInput.institution || !academicInput.details) {
-      setApiError('Institution and details are required');
+    const inst = academicInput.institution.trim();
+    const deg = academicInput.degree.trim();
+    const det = academicInput.details.trim();
+    if (!inst || (!deg && !det)) {
+      setApiError('Institution and degree (or other details) are required');
       return;
     }
 
@@ -37,16 +67,22 @@ const EducationQualifications = () => {
     setSuccessMessage(null);
 
     try {
-      const result = await dispatch(addAcademicRecord({
-        institution: academicInput.institution,
-        details: academicInput.details
-      }));
+      const payload = {
+        institution: inst,
+        degree: deg,
+        fieldOfStudy: academicInput.fieldOfStudy.trim() || undefined,
+        startDate: academicInput.startDate || undefined,
+        endDate: academicInput.endDate || undefined,
+        cgpa: academicInput.cgpa.trim() || undefined,
+        details: det || undefined,
+      };
+      const result = await dispatch(addAcademicRecord(payload));
 
       if (addAcademicRecord.fulfilled.match(result)) {
         setSuccessMessage('Academic record added successfully!');
-        setAcademicInput({ institution: '', details: '' });
+        setAcademicInput(emptyAcademic);
         setShowAcademicForm(false);
-        dispatch(fetchEmployeeDetails());
+        dispatch(fetchEmployeeOwnInfo());
       } else {
         setApiError(result.payload || 'Failed to add academic record');
       }
@@ -81,23 +117,23 @@ const EducationQualifications = () => {
           description: ''
         });
         setShowProfessionalForm(false);
-        dispatch(fetchEmployeeDetails());
+        dispatch(fetchEmployeeOwnInfo());
       } else {
         const errorMessage = result.payload || 'Failed to add professional qualification';
         throw new Error(errorMessage);
       }
     } catch (error) {
-      // Removed console.error for production
       setApiError(error.message);
     }
   };
 
-  if (loading) return <div className="text-center py-8">Loading qualifications...</div>;
+  if (loading && !employee) {
+    return <div className="text-center py-8">Loading qualifications...</div>;
+  }
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
       <div className="mx-auto w-full max-w-4xl">
-        {/* Error and Success Messages */}
         {apiError && (
           <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700">
             <p>{apiError}</p>
@@ -110,11 +146,11 @@ const EducationQualifications = () => {
           </div>
         )}
 
-        {/* Academic Records Section */}
         <div className="mb-8 bg-white p-6 rounded-lg shadow">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-            <h2 className="text-xl font-bold text-gray-800">Academic Records</h2>
+            <h2 className="text-xl font-bold text-gray-800">Academic records</h2>
             <button
+              type="button"
               onClick={() => {
                 setShowAcademicForm(!showAcademicForm);
                 setShowProfessionalForm(false);
@@ -123,25 +159,87 @@ const EducationQualifications = () => {
               }}
               className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
             >
-              {showAcademicForm ? 'Cancel' : 'Add Academic Record'}
+              {showAcademicForm ? 'Cancel' : 'Add academic record'}
             </button>
           </div>
 
           {showAcademicForm && (
             <div className="mb-6 space-y-3">
-              <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                placeholder="Institution"
-                value={academicInput.institution}
-                onChange={(e) => setAcademicInput({ ...academicInput, institution: e.target.value })}
-              />
-              <input
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                placeholder="Details (e.g., Degree, Dates)"
-                value={academicInput.details}
-                onChange={(e) => setAcademicInput({ ...academicInput, details: e.target.value })}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Institution <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    placeholder="e.g. Indian Institute of Technology"
+                    value={academicInput.institution}
+                    onChange={(e) => setAcademicInput({ ...academicInput, institution: e.target.value })}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Degree / qualification <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    placeholder="e.g. B.Tech Computer Science, HSC"
+                    value={academicInput.degree}
+                    onChange={(e) => setAcademicInput({ ...academicInput, degree: e.target.value })}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Field of study (optional)</label>
+                  <input
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    placeholder="e.g. Computer Science"
+                    value={academicInput.fieldOfStudy}
+                    onChange={(e) => setAcademicInput({ ...academicInput, fieldOfStudy: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start date</label>
+                  <input
+                    type="date"
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    value={academicInput.startDate}
+                    onChange={(e) => setAcademicInput({ ...academicInput, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End date (or expected)</label>
+                  <input
+                    type="date"
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    value={academicInput.endDate}
+                    onChange={(e) => setAcademicInput({ ...academicInput, endDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CGPA / grade (optional)</label>
+                  <input
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    placeholder="e.g. 8.7/10, 92%"
+                    value={academicInput.cgpa}
+                    onChange={(e) => setAcademicInput({ ...academicInput, cgpa: e.target.value })}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Additional notes (optional)</label>
+                  <textarea
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    placeholder="Honors, thesis title, etc. (if not covered above, you can put degree text here instead of the degree field)"
+                    rows={2}
+                    value={academicInput.details}
+                    onChange={(e) => setAcademicInput({ ...academicInput, details: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    If you only fill Notes and leave Degree empty, Notes is treated as the qualification line (legacy style).
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={handleAddAcademic}
                 className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
                 disabled={loading}
@@ -151,28 +249,46 @@ const EducationQualifications = () => {
             </div>
           )}
 
-          {(!employee?.academicRecords || employee.academicRecords.length === 0) ? (
+          {!employee?.academicRecords || employee.academicRecords.length === 0 ? (
             <p className="text-center text-gray-500 py-4">No academic records added yet.</p>
           ) : (
             <div className="space-y-4">
-              {employee.academicRecords
-                .slice(-3)
-                .reverse()
-                .map((record, index) => (
-                  <div key={record._id || index} className="bg-gray-50 p-4 rounded-lg shadow-sm">
-                    <h3 className="text-lg font-semibold text-gray-800">{record.institution}</h3>
-                    <p className="text-gray-600">{record.details}</p>
+              {[...employee.academicRecords].reverse().map((record, index) => (
+                <div key={record._id || index} className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-100">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-800">{record.institution}</h3>
+                      <p className="text-gray-700 font-medium">
+                        {record.degree || record.details || '—'}
+                      </p>
+                      {record.fieldOfStudy ? (
+                        <p className="text-sm text-gray-600">Field: {record.fieldOfStudy}</p>
+                      ) : null}
+                    </div>
+                    <div className="text-sm text-gray-600 sm:text-right">
+                      <p>{formatAcademicPeriod(record)}</p>
+                      {(record.cgpa || record.gpa || record.grade) && (
+                        <p className="mt-1">
+                          <span className="font-medium text-gray-700">CGPA / grade: </span>
+                          {record.cgpa || record.gpa || record.grade}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  {record.details && record.degree && (
+                    <p className="text-sm text-gray-600 mt-2 border-t border-gray-200 pt-2">{record.details}</p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Professional Qualifications Section */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-            <h2 className="text-xl font-bold text-gray-800">Professional Qualifications</h2>
+            <h2 className="text-xl font-bold text-gray-800">Professional qualifications</h2>
             <button
+              type="button"
               onClick={() => {
                 setShowProfessionalForm(!showProfessionalForm);
                 setShowAcademicForm(false);
@@ -181,7 +297,7 @@ const EducationQualifications = () => {
               }}
               className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
             >
-              {showProfessionalForm ? 'Cancel' : 'Add Professional Qualification'}
+              {showProfessionalForm ? 'Cancel' : 'Add professional qualification'}
             </button>
           </div>
 
@@ -212,6 +328,7 @@ const EducationQualifications = () => {
                 onChange={(e) => setProfessionalInput({ ...professionalInput, description: e.target.value })}
               />
               <button
+                type="button"
                 onClick={handleAddProfessional}
                 className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
                 disabled={loading}
@@ -221,7 +338,7 @@ const EducationQualifications = () => {
             </div>
           )}
 
-          {(!employee?.professionalQualifications || employee.professionalQualifications.length === 0) ? (
+          {!employee?.professionalQualifications || employee.professionalQualifications.length === 0 ? (
             <p className="text-center text-gray-500 py-4">No professional qualifications added yet.</p>
           ) : (
             <div className="space-y-4">

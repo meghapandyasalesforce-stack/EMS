@@ -1,38 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiCreditCard, FiDownload, FiUser, FiCalendar, FiMapPin, FiBriefcase, FiTag, FiArrowLeft } from 'react-icons/fi';
-import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
 import { getUploadUrl } from '../utils/axios';
-import html2canvas from 'html2canvas';
-
-/**
- * Sanitize text to prevent XSS attacks
- * Removes all HTML tags and escapes special characters
- */
-const sanitizeText = (text) => {
-    if (text === null || text === undefined) return '';
-    // Use DOMPurify to sanitize, removing all HTML tags
-    const sanitized = DOMPurify.sanitize(String(text), { ALLOWED_TAGS: [] });
-    return sanitized;
-};
-
-/**
- * Sanitize CSS color value to prevent injection
- * Only allows valid hex colors or CSS color names
- */
-const sanitizeColor = (color) => {
-    if (!color) return '#000000';
-    // Remove any non-color characters and validate hex format
-    const sanitized = String(color).replace(/[^#a-fA-F0-9]/g, '');
-    // If it's a hex color, ensure it starts with #
-    if (sanitized.match(/^[0-9a-fA-F]{3,6}$/)) {
-        return `#${sanitized}`;
-    }
-    // Fallback to safe default
-    return '#000000';
-};
 
 const IdCardView = () => {
   const [idCard, setIdCard] = useState(null);
@@ -62,174 +33,37 @@ const IdCardView = () => {
   };
 
   const handleDownload = async () => {
-    if (!idCard || !cardRef.current) return;
+    if (!idCard?._id) return;
     
     try {
-      toast.info('Generating ID card image...');
-      
-      // Create a download-ready card element with inline styles (no Tailwind classes)
-      const downloadCard = document.createElement('div');
-      downloadCard.style.cssText = `
-        width: 400px;
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        border: 2px solid #e0e0e0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      `;
-      
-      // Sanitize all user-controlled data before inserting into HTML
-      const bgColor = sanitizeColor(idCard.cardDesign?.backgroundColor) || '#ffffff';
-      const accentColor = sanitizeColor(idCard.cardDesign?.accentColor) || '#1976d2';
-      const textColor = sanitizeColor(idCard.cardDesign?.textColor) || '#000000';
-      const companyName = sanitizeText(idCard.cardDesign?.companyName || 'Paarsiv Technologies');
-      const companyAddress = sanitizeText(idCard.cardDesign?.companyAddress || 'Employee ID Card');
-      
-      // Sanitize employee data
-      const employeeName = sanitizeText(idCard.employeeId?.name || '');
-      const employeeLastName = sanitizeText(idCard.employeeId?.lastName || '');
-      const employeeId = sanitizeText(idCard.employeeId?.employeeId || 'N/A');
-      const jobTitle = sanitizeText(idCard.employeeId?.jobTitle || 'Not Specified');
-      const department = sanitizeText(idCard.employeeId?.department || 'Not Specified');
-      const phone1 = sanitizeText(idCard.employeeId?.phone1 || '');
-      const joiningDate = idCard.employeeId?.joiningDate 
-        ? new Date(idCard.employeeId.joiningDate).toLocaleDateString() 
-        : '';
-      
-      // Sanitize image URLs - validate they're safe URLs
-      const profilePhotoUrl = idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto;
-      const qrCodeUrl = idCard.qrCode?.imageUrl;
-      
-      // Validate and sanitize URLs to prevent XSS via javascript: or data: URLs
-      const sanitizeUrl = (url) => {
-        if (!url) return null;
+      toast.info('Generating ID card PDF...');
+      const response = await axios.get(`/v1/admin/id-cards/card/${idCard._id}/download`, {
+        responseType: 'blob'
+      });
+
+      const contentType = response.headers?.['content-type'] || '';
+      if (!contentType.includes('application/pdf')) {
+        const errorText = await response.data.text();
+        let message = 'Failed to download ID card';
         try {
-          const fullUrl = getUploadUrl(url);
-          // Create a temporary anchor element to validate URL
-          const tempAnchor = document.createElement('a');
-          tempAnchor.href = fullUrl;
-          
-          // Only allow http, https, and relative URLs (no javascript:, data:, etc.)
-          const protocol = tempAnchor.protocol;
-          if (protocol !== 'http:' && protocol !== 'https:' && protocol !== '') {
-            return null; // Reject dangerous protocols
-          }
-          
-          // Use DOMPurify to sanitize the URL string
-          const sanitized = DOMPurify.sanitize(tempAnchor.href, { 
-            ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i 
-          });
-          
-          return sanitized || null;
+          const parsed = JSON.parse(errorText);
+          message = parsed?.message || message;
         } catch {
-          return null;
+          // Keep generic message
         }
-      };
-      
-      const safeProfilePhotoUrl = sanitizeUrl(profilePhotoUrl);
-      const safeQrCodeUrl = sanitizeUrl(qrCodeUrl);
-      
-      downloadCard.innerHTML = `
-        <div style="background: ${accentColor}; color: white; padding: 15px; text-align: center; border-radius: 6px 6px 0 0;">
-          <h3 style="margin: 0; font-size: 18px; font-weight: bold;">${companyName}</h3>
-          <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.9;">${companyAddress}</p>
-        </div>
-        <div style="padding: 20px; background: ${bgColor};">
-          <div style="text-align: center; margin-bottom: 15px;">
-            <div style="width: 80px; height: 80px; border-radius: 50%; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center;">
-              ${safeProfilePhotoUrl 
-                ? `<img src="${safeProfilePhotoUrl}" alt="Photo" crossOrigin="anonymous" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
-                : '<div style="width: 40px; height: 40px; background: #d1d5db; border-radius: 50%;"></div>'}
-            </div>
-          </div>
-          <div style="text-align: center;">
-            <h4 style="margin: 0 0 15px 0; font-size: 20px; font-weight: bold; color: ${textColor};">
-              ${employeeName} ${employeeLastName}
-            </h4>
-            <div style="font-size: 14px; color: ${textColor}; line-height: 1.8;">
-              <div style="margin: 5px 0;">ID: ${employeeId}</div>
-              <div style="margin: 5px 0;">${jobTitle}</div>
-              <div style="margin: 5px 0;">${department}</div>
-              ${phone1 ? `<div style="margin: 5px 0;">Phone: ${phone1}</div>` : ''}
-              ${joiningDate ? `<div style="margin: 5px 0;">Joined: ${joiningDate}</div>` : ''}
-            </div>
-          </div>
-          ${safeQrCodeUrl ? `
-            <div style="text-align: center; margin-top: 15px;">
-              <img src="${safeQrCodeUrl}" alt="QR Code" style="width: 64px; height: 64px;" />
-            </div>
-          ` : ''}
-        </div>
-        <div style="background: ${accentColor}; color: white; padding: 10px; text-align: center; font-size: 11px; border-radius: 0 0 6px 6px;">
-          Employee ID Card
-        </div>
-      `;
-      
-      // Hide it temporarily
-      downloadCard.style.position = 'absolute';
-      downloadCard.style.left = '-9999px';
-      downloadCard.style.top = '0';
-      document.body.appendChild(downloadCard);
-      
-      // Wait for images to load
-      const images = downloadCard.querySelectorAll('img');
-      if (images.length > 0) {
-        await Promise.all(
-          Array.from(images).map(img => {
-            if (img.complete) return Promise.resolve();
-            return new Promise((resolve, reject) => {
-              img.onload = resolve;
-              img.onerror = resolve; // Continue even if image fails
-              setTimeout(resolve, 2000); // Max 2 second wait
-            });
-          })
-        );
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        toast.error(message);
+        return;
       }
 
-      // Use html2canvas to capture
-      const canvas = await html2canvas(downloadCard, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        width: downloadCard.offsetWidth,
-        height: downloadCard.offsetHeight,
-        onclone: function(clonedDoc) {
-          // Ensure all images are loaded in cloned document
-          clonedDoc.querySelectorAll('img').forEach(img => {
-            if (!img.complete) {
-              img.src = img.src; // Force reload
-            }
-          });
-        }
-      });
-      
-      // Remove temporary element
-      document.body.removeChild(downloadCard);
-
-      // Convert canvas to blob
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          toast.error('Failed to generate image');
-          return;
-        }
-
-        // Create download link
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `id-card-${idCard.employeeId?.employeeId || idCard.employeeId?.name || 'card'}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        toast.success('ID card downloaded successfully!');
-      }, 'image/png', 0.95);
-      
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `id-card-${idCard.employeeId?.employeeId || idCard.cardNumber || 'card'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('ID card downloaded successfully!');
     } catch (error) {
       // Removed console.error for production
       toast.error('Failed to download ID card');

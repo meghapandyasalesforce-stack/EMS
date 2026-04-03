@@ -5,7 +5,7 @@ import {
     upload
 } from '../../controllers/fileUpload/uploadConfigController.js';
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
-import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
+import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
 
 const router = express.Router();
 
@@ -24,10 +24,10 @@ router.post(
     addDocument // This controller should use req.employee._id instead of req.params.employeeId
 );
 
-// Admin downloads document (uses employeeId from URL)
+// Admin or HR downloads employee document (uses employeeId from URL)
 router.get(
     '/:employeeId/documents/:documentId/download',
-    isAdminAuthenticated,
+    isAdminOrHRAuthenticated,
     downloadDocument
 );
 

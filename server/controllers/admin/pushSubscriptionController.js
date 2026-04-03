@@ -1,4 +1,6 @@
 import PushSubscription from '../../models/pushSubscription.model.js';
+import User from '../../models/user.model.js';
+import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
 
 /**
@@ -36,11 +38,30 @@ export const subscribe = async (req, res) => {
     const userId = req.user?._id || req.employee?._id;
     const userType = req.user ? 'User' : 'Employee';
     const { subscription } = req.body;
+    let organizationId = req.user?.organizationId || req.employee?.organizationId;
 
     if (!userId) {
       return res.status(401).json({ 
         success: false, 
         message: 'User not authenticated' 
+      });
+    }
+
+    // PushSubscription collection requires organizationId (multi-tenancy)
+    if (!organizationId) {
+      if (req.user?._id) {
+        const user = await User.findById(req.user._id).select('organizationId').lean();
+        organizationId = user?.organizationId;
+      } else if (req.employee?._id) {
+        const employee = await Employee.findById(req.employee._id).select('organizationId').lean();
+        organizationId = employee?.organizationId;
+      }
+    }
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'OrganizationId is required to save push subscription'
       });
     }
 
@@ -64,6 +85,7 @@ export const subscribe = async (req, res) => {
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth
       };
+      existing.organizationId = organizationId;
       existing.userAgent = req.get('User-Agent');
       await existing.save();
 
@@ -75,6 +97,7 @@ export const subscribe = async (req, res) => {
 
     // Create new subscription
     await PushSubscription.create({
+      organizationId,
       userId,
       userType,
       endpoint: subscription.endpoint,

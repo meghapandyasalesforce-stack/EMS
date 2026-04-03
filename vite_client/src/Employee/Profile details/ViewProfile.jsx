@@ -6,6 +6,22 @@ import {
   clearEmployeeDetails
 } from '../../context/employeeDetailsSlice';
 
+function formatAcademicPeriodView(record) {
+  if (record.startDate || record.endDate) {
+    const opts = { year: 'numeric', month: 'short' };
+    const s = record.startDate
+      ? new Date(record.startDate).toLocaleDateString(undefined, opts)
+      : '';
+    const e = record.endDate
+      ? new Date(record.endDate).toLocaleDateString(undefined, opts)
+      : '';
+    if (s && e) return `${s} – ${e}`;
+    if (s) return `${s} – Present`;
+    if (e) return e;
+  }
+  return record.year ? String(record.year) : null;
+}
+
 const EmployeeProfile = ({ employeeId }) => {
   const dispatch = useDispatch();
   const {
@@ -137,12 +153,27 @@ const EmployeeProfile = ({ employeeId }) => {
               {/* Academic Records */}
               {employee.academicRecords && employee.academicRecords.length > 0 && (
                 <Section title="Education">
-                  {employee.academicRecords.map((record, index) => (
-                    <div key={index} className="mb-4 last:mb-0">
-                      <h3 className="font-semibold text-gray-800">{record.institution}</h3>
-                      <p className="text-gray-600">{record.details}</p>
-                    </div>
-                  ))}
+                  {employee.academicRecords.map((record, index) => {
+                    const period = formatAcademicPeriodView(record);
+                    const degreeLine = record.degree || record.details || '—';
+                    const grade = record.cgpa || record.gpa || record.grade;
+                    return (
+                      <div key={record._id || index} className="mb-4 last:mb-0 border-b border-gray-100 pb-4 last:border-0">
+                        <h3 className="font-semibold text-gray-800">{record.institution}</h3>
+                        <p className="text-gray-700">{degreeLine}</p>
+                        {record.fieldOfStudy && (
+                          <p className="text-gray-600 text-sm">Field: {record.fieldOfStudy}</p>
+                        )}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mt-1">
+                          {period && <span>{period}</span>}
+                          {grade && <span>CGPA / grade: {grade}</span>}
+                        </div>
+                        {record.details && record.degree && (
+                          <p className="text-gray-500 text-sm mt-1">{record.details}</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </Section>
               )}
 

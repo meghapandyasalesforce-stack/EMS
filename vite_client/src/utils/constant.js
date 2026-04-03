@@ -20,6 +20,8 @@ export const ADMIN_LEAVE_ENDPOINT = `${BASE_URL}/admin/leave`
 export const ADMIN_PROJECT_ENDPOINT = `${BASE_URL}/admin/project`
 export const ADMIN_PAYROLL_ENDPOINT = `${BASE_URL}/admin/payroll`
 export const ADMIN_EMPLOYEE_ENDPOINT = `${BASE_URL}/admin/employee`
+/** HR / admin document library (upload company docs, etc.) */
+export const ADMIN_DOCUMENTS_ENDPOINT = `${BASE_URL}/admin/documents`
 
 
 //==================Employee===================//
@@ -31,8 +33,11 @@ export const EMPLOYEE_LEAVE_ENDPOINT = `${BASE_URL}/employee/leave`
 //==================Both===================//
 export const BOTH_PROFILE_ENDPOINT = `${BASE_URL}/both/profile-details`
 export const BOTH_NOTIFICATION_ENDPOINT = `${BASE_URL}/both/notification`
+export const BOTH_PUSH_SUBSCRIPTION_ENDPOINT = `${BASE_URL}/both/push-subscription`
 export const BOTH_ATTENDANCE_ENDPOINT = `${BASE_URL}/both/attendance`
 export const BOTH_DOCUMENT_ENDPOINT = `${BASE_URL}/both/document`
+/** Canonical document library (employee uploads, HR list) */
+export const BOTH_DOCUMENTS_ENDPOINT = `${BASE_URL}/both/documents`
 export const BOTH_PASSWORD_ENDPOINT = `${BASE_URL}/both/password`
 export const BOTH_TASK_ENDPOINT = `${BASE_URL}/both/project-task`
 

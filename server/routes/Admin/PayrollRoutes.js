@@ -21,13 +21,13 @@ router.route("/")
     .get(isAdminOrManagerOrHRAuthenticated, payrollLimiter, cacheMiddleware('payroll:all', 120), getAllPayrolls);
 
 router.route("/create-payroll")
-    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidations.create, createPayroll);
+    .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, payrollValidations.create, createPayroll);
 router.route("/update-payroll/:id")
     .put(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.update, updatePayroll);
 router.route("/toggle-visibility/:id")
     .patch(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.toggleVisibility, togglePayrollVisibility);
 router.route("/generate-bulk")
-    .post(isAdminOrHRAuthenticated, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
+    .post(isAdminOrManagerOrHRAuthenticated, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
 
 // Disburse salaries to employees' bank accounts (mock provider) - CEO only
 router.route("/disburse")

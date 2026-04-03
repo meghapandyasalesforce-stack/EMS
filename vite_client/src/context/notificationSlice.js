@@ -28,7 +28,12 @@ const notificationSlice = createSlice({
   },
   reducers: {
     addNotification(state, action) {
-      state.list.unshift(...action.payload); // Add latest notifications on top
+      const incoming = Array.isArray(action.payload) ? action.payload : [action.payload];
+      const existingIds = new Set(state.list.map((n) => String(n?._id ?? '')));
+      const merged = incoming.filter((n) => n && n._id && !existingIds.has(String(n._id)));
+      if (merged.length) {
+        state.list.unshift(...merged);
+      }
     },
     clearNotifications(state) {
       state.list = [];

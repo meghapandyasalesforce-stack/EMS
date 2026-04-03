@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { createNotification } from '../context/notificationSlice';
 import { toast } from 'react-toastify';
 
-const NotificationSender = () => {
+const NotificationSender = ({ onSent }) => {
   const [message, setMessage] = useState('');
   const dispatch = useDispatch();
   const { status, error } = useSelector((state) => state.notifications);
@@ -18,6 +18,7 @@ const NotificationSender = () => {
       .then(() => {
         toast.success('Announcement sent successfully!');
         setMessage('');
+        onSent?.();
       })
       .catch((err) => {
         toast.error(`Failed to send: ${err.message}`);

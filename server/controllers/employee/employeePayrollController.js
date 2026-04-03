@@ -1,7 +1,7 @@
 import Payroll from "../../models/payroll.model.js";
 import logger from "../../helpers/logger.js";
 import { generatePayrollPDF } from "../../helpers/pdfGenerator.js";
-import { pickDisplayPayroll } from "../../helpers/payrollGenerationHelper.js";
+import { pickDisplayPayroll, enrichAttendanceMetricsForPayslip } from "../../helpers/payrollGenerationHelper.js";
 import { aggregatePayrollPeriod } from "../../helpers/payrollAggregationHelper.js";
 import fs from 'fs';
 import path from 'path';
@@ -307,6 +307,11 @@ export const downloadPayslip = async (req, res) => {
         payrollData.earnings.totalEarnings = aggregated.final.earningsTotal;
         payrollData.deductions = payrollData.deductions || {};
         payrollData.deductions.total = aggregated.final.deductionsTotal;
+
+        const attendanceMetrics = await enrichAttendanceMetricsForPayslip(payroll, organizationId);
+        payrollData.workingDays = attendanceMetrics.workingDays ?? payrollData.workingDays;
+        payrollData.presentDays = attendanceMetrics.presentDays ?? payrollData.presentDays;
+        payrollData.unpaidLeave = attendanceMetrics.unpaidLeave ?? payrollData.unpaidLeave;
 
         // Generate PDF (new format with org name + bank details)
         const pdfBuffer = await generatePayrollPDF(payrollData, employeeData, orgData);

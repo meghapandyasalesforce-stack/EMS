@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateEmployeeInfo } from '../../context/employeeDetailsSlice';
+import {
+    NATIONAL_ID_TYPE_VALUES,
+    getNationalIdPlaceholder,
+    validateNationalIdInput,
+} from '../../utils/nationalIdValidation';
 
 const ContactDetails = () => {
     const dispatch = useDispatch();
@@ -11,6 +16,10 @@ const ContactDetails = () => {
         phone2: '',
         personalEmail: '',
         address: '',
+        birthDate: '',
+        gender: '',
+        nationalIdType: '',
+        nationalId: '',
     });
 
     const [isEditing, setIsEditing] = useState(false);
@@ -22,6 +31,10 @@ const ContactDetails = () => {
                 phone2: employee.phone2 || '',
                 personalEmail: employee.personalEmail || '',
                 address: employee.address || '',
+                birthDate: employee.birthDate ? new Date(employee.birthDate).toISOString().split('T')[0] : '',
+                gender: employee.gender || '',
+                nationalIdType: employee.nationalIdType || '',
+                nationalId: employee.nationalId || '',
             });
         }
     }, [employee]);
@@ -33,19 +46,56 @@ const ContactDetails = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const { phone1, personalEmail, address } = formData;
+        const { phone1, personalEmail, address, birthDate, gender, nationalId, nationalIdType } = formData;
 
         if (!phone1 || !personalEmail || !address) {
             alert('Please fill in all required fields.');
             return;
         }
 
+        if (birthDate) {
+            const selectedDate = new Date(birthDate);
+            if (Number.isNaN(selectedDate.getTime()) || selectedDate > new Date()) {
+                alert('Please enter a valid birth date.');
+                return;
+            }
+        }
+
+        let nationalPayload = {};
+        if (nationalId?.trim()) {
+            if (!nationalIdType) {
+                alert('Select which national ID document you are using.');
+                return;
+            }
+            const check = validateNationalIdInput(nationalIdType, nationalId);
+            if (!check.ok) {
+                alert(check.message);
+                return;
+            }
+            nationalPayload = { nationalId: check.normalized, nationalIdType };
+        } else if (nationalIdType && !nationalId?.trim()) {
+            alert('Enter the ID number, or clear the document type.');
+            return;
+        } else if (employee?.nationalId || employee?.nationalIdType) {
+            nationalPayload = { nationalId: '' };
+        }
+
         try {
-            await dispatch(updateEmployeeInfo(formData)).unwrap();
+            const payload = {
+                phone1,
+                phone2: formData.phone2,
+                personalEmail,
+                address,
+                ...(birthDate ? { birthDate } : {}),
+                ...(gender ? { gender } : {}),
+                ...nationalPayload,
+            };
+
+            await dispatch(updateEmployeeInfo(payload)).unwrap();
             alert('Contact details updated successfully!');
             setIsEditing(false);
         } catch (err) {
-            alert(err?.message || 'Something went wrong.');
+            alert(typeof err === 'string' ? err : (err?.message || 'Something went wrong.'));
         }
     };
 
@@ -112,6 +162,67 @@ const ContactDetails = () => {
                             />
                         </div>
 
+                        <div className="flex flex-col sm:flex-row flex-wrap -mx-2">
+                            <div className="w-full sm:w-1/2 px-2 mb-4 sm:mb-0">
+                                <label className="block mb-2 text-sm font-medium text-gray-700">Birth Date</label>
+                                <input
+                                    type="date"
+                                    name="birthDate"
+                                    value={formData.birthDate}
+                                    onChange={handleChange}
+                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                    max={new Date().toISOString().split('T')[0]}
+                                />
+                            </div>
+                            <div className="w-full sm:w-1/2 px-2">
+                                <label className="block mb-2 text-sm font-medium text-gray-700">Gender</label>
+                                <select
+                                    name="gender"
+                                    value={formData.gender}
+                                    onChange={handleChange}
+                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                >
+                                    <option value="">Select gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                    <option value="Prefer not to say">Prefer not to say</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-sm font-medium text-gray-700">National ID document</label>
+                            <select
+                                name="nationalIdType"
+                                value={formData.nationalIdType}
+                                onChange={handleChange}
+                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm mb-2"
+                            >
+                                <option value="">Select document type</option>
+                                {NATIONAL_ID_TYPE_VALUES.map((t) => (
+                                    <option key={t} value={t}>{t}</option>
+                                ))}
+                            </select>
+                            <label className="block mb-2 text-sm font-medium text-gray-700">ID number</label>
+                            <input
+                                type={formData.nationalIdType === 'Aadhaar' ? 'tel' : 'text'}
+                                name="nationalId"
+                                value={formData.nationalId}
+                                onChange={handleChange}
+                                inputMode={formData.nationalIdType === 'Aadhaar' ? 'numeric' : 'text'}
+                                autoComplete="off"
+                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                placeholder={getNationalIdPlaceholder(formData.nationalIdType)}
+                                disabled={!formData.nationalIdType}
+                            />
+                            {formData.nationalIdType && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Format is checked when you save based on the document selected.
+                                </p>
+                            )}
+                        </div>
+
                         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                             <button
                                 type="submit"
@@ -138,6 +249,13 @@ const ContactDetails = () => {
                             <p><strong>Address:</strong> {formData.address ? formData.address.split('\n').map((line, i) => (
                                 <span key={i}>{line}<br /></span>
                             )) : 'N/A'}</p>
+                            <p><strong>Birth Date:</strong> {formData.birthDate ? new Date(formData.birthDate).toLocaleDateString() : 'N/A'}</p>
+                            <p><strong>Gender:</strong> {formData.gender || 'N/A'}</p>
+                            <p><strong>National ID:</strong>{' '}
+                                {formData.nationalId
+                                    ? `${formData.nationalIdType ? `${formData.nationalIdType} — ` : ''}${formData.nationalId}`
+                                    : 'N/A'}
+                            </p>
                         </div>
                         <button
                             onClick={() => setIsEditing(true)}

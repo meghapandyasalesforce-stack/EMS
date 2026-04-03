@@ -161,7 +161,40 @@ export const registerEmployee = async (req, res) => {
                 );
             }
         }
-        const managerValue = managerTrimmed || 'CEO';
+        let managerValue = managerTrimmed || 'CEO';
+        let managerId = null;
+        if (existingEmployeeCount >= 1) {
+            const managerInput = managerTrimmed;
+            const managerBaseQuery = { organizationId, status: 'active' };
+            let managerEmployee = null;
+
+            if (mongoose.Types.ObjectId.isValid(managerInput)) {
+                managerEmployee = await Employee.findOne({ ...managerBaseQuery, _id: managerInput })
+                    .select('_id name lastName employeeId')
+                    .lean();
+            }
+            if (!managerEmployee) {
+                managerEmployee = await Employee.findOne({ ...managerBaseQuery, employeeId: managerInput })
+                    .select('_id name lastName employeeId')
+                    .lean();
+            }
+            if (!managerEmployee) {
+                const escaped = managerInput.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                managerEmployee = await Employee.findOne({
+                    ...managerBaseQuery,
+                    $or: [
+                        { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+                        { $expr: { $regexMatch: { input: { $concat: ['$name', ' ', '$lastName'] }, regex: `^${escaped}$`, options: 'i' } } }
+                    ]
+                }).select('_id name lastName employeeId').lean();
+            }
+            if (!managerEmployee) {
+                return sendError(res, 'Selected manager not found in this organization.', 400, 'MANAGER_NOT_FOUND');
+            }
+
+            managerId = managerEmployee._id;
+            managerValue = `${managerEmployee.name || ''} ${managerEmployee.lastName || ''}`.trim() || managerInput;
+        }
         
         // Generate secure password if not provided
         const employeePassword = password || generateSecurePassword(16);
@@ -269,6 +302,7 @@ export const registerEmployee = async (req, res) => {
             position,
             department,
             manager: managerValue,
+            managerId,
             jobTitle,
             jobCategory,
             salary,

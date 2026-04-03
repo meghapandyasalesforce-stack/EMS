@@ -206,7 +206,7 @@ const EmployeeDetailsPage = () => {
       jobTitle: employee.jobTitle || '',
       department: employee.department || '',
       position: employee.position || '',
-      manager: employee.manager || '',
+      manager: employee.managerId || employee.manager || '',
       salary: employee.salary !== undefined && employee.salary !== null ? employee.salary : '',
       joiningDate: employee.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : ''
     });
@@ -655,7 +655,7 @@ const EmployeeDetailsPage = () => {
                           Date of Birth
                         </Box>
                       </TableCell>
-                      <TableCell>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString() : 'N/A'}</TableCell>
+                      <TableCell>{employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : 'N/A'}</TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 'bold' }}>
@@ -670,7 +670,16 @@ const EmployeeDetailsPage = () => {
                       <TableCell sx={{ fontWeight: 'bold' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <FiShield size={16} />
-                          National ID
+                          National ID document
+                        </Box>
+                      </TableCell>
+                      <TableCell>{employee.nationalIdType || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <FiShield size={16} />
+                          National ID number
                         </Box>
                       </TableCell>
                       <TableCell>{employee.nationalId || 'N/A'}</TableCell>
@@ -948,22 +957,47 @@ const EmployeeDetailsPage = () => {
                   <TableHead sx={{ bgcolor: 'grey.50' }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 'bold' }}>Institution</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Degree/Certificate</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Year</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Grade/GPA</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Details</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Degree / qualification</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Field of study</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Period</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>CGPA / grade</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Notes</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {employee.academicRecords.map((record, index) => (
-                      <TableRow key={index} hover>
+                    {employee.academicRecords.map((record, index) => {
+                      const degreeLine = record.degree || record.certificate || record.details || 'N/A';
+                      let period = '—';
+                      if (record.startDate || record.endDate) {
+                        const opts = { year: 'numeric', month: 'short' };
+                        const s = record.startDate
+                          ? new Date(record.startDate).toLocaleDateString(undefined, opts)
+                          : '';
+                        const e = record.endDate
+                          ? new Date(record.endDate).toLocaleDateString(undefined, opts)
+                          : '';
+                        period = [s || null, e || (s ? 'Present' : null)].filter(Boolean).join(' → ');
+                      } else if (record.year) {
+                        period = String(record.year);
+                      }
+                      const grade = record.cgpa || record.gpa || record.grade || '—';
+                      const notes =
+                        record.details && record.degree
+                          ? record.details
+                          : record.details && !record.degree
+                            ? '—'
+                            : record.details || '—';
+                      return (
+                      <TableRow key={record._id || index} hover>
                         <TableCell>{record.institution || 'N/A'}</TableCell>
-                        <TableCell>{record.degree || record.certificate || 'N/A'}</TableCell>
-                        <TableCell>{record.year || 'N/A'}</TableCell>
-                        <TableCell>{record.grade || record.gpa || 'N/A'}</TableCell>
-                        <TableCell>{record.details || 'N/A'}</TableCell>
+                        <TableCell>{degreeLine}</TableCell>
+                        <TableCell>{record.fieldOfStudy || '—'}</TableCell>
+                        <TableCell>{period}</TableCell>
+                        <TableCell>{grade}</TableCell>
+                        <TableCell>{notes}</TableCell>
                       </TableRow>
-                    ))}
+                    );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -1465,13 +1499,13 @@ const EmployeeDetailsPage = () => {
                     label="Manager"
                     disabled={loadingDropdownOptions}
                   >
-                    {editWorkForm.manager && !managerOptions.some((m) => `${m?.name || ''} ${m?.lastName || ''}`.trim() === editWorkForm.manager) && (
+                    {editWorkForm.manager && !managerOptions.some((m) => (m?._id || `${m?.name || ''} ${m?.lastName || ''}`.trim()) === editWorkForm.manager) && (
                       <MenuItem value={editWorkForm.manager}>{editWorkForm.manager}</MenuItem>
                     )}
                     {managerOptions.map((manager) => {
                       const managerName = `${manager?.name || ''} ${manager?.lastName || ''}`.trim();
                       return (
-                        <MenuItem key={manager?._id || managerName} value={managerName}>
+                        <MenuItem key={manager?._id || managerName} value={manager?._id || managerName}>
                           {managerName || 'N/A'}
                         </MenuItem>
                       );

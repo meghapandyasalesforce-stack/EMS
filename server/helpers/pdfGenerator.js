@@ -38,6 +38,15 @@ const COLORS = {
  * @param {number|string} amount - Amount to format
  * @returns {string} Formatted currency string (e.g., "INR (15,000.00)")
  */
+/** Display day counts on payslip (supports fractional present/unpaid). */
+const formatPayslipDayCount = (value, fallback) => {
+    if (value == null || Number.isNaN(Number(value))) return fallback;
+    const v = Number(value);
+    const rounded = Math.round(v * 100) / 100;
+    if (Math.abs(rounded - Math.round(rounded)) < 0.001) return String(Math.round(rounded));
+    return rounded.toFixed(1).replace(/\.0$/, '');
+};
+
 const formatCurrency = (amount) => {
     try {
         const num = Number(amount || 0);
@@ -405,9 +414,24 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
 
         // ==================== SALARY DETAILS (Attendance) – 3 columns to avoid overlap ====================
         yPos = checkPageBreak(doc, yPos, pageHeight, margin, 35);
-        const salaryPaidFor = payrollData.salaryPaidFor || `${period} (${payrollData.presentDays ?? payrollData.workingDays ?? 21} Days)`;
-        const presentDaysVal = payrollData.presentDays ?? payrollData.workingDays ?? 21;
-        const unpaidLeaveVal = payrollData.unpaidLeave ?? 0;
+        const daysInPeriodStr = formatPayslipDayCount(
+            payrollData.workingDays != null && !Number.isNaN(Number(payrollData.workingDays))
+                ? payrollData.workingDays
+                : payrollData.presentDays,
+            '21'
+        );
+        const salaryPaidFor = payrollData.salaryPaidFor || `${period} (${daysInPeriodStr} Days)`;
+        const presentDerived =
+            payrollData.presentDays != null && !Number.isNaN(Number(payrollData.presentDays))
+                ? payrollData.presentDays
+                : payrollData.workingDays != null &&
+                  payrollData.unpaidLeave != null &&
+                  !Number.isNaN(Number(payrollData.workingDays)) &&
+                  !Number.isNaN(Number(payrollData.unpaidLeave))
+                  ? Number(payrollData.workingDays) - Number(payrollData.unpaidLeave)
+                  : null;
+        const presentDaysVal = formatPayslipDayCount(presentDerived, '21');
+        const unpaidLeaveVal = formatPayslipDayCount(payrollData.unpaidLeave, '0');
         const col1End = margin + contentWidth * 0.52;
         const col2End = margin + contentWidth * 0.76;
         const cellPadSalary = 4;

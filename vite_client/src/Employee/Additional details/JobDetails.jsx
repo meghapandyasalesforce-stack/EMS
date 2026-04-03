@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { BOTH_DOCUMENT_ENDPOINT } from '../../utils/constant';
+import { BOTH_DOCUMENTS_ENDPOINT } from '../../utils/constant';
 import { getCsrfToken } from '../../utils/authHelper';
 
 const JobDetails = () => {
@@ -39,10 +39,10 @@ const JobDetails = () => {
                 formData.append('additionalInfo', JSON.stringify(additionalInfo[documentType]));
             }
 
-            // Use /api prefix so Vite proxy forwards to backend (same as axios baseURL)
-            const uploadUrl = BOTH_DOCUMENT_ENDPOINT.startsWith('http')
-                ? `${BOTH_DOCUMENT_ENDPOINT}/document-upload`
-                : `/api${BOTH_DOCUMENT_ENDPOINT}/document-upload`;
+            // Canonical employee uploads → Document collection (HR /documents list)
+            const uploadUrl = BOTH_DOCUMENTS_ENDPOINT.startsWith('http')
+                ? `${BOTH_DOCUMENTS_ENDPOINT}/upload`
+                : `/api${BOTH_DOCUMENTS_ENDPOINT}/upload`;
             const csrf = getCsrfToken();
             const headers = {};
             if (csrf) headers['x-csrf-token'] = csrf;
@@ -67,7 +67,7 @@ const JobDetails = () => {
                 throw new Error(result.message || `Failed to upload ${documentType} (${response.status})`);
             }
 
-            alert(`${documentType} uploaded successfully!`);
+            alert(result.message || `${documentType} uploaded successfully!`);
             switch(documentType) {
                 case 'OFFER_LETTER':
                     offerLetterRef.current.value = '';

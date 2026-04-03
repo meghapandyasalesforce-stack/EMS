@@ -296,7 +296,7 @@ export const projectValidations = {
             .isMongoId().withMessage('Invalid project member ID format'),
         body('status')
             .notEmpty().withMessage('Project status is required')
-            .isIn(['planning', 'active', 'on-hold', 'completed', 'cancelled']).withMessage('Invalid project status'),
+            .isIn(['pending', 'in-progress', 'on-hold', 'completed']).withMessage('Invalid project status'),
         handleValidationErrors
     ],
     update: [
@@ -316,7 +316,7 @@ export const projectValidations = {
             .isMongoId().withMessage('Invalid project member ID format'),
         body('status')
             .optional()
-            .isIn(['planning', 'active', 'on-hold', 'completed', 'cancelled']).withMessage('Invalid project status'),
+            .isIn(['pending', 'in-progress', 'on-hold', 'completed']).withMessage('Invalid project status'),
         handleValidationErrors
     ],
     getById: [

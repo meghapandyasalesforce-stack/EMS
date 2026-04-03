@@ -118,6 +118,12 @@ const documentSchema = new mongoose.Schema({
         author: String,
         keywords: [String],
         language: String
+    },
+    /** Job-details / onboarding uploads (Offer letter, degree, etc.) — single active row per type per employee */
+    employeeJobDocumentType: {
+        type: String,
+        enum: ['OFFER_LETTER', 'BIRTH_CERTIFICATE', 'GUARANTOR_FORM', 'DEGREE_CERTIFICATE', 'OTHER'],
+        required: false
     }
 }, {
     timestamps: true

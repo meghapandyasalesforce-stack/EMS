@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { FaFileAlt, FaDownload, FaUpload, FaFolder, FaCheckCircle, FaTimesCircle, FaClock, FaUser, FaHistory } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import logger from '../../utils/logger';
 import { isHR } from '../../utils/managerHelper';
+import { ADMIN_DOCUMENTS_ENDPOINT } from '../../utils/constant';
+
+const DOCUMENT_CATEGORY_OPTIONS = [
+    'Employee', 'Company', 'Policy', 'Contract', 'Certificate',
+    'Training', 'Compliance', 'Financial', 'Legal', 'Other'
+];
 
 const DocumentsPage = () => {
     const user = useSelector((state) => state.auth.user);
@@ -26,6 +33,54 @@ const DocumentsPage = () => {
     const [rejectReason, setRejectReason] = useState('');
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploadName, setUploadName] = useState('');
+    const [uploadCategory, setUploadCategory] = useState('Company');
+    const [uploadDescription, setUploadDescription] = useState('');
+    const [uploading, setUploading] = useState(false);
+
+    const resetUploadForm = () => {
+        setUploadFile(null);
+        setUploadName('');
+        setUploadCategory('Company');
+        setUploadDescription('');
+    };
+
+    const openUploadModal = () => {
+        resetUploadForm();
+        setShowUploadModal(true);
+    };
+
+    const handleUploadSubmit = async (e) => {
+        e.preventDefault();
+        if (!uploadFile) {
+            toast.error('Please choose a file');
+            return;
+        }
+        const name = uploadName.trim() || uploadFile.name;
+        const formData = new FormData();
+        formData.append('document', uploadFile);
+        formData.append('name', name);
+        formData.append('category', uploadCategory);
+        if (uploadDescription.trim()) {
+            formData.append('description', uploadDescription.trim());
+        }
+        try {
+            setUploading(true);
+            await axios.post(`${ADMIN_DOCUMENTS_ENDPOINT}/upload`, formData, { withCredentials: true });
+            toast.success('Document uploaded successfully');
+            setShowUploadModal(false);
+            resetUploadForm();
+            await fetchDocuments(false);
+            if (isHRUser) await fetchPendingDocuments();
+        } catch (error) {
+            logger.error('Error uploading document:', error);
+            toast.error(error.response?.data?.message || 'Failed to upload document');
+        } finally {
+            setUploading(false);
+        }
+    };
 
     useEffect(() => {
         fetchDocuments();
@@ -34,9 +89,9 @@ const DocumentsPage = () => {
         }
     }, [activeTab, filter, isHRUser]);
 
-    const fetchDocuments = async () => {
+    const fetchDocuments = async (showFullPageLoading = true) => {
         try {
-            setLoading(true);
+            if (showFullPageLoading) setLoading(true);
             const params = {};
             if (filter !== 'all') {
                 params.category = filter;
@@ -51,7 +106,7 @@ const DocumentsPage = () => {
             logger.error('Error fetching documents:', error);
             toast.error('Failed to load documents. Please try again.');
         } finally {
-            setLoading(false);
+            if (showFullPageLoading) setLoading(false);
         }
     };
 
@@ -113,13 +168,17 @@ const DocumentsPage = () => {
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
             <div className="max-w-7xl mx-auto">
-                <div className="mb-6 flex justify-between items-center">
-                    <div>
+                <div className="mb-6 flex justify-between items-center gap-4 relative z-10">
+                    <div className="min-w-0">
                         <h1 className="text-3xl font-bold text-gray-800">Document Management</h1>
                         <p className="text-gray-600 mt-1">Manage company documents and employee uploads</p>
                     </div>
                     {isHRUser && (
-                        <button className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={openUploadModal}
+                            className="shrink-0 bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2 cursor-pointer"
+                        >
                             <FaUpload className="w-4 h-4" />
                             Upload Document
                         </button>
@@ -419,7 +478,103 @@ const DocumentsPage = () => {
                     </div>
                 )}
 
-                {/* Reject Modal */}
+                {/* Upload modal */}
+                {showUploadModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                                Upload document
+                            </h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                                PDF, Word, PNG or JPEG up to 5 MB. HR uploads are approved automatically.
+                            </p>
+                            <form onSubmit={handleUploadSubmit} className="space-y-4">
+                                <div>
+                                    <label htmlFor="upload-file" className="block text-sm font-medium text-gray-700 mb-1">
+                                        File <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        id="upload-file"
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/*"
+                                        className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-theme-secondary file:text-white"
+                                        onChange={(ev) => {
+                                            const f = ev.target.files?.[0];
+                                            setUploadFile(f || null);
+                                            if (f) {
+                                                setUploadName((prev) =>
+                                                    prev.trim() ? prev : f.name.replace(/\.[^/.]+$/, '')
+                                                );
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="upload-name" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Display name <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        id="upload-name"
+                                        type="text"
+                                        value={uploadName}
+                                        onChange={(ev) => setUploadName(ev.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                        placeholder="e.g. Employee handbook 2025"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="upload-category" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Category
+                                    </label>
+                                    <select
+                                        id="upload-category"
+                                        value={uploadCategory}
+                                        onChange={(ev) => setUploadCategory(ev.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                    >
+                                        {DOCUMENT_CATEGORY_OPTIONS.map((c) => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="upload-description" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Description (optional)
+                                    </label>
+                                    <textarea
+                                        id="upload-description"
+                                        value={uploadDescription}
+                                        onChange={(ev) => setUploadDescription(ev.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                        placeholder="Short summary"
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowUploadModal(false);
+                                            resetUploadForm();
+                                        }}
+                                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={uploading || !uploadFile}
+                                        className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50"
+                                    >
+                                        {uploading ? 'Uploading…' : 'Upload'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
                 {showRejectModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">

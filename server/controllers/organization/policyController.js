@@ -157,7 +157,7 @@ export const getPolicyById = asyncHandler(async (req, res) => {
  */
 export const updatePolicy = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = req.organizationId || req.user?.organizationId;
+    const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
     if (!organizationId) {
         return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
@@ -200,9 +200,9 @@ export const updatePolicy = asyncHandler(async (req, res) => {
 });
 
 /**
- * Delete a policy (soft delete)
+ * Delete a policy (hard delete; acknowledgments for this policy are removed first)
  * @route DELETE /api/v1/organization/policies/:id
- * @access Private (Admin only)
+ * @access Private (Admin / HR)
  * @param {Object} req - Express request object
  * @param {string} req.params.id - Policy ID
  * @param {string} req.organizationId - Organization ID from authentication
@@ -213,7 +213,7 @@ export const updatePolicy = asyncHandler(async (req, res) => {
  */
 export const deletePolicy = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = req.organizationId || req.user?.organizationId;
+    const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
     if (!organizationId) {
         return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
@@ -228,10 +228,10 @@ export const deletePolicy = asyncHandler(async (req, res) => {
         return sendError(res, 'Policy not found', 404, 'POLICY_NOT_FOUND');
     }
 
-    policy.isActive = false;
-    await policy.save();
+    await PolicyAcknowledgment.deleteMany({ policyId: id, organizationId });
+    await CompanyPolicy.deleteOne({ _id: id, organizationId });
 
-    logger.info('Policy deleted', { policyId: policy._id, organizationId });
+    logger.info('Policy deleted', { policyId: id, organizationId });
 
     return sendSuccess(res, null, 'Policy deleted successfully');
 });

@@ -217,6 +217,7 @@ const getHRNavigation = () => [
     { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
     { path: "/today-attendance", name: "Attendance", icon: <IoBookmarks /> },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
+    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR Reports", icon: <FaFileAlt /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
 ];

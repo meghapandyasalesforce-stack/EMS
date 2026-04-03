@@ -6,6 +6,68 @@ import logger from '../../helpers/logger.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 
+function deriveRoleFlagsFromWorkInfo({ department, position, jobTitle }) {
+  const dept = (department || '').toLowerCase().trim();
+  const pos = (position || '').toLowerCase().trim();
+  const title = (jobTitle || '').toLowerCase().trim();
+
+  const isHR =
+    dept === 'hr' ||
+    dept.includes('hr') ||
+    dept.includes('human resource') ||
+    title.includes('hr manager') ||
+    title.includes('human resource') ||
+    title.includes('hr') ||
+    (pos.includes('hr') && pos.includes('manager'));
+
+  const isManager =
+    pos === 'manager' ||
+    pos === 'director' ||
+    pos.includes('manager') ||
+    pos.includes('director') ||
+    title.includes('manager') ||
+    title.includes('director');
+
+  return { isHR, isManager };
+}
+
+async function resolveManagerReference(organizationId, managerInput) {
+  const raw = String(managerInput || '').trim();
+  if (!raw || raw === 'CEO') {
+    return { manager: 'CEO', managerId: null };
+  }
+
+  const baseQuery = { organizationId, status: 'active' };
+  let managerEmployee = null;
+
+  if (mongoose.Types.ObjectId.isValid(raw)) {
+    managerEmployee = await Employee.findOne({ ...baseQuery, _id: raw })
+      .select('_id name lastName employeeId')
+      .lean();
+  }
+  if (!managerEmployee) {
+    managerEmployee = await Employee.findOne({ ...baseQuery, employeeId: raw })
+      .select('_id name lastName employeeId')
+      .lean();
+  }
+  if (!managerEmployee) {
+    const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    managerEmployee = await Employee.findOne({
+      ...baseQuery,
+      $or: [
+        { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+        { $expr: { $regexMatch: { input: { $concat: ['$name', ' ', '$lastName'] }, regex: `^${escaped}$`, options: 'i' } } }
+      ]
+    }).select('_id name lastName employeeId').lean();
+  }
+
+  if (!managerEmployee) return null;
+  return {
+    manager: `${managerEmployee.name || ''} ${managerEmployee.lastName || ''}`.trim() || raw,
+    managerId: managerEmployee._id
+  };
+}
+
 // Update employee work information (Admin only)
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
@@ -35,10 +97,39 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
     if (department !== undefined) updateData.department = department;
     if (position !== undefined) updateData.position = position;
-    if (manager !== undefined) updateData.manager = manager;
+    if (manager !== undefined) {
+      const resolvedManager = await resolveManagerReference(organizationId, manager);
+      if (!resolvedManager) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected manager not found in this organization'
+        });
+      }
+      updateData.manager = resolvedManager.manager;
+      updateData.managerId = resolvedManager.managerId;
+    }
     if (salary !== undefined) updateData.salary = salary;
     if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
+
+    // Keep functionalRoles in sync with work info edits:
+    // - HR can see all employees.
+    // - Manager (without HR) sees only their team.
+    const effectiveDepartment = updateData.department ?? employee.department;
+    const effectivePosition = updateData.position ?? employee.position;
+    const effectiveJobTitle = updateData.jobTitle ?? employee.jobTitle;
+    const { isHR, isManager } = deriveRoleFlagsFromWorkInfo({
+      department: effectiveDepartment,
+      position: effectivePosition,
+      jobTitle: effectiveJobTitle
+    });
+
+    const nextRoles = new Set(Array.isArray(employee.functionalRoles) ? employee.functionalRoles : []);
+    if (isHR) nextRoles.add('hr');
+    else nextRoles.delete('hr');
+    if (isManager) nextRoles.add('manager');
+    else nextRoles.delete('manager');
+    updateData.functionalRoles = Array.from(nextRoles);
 
     // Update employee work information
     // Explicitly include salary field in the response
@@ -94,7 +185,7 @@ export const getEmployeeWorkInfo = async (req, res) => {
 
     // Get employee work information
     const employee = await Employee.findById(employeeId)
-      .select('jobTitle department position manager salary joiningDate employeeId name lastName email')
+      .select('jobTitle department position manager managerId salary joiningDate employeeId name lastName email')
       .lean();
 
     if (!employee) {

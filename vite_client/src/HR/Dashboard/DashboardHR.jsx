@@ -49,6 +49,31 @@ const DashboardHR = () => {
         birthdays: null
     });
     const [statsLoading, setStatsLoading] = useState(true);
+
+    const handleSendWishes = async (birthdayEmployeeId, recipientName) => {
+        try {
+            if (!birthdayEmployeeId) return;
+            await axios.post(
+                '/v1/both/profile-details/send-birthday-wish',
+                { employeeId: birthdayEmployeeId, message: `Happy Birthday ${recipientName || ''}`.trim() },
+                { withCredentials: true }
+            );
+            // Quick UX: refresh birthdays section after sending
+            // (keeps the UI consistent with future additions like “already wished”)
+            const birthdaysRes = await axios.get('/v1/both/profile-details/upcoming-birthdays', {
+                withCredentials: true
+            });
+            if (birthdaysRes.data?.birthdays) {
+                setDashboardStats((prev) => ({
+                    ...prev,
+                    birthdays: birthdaysRes.data.birthdays,
+                }));
+            }
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'Failed to send wishes';
+            alert(msg);
+        }
+    };
     
     // Use React Query hooks for parallel data fetching
     const {
@@ -820,7 +845,10 @@ const DashboardHR = () => {
                                                         <div className="font-medium text-gray-800">{item.name}</div>
                                                         <div className="text-sm text-gray-600">{item.birthday}</div>
                                                     </div>
-                                                    <button className="bg-pink-500 text-white px-3 py-1 rounded-lg hover:bg-pink-600 transition text-sm font-medium">
+                                                    <button
+                                                        onClick={() => handleSendWishes(item.employeeId, item.name)}
+                                                        className="bg-pink-500 text-white px-3 py-1 rounded-lg hover:bg-pink-600 transition text-sm font-medium"
+                                                    >
                                                         Send Wishes
                                                     </button>
                                                 </div>

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { addNotification } from '../../context/notificationSlice';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../../utils/constant';
-import { getBackendBaseURL } from '../../utils/axios';
+import axios, { getBackendBaseURL } from '../../utils/axios';
 
 const NotificationFeed = () => {
   const dispatch = useDispatch();
@@ -13,11 +13,15 @@ const NotificationFeed = () => {
   try {
     const saved = localStorage.getItem('readNotifications');
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? new Set(parsed) : new Set();
+    return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set();
   } catch {
     return new Set();
   }
 });
+  const readIdsRef = useRef(readIds);
+  useEffect(() => {
+    readIdsRef.current = readIds;
+  }, [readIds]);
 
   // Construct SSE URL - EventSource needs full URL, not relative path
   const getSSEUrl = () => {
@@ -25,6 +29,29 @@ const NotificationFeed = () => {
     // SSE endpoint: /api/v1/both/notification/get-all-notification
     return `${backendUrl}/api/v1/both/notification/get-all-notification`;
   };
+
+  // Load recent announcements via REST (org-scoped, authenticated) so history shows even if SSE misses the window
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications`, {
+          params: { limit: 40, page: 1 },
+        });
+        const list = res.data?.notifications;
+        if (cancelled || !Array.isArray(list) || !list.length) return;
+        const forCard = list.filter(
+          (n) => n && (n.type === 'announcement' || n.isBroadcast === true)
+        );
+        if (forCard.length) dispatch(addNotification(forCard));
+      } catch {
+        // non-fatal: SSE may still deliver broadcasts
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   useEffect(() => {
     const sseUrl = getSSEUrl();
@@ -56,18 +83,24 @@ const NotificationFeed = () => {
         if (Array.isArray(data)) {
           dispatch(addNotification(data));
 
-          const filtered = data.filter(n => !readIds.has(n._id));
-          setVisibleNotifications((prev) => [...prev, ...filtered]);
+          const rid = readIdsRef.current;
+          const isAnnouncementCard = (n) =>
+            n && (n.type === 'announcement' || n.isBroadcast === true);
+          const filtered = data.filter(
+            (n) => isAnnouncementCard(n) && !rid.has(String(n._id))
+          );
 
           const newIds = filtered.map((n) => n._id);
-          setRecentIds((prev) => new Set([...prev, ...newIds]));
-          setTimeout(() => {
-            setRecentIds((prev) => {
-              const updated = new Set(prev);
-              newIds.forEach((id) => updated.delete(id));
-              return updated;
-            });
-          }, 3000);
+          if (newIds.length) {
+            setRecentIds((prev) => new Set([...prev, ...newIds]));
+            setTimeout(() => {
+              setRecentIds((prev) => {
+                const updated = new Set(prev);
+                newIds.forEach((id) => updated.delete(id));
+                return updated;
+              });
+            }, 3000);
+          }
         }
       } catch (err) {
         // Removed console.error for production
@@ -86,21 +119,26 @@ const NotificationFeed = () => {
     };
 
     return () => eventSource.close();
-  }, [dispatch, readIds]);
+  }, [dispatch]);
 
   const handleRead = (id) => {
-    const updated = visibleNotifications.filter((n) => n._id !== id);
-    setVisibleNotifications(updated);
-
+    const sid = String(id);
     const newReadIds = new Set(readIds);
-    newReadIds.add(id);
+    newReadIds.add(sid);
     setReadIds(newReadIds);
     localStorage.setItem('readNotifications', JSON.stringify([...newReadIds]));
   };
 
-  // Filter again on page load (not just on SSE)
+  // Sync visible list from Redux + read state (broadcasts + announcement type)
   useEffect(() => {
-    const freshVisible = allNotifications.filter(n => !readIds.has(n._id));
+    const freshVisible = allNotifications
+      .filter(
+        (n) =>
+          n &&
+          (n.type === 'announcement' || n.isBroadcast === true) &&
+          !readIds.has(String(n._id))
+      )
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     setVisibleNotifications(freshVisible);
   }, [allNotifications, readIds]);
 
@@ -122,7 +160,7 @@ const NotificationFeed = () => {
             <li
               key={note._id}
               className={`border rounded-lg p-4 flex justify-between items-start transition-all duration-300 hover:shadow-md ${
-                recentIds.has(note._id) 
+                recentIds.has(String(note._id))
                   ? 'bg-gradient-to-r from-red-50 to-pink-50 border-red-300 shadow-lg' 
                   : 'bg-white border-gray-200 hover:border-theme-secondary'
               }`}

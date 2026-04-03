@@ -1,17 +1,22 @@
+import fs from 'fs';
 import { Document, DocumentRequest } from '../../models/document.model.js';
 import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
+import { createEmployeeJobOrGenericDocument, mimeToDocumentTypeEnum } from '../../helpers/employeeDocumentUploadHelper.js';
+import { getEffectiveFunctionalRoles } from '../../middlewares/createAuthMiddleware.js';
+
+const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certificate',
+  'Training', 'Compliance', 'Financial', 'Legal', 'Other'];
 
 /**
  * Upload document (Admin/HR - auto-approved)
  */
 export const uploadDocument = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const uploadedBy = req.user?._id || req.employee?._id;
+    const uploadedBy = req.employee?._id || req.user?._id;
 
-    // File should be uploaded via multer middleware
     const file = req.file || req.files?.[0];
     if (!file) {
         return res.status(400).json({
@@ -20,16 +25,44 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         });
     }
 
+    if (!uploadedBy) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+        });
+    }
+
+    const name = (req.body.name && String(req.body.name).trim()) || file.originalname || 'Document';
+    const category = req.body.category && DOCUMENT_CATEGORIES.includes(req.body.category)
+        ? req.body.category
+        : 'Company';
+    const type = req.body.type && ['PDF', 'Word', 'Excel', 'Image', 'Video', 'Other'].includes(req.body.type)
+        ? req.body.type
+        : mimeToDocumentTypeEnum(file.mimetype);
+
+    const relFileUrl = `/uploads/documents/${file.filename}`;
+    const accessLevel = req.body.accessLevel && ['Public', 'Department', 'Role', 'Specific', 'Private'].includes(req.body.accessLevel)
+        ? req.body.accessLevel
+        : 'Public';
+
     const document = new Document({
-        ...req.body,
+        name,
+        description: req.body.description != null ? String(req.body.description) : '',
+        category,
+        type,
         organizationId,
         uploadedBy,
-        fileUrl: file.path || file.location || file.url || `/uploads/${file.filename}`,
-        fileName: file.originalname || file.name,
+        fileUrl: relFileUrl,
+        fileName: file.originalname || file.name || name,
         fileSize: file.size,
         mimeType: file.mimetype,
-        requiresApproval: false, // Admin/HR uploads are auto-approved
-        approvalStatus: 'Approved'
+        relatedTo: req.body.relatedTo && ['Employee', 'Department', 'Project', 'Policy', 'Course', 'General'].includes(req.body.relatedTo)
+            ? req.body.relatedTo
+            : 'General',
+        accessLevel,
+        requiresApproval: false,
+        approvalStatus: 'Approved',
+        isActive: true
     });
 
     await document.save();
@@ -55,7 +88,6 @@ export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
         });
     }
 
-    // File should be uploaded via multer middleware
     const file = req.file || req.files?.[0];
     if (!file) {
         return res.status(400).json({
@@ -64,95 +96,102 @@ export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
         });
     }
 
-    const document = new Document({
-        ...req.body,
-        organizationId,
-        uploadedBy,
-        fileUrl: file.path || file.location || file.url || `/uploads/${file.filename}`,
-        fileName: file.originalname || file.name,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        category: req.body.category || 'Employee',
-        relatedTo: 'Employee',
-        relatedId: uploadedBy,
-        requiresApproval: true, // Employee uploads require approval
-        approvalStatus: 'Pending',
-        accessLevel: 'Private'
-    });
+    try {
+        const document = await createEmployeeJobOrGenericDocument({
+            organizationId,
+            employeeId: uploadedBy,
+            file,
+            body: req.body,
+        });
 
-    await document.save();
-
-    res.status(201).json({
-        success: true,
-        message: 'Document uploaded successfully. Pending HR approval.',
-        data: document
-    });
+        res.status(201).json({
+            success: true,
+            message: 'Document uploaded successfully. Pending HR approval.',
+            data: document
+        });
+    } catch (err) {
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch {
+                /* ignore */
+            }
+        }
+        return res.status(400).json({
+            success: false,
+            message: err.message || 'Failed to save document'
+        });
+    }
 });
 
 /**
  * Get documents with proper access control
  */
 export const getDocuments = asyncHandler(async (req, res) => {
-    const organizationId = getOrganizationId(req);
     const { category, relatedTo, relatedId, approvalStatus, page = 1, limit = 20 } = req.query;
 
     const query = addOrganizationFilter(req, {});
 
-    // For employees, enforce access control
-    if (req.employee?._id && !req.user?._id) {
+    // Platform admin: org-wide. Employee JWT: restricted unless HR (same visibility as /admin/documents/pending).
+    const isPlatformAdmin = !!req.user?._id;
+
+    if (isPlatformAdmin) {
+        if (approvalStatus) {
+            query.approvalStatus = approvalStatus;
+        }
+    } else if (req.employee?._id) {
         const employeeId = req.employee._id;
-        
-        // Get employee details for access control
+
         const employee = await Employee.findById(employeeId)
-            .select('department assignedRole functionalRoles')
+            .select('department assignedRole functionalRoles position jobTitle')
             .populate('assignedRole', '_id')
             .lean();
 
         if (!employee) {
             return res.status(404).json({
                 success: false,
-                message: 'Employee not found'
+                message: 'Employee not found',
             });
         }
 
-        // Build access control query
-        const accessQuery = {
-            $or: [
-                // Own documents (always accessible)
-                { uploadedBy: employeeId },
-                // Public documents
-                { accessLevel: 'Public' },
-                // Department-specific documents
-                {
-                    accessLevel: 'Department',
-                    allowedDepartments: { $in: [employee.department] }
-                },
-                // Role-specific documents
-                {
-                    accessLevel: 'Role',
-                    allowedRoles: employee.assignedRole?._id || { $exists: false }
-                },
-                // Specific employee documents
-                {
-                    accessLevel: 'Specific',
-                    allowedEmployees: employeeId
-                }
-            ]
-        };
+        const isHR = getEffectiveFunctionalRoles(employee).includes('hr');
 
-        // Combine with approval status
-        query.$and = [
-            {
+        if (isHR) {
+            if (approvalStatus) {
+                query.approvalStatus = approvalStatus;
+            }
+        } else {
+            const accessQuery = {
                 $or: [
-                    { approvalStatus: 'Approved' },
-                    { approvalStatus: { $exists: false } },
-                    { uploadedBy: employeeId }
-                ]
-            },
-            accessQuery
-        ];
+                    { uploadedBy: employeeId },
+                    { accessLevel: 'Public' },
+                    {
+                        accessLevel: 'Department',
+                        allowedDepartments: { $in: [employee.department] },
+                    },
+                    {
+                        accessLevel: 'Role',
+                        allowedRoles: employee.assignedRole?._id || { $exists: false },
+                    },
+                    {
+                        accessLevel: 'Specific',
+                        allowedEmployees: employeeId,
+                    },
+                ],
+            };
+
+            query.$and = [
+                {
+                    $or: [
+                        { approvalStatus: 'Approved' },
+                        { approvalStatus: { $exists: false } },
+                        { uploadedBy: employeeId },
+                    ],
+                },
+                accessQuery,
+            ];
+        }
     } else {
-        // For HR/Admin, show all documents
         if (approvalStatus) {
             query.approvalStatus = approvalStatus;
         }

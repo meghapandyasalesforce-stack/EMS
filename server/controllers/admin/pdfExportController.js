@@ -4,6 +4,7 @@
  */
 
 import { generatePayrollPDF, generateAttendancePDF, generateReportPDF } from '../../helpers/pdfGenerator.js';
+import { enrichAttendanceMetricsForPayslip } from '../../helpers/payrollGenerationHelper.js';
 import Payroll from '../../models/payroll.model.js';
 import Employee from '../../models/employee.model.js';
 import Attendance from '../../models/attendance.model.js';
@@ -117,6 +118,11 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             cumulativeEarnings: payroll.cumulativeEarnings,
             cumulativeDeductions: payroll.cumulativeDeductions
         };
+
+        const attendanceMetrics = await enrichAttendanceMetricsForPayslip(payroll, organizationId);
+        payrollData.workingDays = attendanceMetrics.workingDays ?? payrollData.workingDays;
+        payrollData.presentDays = attendanceMetrics.presentDays ?? payrollData.presentDays;
+        payrollData.unpaidLeave = attendanceMetrics.unpaidLeave ?? payrollData.unpaidLeave;
 
         const pdfBuffer = await generatePayrollPDF(payrollData, employeeData, orgData);
 

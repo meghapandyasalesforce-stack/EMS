@@ -78,6 +78,16 @@ const employeeSchema = new mongoose.Schema({
      * @type {string}
      */
     manager: { type: String, required: false, default: 'CEO' },
+    /**
+     * Preferred manager reference (ObjectId) for robust team mapping.
+     * Legacy `manager` string is kept for backwards compatibility.
+     */
+    managerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        required: false,
+        index: true
+    },
     
     /**
      * Employee salary
@@ -141,6 +151,28 @@ const employeeSchema = new mongoose.Schema({
     // Birth date
     birthDate: { 
         type: Date, 
+        required: false
+    },
+    gender: {
+        type: String,
+        enum: ['Male', 'Female', 'Other', 'Prefer not to say'],
+        required: false
+    },
+    nationalIdType: {
+        type: String,
+        enum: [
+            'Aadhaar',
+            'Voter ID (EPIC)',
+            'Passport',
+            'PAN',
+            'Driving License',
+            'Other'
+        ],
+        required: false
+    },
+    nationalId: {
+        type: String,
+        trim: true,
         required: false
     },
     
@@ -259,7 +291,15 @@ const employeeSchema = new mongoose.Schema({
     academicRecords: [
         {
             institution: { type: String },
-            details: { type: String }
+            /** Degree / program name (e.g. B.Tech, M.Sc). Legacy rows may only have details. */
+            degree: { type: String },
+            fieldOfStudy: { type: String },
+            startDate: { type: Date },
+            endDate: { type: Date },
+            /** e.g. 8.5/10 or percentage */
+            cgpa: { type: String },
+            /** Free text / legacy combined field */
+            details: { type: String },
         }
     ],
 
@@ -419,6 +459,7 @@ employeeSchema.index({ joiningDate: 1 });
 employeeSchema.index({ status: 1, active: 1 }); // Compound index for common queries
 employeeSchema.index({ organizationId: 1, status: 1 }); // For filtering by org and status
 employeeSchema.index({ functionalRoles: 1 }); // Index for role-based queries
+employeeSchema.index({ organizationId: 1, managerId: 1, status: 1 }); // Team lookups by manager
 
 // Apply organization isolation plugin (SECURITY: Enforces multi-tenancy)
 // Note: requireOrganizationId is false by default to avoid breaking populate() and other operations

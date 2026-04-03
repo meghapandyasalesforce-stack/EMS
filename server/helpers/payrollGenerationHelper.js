@@ -1,6 +1,7 @@
 import Attendance from '../models/attendance.model.js';
 import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
+import Employee from '../models/employee.model.js';
 import { computeEarningsFromGross } from './salaryCalculation.js';
 
 // Cache calendar docs during a single Node process run to avoid
@@ -370,7 +371,51 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         deductions,
         ctc,
         inHandSalary,
+        workingDays: workingDenom,
+        presentDays: effectivePresent,
+        unpaidLeave: unpaidDays,
         // Store leaves without internal flags
         leaves: payrollLeaves.map(({ isLossOfPay: _ignored, ...rest }) => rest)
+    };
+}
+
+/**
+ * Resolve attendance metrics for payslip PDF when missing on the saved document (e.g. legacy rows).
+ */
+export async function enrichAttendanceMetricsForPayslip(payroll, organizationId) {
+    const base = {
+        workingDays: payroll.workingDays,
+        presentDays: payroll.presentDays,
+        unpaidLeave: payroll.unpaidLeave
+    };
+    if (payroll.type !== 'monthly') return base;
+    if (
+        payroll.workingDays != null &&
+        payroll.presentDays != null &&
+        payroll.unpaidLeave != null
+    ) {
+        return base;
+    }
+    const empId = payroll.employeeId?._id || payroll.employeeId;
+    if (!empId) return base;
+    const emp = await Employee.findById(empId).select('salary organizationId joiningDate').lean();
+    if (!emp) return base;
+    const orgId = organizationId || emp.organizationId;
+    const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
+    const monthIndex = new Date(`${payroll.month} 1, ${yearNum}`).getMonth();
+    const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
+    endOfMonth.setHours(23, 59, 59, 999);
+    const payload = await buildGeneratedPayrollPayload({
+        emp,
+        month: payroll.month,
+        year: yearNum,
+        organizationId: orgId,
+        mode: 'final',
+        asOf: endOfMonth
+    });
+    return {
+        workingDays: payload.workingDays ?? base.workingDays,
+        presentDays: payload.presentDays ?? base.presentDays,
+        unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
     };
 }

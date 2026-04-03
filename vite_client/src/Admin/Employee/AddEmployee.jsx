@@ -254,7 +254,7 @@ function AddEmployee() {
                                     return (
                                         <option 
                                             key={mgr._id || mgr.employeeId} 
-                                            value={fullName}
+                                            value={mgr._id || fullName}
                                         >
                                             {fullName} - {mgr.position}
                                         </option>

@@ -129,6 +129,18 @@ const payrollSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
+    /** Working days in pay period (org calendar: excludes weekends & company holidays) */
+    workingDays: {
+        type: Number
+    },
+    /** Effective paid presence: attendance + approved paid leave per working day (may be fractional) */
+    presentDays: {
+        type: Number
+    },
+    /** workingDays − presentDays (may be fractional) */
+    unpaidLeave: {
+        type: Number
+    },
     processedDate: Date,
     paidDate: Date,
     payment: {

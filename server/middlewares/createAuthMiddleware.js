@@ -243,9 +243,9 @@ const deriveFunctionalRolesFromLegacy = (employee) => {
 };
 
 /**
- * Get functional roles with legacy fallback
+ * Get functional roles with legacy fallback (exported for controllers e.g. document access)
  */
-const getEffectiveFunctionalRoles = (employee) => {
+export const getEffectiveFunctionalRoles = (employee) => {
     const roles = Array.isArray(employee.functionalRoles) ? employee.functionalRoles : [];
     return roles.length > 0 ? roles : deriveFunctionalRolesFromLegacy(employee);
 };
@@ -342,7 +342,7 @@ export const isAdminOrExecutive = createAuthMiddleware({
         // For employees, check if they are executives
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId status active department position jobTitle')
+                .select('name lastName functionalRoles organizationId status active department position jobTitle')
                 .lean();
 
             if (!employee) {
@@ -466,17 +466,17 @@ export const isAdminOrManagerOrHR = createAuthMiddleware({
             const isExec = effectiveRoles.includes('executive') || effectiveRoles.includes('ceo') || effectiveRoles.includes('cto') || effectiveRoles.includes('cfo') || effectiveRoles.includes('vp');
 
             if (isHR || isManager || isExec) {
-                // Enhance req.employee with functional roles
-                if (req.employee) {
-                    req.employee = {
-                        ...req.employee,
-                        functionalRoles: effectiveRoles,
-                        organizationId: employee.organizationId || decoded.organizationId || req.organizationId,
-                        isManager: isManager,
-                        isHR: isHR,
-                        isExecutive: isExec
-                    };
-                }
+                // Always attach role enrichments so downstream controllers can safely branch on flags.
+                req.employee = {
+                    ...(req.employee || {}),
+                    name: employee.name,
+                    lastName: employee.lastName,
+                    functionalRoles: effectiveRoles,
+                    organizationId: employee.organizationId || decoded.organizationId || req.organizationId,
+                    isManager: isManager,
+                    isHR: isHR,
+                    isExecutive: isExec
+                };
                 if (employee.organizationId && !decoded.organizationId) {
                     decoded.organizationId = employee.organizationId;
                 }

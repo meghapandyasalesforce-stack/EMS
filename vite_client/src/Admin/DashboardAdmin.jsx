@@ -1,7 +1,8 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import NotificationSender from "./NotificationSender";
+import SentAnnouncements from "./SentAnnouncements";
 import { FiCoffee, FiClock, FiUser } from "react-icons/fi";
 import { FaUsers, FaFolder, FaMoneyBillWave } from "react-icons/fa";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -22,6 +23,10 @@ function DashboardAdmin() {
   const navigate = useNavigate();
   const authState = useSelector(selectAuth);
   const user = authState?.user;
+  const [announcementRefreshKey, setAnnouncementRefreshKey] = useState(0);
+  const bumpAnnouncementHistory = useCallback(() => {
+    setAnnouncementRefreshKey((k) => k + 1);
+  }, []);
 
   // Use React Query hooks for data fetching with caching
   const {
@@ -185,7 +190,8 @@ function DashboardAdmin() {
 
         {/* Announcement Section */}
         <div className="mb-6 md:mb-8">
-          <NotificationSender />
+          <NotificationSender onSent={bumpAnnouncementHistory} />
+          <SentAnnouncements refreshKey={announcementRefreshKey} />
         </div>
 
         {/* Projects and Employees Sections */}

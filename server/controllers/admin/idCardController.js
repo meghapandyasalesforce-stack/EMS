@@ -6,7 +6,10 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { generateEmployeeQRCode, generateQRCodeBuffer } from '../../helpers/qrCodeGenerator.js';
-import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
+
+/** Actor running admin/HR ID-card actions (JWT sets req.user for admin, req.employee for employee). */
+const getActorId = (req) => req.user?._id || req.employee?._id;
 
 // Helper to generate QR code image and save it
 const generateAndSaveQRCode = async (employee, employeeCode) => {
@@ -153,9 +156,10 @@ export const autoGenerateIdCard = async (employeeId, organizationId, generatedBy
 // Generate ID Card
 export const generateIdCard = async (req, res) => {
     try {
+        const actorId = getActorId(req);
         logger.info('ID card generation request', {
             employeeId: req.body.employeeId,
-            adminId: req.user._id,
+            actorId,
             path: req.path
         });
         const { 
@@ -165,13 +169,13 @@ export const generateIdCard = async (req, res) => {
             accessLevel = 'basic',
             accessZones = []
         } = req.body;
-        const adminId = req.user._id;
+        const generatedBy = actorId;
 
         // Get organizationId from request
         const organizationId = getOrganizationId(req);
         if (!organizationId) {
             logger.error('Missing organizationId in ID card generation request', {
-                adminId: req.user._id,
+                actorId,
                 employeeId: req.body.employeeId
             });
             return res.status(400).json({ message: 'Organization ID is required' });
@@ -264,7 +268,7 @@ export const generateIdCard = async (req, res) => {
             cardDesign: defaultCardDesign,
             accessLevel,
             accessZones,
-            generatedBy: adminId
+            generatedBy
         };
 
         // Only add QR code if it was generated successfully
@@ -298,7 +302,8 @@ export const generateIdCard = async (req, res) => {
 // Get all ID Cards
 export const getAllIdCards = async (req, res) => {
     try {
-        const idCards = await IdCard.find().populate('employeeId', 'name lastName email employeeId');
+        const query = addOrganizationFilter(req, {});
+        const idCards = await IdCard.find(query).populate('employeeId', 'name lastName email employeeId');
         res.status(200).json({ success: true, data: idCards });
     } catch (error) {
         res.status(500).json({ message: 'Failed to retrieve ID cards', error: error.message });
@@ -309,7 +314,8 @@ export const getAllIdCards = async (req, res) => {
 export const getIdCardByEmployeeId = async (req, res) => {
     try {
         const { employeeId } = req.params;
-        const idCard = await IdCard.findOne({ employeeId }).populate('employeeId', 'name lastName email employeeId');
+        const query = addOrganizationFilter(req, { employeeId });
+        const idCard = await IdCard.findOne(query).populate('employeeId', 'name lastName email employeeId');
         if (!idCard) {
             return res.status(404).json({ message: 'ID card not found for this employee' });
         }
@@ -324,10 +330,14 @@ export const updateIdCard = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
-        const updatedBy = req.user._id;
+        const updatedBy = getActorId(req);
+        if (!updatedBy) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
 
-        const updatedIdCard = await IdCard.findByIdAndUpdate(
-            id,
+        const orgQuery = addOrganizationFilter(req, { _id: id });
+        const updatedIdCard = await IdCard.findOneAndUpdate(
+            orgQuery,
             { ...updates, updatedBy },
             { new: true, runValidators: true }
         );
@@ -345,8 +355,9 @@ export const updateIdCard = async (req, res) => {
 export const revokeIdCard = async (req, res) => {
     try {
         const { id } = req.params;
-        const revokedIdCard = await IdCard.findByIdAndUpdate(
-            id,
+        const orgQuery = addOrganizationFilter(req, { _id: id });
+        const revokedIdCard = await IdCard.findOneAndUpdate(
+            orgQuery,
             { status: 'cancelled' },
             { new: true }
         );
@@ -391,12 +402,25 @@ export const getEmployeeIdCard = async (req, res) => {
 export const downloadIdCard = async (req, res) => {
     try {
         const { id } = req.params;
-        
-        // Find the ID card
-        const idCard = await IdCard.findById(id).populate('employeeId', 'name lastName employeeId email department jobTitle profilePhoto phone1 phone2 address bloodGroup joiningDate');
+        const orgQuery = addOrganizationFilter(req, { _id: id });
+
+        // Find the ID card within organization context
+        const idCard = await IdCard.findOne(orgQuery).populate(
+            'employeeId',
+            'name lastName employeeId email department jobTitle profilePhoto phone1 phone2 address bloodGroup joiningDate'
+        );
         
         if (!idCard) {
             return res.status(404).json({ message: 'ID card not found' });
+        }
+
+        if (!idCard.employeeId) {
+            logger.warn('Cannot generate ID card PDF because employee reference is missing', {
+                idCardId: idCard._id
+            });
+            return res.status(422).json({
+                message: 'Cannot generate ID card PDF: employee record is missing for this card'
+            });
         }
 
         // Generate PDF
@@ -422,12 +446,9 @@ export const downloadIdCard = async (req, res) => {
                 error: pdfError.message,
                 idCardId: idCard._id
             });
-            
-            // Fallback to JSON if PDF generation fails
-            res.status(200).json({
-                success: true,
-                message: 'ID card data (PDF generation failed, returning JSON)',
-                idCard: idCard
+            return res.status(500).json({
+                message: 'Failed to generate ID card PDF',
+                error: pdfError.message
             });
         }
     } catch (error) {
