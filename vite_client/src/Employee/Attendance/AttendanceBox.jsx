@@ -256,8 +256,11 @@ const AttendanceBox = () => {
                                       attendanceRule.coordinates.latitude && 
                                       attendanceRule.coordinates.longitude;
       
-      const requiresLocation = hasRuleWithCoordinates && 
-                               !attendanceRule.enableSimplePunches;
+      const requiresLocation = !!(hasRuleWithCoordinates && (
+        typeof attendanceRule.locationRequired === 'boolean'
+          ? attendanceRule.locationRequired
+          : !attendanceRule.enableSimplePunches
+      ));
 
       let locationData = null;
 
@@ -393,8 +396,11 @@ const AttendanceBox = () => {
                                       attendanceRule.coordinates.latitude && 
                                       attendanceRule.coordinates.longitude;
       
-      const requiresLocation = hasRuleWithCoordinates && 
-                               !attendanceRule.enableSimplePunches;
+      const requiresLocation = !!(hasRuleWithCoordinates && (
+        typeof attendanceRule.locationRequired === 'boolean'
+          ? attendanceRule.locationRequired
+          : !attendanceRule.enableSimplePunches
+      ));
 
       let locationData = null;
 

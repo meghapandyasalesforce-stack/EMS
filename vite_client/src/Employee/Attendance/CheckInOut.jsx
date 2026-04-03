@@ -92,6 +92,23 @@ const CheckInOut = () => {
   const canTakeBreak = currentSession && !isOnBreak;
   const canEndBreak = isOnBreak;
 
+  const hasRuleWithCoordinatesUI = !!(
+    attendanceRule?.coordinates?.latitude != null &&
+    attendanceRule?.coordinates?.longitude != null
+  );
+  const locationRequiredUI = !!(
+    hasRuleWithCoordinatesUI &&
+    (typeof attendanceRule?.locationRequired === 'boolean'
+      ? attendanceRule.locationRequired
+      : !attendanceRule?.enableSimplePunches)
+  );
+  const enforceOfficeRadiusUI = !!(
+    hasRuleWithCoordinatesUI &&
+    (typeof attendanceRule?.enforceOfficeRadius === 'boolean'
+      ? attendanceRule.enforceOfficeRadius
+      : locationRequiredUI && !attendanceRule?.enableSimplePunches)
+  );
+
   // Get current location with permission check
   const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
@@ -257,8 +274,8 @@ const CheckInOut = () => {
 
   // Real-time location monitoring for distance calculation
   useEffect(() => {
-    if (!attendanceRule?.coordinates || attendanceRule?.enableSimplePunches) {
-      return; // Don't monitor if no rule or simple punches enabled
+    if (!attendanceRule?.coordinates || !locationRequiredUI) {
+      return;
     }
 
     if (!isPermissionGranted('location')) {
@@ -306,7 +323,7 @@ const CheckInOut = () => {
         navigator.geolocation.clearWatch(locationWatchId);
       }
     };
-  }, [attendanceRule, isPermissionGranted, locationWatchId]);
+  }, [attendanceRule, isPermissionGranted, locationWatchId, locationRequiredUI]);
 
   // Get network information
   const getNetworkInfo = () => {
@@ -528,20 +545,21 @@ const CheckInOut = () => {
       let locationData = null;
       let networkData = networkInfo || getNetworkInfo();
       
-      // Always get fresh location for check-in to ensure accuracy
-      // Check if location is required based on attendance rule
-      // IMPORTANT: Backend requires location when enableSimplePunches is false
-      // This matches the backend logic: if (activeRule && !activeRule.enableSimplePunches)
-      const hasRuleWithCoordinates = attendanceRule && 
-                                      attendanceRule.coordinates && 
-                                      attendanceRule.coordinates.latitude && 
+      const hasRuleWithCoordinates = attendanceRule &&
+                                      attendanceRule.coordinates &&
+                                      attendanceRule.coordinates.latitude &&
                                       attendanceRule.coordinates.longitude;
-      
-      // Location is required if:
-      // 1. Rule exists with coordinates AND enableSimplePunches is false (matches backend logic)
-      // 2. OR locationRequired is explicitly true
-      const requiresLocation = hasRuleWithCoordinates && 
-                               (!attendanceRule.enableSimplePunches || attendanceRule.locationRequired === true);
+
+      const requiresLocation = !!(hasRuleWithCoordinates && (
+        typeof attendanceRule.locationRequired === 'boolean'
+          ? attendanceRule.locationRequired
+          : !attendanceRule.enableSimplePunches
+      ));
+      const enforceOfficeRadius = !!(hasRuleWithCoordinates && (
+        typeof attendanceRule.enforceOfficeRadius === 'boolean'
+          ? attendanceRule.enforceOfficeRadius
+          : requiresLocation && !attendanceRule.enableSimplePunches
+      ));
       
       // Always try to get location if rule exists with coordinates (backend might require it)
       // This ensures we have location data even if frontend logic doesn't think it's required
@@ -653,11 +671,7 @@ const CheckInOut = () => {
           locationData = null; // Clear invalid location data
         }
       } else {
-        // No location data available
-        // CRITICAL: If attendance rule exists with coordinates and enableSimplePunches is false,
-        // backend WILL require location. Don't proceed without it.
-        if (hasRuleWithCoordinates && !attendanceRule.enableSimplePunches) {
-          // Backend will reject this - we MUST have location
+        if (requiresLocation) {
           showNotification('Location is required for check-in at this site. Please enable location services and try again.', 'error');
           setIsProcessing(false);
           return;
@@ -677,10 +691,9 @@ const CheckInOut = () => {
         return;
       }
 
-      // Location-based validation (Kredily-style) - only if we have valid location
-      if (lat !== undefined && lng !== undefined && attendanceRule && requiresLocation) {
-        if (attendanceRule.coordinates && 
-            attendanceRule.coordinates.latitude && 
+      if (lat !== undefined && lng !== undefined && attendanceRule && enforceOfficeRadius) {
+        if (attendanceRule.coordinates &&
+            attendanceRule.coordinates.latitude &&
             attendanceRule.coordinates.longitude) {
           const locationCheck = checkLocationWithinRadius(
             lat,
@@ -731,20 +744,15 @@ const CheckInOut = () => {
         return;
       }
       
-      // CRITICAL FINAL CHECK: Backend will reject if enableSimplePunches is false and location is missing
-      // This prevents sending invalid requests
-      if (hasRuleWithCoordinates && !attendanceRule.enableSimplePunches && 
+      if (requiresLocation &&
           (!clockInData.latitude || !clockInData.longitude)) {
         showNotification('Location is required for check-in at this site. Please enable location services and try again.', 'error');
         setIsProcessing(false);
         return;
       }
-      
-      // CRITICAL: Final validation before API call
-      // This is the last chance to prevent invalid requests
-      // Check if location is required based on attendance rule
-      if (hasRuleWithCoordinates && !attendanceRule.enableSimplePunches) {
-        const hasValidLocation = clockInData.latitude !== undefined && 
+
+      if (requiresLocation) {
+        const hasValidLocation = clockInData.latitude !== undefined &&
                                 clockInData.longitude !== undefined &&
                                 typeof clockInData.latitude === 'number' &&
                                 typeof clockInData.longitude === 'number' &&
@@ -752,7 +760,7 @@ const CheckInOut = () => {
                                 !isNaN(clockInData.longitude) &&
                                 clockInData.latitude !== 0 &&
                                 clockInData.longitude !== 0;
-        
+
         if (!hasValidLocation) {
           showNotification('Location is required for check-in at this site. Please enable location services and try again.', 'error');
           setIsProcessing(false);
@@ -835,13 +843,21 @@ const CheckInOut = () => {
       let locationData = null;
       let networkData = networkInfo || getNetworkInfo();
       
-      // Check if location is required for clock-out (same logic as clock-in)
-      const requiresLocationForCheckout = attendanceRule && 
-                                          attendanceRule.coordinates && 
-                                          attendanceRule.coordinates.latitude && 
-                                          attendanceRule.coordinates.longitude &&
-                                          (attendanceRule.locationRequired === true || 
-                                           (!attendanceRule.enableSimplePunches && attendanceRule.locationRequired !== false));
+      const hasRuleWithCoordinates = attendanceRule &&
+        attendanceRule.coordinates &&
+        attendanceRule.coordinates.latitude &&
+        attendanceRule.coordinates.longitude;
+
+      const requiresLocationForCheckout = !!(hasRuleWithCoordinates && (
+        typeof attendanceRule.locationRequired === 'boolean'
+          ? attendanceRule.locationRequired
+          : !attendanceRule.enableSimplePunches
+      ));
+      const enforceOfficeRadiusCheckout = !!(hasRuleWithCoordinates && (
+        typeof attendanceRule.enforceOfficeRadius === 'boolean'
+          ? attendanceRule.enforceOfficeRadius
+          : requiresLocationForCheckout && !attendanceRule.enableSimplePunches
+      ));
       
       // Check if we already have valid location data cached
       if (location && isValidCoordinates(location.latitude, location.longitude)) {
@@ -957,9 +973,7 @@ const CheckInOut = () => {
         }
       }
 
-      // Location-based validation (Kredily-style) for clock-out
-      // Use the requiresLocationForCheckout already declared above
-      if (requiresLocationForCheckout) {
+      if (enforceOfficeRadiusCheckout) {
         if (attendanceRule.coordinates && attendanceRule.coordinates.latitude && attendanceRule.coordinates.longitude) {
           const locationCheck = checkLocationWithinRadius(
             lat,
@@ -1183,8 +1197,8 @@ const CheckInOut = () => {
             </div>
           </div>
 
-          {/* Location Status Indicator (Kredily-style) */}
-          {attendanceRule && attendanceRule.locationRequired && !attendanceRule.enableSimplePunches && attendanceRule.coordinates && (
+          {/* Location status: strict radius */}
+          {attendanceRule && enforceOfficeRadiusUI && attendanceRule.coordinates && (
             <div className={`mb-6 rounded-xl p-4 border-2 shadow-lg ${
               isWithinRadius === true 
                 ? 'bg-gradient-to-r from-white to-theme-primary/10 border-theme-primary' 
@@ -1260,6 +1274,26 @@ const CheckInOut = () => {
                   </p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Simple punches: location recorded, radius not enforced */}
+          {attendanceRule && locationRequiredUI && !enforceOfficeRadiusUI && attendanceRule.coordinates && (
+            <div className="mb-6 rounded-xl p-4 border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50 shadow-lg">
+              <div className="flex items-center gap-3">
+                <FiMapPin className="w-8 h-8 text-blue-600 shrink-0" />
+                <div>
+                  <h3 className="font-bold text-lg text-blue-900">Location required</h3>
+                  <p className="text-sm text-blue-800 mt-1">
+                    Your GPS will be saved with this punch. Office radius is not enforced (simple punches enabled).
+                  </p>
+                  {distanceFromOffice != null && (
+                    <p className="text-xs text-blue-700 mt-2">
+                      About {distanceFromOffice}m from office reference (informational only)
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1488,13 +1522,13 @@ const CheckInOut = () => {
                   <div className="flex gap-3">
                     <button
                       onClick={handleClockOut}
-                      disabled={loading || isOnBreak || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)}
+                      disabled={loading || isOnBreak || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)}
                       className={`flex-1 py-4 px-6 rounded-2xl text-white font-bold flex items-center justify-center gap-3 text-lg shadow-lg transition-all duration-200 ${
-                        loading || isOnBreak || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)
+                        loading || isOnBreak || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)
                           ? 'bg-gray-400 cursor-not-allowed' 
                           : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 hover:shadow-xl transform hover:scale-105'
                       }`}
-                      title={attendanceRule?.locationRequired && isWithinRadius === false 
+                      title={enforceOfficeRadiusUI && isWithinRadius === false 
                         ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check out.`
                         : 'Check Out'}
                     >
@@ -1503,7 +1537,7 @@ const CheckInOut = () => {
                           <FiLoader className="animate-spin w-5 h-5" />
                           Processing...
                         </>
-                      ) : attendanceRule?.locationRequired && isWithinRadius === false ? (
+                      ) : enforceOfficeRadiusUI && isWithinRadius === false ? (
                         <>
                           <FiXCircle className="w-5 h-5" />
                           Outside Radius
@@ -1693,13 +1727,13 @@ const CheckInOut = () => {
               {/* Enhanced Check In Button */}
               <button
                 onClick={handleClockIn}
-                disabled={loading || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)}
+                disabled={loading || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)}
                 className={`w-full max-w-md py-5 px-8 rounded-2xl text-white font-bold text-xl shadow-xl transition-all duration-200 ${
-                  loading || isProcessing || (attendanceRule?.locationRequired && isWithinRadius === false)
+                  loading || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)
                     ? 'bg-gray-400 cursor-not-allowed' 
                     : 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 hover:shadow-2xl transform hover:scale-105'
                 }`}
-                title={attendanceRule?.locationRequired && isWithinRadius === false 
+                title={enforceOfficeRadiusUI && isWithinRadius === false 
                   ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
                   : 'Check In'}
               >
@@ -1708,7 +1742,7 @@ const CheckInOut = () => {
                     <FiLoader className="animate-spin w-6 h-6 mr-3" />
                     Processing...
                   </div>
-                ) : attendanceRule?.locationRequired && isWithinRadius === false ? (
+                ) : enforceOfficeRadiusUI && isWithinRadius === false ? (
                   <div className="flex items-center justify-center">
                     <FiXCircle className="w-6 h-6 mr-3" />
                     Outside Radius

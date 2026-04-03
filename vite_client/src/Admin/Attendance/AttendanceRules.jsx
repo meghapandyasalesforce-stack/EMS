@@ -664,7 +664,7 @@ const AttendanceRules = () => {
                             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                                 <div>
                                     <h4 className="font-medium text-gray-900">Enable Simple Punches</h4>
-                                    <p className="text-sm text-gray-600">Allow basic check-in/check-out without location verification</p>
+                                    <p className="text-sm text-gray-600">Employees must share GPS with each punch; office radius is not enforced (for audit only)</p>
                                 </div>
                                 <button
                                     type="button"

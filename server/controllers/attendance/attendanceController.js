@@ -382,31 +382,38 @@ export const clockIn = async (req, res) => {
     let locationMatch = false;
     let locationDistance = null;
 
-    // Enforce geofence if rule present and simple punches disabled
-    if (activeRule && !activeRule.enableSimplePunches) {
+    // Geofence: when rule applies, GPS is required; office radius is enforced only if simple punches are off
+    if (activeRule) {
       const empDept = req.employee?.department;
       const appliesToDept = !activeRule.applicableDepartments?.length ||
         (empDept && activeRule.applicableDepartments.includes(empDept));
+      const isExempt = activeRule.exceptions?.exemptEmployees?.some(
+        (empId) => empId.toString() === req.employee?._id?.toString()
+      ) || false;
+      const hasRuleCoords = activeRule.coordinates &&
+        typeof activeRule.coordinates.latitude === 'number' &&
+        typeof activeRule.coordinates.longitude === 'number' &&
+        !isNaN(activeRule.coordinates.latitude) &&
+        !isNaN(activeRule.coordinates.longitude) &&
+        !(activeRule.coordinates.latitude === 0 && activeRule.coordinates.longitude === 0);
 
-      if (appliesToDept) {
-        // Validate location after normalization
-        // Check if location is missing or invalid
-        // Note: (0,0) coordinates are technically valid but unlikely for real locations
-        const hasValidLatitude = typeof locationInfo.latitude === 'number' && 
-                                  !isNaN(locationInfo.latitude) && 
-                                  locationInfo.latitude !== null && 
-                                  locationInfo.latitude !== undefined &&
-                                  locationInfo.latitude >= -90 && 
-                                  locationInfo.latitude <= 90;
-        
-        const hasValidLongitude = typeof locationInfo.longitude === 'number' && 
-                                   !isNaN(locationInfo.longitude) && 
-                                   locationInfo.longitude !== null && 
-                                   locationInfo.longitude !== undefined &&
-                                   locationInfo.longitude >= -180 && 
-                                   locationInfo.longitude <= 180;
+      if (appliesToDept && hasRuleCoords && !isExempt) {
+        const enforceRadius = !activeRule.enableSimplePunches;
 
-        // Reject if both are 0 (invalid location) or if either is invalid
+        const hasValidLatitude = typeof locationInfo.latitude === 'number' &&
+          !isNaN(locationInfo.latitude) &&
+          locationInfo.latitude !== null &&
+          locationInfo.latitude !== undefined &&
+          locationInfo.latitude >= -90 &&
+          locationInfo.latitude <= 90;
+
+        const hasValidLongitude = typeof locationInfo.longitude === 'number' &&
+          !isNaN(locationInfo.longitude) &&
+          locationInfo.longitude !== null &&
+          locationInfo.longitude !== undefined &&
+          locationInfo.longitude >= -180 &&
+          locationInfo.longitude <= 180;
+
         const bothZero = locationInfo.latitude === 0 && locationInfo.longitude === 0;
 
         if (!hasValidLatitude || !hasValidLongitude || bothZero) {
@@ -415,21 +422,8 @@ export const clockIn = async (req, res) => {
             organizationId,
             latitude: locationInfo.latitude,
             longitude: locationInfo.longitude,
-            latitudeType: typeof locationInfo.latitude,
-            longitudeType: typeof locationInfo.longitude,
-            hasValidLatitude,
-            hasValidLongitude,
-            bothZero,
-            originalLatitude: req.body.latitude,
-            originalLongitude: req.body.longitude,
-            originalLatitudeType: typeof req.body.latitude,
-            originalLongitudeType: typeof req.body.longitude,
-            bodyKeys: Object.keys(req.body),
             enableSimplePunches: activeRule.enableSimplePunches,
-            ruleHasCoordinates: !!(activeRule.coordinates?.latitude && activeRule.coordinates?.longitude)
           });
-          
-          // Provide more helpful error message
           let errorMessage = 'Location is required to clock in at this site. ';
           if (!req.body.latitude && !req.body.longitude) {
             errorMessage += 'Location data was not provided. Please enable location services and try again.';
@@ -438,7 +432,6 @@ export const clockIn = async (req, res) => {
           } else {
             errorMessage += 'Invalid location coordinates received. Please enable location services and try again.';
           }
-          
           return res.status(400).json({
             success: false,
             message: errorMessage,
@@ -447,68 +440,58 @@ export const clockIn = async (req, res) => {
               received: {
                 latitude: req.body.latitude,
                 longitude: req.body.longitude,
-                latitudeType: typeof req.body.latitude,
-                longitudeType: typeof req.body.longitude
               },
               normalized: {
                 latitude: locationInfo.latitude,
-                longitude: locationInfo.longitude
+                longitude: locationInfo.longitude,
               },
               validation: {
                 hasValidLatitude,
                 hasValidLongitude,
-                bothZero
+                bothZero,
               },
-              requestBodyKeys: Object.keys(req.body)
-            }
+              requestBodyKeys: Object.keys(req.body),
+            },
           });
         }
+
         locationDistance = distanceInMeters(
           locationInfo.latitude,
           locationInfo.longitude,
           activeRule.coordinates.latitude,
           activeRule.coordinates.longitude
         );
-        if (locationDistance > (activeRule.maximumRadius || 500)) {
-          logger.warn('Clock-in outside radius', {
-            userId,
-            organizationId,
-            distance: Math.round(locationDistance),
-            maximumRadius: activeRule.maximumRadius,
-            userLocation: { lat: locationInfo.latitude, lng: locationInfo.longitude },
-            officeLocation: activeRule.coordinates
-          });
-          return res.status(400).json({
-            success: false,
-            message: `You are outside the allowed check-in radius. Distance: ${Math.round(locationDistance)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
-            code: 'OUTSIDE_RADIUS',
-            distance: Math.round(locationDistance),
-            maximumRadius: activeRule.maximumRadius,
-            details: {
-              yourLocation: {
-                latitude: locationInfo.latitude,
-                longitude: locationInfo.longitude
+        locationInfo.locationDistance = locationDistance;
+
+        if (enforceRadius) {
+          if (locationDistance > (activeRule.maximumRadius || 500)) {
+            logger.warn('Clock-in outside radius', {
+              userId,
+              organizationId,
+              distance: Math.round(locationDistance),
+              maximumRadius: activeRule.maximumRadius,
+            });
+            return res.status(400).json({
+              success: false,
+              message: `You are outside the allowed check-in radius. Distance: ${Math.round(locationDistance)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
+              code: 'OUTSIDE_RADIUS',
+              distance: Math.round(locationDistance),
+              maximumRadius: activeRule.maximumRadius,
+              details: {
+                yourLocation: {
+                  latitude: locationInfo.latitude,
+                  longitude: locationInfo.longitude,
+                },
+                officeLocation: activeRule.coordinates,
               },
-              officeLocation: activeRule.coordinates
-            }
-          });
+            });
+          }
+          locationMatch = true;
+          locationInfo.locationMatch = true;
+        } else {
+          locationMatch = locationDistance <= (activeRule.maximumRadius || 500);
+          locationInfo.locationMatch = locationMatch;
         }
-        locationMatch = true;
-        locationInfo.locationMatch = true;
-        locationInfo.locationDistance = locationDistance;
-      }
-    } else if (activeRule && activeRule.enableSimplePunches) {
-      // Even with simple punches, check if location matches (for admin info)
-      if (typeof locationInfo.latitude === 'number' && typeof locationInfo.longitude === 'number') {
-        locationDistance = distanceInMeters(
-          locationInfo.latitude,
-          locationInfo.longitude,
-          activeRule.coordinates.latitude,
-          activeRule.coordinates.longitude
-        );
-        locationMatch = locationDistance <= (activeRule.maximumRadius || 500);
-        locationInfo.locationMatch = locationMatch;
-        locationInfo.locationDistance = locationDistance;
       }
     } else if (!activeRule && typeof locationInfo.latitude === 'number' && typeof locationInfo.longitude === 'number') {
       // If no rule is configured but location is provided, mark as verified
@@ -1044,49 +1027,45 @@ export const clockOut = async (req, res) => {
       });
     }
 
-    // Enforce geofence if rule present and simple punches disabled
-    if (activeRule && !activeRule.enableSimplePunches) {
+    // Geofence: same as clock-in — GPS required when rule applies; radius only if simple punches off
+    if (activeRule) {
       const empDept = req.employee?.department;
       const appliesToDept = !activeRule.applicableDepartments?.length ||
         (empDept && activeRule.applicableDepartments.includes(empDept));
+      const isExempt = activeRule.exceptions?.exemptEmployees?.some(
+        (empId) => empId.toString() === req.employee?._id?.toString()
+      ) || false;
+      const hasRuleCoords = activeRule.coordinates &&
+        typeof activeRule.coordinates.latitude === 'number' &&
+        typeof activeRule.coordinates.longitude === 'number' &&
+        !isNaN(activeRule.coordinates.latitude) &&
+        !isNaN(activeRule.coordinates.longitude) &&
+        !(activeRule.coordinates.latitude === 0 && activeRule.coordinates.longitude === 0);
 
-      if (appliesToDept) {
-        // Validate location after normalization
-        // Check if location is missing or invalid
-        // Validate location after normalization
-        // Check if location is missing or invalid
-        // Note: (0,0) coordinates are technically valid but unlikely for real locations
-        const hasValidLatitude = typeof locationInfo.latitude === 'number' && 
-                                  !isNaN(locationInfo.latitude) && 
-                                  locationInfo.latitude !== null && 
-                                  locationInfo.latitude !== undefined &&
-                                  locationInfo.latitude >= -90 && 
-                                  locationInfo.latitude <= 90;
-        
-        const hasValidLongitude = typeof locationInfo.longitude === 'number' && 
-                                   !isNaN(locationInfo.longitude) && 
-                                   locationInfo.longitude !== null && 
-                                   locationInfo.longitude !== undefined &&
-                                   locationInfo.longitude >= -180 && 
-                                   locationInfo.longitude <= 180;
+      if (appliesToDept && hasRuleCoords && !isExempt) {
+        const enforceRadius = !activeRule.enableSimplePunches;
 
-        // Reject if both are 0 (invalid location) or if either is invalid
+        const hasValidLatitude = typeof locationInfo.latitude === 'number' &&
+          !isNaN(locationInfo.latitude) &&
+          locationInfo.latitude !== null &&
+          locationInfo.latitude !== undefined &&
+          locationInfo.latitude >= -90 &&
+          locationInfo.latitude <= 90;
+
+        const hasValidLongitude = typeof locationInfo.longitude === 'number' &&
+          !isNaN(locationInfo.longitude) &&
+          locationInfo.longitude !== null &&
+          locationInfo.longitude !== undefined &&
+          locationInfo.longitude >= -180 &&
+          locationInfo.longitude <= 180;
+
         const bothZero = locationInfo.latitude === 0 && locationInfo.longitude === 0;
 
         if (!hasValidLatitude || !hasValidLongitude || bothZero) {
           logger.warn('Clock-out location validation failed', {
             latitude: locationInfo.latitude,
             longitude: locationInfo.longitude,
-            latitudeType: typeof locationInfo.latitude,
-            longitudeType: typeof locationInfo.longitude,
-            hasValidLatitude,
-            hasValidLongitude,
-            bothZero,
-            originalLatitude: req.body.latitude,
-            originalLongitude: req.body.longitude,
-            originalLatitudeType: typeof req.body.latitude,
-            originalLongitudeType: typeof req.body.longitude,
-            bodyKeys: Object.keys(req.body)
+            enableSimplePunches: activeRule.enableSimplePunches,
           });
           return res.status(400).json({
             success: false,
@@ -1096,35 +1075,40 @@ export const clockOut = async (req, res) => {
               received: {
                 latitude: req.body.latitude,
                 longitude: req.body.longitude,
-                latitudeType: typeof req.body.latitude,
-                longitudeType: typeof req.body.longitude
               },
               normalized: {
                 latitude: locationInfo.latitude,
-                longitude: locationInfo.longitude
+                longitude: locationInfo.longitude,
               },
               validation: {
                 hasValidLatitude,
                 hasValidLongitude,
-                bothZero
-              }
-            }
+                bothZero,
+              },
+            },
           });
         }
+
         const dist = distanceInMeters(
           locationInfo.latitude,
           locationInfo.longitude,
           activeRule.coordinates.latitude,
           activeRule.coordinates.longitude
         );
-        if (dist > (activeRule.maximumRadius || 500)) {
-          return res.status(400).json({
-            success: false,
-            message: `You are outside the allowed check-out radius. Distance: ${Math.round(dist)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
-            code: 'OUTSIDE_RADIUS',
-            distance: Math.round(dist),
-            maximumRadius: activeRule.maximumRadius
-          });
+        locationInfo.locationDistance = dist;
+        if (enforceRadius) {
+          if (dist > (activeRule.maximumRadius || 500)) {
+            return res.status(400).json({
+              success: false,
+              message: `You are outside the allowed check-out radius. Distance: ${Math.round(dist)}m, Maximum allowed: ${activeRule.maximumRadius}m. Please move closer to the office location.`,
+              code: 'OUTSIDE_RADIUS',
+              distance: Math.round(dist),
+              maximumRadius: activeRule.maximumRadius,
+            });
+          }
+          locationInfo.locationMatch = true;
+        } else {
+          locationInfo.locationMatch = dist <= (activeRule.maximumRadius || 500);
         }
       }
     }
@@ -2002,7 +1986,8 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
           coordinates: null,
           maximumRadius: 500,
           enableSimplePunches: true, // Default to true if no rule
-          locationRequired: false
+          locationRequired: false,
+          enforceOfficeRadius: false
         }
       });
     }
@@ -2017,13 +2002,9 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
       empId => empId.toString() === req.employee?._id?.toString()
     ) || false;
 
-    // Determine if location is required
-    // Location is required if:
-    // 1. Simple punches are disabled
-    // 2. Rule applies to employee's department
-    // 3. Employee is not exempt
-    // 4. Rule has valid coordinates
-    const hasValidCoordinates = activeRule.coordinates && 
+    // Location required whenever rule applies and employee must follow geofence rules (incl. simple punches).
+    // Office radius is enforced only when simple punches are off.
+    const hasValidCoordinates = activeRule.coordinates &&
                                  typeof activeRule.coordinates.latitude === 'number' &&
                                  typeof activeRule.coordinates.longitude === 'number' &&
                                  !isNaN(activeRule.coordinates.latitude) &&
@@ -2031,10 +2012,11 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
                                  activeRule.coordinates.latitude !== 0 &&
                                  activeRule.coordinates.longitude !== 0;
 
-    const locationRequired = !activeRule.enableSimplePunches && 
-                            appliesToDept && 
+    const locationRequired = appliesToDept &&
                             !isExempt &&
                             hasValidCoordinates;
+
+    const enforceOfficeRadius = locationRequired && !activeRule.enableSimplePunches;
 
     // Return public rule information
     return res.json({
@@ -2045,7 +2027,8 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
         coordinates: activeRule.coordinates,
         maximumRadius: activeRule.maximumRadius || 500,
         enableSimplePunches: activeRule.enableSimplePunches || false,
-        locationRequired: locationRequired,
+        locationRequired,
+        enforceOfficeRadius,
         applicableToDepartment: appliesToDept,
         isExempt: isExempt
       }
