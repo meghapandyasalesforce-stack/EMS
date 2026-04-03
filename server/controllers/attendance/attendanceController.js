@@ -980,12 +980,13 @@ export const clockOut = async (req, res) => {
       }
     }
 
-    // Validate location matches check-in location (location-based validation)
+    // Validate check-out is near check-in (strict mode only). Simple punches: independent locations.
     const checkInLocation = attendance.clockInLocation;
-    if (checkInLocation && 
-        typeof checkInLocation.latitude === 'number' && 
+    if (!activeRule?.enableSimplePunches &&
+        checkInLocation &&
+        typeof checkInLocation.latitude === 'number' &&
         typeof checkInLocation.longitude === 'number' &&
-        typeof locationInfo.latitude === 'number' && 
+        typeof locationInfo.latitude === 'number' &&
         typeof locationInfo.longitude === 'number') {
       
       const distanceFromCheckIn = distanceInMeters(
