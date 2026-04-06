@@ -5,7 +5,7 @@ import {
     upload
 } from '../../controllers/fileUpload/uploadConfigController.js';
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ router.post(
 // Admin or HR downloads employee document (uses employeeId from URL)
 router.get(
     '/:employeeId/documents/:documentId/download',
-    isAdminOrHRAuthenticated,
+    isAdminOrHROrExecutiveAuthenticated,
     downloadDocument
 );
 

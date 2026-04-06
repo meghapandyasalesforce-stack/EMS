@@ -13,7 +13,7 @@ import {
     updateOrganizationBranding
 } from '../../controllers/organization/organizationController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAdminOrExecutiveAuthenticated from '../../middlewares/isAdminOrExecutiveAuthenticated.js';
 import { organizationValidations } from '../../middlewares/inputValidation.js';
 import multer from 'multer';
@@ -65,7 +65,7 @@ router.get('/profile', isAdminAuthenticated, getOrganizationProfile);
 router.put('/profile', isAdminAuthenticated, organizationValidations.updateProfile, updateOrganizationProfile);
 router.post('/logo', isAdminAuthenticated, upload.single('logo'), uploadOrganizationLogo);
 router.delete('/logo', isAdminAuthenticated, deleteOrganizationLogo);
-router.put('/settings', isAdminOrHRAuthenticated, organizationValidations.updateSettings, updateOrganizationSettings);
+router.put('/settings', isAdminOrHROrExecutiveAuthenticated, organizationValidations.updateSettings, updateOrganizationSettings);
 router.put('/subscription', isAdminAuthenticated, organizationValidations.updateSubscription, updateSubscriptionPlan);
 router.get('/statistics', isAdminOrExecutiveAuthenticated, getOrganizationStatistics);
 router.get('/users', isAdminAuthenticated, organizationValidations.getUsers, getOrganizationUsers);

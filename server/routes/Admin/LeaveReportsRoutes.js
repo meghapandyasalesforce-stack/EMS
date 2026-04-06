@@ -4,18 +4,18 @@ import {
     getLeaveBalanceReport,
     getLeaveApprovalAnalytics
 } from '../../controllers/leave/leaveReportsController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
 
 router.route('/usage-trends')
-    .get(isAdminOrHRAuthenticated, getLeaveUsageTrends);
+    .get(isAdminOrHROrExecutiveAuthenticated, getLeaveUsageTrends);
 
 router.route('/balance-report')
-    .get(isAdminOrHRAuthenticated, getLeaveBalanceReport);
+    .get(isAdminOrHROrExecutiveAuthenticated, getLeaveBalanceReport);
 
 router.route('/approval-analytics')
-    .get(isAdminOrHRAuthenticated, getLeaveApprovalAnalytics);
+    .get(isAdminOrHROrExecutiveAuthenticated, getLeaveApprovalAnalytics);
 
 export default router;
 

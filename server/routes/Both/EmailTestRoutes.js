@@ -4,8 +4,6 @@ import { validateEmailConfig } from '../../helpers/emailValidator.js';
 import { getEmailConfigStatus } from '../../config/email.config.js';
 import logger from '../../helpers/logger.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
-import isAdminOrExecutiveAuthenticated from '../../middlewares/isAdminOrExecutiveAuthenticated.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();

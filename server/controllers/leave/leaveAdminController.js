@@ -10,7 +10,7 @@ import { logApprove, logReject, logUpdate } from "../../helpers/auditLogger.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
-        // Access is controlled by middleware (isAdminOrHRAuthenticated)
+        // Access is controlled by middleware (isAdminOrManagerOrHRAuthenticated)
         // No need to check role here as middleware handles it
         if (!req.user && !req.employee) {
             return res.status(403).json({ message: 'Access denied. Authentication required.' });

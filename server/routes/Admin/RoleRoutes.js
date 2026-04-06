@@ -10,7 +10,7 @@ import {
     checkPermissions
 } from '../../controllers/admin/roleController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { roleValidations } from '../../middlewares/inputValidation.js';
 
 const router = express.Router();
@@ -22,12 +22,12 @@ router.route('/')
 // Get all roles
 // Allow HR to read roles (for viewing role hierarchy)
 router.route('/')
-    .get(isAdminOrHRAuthenticated, getAllRoles);
+    .get(isAdminOrHROrExecutiveAuthenticated, getAllRoles);
 
 // Get role hierarchy
 // Allow HR to view role hierarchy
 router.route('/hierarchy')
-    .get(isAdminOrHRAuthenticated, getRoleHierarchy);
+    .get(isAdminOrHROrExecutiveAuthenticated, getRoleHierarchy);
 
 // Get role by ID
 router.route('/:id')

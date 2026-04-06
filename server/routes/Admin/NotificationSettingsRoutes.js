@@ -6,7 +6,7 @@ import {
   getAllNotificationSettings
 } from '../../controllers/admin/notificationSettingsController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isUserAuthenticated from '../../middlewares/isUserAuthenticated.js';
 import { notificationSettingsValidations } from '../../middlewares/inputValidation.js';
 
@@ -22,6 +22,6 @@ router.route('/settings').patch(isUserAuthenticated, notificationSettingsValidat
 router.route('/settings/reset').post(isUserAuthenticated, resetNotificationSettings);
 
 // Get all notification settings (admin and HR can view)
-router.route('/settings/all').get(isAdminOrHRAuthenticated, getAllNotificationSettings);
+router.route('/settings/all').get(isAdminOrHROrExecutiveAuthenticated, getAllNotificationSettings);
 
 export default router;

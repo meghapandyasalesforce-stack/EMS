@@ -11,14 +11,14 @@ import {
     get360Feedback
 } from '../../controllers/engagement/engagementController.js';
 import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
 // Surveys
 router.route('/surveys')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createSurvey)
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createSurvey)
     .get(isAuthenticatedBoth, readLimiter, getSurveys);
 
 router.route('/surveys/:surveyId/respond')
@@ -26,7 +26,7 @@ router.route('/surveys/:surveyId/respond')
 
 // Pulse Surveys (Admin/HR only)
 router.route('/pulse-surveys')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createPulseSurvey);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createPulseSurvey);
 
 // Feedback
 router.route('/feedback')
@@ -43,7 +43,7 @@ router.route('/recognition')
 
 // Analytics (Admin/HR only)
 router.route('/analytics')
-    .get(isAdminOrHRAuthenticated, readLimiter, getEngagementAnalytics);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getEngagementAnalytics);
 
 export default router;
 

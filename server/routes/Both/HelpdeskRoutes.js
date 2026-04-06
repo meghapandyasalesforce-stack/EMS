@@ -9,7 +9,7 @@ import {
     getHelpdeskAnalytics
 } from '../../controllers/helpdesk/helpdeskController.js';
 import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
@@ -241,7 +241,7 @@ router.route('/tickets/:id/resolve')
  *         $ref: '#/components/responses/ForbiddenError'
  */
 router.route('/analytics')
-    .get(isAdminOrHRAuthenticated, readLimiter, getHelpdeskAnalytics);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getHelpdeskAnalytics);
 
 export default router;
 

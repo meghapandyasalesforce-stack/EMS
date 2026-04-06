@@ -15,47 +15,47 @@ import {
     getRankedCandidates,
     generateOfferLetter
 } from '../../controllers/recruitment/recruitmentController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
 // Job Postings
 router.route('/jobs')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createJobPosting)
-    .get(isAdminOrHRAuthenticated, readLimiter, getJobPostings);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createJobPosting)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getJobPostings);
 
 router.route('/jobs/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getJobPostingById)
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateJobPosting)
-    .delete(isAdminOrHRAuthenticated, writeLimiter, deleteJobPosting);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getJobPostingById)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateJobPosting)
+    .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteJobPosting);
 
 router.route('/jobs/:id/candidates/ranked')
-    .get(isAdminOrHRAuthenticated, readLimiter, getRankedCandidates);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getRankedCandidates);
 
 // Candidates
 router.route('/candidates')
-    .get(isAdminOrHRAuthenticated, readLimiter, getCandidates);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getCandidates);
 
 router.route('/candidates/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getCandidateById)
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateCandidateStatus);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getCandidateById)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateCandidateStatus);
 
 router.route('/candidates/:id/interview')
-    .post(isAdminOrHRAuthenticated, writeLimiter, scheduleInterview);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, scheduleInterview);
 
 router.route('/candidates/:id/score')
-    .post(isAdminOrHRAuthenticated, writeLimiter, calculateCandidateScore);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, calculateCandidateScore);
 
 router.route('/candidates/:id/generate-offer')
-    .post(isAdminOrHRAuthenticated, writeLimiter, generateOfferLetter);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, generateOfferLetter);
 
 // Pipeline & Analytics
 router.route('/pipeline')
-    .get(isAdminOrHRAuthenticated, readLimiter, getCandidatePipeline);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getCandidatePipeline);
 
 router.route('/analytics')
-    .get(isAdminOrHRAuthenticated, readLimiter, getRecruitmentAnalytics);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getRecruitmentAnalytics);
 
 export default router;
 

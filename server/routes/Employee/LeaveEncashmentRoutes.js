@@ -4,7 +4,7 @@ import {
     getEncashmentHistory
 } from '../../controllers/leave/leaveEncashmentController.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { approveLeaveEncashment } from '../../controllers/leave/leaveEncashmentController.js';
 
 const router = express.Router();
@@ -18,7 +18,7 @@ router.route('/history/:employeeId?')
 
 // Admin/HR routes
 router.route('/approve/:id')
-    .put(isAdminOrHRAuthenticated, approveLeaveEncashment);
+    .put(isAdminOrHROrExecutiveAuthenticated, approveLeaveEncashment);
 
 export default router;
 

@@ -6,9 +6,6 @@ import {
     deactivateAttendanceRule,
     checkAttendanceRadius
 } from '../../controllers/admin/attendanceRuleController.js';
-import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
-import isAdminOrExecutiveAuthenticated from '../../middlewares/isAdminOrExecutiveAuthenticated.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import { attendanceRadiusCheckLimiter } from '../../middlewares/rateLimiter.js';
@@ -22,7 +19,7 @@ router.patch('/deactivate/:ruleId', isAdminOrHROrExecutiveAuthenticated, deactiv
 
 // Read routes (allow HR and Executives to view attendance rules)
 router.get('/current', isAdminOrHROrExecutiveAuthenticated, getAttendanceRule);
-router.get('/all', isAdminOrHRAuthenticated, getAllAttendanceRules);
+router.get('/all', isAdminOrHROrExecutiveAuthenticated, getAllAttendanceRules);
 
 // Both admin and employee can check radius (for attendance marking)
 router.post('/check-radius', isAuthenticated, attendanceRadiusCheckLimiter, checkAttendanceRadius);

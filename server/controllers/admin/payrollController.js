@@ -430,9 +430,29 @@ export const createPayroll = async (req, res) => {
         }
         delete earnings.gratuity;
 
-        earnings.totalEarnings = Object.values(earnings).reduce((sum, val) => sum + (val || 0), 0);
-        deductions.total = Object.values(deductions).reduce((sum, val) => sum + (val || 0), 0);
-        
+        // Sum line items only — client sends totalEarnings/total alongside components; Object.values would double-count.
+        earnings.totalEarnings =
+            (Number(earnings.basicWage) || 0) +
+            (Number(earnings.houseRentAllowance) || 0) +
+            (Number(earnings.transportAllowance) || 0) +
+            (Number(earnings.medicalAllowance) || 0) +
+            (Number(earnings.overtime) || 0) +
+            (Number(earnings.specialAllowance) || 0) +
+            (Number(earnings.performanceBonus) || 0) +
+            (Number(earnings.projectBonus) || 0) +
+            (Number(earnings.attendanceBonus) || 0) +
+            (Number(earnings.pfEmployer) || 0) +
+            (Number(earnings.esiEmployer) || 0);
+
+        deductions.total =
+            (Number(deductions.pfEmployee) || 0) +
+            (Number(deductions.esiEmployee) || 0) +
+            (Number(deductions.professionalTax) || 0) +
+            (Number(deductions.incomeTax) || 0) +
+            (Number(deductions.advanceSalary) || 0) +
+            (Number(deductions.loanDeduction) || 0) +
+            (Number(deductions.otherDeductions) || 0);
+
         const ctc = earnings.totalEarnings;
         const inHandSalary = earnings.totalEarnings - deductions.total;
         

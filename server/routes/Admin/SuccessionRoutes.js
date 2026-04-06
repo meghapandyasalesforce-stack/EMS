@@ -10,29 +10,29 @@ import {
     updateTalentPool,
     deleteTalentPool
 } from '../../controllers/succession/successionController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
 // Succession Plans
 router.route('/succession-plans')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createSuccessionPlan)
-    .get(isAdminOrHRAuthenticated, readLimiter, getSuccessionPlans);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createSuccessionPlan)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getSuccessionPlans);
 
 router.route('/succession-plans/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getSuccessionPlan)
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateSuccessionPlan)
-    .delete(isAdminOrHRAuthenticated, writeLimiter, deleteSuccessionPlan);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getSuccessionPlan)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateSuccessionPlan)
+    .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteSuccessionPlan);
 
 // Talent Pool
 router.route('/talent-pool')
-    .post(isAdminOrHRAuthenticated, writeLimiter, addToTalentPool)
-    .get(isAdminOrHRAuthenticated, readLimiter, getTalentPool);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, addToTalentPool)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getTalentPool);
 
 router.route('/talent-pool/:id')
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateTalentPool)
-    .delete(isAdminOrHRAuthenticated, writeLimiter, deleteTalentPool);
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateTalentPool)
+    .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteTalentPool);
 
 export default router;
 

@@ -10,7 +10,7 @@ import {
     getEntityAuditLogs,
     getAuditLogStatistics
 } from '../../controllers/admin/auditLogController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
@@ -80,7 +80,7 @@ const router = express.Router();
  *         $ref: '#/components/responses/ForbiddenError'
  */
 router.route('/')
-    .get(isAdminOrHRAuthenticated, readLimiter, getAuditLogs);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAuditLogs);
 
 /**
  * @swagger
@@ -96,7 +96,7 @@ router.route('/')
  *         description: Statistics retrieved successfully
  */
 router.route('/statistics')
-    .get(isAdminOrHRAuthenticated, readLimiter, getAuditLogStatistics);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAuditLogStatistics);
 
 /**
  * @swagger
@@ -123,7 +123,7 @@ router.route('/statistics')
  *         description: Entity audit logs retrieved successfully
  */
 router.route('/entity/:entityType/:entityId')
-    .get(isAdminOrHRAuthenticated, readLimiter, getEntityAuditLogs);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getEntityAuditLogs);
 
 /**
  * @swagger
@@ -147,7 +147,7 @@ router.route('/entity/:entityType/:entityId')
  *         $ref: '#/components/responses/NotFoundError'
  */
 router.route('/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getAuditLogById);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAuditLogById);
 
 export default router;
 

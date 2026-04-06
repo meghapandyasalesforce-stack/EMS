@@ -3,18 +3,18 @@ import {
     createSurvey,
     createRecognition
 } from '../../controllers/engagement/engagementController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
 // Surveys
 router.route('/surveys')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createSurvey);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createSurvey);
 
 // Recognition
 router.route('/recognition')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createRecognition);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createRecognition);
 
 export default router;
 

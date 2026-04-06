@@ -3,7 +3,7 @@ import { loginEmployee, logoutEmployee, registerEmployee, resetEmployeePassword 
 import { deleteEmployee, getAllEmployees } from "../../controllers/admin/employeeManagementController.js";
 import { refreshToken } from "../../controllers/auth/refreshTokenController.js";
 import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
@@ -16,7 +16,7 @@ const router = express.Router();
 // Employee registration uses employeeValidations.create which validates all required employee fields
 // Password is optional (will be auto-generated if not provided)
 router.route("/register").post(
-    isAdminOrHRAuthenticated, // Require admin or HR authentication to get organizationId
+    isAdminOrHROrExecutiveAuthenticated, // Require admin or HR authentication to get organizationId
     loginLimiter, 
     employeeValidations.create, 
     registerEmployee
@@ -31,6 +31,6 @@ router.route("/refresh-token").post(refreshToken); // Refresh access token
 router.route("/reset-password").patch(loginLimiter, isAuthenticated, resetEmployeePassword); // Rate limited password reset
 // Allow managers to view employees in their department
 router.route("/get-all-employees").get(isAdminOrManagerOrHRAuthenticated, getAllEmployees);
-router.route("/delete-employee/:employeeId").delete(isAdminOrHRAuthenticated, deleteEmployee);
+router.route("/delete-employee/:employeeId").delete(isAdminOrHROrExecutiveAuthenticated, deleteEmployee);
 
 export default router;

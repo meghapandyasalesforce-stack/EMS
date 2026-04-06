@@ -11,33 +11,33 @@ import {
     markEntityResolved
 } from '../../controllers/admin/slaController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
 
 // SLA management
 router.route('/')
     .post(isAdminAuthenticated, createSLA)
-    .get(isAdminOrHRAuthenticated, getAllSLAs);
+    .get(isAdminOrHROrExecutiveAuthenticated, getAllSLAs);
 
 router.route('/:id')
-    .get(isAdminOrHRAuthenticated, getSLAById)
+    .get(isAdminOrHROrExecutiveAuthenticated, getSLAById)
     .put(isAdminAuthenticated, updateSLA)
     .delete(isAdminAuthenticated, deleteSLA);
 
 // Violations
 router.route('/violations')
-    .get(isAdminOrHRAuthenticated, getSLAViolations);
+    .get(isAdminOrHROrExecutiveAuthenticated, getSLAViolations);
 
 // Track entities
 router.route('/track')
-    .post(isAdminOrHRAuthenticated, trackEntityForSLA);
+    .post(isAdminOrHROrExecutiveAuthenticated, trackEntityForSLA);
 
 router.route('/violations/:id/responded')
-    .post(isAdminOrHRAuthenticated, markEntityResponded);
+    .post(isAdminOrHROrExecutiveAuthenticated, markEntityResponded);
 
 router.route('/violations/:id/resolved')
-    .post(isAdminOrHRAuthenticated, markEntityResolved);
+    .post(isAdminOrHROrExecutiveAuthenticated, markEntityResolved);
 
 export default router;
 

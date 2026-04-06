@@ -6,7 +6,7 @@ import {
 } from '../../controllers/admin/employeeController.js';
 import { getManagers, getAllEmployees, getOrganizationJobTitles } from '../../controllers/admin/employeeManagementController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 import { employeeListLimiter } from '../../middlewares/endpointRateLimiters.js';
 import { writeLimiter as generalWriteLimiter } from '../../middlewares/rateLimiter.js';
@@ -23,15 +23,15 @@ router.route('/')
 
 // Get managers (employees with management positions) - no cache so dropdown always shows current list
 router.route('/managers')
-  .get(isAdminOrHRAuthenticated, employeeListLimiter, getManagers);
+  .get(isAdminOrHROrExecutiveAuthenticated, employeeListLimiter, getManagers);
 
 // Get organization-specific job titles for dropdowns
 router.route('/job-titles')
-  .get(isAdminOrHRAuthenticated, employeeListLimiter, getOrganizationJobTitles);
+  .get(isAdminOrHROrExecutiveAuthenticated, employeeListLimiter, getOrganizationJobTitles);
 
 // Update employee work information - write operations have stricter limits
 router.route('/:employeeId/work-info')
-  .put(isAdminOrHRAuthenticated, generalWriteLimiter, updateEmployeeWorkInfo)
+  .put(isAdminOrHROrExecutiveAuthenticated, generalWriteLimiter, updateEmployeeWorkInfo)
   .get(isAdminAuthenticated, employeeListLimiter, getEmployeeWorkInfo);
 
 // Calculate employee statistics - resource intensive

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from '../utils/axios';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
-import { FiRefreshCw, FiMegaphone } from 'react-icons/fi';
+import { FiRefreshCw, FiSpeaker } from 'react-icons/fi';
 
 /**
  * Lists broadcast announcements for the admin dashboard (your sends, or whole org).
@@ -44,7 +44,7 @@ const SentAnnouncements = ({ refreshKey = 0 }) => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <FiMegaphone className="w-5 h-5 text-theme-secondary" style={{ color: 'var(--color-secondary)' }} />
+            <FiSpeaker className="w-5 h-5 text-theme-secondary" style={{ color: 'var(--color-secondary)' }} />
             Announcement history
           </h2>
           <p className="text-xs text-gray-500">

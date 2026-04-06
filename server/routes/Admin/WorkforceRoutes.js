@@ -12,34 +12,34 @@ import {
     deleteHeadcountForecast,
     getWorkforceAnalytics
 } from '../../controllers/workforce/workforceController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
 // Workforce Plans
 router.route('/workforce-plans')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createWorkforcePlan)
-    .get(isAdminOrHRAuthenticated, readLimiter, getWorkforcePlans);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createWorkforcePlan)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getWorkforcePlans);
 
 router.route('/workforce-plans/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getWorkforcePlan)
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateWorkforcePlan)
-    .delete(isAdminOrHRAuthenticated, writeLimiter, deleteWorkforcePlan);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getWorkforcePlan)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateWorkforcePlan)
+    .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteWorkforcePlan);
 
 // Headcount Forecasts
 router.route('/headcount-forecasts')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createHeadcountForecast)
-    .get(isAdminOrHRAuthenticated, readLimiter, getHeadcountForecasts);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createHeadcountForecast)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getHeadcountForecasts);
 
 router.route('/headcount-forecasts/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getHeadcountForecast)
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateHeadcountForecast)
-    .delete(isAdminOrHRAuthenticated, writeLimiter, deleteHeadcountForecast);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getHeadcountForecast)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateHeadcountForecast)
+    .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteHeadcountForecast);
 
 // Analytics
 router.route('/analytics')
-    .get(isAdminOrHRAuthenticated, readLimiter, getWorkforceAnalytics);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getWorkforceAnalytics);
 
 export default router;
 

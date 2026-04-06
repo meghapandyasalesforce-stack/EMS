@@ -13,41 +13,41 @@ import {
     delegateApprovalRequest
 } from '../../controllers/admin/approvalWorkflowController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 
 const router = express.Router();
 
 // Workflow management (Admin only)
 router.route('/workflows')
     .post(isAdminAuthenticated, createWorkflow)
-    .get(isAdminOrHRAuthenticated, getAllWorkflows);
+    .get(isAdminOrHROrExecutiveAuthenticated, getAllWorkflows);
 
 router.route('/workflows/:id')
-    .get(isAdminOrHRAuthenticated, getWorkflowById)
+    .get(isAdminOrHROrExecutiveAuthenticated, getWorkflowById)
     .put(isAdminAuthenticated, updateWorkflow)
     .delete(isAdminAuthenticated, deleteWorkflow);
 
 // Approval instances
 router.route('/instances')
-    .get(isAdminOrHRAuthenticated, getApprovalInstances);
+    .get(isAdminOrHROrExecutiveAuthenticated, getApprovalInstances);
 
 router.route('/instances/:id')
-    .get(isAdminOrHRAuthenticated, getApprovalInstanceById);
+    .get(isAdminOrHROrExecutiveAuthenticated, getApprovalInstanceById);
 
 // User-specific approvals
 router.route('/my-pending')
-    .get(isAdminOrHRAuthenticated, getMyPendingApprovals);
+    .get(isAdminOrHROrExecutiveAuthenticated, getMyPendingApprovals);
 
 router.route('/process/:id')
-    .post(isAdminOrHRAuthenticated, processApproval);
+    .post(isAdminOrHROrExecutiveAuthenticated, processApproval);
 
 // Delegate approval
 router.route('/delegate/:id')
-    .post(isAdminOrHRAuthenticated, delegateApprovalRequest);
+    .post(isAdminOrHROrExecutiveAuthenticated, delegateApprovalRequest);
 
 // Initiate approval
 router.route('/initiate')
-    .post(isAdminOrHRAuthenticated, initiateApprovalRequest);
+    .post(isAdminOrHROrExecutiveAuthenticated, initiateApprovalRequest);
 
 export default router;
 

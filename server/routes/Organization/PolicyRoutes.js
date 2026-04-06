@@ -10,7 +10,7 @@ import {
     acknowledgePolicy,
     getPolicyCompliance
 } from '../../controllers/organization/policyController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import { policyValidations } from '../../middlewares/policyValidations.js';
 import validateOrganizationId from '../../middlewares/validateOrganizationId.js';
@@ -31,18 +31,18 @@ const policyWriteLimiter = rateLimit({
 });
 
 // Admin/HR routes (write operations)
-router.post('/', isAdminOrHRAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.create, createPolicy);
-router.put('/:id', isAdminOrHRAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.update, updatePolicy);
-router.delete('/:id', isAdminOrHRAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.delete, deletePolicy);
+router.post('/', isAdminOrHROrExecutiveAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.create, createPolicy);
+router.put('/:id', isAdminOrHROrExecutiveAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.update, updatePolicy);
+router.delete('/:id', isAdminOrHROrExecutiveAuthenticated, validateOrganizationId, policyWriteLimiter, policyValidations.delete, deletePolicy);
 
 // Employee routes (require employee authentication) - MUST come before /:id to avoid route conflicts
 router.get('/employee/policies', isAuthenticated, validateOrganizationId, generalLimiter, getEmployeePolicies);
 router.post('/employee/acknowledge', isAuthenticated, validateOrganizationId, generalLimiter, policyValidations.acknowledge, acknowledgePolicy);
 
 // Admin/HR routes (allow both admin and HR for read operations) - MUST come after /employee routes
-router.get('/', isAdminOrHRAuthenticated, validateOrganizationId, generalLimiter, getPolicies);
-router.get('/compliance', isAdminOrHRAuthenticated, validateOrganizationId, generalLimiter, getPolicyCompliance);
-router.get('/:id', isAdminOrHRAuthenticated, validateOrganizationId, generalLimiter, policyValidations.getById, getPolicyById);
+router.get('/', isAdminOrHROrExecutiveAuthenticated, validateOrganizationId, generalLimiter, getPolicies);
+router.get('/compliance', isAdminOrHROrExecutiveAuthenticated, validateOrganizationId, generalLimiter, getPolicyCompliance);
+router.get('/:id', isAdminOrHROrExecutiveAuthenticated, validateOrganizationId, generalLimiter, policyValidations.getById, getPolicyById);
 
 export default router;
 

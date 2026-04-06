@@ -10,33 +10,33 @@ import {
     updateOffboardingTask,
     getOnboardingAnalytics
 } from '../../controllers/onboarding/onboardingController.js';
-import isAdminOrHRAuthenticated from '../../middlewares/isAdminOrHRAuthenticated.js';
+import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
 // Onboarding
 router.route('/onboarding')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createOnboardingWorkflow)
-    .get(isAdminOrHRAuthenticated, readLimiter, getOnboardingWorkflows);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createOnboardingWorkflow)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getOnboardingWorkflows);
 
 router.route('/onboarding/:id')
-    .get(isAdminOrHRAuthenticated, readLimiter, getOnboardingWorkflow)
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateOnboardingWorkflow);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getOnboardingWorkflow)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateOnboardingWorkflow);
 
 router.route('/onboarding/:id/tasks/:taskId')
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateOnboardingTask);
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateOnboardingTask);
 
 router.route('/onboarding/analytics')
-    .get(isAdminOrHRAuthenticated, readLimiter, getOnboardingAnalytics);
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getOnboardingAnalytics);
 
 // Offboarding
 router.route('/offboarding')
-    .post(isAdminOrHRAuthenticated, writeLimiter, createOffboardingWorkflow)
-    .get(isAdminOrHRAuthenticated, readLimiter, getOffboardingWorkflows);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createOffboardingWorkflow)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getOffboardingWorkflows);
 
 router.route('/offboarding/:id/tasks/:taskId')
-    .put(isAdminOrHRAuthenticated, writeLimiter, updateOffboardingTask);
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateOffboardingTask);
 
 export default router;
 

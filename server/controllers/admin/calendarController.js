@@ -10,7 +10,7 @@ export const getCalendar = async (req, res) => {
     try {
         const { year } = req.params;
         const yearNum = parseInt(year);
-
+        
         if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2050) {
             return sendValidationError(res, { year: 'Invalid year. Must be between 2020 and 2050' });
         }

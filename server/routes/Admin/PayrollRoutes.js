@@ -5,7 +5,6 @@ import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
-import isAdminOrHRAuthenticated from "../../middlewares/isAdminOrHRAuthenticated.js";
 import isCEOAuthenticated from "../../middlewares/isCEOAuthenticated.js";
 import { payrollLimiter, exportLimiter } from "../../middlewares/endpointRateLimiters.js";
 import { writeLimiter } from "../../middlewares/rateLimiter.js";

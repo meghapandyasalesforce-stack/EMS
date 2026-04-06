@@ -1,7 +1,6 @@
 import express from "express";
 import { getAllLeaves, getLeaveStatistics, updateLeaveStatus } from "../../controllers/leave/leaveAdminController.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
-import isAdminOrHRAuthenticated from "../../middlewares/isAdminOrHRAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
 import { leaveLimiter } from "../../middlewares/endpointRateLimiters.js";
 import { writeLimiter } from "../../middlewares/rateLimiter.js";
