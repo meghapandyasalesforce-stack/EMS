@@ -1,5 +1,6 @@
 import AttendanceRule from '../../models/attendanceRule.model.js';
 import AttendanceRuleAudit from '../../models/attendanceRuleAudit.model.js';
+import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
@@ -64,6 +65,50 @@ const detectFieldChanges = (oldRule, newRule) => {
     });
 
     return changes;
+};
+
+// Sync attendance office hours to current-year calendar working hours.
+const syncCalendarWorkingHoursFromRule = async (req, organizationId, officeHours) => {
+    if (!officeHours?.startTime || !officeHours?.endTime) return;
+
+    const currentYear = new Date().getFullYear();
+    const query = addOrganizationFilter(req, { year: currentYear });
+    let calendar = await Calendar.findOne(query);
+
+    if (!calendar) {
+        calendar = new Calendar({
+            organizationId,
+            year: currentYear,
+            holidays: [],
+            workingDays: {
+                monday: true,
+                tuesday: true,
+                wednesday: true,
+                thursday: true,
+                friday: true,
+                saturday: false,
+                sunday: false
+            },
+            workingHours: {
+                startTime: officeHours.startTime,
+                endTime: officeHours.endTime,
+                breakDuration: 60
+            },
+            companySettings: {
+                timezone: "UTC",
+                dateFormat: "DD/MM/YYYY",
+                weekStartsOn: "monday"
+            }
+        });
+    } else {
+        calendar.workingHours = {
+            ...calendar.workingHours,
+            startTime: officeHours.startTime,
+            endTime: officeHours.endTime
+        };
+    }
+
+    await calendar.save();
 };
 
 // Create or update attendance rule
@@ -238,6 +283,17 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 req
             );
 
+            // Keep calendar working hours in sync with attendance office hours.
+            try {
+                await syncCalendarWorkingHoursFromRule(req, organizationId, attendanceRule.officeHours);
+            } catch (syncError) {
+                logger.error('Sync attendance->calendar working hours failed', {
+                    error: syncError.message,
+                    stack: syncError.stack,
+                    organizationId
+                });
+            }
+
             return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule updated successfully');
         } else {
             // Create new rule
@@ -312,6 +368,17 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 req.body.changeReason || null,
                 req
             );
+
+            // Keep calendar working hours in sync with attendance office hours.
+            try {
+                await syncCalendarWorkingHoursFromRule(req, organizationId, attendanceRule.officeHours);
+            } catch (syncError) {
+                logger.error('Sync attendance->calendar working hours failed', {
+                    error: syncError.message,
+                    stack: syncError.stack,
+                    organizationId
+                });
+            }
 
             return sendSuccess(res, { rule: attendanceRule }, 'Attendance rule created successfully', 201);
         }

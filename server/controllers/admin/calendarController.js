@@ -1,9 +1,22 @@
 import Calendar from '../../models/calendar.model.js';
+import AttendanceRule from '../../models/attendanceRule.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { detectHolidayTheme, isIndianHoliday } from '../../helpers/indianHolidayService.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
+
+const toStartOfDay = (value) => {
+    const d = new Date(value);
+    d.setHours(0, 0, 0, 0);
+    return d;
+};
+
+const isPastDate = (value) => {
+    const target = toStartOfDay(value);
+    const today = toStartOfDay(new Date());
+    return target < today;
+};
 
 // Get calendar for a specific year
 export const getCalendar = async (req, res) => {
@@ -87,6 +100,20 @@ export const addHoliday = async (req, res) => {
         if (isNaN(yearNum)) {
             return sendValidationError(res, { year: 'Invalid year' });
         }
+        const holidayDate = new Date(date);
+        if (isNaN(holidayDate.getTime())) {
+            return sendValidationError(res, { date: 'Invalid holiday date' });
+        }
+        if (holidayDate.getFullYear() !== yearNum) {
+            return sendValidationError(res, {
+                date: `Holiday date year (${holidayDate.getFullYear()}) must match selected calendar year (${yearNum})`
+            });
+        }
+        if (isPastDate(holidayDate)) {
+            return sendValidationError(res, {
+                date: 'Cannot add holidays for past dates. Only today or future dates are allowed.'
+            });
+        }
 
         // Get organizationId from request
         const organizationId = getOrganizationId(req);
@@ -106,7 +133,7 @@ export const addHoliday = async (req, res) => {
 
         // Check if holiday already exists for this date
         const existingHoliday = calendar.holidays.find(h => 
-            new Date(h.date).getTime() === new Date(date).getTime()
+            new Date(h.date).getTime() === holidayDate.getTime()
         );
 
         if (existingHoliday) {
@@ -118,7 +145,7 @@ export const addHoliday = async (req, res) => {
         
         const holiday = {
             name,
-            date: new Date(date),
+            date: holidayDate,
             type: type || 'national',
             description,
             theme: themeData.theme,
@@ -126,7 +153,8 @@ export const addHoliday = async (req, res) => {
             color: themeData.color,
             isRecurring: isRecurring || false,
             recurringPattern: recurringPattern || 'yearly',
-            isActive: true
+            isActive: true,
+            source: 'manual'
         };
 
         calendar.holidays.push(holiday);
@@ -156,6 +184,28 @@ export const updateHoliday = async (req, res) => {
         const holiday = calendar.holidays.id(holidayId);
         if (!holiday) {
             return sendNotFound(res, 'Holiday');
+        }
+        if (isPastDate(holiday.date)) {
+            return sendValidationError(res, {
+                date: 'Past holidays cannot be updated.'
+            });
+        }
+
+        if (updates.date) {
+            const updatedDate = new Date(updates.date);
+            if (isNaN(updatedDate.getTime())) {
+                return sendValidationError(res, { date: 'Invalid holiday date' });
+            }
+            if (updatedDate.getFullYear() !== yearNum) {
+                return sendValidationError(res, {
+                    date: `Holiday date year (${updatedDate.getFullYear()}) must match selected calendar year (${yearNum})`
+                });
+            }
+            if (isPastDate(updatedDate)) {
+                return sendValidationError(res, {
+                    date: 'Cannot set holiday date in the past. Only today or future dates are allowed.'
+                });
+            }
         }
 
         // Update holiday fields
@@ -209,6 +259,11 @@ export const deleteHoliday = async (req, res) => {
         if (!holiday) {
             logger.warn('Holiday not found', { holidayId, year: yearNum });
             return sendNotFound(res, 'Holiday');
+        }
+        if (isPastDate(holiday.date)) {
+            return sendValidationError(res, {
+                date: 'Past holidays cannot be deleted.'
+            });
         }
 
         logger.debug('Found holiday', { holidayName: holiday.name, holidayDate: holiday.date, holidayId });
@@ -285,6 +340,33 @@ export const updateWorkingHours = async (req, res) => {
 
         calendar.workingHours = { ...calendar.workingHours, ...workingHours };
         await calendar.save();
+
+        // Keep attendance office hours in sync with calendar working hours.
+        try {
+            const now = new Date();
+            const attendanceRuleQuery = addOrganizationFilter(req, {
+                isActive: true,
+                effectiveDate: { $lte: now },
+                $or: [{ expiryDate: null }, { expiryDate: { $gte: now } }]
+            });
+            const attendanceRule = await AttendanceRule.findOne(attendanceRuleQuery)
+                .sort({ priority: -1, createdAt: -1 });
+
+            if (attendanceRule) {
+                attendanceRule.officeHours = {
+                    ...attendanceRule.officeHours,
+                    startTime: calendar.workingHours?.startTime || attendanceRule.officeHours?.startTime || '09:00',
+                    endTime: calendar.workingHours?.endTime || attendanceRule.officeHours?.endTime || '17:00'
+                };
+                await attendanceRule.save();
+            }
+        } catch (syncError) {
+            logger.error('Sync calendar->attendance working hours failed', {
+                error: syncError.message,
+                stack: syncError.stack,
+                year: yearNum
+            });
+        }
 
         return sendSuccess(res, { workingHours: calendar.workingHours }, 'Working hours updated successfully');
     } catch (error) {

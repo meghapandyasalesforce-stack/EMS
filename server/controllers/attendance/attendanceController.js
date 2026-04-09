@@ -1,6 +1,7 @@
 import Attendance from "../../models/attendance.model.js";
 import Employee from "../../models/employee.model.js"
 import AttendanceRule from "../../models/attendanceRule.model.js";
+import Calendar from "../../models/calendar.model.js";
 import User from "../../models/user.model.js";
 import mongoose from 'mongoose';
 import logger from "../../helpers/logger.js";
@@ -37,12 +38,75 @@ const getClientIP = (req) => {
          'unknown';
 };
 
-function calculateWorkingDays(startDate, endDate) {
+const DEFAULT_WORKING_DAYS = {
+  monday: true,
+  tuesday: true,
+  wednesday: true,
+  thursday: true,
+  friday: true,
+  saturday: false,
+  sunday: false
+};
+
+const getDateKey = (value) => {
+  const d = new Date(value);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const getDayName = (value) => {
+  const names = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  return names[new Date(value).getDay()];
+};
+
+async function calculateWorkingDays(startDate, endDate, organizationId) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return 0;
+  }
+
+  const years = [];
+  for (let year = start.getFullYear(); year <= end.getFullYear(); year++) {
+    years.push(year);
+  }
+
+  const calendars = await Calendar.find({
+    organizationId,
+    year: { $in: years }
+  }).lean();
+
+  const calendarByYear = new Map(calendars.map((c) => [c.year, c]));
+  const holidayKeysByYear = new Map();
+  years.forEach((year) => {
+    const calendar = calendarByYear.get(year);
+    const keys = new Set(
+      (calendar?.holidays || [])
+        .filter((holiday) => holiday?.isActive !== false)
+        .map((holiday) => getDateKey(holiday.date))
+    );
+    holidayKeysByYear.set(year, keys);
+  });
+
   let count = 0;
-  const current = new Date(startDate);
-  while (current <= endDate) {
-    const day = current.getDay();
-    if (day !== 0 && day !== 6) count++; // Skip weekends
+  const current = new Date(start);
+  while (current <= end) {
+    const year = current.getFullYear();
+    const calendar = calendarByYear.get(year);
+    const workingDays = calendar?.workingDays || DEFAULT_WORKING_DAYS;
+    const dayName = getDayName(current);
+    const isConfiguredWorkingDay = Boolean(workingDays?.[dayName]);
+    const dateKey = getDateKey(current);
+    const isHoliday = holidayKeysByYear.get(year)?.has(dateKey);
+
+    if (isConfiguredWorkingDay && !isHoliday) {
+      count++;
+    }
     current.setDate(current.getDate() + 1);
   }
   return count;
@@ -1254,18 +1318,26 @@ export const getLogs = async (req, res) => {
     const { startDate, endDate } = req.query;
     const userId = req.employee._id;
     const query = addOrganizationFilter(req, { userId });
-
-    if (startDate && endDate) {
-      // Use local timezone range so we match how Attendance stores date (startOfDay in server local time).
-      // This avoids excluding first/last day of month when server is not in UTC.
-      const [y, m] = startDate.split('-').map(Number);
-      const monthIndex = (m || 1) - 1;
-      const year = y || new Date().getFullYear();
-      query.date = {
-        $gte: new Date(year, monthIndex, 1),
-        $lt: new Date(year, monthIndex + 1, 1)
-      };
+    // Resolve period (local time). If not provided, default to current month.
+    let periodStart;
+    let periodEnd;
+    const now = new Date();
+    if (startDate) {
+      periodStart = new Date(startDate);
     }
+    if (endDate) {
+      periodEnd = new Date(endDate);
+    }
+    if (!periodStart || Number.isNaN(periodStart.getTime())) {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    if (!periodEnd || Number.isNaN(periodEnd.getTime())) {
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    }
+    periodStart.setHours(0, 0, 0, 0);
+    periodEnd.setHours(23, 59, 59, 999);
+
+    query.date = { $gte: periodStart, $lte: periodEnd };
 
     const logs = await Attendance.find(query).sort({ date: -1 });
 
@@ -1273,6 +1345,7 @@ export const getLogs = async (req, res) => {
     const sessions = [];
     let totalLateArrivals = 0;
     let totalEarlyDepartures = 0;
+    const issueDayKeys = new Set();
 
     // Compute effective hours from clockIn/clockOut/breaks when stored value is 0 (e.g. old data or pre clock-out).
     const getEffectiveHours = (log) => {
@@ -1291,7 +1364,7 @@ export const getLogs = async (req, res) => {
     logs.forEach(log => {
       sessions.push(log);
 
-      const dateKey = log.date.toISOString().split("T")[0];
+      const dateKey = getDateKey(log.date);
 
       if (!dailyStats[dateKey]) {
         dailyStats[dateKey] = {
@@ -1312,15 +1385,31 @@ export const getLogs = async (req, res) => {
       dailyStats[dateKey].isEarlyDeparture = log.isEarlyDeparture;
       dailyStats[dateKey].status = log.status;
 
-      if (log.isLateArrival) totalLateArrivals++;
-      if (log.isEarlyDeparture) totalEarlyDepartures++;
+      if (log.isLateArrival) {
+        totalLateArrivals++;
+        issueDayKeys.add(dateKey);
+      }
+      if (log.isEarlyDeparture) {
+        totalEarlyDepartures++;
+        issueDayKeys.add(dateKey);
+      }
     });
+
+    const presentDays = Object.keys(dailyStats).length;
+    const workingDays = await calculateWorkingDays(periodStart, periodEnd, organizationId);
+    const absentDays = Math.max(0, workingDays - presentDays);
 
     // Summary stats
     const summary = {
-      totalDays: Object.keys(dailyStats).length,
+      periodStart,
+      periodEnd,
+      totalDays: presentDays,
+      workingDays,
+      presentDays,
+      absentDays,
       totalLateArrivals,
       totalEarlyDepartures: totalEarlyDepartures,
+      issueDays: issueDayKeys.size,
       totalOvertime: Object.values(dailyStats).reduce((sum, day) => sum + (day.overtimeHours || 0), 0),
       totalEffectiveHours: Object.values(dailyStats).reduce((sum, day) => sum + (day.effectiveHours || 0), 0),
       avgEffectiveHours: 0,
@@ -1335,7 +1424,11 @@ export const getLogs = async (req, res) => {
     res.json({
       sessions,
       dailyStats,
-      summary
+      summary,
+      period: {
+        startDate: periodStart,
+        endDate: periodEnd
+      }
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1798,7 +1891,7 @@ export const getAttendanceSummary = async (req, res) => {
     }
     
     periodEnd = endDate ? new Date(endDate) : new Date();
-    const workingDays = calculateWorkingDays(periodStart, periodEnd);
+    const workingDays = await calculateWorkingDays(periodStart, periodEnd, organizationId);
 
     // Calculate statistics
     const presentDays = records.filter(r => ['present', 'loggedOut'].includes(r.status)).length;
@@ -1899,7 +1992,7 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
       ? new Date(Math.min(...records.map(r => r.date.getTime()))) 
       : new Date();
     const periodEnd = endDate ? new Date(endDate) : new Date();
-    const workingDays = calculateWorkingDays(periodStart, periodEnd);
+    const workingDays = await calculateWorkingDays(periodStart, periodEnd, organizationId);
 
     // Calculate statistics
     const presentDays = records.filter(r => ['present', 'loggedOut'].includes(r.status)).length;

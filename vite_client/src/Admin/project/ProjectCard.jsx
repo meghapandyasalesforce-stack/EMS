@@ -12,7 +12,8 @@ import {
   Divider,
   LinearProgress,
   Checkbox,
-  Tooltip
+  Tooltip,
+  Button
 } from '@mui/material';
 import { 
   FiUsers, 
@@ -20,7 +21,9 @@ import {
   FiCheckCircle, 
   FiPause, 
   FiAlertCircle,
-  FiTrendingUp 
+  FiTrendingUp,
+  FiExternalLink,
+  FiEdit2
 } from 'react-icons/fi';
 
 const ProjectCard = ({ project, isOverdue = false, progress = 0, isCEO = false, selected = false, onSelect }) => {
@@ -68,6 +71,7 @@ const ProjectCard = ({ project, isOverdue = false, progress = 0, isCEO = false, 
 
   const statusInfo = getStatusInfo(project.status);
   const memberCount = project.projectMembers?.length || 0;
+  const openProjectDetails = () => navigate(`/projects/${project._id}`);
 
   return (
     <motion.div
@@ -94,6 +98,15 @@ const ProjectCard = ({ project, isOverdue = false, progress = 0, isCEO = false, 
         '&:hover': {
           boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
           transform: 'translateY(-2px)'
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      onClick={openProjectDetails}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openProjectDetails();
         }
       }}>
         <CardContent sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -318,22 +331,32 @@ const ProjectCard = ({ project, isOverdue = false, progress = 0, isCEO = false, 
                   {memberCount} member{memberCount !== 1 ? 's' : ''}
                 </Typography>
               </Box>
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  color: statusInfo.color, 
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  cursor: 'pointer'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/projects/${project._id}`);
-                }}
-              >
-                {statusInfo.label}
-              </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  size="small"
+                  variant="text"
+                  startIcon={<FiExternalLink size={12} />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProjectDetails();
+                  }}
+                  sx={{ textTransform: 'none', minWidth: 'auto', px: 1 }}
+                >
+                  View
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  startIcon={<FiEdit2 size={12} />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProjectDetails();
+                  }}
+                  sx={{ textTransform: 'none', minWidth: 'auto', px: 1, color: statusInfo.color }}
+                >
+                  Edit
+                </Button>
+              </Box>
             </Box>
           </Box>
         </CardContent>

@@ -58,6 +58,18 @@ const calendarSchema = new mongoose.Schema({
         isActive: {
             type: Boolean,
             default: true
+        },
+        source: {
+            type: String,
+            enum: ['manual', 'upload', 'import'],
+            default: 'manual'
+        },
+        sourceFileName: {
+            type: String,
+            trim: true
+        },
+        uploadedAt: {
+            type: Date
         }
     }],
     workingDays: {

@@ -3,7 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchEmployeeOwnInfo,
   addAcademicRecord,
-  addProfessionalQualification
+  updateAcademicRecord,
+  deleteAcademicRecord,
+  addProfessionalQualification,
+  updateProfessionalQualification,
+  deleteProfessionalQualification
 } from '../../context/employeeDetailsSlice';
 
 const emptyAcademic = {
@@ -47,6 +51,12 @@ const EducationQualifications = () => {
 
   const [showAcademicForm, setShowAcademicForm] = useState(false);
   const [showProfessionalForm, setShowProfessionalForm] = useState(false);
+  const [editingAcademicId, setEditingAcademicId] = useState(null);
+  const [editingProfessionalId, setEditingProfessionalId] = useState(null);
+  const [isSavingAcademic, setIsSavingAcademic] = useState(false);
+  const [isSavingProfessional, setIsSavingProfessional] = useState(false);
+  const [deletingAcademicId, setDeletingAcademicId] = useState(null);
+  const [deletingProfessionalId, setDeletingProfessionalId] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
@@ -54,7 +64,7 @@ const EducationQualifications = () => {
     dispatch(fetchEmployeeOwnInfo());
   }, [dispatch]);
 
-  const handleAddAcademic = async () => {
+  const handleSaveAcademic = async () => {
     const inst = academicInput.institution.trim();
     const deg = academicInput.degree.trim();
     const det = academicInput.details.trim();
@@ -65,6 +75,7 @@ const EducationQualifications = () => {
 
     setApiError(null);
     setSuccessMessage(null);
+    setIsSavingAcademic(true);
 
     try {
       const payload = {
@@ -76,22 +87,31 @@ const EducationQualifications = () => {
         cgpa: academicInput.cgpa.trim() || undefined,
         details: det || undefined,
       };
-      const result = await dispatch(addAcademicRecord(payload));
+      const action = editingAcademicId
+        ? updateAcademicRecord({ academicRecordId: editingAcademicId, ...payload })
+        : addAcademicRecord(payload);
+      const result = await dispatch(action);
+      const isSuccess = editingAcademicId
+        ? updateAcademicRecord.fulfilled.match(result)
+        : addAcademicRecord.fulfilled.match(result);
 
-      if (addAcademicRecord.fulfilled.match(result)) {
-        setSuccessMessage('Academic record added successfully!');
+      if (isSuccess) {
+        setSuccessMessage(editingAcademicId ? 'Academic record updated successfully!' : 'Academic record added successfully!');
         setAcademicInput(emptyAcademic);
+        setEditingAcademicId(null);
         setShowAcademicForm(false);
         dispatch(fetchEmployeeOwnInfo());
       } else {
-        setApiError(result.payload || 'Failed to add academic record');
+        setApiError(result.payload || 'Failed to save academic record');
       }
     } catch (error) {
       setApiError(error.message);
+    } finally {
+      setIsSavingAcademic(false);
     }
   };
 
-  const handleAddProfessional = async () => {
+  const handleSaveProfessional = async () => {
     if (!professionalInput.title || !professionalInput.organization) {
       setApiError('Title and organization are required');
       return;
@@ -99,31 +119,114 @@ const EducationQualifications = () => {
 
     setApiError(null);
     setSuccessMessage(null);
+    setIsSavingProfessional(true);
 
     try {
-      const result = await dispatch(addProfessionalQualification({
+      const payload = {
         title: professionalInput.title,
         organization: professionalInput.organization,
         duration: professionalInput.duration,
         description: professionalInput.description
-      }));
+      };
+      const action = editingProfessionalId
+        ? updateProfessionalQualification({
+          professionalQualificationId: editingProfessionalId,
+          ...payload
+        })
+        : addProfessionalQualification(payload);
+      const result = await dispatch(action);
+      const isSuccess = editingProfessionalId
+        ? updateProfessionalQualification.fulfilled.match(result)
+        : addProfessionalQualification.fulfilled.match(result);
 
-      if (addProfessionalQualification.fulfilled.match(result)) {
-        setSuccessMessage('Professional qualification added successfully!');
+      if (isSuccess) {
+        setSuccessMessage(editingProfessionalId
+          ? 'Professional qualification updated successfully!'
+          : 'Professional qualification added successfully!');
         setProfessionalInput({
           title: '',
           organization: '',
           duration: '',
           description: ''
         });
+        setEditingProfessionalId(null);
         setShowProfessionalForm(false);
         dispatch(fetchEmployeeOwnInfo());
       } else {
-        const errorMessage = result.payload || 'Failed to add professional qualification';
+        const errorMessage = result.payload || 'Failed to save professional qualification';
         throw new Error(errorMessage);
       }
     } catch (error) {
       setApiError(error.message);
+    } finally {
+      setIsSavingProfessional(false);
+    }
+  };
+
+  const startAcademicEdit = (record) => {
+    setAcademicInput({
+      institution: record.institution || '',
+      degree: record.degree || '',
+      fieldOfStudy: record.fieldOfStudy || '',
+      startDate: record.startDate ? new Date(record.startDate).toISOString().split('T')[0] : '',
+      endDate: record.endDate ? new Date(record.endDate).toISOString().split('T')[0] : '',
+      cgpa: record.cgpa || '',
+      details: record.details || ''
+    });
+    setEditingAcademicId(record._id);
+    setShowAcademicForm(true);
+    setShowProfessionalForm(false);
+    setApiError(null);
+    setSuccessMessage(null);
+  };
+
+  const handleDeleteAcademic = async (academicRecordId) => {
+    if (!window.confirm('Delete this academic record?')) return;
+    setApiError(null);
+    setSuccessMessage(null);
+    setDeletingAcademicId(academicRecordId);
+    try {
+      const result = await dispatch(deleteAcademicRecord(academicRecordId));
+      if (deleteAcademicRecord.fulfilled.match(result)) {
+        setSuccessMessage('Academic record deleted successfully!');
+        dispatch(fetchEmployeeOwnInfo());
+      } else {
+        setApiError(result.payload || 'Failed to delete academic record');
+      }
+    } finally {
+      setDeletingAcademicId(null);
+    }
+  };
+
+  const startProfessionalEdit = (qualification) => {
+    setProfessionalInput({
+      title: qualification.title || '',
+      organization: qualification.organization || '',
+      duration: qualification.duration || '',
+      description: qualification.description || ''
+    });
+    setEditingProfessionalId(qualification._id);
+    setShowProfessionalForm(true);
+    setShowAcademicForm(false);
+    setApiError(null);
+    setSuccessMessage(null);
+  };
+
+  const handleDeleteProfessional = async (professionalQualificationId) => {
+    if (!window.confirm('Delete this professional qualification?')) return;
+    setApiError(null);
+    setSuccessMessage(null);
+    setDeletingProfessionalId(professionalQualificationId);
+    try {
+      const result = await dispatch(deleteProfessionalQualification(professionalQualificationId));
+      if (deleteProfessionalQualification.fulfilled.match(result)) {
+        setSuccessMessage('Professional qualification deleted successfully!');
+        dispatch(fetchEmployeeOwnInfo());
+      } else {
+        setApiError(result.payload || 'Failed to delete professional qualification');
+      }
+    } finally {
+      setDeletingProfessionalId(null);
     }
   };
 
@@ -153,6 +256,10 @@ const EducationQualifications = () => {
               type="button"
               onClick={() => {
                 setShowAcademicForm(!showAcademicForm);
+                if (showAcademicForm) {
+                  setAcademicInput(emptyAcademic);
+                  setEditingAcademicId(null);
+                }
                 setShowProfessionalForm(false);
                 setApiError(null);
                 setSuccessMessage(null);
@@ -240,11 +347,11 @@ const EducationQualifications = () => {
               </div>
               <button
                 type="button"
-                onClick={handleAddAcademic}
+                onClick={handleSaveAcademic}
                 className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
-                disabled={loading}
+                disabled={loading || isSavingAcademic}
               >
-                {loading ? 'Saving...' : 'Save'}
+                {isSavingAcademic ? 'Saving...' : editingAcademicId ? 'Update' : 'Save'}
               </button>
             </div>
           )}
@@ -278,6 +385,26 @@ const EducationQualifications = () => {
                   {record.details && record.degree && (
                     <p className="text-sm text-gray-600 mt-2 border-t border-gray-200 pt-2">{record.details}</p>
                   )}
+                  {record._id && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:opacity-90"
+                        onClick={() => startAcademicEdit(record)}
+                        disabled={isSavingAcademic || deletingAcademicId === record._id}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:opacity-90"
+                        onClick={() => handleDeleteAcademic(record._id)}
+                        disabled={isSavingAcademic || deletingAcademicId === record._id}
+                      >
+                        {deletingAcademicId === record._id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -291,6 +418,15 @@ const EducationQualifications = () => {
               type="button"
               onClick={() => {
                 setShowProfessionalForm(!showProfessionalForm);
+                if (showProfessionalForm) {
+                  setProfessionalInput({
+                    title: '',
+                    organization: '',
+                    duration: '',
+                    description: ''
+                  });
+                  setEditingProfessionalId(null);
+                }
                 setShowAcademicForm(false);
                 setApiError(null);
                 setSuccessMessage(null);
@@ -329,11 +465,11 @@ const EducationQualifications = () => {
               />
               <button
                 type="button"
-                onClick={handleAddProfessional}
+                onClick={handleSaveProfessional}
                 className="px-4 py-2 bg-theme-primary text-white rounded hover:opacity-90 transition w-full sm:w-auto"
-                disabled={loading}
+                disabled={loading || isSavingProfessional}
               >
-                {loading ? 'Saving...' : 'Save'}
+                {isSavingProfessional ? 'Saving...' : editingProfessionalId ? 'Update' : 'Save'}
               </button>
             </div>
           )}
@@ -348,6 +484,26 @@ const EducationQualifications = () => {
                   {qualification.organization && <p className="text-gray-600">{qualification.organization}</p>}
                   <p className="text-gray-600">{qualification.duration}</p>
                   {qualification.description && <p className="text-gray-600">{qualification.description}</p>}
+                  {qualification._id && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:opacity-90"
+                        onClick={() => startProfessionalEdit(qualification)}
+                        disabled={isSavingProfessional || deletingProfessionalId === qualification._id}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:opacity-90"
+                        onClick={() => handleDeleteProfessional(qualification._id)}
+                        disabled={isSavingProfessional || deletingProfessionalId === qualification._id}
+                      >
+                        {deletingProfessionalId === qualification._id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -690,12 +690,12 @@ function DashboardEmployee() {
                                 </button>
                                 
                                 <button 
-                                    onClick={() => navigate('/documents')}
+                                    onClick={() => navigate('/employee/documents-id')}
                                     className="w-full text-white py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm bg-theme-primary hover:opacity-90"
             style={{ backgroundColor: 'var(--color-primary)' }}
                                 >
                                     <FaFolderOpen className="w-4 h-4" />
-                                    My Documents
+                                    Documents & ID Card
                                 </button>
                                 
                                 <button 

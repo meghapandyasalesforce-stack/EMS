@@ -81,3 +81,23 @@ export const requireOrganizationId = (req) => {
     return organizationId;
 };
 
+/**
+ * Single-line mailing label from Organization.address subdocument
+ * @param {Object|null|undefined} addr - organization.address
+ * @returns {string}
+ */
+export const formatOrganizationAddress = (addr) => {
+    if (!addr || typeof addr !== 'object') return '';
+    const parts = [addr.street, addr.city, addr.state, addr.zipCode, addr.country]
+        .map((p) => (p == null ? '' : String(p).trim()))
+        .filter(Boolean);
+    return parts.join(', ');
+};
+
+/** True when ID card should replace this string with org profile address */
+export const isPlaceholderIdCardAddress = (s) => {
+    if (s == null) return true;
+    const t = String(s).trim().toLowerCase();
+    return t === '' || t === 'your company address' || t === 'corporate office address';
+};
+

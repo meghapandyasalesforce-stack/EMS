@@ -102,6 +102,50 @@ export const addAcademicRecord = createAsyncThunk(
     }
   }
 );
+
+// Async thunk for updating academic record
+export const updateAcademicRecord = createAsyncThunk(
+  'employeeDetails/updateAcademicRecord',
+  async (payload, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.put(
+        `${BOTH_PROFILE_ENDPOINT}/update-academic-record`,
+        payload,
+        { withCredentials: true }
+      );
+      return {
+        ...employee,
+        academicRecords: response.data.academicRecords
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update academic record');
+    }
+  }
+);
+
+// Async thunk for deleting academic record
+export const deleteAcademicRecord = createAsyncThunk(
+  'employeeDetails/deleteAcademicRecord',
+  async (academicRecordId, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.delete(
+        `${BOTH_PROFILE_ENDPOINT}/delete-academic-record`,
+        {
+          data: { academicRecordId },
+          withCredentials: true
+        }
+      );
+      return {
+        ...employee,
+        academicRecords: response.data.academicRecords
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete academic record');
+    }
+  }
+);
 // Async thunk for adding guarantor details
 export const addGuarantor = createAsyncThunk(
   'employeeDetails/addGuarantor',
@@ -154,6 +198,50 @@ export const addProfessionalQualification = createAsyncThunk(
         error.message ||
         'Failed to add professional qualification'
       );
+    }
+  }
+);
+
+// Async thunk for updating professional qualification
+export const updateProfessionalQualification = createAsyncThunk(
+  'employeeDetails/updateProfessionalQualification',
+  async (payload, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.put(
+        `${BOTH_PROFILE_ENDPOINT}/update-professional-qualification`,
+        payload,
+        { withCredentials: true }
+      );
+      return {
+        ...employee,
+        professionalQualifications: response.data.professionalQualifications
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update professional qualification');
+    }
+  }
+);
+
+// Async thunk for deleting professional qualification
+export const deleteProfessionalQualification = createAsyncThunk(
+  'employeeDetails/deleteProfessionalQualification',
+  async (professionalQualificationId, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.delete(
+        `${BOTH_PROFILE_ENDPOINT}/delete-professional-qualification`,
+        {
+          data: { professionalQualificationId },
+          withCredentials: true
+        }
+      );
+      return {
+        ...employee,
+        professionalQualifications: response.data.professionalQualifications
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete professional qualification');
     }
   }
 );
@@ -396,6 +484,28 @@ const employeeDetailsSlice = createSlice({
         state.addingRecord = false;
         state.error = action.payload;
       })
+      .addCase(updateAcademicRecord.pending, (state) => {
+        state.addingRecord = true;
+      })
+      .addCase(updateAcademicRecord.fulfilled, (state, action) => {
+        state.addingRecord = false;
+        state.employee = action.payload;
+      })
+      .addCase(updateAcademicRecord.rejected, (state, action) => {
+        state.addingRecord = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteAcademicRecord.pending, (state) => {
+        state.addingRecord = true;
+      })
+      .addCase(deleteAcademicRecord.fulfilled, (state, action) => {
+        state.addingRecord = false;
+        state.employee = action.payload;
+      })
+      .addCase(deleteAcademicRecord.rejected, (state, action) => {
+        state.addingRecord = false;
+        state.error = action.payload;
+      })
 
       // Add guarantor details cases
       .addCase(addGuarantor.pending, (state) => {
@@ -427,6 +537,32 @@ const employeeDetailsSlice = createSlice({
         }
       })
       .addCase(addProfessionalQualification.rejected, (state, action) => {
+        state.addingQualification = false;
+        state.error = action.payload;
+      })
+      .addCase(updateProfessionalQualification.pending, (state) => {
+        state.addingQualification = true;
+      })
+      .addCase(updateProfessionalQualification.fulfilled, (state, action) => {
+        state.addingQualification = false;
+        if (state.employee) {
+          state.employee.professionalQualifications = action.payload.professionalQualifications;
+        }
+      })
+      .addCase(updateProfessionalQualification.rejected, (state, action) => {
+        state.addingQualification = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteProfessionalQualification.pending, (state) => {
+        state.addingQualification = true;
+      })
+      .addCase(deleteProfessionalQualification.fulfilled, (state, action) => {
+        state.addingQualification = false;
+        if (state.employee) {
+          state.employee.professionalQualifications = action.payload.professionalQualifications;
+        }
+      })
+      .addCase(deleteProfessionalQualification.rejected, (state, action) => {
         state.addingQualification = false;
         state.error = action.payload;
       })

@@ -314,6 +314,7 @@ const attendanceSlice = createSlice({
     sessions: [],
     summary: null,
     dailyStats: null,
+    period: null,
     todayStatus: [],
     adminStats: [],
     breakSession: null,
@@ -328,6 +329,7 @@ const attendanceSlice = createSlice({
       state.sessions = [];
       state.summary = null;
       state.dailyStats = null;
+      state.period = null;
       state.todayStatus = [];
       state.adminStats = [];
       state.breakSession = null;
@@ -441,6 +443,7 @@ const attendanceSlice = createSlice({
         state.loading = false;
         state.summary = action.payload.summary || {};
         state.dailyStats = action.payload.dailyStats || {};
+        state.period = action.payload.period || null;
         state.error = null;
         
         // Update sessions with fetched data

@@ -7,6 +7,8 @@ import { jsPDF } from 'jspdf';
 import fs from 'fs';
 import path from 'path';
 import logger from './logger.js';
+import Organization from '../models/organization.model.js';
+import { formatOrganizationAddress, isPlaceholderIdCardAddress } from './organizationHelper.js';
 
 /**
  * Generate PDF for ID card
@@ -29,8 +31,29 @@ export const generateIdCardPDF = async (idCard) => {
             format: [width, height]
         });
 
-        const companyName = cardDesign.companyName || 'COMPANY NAME';
-        const companyAddress = cardDesign.companyAddress || 'Corporate Office Address';
+        let companyName = String(cardDesign.companyName ?? '').trim();
+        let companyAddress = String(cardDesign.companyAddress ?? '').trim();
+        if (idCard.organizationId) {
+            try {
+                const org = await Organization.findById(idCard.organizationId).select('name address').lean();
+                if (org) {
+                    const orgAddr = formatOrganizationAddress(org.address);
+                    if (isPlaceholderIdCardAddress(companyAddress) && orgAddr) {
+                        companyAddress = orgAddr;
+                    }
+                    if (!companyName && org.name) {
+                        companyName = String(org.name).trim();
+                    }
+                }
+            } catch (orgErr) {
+                logger.warn('ID card PDF: organization lookup failed', {
+                    error: orgErr.message,
+                    organizationId: idCard.organizationId
+                });
+            }
+        }
+        if (!companyName) companyName = 'COMPANY NAME';
+        if (!companyAddress) companyAddress = 'Corporate Office Address';
         const role = employee.jobTitle || employee.position || 'Employee';
         const employeeName = `${employee.name || ''} ${employee.lastName || ''}`.trim() || 'Employee Name';
         const employeeCode = employee.employeeId || idCard.cardNumber || '-';
@@ -80,9 +103,15 @@ export const generateIdCardPDF = async (idCard) => {
         pdf.text(wrapText(companyName, 22), width / 2, 6.5, { align: 'center' });
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(4.8);
-        pdf.text(wrapText(companyAddress, 28), width / 2, 10.5, { align: 'center' });
+        const headerAddrLines = pdf.splitTextToSize(companyAddress, width - 6).slice(0, 2);
+        if (headerAddrLines.length <= 1) {
+            pdf.text(headerAddrLines[0] || companyAddress, width / 2, 10.5, { align: 'center' });
+        } else {
+            pdf.text(headerAddrLines[0], width / 2, 9.4, { align: 'center' });
+            pdf.text(headerAddrLines[1], width / 2, 11.9, { align: 'center' });
+        }
         pdf.setFontSize(5.2);
-        pdf.text('EMPLOYEE ID CARD', width / 2, 14, { align: 'center' });
+        pdf.text('EMPLOYEE ID CARD', width / 2, 14.2, { align: 'center' });
 
         // Photo block (centered)
         const photoW = 14;
@@ -129,17 +158,61 @@ export const generateIdCardPDF = async (idCard) => {
         pdf.setFontSize(4.8);
         pdf.text(`EMP ID: ${wrapText(employeeCode, 14)}`, width / 2, 47.1, { align: 'center' });
 
-        // Details block (left side)
+        // QR position (define before detail block so value column width clears the QR)
+        const qrX = width - 20.5;
+        const valueColumnX = 12.5;
+        const valueMaxWidth = Math.max(16, qrX - valueColumnX - 1.5);
+        const detailLineHeight = 2.85;
+        const maxValueLines = 6;
+
+        // Details block (left column — wrap long email/address instead of truncating with "...")
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(55, 65, 81);
         pdf.setFontSize(4.2);
         let y = 53;
         const printKV = (k, v) => {
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(`${k}:`, 3.8, y);
+            const str = String(v == null || v === '' ? '-' : v);
             pdf.setFont('helvetica', 'normal');
-            pdf.text(wrapText(v, 12), 12.5, y);
-            y += 3.1;
+            let lines;
+            if (k === 'Email' && str !== '-' && str.includes('@')) {
+                const asOneLine = pdf.splitTextToSize(str, valueMaxWidth);
+                if (asOneLine.length === 1) {
+                    lines = asOneLine;
+                } else {
+                    const idx = str.indexOf('@');
+                    const local = str.slice(0, idx);
+                    const domain = str.slice(idx + 1);
+                    const line2 = `@${domain}`;
+                    const localFits = pdf.splitTextToSize(local, valueMaxWidth).length === 1;
+                    const domainFits = pdf.splitTextToSize(line2, valueMaxWidth).length === 1;
+                    if (localFits && domainFits) {
+                        lines = [local, line2];
+                    } else {
+                        lines = asOneLine;
+                    }
+                }
+            } else {
+                lines = pdf.splitTextToSize(str, valueMaxWidth);
+            }
+            if (!lines.length) lines = ['-'];
+            if (lines.length > maxValueLines) {
+                lines = lines.slice(0, maxValueLines);
+                const last = lines[maxValueLines - 1] || '';
+                lines[maxValueLines - 1] =
+                    last.length > 3 ? `${last.slice(0, last.length - 3).trimEnd()}...` : `${last}...`;
+            }
+            lines.forEach((line, i) => {
+                if (i === 0) {
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text(`${k}: `, 3.8, y);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.text(line, valueColumnX, y);
+                } else {
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.text(line, valueColumnX, y);
+                }
+                y += detailLineHeight;
+            });
         };
 
         printKV('Department', department);
@@ -149,7 +222,6 @@ export const generateIdCardPDF = async (idCard) => {
         printKV('Joined', formatDate(joinDate));
 
         // QR area on front (right side)
-        const qrX = width - 20.5;
         const qrY = 56;
         pdf.setDrawColor(31, 41, 55);
         pdf.roundedRect(qrX, qrY, 16, 16, 1.2, 1.2, 'S');

@@ -174,7 +174,7 @@ export const organizationRoutes = [
 // Admin management routes
 export const adminRoutes = [
   { path: '/role-hierarchy', component: lazy(() => import('../Admin/RoleManagement/RoleHierarchy')), message: 'Loading role hierarchy...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/calendar-management', component: lazy(() => import('../Admin/Calendar/CalendarManagement')), message: 'Loading calendar management...', allowedRoles: ['admin'] },
+  { path: '/calendar-management', component: lazy(() => import('../Admin/Calendar/CalendarManagement')), message: 'Loading calendar management...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/id-card-generator', component: lazy(() => import('../Admin/IdCards/IdCardGenerator')), message: 'Loading ID card generator...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/employee/id-card', component: lazy(() => import('../Employee/IdCardView')), message: 'Loading ID card...', allowedRoles: [] },
   { path: '/salary-structure', component: lazy(() => import('../Admin/SalaryStructure/SalaryStructureManager')), message: 'Loading salary structure...', allowedRoles: ['admin', 'hr', 'finance', 'executive'] },
@@ -201,6 +201,7 @@ export const hrRoutes = [
   { path: '/engagement', component: lazy(() => import('../HR/Engagement/EngagementPage')), message: 'Loading employee engagement...', allowedRoles: [] },
   { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: [] },
+  { path: '/employee/documents-id', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },
   { path: '/documents/:id/versions', component: lazy(() => import('../HR/Documents/DocumentVersions')), message: 'Loading document versions...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/benefits', component: lazy(() => import('../HR/Benefits/BenefitsPage')), message: 'Loading benefits...', allowedRoles: [] },
   { path: '/benefits/:id', component: lazy(() => import('../HR/Benefits/BenefitDetailPage')), message: 'Loading benefit plan details...', allowedRoles: [] },

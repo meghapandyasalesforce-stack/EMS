@@ -26,7 +26,7 @@ const RegularizationRequests = () => {
                 params: { status: filterStatus === 'all' ? undefined : filterStatus },
                 withCredentials: true
             });
-            setRequests(response.data?.requests || []);
+            setRequests(response.data?.data ?? []);
         } catch (error) {
             toast.error('Failed to load regularization requests');
         } finally {

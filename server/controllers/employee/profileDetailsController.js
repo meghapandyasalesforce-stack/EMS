@@ -229,6 +229,112 @@ export const addAcademicRecord = async (req, res) => {
     }
 };
 
+// Employee updates an academic record (by subdocument _id)
+export const updateAcademicRecord = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const {
+            academicRecordId,
+            institution,
+            details,
+            degree,
+            fieldOfStudy,
+            startDate,
+            endDate,
+            cgpa,
+        } = req.body;
+
+        if (!academicRecordId || !mongoose.isValidObjectId(academicRecordId)) {
+            return res.status(400).json({ message: 'Valid academicRecordId is required' });
+        }
+
+        const inst = institution != null ? String(institution).trim() : '';
+        const deg = degree != null ? String(degree).trim() : '';
+        const det = details != null ? String(details).trim() : '';
+
+        if (!inst || (!deg && !det)) {
+            return res.status(400).json({
+                message: 'Institution and degree (or details) are required',
+            });
+        }
+
+        const parseDate = (v) => {
+            if (v == null || v === '') return undefined;
+            const d = new Date(v);
+            return Number.isNaN(d.getTime()) ? undefined : d;
+        };
+
+        const field = fieldOfStudy != null ? String(fieldOfStudy).trim() : '';
+        const cgpaVal = cgpa != null ? String(cgpa).trim() : '';
+        const sd = parseDate(startDate);
+        const ed = parseDate(endDate);
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'academicRecords._id': academicRecordId },
+            {
+                $set: {
+                    'academicRecords.$.institution': inst,
+                    'academicRecords.$.degree': deg || '',
+                    'academicRecords.$.details': det || '',
+                    'academicRecords.$.fieldOfStudy': field || '',
+                    'academicRecords.$.startDate': sd || null,
+                    'academicRecords.$.endDate': ed || null,
+                    'academicRecords.$.cgpa': cgpaVal || ''
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Academic record not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('academicRecords');
+        res.status(200).json({
+            message: 'Academic record updated successfully',
+            academicRecords: updatedEmployee.academicRecords
+        });
+    } catch (error) {
+        logger.error('Error updating academic record', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to update academic record',
+            error: error.message
+        });
+    }
+};
+
+// Employee deletes an academic record (by subdocument _id)
+export const deleteAcademicRecord = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const { academicRecordId } = req.body;
+
+        if (!academicRecordId || !mongoose.isValidObjectId(academicRecordId)) {
+            return res.status(400).json({ message: 'Valid academicRecordId is required' });
+        }
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'academicRecords._id': academicRecordId },
+            { $pull: { academicRecords: { _id: academicRecordId } } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Academic record not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('academicRecords');
+        res.status(200).json({
+            message: 'Academic record deleted successfully',
+            academicRecords: updatedEmployee.academicRecords
+        });
+    } catch (error) {
+        logger.error('Error deleting academic record', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to delete academic record',
+            error: error.message
+        });
+    }
+};
+
 // Employee adds/updates guarantor (only 1 allowed)
 export const addGuarantorDetails = async (req, res) => {
     try {
@@ -311,6 +417,85 @@ export const addGuarantorDetails = async (req, res) => {
         logger.error('Error adding professional qualification', { error: error.message, stack: error.stack });
         res.status(500).json({ 
             message: 'Failed to add professional qualification',
+            error: error.message
+        });
+    }
+};
+
+// Employee updates professional qualification (by subdocument _id)
+export const updateProfessionalQualification = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const { professionalQualificationId, title, organization, duration, description } = req.body;
+
+        if (!professionalQualificationId || !mongoose.isValidObjectId(professionalQualificationId)) {
+            return res.status(400).json({ message: 'Valid professionalQualificationId is required' });
+        }
+
+        const ttl = title != null ? String(title).trim() : '';
+        const org = organization != null ? String(organization).trim() : '';
+        if (!ttl || !org) {
+            return res.status(400).json({ message: 'Title and organization are required' });
+        }
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'professionalQualifications._id': professionalQualificationId },
+            {
+                $set: {
+                    'professionalQualifications.$.title': ttl,
+                    'professionalQualifications.$.organization': org,
+                    'professionalQualifications.$.duration': duration != null ? String(duration).trim() : '',
+                    'professionalQualifications.$.description': description != null ? String(description).trim() : ''
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Professional qualification not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('professionalQualifications');
+        res.status(200).json({
+            message: 'Professional qualification updated successfully',
+            professionalQualifications: updatedEmployee.professionalQualifications
+        });
+    } catch (error) {
+        logger.error('Error updating professional qualification', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to update professional qualification',
+            error: error.message
+        });
+    }
+};
+
+// Employee deletes professional qualification (by subdocument _id)
+export const deleteProfessionalQualification = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const { professionalQualificationId } = req.body;
+
+        if (!professionalQualificationId || !mongoose.isValidObjectId(professionalQualificationId)) {
+            return res.status(400).json({ message: 'Valid professionalQualificationId is required' });
+        }
+
+        const result = await Employee.updateOne(
+            { _id: employeeId, 'professionalQualifications._id': professionalQualificationId },
+            { $pull: { professionalQualifications: { _id: professionalQualificationId } } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Professional qualification not found' });
+        }
+
+        const updatedEmployee = await Employee.findById(employeeId).select('professionalQualifications');
+        res.status(200).json({
+            message: 'Professional qualification deleted successfully',
+            professionalQualifications: updatedEmployee.professionalQualifications
+        });
+    } catch (error) {
+        logger.error('Error deleting professional qualification', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            message: 'Failed to delete professional qualification',
             error: error.message
         });
     }

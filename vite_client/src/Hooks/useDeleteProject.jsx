@@ -14,17 +14,18 @@ const useDeleteProject = () => {
         { withCredentials: true }
       );
 
-      if (res.data.success) {
+      const deleteSucceeded = res.status === 200 && (res.data?.success !== false);
+      if (deleteSucceeded) {
         dispatch(deleteProject(projectId));
         return { success: true };
       } else {
-        return { success: false, error: res.data.error || 'Failed to delete project' };
+        return { success: false, error: res.data?.error || 'Failed to delete project' };
       }
     } catch (error) {
       // Removed console.error for production
       return { 
         success: false, 
-        error: error.response?.data?.error || 'Failed to delete project' 
+        error: error.response?.data?.error || error.response?.data?.message || 'Failed to delete project' 
       };
     }
   };

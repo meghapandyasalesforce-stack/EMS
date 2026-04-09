@@ -1,6 +1,7 @@
 import Calendar from '../../models/calendar.model.js';
 import logger from '../../helpers/logger.js';
 import { detectHolidayTheme } from '../../helpers/indianHolidayService.js';
+import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 
 // Get calendar for year (employee view - read-only)
 export const getEmployeeCalendar = async (req, res) => {
@@ -13,7 +14,8 @@ export const getEmployeeCalendar = async (req, res) => {
     }
 
     // Get calendar for the year
-    let calendar = await Calendar.findOne({ year: yearNum });
+    const query = addOrganizationFilter(req, { year: yearNum });
+    let calendar = await Calendar.findOne(query);
     
     if (!calendar) {
       // Return empty calendar if not found
@@ -85,7 +87,8 @@ export const getHolidaysForMonth = async (req, res) => {
       return res.status(400).json({ message: 'Invalid month. Must be between 1 and 12' });
     }
 
-    const calendar = await Calendar.findOne({ year: yearNum });
+    const query = addOrganizationFilter(req, { year: yearNum });
+    const calendar = await Calendar.findOne(query);
     
     if (!calendar) {
       return res.json({ holidays: [] });
@@ -116,7 +119,8 @@ export const isWorkingDay = async (req, res) => {
     }
 
     const year = checkDate.getFullYear();
-    const calendar = await Calendar.findOne({ year });
+    const query = addOrganizationFilter(req, { year });
+    const calendar = await Calendar.findOne(query);
     
     if (!calendar) {
       // Default working days if no calendar found

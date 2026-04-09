@@ -376,6 +376,7 @@ export const deleteProject = async (req, res) => {
         }
 
         res.status(200).json({ 
+            success: true,
             message: 'Project deleted successfully',
             deletedProject 
         });

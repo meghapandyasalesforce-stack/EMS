@@ -339,7 +339,10 @@ export const uploadCalendarFile = async (req, res) => {
           color: themeData.color,
           isRecurring: holidayData.isRecurring !== undefined ? holidayData.isRecurring : true,
           recurringPattern: holidayData.recurringPattern || 'yearly',
-          isActive: true
+          isActive: true,
+          source: 'upload',
+          sourceFileName: req.file.originalname,
+          uploadedAt: new Date()
         };
         
         calendar.holidays.push(holiday);
@@ -623,9 +626,14 @@ export const getCalendarUploadHistory = async (req, res) => {
       return res.json({ uploads: [] });
     }
 
-    // Get holidays that were auto-generated from files
+    // Get holidays that were generated from uploads.
+    // Keep legacy description-based fallback for previously stored holidays.
     const fileGeneratedHolidays = calendar.holidays.filter(holiday => 
-      holiday.description && holiday.description.includes('Auto-generated from calendar')
+      holiday.source === 'upload' ||
+      (holiday.description && (
+        holiday.description.includes('Auto-generated from calendar') ||
+        holiday.description.includes('Auto-detected from calendar file')
+      ))
     );
 
     res.json({
@@ -633,6 +641,10 @@ export const getCalendarUploadHistory = async (req, res) => {
         id: holiday._id,
         name: holiday.name,
         date: holiday.date,
+        type: holiday.type,
+        source: holiday.source || 'upload',
+        sourceFileName: holiday.sourceFileName || null,
+        uploadedAt: holiday.uploadedAt || null,
         description: holiday.description,
         createdAt: holiday.createdAt || new Date()
       }))

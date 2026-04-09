@@ -6,7 +6,13 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { generateEmployeeQRCode, generateQRCodeBuffer } from '../../helpers/qrCodeGenerator.js';
-import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
+import {
+    getOrganizationId,
+    addOrganizationFilter,
+    formatOrganizationAddress,
+    isPlaceholderIdCardAddress
+} from '../../helpers/organizationHelper.js';
+import Organization from '../../models/organization.model.js';
 
 /** Actor running admin/HR ID-card actions (JWT sets req.user for admin, req.employee for employee). */
 const getActorId = (req) => req.user?._id || req.employee?._id;
@@ -99,13 +105,15 @@ export const autoGenerateIdCard = async (employeeId, organizationId, generatedBy
             // Continue without QR code
         }
 
-        // Default card design
+        const org = await Organization.findById(organizationId).select('name address').lean();
+        const orgAddress = formatOrganizationAddress(org?.address);
+
         const defaultCardDesign = {
             template: 'standard',
             backgroundColor: '#ffffff',
             textColor: '#000000',
-            companyName: 'Paarsiv Technologies',
-            companyAddress: 'Your Company Address'
+            companyName: org?.name?.trim() || 'Paarsiv Technologies',
+            companyAddress: orgAddress || 'Your Company Address'
         };
 
         // Generate card number
@@ -245,13 +253,22 @@ export const generateIdCard = async (req, res) => {
             qrData = null;
         }
 
-        // Default card design if not provided - merge carefully to avoid undefined values
+        const org = await Organization.findById(organizationId).select('name address').lean();
+        const orgAddress = formatOrganizationAddress(org?.address);
+        const explicitName = String(cardDesign?.companyName ?? '').trim();
+        const explicitAddr = String(cardDesign?.companyAddress ?? '').trim();
+        const resolvedName = explicitName || org?.name?.trim() || 'Paarsiv Technologies';
+        const resolvedAddress =
+            explicitAddr && !isPlaceholderIdCardAddress(explicitAddr)
+                ? explicitAddr
+                : orgAddress || explicitAddr || 'Your Company Address';
+
         const defaultCardDesign = {
             template: cardDesign?.template || 'standard',
             backgroundColor: cardDesign?.backgroundColor || '#ffffff',
             textColor: cardDesign?.textColor || '#000000',
-            companyName: cardDesign?.companyName || 'Paarsiv Technologies',
-            companyAddress: cardDesign?.companyAddress || 'Your Company Address'
+            companyName: resolvedName,
+            companyAddress: resolvedAddress
         };
 
         // Generate card number

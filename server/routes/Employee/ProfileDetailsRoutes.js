@@ -2,7 +2,11 @@ import express from "express";
 import {
     updateEmployeeInfo,
     addAcademicRecord,
+    updateAcademicRecord,
+    deleteAcademicRecord,
     addProfessionalQualification,
+    updateProfessionalQualification,
+    deleteProfessionalQualification,
     addFamilyDetail,
     updateFamilyDetail,
     updateFinancialDetails,
@@ -28,7 +32,11 @@ router.route("/update-info").put(isAuthenticated, updateEmployeeInfo);
 router.route("/admin/get-info/:employeeId").get(isAdminOrHROrExecutiveAuthenticated, getEmployeeInfoByAdmin);
 router.route("/get-my-details").get(isAuthenticated, getEmployeeInfoByEmployee);
 router.route("/add-academic-record").post(isAuthenticated, addAcademicRecord);
+router.route("/update-academic-record").put(isAuthenticated, updateAcademicRecord);
+router.route("/delete-academic-record").delete(isAuthenticated, deleteAcademicRecord);
 router.route("/add-professional-qualification").post(isAuthenticated, addProfessionalQualification);
+router.route("/update-professional-qualification").put(isAuthenticated, updateProfessionalQualification);
+router.route("/delete-professional-qualification").delete(isAuthenticated, deleteProfessionalQualification);
 router.route("/add-family-detail").post(isAuthenticated, addFamilyDetail);
 router.route("/update-family-detail").put(isAuthenticated, updateFamilyDetail);
 router.route("/add-guarantor-detail").post(isAuthenticated, addGuarantorDetails);

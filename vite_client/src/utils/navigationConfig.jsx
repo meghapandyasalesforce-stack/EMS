@@ -158,6 +158,7 @@ const getExecutiveNavigation = (position) => {
         { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
         { path: "/today-attendance", name: "Attendance", icon: <IoBookmarks /> },
         { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
+        { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
         { path: "/admin/reports", name: "Reports & Analytics", icon: <FaChartBar /> },
         { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
     ];
@@ -194,7 +195,7 @@ const getManagerNavigation = () => [
     { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/team-learning", name: "Team Learning", icon: <FaGraduationCap /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
-    { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
+    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill /> },
     { path: "/employee/id-card", name: "ID Card", icon: <FaCreditCard /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
@@ -215,6 +216,7 @@ const getHRNavigation = () => [
     { path: "/succession", name: "Succession Planning", icon: <FaUserTie /> },
     { path: "/workforce", name: "Workforce Planning", icon: <FaChartBar /> },
     { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
+    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/today-attendance", name: "Attendance", icon: <IoBookmarks /> },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
     { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
@@ -233,6 +235,7 @@ const getFinanceNavigation = () => [
     { path: "/admin/reports", name: "Financial Reports", icon: <FaChartBar /> },
     { path: "/employees", name: "Employees", icon: <FaUsers /> },
     { path: "/my-leave", name: "My Leave", icon: <FaCalendarAlt /> },
+    { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
 ];
@@ -257,15 +260,15 @@ const getTechNavigation = () => [
 const getEmployeeNavigation = () => [
     { path: "/dashboard-employee", name: "Dashboard", icon: <FaHome /> },
     { path: "/attendance-stats", name: "Attendance Stats", icon: <IoBookmarks /> },
+    { path: "/my-attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/employee/projects", name: "Projects", icon: <VscProject /> },
     { path: "/my-leave", name: "Leave", icon: <FaCalendarAlt /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
     { path: "/team-learning", name: "Team Learning", icon: <FaGraduationCap /> },
     { path: "/benefits", name: "Benefits", icon: <FaGift /> },
-    { path: "/documents", name: "Documents", icon: <FaFolderOpen /> },
+    { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
     { path: "/learning", name: "Learning", icon: <FaGraduationCap /> },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
-    { path: "/employee/id-card", name: "ID Card", icon: <FaCreditCard /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
 ];
