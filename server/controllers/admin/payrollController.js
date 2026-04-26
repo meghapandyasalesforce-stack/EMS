@@ -23,6 +23,18 @@ function sortPayrollsByYearMonth(payrolls, descending = true) {
     });
 }
 
+function resolveRecomputeMode(month, year, requestedGenerationType = 'final') {
+    const monthName = String(month || '');
+    const yearNum = parseInt(year, 10);
+    const monthIndex = new Date(`${monthName} 1, ${yearNum}`).getMonth();
+    if (!Number.isFinite(yearNum) || Number.isNaN(monthIndex)) {
+        return requestedGenerationType === 'preview' ? 'preview' : 'final';
+    }
+    // For explicit manual monthly creation/update, honor requested generation type.
+    // This allows full-month calendar-day denominator even when payroll is created mid-month.
+    return requestedGenerationType === 'preview' ? 'preview' : 'final';
+}
+
 function normalizePayrollForDisplay(payroll) {
     if (!payroll || typeof payroll !== 'object') return payroll;
 
@@ -39,7 +51,10 @@ function normalizePayrollForDisplay(payroll) {
         earnings.specialAllowance = (Number(earnings.specialAllowance) || 0) + gratuityLegacy;
     }
 
-    deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+    // Keep stored PF when present (supports custom/capped structures); fallback only for legacy rows.
+    if (deductions.pfEmployee == null) {
+        deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+    }
 
     const earningsFields = [
         'basicWage',
@@ -76,18 +91,131 @@ function normalizePayrollForDisplay(payroll) {
     };
 }
 
+function pickAllowedCreateFields(payload = {}) {
+    const allowed = {};
+    const scalarFields = [
+        'employeeId',
+        'month',
+        'year',
+        'basicSalary',
+        'status',
+        'type',
+        'subType',
+        'adjustmentMode',
+        'notes',
+        'generationType'
+    ];
+    for (const key of scalarFields) {
+        if (payload[key] !== undefined) allowed[key] = payload[key];
+    }
+    if (payload.earnings && typeof payload.earnings === 'object') {
+        allowed.earnings = payload.earnings;
+    }
+    if (payload.deductions && typeof payload.deductions === 'object') {
+        allowed.deductions = payload.deductions;
+    }
+    if (Array.isArray(payload.leaves)) {
+        allowed.leaves = payload.leaves;
+    }
+    return allowed;
+}
+
+function buildDisbursementPlanForGroup(group = []) {
+    const monthlyCandidates = group
+        .filter((p) => p?.type === 'monthly')
+        .slice()
+        .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+    const monthly = monthlyCandidates[0] || null;
+    const adjustments = group.filter((p) => p?.type === 'off_cycle');
+
+    const fullOverride = adjustments
+        .filter((p) => String(p?.adjustmentMode) === 'full_override')
+        .slice()
+        .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0] || null;
+
+    const payableRecords = [];
+    if (fullOverride) {
+        const cutoff = new Date(fullOverride.createdAt || fullOverride.updatedAt || 0).getTime();
+        payableRecords.push(fullOverride);
+        adjustments.forEach((adj) => {
+            if (String(adj?._id) === String(fullOverride?._id)) return;
+            const ts = new Date(adj.createdAt || adj.updatedAt || 0).getTime();
+            if (Number.isFinite(ts) && ts >= cutoff) {
+                payableRecords.push(adj);
+            }
+        });
+    } else {
+        if (monthly) payableRecords.push(monthly);
+        payableRecords.push(...adjustments);
+    }
+
+    if (!payableRecords.length) {
+        return null;
+    }
+
+    const aggregated = aggregatePayrollPeriod(payableRecords);
+    const amount = Math.round(Number(aggregated?.final?.net) || 0);
+    const employee = payableRecords[0]?.employeeId || group[0]?.employeeId;
+
+    return {
+        monthly,
+        fullOverride,
+        payableRecords,
+        aggregated,
+        amount,
+        employee
+    };
+}
+
+async function buildMonthlyPayrollGeneration({ payrollEmployee, month, year, organizationId, generationType }) {
+    const effectiveGenerationType = generationType === 'preview' ? 'preview' : 'final';
+    const recomputeMode = resolveRecomputeMode(month, year, effectiveGenerationType);
+    const generatedPayload = await buildGeneratedPayrollPayload({
+        emp: payrollEmployee,
+        month,
+        year,
+        organizationId,
+        mode: recomputeMode,
+        asOf: new Date()
+    });
+
+    return {
+        generatedPayload,
+        recomputeMode
+    };
+}
+
 // Update payroll details
 export const updatePayroll = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
         const adminId = req.user?._id;
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        const query = addOrganizationFilter(req, { _id: id });
 
         // Paid status is controlled by CEO disbursement (so bank transfer + lock happens together).
         if (updates?.status === 'Paid') {
             return res.status(403).json({
                 success: false,
                 message: 'Paid status can only be set after disbursement.'
+            });
+        }
+
+        // Get payroll before update for audit log
+        const payrollBefore = await Payroll.findOne(query).populate('employeeId', 'name lastName email jobTitle department employeeId').lean();
+        
+        if (!payrollBefore) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Payroll not found' 
+            });
+        }
+
+        if (payrollBefore.status === 'Paid' || payrollBefore.status === 'Processed' || payrollBefore.payrollLocked) {
+            return res.status(403).json({
+                success: false,
+                message: 'This payroll is paid or locked and cannot be edited.'
             });
         }
 
@@ -142,23 +270,6 @@ export const updatePayroll = async (req, res) => {
             lastModifiedBy: adminId
         };
 
-        // Get payroll before update for audit log
-        const payrollBefore = await Payroll.findById(id).populate('employeeId', 'name lastName email jobTitle department employeeId').lean();
-        
-        if (!payrollBefore) {
-            return res.status(404).json({ 
-                success: false,
-                message: 'Payroll not found' 
-            });
-        }
-
-        if (payrollBefore.status === 'Paid' || payrollBefore.status === 'Processed' || payrollBefore.payrollLocked) {
-            return res.status(403).json({
-                success: false,
-                message: 'This payroll is paid or locked and cannot be edited.'
-            });
-        }
-
         // Off-cycle adjustments should never be created/treated as preview/provisional.
         if (payrollBefore.type === 'off_cycle') {
             updateData.type = 'off_cycle';
@@ -168,9 +279,49 @@ export const updatePayroll = async (req, res) => {
             updateData.isVisible = true;
         }
 
+        const targetType = updateData.type || payrollBefore.type || 'monthly';
+        if (targetType === 'monthly') {
+            const targetEmployeeId = updateData.employeeId || payrollBefore.employeeId?._id || payrollBefore.employeeId;
+            const targetMonth = updateData.month || payrollBefore.month;
+            const targetYear = parseInt(updateData.year ?? payrollBefore.year, 10);
+            const targetOrganizationId =
+                payrollBefore.organizationId ||
+                req.organizationId ||
+                req.user?.organizationId ||
+                req.employee?.organizationId;
+
+            if (targetEmployeeId && targetMonth && !Number.isNaN(targetYear)) {
+                const payrollEmployee = await Employee.findById(targetEmployeeId)
+                    .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate')
+                    .lean();
+
+                if (payrollEmployee) {
+                    const generationType = updateData.generationType || payrollBefore.generationType || 'final';
+                    const { generatedPayload, recomputeMode } = await buildMonthlyPayrollGeneration({
+                        payrollEmployee,
+                        month: targetMonth,
+                        year: targetYear,
+                        organizationId: targetOrganizationId,
+                        generationType
+                    });
+                    updateData.basicSalary = generatedPayload.basicSalary;
+                    updateData.earnings = generatedPayload.earnings;
+                    updateData.deductions = generatedPayload.deductions;
+                    updateData.ctc = generatedPayload.ctc;
+                    updateData.inHandSalary = generatedPayload.inHandSalary;
+                    updateData.workingDays = generatedPayload.workingDays;
+                    updateData.presentDays = generatedPayload.presentDays;
+                    updateData.unpaidLeave = generatedPayload.unpaidLeave;
+                    updateData.leaves = generatedPayload.leaves;
+                    updateData.generationType = recomputeMode === 'preview' ? 'preview' : 'final';
+                    updateData.isProvisional = recomputeMode === 'preview';
+                }
+            }
+        }
+
         // Perform the update
-        const payroll = await Payroll.findByIdAndUpdate(
-            id,
+        const payroll = await Payroll.findOneAndUpdate(
+            query,
             updateData,
             { new: true }
         ).populate('employeeId', 'name lastName email jobTitle department employeeId');
@@ -355,7 +506,8 @@ export const getAllPayrolls = async (req, res) => {
 // Create new payroll
 export const createPayroll = async (req, res) => {
     try {
-        const payrollData = req.body;
+        const payrollData = pickAllowedCreateFields(req.body || {});
+        let payrollEmployee = null;
         
         // Get organizationId from request context (multi-tenancy security)
         const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
@@ -368,14 +520,16 @@ export const createPayroll = async (req, res) => {
         
         // If employeeId is provided, verify it belongs to the same organization
         if (payrollData.employeeId) {
-            const employee = await Employee.findById(payrollData.employeeId).select('organizationId').lean();
-            if (!employee) {
+            payrollEmployee = await Employee.findById(payrollData.employeeId)
+                .select('organizationId salary joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate')
+                .lean();
+            if (!payrollEmployee) {
                 return res.status(404).json({ 
                     success: false, 
                     message: 'Employee not found' 
                 });
             }
-            if (employee.organizationId && employee.organizationId.toString() !== organizationId.toString()) {
+            if (payrollEmployee.organizationId && payrollEmployee.organizationId.toString() !== organizationId.toString()) {
                 return res.status(403).json({ 
                     success: false, 
                     message: 'Access denied. Employee does not belong to your organization.' 
@@ -399,8 +553,16 @@ export const createPayroll = async (req, res) => {
         const subType = recordType === 'off_cycle' ? (payrollData.subType || 'correction') : undefined;
         const adjustmentMode = recordType === 'off_cycle' ? (payrollData.adjustmentMode || 'earning') : undefined;
         const genType = payrollData.generationType === 'preview' ? 'preview' : 'final';
+        const requestedStatus = payrollData.status;
+        let monthlyGeneratedData = null;
 
         if (recordType === 'monthly') {
+            if (requestedStatus && !['Pending', 'Processed', 'Cancelled'].includes(requestedStatus)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid status for monthly payroll creation.'
+                });
+            }
             const existing = await Payroll.findOne({
                 organizationId,
                 employeeId: payrollData.employeeId,
@@ -415,8 +577,37 @@ export const createPayroll = async (req, res) => {
                 });
             }
         }
+        if (recordType === 'off_cycle' && requestedStatus && !['Pending', 'Processed', 'Cancelled'].includes(requestedStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid status for off-cycle payroll creation.'
+            });
+        }
         
-        // Calculate totals
+        if (recordType === 'monthly' && payrollEmployee) {
+            const { generatedPayload, recomputeMode } = await buildMonthlyPayrollGeneration({
+                payrollEmployee,
+                month,
+                year: yearNum,
+                organizationId,
+                generationType: genType
+            });
+            monthlyGeneratedData = {
+                basicSalary: generatedPayload.basicSalary,
+                earnings: generatedPayload.earnings,
+                deductions: generatedPayload.deductions,
+                ctc: generatedPayload.ctc,
+                inHandSalary: generatedPayload.inHandSalary,
+                leaves: generatedPayload.leaves,
+                workingDays: generatedPayload.workingDays,
+                presentDays: generatedPayload.presentDays,
+                unpaidLeave: generatedPayload.unpaidLeave,
+                generationType: recomputeMode === 'preview' ? 'preview' : 'final',
+                isProvisional: recomputeMode === 'preview'
+            };
+        }
+
+        // Calculate totals for manual off-cycle entries only.
         const earnings = payrollData.earnings || {};
         const deductions = payrollData.deductions || {};
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
@@ -457,20 +648,33 @@ export const createPayroll = async (req, res) => {
         const inHandSalary = earnings.totalEarnings - deductions.total;
         
         const payroll = new Payroll({
-            ...payrollData,
             organizationId: organizationId, // Override with request context for security
-            earnings,
-            deductions,
-            ctc,
-            inHandSalary,
+            employeeId: payrollData.employeeId,
+            month,
+            year: yearNum,
+            basicSalary: recordType === 'monthly' ? monthlyGeneratedData?.basicSalary : payrollData.basicSalary,
+            status: requestedStatus || 'Pending',
+            earnings: recordType === 'monthly' ? monthlyGeneratedData?.earnings : earnings,
+            deductions: recordType === 'monthly' ? monthlyGeneratedData?.deductions : deductions,
+            ctc: recordType === 'monthly' ? monthlyGeneratedData?.ctc : ctc,
+            inHandSalary: recordType === 'monthly' ? monthlyGeneratedData?.inHandSalary : inHandSalary,
+            leaves: recordType === 'monthly' ? monthlyGeneratedData?.leaves : payrollData.leaves,
+            notes: payrollData.notes,
             type: recordType,
             subType,
             adjustmentMode,
-            generationType: recordType === 'monthly' ? genType : 'final',
+            generationType: recordType === 'monthly' ? (monthlyGeneratedData?.generationType || genType) : 'final',
             // Off-cycle never uses preview/provisional.
-            isProvisional: recordType === 'monthly' ? genType === 'preview' : false,
+            isProvisional: recordType === 'monthly' ? !!monthlyGeneratedData?.isProvisional : false,
             payrollLocked: false,
-            isVisible: true
+            isVisible: true,
+            ...(recordType === 'monthly'
+                ? {
+                    workingDays: monthlyGeneratedData?.workingDays,
+                    presentDays: monthlyGeneratedData?.presentDays,
+                    unpaidLeave: monthlyGeneratedData?.unpaidLeave
+                }
+                : {})
         });
         
         await payroll.save();
@@ -499,6 +703,12 @@ export const createPayroll = async (req, res) => {
         
         res.status(201).json(populatedPayroll);
     } catch (error) {
+        if (error?.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: 'Monthly payroll already exists for this employee and period.'
+            });
+        }
         logger.error('Create Payroll Error', { error: error.message, stack: error.stack });
         res.status(500).json({ message: error.message });
     }
@@ -853,6 +1063,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
             const adjustments = aggregated?.adjustments?.map((p) => ({
                 payrollId: p._id,
                 subType: p.subType,
+                adjustmentMode: p.adjustmentMode,
                 status: p.status,
                 paidAmount: p.paidAmount ?? 0,
                 generationType: p.generationType,
@@ -901,9 +1112,11 @@ export const togglePayrollVisibility = async (req, res) => {
     try {
         const { id } = req.params;
         const { isVisible } = req.body;
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        const query = addOrganizationFilter(req, { _id: id });
 
-        const payroll = await Payroll.findByIdAndUpdate(
-            id,
+        const payroll = await Payroll.findOneAndUpdate(
+            query,
             { isVisible },
             { new: true }
         ).populate('employeeId', 'name lastName email');
@@ -943,6 +1156,128 @@ export const togglePayrollVisibility = async (req, res) => {
             success: false,
             message: error.message 
         });
+    }
+};
+
+// Mark one payroll entry as Processed (workflow transition)
+export const processPayrollEntry = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        const query = addOrganizationFilter(req, { _id: id });
+        const payroll = await Payroll.findOne(query).populate('employeeId', 'name lastName email');
+
+        if (!payroll) {
+            return res.status(404).json({ success: false, message: 'Payroll not found' });
+        }
+        if (payroll.status === 'Paid' || payroll.payrollLocked) {
+            return res.status(409).json({ success: false, message: 'Paid/locked payroll cannot be re-processed.' });
+        }
+        if (payroll.status === 'Cancelled') {
+            return res.status(409).json({ success: false, message: 'Cancelled payroll cannot be processed.' });
+        }
+        if (payroll.isProvisional) {
+            return res.status(409).json({ success: false, message: 'Preview/provisional payroll cannot be processed for payout.' });
+        }
+
+        payroll.status = 'Processed';
+        payroll.lastModifiedBy = req.user?._id || req.employee?._id;
+        payroll.processedDate = new Date();
+        await payroll.save();
+
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
+
+        return res.json({ success: true, message: 'Payroll processed successfully.', data: payroll });
+    } catch (error) {
+        logger.error('Process Payroll Entry Error', { error: error.message, stack: error.stack });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Void one payroll entry before payout (workflow transition)
+export const voidPayrollEntry = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body || {};
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        const query = addOrganizationFilter(req, { _id: id });
+        const payroll = await Payroll.findOne(query).populate('employeeId', 'name lastName email');
+
+        if (!payroll) {
+            return res.status(404).json({ success: false, message: 'Payroll not found' });
+        }
+        if (payroll.status === 'Paid' || payroll.payrollLocked) {
+            return res.status(409).json({ success: false, message: 'Paid/locked payroll cannot be voided.' });
+        }
+
+        payroll.status = 'Cancelled';
+        payroll.lastModifiedBy = req.user?._id || req.employee?._id;
+        if (reason) {
+            const base = (payroll.notes || '').trim();
+            payroll.notes = `${base}${base ? '\n' : ''}[VOID] ${reason}`.slice(0, 500);
+        }
+        await payroll.save();
+
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
+
+        return res.json({ success: true, message: 'Payroll entry voided successfully.', data: payroll });
+    } catch (error) {
+        logger.error('Void Payroll Entry Error', { error: error.message, stack: error.stack });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Mark a monthly base payroll as superseded by an off-cycle full override.
+export const supersedeMonthlyBase = async (req, res) => {
+    try {
+        const { monthlyPayrollId, overridePayrollId } = req.body || {};
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        const monthlyQuery = addOrganizationFilter(req, { _id: monthlyPayrollId });
+        const overrideQuery = addOrganizationFilter(req, { _id: overridePayrollId });
+
+        const [monthly, override] = await Promise.all([
+            Payroll.findOne(monthlyQuery),
+            Payroll.findOne(overrideQuery)
+        ]);
+
+        if (!monthly || !override) {
+            return res.status(404).json({ success: false, message: 'Monthly or override payroll not found.' });
+        }
+        if (monthly.type !== 'monthly') {
+            return res.status(400).json({ success: false, message: 'monthlyPayrollId must refer to a monthly payroll entry.' });
+        }
+        if (override.type !== 'off_cycle' || String(override.adjustmentMode) !== 'full_override') {
+            return res.status(400).json({ success: false, message: 'overridePayrollId must be an off-cycle full_override entry.' });
+        }
+        if (override.status !== 'Processed') {
+            return res.status(400).json({ success: false, message: 'Only processed full_override entries can supersede a monthly base.' });
+        }
+        if (String(monthly.employeeId) !== String(override.employeeId) || monthly.month !== override.month || Number(monthly.year) !== Number(override.year)) {
+            return res.status(400).json({ success: false, message: 'Monthly and override entries must belong to same employee and period.' });
+        }
+        if (monthly.status === 'Paid' || monthly.payrollLocked) {
+            return res.status(409).json({ success: false, message: 'Paid/locked monthly payroll cannot be superseded.' });
+        }
+
+        monthly.isSuperseded = true;
+        monthly.supersededBy = override._id;
+        monthly.supersededAt = new Date();
+        monthly.lastModifiedBy = req.user?._id || req.employee?._id;
+        await monthly.save();
+
+        const { invalidatePayrollCache } = await import('../../helpers/cacheHelper.js');
+        await invalidatePayrollCache();
+
+        return res.json({
+            success: true,
+            message: 'Monthly payroll marked as superseded by override.',
+            data: { monthlyPayrollId: monthly._id, overridePayrollId: override._id }
+        });
+    } catch (error) {
+        logger.error('Supersede Monthly Payroll Error', { error: error.message, stack: error.stack });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -993,18 +1328,30 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             });
         }
 
+        const monthStart = new Date(targetYear, targetMonthIndex, 1);
+        monthStart.setHours(0, 0, 0, 0);
+        const endOfMonth = new Date(targetYear, targetMonthIndex + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+
         const employees = await Employee.find({
             salary: { $exists: true, $gt: 0 },
             organizationId: organizationId,
-            active: true
-        }).select('salary organizationId joiningDate');
+            $or: [
+                { active: true },
+                {
+                    status: 'terminated',
+                    $or: [
+                        { lastWorkingDate: { $gte: monthStart, $lte: endOfMonth } },
+                        { terminationDate: { $gte: monthStart, $lte: endOfMonth } }
+                    ]
+                }
+            ]
+        }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate');
 
         let created = 0;
         let updated = 0;
         let skipped = 0;
         const asOf = now;
-        const endOfMonth = new Date(targetYear, targetMonthIndex + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
 
         for (const emp of employees) {
             const orgId = emp.organizationId || organizationId;
@@ -1052,7 +1399,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
                 type: 'monthly',
                 generationType: mode === 'preview' ? 'preview' : 'final',
                 isProvisional: mode === 'preview',
-                computedAsOf: mode === 'preview' ? asOf : endOfMonth,
+                computedAsOf: endOfMonth,
                 payrollLocked: false
             };
             // Allow employees (and admin) to see monthly payroll as soon as it's generated.
@@ -1089,6 +1436,93 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         });
     } catch (error) {
         logger.error('Generate Payrolls Error', { error: error.message, stack: error.stack });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Preview disbursement plan for a given month/year (no payment side-effects)
+export const previewDisbursement = async (req, res) => {
+    try {
+        const isCEO = req.employee && (
+            (req.employee.position || '').toLowerCase().trim() === 'ceo' ||
+            (req.employee.position || '').toLowerCase().trim().includes('chief executive')
+        );
+        if (!isCEO) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access restricted to CEO only. Only the CEO can preview disbursement.'
+            });
+        }
+
+        const { month, year } = req.query;
+        if (!month || !year) {
+            return res.status(400).json({ success: false, message: 'month and year are required' });
+        }
+
+        const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
+        const query = addOrganizationFilter(req, {
+            month,
+            year: parseInt(year, 10),
+            status: 'Processed',
+            payrollLocked: false,
+            isProvisional: { $ne: true },
+            $or: [
+                { type: { $ne: 'monthly' } },
+                { type: 'monthly', isSuperseded: { $ne: true } }
+            ]
+        });
+
+        const payrolls = await Payroll.find(query)
+            .populate('employeeId', 'financialDetails name lastName email');
+
+        if (!payrolls.length) {
+            return res.json({ success: true, totalEmployees: 0, totalAmount: 0, plans: [] });
+        }
+
+        const byEmployee = new Map();
+        for (const pr of payrolls) {
+            const key = String(pr.employeeId?._id || pr.employeeId || '');
+            if (!byEmployee.has(key)) byEmployee.set(key, []);
+            byEmployee.get(key).push(pr);
+        }
+
+        const plans = [];
+        for (const [, group] of byEmployee) {
+            const plan = buildDisbursementPlanForGroup(group);
+            if (!plan) continue;
+
+            const employee = plan.employee;
+            plans.push({
+                employee: employee?._id,
+                employeeName: `${employee?.name || ''} ${employee?.lastName || ''}`.trim(),
+                employeeEmail: employee?.email || '',
+                amount: plan.amount,
+                strategy: plan.fullOverride ? 'override_with_post_adjustments' : 'base_plus_adjustments',
+                recordCount: plan.payableRecords.length,
+                records: plan.payableRecords.map((p) => ({
+                    payrollId: p._id,
+                    type: p.type,
+                    adjustmentMode: p.adjustmentMode,
+                    subType: p.subType,
+                    status: p.status,
+                    earningsTotal: Number(p?.earnings?.totalEarnings) || 0,
+                    deductionsTotal: Number(p?.deductions?.total) || 0,
+                    net: (Number(p?.earnings?.totalEarnings) || 0) - (Number(p?.deductions?.total) || 0)
+                }))
+            });
+        }
+
+        const totalAmount = plans.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        return res.json({
+            success: true,
+            month,
+            year: parseInt(year, 10),
+            totalEmployees: plans.length,
+            totalAmount,
+            plans
+        });
+    } catch (error) {
+        logger.error('Preview Disbursement Error', { error: error.message, stack: error.stack });
         return res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -1130,7 +1564,11 @@ export const disbursePayrolls = async (req, res) => {
             // Only approved payrolls should be disbursed.
             status: 'Processed',
             payrollLocked: false,
-            isProvisional: { $ne: true }
+            isProvisional: { $ne: true },
+            $or: [
+                { type: { $ne: 'monthly' } },
+                { type: 'monthly', isSuperseded: { $ne: true } }
+            ]
         });
 
         const payrolls = await Payroll.find(query)
@@ -1153,38 +1591,55 @@ export const disbursePayrolls = async (req, res) => {
         }
 
         for (const [, group] of byEmployee) {
-            const hasFullOverride = group.some(
-                (p) => p?.type === 'off_cycle' && String(p?.adjustmentMode) === 'full_override'
-            );
+            const plan = buildDisbursementPlanForGroup(group);
+            if (!plan) {
+                continue;
+            }
+            const { payableRecords, amount, employee } = plan;
+            const fin = employee?.financialDetails || {};
 
-            const toPay = hasFullOverride
-                ? group.filter((p) => p?.type === 'off_cycle')
-                : group;
-
-            for (const pr of toPay) {
-                const employee = pr.employeeId;
-                const fin = employee?.financialDetails || {};
-                const earningsTotal = Number(pr?.earnings?.totalEarnings);
-                const deductionsTotal = Number(pr?.deductions?.total);
-                const amount = Math.round(
-                    Number.isFinite(earningsTotal)
-                        ? (earningsTotal - (Number.isFinite(deductionsTotal) ? deductionsTotal : 0))
-                        : (Number(pr?.inHandSalary) || 0)
-                );
-
-                const transfer = await transferToBank({
+            if (amount <= 0) {
+                for (const pr of payableRecords) {
+                    pr.payment = {
+                        provider: 'mock-bank',
+                        status: 'Failed',
+                        processedAt: new Date(),
+                        error: 'Invalid payout amount'
+                    };
+                    pr.paidAmount = 0;
+                    pr.lastModifiedBy = adminId;
+                    await pr.save();
+                }
+                failed += 1;
+                results.push({
+                    payrollId: payableRecords.map((p) => p._id),
+                    employee: employee?._id,
+                    employeeName: `${employee?.name || ''} ${employee?.lastName || ''}`.trim(),
+                    employeeEmail: employee?.email,
                     amount,
-                    beneficiary: {
-                        accountNo: fin.accountNo,
-                        ifsc: fin.ifsc,
-                        accountName: fin.accountName,
-                        bankName: fin.bankName
-                    }
+                    status: 'Failed',
+                    error: 'Invalid payout amount'
                 });
+                continue;
+            }
 
-                if (transfer.success) {
+            const transfer = await transferToBank({
+                amount,
+                beneficiary: {
+                    accountNo: fin.accountNo,
+                    ifsc: fin.ifsc,
+                    accountName: fin.accountName,
+                    bankName: fin.bankName
+                }
+            });
+
+            if (transfer.success) {
+                const paymentBatchId = `PB-${month}-${year}-${Date.now()}-${String(employee?._id || '')}`;
+                for (const pr of payableRecords) {
+                    const prEarnings = Number(pr?.earnings?.totalEarnings) || 0;
+                    const prDeductions = Number(pr?.deductions?.total) || 0;
                     pr.status = 'Paid';
-                    pr.paidAmount = amount;
+                    pr.paidAmount = prEarnings - prDeductions;
                     pr.paymentDate = new Date();
                     pr.payrollLocked = true;
                     pr.paidDate = new Date();
@@ -1195,18 +1650,21 @@ export const disbursePayrolls = async (req, res) => {
                         status: 'Success',
                         processedAt: new Date()
                     };
+                    pr.paymentBatchId = paymentBatchId;
                     await pr.save();
-                    paid += 1;
-                    results.push({ 
-                        payrollId: pr._id, 
-                        employee: employee._id, 
-                        employeeName: `${employee.name || ''} ${employee.lastName || ''}`.trim(),
-                        employeeEmail: employee.email,
-                        amount, 
-                        status: 'Success', 
-                        reference: transfer.reference 
-                    });
-                } else {
+                }
+                paid += 1;
+                results.push({
+                    payrollId: payableRecords.map((p) => p._id),
+                    employee: employee?._id,
+                    employeeName: `${employee?.name || ''} ${employee?.lastName || ''}`.trim(),
+                    employeeEmail: employee?.email,
+                    amount,
+                    status: 'Success',
+                    reference: transfer.reference
+                });
+            } else {
+                for (const pr of payableRecords) {
                     pr.payment = {
                         provider: 'mock-bank',
                         status: 'Failed',
@@ -1216,17 +1674,17 @@ export const disbursePayrolls = async (req, res) => {
                     pr.paidAmount = 0;
                     pr.lastModifiedBy = adminId;
                     await pr.save();
-                    failed += 1;
-                    results.push({ 
-                        payrollId: pr._id, 
-                        employee: employee._id, 
-                        employeeName: `${employee.name || ''} ${employee.lastName || ''}`.trim(),
-                        employeeEmail: employee.email,
-                        amount, 
-                        status: 'Failed', 
-                        error: transfer.error 
-                    });
                 }
+                failed += 1;
+                results.push({
+                    payrollId: payableRecords.map((p) => p._id),
+                    employee: employee?._id,
+                    employeeName: `${employee?.name || ''} ${employee?.lastName || ''}`.trim(),
+                    employeeEmail: employee?.email,
+                    amount,
+                    status: 'Failed',
+                    error: transfer.error
+                });
             }
         }
 

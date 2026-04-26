@@ -198,6 +198,10 @@ async function calculateWorkingDays(startDate, endDate, organizationId) {
  */
 // Enhanced Clock In with image capture, geolocation, and network tracking
 export const clockIn = async (req, res) => {
+  let userId;
+  let startOfDay;
+  let organizationId;
+
   // Log incoming request for debugging
   logger.debug('Clock-in request received', {
     hasEmployee: !!req.employee,
@@ -232,13 +236,13 @@ export const clockIn = async (req, res) => {
       });
     }
 
-    const userId = req.employee._id;
+    userId = req.employee._id;
     const today = new Date();
-    const startOfDay = new Date(today);
+    startOfDay = new Date(today);
     startOfDay.setHours(0, 0, 0, 0);
 
     // Get organizationId from request
-    const organizationId = getOrganizationId(req);
+    organizationId = getOrganizationId(req);
     
     if (!organizationId) {
       logger.error('Clock-in error: Missing organizationId', {
@@ -666,6 +670,22 @@ export const clockIn = async (req, res) => {
       errorCode: error.code
     });
     
+    // Handle duplicate attendance safely (race condition fallback with unique index)
+    if (error?.code === 11000) {
+      const existingSession = await Attendance.findOne({
+        organizationId,
+        userId,
+        date: startOfDay
+      });
+
+      return res.status(400).json({
+        success: false,
+        message: "Already clocked in for today",
+        code: 'ALREADY_CLOCKED_IN',
+        session: existingSession || null
+      });
+    }
+
     // If it's a validation error from express-validator, return 400
     if (error.name === 'ValidationError' || error.statusCode === 400) {
       return res.status(400).json({ 

@@ -8,7 +8,11 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
 
-const AttendanceBox = () => {
+/**
+ * @param {{ variant?: 'default' | 'dashboard' }} [props]
+ * dashboard = compact strip for employee home (mint / workspace theme)
+ */
+const AttendanceBox = ({ variant = 'default' }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const {
@@ -531,12 +535,188 @@ const AttendanceBox = () => {
     return hours.toFixed(2);
   };
 
+  const getTodayBreakSeconds = (session, now = new Date()) => {
+    if (!session?.breaks || !Array.isArray(session.breaks)) return 0;
+    return session.breaks.reduce((total, entry) => {
+      if (!entry?.breakIn) return total;
+      const breakIn = new Date(entry.breakIn).getTime();
+      if (!Number.isFinite(breakIn)) return total;
+      const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : now.getTime();
+      if (!Number.isFinite(breakOut) || breakOut <= breakIn) return total;
+      return total + ((breakOut - breakIn) / 1000);
+    }, 0);
+  };
+
+  const formatBreakDuration = (seconds) => {
+    const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const breakTakenTodaySeconds = getTodayBreakSeconds(currentSession, currentTime);
+
   if (initialLoading || loading) {
     return (
-      <div className="flex items-center justify-center p-12">
+      <div className={`flex items-center justify-center ${variant === 'dashboard' ? 'rounded-2xl bg-white border border-slate-100 py-14' : 'p-12'}`}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div
+            className={`animate-spin rounded-full h-12 w-12 border-2 border-transparent mx-auto mb-4 ${
+              variant === 'dashboard' ? 'border-t-[#20C997] border-r-[#20C997]' : 'border-b-2 border-indigo-600'
+            }`}
+          />
+          <p className="text-gray-600 text-sm">Loading attendance…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'dashboard') {
+    const activeBreakEntry = currentSession?.breaks?.find((b) => b.breakIn && !b.breakOut);
+    const currentBreakElapsedSec =
+      activeBreakEntry && currentTime
+        ? Math.max(0, (currentTime.getTime() - new Date(activeBreakEntry.breakIn).getTime()) / 1000)
+        : 0;
+
+    const breakTodayRow = (
+      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+        <div className="flex items-center gap-2">
+          <FiCoffee className="h-5 w-5 shrink-0 text-slate-500" />
+          <span className="text-sm font-medium">Break taken today</span>
+        </div>
+        <span className="text-sm font-semibold tabular-nums">{formatBreakDuration(breakTakenTodaySeconds)}</span>
+      </div>
+    );
+
+    return (
+      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+        {error && (
+          <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {typeof error === 'string' ? error : error.message}
+          </div>
+        )}
+        <div className="p-5 md:p-6">
+          {currentSession ? (
+            <div className="space-y-4">
+              {currentSession.clockOut ? (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-[#20C997]/15 flex items-center justify-center">
+                        <FiCheckCircle className="w-6 h-6 text-[#20C997]" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Today</p>
+                        <p className="text-lg font-semibold text-slate-800">Punched out</p>
+                        <p className="text-sm text-slate-500">
+                          In {formatTime(currentSession.clockIn)} · Out {formatTime(currentSession.clockOut)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-2xl font-semibold text-slate-800 tabular-nums">{formatElapsedTime(elapsedTime)}</p>
+                      <p className="text-xs text-slate-500">Total duration</p>
+                    </div>
+                  </div>
+                  {breakTodayRow}
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="font-mono text-3xl sm:text-4xl font-semibold text-slate-800 tabular-nums tracking-tight shrink-0">
+                        {formatElapsedTime(elapsedTime)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                            isOnBreak
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-[#20C997]/12 text-[#006D4E]'
+                          }`}
+                        >
+                          {isOnBreak ? 'On break' : 'Punched in'}
+                        </span>
+                        <span className="text-sm text-slate-500">
+                          Since {formatTime(currentSession.clockIn)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
+                      {!isOnBreak ? (
+                        <button
+                          type="button"
+                          onClick={handleBreakIn}
+                          disabled={loading || breakCount >= 4}
+                          className="rounded-full border-2 border-[#20C997] px-5 py-2.5 text-sm font-semibold text-[#20C997] transition hover:bg-[#20C997]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {breakCount >= 4 ? 'Max breaks' : 'Start break'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleBreakOut}
+                          disabled={loading}
+                          className="rounded-full border-2 border-[#20C997] px-5 py-2.5 text-sm font-semibold text-[#20C997] transition hover:bg-[#20C997]/10 disabled:opacity-50"
+                        >
+                          End break
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleClockOut}
+                        disabled={loading || isOnBreak}
+                        className="rounded-full bg-[#20C997] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1ab589] disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        {isOnBreak ? 'End break to punch out' : 'Punch out'}
+                      </button>
+                    </div>
+                  </div>
+                  {isOnBreak && activeBreakEntry && (
+                    <div className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50/80 px-4 py-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+                            <FiCoffee className="h-6 w-6 text-amber-800" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800/90">Break timer</p>
+                            <p className="font-mono text-2xl font-bold tabular-nums text-amber-950 sm:text-3xl">
+                              {formatElapsedTime(currentBreakElapsedSec)}
+                            </p>
+                            <p className="text-xs text-amber-900/80">
+                              Started {formatTime(activeBreakEntry.breakIn)}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-amber-900/85 sm:max-w-[200px] sm:text-right">
+                          This break counts toward &quot;break taken today&quot; below.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {breakTodayRow}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Attendance</p>
+                <p className="text-lg font-semibold text-slate-800">Ready to start your day?</p>
+                <p className="text-sm text-slate-500">Punch in to begin tracking your hours.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleClockIn}
+                disabled={isProcessing || loading}
+                className="rounded-full bg-[#20C997] px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1ab589] disabled:bg-slate-300 shrink-0"
+              >
+                {isProcessing || loading ? 'Processing…' : 'Punch in'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -664,6 +844,18 @@ const AttendanceBox = () => {
                   <div className="flex items-center gap-2 text-yellow-800">
                     <FiCoffee className="w-5 h-5" />
                     <span className="font-medium">On Break</span>
+                  </div>
+                </div>
+              )}
+
+              {currentSession && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center justify-between text-slate-700">
+                    <div className="flex items-center gap-2">
+                      <FiCoffee className="w-5 h-5" />
+                      <span className="font-medium">Break Taken Today</span>
+                    </div>
+                    <span className="text-sm font-semibold">{formatBreakDuration(breakTakenTodaySeconds)}</span>
                   </div>
                 </div>
               )}

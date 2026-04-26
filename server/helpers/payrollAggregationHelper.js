@@ -36,8 +36,18 @@ export function aggregatePayrollPeriod(payrolls) {
         .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
     const fullOverride = fullOverrides[0] || null;
 
+    // When a full override exists, only apply non-full adjustments created on/after
+    // that override. This avoids re-applying older corrections that belonged to the
+    // superseded base run.
+    const fullOverrideCutoff = fullOverride
+        ? new Date(fullOverride.createdAt || fullOverride.updatedAt || 0).getTime()
+        : null;
     const nonFullAdjustments = fullOverride
-        ? adjustmentsForTotal.filter((p) => String(p?._id) !== String(fullOverride?._id))
+        ? adjustmentsForTotal.filter((p) => {
+            if (String(p?._id) === String(fullOverride?._id)) return false;
+            const ts = new Date(p?.createdAt || p?.updatedAt || 0).getTime();
+            return Number.isFinite(ts) && ts >= fullOverrideCutoff;
+        })
         : adjustmentsForTotal;
 
     const adjustmentsEarningsTotal = nonFullAdjustments.reduce(

@@ -96,6 +96,11 @@ const employeeSchema = new mongoose.Schema({
      * @min 0
      */
     salary: { type: Number, required: true, min: 0 },
+    salaryStructure: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SalaryStructure',
+        required: false
+    },
     
     /**
      * User role: 'admin' or 'employee'
@@ -181,6 +186,32 @@ const employeeSchema = new mongoose.Schema({
         type: String, 
         enum: ['active', 'inactive', 'suspended', 'terminated'], 
         default: 'active' 
+    },
+    terminationDate: {
+        type: Date,
+        index: true
+    },
+    lastWorkingDate: {
+        type: Date,
+        index: true
+    },
+    terminationReason: {
+        type: String,
+        trim: true,
+        maxlength: 500
+    },
+    terminationNotes: {
+        type: String,
+        trim: true,
+        maxlength: 1000
+    },
+    terminatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    eligibleForRehire: {
+        type: Boolean,
+        default: false
     },
     
     // Role hierarchy
@@ -460,6 +491,8 @@ employeeSchema.index({ status: 1, active: 1 }); // Compound index for common que
 employeeSchema.index({ organizationId: 1, status: 1 }); // For filtering by org and status
 employeeSchema.index({ functionalRoles: 1 }); // Index for role-based queries
 employeeSchema.index({ organizationId: 1, managerId: 1, status: 1 }); // Team lookups by manager
+employeeSchema.index({ organizationId: 1, terminationDate: 1 }); // Payroll selection for terminated-in-period
+employeeSchema.index({ organizationId: 1, lastWorkingDate: 1 }); // Payroll selection for last-working-day flows
 
 // Apply organization isolation plugin (SECURITY: Enforces multi-tenancy)
 // Note: requireOrganizationId is false by default to avoid breaking populate() and other operations

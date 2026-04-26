@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../utils/axios';
+import { getAuthEmployeeId } from '../../utils/authUser';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -9,18 +10,19 @@ const LeaveBalance = () => {
     const [loading, setLoading] = useState(false);
     const [year, setYear] = useState(new Date().getFullYear());
     const employee = useSelector(state => state.auth.employee || state.auth.user);
+    const employeeDocId = getAuthEmployeeId(employee);
 
     useEffect(() => {
-        if (employee?._id) {
+        if (employeeDocId) {
             fetchBalance();
         }
-    }, [year, employee?._id]);
+    }, [year, employeeDocId]);
 
     const fetchBalance = async () => {
         setLoading(true);
         try {
             const res = await axios.get(
-                `/v1/admin/leave-policy/balance/${employee?._id}`,
+                `/v1/admin/leave-policy/balance/${employeeDocId}`,
                 { params: { year } }
             );
             setBalance(res.data.balance);

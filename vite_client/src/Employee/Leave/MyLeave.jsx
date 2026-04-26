@@ -7,6 +7,7 @@ import { MdSick } from 'react-icons/md';
 import { BsCalendarCheck } from 'react-icons/bs';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
+import { getAuthEmployeeId } from '../../utils/authUser';
 
 const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
@@ -19,6 +20,7 @@ const MyLeavePage = () => {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const employee = useSelector(state => state.auth.employee || state.auth.user);
+  const employeeDocId = getAuthEmployeeId(employee);
 
   useEffect(() => {
     const handleResize = () => {
@@ -36,16 +38,16 @@ const MyLeavePage = () => {
 
   // Fetch leave balance from LeavePolicyManagement
   useEffect(() => {
-    if (employee?._id) {
+    if (employeeDocId) {
       fetchLeaveBalance();
     }
-  }, [employee?._id, selectedYear]);
+  }, [employeeDocId, selectedYear]);
 
   const fetchLeaveBalance = async () => {
     setBalanceLoading(true);
     try {
       const res = await axios.get(
-        `/v1/admin/leave-policy/balance/${employee?._id}`,
+        `/v1/admin/leave-policy/balance/${employeeDocId}`,
         { params: { year: selectedYear } }
       );
       setLeaveBalance(res.data.balance);

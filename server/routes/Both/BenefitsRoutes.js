@@ -1,6 +1,7 @@
 import express from 'express';
 import {
     getBenefitPlans,
+    getBenefitPlan,
     enrollInBenefit,
     getEmployeeBenefits
 } from '../../controllers/benefits/benefitsController.js';
@@ -12,6 +13,9 @@ const router = express.Router();
 // Benefit Plans
 router.route('/benefit-plans')
     .get(isAuthenticatedBoth, readLimiter, getBenefitPlans);
+
+router.route('/benefit-plans/:id')
+    .get(isAuthenticatedBoth, readLimiter, getBenefitPlan);
 
 // Enrollment
 router.route('/benefits/enroll')

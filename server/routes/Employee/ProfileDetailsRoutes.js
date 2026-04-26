@@ -20,7 +20,7 @@ import {
 } from "../../controllers/employee/profileDetailsController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminOrHROrExecutiveAuthenticated from './../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
-import { updateEmployeeStatus } from "../../controllers/admin/employeeManagementController.js";
+import { terminateEmployee, updateEmployeeStatus } from "../../controllers/admin/employeeManagementController.js";
 
 
 
@@ -48,6 +48,7 @@ router.route("/send-birthday-wish").post(isAdminOrHROrExecutiveAuthenticated, se
 
 // update status(active or inactive)
 router.route("/admin/update-status/:employeeId").patch(isAdminOrHROrExecutiveAuthenticated, updateEmployeeStatus);
+router.route("/admin/terminate/:employeeId").patch(isAdminOrHROrExecutiveAuthenticated, terminateEmployee);
 
 
 

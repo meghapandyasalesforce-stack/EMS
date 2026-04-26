@@ -94,6 +94,13 @@ const Header = () => {
         return getNavigationItems(user, employee);
     }, [user, employee]);
 
+    // Light nav matches employee app pages (--color-bg / --color-bg-soft); keep dark for admin
+    const isAdminUser = useMemo(
+        () => (user?.role || employee?.role || '').toLowerCase() === 'admin',
+        [user, employee]
+    );
+    const useLightEmployeeNav = !isAdminUser;
+
     // Highlight active route
     const isActive = (path) => location.pathname === path;
 
@@ -161,36 +168,55 @@ const Header = () => {
         </Transition>
     );
 
-    // Desktop Sidebar - Now non-minimizable
+    // Desktop Sidebar - non-admin: light surface to match employee pages; admin: dark
     const DesktopSidebar = () => (
-        <div className="fixed top-0 left-0 h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white w-64 flex flex-col z-40 overflow-hidden shadow-2xl border-r border-gray-700/50">
-            <div className="flex items-center justify-between p-5 border-b border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
-                <h3 className="font-extrabold text-3xl tracking-tight">
+        <div
+            className={
+                useLightEmployeeNav
+                    ? 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-slate-200/90 bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm'
+                    : 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-gray-700/50 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white shadow-2xl'
+            }
+        >
+            <div
+                className={
+                    useLightEmployeeNav
+                        ? 'flex flex-shrink-0 items-center justify-between border-b border-slate-200/90 bg-[var(--color-bg-soft)] p-5'
+                        : 'flex flex-shrink-0 items-center justify-between border-b border-gray-700/50 bg-gray-800/50 p-5 backdrop-blur-sm'
+                }
+            >
+                <h3 className="text-3xl font-extrabold tracking-tight">
                     <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
-                    <span className="text-white">a</span>
-                    <span className="text-white">a</span>
-                    <span className="text-white">r</span>
+                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
+                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
+                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>r</span>
                     <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
-                    <span className="text-white">i</span>
-                    <span className="text-white">v</span>
+                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>i</span>
+                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>v</span>
                 </h3>
             </div>
 
-            {/* Make the nav scrollable so bottom sections (notifications/logout) stay visible */}
-            <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+            <nav
+                className={
+                    useLightEmployeeNav
+                        ? 'scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-2 py-3'
+                        : 'scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-2 py-3'
+                }
+            >
                 {navItems.map((item, index) => (
                     <Link
                         key={item.path}
                         to={item.path}
-                        className={`group flex items-center p-3.5 mx-2 rounded-xl transition-all duration-300 mb-1 ${
-                            isActive(item.path) 
-                                ? 'text-white shadow-lg scale-105' 
-                                : 'hover:bg-gray-700/50 text-gray-300 hover:text-white hover:translate-x-1'
+                        className={`group mb-1 flex items-center rounded-xl p-3.5 mx-2 transition-all duration-300 ${
+                            isActive(item.path)
+                                ? 'scale-105 text-white shadow-lg'
+                                : useLightEmployeeNav
+                                    ? 'text-slate-600 hover:translate-x-1 hover:bg-slate-100/90 hover:text-slate-900'
+                                    : 'text-gray-300 hover:translate-x-1 hover:bg-gray-700/50 hover:text-white'
                         }`}
                         style={{
                             animationDelay: `${index * 50}ms`,
                             ...(isActive(item.path)
-                                ? { backgroundColor: 'var(--color-primary)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)' }
+                                ? { backgroundColor: 'var(--color-primary)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12)' }
                                 : {}),
                         }}
                     >
@@ -199,27 +225,49 @@ const Header = () => {
                         </span>
                         <span className="ml-3 truncate font-medium">{item.name}</span>
                         {isActive(item.path) && (
-                            <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                            <div className="ml-auto h-1.5 w-1.5 animate-pulse rounded-full bg-white"></div>
                         )}
                     </Link>
                 ))}
             </nav>
 
-            {/* Notifications section - Fixed at bottom */}
-            <div className="p-4 border-t border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
+            <div
+                className={
+                    useLightEmployeeNav
+                        ? 'flex-shrink-0 border-t border-slate-200/90 bg-[var(--color-bg-soft)] p-4'
+                        : 'flex-shrink-0 border-t border-gray-700/50 bg-gray-800/50 p-4 backdrop-blur-sm'
+                }
+            >
                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Notifications</span>
+                    <span
+                        className={
+                            useLightEmployeeNav
+                                ? 'text-xs font-semibold uppercase tracking-wide text-slate-500'
+                                : 'text-xs font-semibold uppercase tracking-wide text-gray-400'
+                        }
+                    >
+                        Notifications
+                    </span>
                     <div className="relative">
                         <NotificationDropdown />
                     </div>
                 </div>
             </div>
 
-            {/* Logout button at bottom - Fixed at bottom */}
-            <div className="p-4 border-t border-gray-700/50 flex-shrink-0 bg-gray-800/50 backdrop-blur-sm">
+            <div
+                className={
+                    useLightEmployeeNav
+                        ? 'flex-shrink-0 border-t border-slate-200/90 bg-[var(--color-bg-soft)] p-4'
+                        : 'flex-shrink-0 border-t border-gray-700/50 bg-gray-800/50 p-4 backdrop-blur-sm'
+                }
+            >
                 <button
                     onClick={openLogoutModal}
-                    className="flex items-center justify-center gap-3 w-full p-3 rounded-xl text-gray-300 hover:text-white hover:bg-red-500/20 transition-all duration-300 group border border-transparent hover:border-red-500/30"
+                    className={
+                        useLightEmployeeNav
+                            ? 'group flex w-full items-center justify-center gap-3 rounded-xl border border-transparent p-3 text-slate-600 transition-all duration-300 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                            : 'group flex w-full items-center justify-center gap-3 rounded-xl border border-transparent p-3 text-gray-300 transition-all duration-300 hover:border-red-500/30 hover:bg-red-500/20 hover:text-white'
+                    }
                 >
                     <FaSignOutAlt className="text-lg flex-shrink-0 transition-transform group-hover:rotate-12" />
                     <span className="font-medium">Logout</span>
@@ -230,11 +278,21 @@ const Header = () => {
 
     // Mobile Header
     const MobileHeader = () => (
-        <header className="fixed top-0 left-0 right-0 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl z-30 border-b border-gray-700/50">
-            <div className="flex justify-between items-center p-4">
-                <button 
-                    onClick={toggleMobileMenu} 
-                    className="text-white focus:outline-none p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+        <header
+            className={
+                useLightEmployeeNav
+                    ? 'fixed top-0 right-0 left-0 z-30 border-b border-slate-200/90 bg-[var(--color-bg)] text-slate-800 shadow-sm'
+                    : 'fixed top-0 right-0 left-0 z-30 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
+            }
+        >
+            <div className="flex items-center justify-between p-4">
+                <button
+                    onClick={toggleMobileMenu}
+                    className={
+                        useLightEmployeeNav
+                            ? 'rounded-lg p-2 text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none'
+                            : 'rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50 focus:outline-none'
+                    }
                 >
                     <FaBars className="text-xl" />
                 </button>
@@ -242,13 +300,24 @@ const Header = () => {
                 <div className="flex items-center gap-3">
                     <NotificationDropdown />
 
-                    <div className="relative text-xl text-white cursor-pointer transition-colors p-2 rounded-lg hover:bg-gray-700/50" style={{ ['--hover-color']: 'var(--color-secondary)' }}>
+                    <div
+                        className={
+                            useLightEmployeeNav
+                                ? 'relative cursor-pointer rounded-lg p-2 text-xl text-slate-600 transition-colors hover:bg-slate-100'
+                                : 'relative cursor-pointer rounded-lg p-2 text-xl text-white transition-colors hover:bg-gray-700/50'
+                        }
+                        style={{ ['--hover-color']: 'var(--color-secondary)' }}
+                    >
                         <FaEnvelope className="hover:opacity-80" />
                     </div>
 
                     <div className="relative">
                         <FaUserCircle
-                            className="text-2xl text-white cursor-pointer transition-colors p-1 rounded-lg hover:bg-gray-700/50 hover:opacity-90"
+                            className={
+                                useLightEmployeeNav
+                                    ? 'cursor-pointer rounded-lg p-1 text-2xl text-slate-600 transition-colors hover:bg-slate-100 hover:opacity-90'
+                                    : 'cursor-pointer rounded-lg p-1 text-2xl text-white transition-colors hover:bg-gray-700/50 hover:opacity-90'
+                            }
                             onClick={toggleDropdown}
                         />
                         {dropdownOpen && (
@@ -272,20 +341,36 @@ const Header = () => {
 
             {/* Mobile Menu */}
             {mobileMenuOpen && (
-                <div className="bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl animate-slideDown border-b border-gray-700/50">
-                    <div className="px-4 py-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/50 backdrop-blur-sm">
-                        <h3 className="font-extrabold text-2xl tracking-tight">
+                <div
+                    className={
+                        useLightEmployeeNav
+                            ? 'animate-slideDown border-b border-slate-200/90 bg-[var(--color-bg)] text-slate-800 shadow-lg'
+                            : 'animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl'
+                    }
+                >
+                    <div
+                        className={
+                            useLightEmployeeNav
+                                ? 'flex items-center justify-between border-b border-slate-200/90 bg-[var(--color-bg-soft)] px-4 py-4'
+                                : 'flex items-center justify-between border-b border-gray-700/50 bg-gray-800/50 px-4 py-4 backdrop-blur-sm'
+                        }
+                    >
+                        <h3 className="text-2xl font-extrabold tracking-tight">
                             <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
-                            <span className="text-white">a</span>
-                            <span className="text-white">a</span>
-                            <span className="text-white">r</span>
+                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
+                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
+                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>r</span>
                             <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
-                            <span className="text-white">i</span>
-                            <span className="text-white">v</span>
+                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>i</span>
+                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>v</span>
                         </h3>
-                        <button 
-                            onClick={toggleMobileMenu} 
-                            className="text-white p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                        <button
+                            onClick={toggleMobileMenu}
+                            className={
+                                useLightEmployeeNav
+                                    ? 'rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-200/80'
+                                    : 'rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50'
+                            }
                         >
                             <FaTimes className="text-xl" />
                         </button>
@@ -295,10 +380,12 @@ const Header = () => {
                             <Link
                                 key={item.path}
                                 to={item.path}
-                                className={`flex items-center p-4 mx-2 rounded-xl transition-all duration-300 ${
-                                    isActive(item.path) 
-                                        ? 'text-white shadow-lg' 
-                                        : 'hover:bg-gray-700/50 text-gray-300'
+                                className={`mx-2 flex items-center rounded-xl p-4 transition-all duration-300 ${
+                                    isActive(item.path)
+                                        ? 'text-white shadow-lg'
+                                        : useLightEmployeeNav
+                                            ? 'text-slate-600 hover:bg-slate-100'
+                                            : 'text-gray-300 hover:bg-gray-700/50'
                                 }`}
                                 onClick={() => setMobileMenuOpen(false)}
                                 style={{

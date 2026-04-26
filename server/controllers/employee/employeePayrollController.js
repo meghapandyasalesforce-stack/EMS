@@ -3,6 +3,7 @@ import logger from "../../helpers/logger.js";
 import { generatePayrollPDF } from "../../helpers/pdfGenerator.js";
 import { pickDisplayPayroll, enrichAttendanceMetricsForPayslip } from "../../helpers/payrollGenerationHelper.js";
 import { aggregatePayrollPeriod } from "../../helpers/payrollAggregationHelper.js";
+import { employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,6 +23,37 @@ function sortPayrollsByYearMonth(payrolls, descending = true) {
     });
 }
 
+function getPayrollPeriodRank(month, year) {
+    const monthRank = MONTH_ORDER[month] || 0;
+    const yearRank = Number(year) || 0;
+    return yearRank * 12 + monthRank;
+}
+
+function isPreviousPayrollPeriod(payroll) {
+    const now = new Date();
+    const currentRank = now.getFullYear() * 12 + (now.getMonth() + 1);
+    return getPayrollPeriodRank(payroll?.month, payroll?.year) < currentRank;
+}
+
+function canEmployeeDownloadPayslip(payroll) {
+    if (!payroll) return false;
+
+    // Current behavior for finalized paid payrolls.
+    if (payroll.status === 'Paid' && payroll.payrollLocked === true) {
+        return true;
+    }
+
+    // Allow previous month(s) payroll download as long as it is published/final monthly payroll.
+    const isFinalMonthly =
+        payroll.type === 'monthly' &&
+        payroll.isProvisional !== true &&
+        payroll.generationType !== 'preview' &&
+        payroll.isVisible === true &&
+        (payroll.status === 'Processed' || payroll.status === 'Paid');
+
+    return isFinalMonthly && isPreviousPayrollPeriod(payroll);
+}
+
 function normalizePayrollForDisplay(payroll) {
     if (!payroll || typeof payroll !== 'object') return payroll;
 
@@ -39,7 +71,10 @@ function normalizePayrollForDisplay(payroll) {
     }
 
     const basicWage = Number(earnings.basicWage) || 0;
-    deductions.pfEmployee = Math.round(basicWage * 0.12);
+    // Keep stored PF when available; fallback only for legacy data.
+    if (deductions.pfEmployee == null) {
+        deductions.pfEmployee = employeePfFromBasicWage(basicWage);
+    }
 
     const earningsFields = [
         'basicWage',
@@ -146,8 +181,7 @@ export const getPayrollDetails = async (req, res) => {
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
         const { payrollId } = req.params;
 
-        // Only allow downloading payslips after final payment.
-        const query = { _id: payrollId, employeeId, isVisible: true, status: 'Paid', payrollLocked: true };
+        const query = { _id: payrollId, employeeId, isVisible: true };
         if (organizationId) query.organizationId = organizationId;
 
         const payroll = await Payroll.findOne(query)
@@ -156,6 +190,12 @@ export const getPayrollDetails = async (req, res) => {
 
         if (!payroll) {
             return res.status(404).json({ message: 'Payroll not found' });
+        }
+
+        if (!canEmployeeDownloadPayslip(payroll)) {
+            return res.status(403).json({
+                message: 'Payroll details are available for paid payrolls or finalized previous months.'
+            });
         }
 
         const adjustmentsQuery = {
@@ -192,16 +232,21 @@ export const downloadPayslip = async (req, res) => {
         const { payrollId } = req.params;
 
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
-        // Only allow downloading payslips after final payment.
-        const query = { _id: payrollId, employeeId, isVisible: true, status: 'Paid', payrollLocked: true };
+        const query = { _id: payrollId, employeeId, isVisible: true };
         if (organizationId) query.organizationId = organizationId;
 
         const payroll = await Payroll.findOne(query)
             .sort({ updatedAt: -1, createdAt: -1 })
-            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 financialDetails');
+            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 gender financialDetails');
 
         if (!payroll) {
             return res.status(404).json({ message: 'Payroll not found' });
+        }
+
+        if (!canEmployeeDownloadPayslip(payroll)) {
+            return res.status(403).json({
+                message: 'Payslip download is available for paid payrolls or finalized previous months.'
+            });
         }
 
         const emp = payroll.employeeId;

@@ -247,8 +247,36 @@ export const payrollValidations = {
             .notEmpty().withMessage('Year is required')
             .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
         body('basicSalary')
-            .notEmpty().withMessage('Basic salary is required')
+            .optional()
             .isFloat({ min: 0 }).withMessage('Basic salary must be a positive number'),
+        body('type')
+            .optional()
+            .isIn(['monthly', 'off_cycle']).withMessage('Invalid payroll record type'),
+        body('subType')
+            .optional()
+            .isIn(['bonus', 'fnf', 'correction']).withMessage('Invalid off-cycle subtype'),
+        body('adjustmentMode')
+            .optional()
+            .isIn(['earning', 'deduction', 'full_override']).withMessage('Invalid adjustment mode'),
+        body('notes')
+            .if(body('type').equals('off_cycle'))
+            .notEmpty().withMessage('notes are required for off-cycle payroll entries')
+            .isLength({ max: 500 }).withMessage('notes must be at most 500 chars'),
+        body('payrollLocked')
+            .not()
+            .exists().withMessage('payrollLocked is managed by system'),
+        body('paidAmount')
+            .not()
+            .exists().withMessage('paidAmount is managed by disbursement'),
+        body('paymentDate')
+            .not()
+            .exists().withMessage('paymentDate is managed by disbursement'),
+        body('paidDate')
+            .not()
+            .exists().withMessage('paidDate is managed by disbursement'),
+        body('payment')
+            .not()
+            .exists().withMessage('payment is managed by disbursement'),
         handleValidationErrors
     ]
 };
@@ -434,6 +462,16 @@ export const payrollValidationsExtended = {
             .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
         handleValidationErrors
     ],
+    disbursePreview: [
+        query('month')
+            .notEmpty().withMessage('Month is required')
+            .isIn(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])
+            .withMessage('Invalid month'),
+        query('year')
+            .notEmpty().withMessage('Year is required')
+            .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        handleValidationErrors
+    ],
     getByEmployee: [
         commonValidations.objectId('employeeId'),
         query('page')
@@ -453,6 +491,27 @@ export const payrollValidationsExtended = {
         param('year')
             .notEmpty().withMessage('Year is required')
             .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+        handleValidationErrors
+    ],
+    processById: [
+        commonValidations.objectId('id'),
+        handleValidationErrors
+    ],
+    voidById: [
+        commonValidations.objectId('id'),
+        body('reason')
+            .optional()
+            .isString().withMessage('reason must be a string')
+            .isLength({ max: 500 }).withMessage('reason must be at most 500 chars'),
+        handleValidationErrors
+    ],
+    supersedeBase: [
+        body('monthlyPayrollId')
+            .notEmpty().withMessage('monthlyPayrollId is required')
+            .isMongoId().withMessage('Invalid monthlyPayrollId format'),
+        body('overridePayrollId')
+            .notEmpty().withMessage('overridePayrollId is required')
+            .isMongoId().withMessage('Invalid overridePayrollId format'),
         handleValidationErrors
     ]
 };

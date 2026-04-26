@@ -118,6 +118,28 @@ const EmployeePayroll = () => {
         }).format(amount || 0);
     };
 
+    const canDownloadPayslip = (payroll) => {
+        if (!payroll) return false;
+        if (payroll.status === 'Paid') return true;
+
+        const monthIndex = MONTHS.indexOf(payroll.month);
+        if (monthIndex < 0) return false;
+
+        const current = new Date();
+        const payrollRank = (Number(payroll.year) || 0) * 12 + (monthIndex + 1);
+        const currentRank = current.getFullYear() * 12 + (current.getMonth() + 1);
+        const isPreviousMonthOrOlder = payrollRank < currentRank;
+        const isFinalMonthly = payroll.isProvisional !== true && payroll.generationType !== 'preview';
+
+        return isPreviousMonthOrOlder && isFinalMonthly;
+    };
+
+    const getDownloadTitle = (payroll) => (
+        canDownloadPayslip(payroll)
+            ? 'Download Payslip'
+            : 'Payslip is available after payroll is paid or once a previous month is finalized.'
+    );
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'Paid':
@@ -249,8 +271,8 @@ const EmployeePayroll = () => {
                             </button>
                             <button
                                 onClick={() => handleDownloadPayslip(currentMonthPayroll._id)}
-                                disabled={currentMonthPayroll.status !== 'Paid'}
-                                title={currentMonthPayroll.status !== 'Paid' ? 'Payslips are available after final payroll is paid.' : 'Download Payslip'}
+                                disabled={!canDownloadPayslip(currentMonthPayroll)}
+                                title={getDownloadTitle(currentMonthPayroll)}
                                 className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <FiDownload className="w-4 h-4" />
@@ -319,8 +341,8 @@ const EmployeePayroll = () => {
                                     </button>
                                     <button
                                         onClick={() => handleDownloadPayslip(selectedMonthPayroll._id)}
-                                        disabled={selectedMonthPayroll.status !== 'Paid'}
-                                        title={selectedMonthPayroll.status !== 'Paid' ? 'Payslips are available after final payroll is paid.' : 'Download Payslip'}
+                                        disabled={!canDownloadPayslip(selectedMonthPayroll)}
+                                        title={getDownloadTitle(selectedMonthPayroll)}
                                         className="flex items-center gap-2 px-3 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <FiDownload className="w-4 h-4" /> Download Payslip
@@ -387,8 +409,8 @@ const EmployeePayroll = () => {
                                                 </button>
                                                 <button
                                                     onClick={() => handleDownloadPayslip(payroll._id)}
-                                                    disabled={payroll.status !== 'Paid'}
-                                                    title={payroll.status !== 'Paid' ? 'Payslips are available after final payroll is paid.' : 'Download Payslip'}
+                                                    disabled={!canDownloadPayslip(payroll)}
+                                                    title={getDownloadTitle(payroll)}
                                                     className="p-2 text-gray-600 hover:text-theme-primary hover:bg-theme-primary/10 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     <FiDownload className="w-4 h-4" />

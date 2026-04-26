@@ -1,9 +1,27 @@
 
 import express from "express";
-import { getAllEmployeesPayroll, getAllPayrolls, getEmployeePayroll, createPayroll, updatePayroll, getEmployeePayrollForAdmin, getCurrentMonthPayrollForAdmin, getPayrollByEmployeeMonthYear, getPayrollById, togglePayrollVisibility, generatePayrollsForMonthYear, disbursePayrolls } from "../../controllers/admin/payrollController.js";
+import {
+    getAllEmployeesPayroll,
+    getAllPayrolls,
+    getEmployeePayroll,
+    createPayroll,
+    updatePayroll,
+    getEmployeePayrollForAdmin,
+    getCurrentMonthPayrollForAdmin,
+    getPayrollByEmployeeMonthYear,
+    getPayrollById,
+    togglePayrollVisibility,
+    generatePayrollsForMonthYear,
+    disbursePayrolls,
+    previewDisbursement,
+    processPayrollEntry,
+    voidPayrollEntry,
+    supersedeMonthlyBase
+} from "../../controllers/admin/payrollController.js";
 import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
+import isAdminOrHRAuthenticated from "../../middlewares/isAdminOrHRAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
 import isCEOAuthenticated from "../../middlewares/isCEOAuthenticated.js";
 import { payrollLimiter, exportLimiter } from "../../middlewares/endpointRateLimiters.js";
@@ -22,13 +40,21 @@ router.route("/")
 router.route("/create-payroll")
     .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, payrollValidations.create, createPayroll);
 router.route("/update-payroll/:id")
-    .put(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.update, updatePayroll);
+    .put(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.update, updatePayroll);
 router.route("/toggle-visibility/:id")
     .patch(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.toggleVisibility, togglePayrollVisibility);
 router.route("/generate-bulk")
     .post(isAdminOrManagerOrHRAuthenticated, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
+router.route("/process/:id")
+    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.processById, processPayrollEntry);
+router.route("/void/:id")
+    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.voidById, voidPayrollEntry);
+router.route("/supersede-base")
+    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.supersedeBase, supersedeMonthlyBase);
 
 // Disburse salaries to employees' bank accounts (mock provider) - CEO only
+router.route("/disburse-preview")
+    .get(isCEOAuthenticated, exportLimiter, payrollValidationsExtended.disbursePreview, previewDisbursement);
 router.route("/disburse")
     .post(isCEOAuthenticated, exportLimiter, payrollValidationsExtended.disburse, disbursePayrolls);
 

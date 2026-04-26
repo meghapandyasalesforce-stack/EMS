@@ -83,12 +83,17 @@ export const createNewTask = (taskData) => async (dispatch) => {
     const res = await axios.post(`${BOTH_TASK_ENDPOINT}/create-task`, taskData, { 
       withCredentials: true 
     });
-    dispatch(addTask(res.data.task));
+    const createdTask = res.data?.task || res.data?.data?.task || res.data?.data;
+    if (createdTask) {
+      dispatch(addTask(createdTask));
+    }
+    dispatch(setStatus('succeeded'));
     toast.success('Task created successfully!');
-    return { success: true, task: res.data.task };
+    return { success: true, task: createdTask };
   } catch (error) {
-    dispatch(setError(error.response?.data?.error || 'Failed to create task'));
-    toast.error(error.response?.data?.error || 'Failed to create task');
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to create task';
+    dispatch(setError(errorMessage));
+    toast.error(errorMessage);
     return { success: false, error };
   }
 };
@@ -99,12 +104,17 @@ export const updateExistingTask = (taskId, updateData) => async (dispatch) => {
     const res = await axios.put(`${BOTH_TASK_ENDPOINT}/task-status/${taskId}`, updateData, { 
       withCredentials: true 
     });
-    dispatch(updateTask(res.data.task));
+    const updatedTask = res.data?.task || res.data?.data?.task || res.data?.data;
+    if (updatedTask) {
+      dispatch(updateTask(updatedTask));
+    }
+    dispatch(setStatus('succeeded'));
     toast.success('Task updated successfully!');
-    return { success: true, task: res.data.task };
+    return { success: true, task: updatedTask };
   } catch (error) {
-    dispatch(setError(error.response?.data?.error || 'Failed to update task'));
-    toast.error(error.response?.data?.error || 'Failed to update task');
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to update task';
+    dispatch(setError(errorMessage));
+    toast.error(errorMessage);
     return { success: false, error };
   }
 };

@@ -1,6 +1,9 @@
 import express from 'express';
 import {
     createCourse,
+    getAdminCourses,
+    getAdminCourseById,
+    updateCourse,
     createLearningPath,
     getLearningPaths,
     generateCertificate,
@@ -15,7 +18,12 @@ const router = express.Router();
 
 // Courses
 router.route('/courses')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createCourse);
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createCourse)
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAdminCourses);
+
+router.route('/courses/:id')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAdminCourseById)
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateCourse);
 
 // Learning Paths
 router.route('/learning-paths')

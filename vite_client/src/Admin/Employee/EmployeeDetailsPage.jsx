@@ -20,7 +20,7 @@ import {
   clearEmployeeDetails,
 } from '../../context/employeeDetailsSlice';
 import { deleteEmployee } from '../../context/employeeSlice';
-import { BOTH_DOCUMENT_ENDPOINT } from '../../utils/constant';
+import { BOTH_DOCUMENT_ENDPOINT, BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
 import axiosInstance, { getBackendBaseURL } from '../../utils/axios';
 import { 
   FiUser, 
@@ -53,8 +53,17 @@ const EmployeeDetailsPage = () => {
   const dispatch = useDispatch();
   const [openDialog, setOpenDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openTerminateDialog, setOpenTerminateDialog] = useState(false);
   const [openEditWorkDialog, setOpenEditWorkDialog] = useState(false);
   const [openEditPerformanceDialog, setOpenEditPerformanceDialog] = useState(false);
+  const [terminatingEmployee, setTerminatingEmployee] = useState(false);
+  const [terminateForm, setTerminateForm] = useState({
+    terminationDate: '',
+    lastWorkingDate: '',
+    reason: '',
+    notes: '',
+    eligibleForRehire: false
+  });
   const [editWorkForm, setEditWorkForm] = useState({
     jobTitle: '',
     department: '',
@@ -176,6 +185,58 @@ const EmployeeDetailsPage = () => {
 
   const handleDeleteClick = () => {
     setOpenDeleteDialog(true);
+  };
+
+  const handleOpenTerminateDialog = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setTerminateForm({
+      terminationDate: today,
+      lastWorkingDate: today,
+      reason: '',
+      notes: '',
+      eligibleForRehire: false
+    });
+    setOpenTerminateDialog(true);
+  };
+
+  const handleCloseTerminateDialog = () => {
+    if (terminatingEmployee) return;
+    setOpenTerminateDialog(false);
+  };
+
+  const handleConfirmTerminate = async () => {
+    if (!employee?._id) return;
+    if (!terminateForm.terminationDate) {
+      toast.error('Termination date is required.');
+      return;
+    }
+
+    setTerminatingEmployee(true);
+    try {
+      await axiosInstance.patch(
+        `${BOTH_PROFILE_ENDPOINT}/admin/terminate/${employee._id}`,
+        {
+          terminationDate: terminateForm.terminationDate,
+          lastWorkingDate: terminateForm.lastWorkingDate || terminateForm.terminationDate,
+          reason: terminateForm.reason,
+          notes: terminateForm.notes,
+          eligibleForRehire: terminateForm.eligibleForRehire
+        },
+        { withCredentials: true }
+      );
+      toast.success('Employee terminated successfully');
+      setOpenTerminateDialog(false);
+      dispatch(fetchEmployeeDetails(employeeId));
+    } catch (err) {
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.errors?.[0]?.terminationDate ||
+        err?.response?.data?.errors?.[0]?.lastWorkingDate ||
+        'Failed to terminate employee';
+      toast.error(message);
+    } finally {
+      setTerminatingEmployee(false);
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -467,8 +528,8 @@ const EmployeeDetailsPage = () => {
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Chip 
-                    label={employee.active ? 'Active' : 'Inactive'} 
-                    color={employee.active ? 'success' : 'error'}
+                    label={employee.status === 'terminated' ? 'Terminated' : employee.active ? 'Active' : 'Inactive'} 
+                    color={employee.status === 'terminated' ? 'error' : employee.active ? 'success' : 'default'}
                     sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
                   />
                   <Chip 
@@ -493,7 +554,7 @@ const EmployeeDetailsPage = () => {
                 variant="contained"
                 color={employee.active ? 'success' : 'error'}
                 onClick={handleStatusChangeClick}
-                disabled={updatingStatus}
+                disabled={updatingStatus || employee.status === 'terminated'}
                 fullWidth={isMobile}
                 size={isMobile ? 'medium' : 'small'}
                 startIcon={<FiActivity />}
@@ -504,8 +565,27 @@ const EmployeeDetailsPage = () => {
                   }
                 }}
               >
-                {employee.active ? 'DEACTIVATE' : 'ACTIVATE'}
+                {employee.status === 'terminated' ? 'TERMINATED' : employee.active ? 'DEACTIVATE' : 'ACTIVATE'}
               </Button>
+              {employee.status !== 'terminated' && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  onClick={handleOpenTerminateDialog}
+                  disabled={terminatingEmployee}
+                  fullWidth={isMobile}
+                  size={isMobile ? 'medium' : 'small'}
+                  startIcon={<FiClock />}
+                  sx={{
+                    bgcolor: 'rgba(251, 146, 60, 0.95)',
+                    '&:hover': {
+                      bgcolor: 'rgba(249, 115, 22, 1)'
+                    }
+                  }}
+                >
+                  TERMINATE
+                </Button>
+              )}
               <Button
                 variant="contained"
                 color="error"
@@ -586,6 +666,76 @@ const EmployeeDetailsPage = () => {
             disabled={deletingEmployee}
           >
             {deletingEmployee ? 'Deleting...' : 'Confirm Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Termination Dialog */}
+      <Dialog
+        open={openTerminateDialog}
+        onClose={handleCloseTerminateDialog}
+        aria-labelledby="terminate-dialog-title"
+        fullScreen={isMobile}
+      >
+        <DialogTitle id="terminate-dialog-title">Terminate Employee</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            This will mark {employee.name} {employee.lastName} as terminated and stop normal active payroll participation.
+          </DialogContentText>
+          <Box sx={{ display: 'grid', gap: 2, mt: 1 }}>
+            <TextField
+              label="Termination Date"
+              type="date"
+              value={terminateForm.terminationDate}
+              onChange={(e) => setTerminateForm((prev) => ({ ...prev, terminationDate: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Last Working Date"
+              type="date"
+              value={terminateForm.lastWorkingDate}
+              onChange={(e) => setTerminateForm((prev) => ({ ...prev, lastWorkingDate: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <TextField
+              label="Reason"
+              value={terminateForm.reason}
+              onChange={(e) => setTerminateForm((prev) => ({ ...prev, reason: e.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label="Notes"
+              value={terminateForm.notes}
+              onChange={(e) => setTerminateForm((prev) => ({ ...prev, notes: e.target.value }))}
+              fullWidth
+              multiline
+              minRows={3}
+            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <input
+                id="eligible-rehire"
+                type="checkbox"
+                checked={terminateForm.eligibleForRehire}
+                onChange={(e) => setTerminateForm((prev) => ({ ...prev, eligibleForRehire: e.target.checked }))}
+              />
+              <label htmlFor="eligible-rehire">Eligible for rehire</label>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTerminateDialog} disabled={terminatingEmployee}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmTerminate}
+            color="error"
+            variant="contained"
+            disabled={terminatingEmployee}
+          >
+            {terminatingEmployee ? 'Terminating...' : 'Confirm Termination'}
           </Button>
         </DialogActions>
       </Dialog>

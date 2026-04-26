@@ -31,7 +31,7 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
         const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
         const payroll = await Payroll.findOne({ _id: id, ...(organizationId && { organizationId }) })
-            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 financialDetails');
+            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 gender financialDetails');
         if (!payroll) {
             return sendNotFound(res, 'Payroll');
         }

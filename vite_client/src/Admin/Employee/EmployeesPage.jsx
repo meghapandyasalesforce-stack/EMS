@@ -219,6 +219,8 @@ const EmployeesPage = () => {
                           ? 'bg-yellow-100 text-yellow-800'
                           : employee.status === 'suspended'
                           ? 'bg-red-100 text-red-800'
+                          : employee.status === 'terminated'
+                          ? 'bg-red-100 text-red-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
                         {employee.status || 'active'}
@@ -304,6 +306,7 @@ const EmployeesPage = () => {
           </div>
         </div>
       </div>
+
     </div>
   );
 };

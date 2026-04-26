@@ -61,15 +61,23 @@ const TodayStatusComponent = () => {
   return (
     <div className="transition-all duration-300 mt-5 lg:mt-0">
       <div className="p-4 sm:p-6">
-        <div className='flex justify-between'> 
+        <div className='flex justify-between items-center gap-2'> 
 
         <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-800">Today's Attendance Overview</h2>
-         <button
-                onClick={() => navigate("/all-attendance-history")}
-                className="bg-theme-primary hover:opacity-90 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
-              >
-                All Attendance Report
-              </button>
+         <div className="flex items-center gap-2 mb-4 sm:mb-6">
+            <button
+              onClick={() => navigate("/attendance-regularization")}
+              className="bg-theme-secondary hover:opacity-90 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
+            >
+              Attendance Regularization
+            </button>
+            <button
+              onClick={() => navigate("/all-attendance-history")}
+              className="bg-theme-primary hover:opacity-90 text-white py-1 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 text-sm md:text-base"
+            >
+              All Attendance Report
+            </button>
+          </div>
         
         </div>
         {/* Summary Cards */}

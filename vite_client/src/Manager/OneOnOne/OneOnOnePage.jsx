@@ -53,7 +53,7 @@ const OneOnOnePage = () => {
     useEffect(() => {
         fetchMeetings();
         fetchEmployees();
-    }, [filterStatus]);
+    }, [filterStatus, user, employee]);
 
     const fetchMeetings = async () => {
         try {
@@ -74,14 +74,27 @@ const OneOnOnePage = () => {
     const fetchEmployees = async () => {
         try {
             const response = await axios.get('/v1/employee/auth/get-all-employees', {
+                params: { limit: 500 },
                 withCredentials: true
             });
-            const allEmployees = response.data?.employees || [];
-            // Filter by manager if user is a manager
-            const teamMembers = filterEmployeesByManager(allEmployees, user);
-            setEmployees(teamMembers);
+
+            // Endpoint returns paginated payload in `data`.
+            const allEmployees = response.data?.data || response.data?.employees || [];
+            const currentUser = user || employee;
+            const userRole = currentUser?.role;
+
+            // Managers are already server-filtered; for non-admins keep a fallback
+            // in case backend filtering does not apply due to legacy records.
+            if (userRole === 'admin') {
+                setEmployees(allEmployees);
+                return;
+            }
+
+            const teamMembers = filterEmployeesByManager(allEmployees, currentUser);
+            setEmployees(teamMembers.length > 0 ? teamMembers : allEmployees);
         } catch (error) {
-            // Error handled silently for production
+            setEmployees([]);
+            toast.error('Failed to load employee list');
         }
     };
 

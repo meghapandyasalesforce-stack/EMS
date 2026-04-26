@@ -1,5 +1,12 @@
-import React, { useEffect } from 'react';
-import { FiChevronRight, FiFolder, FiUser, FiAlertCircle } from 'react-icons/fi';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  FiSearch,
+  FiBell,
+  FiUser,
+  FiChevronRight,
+  FiCalendar,
+  FiAlertCircle
+} from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchMyProjects } from '../../context/employeeTaskSlice';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +17,8 @@ const EmployeeProjects = () => {
 
   const { myProjects = [], status = 'idle', error = null } = useSelector(state => state.employeeTask || {});
   const projects = Array.isArray(myProjects) ? myProjects : [];
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
 
   useEffect(() => {
     dispatch(fetchMyProjects());
@@ -19,25 +28,114 @@ const EmployeeProjects = () => {
     navigate(`/employee/projects/${projectId}`);
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Completed':
-        return 'bg-theme-primary/10 text-theme-primary border-theme-primary';
-      case 'In Progress':
-        return 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary';
-      case 'On Hold':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
+  const normalizeStatus = (value) => {
+    const s = String(value || '').toLowerCase().trim();
+    if (s.includes('complete') || s.includes('done')) return 'Completed';
+    if (s.includes('hold') || s.includes('blocked')) return 'On Hold';
+    if (s.includes('progress') || s.includes('active') || s.includes('ongoing')) return 'In Progress';
+    return 'In Progress';
   };
+
+  const getStatusStyles = (statusValue) => {
+    const normalized = normalizeStatus(statusValue);
+    if (normalized === 'Completed') {
+      return {
+        dot: 'bg-emerald-500',
+        text: 'text-emerald-700',
+        pill: 'bg-emerald-50 border-emerald-100'
+      };
+    }
+    if (normalized === 'On Hold') {
+      return {
+        dot: 'bg-slate-400',
+        text: 'text-slate-600',
+        pill: 'bg-slate-50 border-slate-200'
+      };
+    }
+    return {
+      dot: 'bg-[#20C997]',
+      text: 'text-[#0F766E]',
+      pill: 'bg-[#ECFDF5] border-[#CFFAFE]'
+    };
+  };
+
+  const getCategory = (project) => {
+    return String(
+      project?.department?.name ||
+      project?.department ||
+      project?.category ||
+      project?.team ||
+      'General'
+    ).toUpperCase();
+  };
+
+  const getProgress = (project) => {
+    const raw = Number(
+      project?.progress ??
+      project?.progressPercent ??
+      project?.completionPercent ??
+      project?.completionPercentage ??
+      project?.completion ??
+      0
+    );
+    if (!Number.isFinite(raw)) return 0;
+    return Math.max(0, Math.min(100, Math.round(raw)));
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'NA';
+    const parts = String(name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+  };
+
+  const formatDueDate = (value) => {
+    if (!value) return 'No due date';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'No due date';
+    return `Due ${date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`;
+  };
+
+  const isDueThisWeek = (value) => {
+    if (!value) return false;
+    const due = new Date(value);
+    if (Number.isNaN(due.getTime())) return false;
+    const now = new Date();
+    const weekLater = new Date(now);
+    weekLater.setDate(now.getDate() + 7);
+    return due >= now && due <= weekLater;
+  };
+
+  const filteredProjects = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return projects.filter((project) => {
+      const normalizedStatus = normalizeStatus(project?.status);
+      const matchesFilter = activeFilter === 'All' || normalizedStatus === activeFilter;
+      if (!matchesFilter) return false;
+
+      if (!q) return true;
+      const searchable = [
+        project?.name,
+        project?.description,
+        project?.projectLeader?.name,
+        getCategory(project),
+        normalizedStatus
+      ].join(' ').toLowerCase();
+      return searchable.includes(q);
+    });
+  }, [projects, searchTerm, activeFilter]);
+
+  const totalProjects = projects.length;
+  const dueThisWeek = projects.filter((p) => isDueThisWeek(p?.endDate)).length;
+
+  const filters = ['All', 'In Progress', 'Completed', 'On Hold'];
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#F6F8FB] p-6">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading projects...</p>
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+          <p className="text-sm text-slate-600">Loading projects...</p>
         </div>
       </div>
     );
@@ -45,12 +143,12 @@ const EmployeeProjects = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
-        <div className="max-w-lg bg-white rounded-lg shadow-md border border-gray-200 p-5 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#F6F8FB] p-6">
+        <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           <div className="flex justify-center mb-3">
-            <FiAlertCircle className="w-8 h-8 text-red-500" />
+            <FiAlertCircle className="h-8 w-8 text-red-500" />
           </div>
-          <h2 className="text-base font-semibold text-gray-900 mb-2">Error Loading Projects</h2>
+          <h2 className="mb-2 text-base font-semibold text-slate-900">Error loading projects</h2>
           <p className="text-sm text-red-600">{error}</p>
         </div>
       </div>
@@ -58,210 +156,167 @@ const EmployeeProjects = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="min-h-screen bg-[#F6F8FB] p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1280px]">
+        <header className="mb-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Projects Dashboard</h1>
-              <p className="text-sm text-gray-600 mt-0.5">Manage and track your assigned projects</p>
+              <p className="text-3xl font-bold tracking-tight text-[#0F172A]">Workspace</p>
             </div>
-            <div className="flex gap-2">
-              <button className="bg-theme-secondary text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-theme-primary transition">
-                Active Projects
-              </button>
-              <button className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
-                Statistics
-              </button>
-            </div>
-          </div>
-        </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-          <SummaryCard 
-            title="Total Projects" 
-            count={projects.length} 
-            icon={<FiFolder className="w-6 h-6 text-theme-secondary" />} 
-            bg="bg-theme-secondary/10" 
-            iconBg="bg-theme-secondary/10"
-          />
-          <SummaryCard 
-            title="In Progress" 
-            count={projects.filter(p => p.status === 'In Progress').length} 
-            icon={<CheckIcon />} 
-            bg="bg-theme-primary/10" 
-            iconBg="bg-theme-primary/10"
-          />
-          <SummaryCard 
-            title="Completed" 
-            count={projects.filter(p => p.status === 'Completed').length} 
-            icon={<DoneIcon />} 
-            bg="bg-theme-primary/10" 
-            iconBg="bg-emerald-100"
-          />
-          <SummaryCard 
-            title="On Hold" 
-            count={projects.filter(p => p.status === 'On Hold').length} 
-            icon={<AlertIcon />} 
-            bg="bg-yellow-50" 
-            iconBg="bg-yellow-100"
-          />
-        </div>
-
-        {/* Projects Table */}
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200">
-            <h2 className="text-base font-semibold text-gray-900">My Projects</h2>
-            <p className="text-sm text-gray-600 mt-0.5">View and manage your assigned projects</p>
-          </div>
-
-          {projects.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="flex items-center justify-center w-14 h-14 bg-theme-secondary/10 rounded-full mx-auto mb-3">
-                <FiFolder className="w-7 h-7 text-theme-secondary" />
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center lg:w-auto">
+              <div className="relative w-full sm:w-[280px] md:w-[320px]">
+                <FiSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search projects..."
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-[#20C997] focus:ring-2 focus:ring-[#20C997]/20"
+                />
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1">No Projects Assigned</h3>
-              <p className="text-sm text-gray-500 mb-1">You are not assigned to any projects yet.</p>
-              <p className="text-xs text-gray-400">Contact your manager to get assigned to projects.</p>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600"
+                  aria-label="Notifications"
+                >
+                  <FiBell className="h-4 w-4" />
+                </button>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-slate-700">
+                  <FiUser className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-[#0F172A]">Project Directory</h1>
+              <p className="mt-1 text-sm text-slate-600">Manage and track all ongoing workspace initiatives.</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => {
+                const active = activeFilter === filter;
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActiveFilter(filter)}
+                    className={`rounded-full px-4 py-2 text-xs font-semibold transition sm:px-5 sm:text-sm ${
+                      active
+                        ? 'bg-[#20C997] text-white shadow-sm'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:border-[#20C997]/40'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {filteredProjects.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5]">
+                <FiAlertCircle className="h-6 w-6 text-[#0F766E]" />
+              </div>
+              <h3 className="text-base font-semibold text-slate-900">No projects found</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {projects.length === 0
+                  ? 'You are not assigned to any projects yet.'
+                  : 'Try adjusting your search or status filter.'}
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {[
-                      { key: 'project', label: 'Project' },
-                      { key: 'leader', label: 'Leader' },
-                      { key: 'start', label: 'Start Date' },
-                      { key: 'end', label: 'End Date' },
-                      { key: 'status', label: 'Status' },
-                      { key: 'actions', label: 'Actions' }
-                    ].map((header) => (
-                      <th
-                        key={header.key}
-                        className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {header.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {projects.map((project) => (
-                    <tr
-                      key={project._id}
-                      className="hover:bg-theme-secondary/10 cursor-pointer transition-all duration-200 hover:shadow-sm"
-                      onClick={() => handleProjectClick(project._id)}
-                    >
-                      {/* Project name */}
-                      <td className="px-5 py-3">
-                        <div className="flex items-center">
-                          <div className="h-9 w-9 bg-theme-secondary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <FiFolder className="w-5 h-5 text-theme-secondary" />
-                          </div>
-                          <div className="ml-3 min-w-0 flex-1">
-                            <div className="text-sm font-semibold text-gray-900 truncate">{project.name}</div>
-                            {project.description && (
-                              <div className="text-xs text-gray-500 truncate mt-0.5">{project.description}</div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {filteredProjects.map((project) => {
+                const statusLabel = normalizeStatus(project?.status);
+                const styles = getStatusStyles(statusLabel);
+                const progress = getProgress(project);
+                const leaderName = project?.projectLeader?.name || 'Not assigned';
+                const initials = getInitials(leaderName);
 
-                      {/* Leader */}
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 bg-theme-secondary/10 rounded-full flex items-center justify-center">
-                            <FiUser className="w-4 h-4 text-theme-secondary" />
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">
-                            {project.projectLeader?.name || 'Not assigned'}
-                          </span>
-                        </div>
-                      </td>
+                return (
+                  <button
+                    key={project._id}
+                    type="button"
+                    onClick={() => handleProjectClick(project._id)}
+                    className="rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-2">
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                        {getCategory(project)}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${styles.pill} ${styles.text}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
+                        {statusLabel}
+                      </span>
+                    </div>
 
-                      {/* Dates */}
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {project.startDate ? new Date(project.startDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          }) : 'Not set'}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {project.endDate ? new Date(project.endDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          }) : 'Not set'}
-                        </div>
-                      </td>
+                    <h3 className="line-clamp-1 text-2xl font-semibold tracking-tight text-slate-900">{project?.name || 'Untitled Project'}</h3>
+                    <p className="mt-2 line-clamp-2 min-h-[44px] text-sm leading-5 text-slate-600">
+                      {project?.description || 'No project description provided.'}
+                    </p>
 
-                      {/* Status */}
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${getStatusColor(
-                            project.status
-                          )}`}
-                        >
-                          {project.status}
-                        </span>
-                      </td>
+                    <div className="mt-5">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Progress</p>
+                        <p className="text-xs font-semibold text-[#0F766E]">{progress}%</p>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-[#20C997]"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
 
-                      {/* Action */}
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <div className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-theme-secondary/10 transition">
-                          <FiChevronRight className="w-4 h-4 text-gray-400 hover:text-theme-secondary transition" />
+                    <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ECFDF5] text-[11px] font-semibold text-[#0F766E]">
+                          {initials}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                          <FiCalendar className="h-3.5 w-3.5" />
+                          {formatDueDate(project?.endDate)}
+                        </div>
+                      </div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition hover:border-[#20C997]/40 hover:text-[#20C997]">
+                        <FiChevronRight className="h-4 w-4" />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
-        </div>
+
+          <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-100 bg-[#F8FAFC] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex items-center gap-8">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Projects</p>
+                <p className="text-2xl font-bold text-slate-900">{totalProjects} Active</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">This Week</p>
+                <p className="text-2xl font-bold text-[#0F766E]">{dueThisWeek} Due</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="rounded-full bg-[#0F766E] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0C685F]"
+            >
+              View Full Report
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
 };
-
-/* --- Helper Components --- */
-const SummaryCard = ({ title, count, icon, bg, iconBg }) => (
-  <div className={`${bg} rounded-lg shadow-sm border border-gray-200 p-4 transition hover:shadow-md`}>
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-xs font-medium text-gray-600 mb-1">{title}</p>
-        <p className="text-xl font-semibold text-gray-900">{count}</p>
-      </div>
-      <div className={`w-9 h-9 ${iconBg} rounded-lg flex items-center justify-center`}>
-        {icon}
-      </div>
-    </div>
-  </div>
-);
-
-const CheckIcon = () => (
-  <svg className="w-5 h-5 text-theme-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const DoneIcon = () => (
-  <svg className="w-5 h-5 text-theme-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-  </svg>
-);
-
-const AlertIcon = () => (
-  <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-  </svg>
-);
 
 export default EmployeeProjects;

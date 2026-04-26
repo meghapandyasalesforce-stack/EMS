@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiCalendar, FiClock, FiMapPin, FiAlertCircle, FiRefreshCw } from 'react-icons/fi';
+import { FiCalendar, FiClock, FiAlertCircle, FiRefreshCw, FiChevronLeft, FiChevronRight, FiBell, FiUser } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { isNonWorkingDay } from '../../utils/calendarUtils';
@@ -10,6 +10,8 @@ const EmployeeCalendar = () => {
   const [calendar, setCalendar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('month');
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
 
   useEffect(() => {
     fetchCalendar();
@@ -93,16 +95,6 @@ const EmployeeCalendar = () => {
     return months[month - 1];
   };
 
-  const getHolidayTypeColor = (type) => {
-    const colors = {
-      national: 'bg-red-100 text-red-800 border-red-200',
-      religious: 'bg-purple-100 text-purple-800 border-purple-200',
-      company: 'bg-theme-secondary/10 text-theme-secondary border-theme-secondary',
-      regional: 'bg-theme-primary/10 text-theme-primary border-theme-primary'
-    };
-    return colors[type] || 'bg-gray-100 text-gray-800 border-gray-200';
-  };
-
   const getWorkingDaysInfo = () => {
     if (!calendar?.workingDays) return null;
     
@@ -121,6 +113,65 @@ const EmployeeCalendar = () => {
       end: calendar.workingHours.endTime,
       break: calendar.workingHours.breakDuration
     };
+  };
+
+  const getEventTypeColor = (type) => {
+    const key = String(type || '').toLowerCase();
+    if (key === 'national') return 'bg-red-500';
+    if (key === 'religious') return 'bg-purple-500';
+    if (key === 'company') return 'bg-emerald-500';
+    if (key === 'regional') return 'bg-yellow-400';
+    return 'bg-slate-400';
+  };
+
+  const getEventTypeLabel = (type) => {
+    const key = String(type || '').toLowerCase();
+    if (key === 'national' || key === 'regional') return 'Holiday';
+    if (key === 'company') return 'Meeting';
+    if (key === 'religious') return 'Deadline';
+    return 'Event';
+  };
+
+  const getUpcomingEvents = () => {
+    if (!calendar?.holidays) return [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    return [...calendar.holidays]
+      .filter((holiday) => holiday.isActive)
+      .map((holiday) => ({
+        ...holiday,
+        dateObj: new Date(holiday.date)
+      }))
+      .filter((holiday) => holiday.dateObj >= now)
+      .sort((a, b) => a.dateObj - b.dateObj)
+      .slice(0, 7);
+  };
+
+  const getEventsForDateObj = (dateObj) => {
+    if (!calendar?.holidays || !dateObj) return [];
+    const yyyy = dateObj.getFullYear();
+    const mm = dateObj.getMonth();
+    const dd = dateObj.getDate();
+
+    return calendar.holidays.filter((holiday) => {
+      if (!holiday.isActive) return false;
+      const hd = new Date(holiday.date);
+      return hd.getFullYear() === yyyy && hd.getMonth() === mm && hd.getDate() === dd;
+    });
+  };
+
+  const getWeekDays = (baseDate) => {
+    const base = new Date(baseDate);
+    const mondayOffset = (base.getDay() + 6) % 7;
+    const monday = new Date(base);
+    monday.setDate(base.getDate() - mondayOffset);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
   };
 
   const generateCalendarDays = () => {
@@ -171,6 +222,15 @@ const EmployeeCalendar = () => {
     );
   };
 
+  const isSelectedDay = (day) => {
+    if (!day) return false;
+    return (
+      selectedDate.getDate() === day &&
+      selectedDate.getMonth() + 1 === currentMonth &&
+      selectedDate.getFullYear() === currentYear
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
@@ -185,25 +245,48 @@ const EmployeeCalendar = () => {
   const holidays = getHolidaysForMonth(currentMonth);
   const workingDays = getWorkingDaysInfo();
   const workingHours = getWorkingHoursInfo();
+  const upcomingEvents = getUpcomingEvents();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4 sm:p-6 transition-all duration-300">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="bg-white/90 backdrop-blur rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div className="min-h-screen bg-[#F4F6FB] p-4 sm:p-6 transition-all duration-300">
+      <div className="mx-auto max-w-[1320px] space-y-6">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Company Calendar</h1>
-              <p className="text-sm sm:text-base text-slate-600 mt-1">
-                View holidays and weekly schedule for {currentYear}
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Employee Calendar</h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Manage your schedule and milestones.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <div className="inline-flex items-center px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-medium">
-                <FiCalendar className="w-4 h-4 mr-2 text-slate-500" />
-                {getMonthName(currentMonth)} {currentYear}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('month')}
+                  className={`rounded-lg px-4 py-1.5 font-semibold ${viewMode === 'month' ? 'bg-[#20C997] text-white' : 'text-slate-600'}`}
+                >
+                  Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('week')}
+                  className={`rounded-lg px-4 py-1.5 font-medium ${viewMode === 'week' ? 'bg-[#20C997] text-white' : 'text-slate-600'}`}
+                >
+                  Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('day')}
+                  className={`rounded-lg px-4 py-1.5 font-medium ${viewMode === 'day' ? 'bg-[#20C997] text-white' : 'text-slate-600'}`}
+                >
+                  Day
+                </button>
               </div>
-              <div className="inline-flex items-center px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-medium">
-                {holidays.length} holiday{holidays.length === 1 ? '' : 's'}
+              <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600">
+                <FiBell className="h-4 w-4" />
+              </button>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                <FiUser className="h-4 w-4" />
               </div>
             </div>
           </div>
@@ -229,168 +312,293 @@ const EmployeeCalendar = () => {
           </div>
         )}
 
-        {/* Working Days & Hours Info */}
-        {(workingDays || workingHours) && (
-          <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-200">
-            <h3 className="text-base font-semibold text-slate-900 mb-4 flex items-center">
-              <FiClock className="w-4 h-4 mr-2 text-blue-600" />
-              Working Schedule
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {workingDays && (
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                  <h4 className="text-xs font-semibold text-blue-700 mb-2 uppercase tracking-wide">Working Days</h4>
-                  <p className="text-sm text-blue-800 font-medium leading-relaxed">{workingDays.join(', ')}</p>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <FiCalendar className="h-4 w-4 text-slate-500" />
+                  <span className="font-medium text-slate-700">Month:</span>
+                  <select
+                    value={currentMonth}
+                    onChange={(e) => setCurrentMonth(parseInt(e.target.value))}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                      <option key={month} value={month}>{getMonthName(month)}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-              {workingHours && (
-                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
-                  <h4 className="text-xs font-semibold text-emerald-700 mb-2 uppercase tracking-wide">Working Hours</h4>
-                  <p className="text-sm text-emerald-800 font-medium">
-                    {workingHours.start} - {workingHours.end} 
-                    {workingHours.break > 0 && (
-                      <span className="block text-xs text-emerald-700 mt-1">
-                        Break: {workingHours.break} minutes
-                      </span>
-                    )}
-                  </p>
+
+                <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <span className="font-medium text-slate-700">Year:</span>
+                  <select
+                    value={currentYear}
+                    onChange={(e) => setCurrentYear(parseInt(e.target.value))}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
+                  >
+                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i).map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
+
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  {holidays.length} holiday{holidays.length === 1 ? '' : 's'}
+                </span>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5 border border-slate-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Filters</h2>
-              <p className="text-xs sm:text-sm text-slate-600">Choose year and month to view the calendar</p>
-            </div>
-            <select
-              value={currentYear}
-              onChange={(e) => setCurrentYear(parseInt(e.target.value))}
-              className="px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
-            >
-              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i).map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <FiCalendar className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Show Month:</span>
-            <select
-              value={currentMonth}
-              onChange={(e) => setCurrentMonth(parseInt(e.target.value))}
-              className="px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                <option key={month} value={month}>{getMonthName(month)}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+            {/* Calendar Grid */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-3xl font-bold tracking-tight text-slate-900">{getMonthName(currentMonth)} {currentYear}</h3>
+                  <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+                    <FiChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+                    <FiChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    setCurrentYear(now.getFullYear());
+                    setCurrentMonth(now.getMonth() + 1);
+                    setSelectedDate(now);
+                  }}
+                  className="rounded-lg px-3 py-1.5 text-sm font-semibold text-[#0a8f6c] hover:bg-[#20C997]/10"
+                >
+                  Go to today
+                </button>
+              </div>
 
-        {/* Calendar Grid */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">
-            {getMonthName(currentMonth)} {currentYear}
-          </h3>
+              {viewMode === 'month' && (
+                <>
+                  {/* Weekdays Header */}
+                  <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                      <div key={d} className="py-2">{d}</div>
+                    ))}
+                  </div>
 
-          {/* Weekdays Header */}
-          <div className="grid grid-cols-7 gap-2 mb-2 text-[11px] text-center text-white font-semibold tracking-wide">
-            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
-              <div key={d} className="py-2 bg-slate-700 rounded-lg">{d}</div>
-            ))}
-          </div>
+                  {/* Days */}
+                  <div className="grid grid-cols-7 gap-2">
+                    {generateCalendarDays().map((day, idx) => {
+                      const holidaysOnDay = day ? getHolidaysForDay(day) : [];
+                      const hasHoliday = holidaysOnDay.length > 0;
+                      const firstHoliday = hasHoliday ? holidaysOnDay[0] : null;
+                      const today = isToday(day);
+                      const selected = isSelectedDay(day);
 
-          {/* Days */}
-          <div className="grid grid-cols-7 gap-2">
-            {generateCalendarDays().map((day, idx) => {
-              const holidaysOnDay = day ? getHolidaysForDay(day) : [];
-              const hasHoliday = holidaysOnDay.length > 0;
-              const firstHoliday = hasHoliday ? holidaysOnDay[0] : null;
-              
-              // Determine background color: holiday takes precedence, then non-working day, then default
-              let bgClass = 'bg-white';
-              if (hasHoliday) {
-                bgClass = getHolidayBgColor(firstHoliday.type);
-              } else if (
-                day &&
-                isNonWorkingDay(calendar?.workingDays, currentYear, currentMonth, day)
-              ) {
-                bgClass = 'bg-gray-100';
-              }
-              
-              const holidayNames = holidaysOnDay.map(h => h.name).join(', ');
-
-              return (
-                <div
-                  key={idx}
-                  className={`h-24 p-2 rounded-xl border flex flex-col justify-between transition-all hover:shadow-md
-                    ${day ? bgClass : 'bg-slate-50'}
-                    ${hasHoliday ? 'border-red-300' : 'border-slate-200'}
-                    ${isToday(day) ? 'ring-2 ring-blue-300' : ''}
-                    relative group
-                  `}
-                  title={
-                    hasHoliday
-                      ? holidayNames
-                      : (
+                      let bgClass = 'bg-white';
+                      if (today) {
+                        bgClass = 'bg-[#20C997] text-white';
+                      } else if (hasHoliday) {
+                        bgClass = getHolidayBgColor(firstHoliday.type);
+                      } else if (
                         day &&
                         isNonWorkingDay(calendar?.workingDays, currentYear, currentMonth, day)
-                      )
-                        ? 'Non-working day'
-                        : ''
-                  }
-                >
-                  <span className={`font-semibold text-sm ${isToday(day) ? 'text-blue-700' : 'text-slate-700'}`}>
-                    {day || ''}
-                  </span>
-                  {hasHoliday && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 truncate font-medium w-fit">
-                      {firstHoliday.name}
-                      {holidaysOnDay.length > 1 && ` +${holidaysOnDay.length - 1}`}
-                    </span>
+                      ) {
+                        bgClass = 'bg-gray-100';
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          key={idx}
+                          onClick={() => {
+                            if (!day) return;
+                            setSelectedDate(new Date(currentYear, currentMonth - 1, day));
+                          }}
+                          className={`min-h-[100px] rounded-xl border border-slate-100 p-2 text-left transition ${day ? bgClass : 'bg-slate-50'} ${selected ? 'ring-2 ring-[#20C997]/50' : ''}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <span className={`text-sm font-semibold ${today ? 'text-white' : 'text-slate-700'}`}>{day || ''}</span>
+                            {today && (
+                              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">Today</span>
+                            )}
+                          </div>
+                          {day && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {holidaysOnDay.slice(0, 3).map((holiday) => (
+                                <span key={holiday._id || holiday.name} className={`h-2 w-2 rounded-full ${getEventTypeColor(holiday.type)}`} />
+                              ))}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {viewMode === 'week' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-7">
+                    {getWeekDays(selectedDate).map((dateObj) => {
+                      const day = dateObj.getDate();
+                      const month = dateObj.getMonth() + 1;
+                      const year = dateObj.getFullYear();
+                      const inCurrentMonth = month === currentMonth && year === currentYear;
+                      const today =
+                        new Date().toDateString() === dateObj.toDateString();
+                      const events = getEventsForDateObj(dateObj);
+
+                      return (
+                        <button
+                          type="button"
+                          key={dateObj.toISOString()}
+                          onClick={() => setSelectedDate(dateObj)}
+                          className={`rounded-xl border p-3 text-left ${inCurrentMonth ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-100'} ${today ? 'ring-2 ring-[#20C997]/40' : ''}`}
+                        >
+                          <p className="text-xs font-semibold uppercase text-slate-500">
+                            {dateObj.toLocaleDateString(undefined, { weekday: 'short' })}
+                          </p>
+                          <p className="mt-1 text-lg font-bold text-slate-800">{day}</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {events.slice(0, 3).map((event) => (
+                              <span key={event._id || event.name} className={`h-2 w-2 rounded-full ${getEventTypeColor(event.type)}`} />
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Events this week
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                      {getWeekDays(selectedDate)
+                        .flatMap((d) => getEventsForDateObj(d).map((evt) => ({ evt, d })))
+                        .slice(0, 8)
+                        .map(({ evt, d }, idx) => (
+                          <li key={`${evt._id || evt.name}-${idx}`} className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${getEventTypeColor(evt.type)}`} />
+                            <span>{d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {evt.name}</span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {viewMode === 'day' && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {getEventsForDateObj(selectedDate).length === 0 ? (
+                      <p className="text-sm text-slate-600">No events for this day.</p>
+                    ) : (
+                      getEventsForDateObj(selectedDate).map((event) => (
+                        <div key={event._id || event.name} className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2.5 w-2.5 rounded-full ${getEventTypeColor(event.type)}`} />
+                            <p className="font-semibold text-slate-900">{event.name}</p>
+                          </div>
+                          <p className="mt-1 text-xs font-semibold uppercase text-slate-500">
+                            {getEventTypeLabel(event.type)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+
+                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <p className="text-sm font-semibold text-slate-800">Day status</p>
+                      {isNonWorkingDay(
+                        calendar?.workingDays,
+                        selectedDate.getFullYear(),
+                        selectedDate.getMonth() + 1,
+                        selectedDate.getDate()
+                      ) ? (
+                        <p className="mt-1 text-sm text-slate-600">Non-working day</p>
+                      ) : (
+                        <p className="mt-1 text-sm text-slate-600">
+                          Working day{workingHours ? ` • ${workingHours.start} - ${workingHours.end}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Legend */}
+              <div className="mt-6 flex flex-wrap gap-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-yellow-400" /> Leave</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Holiday</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Meeting</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-purple-500" /> Deadline</span>
+              </div>
+            </div>
+
+            {/* Working Days & Hours Info */}
+            {(workingDays || workingHours) && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="mb-4 flex items-center text-base font-semibold text-slate-900">
+                  <FiClock className="mr-2 h-4 w-4 text-[#20C997]" />
+                  Working Schedule
+                </h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {workingDays && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Working Days</h4>
+                      <p className="text-sm font-medium text-slate-700">{workingDays.join(', ')}</p>
+                    </div>
                   )}
-                  {!hasHoliday && day && isNonWorkingDay(calendar?.workingDays, currentYear, currentMonth, day) && (
-                    <span className="text-[10px] text-slate-500 truncate">
-                      Non-working day
-                    </span>
+                  {workingHours && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Working Hours</h4>
+                      <p className="text-sm font-medium text-slate-700">
+                        {workingHours.start} - {workingHours.end}
+                        {workingHours.break > 0 && (
+                          <span className="mt-1 block text-xs text-slate-500">Break: {workingHours.break} minutes</span>
+                        )}
+                      </p>
+                    </div>
                   )}
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Calendar Legend */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5 border border-slate-200">
-          <h3 className="text-sm sm:text-base font-semibold text-slate-900 mb-3">Holiday Types</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-red-100 border border-red-200 rounded-full"></div>
-              <span className="text-sm text-slate-600 font-medium">National</span>
+          {/* Upcoming Events */}
+          <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-start justify-between">
+              <h3 className="text-3xl font-bold tracking-tight text-slate-900">Upcoming Events</h3>
+              <span className="rounded-lg bg-[#ECFDF5] px-2 py-1 text-xs font-semibold text-[#0a8f6c]">
+                Next {upcomingEvents.length} Days
+              </span>
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-purple-100 border border-purple-200 rounded-full"></div>
-              <span className="text-sm text-slate-600 font-medium">Religious</span>
+
+            {upcomingEvents.length === 0 ? (
+              <p className="text-sm text-slate-500">No upcoming events for this period.</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingEvents.map((event) => (
+                  <div key={event._id || `${event.name}-${event.date}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {event.dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-slate-900">{event.name}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${getEventTypeColor(event.type)}`} />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{getEventTypeLabel(event.type)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5 rounded-2xl bg-[#F0FDF9] p-4 text-sm text-[#0a8f6c]">
+              Keep an eye on upcoming events and holidays to plan your work week better.
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-blue-100 border border-blue-200 rounded-full"></div>
-              <span className="text-sm text-slate-600 font-medium">Company</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-emerald-100 border border-emerald-200 rounded-full"></div>
-              <span className="text-sm text-slate-600 font-medium">Regional</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded-full"></div>
-              <span className="text-sm text-slate-600 font-medium">Non-working day</span>
-            </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>

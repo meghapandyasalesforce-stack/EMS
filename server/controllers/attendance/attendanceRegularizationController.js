@@ -41,6 +41,41 @@ export const createRegularizationRequest = async (req, res) => {
             });
         }
 
+        // Enforce current-month-only regularization
+        const requestedDate = new Date(attendanceDate);
+        if (Number.isNaN(requestedDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid attendance date'
+            });
+        }
+        const now = new Date();
+        const isCurrentMonth =
+            requestedDate.getFullYear() === now.getFullYear() &&
+            requestedDate.getMonth() === now.getMonth();
+        if (!isCurrentMonth) {
+            return res.status(400).json({
+                success: false,
+                message: 'Regularization is allowed only for the current month.'
+            });
+        }
+
+        // Enforce monthly request cap (count only pending + approved)
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const monthlyRequestCount = await AttendanceRegularization.countDocuments({
+            organizationId,
+            employeeId,
+            attendanceDate: { $gte: monthStart, $lt: nextMonthStart },
+            status: { $in: ['pending', 'approved'] }
+        });
+        if (monthlyRequestCount >= 5) {
+            return res.status(400).json({
+                success: false,
+                message: 'Monthly regularization limit reached (max 5 requests for pending/approved).'
+            });
+        }
+
         // Validate dates based on type
         if (regularizationType === 'missing_clock_in' || regularizationType === 'both' || regularizationType === 'incorrect_time') {
             if (!requestedClockIn) {
@@ -63,7 +98,7 @@ export const createRegularizationRequest = async (req, res) => {
         // Check if a request already exists for this date
         const existingRequest = await AttendanceRegularization.findOne({
             employeeId,
-            attendanceDate: new Date(attendanceDate),
+            attendanceDate: requestedDate,
             status: { $in: ['pending', 'approved'] },
             organizationId
         });
@@ -118,7 +153,7 @@ export const createRegularizationRequest = async (req, res) => {
             organizationId,
             employeeId,
             managerId: manager._id,
-            attendanceDate: new Date(attendanceDate),
+            attendanceDate: requestedDate,
             regularizationType,
             requestedClockIn: requestedClockIn ? new Date(requestedClockIn) : undefined,
             requestedClockOut: requestedClockOut ? new Date(requestedClockOut) : undefined,
@@ -411,7 +446,34 @@ export const approveRegularization = async (req, res) => {
             attendanceRecord.status = 'present';
         }
 
-        await attendanceRecord.save();
+        try {
+            await attendanceRecord.save();
+        } catch (saveError) {
+            // If another request inserted the same (org,user,date) row in parallel,
+            // reuse that row and apply the requested update.
+            if (saveError?.code === 11000) {
+                attendanceRecord = await Attendance.findOne({
+                    userId: regularizationRequest.employeeId._id || regularizationRequest.employeeId,
+                    date: startOfDay,
+                    organizationId
+                });
+
+                if (!attendanceRecord) {
+                    throw saveError;
+                }
+
+                if (regularizationRequest.requestedClockIn) {
+                    attendanceRecord.clockIn = clockInTime;
+                }
+                if (regularizationRequest.requestedClockOut) {
+                    attendanceRecord.clockOut = clockOutTime;
+                }
+                attendanceRecord.status = 'present';
+                await attendanceRecord.save();
+            } else {
+                throw saveError;
+            }
+        }
 
         // Link attendance record to regularization request
         regularizationRequest.attendanceRecordId = attendanceRecord._id;

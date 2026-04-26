@@ -6,7 +6,7 @@ import { isManager } from '../utils/managerHelper';
 
 const TeamLearningRouteWrapper = () => {
     const ManagerComponent = React.lazy(() => import('../Manager/TeamLearning/TeamLearningPage'));
-    const EmployeeComponent = React.lazy(() => import('../Employee/Learning/MyTeamLearningPage'));
+    const EmployeeComponent = React.lazy(() => import('../Employee/Learning/BenefitsLearningHub'));
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const [isLoading, setIsLoading] = React.useState(true);

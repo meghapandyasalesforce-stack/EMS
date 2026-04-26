@@ -2,7 +2,7 @@
 // This lets the admin change colors once and have the whole app theme update.
 
 const DEFAULTS = {
-  primary: '#16a34a',
+  primary: '#20C997',
   secondary: '#2563eb',
   accent: '#f97316',
   bg: '#ffffff',

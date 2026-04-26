@@ -1,5 +1,6 @@
 import Task from "../../models/task.model.js";
 import Project from "../../models/project.model.js";
+import ProjectUpdate from "../../models/projectUpdate.model.js";
 import Employee from "../../models/employee.model.js";
 import { sendTaskUpdateNotification } from "../../helpers/notificationService.js";
 import { sendSuccess, sendError, sendForbidden, sendInternalError } from "../../helpers/responseHelper.js";
@@ -10,18 +11,85 @@ import logger from "../../helpers/logger.js";
 // Get all projects for the logged-in employee
 export const getMyProjects = async (req, res) => {
     try {
-        const employeeId = req.employee._id; // Assuming you have employee info in req after auth
-        
-        const projects = await Project.find({
+        const employeeId = req.employee._id;
+        const organizationId = getOrganizationId(req);
+
+        // Keep this endpoint organization-scoped for reliable progress calculations.
+        const projectQuery = addOrganizationFilter(req, {
             $or: [
                 { projectLeader: employeeId },
                 { projectMembers: employeeId }
             ]
-        })
+        });
+
+        const projects = await Project.find(projectQuery)
         .populate('projectLeader', 'name email')
         .populate('projectMembers', 'name email');
 
-        return sendSuccess(res, { projects }, 'Projects retrieved successfully');
+        if (!projects.length) {
+            return sendSuccess(res, { projects: [] }, 'Projects retrieved successfully');
+        }
+
+        const projectIds = projects.map((p) => p._id);
+
+        // Task progress fallback: completed tasks / total tasks.
+        const taskQuery = addOrganizationFilter(req, {
+            project: { $in: projectIds }
+        });
+        const tasks = await Task.find(taskQuery).select('project status').lean();
+
+        // Update-based progress: latest update wins when available.
+        const updatesQuery = addOrganizationFilter(req, {
+            projectId: { $in: projectIds }
+        });
+        const updates = await ProjectUpdate.find(updatesQuery)
+            .select('projectId progress updateDate')
+            .sort({ updateDate: -1 })
+            .lean();
+
+        const taskStatsByProject = new Map();
+        tasks.forEach((task) => {
+            const projectId = task.project?.toString();
+            if (!projectId) return;
+            const current = taskStatsByProject.get(projectId) || { total: 0, completed: 0 };
+            current.total += 1;
+            if (String(task.status || '').toLowerCase() === 'completed') {
+                current.completed += 1;
+            }
+            taskStatsByProject.set(projectId, current);
+        });
+
+        const latestUpdateProgressByProject = new Map();
+        updates.forEach((update) => {
+            const projectId = update.projectId?.toString();
+            if (!projectId || latestUpdateProgressByProject.has(projectId)) return;
+            if (typeof update.progress === 'number' && Number.isFinite(update.progress)) {
+                latestUpdateProgressByProject.set(projectId, Math.max(0, Math.min(100, update.progress)));
+            }
+        });
+
+        const projectsWithProgress = projects.map((projectDoc) => {
+            const project = projectDoc.toObject();
+            const pid = projectDoc._id.toString();
+            const stats = taskStatsByProject.get(pid) || { total: 0, completed: 0 };
+            const taskProgress = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
+            const updateProgress = latestUpdateProgressByProject.get(pid);
+
+            let overallProgress = typeof updateProgress === 'number' ? updateProgress : taskProgress;
+            if (String(project.status || '').toLowerCase() === 'completed') {
+                overallProgress = 100;
+            }
+
+            project.progress = Math.round(overallProgress);
+            project.taskProgress = Math.round(taskProgress);
+            project.updateProgress = typeof updateProgress === 'number' ? Math.round(updateProgress) : null;
+            project.totalTasks = stats.total;
+            project.completedTasks = stats.completed;
+            project.organizationId = organizationId || project.organizationId;
+            return project;
+        });
+
+        return sendSuccess(res, { projects: projectsWithProgress }, 'Projects retrieved successfully');
     } catch (error) {
         logger.error('Error fetching projects', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to fetch projects', error);
@@ -32,7 +100,12 @@ export const getMyProjects = async (req, res) => {
 export const createTodayTask = async (req, res) => {
     try {
         const employeeId = req.employee._id;
+        const organizationId = getOrganizationId(req);
         const { projectId, taskDescription } = req.body;
+
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'ORG_ID_MISSING');
+        }
 
         // Validate the employee is part of the project
         const project = await Project.findOne({
@@ -65,6 +138,7 @@ export const createTodayTask = async (req, res) => {
         }
 
         const newTask = new Task({
+            organizationId,
             employee: employeeId,
             project: projectId,
             taskDescription,
@@ -83,7 +157,7 @@ export const createTodayTask = async (req, res) => {
             await sendTaskUpdateNotification(populatedTask, employee, 'created');
         }
 
-        return sendSuccess(res, populatedTask, 'Task created successfully', 201);
+        return sendSuccess(res, { task: populatedTask }, 'Task created successfully', 201);
     } catch (error) {
         logger.error('Error creating task', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to create task', error);
@@ -143,12 +217,10 @@ export const updateTask = async (req, res) => {
             await sendTaskUpdateNotification(populatedTask, employee, updateType, oldTask);
         }
 
-        res.status(200).json(populatedTask);
+        return sendSuccess(res, { task: populatedTask }, 'Task updated successfully');
     } catch (error) {
-        res.status(500).json({ 
-            error: 'Failed to update task', 
-            details: error.message 
-        });
+        logger.error('Error updating task', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to update task', error);
     }
 };
 

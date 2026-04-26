@@ -2,6 +2,9 @@ import SalaryStructure from '../../models/salaryStructure.model.js';
 import Employee from '../../models/employee.model.js';
 import Payroll from '../../models/payroll.model.js';
 import logger from '../../helpers/logger.js';
+import { buildGeneratedPayrollPayload, clearPayrollGenerationCaches } from '../../helpers/payrollGenerationHelper.js';
+
+const getReqOrganizationId = (req) => req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
 // Create salary structure
 export const createSalaryStructure = async (req, res) => {
@@ -10,14 +13,16 @@ export const createSalaryStructure = async (req, res) => {
             name, description, applicableTo, applicableValues,
             earnings, deductions, bonusStructure, overtimeRules
         } = req.body;
+        const organizationId = getReqOrganizationId(req);
 
         // Check if structure with same name exists
-        const existingStructure = await SalaryStructure.findOne({ name });
+        const existingStructure = await SalaryStructure.findOne({ name, organizationId });
         if (existingStructure) {
             return res.status(400).json({ message: 'Salary structure with this name already exists' });
         }
 
         const salaryStructure = new SalaryStructure({
+            organizationId,
             name,
             description,
             applicableTo,
@@ -30,6 +35,7 @@ export const createSalaryStructure = async (req, res) => {
         });
 
         await salaryStructure.save();
+        clearPayrollGenerationCaches({ organizationId });
 
         res.status(201).json({
             message: 'Salary structure created successfully',
@@ -45,7 +51,8 @@ export const createSalaryStructure = async (req, res) => {
 export const getAllSalaryStructures = async (req, res) => {
     try {
         const { isActive } = req.query;
-        const filter = {};
+        const organizationId = getReqOrganizationId(req);
+        const filter = { organizationId };
 
         if (isActive !== undefined) {
             filter.isActive = isActive === 'true';
@@ -67,8 +74,9 @@ export const getAllSalaryStructures = async (req, res) => {
 export const getSalaryStructureById = async (req, res) => {
     try {
         const { id } = req.params;
+        const organizationId = getReqOrganizationId(req);
 
-        const structure = await SalaryStructure.findById(id)
+        const structure = await SalaryStructure.findOne({ _id: id, organizationId })
             .populate('createdBy', 'name email')
             .populate('lastModifiedBy', 'name email');
 
@@ -88,8 +96,9 @@ export const updateSalaryStructure = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
+        const organizationId = getReqOrganizationId(req);
 
-        const structure = await SalaryStructure.findById(id);
+        const structure = await SalaryStructure.findOne({ _id: id, organizationId });
         if (!structure) {
             return res.status(404).json({ message: 'Salary structure not found' });
         }
@@ -98,6 +107,7 @@ export const updateSalaryStructure = async (req, res) => {
         if (updates.name && updates.name !== structure.name) {
             const existingStructure = await SalaryStructure.findOne({ 
                 name: updates.name, 
+                organizationId,
                 _id: { $ne: id } 
             });
             if (existingStructure) {
@@ -106,9 +116,10 @@ export const updateSalaryStructure = async (req, res) => {
         }
 
         updates.lastModifiedBy = req.user._id;
-        const updatedStructure = await SalaryStructure.findByIdAndUpdate(id, updates, { new: true })
+        const updatedStructure = await SalaryStructure.findOneAndUpdate({ _id: id, organizationId }, updates, { new: true })
             .populate('createdBy', 'name email')
             .populate('lastModifiedBy', 'name email');
+        clearPayrollGenerationCaches({ organizationId, structureId: id });
 
         res.json({
             message: 'Salary structure updated successfully',
@@ -124,15 +135,17 @@ export const updateSalaryStructure = async (req, res) => {
 export const deleteSalaryStructure = async (req, res) => {
     try {
         const { id } = req.params;
+        const organizationId = getReqOrganizationId(req);
 
-        const structure = await SalaryStructure.findById(id);
+        const structure = await SalaryStructure.findOne({ _id: id, organizationId });
         if (!structure) {
             return res.status(404).json({ message: 'Salary structure not found' });
         }
 
         // Check if structure is being used by any employees
         const employeesUsingStructure = await Employee.countDocuments({
-            salaryStructure: id
+            salaryStructure: id,
+            organizationId
         });
 
         if (employeesUsingStructure > 0) {
@@ -142,7 +155,8 @@ export const deleteSalaryStructure = async (req, res) => {
             });
         }
 
-        await SalaryStructure.findByIdAndDelete(id);
+        await SalaryStructure.findOneAndDelete({ _id: id, organizationId });
+        clearPayrollGenerationCaches({ organizationId, structureId: id });
 
         res.json({ message: 'Salary structure deleted successfully' });
     } catch (error) {
@@ -155,13 +169,14 @@ export const deleteSalaryStructure = async (req, res) => {
 export const applySalaryStructure = async (req, res) => {
     try {
         const { employeeId, structureId } = req.body;
+        const organizationId = getReqOrganizationId(req);
 
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findOne({ _id: employeeId, organizationId });
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        const structure = await SalaryStructure.findById(structureId);
+        const structure = await SalaryStructure.findOne({ _id: structureId, organizationId, isActive: true });
         if (!structure) {
             return res.status(404).json({ message: 'Salary structure not found' });
         }
@@ -195,6 +210,7 @@ export const applySalaryStructure = async (req, res) => {
         // Update employee's salary structure reference
         employee.salaryStructure = structureId;
         await employee.save();
+        clearPayrollGenerationCaches({ organizationId, structureId });
 
         res.json({
             message: 'Salary structure applied successfully',
@@ -215,13 +231,14 @@ export const applySalaryStructure = async (req, res) => {
 export const calculateEmployeeSalary = async (req, res) => {
     try {
         const { employeeId, structureId } = req.params;
+        const organizationId = getReqOrganizationId(req);
 
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findOne({ _id: employeeId, organizationId });
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        const structure = await SalaryStructure.findById(structureId);
+        const structure = await SalaryStructure.findOne({ _id: structureId, organizationId, isActive: true });
         if (!structure) {
             return res.status(404).json({ message: 'Salary structure not found' });
         }
@@ -246,22 +263,32 @@ export const calculateEmployeeSalary = async (req, res) => {
 export const generatePayrollWithStructure = async (req, res) => {
     try {
         const { employeeId, month, year, structureId } = req.body;
+        const organizationId = getReqOrganizationId(req);
+        const yearNum = parseInt(year, 10);
+        if (Number.isNaN(yearNum)) {
+            return res.status(400).json({ message: 'Invalid year' });
+        }
+        const monthIndex = new Date(`${month} 1, ${yearNum}`).getMonth();
+        if (Number.isNaN(monthIndex)) {
+            return res.status(400).json({ message: 'Invalid month' });
+        }
 
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findOne({ _id: employeeId, organizationId });
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        const structure = await SalaryStructure.findById(structureId);
+        const structure = await SalaryStructure.findOne({ _id: structureId, organizationId, isActive: true });
         if (!structure) {
             return res.status(404).json({ message: 'Salary structure not found' });
         }
 
         // Check if payroll already exists
         const existingPayroll = await Payroll.findOne({
+            organizationId,
             employeeId,
             month,
-            year
+            year: yearNum
         });
 
         if (existingPayroll) {
@@ -271,19 +298,43 @@ export const generatePayrollWithStructure = async (req, res) => {
             });
         }
 
-        // Calculate salary using structure
-        const calculatedSalary = structure.calculateSalary(employee.salary);
+        const now = new Date();
+        const mode =
+            yearNum > now.getFullYear() ||
+            (yearNum === now.getFullYear() && monthIndex >= now.getMonth())
+                ? 'preview'
+                : 'final';
+
+        const empForGeneration = {
+            ...employee.toObject(),
+            salaryStructure: structure._id
+        };
+        const calculatedSalary = await buildGeneratedPayrollPayload({
+            emp: empForGeneration,
+            month,
+            year: yearNum,
+            organizationId,
+            mode,
+            asOf: now
+        });
 
         // Create payroll
         const payroll = new Payroll({
+            organizationId,
             employeeId,
             month,
-            year,
-            basicSalary: employee.salary,
+            year: yearNum,
+            basicSalary: calculatedSalary.basicSalary,
             earnings: calculatedSalary.earnings,
             deductions: calculatedSalary.deductions,
-            ctc: calculatedSalary.totalEarnings,
-            inHandSalary: calculatedSalary.netSalary,
+            ctc: calculatedSalary.ctc,
+            inHandSalary: calculatedSalary.inHandSalary,
+            leaves: calculatedSalary.leaves,
+            workingDays: calculatedSalary.workingDays,
+            presentDays: calculatedSalary.presentDays,
+            unpaidLeave: calculatedSalary.unpaidLeave,
+            generationType: mode === 'preview' ? 'preview' : 'final',
+            isProvisional: mode === 'preview',
             status: 'Pending'
         });
 
@@ -303,13 +354,14 @@ export const generatePayrollWithStructure = async (req, res) => {
 export const getApplicableStructures = async (req, res) => {
     try {
         const { employeeId } = req.params;
+        const organizationId = getReqOrganizationId(req);
 
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findOne({ _id: employeeId, organizationId });
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
         }
 
-        const structures = await SalaryStructure.find({ isActive: true });
+        const structures = await SalaryStructure.find({ isActive: true, organizationId });
 
         const applicableStructures = structures.filter(structure => {
             if (structure.applicableTo === 'all') return true;

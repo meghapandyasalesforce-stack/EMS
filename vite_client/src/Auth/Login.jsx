@@ -199,8 +199,15 @@ function Login() {
                         organizationId: data.organization?.id
                     }));
                 } else {
-                    // Employee/Admin login
-                    dispatch(setUser(userData));
+                    // Employee/Admin login — API may send Mongo id as `id` (employee) or `_id`; normalize for Redux consumers.
+                    const docId = userData._id ?? userData.id;
+                    dispatch(
+                        setUser(
+                            docId != null && userData._id == null
+                                ? { ...userData, _id: docId }
+                                : userData
+                        )
+                    );
                 }
                 
                 // SECURITY FIX: Tokens are stored in httpOnly cookies only (not localStorage)

@@ -4,7 +4,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import useUpdatePayroll from '../../Hooks/useUpdatePayroll';
 
 function pfEmployeeFromBasicWage(basicWage) {
-  return Math.round((Number(basicWage) || 0) * 0.12);
+  const pfWage = Math.min(Math.max(Number(basicWage) || 0, 0), 15000);
+  return Math.round(pfWage * 0.12);
+}
+
+function computeEarningsFromGross(gross) {
+  const g = Number(gross) || 0;
+  const basicWage = Math.round(0.5 * g);
+  const houseRentAllowance = Math.round(0.4 * basicWage);
+  const specialAllowance = Math.round(g - basicWage - houseRentAllowance);
+  return { basicWage, houseRentAllowance, specialAllowance };
 }
 
 function earningsWithoutGratuity(earnings) {
@@ -48,6 +57,7 @@ const UpdatePayroll = () => {
     return {
       employeeId: employeeId || '',
       payrollId: '', // Add payrollId to track the actual payroll record
+      basicSalary: 0, // Gross salary/CTC for the period
       month: monthIndex >= 0 ? monthIndex : 0,
       year: parseInt(year) || new Date().getFullYear(),
       earnings: {
@@ -90,6 +100,29 @@ const UpdatePayroll = () => {
     }).format(amount || 0);
   };
 
+  const resolveGrossSalary = (payrollRecord) => {
+    const direct = Number(payrollRecord?.basicSalary);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const ctc = Number(payrollRecord?.ctc);
+    if (Number.isFinite(ctc) && ctc > 0) return ctc;
+    const totalEarnings = Number(payrollRecord?.earnings?.totalEarnings);
+    if (Number.isFinite(totalEarnings) && totalEarnings > 0) return totalEarnings;
+    const e = payrollRecord?.earnings || {};
+    return (
+      (Number(e.basicWage) || 0) +
+      (Number(e.houseRentAllowance) || 0) +
+      (Number(e.transportAllowance) || 0) +
+      (Number(e.medicalAllowance) || 0) +
+      (Number(e.overtime) || 0) +
+      (Number(e.specialAllowance) || 0) +
+      (Number(e.performanceBonus) || 0) +
+      (Number(e.projectBonus) || 0) +
+      (Number(e.attendanceBonus) || 0) +
+      (Number(e.pfEmployer) || 0) +
+      (Number(e.esiEmployer) || 0)
+    );
+  };
+
   // Find payroll data for current employee/month/year
   useEffect(() => {
     const loadPayrollData = async () => {
@@ -111,6 +144,7 @@ const UpdatePayroll = () => {
             setFormData({
               employeeId: detailsData.employeeId?._id || detailsData.employeeId || employeeId,
               payrollId: detailsData._id,
+              basicSalary: resolveGrossSalary(detailsData),
               month: months.indexOf(detailsData.month),
               year: detailsData.year,
               earnings: earningsWithoutGratuity(detailsData.earnings),
@@ -137,6 +171,7 @@ const UpdatePayroll = () => {
             setFormData({
               employeeId: extractId(payroll.employeeId),
               payrollId: payroll._id,
+              basicSalary: resolveGrossSalary(payroll),
               month: months.indexOf(payroll.month),
               year: payroll.year,
               earnings: earningsWithoutGratuity(payroll.earnings),
@@ -176,6 +211,7 @@ const UpdatePayroll = () => {
             setFormData({
               employeeId: payrollData.employeeId?._id || payrollData.employeeId,
               payrollId: payrollData._id,
+              basicSalary: resolveGrossSalary(payrollData),
               month: months.indexOf(payrollData.month),
               year: payrollData.year,
               earnings: earningsWithoutGratuity(payrollData.earnings),
@@ -189,6 +225,7 @@ const UpdatePayroll = () => {
               setFormData({
                 employeeId: extractId(selectedPayroll.employeeId),
                 payrollId: selectedPayroll._id,
+                basicSalary: resolveGrossSalary(selectedPayroll),
                 month: months.indexOf(selectedPayroll.month),
                 year: selectedPayroll.year,
                 earnings: earningsWithoutGratuity(selectedPayroll.earnings),
@@ -200,6 +237,7 @@ const UpdatePayroll = () => {
               setFormData(prev => ({
                 ...prev,
                 employeeId,
+                basicSalary: 0,
                 month: parseInt(month),
                 year: parseInt(year),
                 payrollId: '', // No existing payroll, will create on update
@@ -220,6 +258,7 @@ const UpdatePayroll = () => {
                 setFormData({
                   employeeId: detailsData.employeeId?._id || detailsData.employeeId || employeeId,
                   payrollId: detailsData._id,
+                  basicSalary: resolveGrossSalary(detailsData),
                   month: months.indexOf(detailsData.month),
                   year: detailsData.year,
                   earnings: earningsWithoutGratuity(detailsData.earnings),
@@ -231,6 +270,7 @@ const UpdatePayroll = () => {
                 setFormData(prev => ({
                   ...prev,
                   employeeId,
+                  basicSalary: 0,
                   month: parseInt(month),
                   year: parseInt(year),
                   payrollId: '', // No existing payroll, will create on update
@@ -242,6 +282,7 @@ const UpdatePayroll = () => {
               setFormData(prev => ({
                 ...prev,
                 employeeId,
+                basicSalary: 0,
                 month: parseInt(month),
                 year: parseInt(year),
                 payrollId: '', // No existing payroll, will create on update
@@ -269,6 +310,25 @@ const UpdatePayroll = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'basicSalary') {
+      const gross = Number(value) || 0;
+      const formula = computeEarningsFromGross(gross);
+      setFormData(prev => ({
+        ...prev,
+        basicSalary: gross,
+        earnings: {
+          ...prev.earnings,
+          basicWage: formula.basicWage,
+          houseRentAllowance: formula.houseRentAllowance,
+          specialAllowance: formula.specialAllowance
+        },
+        deductions: {
+          ...prev.deductions,
+          pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+        }
+      }));
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -401,6 +461,31 @@ const UpdatePayroll = () => {
 
         {/* Earnings inputs */}
         <div className="mb-5">
+          <h3 className="text-base font-semibold mb-3">Gross Salary</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="basicSalary">
+                Gross Salary (CTC)
+              </label>
+              <input
+                type="number"
+                id="basicSalary"
+                name="basicSalary"
+                value={formData.basicSalary || 0}
+                onChange={handleChange}
+                className="border border-gray-300 rounded-lg w-full py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                min="0"
+                step="0.01"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Updating gross recalculates Basic Wage, HRA, Special Allowance, and PF Employee.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Earnings inputs */}
+        <div className="mb-5">
           <h3 className="text-base font-semibold mb-3">Earnings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div key="basicWage">
@@ -490,7 +575,7 @@ const UpdatePayroll = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div key="pfEmployee">
               <label className="block text-gray-700 text-xs font-medium mb-1.5" htmlFor="deductions-pfEmployee">
-                PF Employee (12% of basic wage)
+                PF Employee (12% of min(basic wage, ₹15,000))
               </label>
               <input
                 type="number"

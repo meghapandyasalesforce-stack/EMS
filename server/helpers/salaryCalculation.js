@@ -28,7 +28,19 @@ export function computeEarningsFromGross(gross) {
     };
 }
 
-/** Employee PF deduction: 12% of basic wage (rounded). */
+export const PF_WAGE_CAP = 15000;
+
+export function pfWageFromBasicWage(basicWage) {
+    const basic = Math.max(0, Number(basicWage) || 0);
+    return Math.min(basic, PF_WAGE_CAP);
+}
+
+/** Employee PF deduction: 12% of capped PF wage (rounded). */
 export function employeePfFromBasicWage(basicWage) {
-    return Math.round((Number(basicWage) || 0) * 0.12);
+    return Math.round(pfWageFromBasicWage(basicWage) * 0.12);
+}
+
+/** Employer PF contribution: 12% of capped PF wage (rounded). */
+export function employerPfFromBasicWage(basicWage) {
+    return Math.round(pfWageFromBasicWage(basicWage) * 0.12);
 }

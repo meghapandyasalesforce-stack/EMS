@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { fetchEmployees } from '../../context/employeeSlice';
 import { createPayroll, updatePayroll } from '../../context/payrollSlice';
@@ -16,22 +16,37 @@ function computeEarningsFromGross(gross) {
 }
 
 function pfEmployeeFromBasicWage(basicWage) {
-    return Math.round((Number(basicWage) || 0) * 0.12);
+    const pfWage = Math.min(Math.max(Number(basicWage) || 0, 0), 15000);
+    return Math.round(pfWage * 0.12);
 }
 
 const AddPayroll = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { employeeId, month, year } = useParams();
+    const [searchParams] = useSearchParams();
+    const queryEmployeeId = searchParams.get('employeeId') || '';
+    const queryMonth = searchParams.get('month') || '';
+    const queryYearRaw = searchParams.get('year');
+    const queryYear = queryYearRaw ? Number(queryYearRaw) : NaN;
+    const queryType = searchParams.get('type') === 'off_cycle' ? 'off_cycle' : 'monthly';
+    const querySubType = searchParams.get('subType') || 'correction';
+    const queryAdjustmentMode = searchParams.get('adjustmentMode') || 'full_override';
+    const prefilledEmployeeId = employeeId || queryEmployeeId;
+    const prefilledMonth = month || queryMonth;
+    const prefilledYear = year || (Number.isFinite(queryYear) ? queryYear : undefined);
     
     const { employees } = useSelector(state => state.employees);
     const { loading, error } = useSelector(state => state.payroll);
     
     const [formData, setFormData] = useState({
-        employeeId: employeeId || '',
-        month: month || new Date().toLocaleString('default', { month: 'long' }),
-        year: year ? parseInt(year) : new Date().getFullYear(),
+        employeeId: prefilledEmployeeId || '',
+        month: prefilledMonth || new Date().toLocaleString('default', { month: 'long' }),
+        year: prefilledYear ? parseInt(prefilledYear) : new Date().getFullYear(),
         basicSalary: 0,
+        type: queryType,
+        subType: querySubType,
+        adjustmentMode: queryAdjustmentMode,
         earnings: {
             basicWage: 0,
             houseRentAllowance: 0,
@@ -54,11 +69,15 @@ const AddPayroll = () => {
             loanDeduction: 0,
             otherDeductions: 0
         },
+        notes: '',
         status: 'Pending'
     });
 
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const isOffCycleMode = formData.type === 'off_cycle';
+    const isMonthlyMode = !isOffCycleMode;
+    const employeeSelectionLocked = Boolean(prefilledEmployeeId);
 
     const months = [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -73,8 +92,8 @@ const AddPayroll = () => {
     }, [dispatch]);
 
     useEffect(() => {
-        if (employeeId && employees.length > 0) {
-            const employee = employees.find(emp => emp._id === employeeId);
+        if (prefilledEmployeeId && employees.length > 0) {
+            const employee = employees.find(emp => emp._id === prefilledEmployeeId);
             if (employee) {
                 setSelectedEmployee(employee);
                 const gross = employee.salary || 0;
@@ -98,7 +117,7 @@ const AddPayroll = () => {
                 }));
             }
         }
-    }, [employeeId, employees]);
+    }, [prefilledEmployeeId, employees]);
 
     const handleEmployeeSelect = (selectedEmployeeId) => {
         const employee = employees.find(emp => emp._id === selectedEmployeeId);
@@ -125,6 +144,10 @@ const AddPayroll = () => {
 
     const handleInputChange = (e) => {
         const { name, value, type } = e.target;
+
+        if (isMonthlyMode && name === 'basicSalary') {
+            return;
+        }
 
         // For numeric inputs (e.g. basicSalary), keep a numeric value so we don't get leading zeros like "012"
         let nextValue;
@@ -172,6 +195,7 @@ const AddPayroll = () => {
     };
 
     const handleEarningsChange = (e) => {
+        if (isMonthlyMode) return;
         const { name, value } = e.target;
         // Strip leading zeros when there are multiple digits so \"0\" + \"12\" doesn't become \"012\"
         const normalized = value.replace(/^0+(?=\\d)/, '');
@@ -193,6 +217,7 @@ const AddPayroll = () => {
     };
 
     const handleDeductionsChange = (e) => {
+        if (isMonthlyMode) return;
         const { name, value } = e.target;
         const normalized = value.replace(/^0+(?=\\d)/, '');
         setFormData(prev => ({
@@ -231,6 +256,9 @@ const AddPayroll = () => {
                 ...formData.deductions,
                 total: deductionsTotal
             },
+            type: formData.type,
+            subType: formData.type === 'off_cycle' ? formData.subType : undefined,
+            adjustmentMode: formData.type === 'off_cycle' ? formData.adjustmentMode : undefined,
             ctc: earningsTotal,
             inHandSalary: inHandSalary
         };
@@ -247,7 +275,7 @@ const AddPayroll = () => {
         } else {
             const result = await dispatch(createPayroll(payload));
             if (createPayroll.fulfilled.match(result)) {
-                toast.success('Payroll created successfully.');
+                toast.success(formData.type === 'off_cycle' ? 'Payroll correction created successfully.' : 'Payroll created successfully.');
                 navigate('/admin-payroll');
             } else if (createPayroll.rejected.match(result)) {
                 const errMsg = result.payload || 'Failed to create payroll';
@@ -273,10 +301,14 @@ const AddPayroll = () => {
                         </button>
                     </div>
                     <h1 className="text-3xl font-bold text-gray-900">
-                        {isEditMode ? 'Edit Payroll' : 'Add New Payroll'}
+                        {isEditMode ? 'Edit Payroll' : (isOffCycleMode ? 'Add Payroll Correction' : 'Add New Payroll')}
                     </h1>
                     <p className="text-gray-600 mt-2">
-                        {isEditMode ? 'Update employee payroll information' : 'Create payroll for an employee'}
+                        {isEditMode
+                            ? 'Update employee payroll information'
+                            : isOffCycleMode
+                              ? 'Create an off-cycle correction for a generated payroll period'
+                              : 'Create payroll for an employee'}
                     </p>
                 </div>
 
@@ -307,7 +339,7 @@ const AddPayroll = () => {
                                     onChange={(e) => handleEmployeeSelect(e.target.value)}
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
                                     required
-                                    disabled={!!employeeId} // Disable if employee is pre-selected
+                                    disabled={employeeSelectionLocked} // Disable if employee is pre-selected
                                 >
                                     <option value="">Choose an employee...</option>
                                     {(Array.isArray(employees) ? employees : []).map(employee => (
@@ -375,11 +407,85 @@ const AddPayroll = () => {
                         </div>
                     </div>
 
+                    {/* Payroll Entry Type */}
+                    <div className="mb-8">
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Payroll Entry Type</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Record Type</label>
+                                <select
+                                    name="type"
+                                    value={formData.type}
+                                    onChange={handleInputChange}
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                    disabled={queryType === 'off_cycle'}
+                                >
+                                    <option value="monthly">Monthly Payroll</option>
+                                    <option value="off_cycle">Off-cycle Correction</option>
+                                </select>
+                            </div>
+                            {isOffCycleMode && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                    <p className="text-sm font-medium text-amber-800">Correction Mode</p>
+                                    <p className="text-xs text-amber-700 mt-1">
+                                        This creates a separate adjustment record without editing locked processed payroll.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {isOffCycleMode && (
+                        <div className="mb-8">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Correction Details</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Correction Category</label>
+                                    <select
+                                        name="subType"
+                                        value={formData.subType}
+                                        onChange={handleInputChange}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                    >
+                                        <option value="correction">Correction</option>
+                                        <option value="bonus">Bonus</option>
+                                        <option value="fnf">Full and Final (F&F)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Correction Impact</label>
+                                    <select
+                                        name="adjustmentMode"
+                                        value={formData.adjustmentMode}
+                                        onChange={handleInputChange}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                    >
+                                        <option value="deduction">Reduce net pay</option>
+                                        <option value="earning">Increase net pay</option>
+                                        <option value="full_override">Full override (special case)</option>
+                                    </select>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Correction Notes</label>
+                                    <textarea
+                                        name="notes"
+                                        value={formData.notes}
+                                        onChange={handleInputChange}
+                                        rows={3}
+                                        required={isOffCycleMode}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                        placeholder="Reason for this correction (recommended for audit trail)"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Gross / Current Salary */}
                     <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                             <FiDollarSign className="w-5 h-5 mr-2" />
-                            Gross/Current Salary
+                            {isOffCycleMode ? 'Correction Amount Inputs' : 'Gross/Current Salary'}
                         </h2>
                         
                         <div>
@@ -389,10 +495,20 @@ const AddPayroll = () => {
                                 name="basicSalary"
                                 value={formData.basicSalary}
                                 onChange={handleInputChange}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                className={`w-full p-3 rounded-lg ${
+                                    isMonthlyMode
+                                        ? 'border border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
+                                        : 'border border-gray-300 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
+                                }`}
                                 placeholder="Enter gross/current salary"
                                 required
+                                readOnly={isMonthlyMode}
                             />
+                            {isMonthlyMode && (
+                                <p className="mt-2 text-sm text-gray-500">
+                                    Monthly payroll amount is auto-calculated from employee salary, attendance, approved leaves, and payroll period dates.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -412,8 +528,13 @@ const AddPayroll = () => {
                                         name={key}
                                         value={value}
                                         onChange={handleEarningsChange}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                        className={`w-full p-3 rounded-lg ${
+                                            isMonthlyMode
+                                                ? 'border border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
+                                                : 'border border-gray-300 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
+                                        }`}
                                         placeholder="0"
+                                        readOnly={isMonthlyMode}
                                     />
                                 </div>
                             ))}
@@ -426,7 +547,7 @@ const AddPayroll = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Pf Employee — 12% of basic wage (₹)
+                                    Pf Employee — 12% of min(basic wage, ₹15,000) (₹)
                                 </label>
                                 <input
                                     type="number"
@@ -447,12 +568,22 @@ const AddPayroll = () => {
                                         name={key}
                                         value={value}
                                         onChange={handleDeductionsChange}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]"
+                                        className={`w-full p-3 rounded-lg ${
+                                            isMonthlyMode
+                                                ? 'border border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
+                                                : 'border border-gray-300 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
+                                        }`}
                                         placeholder="0"
+                                        readOnly={isMonthlyMode}
                                     />
                                 </div>
                             ))}
                         </div>
+                        {isMonthlyMode && (
+                            <p className="mt-3 text-sm text-gray-500">
+                                These values are preview-only here. The backend recalculates monthly payroll at save time from attendance and leave data.
+                            </p>
+                        )}
                     </div>
 
                     {/* Summary */}

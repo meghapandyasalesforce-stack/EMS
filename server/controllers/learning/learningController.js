@@ -27,6 +27,128 @@ export const createCourse = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Admin/HR: Get all courses (all statuses)
+ */
+export const getAdminCourses = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const { category, status, level, page = 1, limit = 50 } = req.query;
+
+    const query = addOrganizationFilter(req, {});
+    if (category) query.category = category;
+    if (level) query.level = level;
+    if (status) query.status = status;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const courses = await Course.find(query)
+        .populate('instructor', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+    const total = await Course.countDocuments(query);
+
+    res.json({
+        success: true,
+        data: courses,
+        pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / parseInt(limit))
+        }
+    });
+});
+
+/**
+ * Admin/HR: Get single course by id
+ */
+export const getAdminCourseById = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const { id } = req.params;
+
+    const course = await Course.findOne({ _id: id, organizationId }).populate('instructor', 'name email');
+    if (!course) {
+        return res.status(404).json({
+            success: false,
+            message: 'Course not found'
+        });
+    }
+
+    res.json({
+        success: true,
+        data: course
+    });
+});
+
+/**
+ * Admin/HR: Update course
+ */
+export const updateCourse = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const { id } = req.params;
+
+    const course = await Course.findOne({ _id: id, organizationId });
+    if (!course) {
+        return res.status(404).json({
+            success: false,
+            message: 'Course not found'
+        });
+    }
+
+    Object.assign(course, req.body);
+    await course.save();
+
+    // Recalculate enrollment progress whenever module structure changes.
+    // This keeps existing enrollments in sync when HR adds/removes modules.
+    const enrollments = await Enrollment.find({
+        organizationId,
+        courseId: course._id
+    });
+
+    const totalModules = Array.isArray(course.content) ? course.content.length : 0;
+
+    await Promise.all(
+        enrollments.map(async (enrollment) => {
+            const completedModulesCountRaw = Array.isArray(enrollment.completedModules)
+                ? enrollment.completedModules.length
+                : 0;
+            const completedModulesCount = Math.min(completedModulesCountRaw, totalModules || completedModulesCountRaw);
+
+            const nextProgress =
+                totalModules > 0
+                    ? Math.round((completedModulesCount / totalModules) * 100)
+                    : 0;
+
+            enrollment.progress = Math.max(0, Math.min(100, nextProgress));
+
+            if (enrollment.progress >= 100 && totalModules > 0) {
+                enrollment.status = 'Completed';
+                if (!enrollment.completionDate) {
+                    enrollment.completionDate = new Date();
+                }
+            } else if (enrollment.status === 'Completed') {
+                enrollment.status = completedModulesCount > 0 ? 'In Progress' : 'Enrolled';
+                enrollment.completionDate = undefined;
+            } else if (enrollment.progress > 0 && enrollment.status === 'Enrolled') {
+                enrollment.status = 'In Progress';
+            } else if (enrollment.progress === 0 && enrollment.status === 'In Progress') {
+                enrollment.status = 'Enrolled';
+            }
+
+            await enrollment.save();
+        })
+    );
+
+    const updatedCourse = await Course.findById(course._id).populate('instructor', 'name email');
+    res.json({
+        success: true,
+        message: 'Course updated successfully',
+        data: updatedCourse
+    });
+});
+
+/**
  * Get all courses
  */
 export const getCourses = asyncHandler(async (req, res) => {

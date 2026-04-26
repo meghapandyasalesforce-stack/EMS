@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { FaBook, FaGraduationCap, FaUsers, FaChartLine, FaPlus } from 'react-icons/fa';
+import { FaBook, FaGraduationCap, FaUsers, FaChartLine, FaPlus, FaEdit } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { isHR } from '../../utils/managerHelper';
@@ -25,13 +25,14 @@ const LearningPage = () => {
 
     useEffect(() => {
         fetchData();
-    }, [activeTab]);
+    }, [activeTab, isHRUser]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
             if (activeTab === 'courses') {
-                const response = await axios.get('/v1/both/learning/courses', { withCredentials: true });
+                const endpoint = isHRUser ? '/v1/admin/learning/courses' : '/v1/both/learning/courses';
+                const response = await axios.get(endpoint, { withCredentials: true });
                 setCourses(response.data?.data || []);
             } else {
                 const response = await axios.get('/v1/both/learning/enrollments', { withCredentials: true });
@@ -114,6 +115,15 @@ const LearningPage = () => {
                                 >
                                     View Course
                                 </button>
+                                {isHRUser && (
+                                    <button
+                                        onClick={() => navigate(`/learning/edit-course/${course._id}`)}
+                                        className="mt-2 w-full border border-theme-secondary text-theme-secondary py-2 rounded-lg hover:bg-theme-secondary/10 transition inline-flex items-center justify-center gap-2"
+                                    >
+                                        <FaEdit className="w-4 h-4" />
+                                        Edit Course
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>

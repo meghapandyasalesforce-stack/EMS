@@ -17,11 +17,24 @@ function calcEndOfMonth(year, monthIndex) {
 
 async function runPreviewForOrg({ organizationId, month, year, asOf }) {
     const targetYear = parseInt(year, 10);
+    const targetMonthIndex = new Date(`${month} 1, ${targetYear}`).getMonth();
+    const monthStart = new Date(targetYear, targetMonthIndex, 1);
+    monthStart.setHours(0, 0, 0, 0);
+    const endOfMonth = calcEndOfMonth(targetYear, targetMonthIndex);
     const employees = await Employee.find({
         salary: { $exists: true, $gt: 0 },
         organizationId,
-        active: true
-    }).select('salary organizationId joiningDate');
+        $or: [
+            { active: true },
+            {
+                status: 'terminated',
+                $or: [
+                    { lastWorkingDate: { $gte: monthStart, $lte: endOfMonth } },
+                    { terminationDate: { $gte: monthStart, $lte: endOfMonth } }
+                ]
+            }
+        ]
+    }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate');
 
     for (const emp of employees) {
         const orgId = emp.organizationId || organizationId;
@@ -55,7 +68,7 @@ async function runPreviewForOrg({ organizationId, month, year, asOf }) {
             type: 'monthly',
             generationType: 'preview',
             isProvisional: true,
-            computedAsOf: asOf,
+            computedAsOf: endOfMonth,
             payrollLocked: false,
             isVisible: true
         };
@@ -64,14 +77,13 @@ async function runPreviewForOrg({ organizationId, month, year, asOf }) {
             await Payroll.findByIdAndUpdate(existing._id, {
                 ...payload,
                 ...meta,
-                // Month-end automation should publish FINAL payroll as Processed.
-                status: 'Processed'
+                status: 'Pending'
             });
         } else {
             await Payroll.create({
                 ...payload,
                 ...meta,
-                status: 'Processed'
+                status: 'Pending'
             });
         }
     }
@@ -87,12 +99,23 @@ async function runFinalForOrg({ organizationId, month, year, now }) {
     }
 
     const endOfMonth = calcEndOfMonth(targetYear, targetMonthIndex);
+    const monthStart = new Date(targetYear, targetMonthIndex, 1);
+    monthStart.setHours(0, 0, 0, 0);
 
     const employees = await Employee.find({
         salary: { $exists: true, $gt: 0 },
         organizationId,
-        active: true
-    }).select('salary organizationId joiningDate');
+        $or: [
+            { active: true },
+            {
+                status: 'terminated',
+                $or: [
+                    { lastWorkingDate: { $gte: monthStart, $lte: endOfMonth } },
+                    { terminationDate: { $gte: monthStart, $lte: endOfMonth } }
+                ]
+            }
+        ]
+    }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate');
 
     for (const emp of employees) {
         const orgId = emp.organizationId || organizationId;
@@ -132,17 +155,18 @@ async function runFinalForOrg({ organizationId, month, year, now }) {
         };
 
         if (existing) {
-            const nextStatus = existing.status === 'Cancelled' ? 'Pending' : existing.status;
             await Payroll.findByIdAndUpdate(existing._id, {
                 ...payload,
                 ...meta,
-                status: nextStatus
+                // Final run publishes closed month payroll as Processed.
+                // Paid/locked/processed rows are already skipped above.
+                status: 'Processed'
             });
         } else {
             await Payroll.create({
                 ...payload,
                 ...meta,
-                status: 'Pending'
+                status: 'Processed'
             });
         }
     }

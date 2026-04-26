@@ -19,6 +19,9 @@ const AdminPayroll = () => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [disburseLoading, setDisburseLoading] = useState(false);
     const [disburseResult, setDisburseResult] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [disbursePreview, setDisbursePreview] = useState(null);
+    const [adjustmentActionLoadingId, setAdjustmentActionLoadingId] = useState(null);
     const [listPage, setListPage] = useState(1);
     const resultsRef = useRef(null);
     const navigate = useNavigate();
@@ -148,6 +151,28 @@ const AdminPayroll = () => {
         }
     };
 
+    const handleDisbursePreview = async () => {
+        if (!isCEO) return;
+        try {
+            setPreviewLoading(true);
+            const payload = {
+                month: months[selectedMonth].label,
+                year: selectedYear
+            };
+            const res = await axios.get('/v1/admin/payroll/disburse-preview', {
+                params: payload
+            });
+            setDisbursePreview(res.data);
+        } catch (e) {
+            setDisbursePreview({
+                success: false,
+                message: e?.response?.data?.message || e.message
+            });
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
     const handleExportCSV = () => {
         if (!disburseResult?.results) return;
         const rows = disburseResult.results;
@@ -246,6 +271,65 @@ const AdminPayroll = () => {
         setSelectedEmployee(null);
     };
 
+    const refreshPayrollList = async () => {
+        await dispatch(
+            fetchPayrolls({
+                month: months[selectedMonth].label,
+                year: selectedYear,
+                page: listPage,
+                limit: 20
+            })
+        );
+    };
+
+    const handleAdjustmentTransition = async (adjustment, action) => {
+        if (!adjustment?.payrollId) return;
+        try {
+            setAdjustmentActionLoadingId(adjustment.payrollId);
+            if (action === 'process') {
+                await axios.post(`/v1/admin/payroll/process/${adjustment.payrollId}`);
+            } else if (action === 'void') {
+                await axios.post(`/v1/admin/payroll/void/${adjustment.payrollId}`, {
+                    reason: 'Voided from payroll details modal'
+                });
+            } else if (action === 'supersede' && selectedEmployee?.payrollId) {
+                await axios.post('/v1/admin/payroll/supersede-base', {
+                    monthlyPayrollId: selectedEmployee.payrollId,
+                    overridePayrollId: adjustment.payrollId
+                });
+            }
+            await refreshPayrollList();
+            closeDialog();
+        } catch (e) {
+            // eslint-disable-next-line no-alert
+            alert(e?.response?.data?.message || 'Failed to update adjustment status');
+        } finally {
+            setAdjustmentActionLoadingId(null);
+        }
+    };
+
+    const handleDownloadPayrollPdf = async (payrollId, recordLabel = 'payroll') => {
+        if (!payrollId) return;
+        try {
+            const response = await axios.get(`/v1/admin/payroll/${payrollId}/export-pdf`, {
+                responseType: 'blob'
+            });
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const safeLabel = String(recordLabel || 'payroll').replace(/\s+/g, '_');
+            link.href = url;
+            link.download = `${safeLabel}_${months[selectedMonth].label}_${selectedYear}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            // eslint-disable-next-line no-alert
+            alert(e?.response?.data?.message || 'Failed to download payroll PDF');
+        }
+    };
+
     // Function to determine payroll status
     const getPayrollStatus = (employee) => {
         const base =
@@ -303,6 +387,14 @@ const AdminPayroll = () => {
                         className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 text-sm disabled:opacity-50"
                     >
                         Run final payroll
+                    </button>
+                    <button
+                        className="px-3 py-2 bg-slate-600 text-white rounded disabled:opacity-50"
+                        onClick={handleDisbursePreview}
+                        disabled={previewLoading || !isCEO}
+                        title={isCEO ? 'Preview who will be paid before disbursement' : 'Only CEO can preview disbursement'}
+                    >
+                        {previewLoading ? 'Loading preview…' : 'Preview Disbursement'}
                     </button>
                     <button
                         className="px-3 py-2 bg-theme-secondary text-white rounded disabled:opacity-50"
@@ -372,6 +464,47 @@ const AdminPayroll = () => {
                                 </tbody>
                             </table>
                         </div>
+                    )}
+                </div>
+            )}
+
+            {disbursePreview && (
+                <div className={`p-3 rounded mb-4 ${disbursePreview.success ? 'bg-blue-50 border border-blue-100' : 'bg-red-50'}`}>
+                    <div className="font-medium mb-1">
+                        {disbursePreview.success ? 'Disbursement preview' : 'Preview failed'}
+                    </div>
+                    {disbursePreview.success ? (
+                        <div className="text-sm text-gray-700">
+                            <div>
+                                Employees: {disbursePreview.totalEmployees} • Planned Amount: {formatCurrency(disbursePreview.totalAmount || 0)}
+                            </div>
+                            {Array.isArray(disbursePreview.plans) && disbursePreview.plans.length > 0 && (
+                                <div className="mt-3 overflow-x-auto">
+                                    <table className="min-w-full text-xs">
+                                        <thead>
+                                            <tr className="text-left border-b">
+                                                <th className="px-2 py-1">Employee</th>
+                                                <th className="px-2 py-1">Strategy</th>
+                                                <th className="px-2 py-1">Records</th>
+                                                <th className="px-2 py-1">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {disbursePreview.plans.map((p, idx) => (
+                                                <tr key={`${p.employee || idx}`} className="border-b">
+                                                    <td className="px-2 py-1">{p.employeeName || p.employee}</td>
+                                                    <td className="px-2 py-1">{p.strategy}</td>
+                                                    <td className="px-2 py-1">{p.recordCount}</td>
+                                                    <td className="px-2 py-1">{formatCurrency(p.amount || 0)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-red-700">{disbursePreview.message}</div>
                     )}
                 </div>
             )}
@@ -661,6 +794,45 @@ const AdminPayroll = () => {
                                                     <div className="text-xs text-gray-600 mt-1">
                                                         Paid Amount: {formatCurrency(adj.paidAmount || 0)}
                                                     </div>
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        {adj.status === 'Pending' && (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAdjustmentTransition(adj, 'process')}
+                                                                    disabled={adjustmentActionLoadingId === adj.payrollId}
+                                                                    className="px-2.5 py-1 text-xs rounded bg-theme-primary text-white hover:opacity-90 disabled:opacity-50"
+                                                                >
+                                                                    {adjustmentActionLoadingId === adj.payrollId ? 'Working…' : 'Mark Processed'}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAdjustmentTransition(adj, 'void')}
+                                                                    disabled={adjustmentActionLoadingId === adj.payrollId}
+                                                                    className="px-2.5 py-1 text-xs rounded bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                                                                >
+                                                                    Void
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownloadPayrollPdf(adj.payrollId, `${adj.subType || 'correction'}_${selectedEmployee?.name || 'employee'}`)}
+                                                            className="px-2.5 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
+                                                        >
+                                                            Download PDF
+                                                        </button>
+                                                        {adj.status === 'Processed' && adj.adjustmentMode === 'full_override' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleAdjustmentTransition(adj, 'supersede')}
+                                                                disabled={adjustmentActionLoadingId === adj.payrollId}
+                                                                className="px-2.5 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                                                            >
+                                                                {adjustmentActionLoadingId === adj.payrollId ? 'Working…' : 'Supersede Base'}
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -679,15 +851,28 @@ const AdminPayroll = () => {
                                 >
                                     Close
                                 </button>
-                               <Link to={`/add-payroll/${selectedEmployee.employeeId}/${months[selectedMonth].label}/${selectedYear}`}>
-                               <button
-                                    onClick={() => {
-                                        closeDialog();
-                                    }}
-                                    className="px-4 py-2 bg-theme-secondary text-white rounded-md hover:opacity-90"
+                                <Link
+                                    to={`/add-payroll?employeeId=${selectedEmployee.employeeId}&month=${encodeURIComponent(months[selectedMonth].label)}&year=${selectedYear}&type=off_cycle&subType=correction&adjustmentMode=full_override`}
                                 >
-                                    Edit Payroll
-                                </button> </Link>
+                                    <button
+                                        onClick={() => {
+                                            closeDialog();
+                                        }}
+                                        className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
+                                    >
+                                        Add Correction
+                                    </button>
+                                </Link>
+                                <Link to={`/add-payroll/${selectedEmployee.employeeId}/${months[selectedMonth].label}/${selectedYear}`}>
+                                    <button
+                                        onClick={() => {
+                                            closeDialog();
+                                        }}
+                                        className="px-4 py-2 bg-theme-secondary text-white rounded-md hover:opacity-90"
+                                    >
+                                        Edit Payroll
+                                    </button>
+                                </Link>
                             </div>
                         </div>
                     </div>

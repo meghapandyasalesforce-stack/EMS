@@ -100,6 +100,10 @@ const payrollSchema = new mongoose.Schema({
         default: 0
     },
     paymentDate: Date,
+    /** Reference id for a single disbursement execution batch (idempotency/audit) */
+    paymentBatchId: {
+        type: String
+    },
     /** Bulk generator mode: provisional estimate vs closed monthly run */
     generationType: {
         type: String,
@@ -116,6 +120,19 @@ const payrollSchema = new mongoose.Schema({
     payrollLocked: {
         type: Boolean,
         default: false
+    },
+    /** Monthly base can be superseded by a full-override off-cycle correction */
+    isSuperseded: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    supersededBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Payroll'
+    },
+    supersededAt: {
+        type: Date
     },
     isVisible: {
         type: Boolean,
@@ -157,10 +174,13 @@ const payrollSchema = new mongoose.Schema({
 // Add database indexes for better query performance
 payrollSchema.index({ employeeId: 1, month: 1, year: 1 }); // Composite index for specific payroll queries
 
-// Monthly records are generated/overwritten by code. We still index for speed,
-// but we avoid a DB-level UNIQUE constraint here because existing data may
-// already contain preview + final documents from older runs.
-payrollSchema.index({ organizationId: 1, employeeId: 1, month: 1, year: 1, type: 1 });
+// Enforce one monthly record per employee-period per organization.
+// NOTE: if legacy duplicates exist, index creation will fail until they are cleaned.
+payrollSchema.index(
+    { organizationId: 1, employeeId: 1, month: 1, year: 1, type: 1 },
+    { unique: true, partialFilterExpression: { type: 'monthly' } }
+);
+payrollSchema.index({ organizationId: 1, employeeId: 1, month: 1, year: 1, type: 1, isSuperseded: 1 });
 
 // Off-cycle queries (many records per month)
 payrollSchema.index({ organizationId: 1, employeeId: 1, month: 1, year: 1, type: 1, subType: 1 });

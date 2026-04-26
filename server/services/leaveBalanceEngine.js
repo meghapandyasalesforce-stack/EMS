@@ -7,6 +7,14 @@ import { getLeaveTypeVariantsForBalance } from '../helpers/leaveTypeHelper.js';
 
 class LeaveBalanceEngine {
     /**
+     * A policy is considered usable only when it has at least
+     * one leave type configured with a positive accrual amount.
+     */
+    hasUsableLeaveTypes(policy) {
+        const leaveTypes = policy?.leaveTypes || [];
+        return leaveTypes.some((lt) => Number(lt?.accrual?.amount || 0) > 0);
+    }
+    /**
      * Calculate and update leave balance for an employee for a given year
      */
     async calculateBalance(employeeId, year, organizationId) {
@@ -21,6 +29,15 @@ class LeaveBalanceEngine {
             const policy = await this.getApplicablePolicy(employee, organizationId, year);
             if (!policy) {
                 logger.warn('No leave policy found for employee', { employeeId, year });
+                return null;
+            }
+            if (!this.hasUsableLeaveTypes(policy)) {
+                logger.warn('Applicable policy has no usable leave types', {
+                    employeeId,
+                    year,
+                    policyId: policy._id,
+                    policyName: policy.policyName
+                });
                 return null;
             }
 
@@ -282,6 +299,15 @@ class LeaveBalanceEngine {
 
         for (const policy of policies) {
             if (this.isPolicyApplicable(policy, employee)) {
+                if (!this.hasUsableLeaveTypes(policy)) {
+                    logger.warn('Skipping applicable policy with empty/zero leave types', {
+                        employeeId: employee._id,
+                        policyId: policy._id,
+                        policyName: policy.policyName,
+                        applicableTo: policy.applicableTo
+                    });
+                    continue;
+                }
                 return policy;
             }
         }
@@ -293,18 +319,31 @@ class LeaveBalanceEngine {
      * Check if policy is applicable to employee
      */
     isPolicyApplicable(policy, employee) {
+        const employeeDepartment = (employee.department || '').toLowerCase().trim();
+        const policyDepartments = (policy.applicableDepartments || [])
+            .map((d) => (d || '').toLowerCase().trim())
+            .filter(Boolean);
+        const employeeRoleId = employee.role?.toString();
+        const applicableRoleIds = (policy.applicableRoles || []).map((role) => role.toString());
+        const employeeId = employee._id?.toString();
+        const applicableEmployeeIds = (policy.applicableEmployees || []).map((emp) => emp.toString());
+
         switch (policy.applicableTo) {
             case 'all':
                 return true;
             case 'department':
-                return policy.applicableDepartments.includes(employee.department);
+                return policyDepartments.includes(employeeDepartment);
             case 'role':
-                return policy.applicableRoles.some(role => 
-                    role.toString() === employee.role?.toString()
-                );
+                return Boolean(employeeRoleId) && applicableRoleIds.includes(employeeRoleId);
             case 'employee':
-                return policy.applicableEmployees.some(emp => 
-                    emp.toString() === employee._id.toString()
+                return Boolean(employeeId) && applicableEmployeeIds.includes(employeeId);
+            case 'custom':
+                // For custom policies, apply if employee matches any configured scope.
+                // This keeps custom flexible and avoids false "no policy" results.
+                return (
+                    (Boolean(employeeId) && applicableEmployeeIds.includes(employeeId)) ||
+                    (Boolean(employeeRoleId) && applicableRoleIds.includes(employeeRoleId)) ||
+                    policyDepartments.includes(employeeDepartment)
                 );
             default:
                 return false;

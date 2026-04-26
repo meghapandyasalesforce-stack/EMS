@@ -3,7 +3,7 @@
 /* Modern Design System - Color Variables */
 :root {
   /* Core theme tokens (overridden per-organization via JS) */
-  --color-primary: #16a34a;      /* primary buttons, highlights */
+  --color-primary: #20C997;      /* primary — mint (matches employee CTAs / nav active) */
   --color-secondary: #2563eb;    /* secondary actions, links */
   --color-accent: #f97316;       /* warnings / accent pills */
   --color-bg: #ffffff;           /* main background */

@@ -209,6 +209,13 @@ export const updateEmployeeStatus = async (req, res) => {
             return sendNotFound(res, 'Employee');
         }
 
+        if (employeeBefore.status === 'terminated') {
+            return sendValidationError(
+                res,
+                { status: 'Terminated employees cannot be changed via activate/deactivate. Use rehire/termination workflow.' }
+            );
+        }
+
         const updateData = {
             active,
             status: active ? 'active' : 'inactive' // Sync status with active field
@@ -253,6 +260,101 @@ export const updateEmployeeStatus = async (req, res) => {
     } catch (error) {
         logger.error('Error updating employee status', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to update employee status', error);
+    }
+};
+
+/**
+ * Terminate employee with effective date.
+ * PATCH /api/v1/employee/profile/admin/terminate/:employeeId
+ */
+export const terminateEmployee = async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        const { terminationDate, lastWorkingDate, reason, notes, eligibleForRehire } = req.body || {};
+
+        if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+            return sendValidationError(res, { employeeId: 'Invalid employee ID format' });
+        }
+
+        if (!terminationDate) {
+            return sendValidationError(res, { terminationDate: 'terminationDate is required' });
+        }
+
+        const parsedTerminationDate = new Date(terminationDate);
+        if (Number.isNaN(parsedTerminationDate.getTime())) {
+            return sendValidationError(res, { terminationDate: 'Invalid terminationDate' });
+        }
+
+        const parsedLastWorkingDate = lastWorkingDate ? new Date(lastWorkingDate) : parsedTerminationDate;
+        if (Number.isNaN(parsedLastWorkingDate.getTime())) {
+            return sendValidationError(res, { lastWorkingDate: 'Invalid lastWorkingDate' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        const employeeBefore = await Employee.findOne({ _id: employeeId, organizationId }).select('-password').lean();
+        if (!employeeBefore) {
+            return sendNotFound(res, 'Employee');
+        }
+
+        if (employeeBefore.status === 'terminated') {
+            return sendValidationError(res, { status: 'Employee is already terminated.' });
+        }
+
+        const joiningDate = employeeBefore.joiningDate ? new Date(employeeBefore.joiningDate) : null;
+        if (joiningDate && !Number.isNaN(joiningDate.getTime()) && parsedLastWorkingDate < joiningDate) {
+            return sendValidationError(res, { lastWorkingDate: 'Last working date cannot be before joining date.' });
+        }
+
+        const updateData = {
+            status: 'terminated',
+            active: false,
+            terminationDate: parsedTerminationDate,
+            lastWorkingDate: parsedLastWorkingDate,
+            terminationReason: reason || '',
+            terminationNotes: notes || '',
+            eligibleForRehire: Boolean(eligibleForRehire),
+            terminatedBy: req.user?._id || req.employee?._id
+        };
+
+        const updatedEmployee = await Employee.findOneAndUpdate(
+            { _id: employeeId, organizationId },
+            updateData,
+            { new: true, runValidators: true }
+        ).select('-password');
+
+        const orgIdForCache = organizationId || updatedEmployee?.organizationId || employeeBefore?.organizationId;
+        if (orgIdForCache) {
+            try {
+                await invalidateEmployeesCache(orgIdForCache);
+            } catch (e) {
+                logger.warn('Failed to invalidate employees cache after termination', { error: e.message });
+            }
+        }
+
+        await logUpdate({
+            entityType: 'Employee',
+            entityId: employeeId,
+            entityName: `${employeeBefore.name} ${employeeBefore.lastName || ''}`.trim(),
+            req,
+            before: employeeBefore,
+            after: updatedEmployee.toObject(),
+            metadata: {
+                statusChange: true,
+                previousStatus: employeeBefore.status,
+                newStatus: updatedEmployee.status,
+                terminationDate: parsedTerminationDate,
+                lastWorkingDate: parsedLastWorkingDate
+            }
+        });
+
+        return sendSuccess(
+            res,
+            { employee: updatedEmployee },
+            'Employee terminated successfully'
+        );
+    } catch (error) {
+        logger.error('Error terminating employee', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to terminate employee', error);
     }
 };
 

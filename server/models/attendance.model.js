@@ -164,6 +164,10 @@ attendanceSchema.pre("save", function (next) {
 });
 
 // Add database indexes for better query performance
+attendanceSchema.index(
+    { organizationId: 1, userId: 1, date: 1 },
+    { unique: true }
+); // Enforce one attendance record per user per day per organization
 attendanceSchema.index({ userId: 1, date: 1 }); // Composite index for user attendance queries
 attendanceSchema.index({ date: 1 }); // For date range queries
 attendanceSchema.index({ status: 1 }); // For filtering by status

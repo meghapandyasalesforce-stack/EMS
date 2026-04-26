@@ -9,6 +9,7 @@
 
 import { jsPDF } from 'jspdf';
 import logger from './logger.js';
+import { employeePfFromBasicWage } from './salaryCalculation.js';
 
 // Constants
 const PDF_CONFIG = {
@@ -499,9 +500,9 @@ export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}
         const normalizedDeductions = (payrollData.deductions && typeof payrollData.deductions === 'object')
             ? { ...payrollData.deductions }
             : {};
-        // Keep payslip behavior aligned with payroll: PF auto-calculated as 12% of basic wage.
+        // Keep payslip behavior aligned with payroll: PF auto-calculated as 12% of capped PF wage.
         const basicWageForPf = Number(payrollData.earnings?.basicWage) || 0;
-        const autoPfEmployee = Math.round(basicWageForPf * 0.12);
+        const autoPfEmployee = employeePfFromBasicWage(basicWageForPf);
         if (!(Number(normalizedDeductions.pfEmployee) > 0) && autoPfEmployee > 0) {
             normalizedDeductions.pfEmployee = autoPfEmployee;
         }

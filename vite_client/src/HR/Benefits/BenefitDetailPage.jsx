@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { 
     FaArrowLeft, FaHeart, FaShieldAlt, FaGraduationCap, FaMoneyBillWave,
     FaUsers, FaCalendar, FaDollarSign, FaCheckCircle, FaTimesCircle, FaSpinner
@@ -8,24 +9,39 @@ import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
+import { isHR, isManager } from '../../utils/managerHelper';
 
 const BenefitDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const user = useSelector((state) => state.auth.user);
+    const employee = useSelector((state) => state.employeeDetails.employee);
     const [plan, setPlan] = useState(null);
     const [enrollments, setEnrollments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+    const userObj = user || employee;
+    const userRole = userObj?.role || 'employee';
+    const isPrivilegedView =
+        userRole === 'admin' ||
+        userRole === 'executive' ||
+        isHR(userObj) ||
+        isManager(userObj);
+    const baseBenefitsEndpoint = isPrivilegedView ? '/v1/admin/benefits' : '/v1/both/benefits';
 
     useEffect(() => {
         fetchPlan();
-        fetchEnrollments();
-    }, [id]);
+        if (isPrivilegedView) {
+            fetchEnrollments();
+        } else {
+            setEnrollments([]);
+        }
+    }, [id, isPrivilegedView]);
 
     const fetchPlan = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`/v1/admin/benefits/benefit-plans/${id}`, { withCredentials: true });
+            const response = await axios.get(`${baseBenefitsEndpoint}/benefit-plans/${id}`, { withCredentials: true });
             if (response.data?.success && response.data?.data) {
                 setPlan(response.data.data);
             } else {
@@ -43,7 +59,7 @@ const BenefitDetailPage = () => {
     const fetchEnrollments = async () => {
         try {
             setEnrollmentsLoading(true);
-            const response = await axios.get(`/v1/admin/benefits/benefit-plans/${id}/enrollments`, { withCredentials: true });
+            const response = await axios.get(`${baseBenefitsEndpoint}/benefit-plans/${id}/enrollments`, { withCredentials: true });
             setEnrollments(response.data?.data || []);
         } catch (error) {
             // Error handled silently for production
@@ -54,6 +70,7 @@ const BenefitDetailPage = () => {
 
     const updateEnrollmentStatus = async (enrollmentId, status) => {
         try {
+            if (!isPrivilegedView) return;
             await axios.put(
                 `/v1/admin/benefits/enrollments/${enrollmentId}`,
                 { status },
@@ -231,7 +248,8 @@ const BenefitDetailPage = () => {
                             </div>
                         </div>
 
-                        {/* Enrollments */}
+                        {/* Enrollments (admin / hr / manager / executive only) */}
+                        {isPrivilegedView && (
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-xl font-semibold">Enrollments</h2>
@@ -310,11 +328,13 @@ const BenefitDetailPage = () => {
                                 </div>
                             )}
                         </div>
+                        )}
                     </div>
 
                     {/* Sidebar */}
                     <div className="space-y-6">
                         {/* Enrollment Stats */}
+                        {isPrivilegedView && (
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold mb-4">Enrollment Statistics</h3>
                             <div className="space-y-3">
@@ -332,6 +352,7 @@ const BenefitDetailPage = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
                         {/* Eligibility */}
                         {plan.eligibility && (

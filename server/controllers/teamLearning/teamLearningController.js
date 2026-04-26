@@ -141,11 +141,14 @@ export const getTeamLearning = asyncHandler(async (req, res) => {
         });
 
         learnings.forEach(learning => {
-            learning.progress = progressMap[learning._id.toString()] || null;
+            const progressRecord = progressMap[learning._id.toString()] || null;
+            learning.progressRecord = progressRecord;
+            learning.progress = progressRecord?.progress ?? 0;
+            learning.progressStatus = progressRecord?.status || 'Not Started';
         });
     }
 
-    return sendPaginatedResponse(res, learnings, total, page, limit, 'Team learning resources retrieved successfully');
+    return sendPaginatedResponse(res, learnings, page, limit, total, 'Team learning resources retrieved successfully');
 });
 
 /**
@@ -189,7 +192,9 @@ export const getTeamLearningById = asyncHandler(async (req, res) => {
             learningId: id
         }).lean();
 
-        learning.progress = progress || null;
+        learning.progressRecord = progress || null;
+        learning.progress = progress?.progress ?? 0;
+        learning.progressStatus = progress?.status || 'Not Started';
     }
 
     return sendSuccess(res, { learning }, 'Team learning resource retrieved successfully');

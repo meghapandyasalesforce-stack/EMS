@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../utils/axios';
+import { getAuthEmployeeId } from '../../utils/authUser';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
 
 const LeaveEncashment = () => {
     const employee = useSelector(state => state.auth.employee || state.auth.user);
+    const employeeDocId = getAuthEmployeeId(employee);
     const [loading, setLoading] = useState(false);
     const [encashmentHistory, setEncashmentHistory] = useState([]);
     const [showRequestForm, setShowRequestForm] = useState(false);
@@ -16,15 +18,15 @@ const LeaveEncashment = () => {
     const [availableBalances, setAvailableBalances] = useState({});
 
     useEffect(() => {
-        if (employee?._id) {
+        if (employeeDocId) {
             fetchEncashmentHistory();
             fetchLeaveBalances();
         }
-    }, [employee?._id]);
+    }, [employeeDocId]);
 
     const fetchEncashmentHistory = async () => {
         try {
-            const res = await axios.get(`/v1/employee/leave-encashment/history/${employee?._id}`);
+            const res = await axios.get(`/v1/employee/leave-encashment/history/${employeeDocId}`);
             setEncashmentHistory(res.data.encashments || []);
         } catch (error) {
             // Error handled silently for production
@@ -33,7 +35,7 @@ const LeaveEncashment = () => {
 
     const fetchLeaveBalances = async () => {
         try {
-            const res = await axios.get(`/v1/admin/leave-policy/balance/${employee?._id}`, {
+            const res = await axios.get(`/v1/admin/leave-policy/balance/${employeeDocId}`, {
                 params: { year: new Date().getFullYear() }
             });
             if (res.data.balance?.balances) {

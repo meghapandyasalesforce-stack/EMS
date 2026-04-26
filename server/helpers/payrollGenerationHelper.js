@@ -2,11 +2,120 @@ import Attendance from '../models/attendance.model.js';
 import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
-import { computeEarningsFromGross } from './salaryCalculation.js';
+import SalaryStructure from '../models/salaryStructure.model.js';
+import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
 
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
 const calendarCache = new Map();
+const salaryStructureByIdCache = new Map();
+const salaryStructureByApplicabilityCache = new Map();
+
+export function clearPayrollGenerationCaches({ organizationId, structureId } = {}) {
+    const orgKey = organizationId ? `${String(organizationId)}:` : null;
+    const structureKey = structureId && organizationId ? `${String(organizationId)}:${String(structureId)}` : null;
+
+    if (!orgKey) {
+        salaryStructureByIdCache.clear();
+        salaryStructureByApplicabilityCache.clear();
+        return;
+    }
+
+    for (const key of salaryStructureByIdCache.keys()) {
+        if (structureKey ? key === structureKey : key.startsWith(orgKey)) {
+            salaryStructureByIdCache.delete(key);
+        }
+    }
+
+    for (const key of salaryStructureByApplicabilityCache.keys()) {
+        if (key.startsWith(orgKey)) {
+            salaryStructureByApplicabilityCache.delete(key);
+        }
+    }
+}
+
+function asNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function computeConfiguredComponent(config, baseAmount) {
+    const cfg = config && typeof config === 'object' ? config : {};
+    const base = Math.max(0, asNumber(baseAmount, 0));
+    const percentage = asNumber(cfg.percentage, 0);
+    const fixedAmount = asNumber(cfg.fixedAmount, 0);
+    const isPercentage = cfg.isPercentage !== false;
+    const raw = isPercentage ? (base * percentage) / 100 : fixedAmount;
+    return Math.round(Math.max(0, raw));
+}
+
+function bonusFromRule(rule, baseAmount) {
+    const r = rule && typeof rule === 'object' ? rule : {};
+    if (!r.enabled) return 0;
+    const pct = asNumber(r.percentage, 0);
+    const maxAmount = asNumber(r.maxAmount, 0);
+    let computed = Math.round((Math.max(0, asNumber(baseAmount, 0)) * pct) / 100);
+    if (maxAmount > 0) computed = Math.min(computed, Math.round(maxAmount));
+    return Math.max(0, computed);
+}
+
+async function resolveSalaryStructureForEmployee(emp, organizationId) {
+    const orgId = String(organizationId || '');
+    if (!orgId) return null;
+
+    const assignedStructureId = emp?.salaryStructure ? String(emp.salaryStructure) : '';
+    if (assignedStructureId) {
+        const byIdCacheKey = `${orgId}:${assignedStructureId}`;
+        if (salaryStructureByIdCache.has(byIdCacheKey)) {
+            return salaryStructureByIdCache.get(byIdCacheKey);
+        }
+
+        const assigned = await SalaryStructure.findOne({
+            _id: assignedStructureId,
+            organizationId: organizationId,
+            isActive: true
+        }).lean();
+        salaryStructureByIdCache.set(byIdCacheKey, assigned || null);
+        if (assigned) return assigned;
+    }
+
+    const dept = (emp?.department || '').trim();
+    const position = (emp?.position || '').trim();
+    const level = emp?.roleLevel != null ? String(emp.roleLevel) : '';
+    const applicabilityCacheKey = `${orgId}:${dept}:${position}:${level}`;
+    if (salaryStructureByApplicabilityCache.has(applicabilityCacheKey)) {
+        return salaryStructureByApplicabilityCache.get(applicabilityCacheKey);
+    }
+
+    const targetedFilters = [];
+    if (dept) targetedFilters.push({ applicableTo: 'department', applicableValues: dept });
+    if (position) targetedFilters.push({ applicableTo: 'position', applicableValues: position });
+    if (level) targetedFilters.push({ applicableTo: 'level', applicableValues: level });
+
+    let matched = null;
+    if (targetedFilters.length > 0) {
+        matched = await SalaryStructure.findOne({
+            organizationId: organizationId,
+            isActive: true,
+            $or: targetedFilters
+        })
+            .sort({ updatedAt: -1, createdAt: -1 })
+            .lean();
+    }
+
+    if (!matched) {
+        matched = await SalaryStructure.findOne({
+            organizationId: organizationId,
+            isActive: true,
+            applicableTo: 'all'
+        })
+            .sort({ updatedAt: -1, createdAt: -1 })
+            .lean();
+    }
+
+    salaryStructureByApplicabilityCache.set(applicabilityCacheKey, matched || null);
+    return matched || null;
+}
 
 function startOfDay(d) {
     const x = new Date(d);
@@ -64,6 +173,15 @@ export function countWorkingDaysInclusive(rangeStart, rangeEnd, isWorkingDayFn) 
         if (isWorking) working += 1;
     }
     return working;
+}
+
+/** Count inclusive calendar days between two dates (ignores working-day rules). */
+export function countCalendarDaysInclusive(rangeStart, rangeEnd) {
+    if (rangeStart > rangeEnd) return 0;
+    const a = startOfDay(new Date(rangeStart));
+    const b = startOfDay(new Date(rangeEnd));
+    const diffMs = b.getTime() - a.getTime();
+    return Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
 }
 
 export function leaveWorkingDaysInRange(lv, rangeStart, rangeEnd, isWorkingDayFn) {
@@ -224,13 +342,56 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
     const join = emp.joiningDate ? startOfDay(new Date(emp.joiningDate)) : null;
     const effStart = join && join > startOfMonth ? join : startOfMonth;
+    const terminationOrLastWorking = emp?.lastWorkingDate || emp?.terminationDate;
 
-    const asOfDate = asOf instanceof Date ? asOf : new Date(asOf);
-    const asOfCap = endOfDay(asOfDate);
-    const effEnd =
-        mode === 'preview'
-            ? new Date(Math.min(endOfMonth.getTime(), asOfCap.getTime()))
-            : endOfMonth;
+    void mode;
+    void asOf;
+    // Monthly payroll must always be computed on the full month's calendar window.
+    // Keep `mode` for record state/workflow, but do not cap payroll math by asOf date.
+    let effEnd = endOfMonth;
+    if (terminationOrLastWorking) {
+        const empEnd = endOfDay(new Date(terminationOrLastWorking));
+        if (!Number.isNaN(empEnd.getTime())) {
+            effEnd = new Date(Math.min(endOfMonth.getTime(), empEnd.getTime()));
+        }
+    }
+
+    if (effStart > effEnd) {
+        return {
+            basicSalary: 0,
+            earnings: {
+                basicWage: 0,
+                houseRentAllowance: 0,
+                transportAllowance: 0,
+                medicalAllowance: 0,
+                overtime: 0,
+                gratuity: 0,
+                specialAllowance: 0,
+                performanceBonus: 0,
+                projectBonus: 0,
+                attendanceBonus: 0,
+                pfEmployer: 0,
+                esiEmployer: 0,
+                totalEarnings: 0
+            },
+            deductions: {
+                pfEmployee: 0,
+                esiEmployee: 0,
+                professionalTax: 0,
+                incomeTax: 0,
+                advanceSalary: 0,
+                loanDeduction: 0,
+                otherDeductions: 0,
+                total: 0
+            },
+            ctc: 0,
+            inHandSalary: 0,
+            workingDays: 0,
+            presentDays: 0,
+            unpaidLeave: 0,
+            leaves: []
+        };
+    }
 
     const orgId = emp.organizationId || organizationId;
     const calendarKey = `${String(orgId)}-${String(yearNum)}`;
@@ -242,7 +403,12 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     }
     const isWorkingDayFn = buildIsWorkingDayFn(calendar);
 
-    const workingDenom = Math.max(1, countWorkingDaysInclusive(effStart, endOfMonth, isWorkingDayFn));
+    // Working-day metric for attendance dashboards/reports (excludes weekends/holidays).
+    const attendanceWorkingDays = Math.max(0, countWorkingDaysInclusive(effStart, effEnd, isWorkingDayFn));
+    // Full calendar month length (e.g. April → 30) — used for a stable "one day" rate (G/D), including for terminated staff.
+    const fullMonthCalDays = Math.max(1, countCalendarDaysInclusive(startOfMonth, endOfMonth));
+    // Proration window: days employed in this month (join through last working/termination, capped at month end).
+    const serviceWindowCalDays = Math.max(1, countCalendarDaysInclusive(effStart, effEnd));
 
     const attendanceRecords =
         effStart <= effEnd
@@ -312,47 +478,115 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
     const effectivePresent = sumEffectivePresentDays(effStart, effEnd, attByDay, paidLeaveByDay, isWorkingDayFn);
     const fullGross = emp.salary || 0;
+    // Weekend/holiday days are paid by default under calendar-day proration.
+    // Only missing paid credit on working days reduces monthly payout.
+    const unpaidWorkingDays = Math.max(0, attendanceWorkingDays - effectivePresent);
+    const paidPayrollDays = Math.max(0, serviceWindowCalDays - unpaidWorkingDays);
     const effectiveGross =
-        workingDenom > 0 ? Math.round((fullGross * effectivePresent) / workingDenom) : 0;
-    const formula = computeEarningsFromGross(effectiveGross);
-    // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
-    const basicSalary = formula.basicWage;
-    const perDayRate = fullGross / workingDenom;
-    const overtimeRatePerHour = perDayRate / 8;
-    const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
-    const unpaidDays = Math.max(0, workingDenom - effectivePresent);
+        fullMonthCalDays > 0
+            ? Math.round((fullGross * paidPayrollDays) / fullMonthCalDays)
+            : 0;
+    const salaryStructure = await resolveSalaryStructureForEmployee(emp, orgId);
+    // Overtime / "one day" value: always monthly gross ÷ full month calendar days, not ÷ (join→term) window.
+    const perDayRate = fullGross / fullMonthCalDays;
+    const unpaidDays = unpaidWorkingDays;
 
-    const earnings = {
-        basicWage: formula.basicWage,
-        houseRentAllowance: formula.houseRentAllowance,
-        transportAllowance: 0,
-        medicalAllowance: 0,
-        overtime: overtimePay,
-        gratuity: formula.gratuity,
-        specialAllowance: formula.specialAllowance,
-        performanceBonus: 0,
-        projectBonus: 0,
-        attendanceBonus: unpaidDays === 0 ? 0 : 0,
-        pfEmployer: Math.round(basicSalary * 0.12),
-        esiEmployer: Math.round(basicSalary * 0.0325)
-    };
-    earnings.totalEarnings =
-        formula.totalEarnings +
-        (earnings.transportAllowance || 0) +
-        (earnings.medicalAllowance || 0) +
-        (earnings.overtime || 0) +
-        (earnings.pfEmployer || 0) +
-        (earnings.esiEmployer || 0);
+    let basicSalary = 0;
+    let earnings;
+    let deductions;
 
-    const deductions = {
-        pfEmployee: Math.round(basicSalary * 0.12),
-        esiEmployee: Math.round(basicSalary * 0.0075),
-        professionalTax: 200,
-        incomeTax: Math.round(basicSalary * 0.1),
-        advanceSalary: 0,
-        loanDeduction: 0,
-        otherDeductions: 0
-    };
+    if (salaryStructure) {
+        const overtimeRules = salaryStructure.overtimeRules || {};
+        const overtimeEnabled = overtimeRules.enabled !== false;
+        const cappedOvertimeHours = overtimeEnabled
+            ? Math.max(0, Math.min(
+                asNumber(totalOvertimeHours, 0),
+                asNumber(overtimeRules.maxHoursPerMonth, asNumber(totalOvertimeHours, 0))
+            ))
+            : 0;
+        const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, 1.5);
+        const overtimePay = overtimeEnabled ? Math.round(cappedOvertimeHours * overtimeRatePerHour) : 0;
+
+        earnings = {
+            basicWage: computeConfiguredComponent(salaryStructure?.earnings?.basicWage, effectiveGross),
+            houseRentAllowance: computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, effectiveGross),
+            transportAllowance: computeConfiguredComponent(salaryStructure?.earnings?.transportAllowance, effectiveGross),
+            medicalAllowance: computeConfiguredComponent(salaryStructure?.earnings?.medicalAllowance, effectiveGross),
+            overtime: overtimePay,
+            gratuity: 0,
+            specialAllowance: computeConfiguredComponent(salaryStructure?.earnings?.specialAllowance, effectiveGross),
+            performanceBonus: bonusFromRule(salaryStructure?.bonusStructure?.performanceBonus, effectiveGross),
+            projectBonus: bonusFromRule(salaryStructure?.bonusStructure?.projectBonus, effectiveGross),
+            attendanceBonus: bonusFromRule(salaryStructure?.bonusStructure?.attendanceBonus, effectiveGross),
+            pfEmployer: computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, effectiveGross),
+            esiEmployer: computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, effectiveGross)
+        };
+        basicSalary = earnings.basicWage;
+        const pfWageBase = pfWageFromBasicWage(basicSalary);
+        earnings.pfEmployer = computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, pfWageBase);
+        earnings.esiEmployer = computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, basicSalary);
+        earnings.totalEarnings =
+            (earnings.basicWage || 0) +
+            (earnings.houseRentAllowance || 0) +
+            (earnings.transportAllowance || 0) +
+            (earnings.medicalAllowance || 0) +
+            (earnings.overtime || 0) +
+            (earnings.specialAllowance || 0) +
+            (earnings.performanceBonus || 0) +
+            (earnings.projectBonus || 0) +
+            (earnings.attendanceBonus || 0) +
+            (earnings.pfEmployer || 0) +
+            (earnings.esiEmployer || 0);
+
+        deductions = {
+            pfEmployee: computeConfiguredComponent(salaryStructure?.deductions?.pfEmployee, pfWageBase),
+            esiEmployee: computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary),
+            professionalTax: computeConfiguredComponent(salaryStructure?.deductions?.professionalTax, effectiveGross),
+            incomeTax: computeConfiguredComponent(salaryStructure?.deductions?.incomeTax, basicSalary),
+            advanceSalary: 0,
+            loanDeduction: 0,
+            otherDeductions: 0
+        };
+    } else {
+        const formula = computeEarningsFromGross(effectiveGross);
+        // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
+        basicSalary = formula.basicWage;
+        const overtimeRatePerHour = perDayRate / 8;
+        const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
+
+        earnings = {
+            basicWage: formula.basicWage,
+            houseRentAllowance: formula.houseRentAllowance,
+            transportAllowance: 0,
+            medicalAllowance: 0,
+            overtime: overtimePay,
+            gratuity: formula.gratuity,
+            specialAllowance: formula.specialAllowance,
+            performanceBonus: 0,
+            projectBonus: 0,
+            attendanceBonus: unpaidDays === 0 ? 0 : 0,
+            pfEmployer: employerPfFromBasicWage(basicSalary),
+            esiEmployer: Math.round(basicSalary * 0.0325)
+        };
+        earnings.totalEarnings =
+            formula.totalEarnings +
+            (earnings.transportAllowance || 0) +
+            (earnings.medicalAllowance || 0) +
+            (earnings.overtime || 0) +
+            (earnings.pfEmployer || 0) +
+            (earnings.esiEmployer || 0);
+
+        deductions = {
+            pfEmployee: employeePfFromBasicWage(basicSalary),
+            esiEmployee: Math.round(basicSalary * 0.0075),
+            professionalTax: 0,
+            incomeTax: Math.round(basicSalary * 0.1),
+            advanceSalary: 0,
+            loanDeduction: 0,
+            otherDeductions: 0
+        };
+    }
+
     deductions.total =
         (deductions.pfEmployee || 0) +
         (deductions.esiEmployee || 0) +
@@ -371,7 +605,8 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         deductions,
         ctc,
         inHandSalary,
-        workingDays: workingDenom,
+        // Keep this field semantics as attendance working days (excluding weekends/holidays).
+        workingDays: attendanceWorkingDays,
         presentDays: effectivePresent,
         unpaidLeave: unpaidDays,
         // Store leaves without internal flags
@@ -398,7 +633,9 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
     }
     const empId = payroll.employeeId?._id || payroll.employeeId;
     if (!empId) return base;
-    const emp = await Employee.findById(empId).select('salary organizationId joiningDate').lean();
+    const emp = await Employee.findById(empId)
+        .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate')
+        .lean();
     if (!emp) return base;
     const orgId = organizationId || emp.organizationId;
     const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
