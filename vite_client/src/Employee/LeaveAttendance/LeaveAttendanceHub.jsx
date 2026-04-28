@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
 import { getAuthEmployeeId } from '../../utils/authUser';
-import { fetchLogs } from '../../context/attendanceSlice';
+import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
 import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
 
@@ -31,6 +31,29 @@ const formatTime = (value) => {
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return '--';
   return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).replace(' ', '');
+};
+
+const toTimeInput = (value) => {
+  if (!value) return '';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '';
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mm = String(dt.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+};
+
+const getRegularizationTypeForRow = (row) => {
+  if (!row?.clockIn && !row?.clockOut) return 'both';
+  if (!row?.clockIn) return 'missing_clock_in';
+  if (!row?.clockOut) return 'missing_clock_out';
+  return 'incorrect_time';
+};
+
+const LOGS_PER_PAGE = 10;
+
+const monthCacheKey = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`;
 };
 
 const formatHours = (value) => {
@@ -118,6 +141,7 @@ const LeaveAttendanceHub = () => {
   const attendance = useSelector((state) => state.attendance);
   const leaveState = useSelector((state) => state.employeeLeave);
   const employee = useSelector((state) => state.auth.employee || state.auth.user);
+  const monthCache = attendance.monthCache || {};
   const employeeDocId = getAuthEmployeeId(employee);
 
   const [calendarCursor, setCalendarCursor] = useState(startOfMonthDate(new Date()));
@@ -126,11 +150,22 @@ const LeaveAttendanceHub = () => {
   const [leaveBalanceError, setLeaveBalanceError] = useState('');
   const [panelTab, setPanelTab] = useState('attendance-log');
   const [selectedMobileDateKey, setSelectedMobileDateKey] = useState(null);
+  const [regularizationRequestsAll, setRegularizationRequestsAll] = useState([]);
+  const [currentLogPage, setCurrentLogPage] = useState(1);
 
   useEffect(() => {
     const monthStart = startOfMonthDate(calendarCursor);
     const monthEnd = endOfMonthDate(calendarCursor);
-    dispatch(fetchLogs({ startDate: toDateInput(monthStart), endDate: toDateInput(monthEnd) }));
+    const cacheKey = monthCacheKey(calendarCursor);
+    const cached = monthCache[cacheKey];
+
+    if (cached) {
+      dispatch(hydrateLogsFromMonthCache({ cacheKey }));
+    }
+
+    // Always revalidate selected month once per mount/month-change.
+    // Cache gives instant paint; fetch guarantees latest attendance after approvals/updates.
+    dispatch(fetchLogs({ startDate: toDateInput(monthStart), endDate: toDateInput(monthEnd), cacheKey }));
   }, [dispatch, calendarCursor]);
 
   useEffect(() => {
@@ -157,6 +192,52 @@ const LeaveAttendanceHub = () => {
     };
     fetchLeaveBalance();
   }, [employeeDocId, selectedYear]);
+
+  useEffect(() => {
+    const fetchAllRegularizationRequests = async () => {
+      try {
+        let page = 1;
+        const combined = [];
+        const maxPages = 50;
+
+        while (page <= maxPages) {
+          const res = await axios.get('/v1/both/attendance-regularization/request', {
+            params: { page, limit: 100 },
+            withCredentials: true
+          });
+          const chunk = res.data?.data || [];
+          const totalPages = res.data?.pagination?.pages ?? page;
+          combined.push(...chunk);
+          if (page >= totalPages || chunk.length === 0) break;
+          page += 1;
+        }
+
+        combined.sort(
+          (a, b) =>
+            new Date(b.updatedAt || b.createdAt || 0).getTime() -
+            new Date(a.updatedAt || a.createdAt || 0).getTime()
+        );
+        setRegularizationRequestsAll(combined);
+      } catch {
+        setRegularizationRequestsAll([]);
+      }
+    };
+
+    fetchAllRegularizationRequests();
+  }, []);
+
+  const regularizationStatusByDate = useMemo(() => {
+    const statusMap = {};
+    regularizationRequestsAll.forEach((request) => {
+      const dateKey = toDateInput(request?.attendanceDate);
+      if (!dateKey || statusMap[dateKey]) return;
+      statusMap[dateKey] = {
+        status: String(request.status || '').toLowerCase(),
+        requestId: request._id
+      };
+    });
+    return statusMap;
+  }, [regularizationRequestsAll]);
 
   const sessions = attendance.sessions || [];
   const summary = attendance.summary || {};
@@ -188,10 +269,18 @@ const LeaveAttendanceHub = () => {
     () => monthMatrix.find((cell) => cell.day && cell.key === selectedMobileDateKey) || null,
     [monthMatrix, selectedMobileDateKey]
   );
-  const recentLogs = useMemo(
-    () => [...sessions].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 8),
+  const sortedLogs = useMemo(
+    () => [...sessions].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
     [sessions]
   );
+  const totalLogPages = Math.max(1, Math.ceil(sortedLogs.length / LOGS_PER_PAGE));
+  const safeCurrentLogPage = Math.min(currentLogPage, totalLogPages);
+  const paginatedLogs = useMemo(() => {
+    const start = (safeCurrentLogPage - 1) * LOGS_PER_PAGE;
+    return sortedLogs.slice(start, start + LOGS_PER_PAGE);
+  }, [sortedLogs, safeCurrentLogPage]);
+  const logsRangeStart = sortedLogs.length === 0 ? 0 : (safeCurrentLogPage - 1) * LOGS_PER_PAGE + 1;
+  const logsRangeEnd = Math.min(sortedLogs.length, safeCurrentLogPage * LOGS_PER_PAGE);
 
   useEffect(() => {
     const validMonthCells = monthMatrix.filter((cell) => cell.day);
@@ -211,6 +300,16 @@ const LeaveAttendanceHub = () => {
     setSelectedMobileDateKey(fallbackCell?.key || null);
   }, [monthMatrix, selectedMobileDateKey]);
 
+  useEffect(() => {
+    setCurrentLogPage(1);
+  }, [calendarCursor]);
+
+  useEffect(() => {
+    if (currentLogPage > totalLogPages) {
+      setCurrentLogPage(totalLogPages);
+    }
+  }, [currentLogPage, totalLogPages]);
+
   const leaveTypeBalances = useMemo(() => {
     if (!leaveBalance?.balances?.length) return [];
     return leaveBalance.balances.map((typeBalance) => ({
@@ -228,27 +327,25 @@ const LeaveAttendanceHub = () => {
     }));
   }, [leaveBalance]);
 
-  const regularizationRows = useMemo(() => {
-    return recentLogs
-      .filter((row) => {
-        const s = String(row.status || '').toLowerCase();
-        return s.includes('late') || s.includes('absent') || !row.clockIn || !row.clockOut;
+  const regTypeLabel = (type) =>
+    ({
+      missing_clock_in: 'Missing Clock In',
+      missing_clock_out: 'Missing Clock Out',
+      both: 'Both Missing',
+      incorrect_time: 'Incorrect Time',
+      full_day: 'Full Day'
+    })[type] || type;
+
+  const regularizationHistoryRows = useMemo(() => {
+    const cy = calendarCursor.getFullYear();
+    const cm = calendarCursor.getMonth();
+    return regularizationRequestsAll
+      .filter((r) => {
+        const dt = new Date(r?.attendanceDate);
+        return !Number.isNaN(dt.getTime()) && dt.getFullYear() === cy && dt.getMonth() === cm;
       })
-      .map((row) => {
-        const s = String(row.status || '').toLowerCase();
-        const issueType = !row.clockIn || !row.clockOut
-          ? 'Missing punches'
-          : s.includes('absent')
-            ? 'Absent'
-            : 'Late arrival';
-        return {
-          id: row._id || `${row.date}-${row.clockIn || 'x'}`,
-          date: row.date,
-          issueType,
-          status: 'Not Requested'
-        };
-      });
-  }, [recentLogs]);
+      .sort((a, b) => new Date(b.attendanceDate || 0) - new Date(a.attendanceDate || 0));
+  }, [regularizationRequestsAll, calendarCursor]);
 
   const presentCount = Number(summary.presentDays || 0);
   const totalWorking = Number(summary.workingDays || 0);
@@ -257,7 +354,80 @@ const LeaveAttendanceHub = () => {
     const s = String(session?.status || '').toLowerCase();
     return acc + (session?.isLateArrival || s.includes('late') ? 1 : 0);
   }, 0);
-  const regularizedCount = 0;
+  const regularizedCount = useMemo(() => {
+    const cy = calendarCursor.getFullYear();
+    const cm = calendarCursor.getMonth();
+    return regularizationRequestsAll.reduce((acc, r) => {
+      if (String(r.status || '').toLowerCase() !== 'approved') return acc;
+      const dt = new Date(r?.attendanceDate);
+      if (!Number.isNaN(dt.getTime()) && dt.getFullYear() === cy && dt.getMonth() === cm) return acc + 1;
+      return acc;
+    }, 0);
+  }, [regularizationRequestsAll, calendarCursor]);
+
+  const navigateToRegularizationWithRow = (row) => {
+    navigate('/my-attendance-regularization', {
+      state: {
+        prefillRegularization: {
+          attendanceDate: toDateInput(row?.date),
+          regularizationType: getRegularizationTypeForRow(row),
+          requestedClockIn: toTimeInput(row?.clockIn),
+          requestedClockOut: toTimeInput(row?.clockOut),
+          reason: ''
+        }
+      }
+    });
+  };
+
+  const renderRegularizationAction = (row, compact = false) => {
+    const attendanceIssue =
+      String(row?.status || '').toLowerCase().includes('late') ||
+      String(row?.status || '').toLowerCase().includes('absent') ||
+      !row?.clockIn ||
+      !row?.clockOut;
+
+    if (!attendanceIssue) {
+      return <span className={`text-xs ${compact ? 'text-[#94A3B8]' : 'text-[#94A3B8]'}`}>{compact ? 'No action needed' : '--'}</span>;
+    }
+
+    const dateKey = toDateInput(row?.date);
+    const requestMeta = regularizationStatusByDate[dateKey];
+    const requestStatus = requestMeta?.status;
+
+    if (!requestStatus || requestStatus === 'cancelled') {
+      return (
+        <button
+          onClick={() => navigateToRegularizationWithRow(row)}
+          className="text-xs font-semibold text-[#0F766E] hover:text-[#10B981]"
+        >
+          Regularize
+        </button>
+      );
+    }
+
+    const badgeClassByStatus = {
+      pending: 'bg-[#FEF3C7] text-[#92400E]',
+      approved: 'bg-[#DCFCE7] text-[#166534]',
+      rejected: 'bg-[#FEE2E2] text-[#B91C1C]'
+    };
+    const badgeClass = badgeClassByStatus[requestStatus] || 'bg-[#E5E7EB] text-[#374151]';
+
+    return (
+      <div className={`flex ${compact ? 'items-center justify-between' : 'items-center gap-2'}`}>
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass}`}>
+          {requestStatus}
+        </span>
+        {requestStatus === 'rejected' && (
+          <button
+            onClick={() => navigateToRegularizationWithRow(row)}
+            className="text-xs font-semibold text-[#0F766E] hover:text-[#10B981]"
+          >
+            Re-apply
+          </button>
+        )}
+      </div>
+    );
+  };
 
   if (attendance.loading && !attendance.summary && !sessions.length) {
     return <div className="py-10 text-center text-gray-500">Loading leave and attendance data...</div>;
@@ -480,13 +650,12 @@ const LeaveAttendanceHub = () => {
               <div>
                 <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#334155]">Attendance Log</p>
                 <div className="space-y-3 md:hidden">
-                  {recentLogs.length === 0 ? (
+                  {paginatedLogs.length === 0 ? (
                     <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] px-4 py-6 text-center text-sm text-[#64748B]">
                       No attendance logs found.
                     </div>
-                  ) : recentLogs.map((row) => {
+                  ) : paginatedLogs.map((row) => {
                     const s = String(row?.status || '').toLowerCase();
-                    const showRegularize = s.includes('late') || s.includes('absent') || !row.clockIn || !row.clockOut;
                     return (
                       <div key={row._id || `${row.date}-${row.clockIn || 'x'}`} className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4">
                         <div className="flex items-start justify-between gap-3">
@@ -512,16 +681,7 @@ const LeaveAttendanceHub = () => {
                           </div>
                         </div>
                         <div className="mt-3">
-                          {showRegularize ? (
-                            <button
-                              onClick={() => navigate('/my-attendance-regularization')}
-                              className="text-xs font-semibold text-[#0F766E] hover:text-[#10B981]"
-                            >
-                              Regularize
-                            </button>
-                          ) : (
-                            <span className="text-xs text-[#94A3B8]">No action needed</span>
-                          )}
+                          {renderRegularizationAction(row, true)}
                         </div>
                       </div>
                     );
@@ -540,13 +700,12 @@ const LeaveAttendanceHub = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentLogs.length === 0 ? (
+                      {paginatedLogs.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-4 py-6 text-center text-sm text-[#64748B]">No attendance logs found.</td>
                         </tr>
-                      ) : recentLogs.map((row) => {
+                      ) : paginatedLogs.map((row) => {
                         const s = String(row?.status || '').toLowerCase();
-                        const showRegularize = s.includes('late') || s.includes('absent') || !row.clockIn || !row.clockOut;
                         return (
                           <tr key={row._id || `${row.date}-${row.clockIn || 'x'}`} className="border-b border-[#F1F5F9] text-sm text-[#1E293B] last:border-b-0">
                             <td className="px-4 py-3">{row?.date ? new Date(row.date).toLocaleDateString() : '--'}</td>
@@ -559,16 +718,7 @@ const LeaveAttendanceHub = () => {
                               </span>
                             </td>
                             <td className="px-4 py-3">
-                              {showRegularize ? (
-                                <button
-                                  onClick={() => navigate('/my-attendance-regularization')}
-                                  className="text-xs font-semibold text-[#0F766E] hover:text-[#10B981]"
-                                >
-                                  Regularize
-                                </button>
-                              ) : (
-                                <span className="text-xs text-[#94A3B8]">--</span>
-                              )}
+                              {renderRegularizationAction(row)}
                             </td>
                           </tr>
                         );
@@ -576,6 +726,34 @@ const LeaveAttendanceHub = () => {
                     </tbody>
                   </table>
                 </div>
+                {sortedLogs.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-[#64748B]">
+                      Showing {logsRangeStart}-{logsRangeEnd} of {sortedLogs.length} logs
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentLogPage((p) => Math.max(1, p - 1))}
+                        disabled={safeCurrentLogPage <= 1}
+                        className="rounded-md border border-[#CBD5E1] px-3 py-1.5 text-xs font-semibold text-[#475569] disabled:cursor-not-allowed disabled:opacity-50 hover:bg-[#F8FAFC]"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs font-medium text-[#334155]">
+                        Page {safeCurrentLogPage} / {totalLogPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentLogPage((p) => Math.min(totalLogPages, p + 1))}
+                        disabled={safeCurrentLogPage >= totalLogPages}
+                        className="rounded-md border border-[#CBD5E1] px-3 py-1.5 text-xs font-semibold text-[#475569] disabled:cursor-not-allowed disabled:opacity-50 hover:bg-[#F8FAFC]"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -708,7 +886,10 @@ const LeaveAttendanceHub = () => {
           {panelTab === 'regularization-history' && (
             <div>
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm font-semibold uppercase tracking-wide text-[#334155]">Regularization History</p>
+                <p className="text-sm font-semibold uppercase tracking-wide text-[#334155]">
+                  Regularization history —{' '}
+                  {calendarCursor.toLocaleString('default', { month: 'long' })} {calendarCursor.getFullYear()}
+                </p>
                 <button
                   onClick={() => navigate('/my-attendance-regularization')}
                   className="rounded-lg border border-[#CBD5E1] px-3 py-1.5 text-xs font-semibold text-[#475569] hover:border-[#20C997] hover:text-[#0F766E]"
@@ -718,27 +899,31 @@ const LeaveAttendanceHub = () => {
               </div>
 
               <div className="space-y-3 md:hidden">
-                {regularizationRows.length === 0 ? (
+                {regularizationHistoryRows.length === 0 ? (
                   <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] px-4 py-6 text-center text-sm text-[#64748B]">
-                    No regularization issues found in recent logs.
+                    No regularization requests for this month.
                   </div>
-                ) : regularizationRows.map((row) => (
-                  <div key={row.id} className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4">
+                ) : regularizationHistoryRows.map((row) => (
+                  <div key={row._id || row.createdAt} className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <p className="text-sm font-semibold text-[#1E293B]">
-                        {row.date ? new Date(row.date).toLocaleDateString() : '--'}
+                        {row.attendanceDate ? new Date(row.attendanceDate).toLocaleDateString() : '--'}
                       </p>
-                      <span className="inline-flex rounded-full bg-[#E5E7EB] px-2.5 py-1 text-xs font-semibold text-[#374151]">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          String(row.status) === 'pending'
+                            ? 'bg-[#FEF3C7] text-[#92400E]'
+                            : String(row.status) === 'approved'
+                              ? 'bg-[#DCFCE7] text-[#166534]'
+                              : String(row.status) === 'rejected'
+                                ? 'bg-[#FEE2E2] text-[#B91C1C]'
+                                : 'bg-[#E5E7EB] text-[#374151]'
+                        }`}
+                      >
                         {row.status}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-[#475569]">{row.issueType}</p>
-                    <button
-                      onClick={() => navigate('/my-attendance-regularization')}
-                      className="mt-3 text-xs font-semibold text-[#0F766E] hover:text-[#10B981]"
-                    >
-                      Raise Request
-                    </button>
+                    <p className="mt-2 text-xs text-[#475569]">{regTypeLabel(row.regularizationType)}</p>
                   </div>
                 ))}
               </div>
@@ -747,24 +932,36 @@ const LeaveAttendanceHub = () => {
                   <thead>
                     <tr className="border-b border-[#E2E8F0] text-left text-[11px] uppercase text-[#64748B]">
                       <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3">Issue Type</th>
-                      <th className="px-4 py-3">Current Status</th>
+                      <th className="px-4 py-3">Request type</th>
+                      <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {regularizationRows.length === 0 ? (
+                    {regularizationHistoryRows.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-4 py-6 text-center text-sm text-[#64748B]">
-                          No regularization issues found in recent logs.
+                          No regularization requests for this month.
                         </td>
                       </tr>
-                    ) : regularizationRows.map((row) => (
-                      <tr key={row.id} className="border-b border-[#F1F5F9] text-sm text-[#1E293B] last:border-b-0">
-                        <td className="px-4 py-3">{row.date ? new Date(row.date).toLocaleDateString() : '--'}</td>
-                        <td className="px-4 py-3">{row.issueType}</td>
+                    ) : regularizationHistoryRows.map((row) => (
+                      <tr key={row._id} className="border-b border-[#F1F5F9] text-sm text-[#1E293B] last:border-b-0">
                         <td className="px-4 py-3">
-                          <span className="inline-flex rounded-full bg-[#E5E7EB] px-2.5 py-1 text-xs font-semibold text-[#374151]">
+                          {row.attendanceDate ? new Date(row.attendanceDate).toLocaleDateString() : '--'}
+                        </td>
+                        <td className="px-4 py-3">{regTypeLabel(row.regularizationType)}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              String(row.status) === 'pending'
+                                ? 'bg-[#FEF3C7] text-[#92400E]'
+                                : String(row.status) === 'approved'
+                                  ? 'bg-[#DCFCE7] text-[#166534]'
+                                  : String(row.status) === 'rejected'
+                                    ? 'bg-[#FEE2E2] text-[#B91C1C]'
+                                    : 'bg-[#E5E7EB] text-[#374151]'
+                            }`}
+                          >
                             {row.status}
                           </span>
                         </td>
@@ -773,7 +970,7 @@ const LeaveAttendanceHub = () => {
                             onClick={() => navigate('/my-attendance-regularization')}
                             className="text-xs font-semibold text-[#0F766E] hover:text-[#10B981]"
                           >
-                            Raise Request
+                            Open
                           </button>
                         </td>
                       </tr>

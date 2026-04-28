@@ -400,7 +400,7 @@ export const isAdminOrHROrExecutive = createAuthMiddleware({
         // For employees, check if they are HR or Executive
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId status active department position jobTitle')
+                .select('name lastName functionalRoles organizationId status active department position jobTitle')
                 .lean();
 
             if (!employee) {
@@ -453,7 +453,7 @@ export const isAdminOrManagerOrHR = createAuthMiddleware({
         // For employees, check if they are HR, Manager, or Executive
         if (decoded.role === 'employee') {
             const employee = await Employee.findById(decoded.userId)
-                .select('functionalRoles organizationId status active department position jobTitle')
+                .select('name lastName functionalRoles organizationId status active department position jobTitle')
                 .lean();
 
             if (!employee) {

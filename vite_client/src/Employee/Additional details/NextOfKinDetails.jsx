@@ -6,7 +6,6 @@ function NextOfKinDetails() {
     const dispatch = useDispatch();
     const { 
         employee, 
-        loading, 
         error: reduxError, 
         addingNextOfKin 
     } = useSelector(state => state.employeeDetails);
@@ -21,7 +20,7 @@ function NextOfKinDetails() {
 
     const [isEditing, setIsEditing] = useState(false);
     const [localError, setLocalError] = useState(null);
-    const [activeKinIndex, setActiveKinIndex] = useState(null);
+    const currentKin = employee?.nextOfKins?.[0] || null;
 
     useEffect(() => {
         dispatch(fetchEmployeeOwnInfo());
@@ -32,7 +31,7 @@ function NextOfKinDetails() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleEditKin = (kin, index) => {
+    const handleEditKin = (kin) => {
         setFormData({
             name: kin.name,
             occupation: kin.occupation,
@@ -40,7 +39,6 @@ function NextOfKinDetails() {
             relationship: kin.relationship,
             address: kin.address,
         });
-        setActiveKinIndex(index);
         setIsEditing(true);
     };
 
@@ -58,7 +56,6 @@ function NextOfKinDetails() {
             
             if (addNextOfKin.fulfilled.match(result)) {
                 setIsEditing(false);
-                setActiveKinIndex(null);
                 dispatch(fetchEmployeeOwnInfo());
             } else {
                 throw new Error(result.payload || 'Failed to save next of kin');
@@ -88,27 +85,25 @@ function NextOfKinDetails() {
 
                     {!isEditing ? (
                         <div className="space-y-4 md:space-y-6">
-                            {employee?.nextOfKins?.length > 0 ? (
-                                employee.nextOfKins.map((kin, index) => (
-                                    <div key={kin._id} className="border-b pb-4">
-                                        <div className="space-y-1 md:space-y-2 text-sm md:text-base">
-                                            <p><strong>Name:</strong> {kin.name}</p>
-                                            <p><strong>Occupation:</strong> {kin.occupation}</p>
-                                            <p><strong>Phone:</strong> {kin.phone}</p>
-                                            <p><strong>Relationship:</strong> {kin.relationship}</p>
-                                            <p><strong>Address:</strong> {kin.address.split('\n').map((line, i) => (
-                                                <span key={i}>{line}<br /></span>
-                                            ))}</p>
-                                            <p><strong>Added:</strong> {new Date(kin.addedAt).toLocaleDateString()}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleEditKin(kin, index)}
-                                            className="mt-2 md:mt-3 bg-theme-primary hover:opacity-90 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm"
-                                        >
-                                            Edit
-                                        </button>
+                            {currentKin ? (
+                                <div className="border-b pb-4">
+                                    <div className="space-y-1 md:space-y-2 text-sm md:text-base">
+                                        <p><strong>Name:</strong> {currentKin.name}</p>
+                                        <p><strong>Occupation:</strong> {currentKin.occupation}</p>
+                                        <p><strong>Phone:</strong> {currentKin.phone}</p>
+                                        <p><strong>Relationship:</strong> {currentKin.relationship}</p>
+                                        <p><strong>Address:</strong> {(currentKin.address || '').split('\n').map((line, i) => (
+                                            <span key={i}>{line}<br /></span>
+                                        ))}</p>
+                                        <p><strong>Added:</strong> {currentKin.addedAt ? new Date(currentKin.addedAt).toLocaleDateString() : 'N/A'}</p>
                                     </div>
-                                ))
+                                    <button
+                                        onClick={() => handleEditKin(currentKin)}
+                                        className="mt-2 md:mt-3 bg-theme-primary hover:opacity-90 text-white px-3 py-1 md:px-4 md:py-2 rounded text-xs md:text-sm"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
                             ) : (
                                 <p className="text-gray-500">No next of kin details available</p>
                             )}
@@ -122,18 +117,17 @@ function NextOfKinDetails() {
                                         relationship: 'Relative',
                                         address: '',
                                     });
-                                    setActiveKinIndex(null);
                                     setIsEditing(true);
                                 }}
                                 className="mt-4 bg-theme-primary hover:opacity-90 text-white px-4 py-2 rounded w-full sm:w-auto"
                             >
-                                Add New Next of Kin
+                                {currentKin ? 'Replace Next of Kin' : 'Add Next of Kin'}
                             </button>
                         </div>
                     ) : (
                         <form className="space-y-3 md:space-y-4" onSubmit={handleSubmit}>
                             <h3 className="text-base md:text-lg font-medium">
-                                {activeKinIndex !== null ? 'Edit Next of Kin' : 'Add New Next of Kin'}
+                                {currentKin ? 'Edit Next of Kin' : 'Add Next of Kin'}
                             </h3>
                             
                             <div>
@@ -208,7 +202,6 @@ function NextOfKinDetails() {
                                     type="button"
                                     onClick={() => {
                                         setIsEditing(false);
-                                        setActiveKinIndex(null);
                                     }}
                                     className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm md:text-base"
                                 >

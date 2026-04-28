@@ -101,17 +101,14 @@ const ContactDetails = () => {
 
     if (!employee) {
         return (
-            <div className="flex justify-center items-center p-4 md:p-6 min-h-screen bg-gray-50">
+            <div className="flex justify-center items-center p-4">
                 Loading employee info...
             </div>
         );
     }
 
     return (
-        <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
-            <div className="max-w-xl mx-auto p-4 sm:p-5 bg-white rounded-lg shadow-md font-sans">
-                <h2 className="text-xl md:text-2xl mb-5 text-gray-700 font-bold">Contact Details</h2>
-
+        <div className="w-full font-sans">
                 {isEditing ? (
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4 md:gap-5">
                         <div className="flex flex-col sm:flex-row flex-wrap -mx-2">
@@ -241,31 +238,48 @@ const ContactDetails = () => {
                         </div>
                     </form>
                 ) : (
-                    <>
-                        <div className="text-gray-700 space-y-2 text-sm md:text-base">
-                            <p><strong>Phone 1:</strong> {formData.phone1 || 'N/A'}</p>
-                            <p><strong>Phone 2:</strong> {formData.phone2 || 'N/A'}</p>
-                            <p><strong>Personal Email:</strong> {formData.personalEmail || 'N/A'}</p>
-                            <p><strong>Address:</strong> {formData.address ? formData.address.split('\n').map((line, i) => (
-                                <span key={i}>{line}<br /></span>
-                            )) : 'N/A'}</p>
-                            <p><strong>Birth Date:</strong> {formData.birthDate ? new Date(formData.birthDate).toLocaleDateString() : 'N/A'}</p>
-                            <p><strong>Gender:</strong> {formData.gender || 'N/A'}</p>
-                            <p><strong>National ID:</strong>{' '}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-base font-semibold text-slate-800">Contact Details</h3>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditing(true)}
+                                className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
+                            >
+                                Edit
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            {[
+                                { label: 'Phone 1', value: formData.phone1 || 'N/A' },
+                                { label: 'Phone 2', value: formData.phone2 || 'N/A' },
+                                { label: 'Personal Email', value: formData.personalEmail || 'N/A' },
+                                { label: 'Birth Date', value: formData.birthDate ? new Date(formData.birthDate).toLocaleDateString() : 'N/A' },
+                                { label: 'Gender', value: formData.gender || 'N/A' },
+                            ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                                    <p className="mt-1 text-sm font-medium text-slate-800 break-words">{item.value}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Address</p>
+                            <p className="mt-1 text-sm font-medium text-slate-800 whitespace-pre-line">{formData.address || 'N/A'}</p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">National ID</p>
+                            <p className="mt-1 text-sm font-medium text-slate-800">
                                 {formData.nationalId
-                                    ? `${formData.nationalIdType ? `${formData.nationalIdType} — ` : ''}${formData.nationalId}`
+                                    ? `${formData.nationalIdType ? `${formData.nationalIdType} - ` : ''}${formData.nationalId}`
                                     : 'N/A'}
                             </p>
                         </div>
-                        <button
-                            onClick={() => setIsEditing(true)}
-                            className="mt-5 bg-theme-secondary hover:bg-theme-primary text-white font-semibold py-2 px-4 rounded w-full sm:w-auto"
-                        >
-                            Edit
-                        </button>
-                    </>
+                    </div>
                 )}
-            </div>
         </div>
     );
 };

@@ -1,10 +1,60 @@
 import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
 import Attendance from '../../models/attendance.model.js';
 import Employee from '../../models/employee.model.js';
+import AttendanceRule from '../../models/attendanceRule.model.js';
 import logger from '../../helpers/logger.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import {
+    harmonizeRegularizationRequestedTimes,
+    ensureClockOutAfterClockIn
+} from '../../helpers/attendanceRegularizationTimeHelper.js';
+
+const DEFAULT_OFFICE_START = '09:00';
+const DEFAULT_OFFICE_END = '17:00';
+
+function parseTimeParts(timeValue, fallbackTime) {
+    const source = typeof timeValue === 'string' && timeValue.includes(':') ? timeValue : fallbackTime;
+    const [hStr, mStr] = source.split(':');
+    const hours = Number(hStr);
+    const minutes = Number(mStr);
+    return {
+        hours: Number.isFinite(hours) ? Math.max(0, Math.min(23, hours)) : 9,
+        minutes: Number.isFinite(minutes) ? Math.max(0, Math.min(59, minutes)) : 0
+    };
+}
+
+function setClockWithTime(anchorDay, timeValue, fallbackTime) {
+    const out = new Date(anchorDay);
+    const { hours, minutes } = parseTimeParts(timeValue, fallbackTime);
+    out.setHours(hours, minutes, 0, 0);
+    return out;
+}
+
+async function getDefaultOfficeDateTimes(organizationId, anchorDay) {
+    const activeRule = await AttendanceRule.findOne({
+        organizationId,
+        isActive: true
+    })
+        .sort({ priority: -1, updatedAt: -1 })
+        .select('officeHours checkInOutTimes')
+        .lean();
+
+    const startTime =
+        activeRule?.officeHours?.startTime ||
+        activeRule?.checkInOutTimes?.checkInStartTime ||
+        DEFAULT_OFFICE_START;
+    const endTime =
+        activeRule?.officeHours?.endTime ||
+        activeRule?.checkInOutTimes?.checkOutStartTime ||
+        DEFAULT_OFFICE_END;
+
+    return {
+        defaultClockIn: setClockWithTime(anchorDay, startTime, DEFAULT_OFFICE_START),
+        defaultClockOut: setClockWithTime(anchorDay, endTime, DEFAULT_OFFICE_END)
+    };
+}
 
 /**
  * Create a new attendance regularization request
@@ -21,7 +71,8 @@ export const createRegularizationRequest = async (req, res) => {
             requestedClockIn,
             requestedClockOut,
             reason,
-            supportingDocuments
+            supportingDocuments,
+            clockOutNextDay
         } = req.body;
 
         // Validation
@@ -76,22 +127,78 @@ export const createRegularizationRequest = async (req, res) => {
             });
         }
 
-        // Validate dates based on type
-        if (regularizationType === 'missing_clock_in' || regularizationType === 'both' || regularizationType === 'incorrect_time') {
-            if (!requestedClockIn) {
+        // Validate dates based on type (full_day uses defaults at approval — no punches required here)
+        if (regularizationType !== 'full_day') {
+            if (regularizationType === 'missing_clock_in' || regularizationType === 'both' || regularizationType === 'incorrect_time') {
+                if (!requestedClockIn) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Requested clock-in time is required for this regularization type'
+                    });
+                }
+            }
+
+            if (regularizationType === 'missing_clock_out' || regularizationType === 'both' || regularizationType === 'incorrect_time') {
+                if (!requestedClockOut) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Requested clock-out time is required for this regularization type'
+                    });
+                }
+            }
+        }
+
+        let finalRequestedClockIn;
+        let finalRequestedClockOut;
+        if (regularizationType === 'full_day') {
+            finalRequestedClockIn = undefined;
+            finalRequestedClockOut = undefined;
+        } else {
+            try {
+                const ci = requestedClockIn ? new Date(requestedClockIn) : null;
+                const co = requestedClockOut ? new Date(requestedClockOut) : null;
+                const h = harmonizeRegularizationRequestedTimes({
+                    attendanceDate: requestedDate,
+                    clockIn: ci,
+                    clockOut: co,
+                    clockOutNextDay
+                });
+                finalRequestedClockIn = h.clockIn || undefined;
+                finalRequestedClockOut = h.clockOut || undefined;
+            } catch (timeErr) {
+                return res.status(400).json({
+                    success: false,
+                    message: timeErr.message || 'Invalid requested clock times'
+                });
+            }
+
+            const needsStart =
+                regularizationType === 'missing_clock_in' ||
+                regularizationType === 'both' ||
+                regularizationType === 'incorrect_time';
+            const needsEnd =
+                regularizationType === 'missing_clock_out' ||
+                regularizationType === 'both' ||
+                regularizationType === 'incorrect_time';
+            if (needsStart && !finalRequestedClockIn) {
                 return res.status(400).json({
                     success: false,
                     message: 'Requested clock-in time is required for this regularization type'
                 });
             }
-        }
-
-        if (regularizationType === 'missing_clock_out' || regularizationType === 'both' || regularizationType === 'incorrect_time') {
-            if (!requestedClockOut) {
+            if (needsEnd && !finalRequestedClockOut) {
                 return res.status(400).json({
                     success: false,
                     message: 'Requested clock-out time is required for this regularization type'
                 });
+            }
+            if (finalRequestedClockIn && finalRequestedClockOut) {
+                if (finalRequestedClockOut.getTime() <= finalRequestedClockIn.getTime()) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Requested clock-out must be after requested clock-in (use “next-day clock-out” if you left after midnight).'
+                    });
+                }
             }
         }
 
@@ -112,7 +219,7 @@ export const createRegularizationRequest = async (req, res) => {
 
         // Find the employee's manager
         // First, try to find manager by department (manager with same department)
-        const employee = await Employee.findById(employeeId).select('department position').lean();
+        const employee = await Employee.findById(employeeId).select('department position managerId manager').lean();
         if (!employee) {
             return res.status(404).json({
                 success: false,
@@ -120,15 +227,25 @@ export const createRegularizationRequest = async (req, res) => {
             });
         }
 
-        // Find manager in the same department
-        let manager = await Employee.findOne({
-            organizationId,
-            department: employee.department,
-            position: { $in: ['Manager', 'Director'] },
-            status: 'active'
-        }).select('_id').lean();
+        // Prefer explicit reporting line (managerId), then department/org heuristics
+        let manager = null;
+        if (employee.managerId) {
+            manager = await Employee.findOne({
+                _id: employee.managerId,
+                organizationId,
+                status: 'active'
+            }).select('_id').lean();
+        }
 
-        // If no manager found in department, find any manager in the organization
+        if (!manager) {
+            manager = await Employee.findOne({
+                organizationId,
+                department: employee.department,
+                position: { $in: ['Manager', 'Director'] },
+                status: 'active'
+            }).select('_id').lean();
+        }
+
         if (!manager) {
             manager = await Employee.findOne({
                 organizationId,
@@ -155,8 +272,8 @@ export const createRegularizationRequest = async (req, res) => {
             managerId: manager._id,
             attendanceDate: requestedDate,
             regularizationType,
-            requestedClockIn: requestedClockIn ? new Date(requestedClockIn) : undefined,
-            requestedClockOut: requestedClockOut ? new Date(requestedClockOut) : undefined,
+            requestedClockIn: finalRequestedClockIn,
+            requestedClockOut: finalRequestedClockOut,
             reason,
             supportingDocuments: supportingDocuments || [],
             status: 'pending'
@@ -410,19 +527,16 @@ export const approveRegularization = async (req, res) => {
             organizationId
         });
 
-        // Prepare clock in/out times
-        let clockInTime = regularizationRequest.requestedClockIn;
-        let clockOutTime = regularizationRequest.requestedClockOut;
+        // Build final times by merging request + existing attendance + dynamic office defaults.
+        // This keeps existing punched side for missing_clock_in/out while still filling any truly missing side.
+        const { defaultClockIn, defaultClockOut } = await getDefaultOfficeDateTimes(organizationId, startOfDay);
 
-        // If times not provided, use default office hours
-        if (!clockInTime) {
-            clockInTime = new Date(startOfDay);
-            clockInTime.setHours(9, 0, 0, 0);
-        }
-        if (!clockOutTime) {
-            clockOutTime = new Date(startOfDay);
-            clockOutTime.setHours(17, 0, 0, 0);
-        }
+        let clockInTime = regularizationRequest.requestedClockIn || attendanceRecord?.clockIn || defaultClockIn;
+        let clockOutTime = regularizationRequest.requestedClockOut || attendanceRecord?.clockOut || defaultClockOut;
+
+        const fixed = ensureClockOutAfterClockIn(clockInTime, clockOutTime);
+        clockInTime = fixed.clockInTime;
+        clockOutTime = fixed.clockOutTime;
 
         if (!attendanceRecord) {
             // Create new attendance record
@@ -437,12 +551,8 @@ export const approveRegularization = async (req, res) => {
             });
         } else {
             // Update existing attendance record
-            if (regularizationRequest.requestedClockIn) {
-                attendanceRecord.clockIn = clockInTime;
-            }
-            if (regularizationRequest.requestedClockOut) {
-                attendanceRecord.clockOut = clockOutTime;
-            }
+            attendanceRecord.clockIn = clockInTime;
+            attendanceRecord.clockOut = clockOutTime;
             attendanceRecord.status = 'present';
         }
 
@@ -462,12 +572,8 @@ export const approveRegularization = async (req, res) => {
                     throw saveError;
                 }
 
-                if (regularizationRequest.requestedClockIn) {
-                    attendanceRecord.clockIn = clockInTime;
-                }
-                if (regularizationRequest.requestedClockOut) {
-                    attendanceRecord.clockOut = clockOutTime;
-                }
+                attendanceRecord.clockIn = clockInTime;
+                attendanceRecord.clockOut = clockOutTime;
                 attendanceRecord.status = 'present';
                 await attendanceRecord.save();
             } else {
@@ -542,17 +648,28 @@ export const rejectRegularization = async (req, res) => {
         // If user is a manager, verify they can reject this request
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
         if (isManager && req.employee) {
-            const employee = regularizationRequest.employeeId;
-            if (employee.department !== req.employee.department) {
-                logger.warn('Manager trying to reject regularization outside their department', {
+            const employee = await Employee.findById(regularizationRequest.employeeId?._id || regularizationRequest.employeeId)
+                .select('manager managerId').lean();
+
+            if (!employee) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Employee not found.'
+                });
+            }
+
+            const isLinked = isEmployeeLinkedToManager(employee, req.employee);
+            if (!isLinked) {
+                const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
+                logger.warn('Manager trying to reject regularization for unlinked employee', {
                     managerId: req.employee._id,
-                    managerDepartment: req.employee.department,
-                    employeeDepartment: employee.department,
+                    managerName: managerName,
+                    employeeManager: employee.manager,
                     requestId: id
                 });
                 return res.status(403).json({
                     success: false,
-                    message: 'You can only reject regularization requests for employees in your department.'
+                    message: 'You can only reject regularization requests for employees linked to you.'
                 });
             }
         }

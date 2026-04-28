@@ -5,11 +5,12 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { FaClock, FaCheckCircle, FaTimesCircle, FaSpinner, FaPlus, FaCalendar } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const MyRegularizationRequests = () => {
     const user = useSelector((state) => state.auth.user);
     const navigate = useNavigate();
+    const location = useLocation();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('all');
@@ -19,6 +20,7 @@ const MyRegularizationRequests = () => {
         regularizationType: 'missing_clock_in',
         requestedClockIn: '',
         requestedClockOut: '',
+        clockOutNextDay: false,
         reason: ''
     });
     const [submitting, setSubmitting] = useState(false);
@@ -26,6 +28,24 @@ const MyRegularizationRequests = () => {
     useEffect(() => {
         fetchRequests();
     }, [filterStatus]);
+
+    useEffect(() => {
+        const prefill = location.state?.prefillRegularization;
+        if (!prefill) return;
+
+        setFormData({
+            attendanceDate: prefill.attendanceDate || '',
+            regularizationType: prefill.regularizationType || 'missing_clock_in',
+            requestedClockIn: prefill.requestedClockIn || '',
+            requestedClockOut: prefill.requestedClockOut || '',
+            clockOutNextDay: Boolean(prefill.clockOutNextDay),
+            reason: prefill.reason || ''
+        });
+        setShowCreateModal(true);
+
+        // Clear route state so refreshes/re-renders don't reopen the modal.
+        navigate(location.pathname, { replace: true, state: null });
+    }, [location.pathname, location.state, navigate]);
 
     const fetchRequests = async () => {
         try {
@@ -50,33 +70,46 @@ const MyRegularizationRequests = () => {
             return;
         }
 
-        // Validate based on regularization type
-        if ((formData.regularizationType === 'missing_clock_in' || 
-             formData.regularizationType === 'both' || 
-             formData.regularizationType === 'incorrect_time') && !formData.requestedClockIn) {
-            toast.warning('Requested Clock In time is required');
-            return;
-        }
+        if (formData.regularizationType !== 'full_day') {
+            // Validate based on regularization type
+            if ((formData.regularizationType === 'missing_clock_in' || 
+                 formData.regularizationType === 'both' || 
+                 formData.regularizationType === 'incorrect_time') && !formData.requestedClockIn) {
+                toast.warning('Requested Clock In time is required');
+                return;
+            }
 
-        if ((formData.regularizationType === 'missing_clock_out' || 
-             formData.regularizationType === 'both' || 
-             formData.regularizationType === 'incorrect_time') && !formData.requestedClockOut) {
-            toast.warning('Requested Clock Out time is required');
-            return;
+            if ((formData.regularizationType === 'missing_clock_out' || 
+                 formData.regularizationType === 'both' || 
+                 formData.regularizationType === 'incorrect_time') && !formData.requestedClockOut) {
+                toast.warning('Requested Clock Out time is required');
+                return;
+            }
         }
 
         try {
             setSubmitting(true);
-            await axios.post(
-                '/v1/both/attendance-regularization/request',
-                {
-                    ...formData,
-                    attendanceDate: new Date(formData.attendanceDate).toISOString(),
-                    requestedClockIn: formData.requestedClockIn ? new Date(`${formData.attendanceDate}T${formData.requestedClockIn}`).toISOString() : undefined,
-                    requestedClockOut: formData.requestedClockOut ? new Date(`${formData.attendanceDate}T${formData.requestedClockOut}`).toISOString() : undefined
-                },
-                { withCredentials: true }
-            );
+            const buildWallIsoFromDateStr = (dateStr, hhmm) => {
+                if (!dateStr || !hhmm) return undefined;
+                return new Date(`${dateStr}T${hhmm}:00`).toISOString();
+            };
+            const payload = {
+                attendanceDate: new Date(formData.attendanceDate).toISOString(),
+                regularizationType: formData.regularizationType,
+                reason: formData.reason
+            };
+            if (formData.regularizationType !== 'full_day') {
+                payload.requestedClockIn = formData.requestedClockIn
+                    ? buildWallIsoFromDateStr(formData.attendanceDate, formData.requestedClockIn)
+                    : undefined;
+                payload.requestedClockOut = formData.requestedClockOut
+                    ? buildWallIsoFromDateStr(formData.attendanceDate, formData.requestedClockOut)
+                    : undefined;
+                if (formData.clockOutNextDay && formData.regularizationType !== 'full_day') {
+                    payload.clockOutNextDay = true;
+                }
+            }
+            await axios.post('/v1/both/attendance-regularization/request', payload, { withCredentials: true });
             toast.success('Regularization request submitted successfully');
             setShowCreateModal(false);
             setFormData({
@@ -84,6 +117,7 @@ const MyRegularizationRequests = () => {
                 regularizationType: 'missing_clock_in',
                 requestedClockIn: '',
                 requestedClockOut: '',
+                clockOutNextDay: false,
                 reason: ''
             });
             fetchRequests();
@@ -262,7 +296,14 @@ const MyRegularizationRequests = () => {
                                 </label>
                                 <select
                                     value={formData.regularizationType}
-                                    onChange={(e) => setFormData({ ...formData, regularizationType: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            regularizationType: e.target.value,
+                                            ...(e.target.value === 'full_day'
+                                                ? { requestedClockIn: '', requestedClockOut: '', clockOutNextDay: false }
+                                                : {})
+                                        })}
                                     className="w-full p-3 border rounded-lg"
                                     required
                                 >
@@ -294,6 +335,7 @@ const MyRegularizationRequests = () => {
                             {(formData.regularizationType === 'missing_clock_out' || 
                               formData.regularizationType === 'both' || 
                               formData.regularizationType === 'incorrect_time') && (
+                                <>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Requested Clock Out Time <span className="text-red-500">*</span>
@@ -306,6 +348,20 @@ const MyRegularizationRequests = () => {
                                         required
                                     />
                                 </div>
+                                <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.clockOutNextDay}
+                                        onChange={(e) =>
+                                            setFormData({ ...formData, clockOutNextDay: e.target.checked })}
+                                        className="mt-1 rounded border-gray-300"
+                                    />
+                                    <span>
+                                        Clock-out was on the <strong>next calendar day</strong> (e.g. night shift / punched out morning after midnight).
+                                        Check this so hours calculate correctly when your out-time is earlier in the clock than your in-time on the attendance date.
+                                    </span>
+                                </label>
+                                </>
                             )}
 
                             <div>
@@ -334,6 +390,7 @@ const MyRegularizationRequests = () => {
                                             regularizationType: 'missing_clock_in',
                                             requestedClockIn: '',
                                             requestedClockOut: '',
+                                            clockOutNextDay: false,
                                             reason: ''
                                         });
                                     }}

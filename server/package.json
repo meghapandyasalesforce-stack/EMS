@@ -68,11 +68,7 @@
     "@sentry/node": "^8.0.0"
   },
   "jest": {
-    "preset": "default",
     "testEnvironment": "node",
-    "extensionsToTreatAsEsm": [
-      ".js"
-    ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },

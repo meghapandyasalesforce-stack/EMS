@@ -59,6 +59,9 @@ export const updateEmployeeInfo = async (req, res) => {
         if (typeof updateData.gender === 'string' && !updateData.gender.trim()) {
             delete updateData.gender;
         }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'professionalBio')) {
+            updateData.professionalBio = String(updateData.professionalBio || '').trim();
+        }
 
         const unsetFields = {};
 
@@ -862,17 +865,21 @@ export const updateLocationPermission = async (req, res) => {
     }
 };
 
-// Get upcoming birthdays (next 30 days)
+// Get upcoming birthdays (next 10 days)
 export const getUpcomingBirthdays = async (req, res) => {
     try {
         const today = new Date();
-        const nextMonth = new Date(today);
-        nextMonth.setMonth(today.getMonth() + 1);
+        const upcomingWindowDays = 10;
+        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({ message: 'Organization ID is required' });
+        }
 
-        // Find employees with birthdays in the next 30 days
+        // Find active employees for this organization with birth dates set.
         const employees = await Employee.find({ 
             birthDate: { $exists: true, $ne: null },
-            status: 'active'
+            status: 'active',
+            organizationId
         }).select('name lastName email profilePhoto birthDate department');
 
         // Filter and format birthday data
@@ -882,13 +889,13 @@ export const getUpcomingBirthdays = async (req, res) => {
                 const birthDate = new Date(emp.birthDate);
                 const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
                 
-                // Check if birthday is within next 30 days
+                // Check if birthday is within the configured upcoming window.
                 if (thisYearBirthday < today) {
                     // Birthday already passed this year, check next year
                     const nextYearBirthday = new Date(today.getFullYear() + 1, birthDate.getMonth(), birthDate.getDate());
-                    return (nextYearBirthday - today) / (1000 * 60 * 60 * 24) <= 30;
+                    return (nextYearBirthday - today) / (1000 * 60 * 60 * 24) <= upcomingWindowDays;
                 }
-                return (thisYearBirthday - today) / (1000 * 60 * 60 * 24) <= 30;
+                return (thisYearBirthday - today) / (1000 * 60 * 60 * 24) <= upcomingWindowDays;
             })
             .map(emp => {
                 const birthDate = new Date(emp.birthDate);

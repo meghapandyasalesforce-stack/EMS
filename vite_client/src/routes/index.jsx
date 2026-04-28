@@ -155,6 +155,7 @@ export const attendanceRoutes = [
   { path: '/today-attendance', component: lazy(() => import('../Admin/Attendance/TodayStatusComponent')), message: "Loading today's attendance...", allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/all-attendance-history', component: lazy(() => import('../Admin/Attendance/AllAttendanceStatsComponent')), message: 'Loading attendance history...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
+  { path: '/manager/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/my-attendance-regularization', component: lazy(() => import('../Employee/AttendanceRegularization/MyRegularizationRequests')), message: 'Loading my attendance regularization...', allowedRoles: [] },
   { path: '/team-learning', component: lazy(() => import('../components/LearningRouteWrapper')), message: 'Loading learning...', allowedRoles: [] },
   { path: '/one-on-one', component: lazy(() => import('../components/OneOnOneRouteWrapper')), message: 'Loading one-on-one meetings...', allowedRoles: [] }

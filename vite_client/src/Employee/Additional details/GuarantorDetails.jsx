@@ -14,7 +14,7 @@ const GuarantorDetails = () => {
   const [formData, setFormData] = useState({
     name: '',
     occupation: '',
-    phoneNumber: '',  // Changed from 'phone' to 'phoneNumber'
+    phoneNumber: '',
     relationship: 'Relative',
     address: '',
   });
@@ -85,7 +85,7 @@ const GuarantorDetails = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <p><strong>Name:</strong> {guarantor.name}</p>
                     <p><strong>Occupation:</strong> {guarantor.occupation}</p>
-                    <p><strong>Phone:</strong> {guarantor.phoneNumber}</p>
+                    <p><strong>Phone:</strong> {guarantor.phone || guarantor.phoneNumber || 'N/A'}</p>
                     <p><strong>Relationship:</strong> {guarantor.relationship}</p>
                     <p className="md:col-span-2"><strong>Address:</strong> {guarantor.address.split('\n').map((line, i) => (
                       <span key={i}>{line}<br /></span>
@@ -96,7 +96,7 @@ const GuarantorDetails = () => {
                       setFormData({
                         name: guarantor.name,
                         occupation: guarantor.occupation,
-                        phoneNumber: guarantor.phoneNumber,
+                        phoneNumber: guarantor.phone || guarantor.phoneNumber || '',
                         relationship: guarantor.relationship,
                         address: guarantor.address
                       });

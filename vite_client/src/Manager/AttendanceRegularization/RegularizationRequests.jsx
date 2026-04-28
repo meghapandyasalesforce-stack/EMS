@@ -12,6 +12,7 @@ const RegularizationRequests = () => {
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('pending');
     const [selectedRequest, setSelectedRequest] = useState(null);
+    const [modalMode, setModalMode] = useState(null);
     const [actionLoading, setActionLoading] = useState(null);
     const [rejectReason, setRejectReason] = useState('');
 
@@ -45,6 +46,7 @@ const RegularizationRequests = () => {
             toast.success('Regularization request approved successfully');
             fetchRequests();
             setSelectedRequest(null);
+            setModalMode(null);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to approve request');
         } finally {
@@ -68,6 +70,7 @@ const RegularizationRequests = () => {
             toast.success('Regularization request rejected');
             fetchRequests();
             setSelectedRequest(null);
+            setModalMode(null);
             setRejectReason('');
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to reject request');
@@ -182,7 +185,10 @@ const RegularizationRequests = () => {
                                                         Approve
                                                     </button>
                                                     <button
-                                                        onClick={() => setSelectedRequest(request)}
+                                                        onClick={() => {
+                                                            setSelectedRequest(request);
+                                                            setModalMode('reject');
+                                                        }}
                                                         className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
                                                     >
                                                         <FaTimesCircle />
@@ -191,7 +197,10 @@ const RegularizationRequests = () => {
                                                 </>
                                             )}
                                             <button
-                                                onClick={() => setSelectedRequest(request)}
+                                                onClick={() => {
+                                                    setSelectedRequest(request);
+                                                    setModalMode('view');
+                                                }}
                                                 className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                                             >
                                                 <FaEye />
@@ -207,7 +216,7 @@ const RegularizationRequests = () => {
             </div>
 
             {/* Reject Modal */}
-            {selectedRequest && selectedRequest.status === 'pending' && (
+            {selectedRequest && modalMode === 'reject' && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                         <h3 className="text-lg font-semibold mb-4">Reject Regularization Request</h3>
@@ -225,6 +234,7 @@ const RegularizationRequests = () => {
                             <button
                                 onClick={() => {
                                     setSelectedRequest(null);
+                                    setModalMode(null);
                                     setRejectReason('');
                                 }}
                                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
@@ -244,7 +254,7 @@ const RegularizationRequests = () => {
             )}
 
             {/* View Details Modal */}
-            {selectedRequest && selectedRequest.status !== 'pending' && (
+            {selectedRequest && modalMode === 'view' && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                         <h3 className="text-lg font-semibold mb-4">Request Details</h3>
@@ -268,7 +278,10 @@ const RegularizationRequests = () => {
                             )}
                         </div>
                         <button
-                            onClick={() => setSelectedRequest(null)}
+                            onClick={() => {
+                                setSelectedRequest(null);
+                                setModalMode(null);
+                            }}
                             className="mt-4 w-full px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
                         >
                             Close

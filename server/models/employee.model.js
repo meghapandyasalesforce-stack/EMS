@@ -280,6 +280,7 @@ const employeeSchema = new mongoose.Schema({
     city: { type: String },
     address: { type: String },
     personalEmail: { type: String, match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'] },
+    professionalBio: { type: String, default: '' },
     
     // Performance and statistics
     performanceScore: { 

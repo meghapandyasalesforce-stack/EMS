@@ -495,7 +495,7 @@ const DashboardManager = () => {
                 
                 <div 
                     className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/attendance-regularization')}
+                    onClick={() => navigate('/manager/attendance-regularization')}
                 >
                     <div className="flex items-center gap-4">
                         <div className="bg-purple-100 p-4 rounded-lg flex-shrink-0">

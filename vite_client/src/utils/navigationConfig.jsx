@@ -140,7 +140,7 @@ const getAdminNavigation = () => [
     { path: "/role-hierarchy", name: "Role Management", icon: <FaShieldAlt /> },
     { path: "/admin/approval-workflows", name: "Approval Workflows", icon: <FaTasks /> },
     { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock /> },
-    { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
+    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
     { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign /> },
     { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
@@ -191,7 +191,7 @@ const getManagerNavigation = () => [
     { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
     { path: "/employee/leave-attendance", name: "Leave & Attendance", icon: <FaChartLine /> },
     { path: "/today-attendance", name: "Team Attendance", icon: <IoBookmarks /> },
-    { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
+    { path: "/manager/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/team-learning", name: "Team Learning", icon: <FaGraduationCap /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FiShield, FiClock, FiChevronRight, FiInfo } from 'react-icons/fi';
 import ProfilePhotoUpload from '../Profile/ProfilePhotoUpload';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import ContactDetails from './ContactDetails';
@@ -12,11 +11,14 @@ import FamilyDetails from '../Additional details/FamilyDetails';
 import JobDetails from '../Additional details/JobDetails';
 import FinancialDetails from './FinancialDetails';
 import { setUser } from '../../context/Auth/authSlice';
-import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
+import { fetchEmployeeOwnInfo, updateEmployeeInfo } from '../../context/employeeDetailsSlice';
+import { toast } from 'react-toastify';
 
 function ProfileDetails() {
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [isFetchingFreshData, setIsFetchingFreshData] = useState(false);
+  const [isSavingPersonalDetails, setIsSavingPersonalDetails] = useState(false);
+  const [isPersonalEditing, setIsPersonalEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('personalDetails');
   const [formValues, setFormValues] = useState({
     firstName: '',
@@ -29,9 +31,11 @@ function ProfileDetails() {
     emergencyContact: ''
   });
   const user = useSelector((state) => state.auth.user);
+  const employeeDetails = useSelector((state) => state.employeeDetails.employee);
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
+  const profileSource = employeeDetails || user;
 
   // Fetch fresh employee data on mount and when user changes to ensure we have the latest Employee ID
   useEffect(() => {
@@ -63,22 +67,34 @@ function ProfileDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, user?.id]); // Run when user.id changes (user logs in or data updates)
 
-  useEffect(() => {
-    if (!user) return;
-    const fullName = String(user?.name || '').trim();
+  const buildPersonalFormValues = (source) => {
+    if (!source) {
+      return {
+        firstName: '',
+        lastName: '',
+        dateOfBirth: '',
+        gender: '',
+        professionalBio: '',
+        contact: '',
+        bankDetails: '',
+        emergencyContact: ''
+      };
+    }
+
+    const fullName = String(source?.name || '').trim();
     const parts = fullName.split(/\s+/).filter(Boolean);
-    const firstName = user?.firstName || parts[0] || '';
-    const lastName = user?.lastName || parts.slice(1).join(' ') || '';
-    const dateOfBirth = user?.birthDate ? new Date(user.birthDate).toISOString().slice(0, 10) : '';
-    const gender = user?.gender || '';
-    const professionalBio = user?.bio || user?.professionalBio || '';
-    const contact = user?.phone || user?.mobile || '';
-    const bankDetails = user?.bankName || user?.accountNumber ? `${user?.bankName || ''} ${user?.accountNumber || ''}`.trim() : '';
-    const emergencyContact = user?.emergencyContactName || user?.emergencyContactPhone
-      ? `${user?.emergencyContactName || ''} ${user?.emergencyContactPhone || ''}`.trim()
+    const firstName = source?.firstName || parts[0] || '';
+    const lastName = source?.lastName || parts.slice(1).join(' ') || '';
+    const dateOfBirth = source?.birthDate ? new Date(source.birthDate).toISOString().slice(0, 10) : '';
+    const gender = source?.gender || '';
+    const professionalBio = source?.professionalBio || source?.bio || '';
+    const contact = source?.phone || source?.mobile || '';
+    const bankDetails = source?.bankName || source?.accountNumber ? `${source?.bankName || ''} ${source?.accountNumber || ''}`.trim() : '';
+    const emergencyContact = source?.emergencyContactName || source?.emergencyContactPhone
+      ? `${source?.emergencyContactName || ''} ${source?.emergencyContactPhone || ''}`.trim()
       : '';
 
-    setFormValues({
+    return {
       firstName,
       lastName,
       dateOfBirth,
@@ -87,8 +103,13 @@ function ProfileDetails() {
       contact,
       bankDetails,
       emergencyContact
-    });
-  }, [user]);
+    };
+  };
+
+  useEffect(() => {
+    if (!profileSource) return;
+    setFormValues(buildPersonalFormValues(profileSource));
+  }, [profileSource]);
 
   const filledFields = [
     formValues.firstName,
@@ -99,9 +120,35 @@ function ProfileDetails() {
   ].filter(Boolean).length;
   const completionPercent = Math.max(20, Math.min(100, Math.round((filledFields / 5) * 100)));
   const stepsLeft = Math.max(0, 5 - filledFields);
+  const joinDateValue = employeeDetails?.joiningDate || user?.joiningDate;
 
   const handleChange = (field, value) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const resetPersonalDetailsForm = () => {
+    if (!profileSource) return;
+    setFormValues(buildPersonalFormValues(profileSource));
+  };
+
+  const handlePersonalDetailsSave = async () => {
+    setIsSavingPersonalDetails(true);
+    try {
+      const payload = {
+        ...(formValues.dateOfBirth ? { birthDate: formValues.dateOfBirth } : {}),
+        ...(formValues.gender ? { gender: formValues.gender } : {}),
+        professionalBio: formValues.professionalBio || ''
+      };
+
+      await dispatch(updateEmployeeInfo(payload)).unwrap();
+      await dispatch(fetchEmployeeOwnInfo()).unwrap();
+      toast.success('Personal details updated successfully.');
+      setIsPersonalEditing(false);
+    } catch (error) {
+      toast.error(typeof error === 'string' ? error : (error?.message || 'Failed to update personal details.'));
+    } finally {
+      setIsSavingPersonalDetails(false);
+    }
   };
 
   const tabs = [
@@ -147,6 +194,9 @@ function ProfileDetails() {
   const handleTabClick = (tabId) => {
     const targetPath = tabPathMap[tabId] || '/profile-details';
     setActiveTab(tabId);
+    if (tabId !== 'personalDetails') {
+      setIsPersonalEditing(false);
+    }
     if (location.pathname !== targetPath) {
       navigate(targetPath);
     }
@@ -196,7 +246,7 @@ function ProfileDetails() {
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Join Date</span>
                     <span className="font-semibold text-slate-800">
-                      {user?.joiningDate ? new Date(user.joiningDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                      {joinDateValue ? new Date(joinDateValue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                     </span>
                   </div>
                   {isFetchingFreshData && (
@@ -205,19 +255,6 @@ function ProfileDetails() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Quick Shortcuts</p>
-                <div className="space-y-2">
-                  <button type="button" className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    <span className="inline-flex items-center gap-2"><FiShield className="text-[#0a8f6c]" /> Security Settings</span>
-                    <FiChevronRight />
-                  </button>
-                  <button type="button" className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    <span className="inline-flex items-center gap-2"><FiClock className="text-[#0a8f6c]" /> Login History</span>
-                    <FiChevronRight />
-                  </button>
-                </div>
-              </div>
             </aside>
 
             <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
@@ -243,55 +280,91 @@ function ProfileDetails() {
               <div className="space-y-5 p-5">
                 {activeTab === 'personalDetails' && (
                   <>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <label className="space-y-1">
-                        <span className="text-sm font-medium text-slate-600">First Name</span>
-                        <input
-                          value={formValues.firstName}
-                          onChange={(e) => handleChange('firstName', e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                        />
-                      </label>
-                      <label className="space-y-1">
-                        <span className="text-sm font-medium text-slate-600">Last Name</span>
-                        <input
-                          value={formValues.lastName}
-                          onChange={(e) => handleChange('lastName', e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                        />
-                      </label>
-                      <label className="space-y-1">
-                        <span className="text-sm font-medium text-slate-600">Date of Birth</span>
-                        <input
-                          type="date"
-                          value={formValues.dateOfBirth}
-                          onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                        />
-                      </label>
-                      <label className="space-y-1">
-                        <span className="text-sm font-medium text-slate-600">Gender</span>
-                        <select
-                          value={formValues.gender}
-                          onChange={(e) => handleChange('gender', e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                        >
-                          <option value="">Select</option>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </label>
-                    </div>
-                    <label className="space-y-1 block">
-                      <span className="text-sm font-medium text-slate-600">Professional Bio</span>
-                      <textarea
-                        rows={4}
-                        value={formValues.professionalBio}
-                        onChange={(e) => handleChange('professionalBio', e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                      />
-                    </label>
+                    {isPersonalEditing ? (
+                      <>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <label className="space-y-1">
+                            <span className="text-sm font-medium text-slate-600">First Name</span>
+                            <input
+                              value={formValues.firstName}
+                              onChange={(e) => handleChange('firstName', e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                            />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-sm font-medium text-slate-600">Last Name</span>
+                            <input
+                              value={formValues.lastName}
+                              onChange={(e) => handleChange('lastName', e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                            />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-sm font-medium text-slate-600">Date of Birth</span>
+                            <input
+                              type="date"
+                              value={formValues.dateOfBirth}
+                              onChange={(e) => handleChange('dateOfBirth', e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                            />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-sm font-medium text-slate-600">Gender</span>
+                            <select
+                              value={formValues.gender}
+                              onChange={(e) => handleChange('gender', e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                            >
+                              <option value="">Select</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </label>
+                        </div>
+                        <label className="space-y-1 block">
+                          <span className="text-sm font-medium text-slate-600">Professional Bio</span>
+                          <textarea
+                            rows={4}
+                            value={formValues.professionalBio}
+                            onChange={(e) => handleChange('professionalBio', e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                          />
+                        </label>
+                      </>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold text-slate-800">Personal Details</h3>
+                          <button
+                            type="button"
+                            onClick={() => setIsPersonalEditing(true)}
+                            className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          {[
+                            { label: 'First Name', value: formValues.firstName || 'N/A' },
+                            { label: 'Last Name', value: formValues.lastName || 'N/A' },
+                            { label: 'Date of Birth', value: formValues.dateOfBirth || 'N/A' },
+                            { label: 'Gender', value: formValues.gender || 'N/A' }
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                              <p className="mt-1 text-sm font-medium text-slate-800">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Professional Bio</p>
+                          <p className="mt-1 text-sm text-slate-800">{formValues.professionalBio || 'N/A'}</p>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -323,38 +396,32 @@ function ProfileDetails() {
                   <FinancialDetails />
                 )}
 
-                <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-                  <button
-                    type="button"
-                    className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-xl bg-[#20C997] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0a8f6c]"
-                  >
-                    Save Changes
-                  </button>
-                </div>
+                {activeTab === 'personalDetails' && isPersonalEditing && (
+                  <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetPersonalDetailsForm();
+                        setIsPersonalEditing(false);
+                      }}
+                      disabled={isSavingPersonalDetails}
+                      className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePersonalDetailsSave}
+                      disabled={isSavingPersonalDetails}
+                      className="rounded-xl bg-[#20C997] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0a8f6c] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingPersonalDetails ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-
-            <div className="rounded-2xl border border-slate-100 bg-[#F0F8F5] p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#20C997]/15 text-[#0a8f6c]">
-                  <FiInfo />
-                </span>
-                <div>
-                  <p className="font-semibold text-slate-800">Official Records Notice</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Changes to legal names or bank details may require HR verification.
-                    Updates typically reflect within 24-48 business hours.
-                  </p>
-                </div>
-              </div>
-            </div>
         </section>
       </div>
 

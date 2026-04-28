@@ -725,20 +725,6 @@ function DashboardEmployee() {
                         </div>
 
                         <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
-                            <h3 className="text-sm font-semibold text-slate-900">Recent activity</h3>
-                            <ul className="mt-4 space-y-4 border-l-2 border-slate-100 pl-4">
-                                <li className="relative text-sm text-slate-600">
-                                    <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-[#20C997]" />
-                                    Dashboard refreshed with your latest attendance.
-                                </li>
-                                <li className="relative text-sm text-slate-600">
-                                    <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-[#006D4E]" />
-                                    Check payroll for payslips and tax summaries.
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
                             <div className="mt-3 flex flex-col gap-2 text-sm">
                                 <button

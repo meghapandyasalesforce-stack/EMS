@@ -507,14 +507,19 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, 1.5);
         const overtimePay = overtimeEnabled ? Math.round(cappedOvertimeHours * overtimeRatePerHour) : 0;
 
+        const basicWage = computeConfiguredComponent(salaryStructure?.earnings?.basicWage, effectiveGross);
+        const houseRentAllowance = computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, effectiveGross);
+        // SPA is always the residual balance, independent of configured SPA %/fixed values.
+        const specialAllowance = Math.max(0, Math.round(effectiveGross - basicWage - houseRentAllowance));
+
         earnings = {
-            basicWage: computeConfiguredComponent(salaryStructure?.earnings?.basicWage, effectiveGross),
-            houseRentAllowance: computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, effectiveGross),
+            basicWage,
+            houseRentAllowance,
             transportAllowance: computeConfiguredComponent(salaryStructure?.earnings?.transportAllowance, effectiveGross),
             medicalAllowance: computeConfiguredComponent(salaryStructure?.earnings?.medicalAllowance, effectiveGross),
             overtime: overtimePay,
             gratuity: 0,
-            specialAllowance: computeConfiguredComponent(salaryStructure?.earnings?.specialAllowance, effectiveGross),
+            specialAllowance,
             performanceBonus: bonusFromRule(salaryStructure?.bonusStructure?.performanceBonus, effectiveGross),
             projectBonus: bonusFromRule(salaryStructure?.bonusStructure?.projectBonus, effectiveGross),
             attendanceBonus: bonusFromRule(salaryStructure?.bonusStructure?.attendanceBonus, effectiveGross),

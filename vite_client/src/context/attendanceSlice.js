@@ -171,8 +171,10 @@ export const fetchLogs = createAsyncThunk(
   'attendance/fetchLogs',
   async (params, { rejectWithValue }) => {
     try {
+      const { cacheKey, ...apiParams } = params || {};
+      void cacheKey;
       const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/get-logs`, {
-        params
+        params: apiParams
       });
       return res.data;
     } catch (err) {
@@ -320,7 +322,8 @@ const attendanceSlice = createSlice({
     breakSession: null,
     employeeList: [],
     employeeAttendanceDetails: null,
-    employeeStats: null
+    employeeStats: null,
+    monthCache: {}
   },
   reducers: {
     resetAttendance: (state) => {
@@ -336,6 +339,7 @@ const attendanceSlice = createSlice({
       state.employeeList = [];
       state.employeeDetails = null;
       state.employeeStats = null;
+      state.monthCache = {};
     },
     clearError: (state) => {
       state.error = null;
@@ -343,6 +347,16 @@ const attendanceSlice = createSlice({
     clearEmployeeDetails: (state) => {
       state.employeeDetails = null;
       state.employeeStats = null;
+    },
+    hydrateLogsFromMonthCache: (state, action) => {
+      const key = action.payload?.cacheKey;
+      if (!key) return;
+      const cached = state.monthCache?.[key];
+      if (!cached) return;
+      state.sessions = cached.sessions || [];
+      state.summary = cached.summary || {};
+      state.dailyStats = cached.dailyStats || {};
+      state.period = cached.period || null;
     }
   },
   extraReducers: (builder) => {
@@ -448,15 +462,28 @@ const attendanceSlice = createSlice({
         
         // Update sessions with fetched data
         const newSessions = action.payload.sessions || [];
-        
-        // Always update sessions if we got data from API
-        // Only keep existing sessions if API returns empty array AND we have existing sessions
-        if (newSessions.length > 0) {
-          // Removed console.log for production
-          state.sessions = newSessions;
-        } else if (state.sessions.length === 0) {
-          // Only clear if we have no existing sessions and no new data
-          // Removed console.log for production
+        // Always replace sessions with fetched range data, including empty months.
+        // This keeps month navigation accurate (no stale previous-month rows).
+        state.sessions = newSessions;
+
+        const cacheKey = action.meta?.arg?.cacheKey;
+        if (cacheKey) {
+          state.monthCache[cacheKey] = {
+            sessions: newSessions,
+            summary: state.summary || {},
+            dailyStats: state.dailyStats || {},
+            period: state.period || null,
+            fetchedAt: Date.now()
+          };
+          const keys = Object.keys(state.monthCache);
+          if (keys.length > 24) {
+            keys
+              .sort((a, b) => (state.monthCache[a]?.fetchedAt || 0) - (state.monthCache[b]?.fetchedAt || 0))
+              .slice(0, keys.length - 24)
+              .forEach((k) => {
+                delete state.monthCache[k];
+              });
+          }
         }
         
         // Find current session and break session from sessions state
@@ -527,5 +554,5 @@ const attendanceSlice = createSlice({
   }
 });
 
-export const { resetAttendance, clearEmployeeDetails, clearError } = attendanceSlice.actions;
+export const { resetAttendance, clearEmployeeDetails, clearError, hydrateLogsFromMonthCache } = attendanceSlice.actions;
 export default attendanceSlice.reducer;
