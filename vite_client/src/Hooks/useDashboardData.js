@@ -376,10 +376,11 @@ export const useFinancialSummary = (options = {}) => {
  */
 export const useExecutiveKPIs = (options = {}) => {
   return useQuery({
-    queryKey: ['executive', 'kpis', options.startDate, options.endDate],
+    queryKey: ['executive', 'kpis', options.period, options.startDate, options.endDate],
     queryFn: async () => {
       try {
         const params = {};
+        if (options.period) params.period = options.period;
         if (options.startDate) params.startDate = options.startDate;
         if (options.endDate) params.endDate = options.endDate;
 

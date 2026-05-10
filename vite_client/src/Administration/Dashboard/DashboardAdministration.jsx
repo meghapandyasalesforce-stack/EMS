@@ -30,13 +30,13 @@ import {
   useExpenses,
   useFinancialSummary,
   useLeaves,
-  usePayrolls,
   usePredictiveAnalytics,
   useProjectPortfolio,
   useProjects,
   useStrategicInsights
 } from "../../Hooks/useDashboardData";
 import LoadingSpinner from "../../components/LoadingSpinner";
+import AttendanceBox from "../../Employee/Attendance/AttendanceBox";
 import { handleApiError } from "../../utils/errorHandler";
 
 const DashboardAdministration = () => {
@@ -62,7 +62,6 @@ const DashboardAdministration = () => {
   const employeeTotal = employeeData?.total ?? employees.length;
 
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
-  const { data: payrolls = [], isLoading: payrollsLoading } = usePayrolls();
 
   const { data: attendanceData = {}, isLoading: attendanceLoading } = useAttendanceSummary({
     startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split("T")[0],
@@ -72,7 +71,7 @@ const DashboardAdministration = () => {
   const { data: expensesList = [] } = useExpenses();
 
   const { data: financialData = {}, isLoading: financialLoading } = useFinancialSummary({ period: selectedPeriod });
-  const { data: kpiData = {} } = useExecutiveKPIs();
+  const { data: kpiData = {}, isLoading: kpiLoading } = useExecutiveKPIs({ period: selectedPeriod });
   const { data: alertsData = { alerts: [], total: 0, critical: 0 } } = useCriticalAlerts();
   const { data: portfolioData = {}, isLoading: portfolioLoading } = useProjectPortfolio();
   const { data: departmentData = {}, isLoading: departmentLoading } = useDepartmentPerformance({ period: selectedPeriod });
@@ -89,13 +88,13 @@ const DashboardAdministration = () => {
     }
   }, [employeesError]);
 
-  const isLoading = employeesLoading || projectsLoading || payrollsLoading || attendanceLoading;
+  const isLoading =
+    employeesLoading || projectsLoading || attendanceLoading || financialLoading || kpiLoading;
 
   const totalEmployees = employeeTotal;
   const activeEmployees = employees.filter((emp) => emp.status === "active" || emp.active).length;
   const totalProjects = projects.length;
   const activeProjects = projects.filter((proj) => proj.status === "active" || proj.status === "in-progress").length;
-  const totalPayroll = payrolls.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
   const attendanceRate = Math.round(attendanceData?.attendanceRate || 0);
   const financialSummary = financialData?.summary || {};
   const kpis = kpiData || {};
@@ -181,9 +180,12 @@ const DashboardAdministration = () => {
       icon: <FiUsers className="h-4 w-4" />
     },
     {
-      label: "Rev Per Employee",
+      label: "Avg. in-hand / paid employee",
       value: formatCurrency(kpis.payroll?.avgPerEmployee || 0),
-      sub: `${activeEmployees} active employees`,
+      sub:
+        kpis.payroll?.employeesPaid > 0
+          ? `${kpis.payroll.employeesPaid} paid in ${selectedPeriod} · ${activeEmployees} active roster`
+          : `No payroll in ${selectedPeriod} window · ${activeEmployees} active`,
       icon: <FiDollarSign className="h-4 w-4" />
     },
     {
@@ -207,7 +209,7 @@ const DashboardAdministration = () => {
         },
     {
       label: "Payroll Cost",
-      value: formatCurrency(financialSummary.totalPayroll || totalPayroll),
+      value: formatCurrency(financialSummary.totalPayroll ?? 0),
       sub: `${selectedPeriod} window`,
       icon: <FiBarChart2 className="h-4 w-4" />
     }
@@ -248,7 +250,9 @@ const DashboardAdministration = () => {
       ["Active Employees", activeEmployees],
       ["Total Projects", totalProjects],
       ["Active Projects", activeProjects],
-      ["Total Payroll", totalPayroll],
+      ["Payroll total (selected period)", financialSummary.totalPayroll ?? 0],
+      ["Avg. in-hand / paid employee", kpis.payroll?.avgPerEmployee ?? 0],
+      ["Employees paid (period)", kpis.payroll?.employeesPaid ?? 0],
       ["Attendance Rate", `${attendanceRate}%`],
       ["Payroll Trend", predictiveData?.trends?.payroll?.direction || "stable"],
       ["Headcount Trend", predictiveData?.trends?.employees?.direction || "stable"]
@@ -364,6 +368,15 @@ const DashboardAdministration = () => {
             )}
           </div>
         </div>
+
+        {isCEO && (
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Punch in / punch out
+            </h3>
+            <AttendanceBox variant="dashboard" />
+          </div>
+        )}
 
         <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {kpiCards.map((card) => (

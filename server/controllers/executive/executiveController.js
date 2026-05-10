@@ -10,22 +10,12 @@ import logger from '../../helpers/logger.js';
 import mongoose from 'mongoose';
 
 /**
- * Get Executive Financial Summary
- * @route GET /api/v1/admin/executive/financial-summary
- * @access Private (Admin/Executive only)
+ * Date window for payroll / leave KPIs — matches {@link getFinancialSummary} semantics.
  */
-export const getFinancialSummary = asyncHandler(async (req, res) => {
-    const organizationId = getOrganizationId(req);
-    const { startDate, endDate, period = 'month' } = req.query;
-
-    if (!organizationId) {
-        return sendError(res, 'Organization ID is required', 400);
-    }
-
-    // Calculate date range
-    let dateFilter = {};
-    const now = new Date();
-    let start, end;
+const resolveExecutivePeriodRange = (query = {}) => {
+    const { startDate, endDate, period = 'month' } = query;
+    let start;
+    let end;
 
     if (startDate && endDate) {
         start = new Date(startDate);
@@ -33,19 +23,22 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
     } else {
         const currentDate = new Date();
         switch (period) {
-            case 'week':
-                start = new Date(currentDate.setDate(currentDate.getDate() - 7));
+            case 'week': {
+                start = new Date(currentDate.getTime());
+                start.setDate(start.getDate() - 7);
                 end = new Date();
                 break;
+            }
             case 'month':
                 start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
                 end = new Date();
                 break;
-            case 'quarter':
+            case 'quarter': {
                 const quarter = Math.floor(currentDate.getMonth() / 3);
                 start = new Date(currentDate.getFullYear(), quarter * 3, 1);
                 end = new Date();
                 break;
+            }
             case 'year':
                 start = new Date(currentDate.getFullYear(), 0, 1);
                 end = new Date();
@@ -56,7 +49,26 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
         }
     }
 
-    dateFilter.createdAt = { $gte: start, $lte: end };
+    return {
+        start,
+        end,
+        dateFilter: { createdAt: { $gte: start, $lte: end } }
+    };
+};
+
+/**
+ * Get Executive Financial Summary
+ * @route GET /api/v1/admin/executive/financial-summary
+ * @access Private (Admin/Executive only)
+ */
+export const getFinancialSummary = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+
+    if (!organizationId) {
+        return sendError(res, 'Organization ID is required', 400);
+    }
+
+    const { start, end, dateFilter } = resolveExecutivePeriodRange(req.query);
 
     try {
         // Total Payroll Costs
@@ -170,18 +182,12 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
  */
 export const getExecutiveKPIs = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const { startDate, endDate } = req.query;
 
     if (!organizationId) {
         return sendError(res, 'Organization ID is required', 400);
     }
 
-    const dateFilter = {};
-    if (startDate || endDate) {
-        dateFilter.createdAt = {};
-        if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
-        if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
-    }
+    const { start, end, dateFilter } = resolveExecutivePeriodRange(req.query);
 
     try {
         // Employee Metrics
@@ -233,8 +239,8 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
         const attendanceRate = activeEmployees > 0 && attendanceStats[0] ? 
             ((attendanceStats[0].presentDays / (activeEmployees * expectedWorkingDays)) * 100).toFixed(2) : 0;
 
-        // Payroll Metrics
-        const payrollTotal = await Payroll.aggregate([
+        // Payroll: same window as financial summary; avg = total ÷ distinct employees paid (HRMS-standard)
+        const payrollRollup = await Payroll.aggregate([
             {
                 $match: {
                     organizationId: new mongoose.Types.ObjectId(organizationId),
@@ -244,10 +250,15 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } }
+                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } },
+                    employeeIds: { $addToSet: '$employeeId' }
                 }
             }
         ]);
+        const payrollTotalAmount = payrollRollup[0]?.total || 0;
+        const employeesPaidCount = payrollRollup[0]?.employeeIds?.length || 0;
+        const avgPerPaidEmployee =
+            employeesPaidCount > 0 ? payrollTotalAmount / employeesPaidCount : 0;
 
         // Leave Metrics
         const leaveStats = await Leave.aggregate([
@@ -291,8 +302,11 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
                 uniqueEmployees: attendanceStats[0]?.uniqueEmployees?.length || 0
             },
             payroll: {
-                total: payrollTotal[0]?.total || 0,
-                avgPerEmployee: activeEmployees > 0 ? (payrollTotal[0]?.total / activeEmployees) : 0
+                total: payrollTotalAmount,
+                avgPerEmployee: avgPerPaidEmployee,
+                employeesPaid: employeesPaidCount,
+                activeEmployeesSnapshot: activeEmployees,
+                window: { start, end }
             },
             leaves: {
                 pending: leaveStats.find(l => l._id === 'pending')?.count || 0,
