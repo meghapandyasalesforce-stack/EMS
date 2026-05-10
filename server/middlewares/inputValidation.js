@@ -366,7 +366,7 @@ export const roleValidations = {
             .notEmpty().withMessage('Role level is required')
             .isInt({ min: 1, max: 10 }).withMessage('Role level must be between 1 and 10'),
         body('parentRole')
-            .optional()
+            .optional({ nullable: true, checkFalsy: true })
             .isMongoId().withMessage('Invalid parent role ID format'),
         body('permissions')
             .optional()
@@ -383,7 +383,7 @@ export const roleValidations = {
             .optional()
             .isInt({ min: 1, max: 10 }).withMessage('Role level must be between 1 and 10'),
         body('parentRole')
-            .optional()
+            .optional({ nullable: true, checkFalsy: true })
             .isMongoId().withMessage('Invalid parent role ID format'),
         body('permissions')
             .optional()

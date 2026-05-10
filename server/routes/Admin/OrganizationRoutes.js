@@ -10,7 +10,8 @@ import {
     getOrganizationUsers,
     getOrganizationActivity,
     getOrganizationBranding,
-    updateOrganizationBranding
+    updateOrganizationBranding,
+    getOrganizationAnalytics
 } from '../../controllers/organization/organizationController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
@@ -68,6 +69,7 @@ router.delete('/logo', isAdminAuthenticated, deleteOrganizationLogo);
 router.put('/settings', isAdminOrHROrExecutiveAuthenticated, organizationValidations.updateSettings, updateOrganizationSettings);
 router.put('/subscription', isAdminAuthenticated, organizationValidations.updateSubscription, updateSubscriptionPlan);
 router.get('/statistics', isAdminOrExecutiveAuthenticated, getOrganizationStatistics);
+router.get('/analytics', isAdminOrExecutiveAuthenticated, getOrganizationAnalytics);
 router.get('/users', isAdminAuthenticated, organizationValidations.getUsers, getOrganizationUsers);
 router.get('/activity', isAdminOrExecutiveAuthenticated, organizationValidations.getActivity, getOrganizationActivity);
 router.get('/branding', isAdminAuthenticated, getOrganizationBranding);

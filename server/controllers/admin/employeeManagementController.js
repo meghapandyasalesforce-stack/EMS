@@ -12,12 +12,12 @@ import { sendSuccess, sendError, sendNotFound, sendForbidden, sendValidationErro
 import { addOrganizationFilter, getOrganizationId } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
-import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
+import { buildManagerMatchQuery, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 
-/**
+/**    
  * @swagger
- * /api/v1/admin/employee:
+ * /api/v1/admin/employee:    
  *   get:
  *     summary: Get all employees (paginated)
  *     description: Retrieves a paginated list of employees. Admins and HR see all employees. Managers see only employees in their department.
@@ -209,6 +209,15 @@ export const updateEmployeeStatus = async (req, res) => {
             return sendNotFound(res, 'Employee');
         }
 
+        // Manager can update status only for employees linked to them.
+        const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManagerScope) {
+            const linked = isEmployeeLinkedToManager(employeeBefore, req.employee);
+            if (!linked) {
+                return sendForbidden(res, 'You can only update status for employees linked to you.');
+            }
+        }
+
         if (employeeBefore.status === 'terminated') {
             return sendValidationError(
                 res,
@@ -294,6 +303,15 @@ export const terminateEmployee = async (req, res) => {
         const employeeBefore = await Employee.findOne({ _id: employeeId, organizationId }).select('-password').lean();
         if (!employeeBefore) {
             return sendNotFound(res, 'Employee');
+        }
+
+        // Manager can terminate only employees linked to them.
+        const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+        if (isManagerScope) {
+            const linked = isEmployeeLinkedToManager(employeeBefore, req.employee);
+            if (!linked) {
+                return sendForbidden(res, 'You can only terminate employees linked to you.');
+            }
         }
 
         if (employeeBefore.status === 'terminated') {

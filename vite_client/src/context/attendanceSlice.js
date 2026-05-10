@@ -291,7 +291,8 @@ export const fetchEmployeeAttendanceDetails = createAsyncThunk(
       const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/employee/${employeeId}/attendance`, {
         params: {
           startDate: params?.startDate,
-          endDate: params?.endDate
+          endDate: params?.endDate,
+          ...(params?.full ? { full: 'true' } : {})
         }
       });
       return res.data;
@@ -299,6 +300,24 @@ export const fetchEmployeeAttendanceDetails = createAsyncThunk(
       // Removed console.error for production
       return rejectWithValue({
         message: err.response?.data?.message || "Failed to get employee details",
+        status: err.response?.status,
+        data: err.response?.data
+      });
+    }
+  }
+);
+
+export const fetchTeamAttendanceHistory = createAsyncThunk(
+  'attendance/fetchTeamHistory',
+  async (params, { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, {
+        params: params || {}
+      });
+      return res.data;
+    } catch (err) {
+      return rejectWithValue({
+        message: err.response?.data?.message || 'Failed to load team attendance history',
         status: err.response?.status,
         data: err.response?.data
       });
@@ -323,7 +342,18 @@ const attendanceSlice = createSlice({
     employeeList: [],
     employeeAttendanceDetails: null,
     employeeStats: null,
-    monthCache: {}
+    monthCache: {},
+    teamAttendanceHistory: {
+      loading: false,
+      error: null,
+      records: [],
+      total: 0,
+      page: 1,
+      limit: 25,
+      kpis: null,
+      dailyTrend: [],
+      memberBreakdown: []
+    }
   },
   reducers: {
     resetAttendance: (state) => {
@@ -340,6 +370,17 @@ const attendanceSlice = createSlice({
       state.employeeDetails = null;
       state.employeeStats = null;
       state.monthCache = {};
+      state.teamAttendanceHistory = {
+        loading: false,
+        error: null,
+        records: [],
+        total: 0,
+        page: 1,
+        limit: 25,
+        kpis: null,
+        dailyTrend: [],
+        memberBreakdown: []
+      };
     },
     clearError: (state) => {
       state.error = null;
@@ -550,7 +591,26 @@ const attendanceSlice = createSlice({
           recentRecords: action.payload?.recentRecords
         };
       })
-      .addCase(fetchEmployeeAttendanceDetails.rejected, rejected);
+      .addCase(fetchEmployeeAttendanceDetails.rejected, rejected)
+
+      .addCase(fetchTeamAttendanceHistory.pending, (state) => {
+        state.teamAttendanceHistory.loading = true;
+        state.teamAttendanceHistory.error = null;
+      })
+      .addCase(fetchTeamAttendanceHistory.fulfilled, (state, action) => {
+        state.teamAttendanceHistory.loading = false;
+        state.teamAttendanceHistory.records = action.payload?.records || [];
+        state.teamAttendanceHistory.total = action.payload?.total ?? 0;
+        state.teamAttendanceHistory.page = action.payload?.page ?? 1;
+        state.teamAttendanceHistory.limit = action.payload?.limit ?? 25;
+        state.teamAttendanceHistory.kpis = action.payload?.kpis || null;
+        state.teamAttendanceHistory.dailyTrend = action.payload?.dailyTrend || [];
+        state.teamAttendanceHistory.memberBreakdown = action.payload?.memberBreakdown || [];
+      })
+      .addCase(fetchTeamAttendanceHistory.rejected, (state, action) => {
+        state.teamAttendanceHistory.loading = false;
+        state.teamAttendanceHistory.error = action.payload || null;
+      });
   }
 });
 

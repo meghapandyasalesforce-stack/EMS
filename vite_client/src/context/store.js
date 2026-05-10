@@ -11,6 +11,33 @@ import {
   REGISTER,
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
+import createMigrate from 'redux-persist/lib/createMigrate';
+
+const TEAM_ATTENDANCE_HISTORY_DEFAULT = {
+  loading: false,
+  error: null,
+  records: [],
+  total: 0,
+  page: 1,
+  limit: 25,
+  kpis: null,
+  dailyTrend: [],
+  memberBreakdown: [],
+};
+
+const migrations = {
+  2: (state) =>
+    state
+      ? {
+          ...state,
+          attendance: {
+            ...(state.attendance || {}),
+            teamAttendanceHistory:
+              state.attendance?.teamAttendanceHistory ?? TEAM_ATTENDANCE_HISTORY_DEFAULT,
+          },
+        }
+      : state,
+};
 
 // Slices
 import authReducer from "./Auth/authSlice";
@@ -49,10 +76,11 @@ const rootReducer = combineReducers({
 // Persistence configuration
 const persistConfig = {
   key: 'root',
-  version: 1,
+  version: 2,
   storage,
+  migrate: createMigrate(migrations, { debug: false }),
   // Persist auth, employeeDetails, and attendance for session continuity
-  whitelist: ['auth', 'employeeDetails', 'attendance']
+  whitelist: ['auth', 'employeeDetails', 'attendance'],
 };
 
 // Create persisted reducer

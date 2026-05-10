@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FiCreditCard, FiPlus, FiDownload, FiEye, FiEdit, FiTrash2, FiUser, FiCalendar } from 'react-icons/fi';
+import { FiCreditCard, FiPlus, FiDownload, FiEye, FiTrash2, FiUser } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { getUploadUrl } from '../../utils/axios';
@@ -108,9 +108,8 @@ const IdCardGenerator = () => {
   };
 
   useEffect(() => {
-    fetchIdCards();
     fetchEmployees();
-  }, [fetchIdCards]);
+  }, []);
 
   const handleGenerateCard = async (e) => {
     e.preventDefault();
@@ -232,7 +231,7 @@ const IdCardGenerator = () => {
 
   useEffect(() => {
     fetchIdCards();
-  }, [filters, fetchIdCards]);
+  }, [fetchIdCards]);
 
   if (loading) {
     return (

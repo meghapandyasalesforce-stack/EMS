@@ -65,11 +65,11 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    totalPayroll: { $sum: '$totalAmount' },
-                    avgPayroll: { $avg: '$totalAmount' },
+                    totalPayroll: { $sum: { $ifNull: ['$inHandSalary', 0] } },
+                    avgPayroll: { $avg: '$inHandSalary' },
                     employeeCount: { $sum: 1 },
-                    minPayroll: { $min: '$totalAmount' },
-                    maxPayroll: { $max: '$totalAmount' }
+                    minPayroll: { $min: '$inHandSalary' },
+                    maxPayroll: { $max: '$inHandSalary' }
                 }
             }
         ]);
@@ -83,7 +83,7 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
                         year: { $year: '$createdAt' },
                         month: { $month: '$createdAt' }
                     },
-                    total: { $sum: '$totalAmount' },
+                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } },
                     count: { $sum: 1 }
                 }
             },
@@ -105,8 +105,8 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
             {
                 $group: {
                     _id: '$employee.department' || 'Unknown',
-                    total: { $sum: '$totalAmount' },
-                    avg: { $avg: '$totalAmount' },
+                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } },
+                    avg: { $avg: '$inHandSalary' },
                     count: { $sum: 1 }
                 }
             },
@@ -128,7 +128,7 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    totalPayroll: { $sum: '$totalAmount' }
+                    totalPayroll: { $sum: { $ifNull: ['$inHandSalary', 0] } }
                 }
             }
         ]);
@@ -201,8 +201,11 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
             }
         ]);
 
-        const activeProjects = projectStats.find(p => p._id === 'active' || p._id === 'in-progress')?.count || 0;
+        const activeProjects = projectStats
+            .filter(p => p._id === 'pending' || p._id === 'in-progress')
+            .reduce((sum, p) => sum + p.count, 0);
         const totalProjects = projectStats.reduce((sum, p) => sum + p.count, 0);
+        const completedProjects = projectStats.find(p => p._id === 'completed')?.count || 0;
 
         // Attendance Metrics (last 30 days)
         const thirtyDaysAgo = new Date();
@@ -221,7 +224,7 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
                     totalHours: { $sum: '$effectiveHours' },
                     avgHours: { $avg: '$effectiveHours' },
                     presentDays: { $sum: 1 },
-                    uniqueEmployees: { $addToSet: '$employeeId' }
+                    uniqueEmployees: { $addToSet: '$userId' }
                 }
             }
         ]);
@@ -241,7 +244,7 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    total: { $sum: '$totalAmount' }
+                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } }
                 }
             }
         ]);
@@ -258,10 +261,13 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
                 $group: {
                     _id: '$status',
                     count: { $sum: 1 },
-                    totalDays: { $sum: '$numberOfDays' }
+                    totalDays: { $sum: { $ifNull: ['$duration', 0] } }
                 }
             }
         ]);
+
+        const approvalStats = {};
+        const slaStats = {};
 
         return sendSuccess(res, {
             employees: {
@@ -273,7 +279,10 @@ export const getExecutiveKPIs = asyncHandler(async (req, res) => {
             projects: {
                 total: totalProjects,
                 active: activeProjects,
-                completionRate: totalProjects > 0 ? parseFloat((((totalProjects - activeProjects) / totalProjects) * 100).toFixed(2)) : 0
+                completionRate:
+                    totalProjects > 0
+                        ? parseFloat(((completedProjects / totalProjects) * 100).toFixed(2))
+                        : 0
             },
             attendance: {
                 rate: parseFloat(attendanceRate),
@@ -339,7 +348,7 @@ export const getCriticalAlerts = asyncHandler(async (req, res) => {
         // Overdue projects
         const overdueProjects = await Project.countDocuments({
             organizationId,
-            status: { $in: ['active', 'in-progress'] },
+            status: { $in: ['pending', 'in-progress'] },
             endDate: { $lt: new Date() }
         });
         if (overdueProjects > 0) {
@@ -476,7 +485,7 @@ export const getProjectPortfolio = asyncHandler(async (req, res) => {
 
         const atRiskProjects = await Project.find({
             organizationId,
-            status: { $in: ['active', 'in-progress'] },
+            status: { $in: ['pending', 'in-progress'] },
             $or: [
                 { endDate: { $lt: now } }, // Overdue
                 { endDate: { $gte: now, $lte: sevenDaysFromNow } } // Due within 7 days
@@ -495,7 +504,9 @@ export const getProjectPortfolio = asyncHandler(async (req, res) => {
         return sendSuccess(res, {
             overview: {
                 total: totalProjects,
-                active: statusDistribution.find(s => s._id === 'active' || s._id === 'in-progress')?.count || 0,
+                active: statusDistribution
+                    .filter(s => s._id === 'pending' || s._id === 'in-progress')
+                    .reduce((sum, s) => sum + s.count, 0),
                 completed: completedProjects,
                 healthScore: parseFloat(healthScore)
             },
@@ -560,7 +571,11 @@ export const getDepartmentPerformance = asyncHandler(async (req, res) => {
                 $group: {
                     _id: '$department',
                     total: { $sum: 1 },
-                    active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+                    active: {
+                        $sum: {
+                            $cond: [{ $in: ['$status', ['pending', 'in-progress']] }, 1, 0]
+                        }
+                    },
                     avgTenure: { $avg: { $ifNull: [{ $divide: [{ $subtract: [new Date(), '$joiningDate'] }, 86400000] }, 0] } }
                 }
             }
@@ -614,8 +629,8 @@ export const getDepartmentPerformance = asyncHandler(async (req, res) => {
             {
                 $group: {
                     _id: '$employee.department' || 'Unknown',
-                    totalPayroll: { $sum: '$totalAmount' },
-                    avgPayroll: { $avg: '$totalAmount' },
+                    totalPayroll: { $sum: { $ifNull: ['$inHandSalary', 0] } },
+                    avgPayroll: { $avg: '$inHandSalary' },
                     count: { $sum: 1 }
                 }
             }
@@ -632,7 +647,11 @@ export const getDepartmentPerformance = asyncHandler(async (req, res) => {
                 $group: {
                     _id: '$department',
                     total: { $sum: 1 },
-                    active: { $sum: { $cond: [{ $in: ['$status', ['active', 'in-progress']] }, 1, 0] } },
+                    active: {
+                        $sum: {
+                            $cond: [{ $in: ['$status', ['pending', 'in-progress']] }, 1, 0]
+                        }
+                    },
                     completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }
                 }
             }
@@ -800,8 +819,8 @@ export const getEmployeeTrends = asyncHandler(async (req, res) => {
                         year: { $year: '$createdAt' },
                         month: { $month: '$createdAt' }
                     },
-                    total: { $sum: '$totalAmount' },
-                    avg: { $avg: '$totalAmount' },
+                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } },
+                    avg: { $avg: '$inHandSalary' },
                     count: { $sum: 1 }
                 }
             },
@@ -897,7 +916,7 @@ export const getStrategicInsights = asyncHandler(async (req, res) => {
                         createdAt: { $gte: currentMonth }
                     }
                 },
-                { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+                { $group: { _id: null, total: { $sum: { $ifNull: ['$inHandSalary', 0] } } } }
             ]),
             Payroll.aggregate([
                 {
@@ -906,7 +925,7 @@ export const getStrategicInsights = asyncHandler(async (req, res) => {
                         createdAt: { $gte: lastMonth, $lt: currentMonth }
                     }
                 },
-                { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+                { $group: { _id: null, total: { $sum: { $ifNull: ['$inHandSalary', 0] } } } }
             ])
         ]);
 
@@ -928,7 +947,7 @@ export const getStrategicInsights = asyncHandler(async (req, res) => {
         // Project Insights
         const overdueProjects = await Project.countDocuments({
             organizationId,
-            status: { $in: ['active', 'in-progress'] },
+            status: { $in: ['pending', 'in-progress'] },
             endDate: { $lt: new Date() }
         });
 
@@ -1022,7 +1041,7 @@ export const getPredictiveAnalytics = asyncHandler(async (req, res) => {
                         year: { $year: '$createdAt' },
                         month: { $month: '$createdAt' }
                     },
-                    total: { $sum: '$totalAmount' },
+                    total: { $sum: { $ifNull: ['$inHandSalary', 0] } },
                     count: { $sum: 1 }
                 }
             },

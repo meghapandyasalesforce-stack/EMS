@@ -1,21 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { 
-    FaUsers, FaTasks, FaChartLine, FaCheckCircle,
-    FaProjectDiagram, FaUserCheck, FaExclamationTriangle,
-    FaMoneyBill, FaGraduationCap, FaCalendarCheck,
-    FaCalendarAlt, FaMoneyBillWave, FaBirthdayCake,
-    FaBell, FaClock, FaEdit, FaEye, FaPlus, FaDownload
+    FaUsers, FaTasks, FaCheckCircle,
+    FaCalendarAlt,
+    FaBell, FaPlus, FaSearch, FaVideo
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import StatCard from '../../components/StatCard';
-import Todo from '../../Employee/Dashboard/Todo';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
-import NotificationFeed from '../../Employee/Dashboard/NotificationFeed';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
-import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
+import { updateLeave } from '../../context/leaveSlice';
 import { format } from 'date-fns';
 import axios from '../../utils/axios';
 import { 
@@ -32,9 +29,85 @@ import {
     EMPLOYEE_LEAVE_ENDPOINT 
 } from '../../utils/constant';
 
+/** Backend may return rate as 0–1 fraction or 0–100 percent */
+const normalizeAttendancePercent = (rate) => {
+    if (rate == null || typeof rate !== 'number' || Number.isNaN(rate)) return 0;
+    let pct = rate >= 0 && rate <= 1 ? rate * 100 : rate;
+    pct = Math.round(pct);
+    return Math.min(100, Math.max(0, pct));
+};
+
+const isTeamLeave = (leave, teamIds) =>
+    teamIds.includes(String(leave.employee?._id || '')) ||
+    teamIds.includes(String(leave.employee || '')) ||
+    teamIds.includes(String(leave.employeeId?._id || '')) ||
+    teamIds.includes(String(leave.employeeId || ''));
+
+/** Match admin leave list: pending-only for approvals */
+const isLeavePendingStatus = (leave) => String(leave?.status || '').toLowerCase() === 'pending';
+
+const getLeaveDurationDays = (leave) => {
+    const d = Number(leave?.duration);
+    if (Number.isFinite(d) && d > 0) return d;
+    if (leave?.startDate && leave?.endDate) {
+        const start = new Date(leave.startDate).getTime();
+        const end = new Date(leave.endDate).getTime();
+        if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+            return Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
+        }
+    }
+    return 1;
+};
+
+const getManagerFieldText = (managerField) => {
+    if (!managerField) return '';
+    if (typeof managerField === 'string') return managerField;
+    if (typeof managerField === 'object') {
+        const combined = `${managerField.name || ''} ${managerField.lastName || ''}`.trim();
+        return combined || String(managerField.username || managerField.email || '');
+    }
+    return String(managerField);
+};
+
+const getMeetingScheduledAt = (meeting) => {
+    if (!meeting) return null;
+
+    const baseDate = meeting.scheduledDate ? new Date(meeting.scheduledDate) : null;
+    if (!baseDate || Number.isNaN(baseDate.getTime())) return null;
+
+    const timeValue = String(meeting.scheduledTime || '').trim();
+    if (!timeValue) return baseDate;
+
+    // Supports "HH:mm", "HH:mm:ss", "hh:mm AM/PM"
+    const ampmMatch = timeValue.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
+    if (ampmMatch) {
+        let hour = Number(ampmMatch[1]);
+        const minute = Number(ampmMatch[2]);
+        const second = Number(ampmMatch[3] || 0);
+        const suffix = ampmMatch[4].toUpperCase();
+        if (hour === 12) hour = 0;
+        if (suffix === 'PM') hour += 12;
+        baseDate.setHours(hour, minute, second, 0);
+        return baseDate;
+    }
+
+    const plainMatch = timeValue.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (plainMatch) {
+        const hour = Number(plainMatch[1]);
+        const minute = Number(plainMatch[2]);
+        const second = Number(plainMatch[3] || 0);
+        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59) {
+            baseDate.setHours(hour, minute, second, 0);
+        }
+    }
+
+    return baseDate;
+};
+
 const DashboardManager = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const queryClient = useQueryClient();
     const user = useSelector((state) => state.auth.user);
     
     const [error, setError] = useState('');
@@ -46,11 +119,23 @@ const DashboardManager = () => {
         thisMonth: '₹0',
         leaveBalance: '0 days',
         tasksCount: '0',
-        currentMonthSalary: '₹0',
         leaveDaysRemaining: '0',
         birthdays: null
     });
     const [statsLoading, setStatsLoading] = useState(true);
+    const [attentionLoading, setAttentionLoading] = useState(false);
+    const [attentionMembers, setAttentionMembers] = useState([]);
+    const [attendanceHealth, setAttendanceHealth] = useState({
+        onTimeScore: 0,
+        absenceRisk: 0,
+        avgCheckInTime: '--:--'
+    });
+    const [meetingsLoading, setMeetingsLoading] = useState(false);
+    const [meetings, setMeetings] = useState([]);
+    const [meetingsError, setMeetingsError] = useState('');
+    const attentionRequestRef = useRef(0);
+    const teamAttendanceRef = useRef(0);
+    const [rejectDraft, setRejectDraft] = useState({ id: null, reason: '' });
     
     // Use React Query hooks for parallel data fetching
     const {
@@ -80,36 +165,55 @@ const DashboardManager = () => {
     const managerFirstName = user?.name || '';
 
     // Filter team members by manager field (employees linked to this manager)
-    const teamMembers = managerName 
-      ? employees.filter(emp => {
-          const empManager = emp.manager || '';
-          return empManager === managerName || 
-                 empManager === managerFirstName ||
-                 empManager.toLowerCase().startsWith(managerFirstName.toLowerCase());
-        })
-      : employees;
+    const teamMembers = useMemo(
+        () => managerName
+            ? employees.filter(emp => {
+                const empManagerText = getManagerFieldText(emp.manager);
+                const empManagerNormalized = empManagerText.toLowerCase();
+                const managerNameNormalized = managerName.toLowerCase();
+                const managerFirstNormalized = managerFirstName.toLowerCase();
+                return empManagerText === managerName ||
+                    empManagerText === managerFirstName ||
+                    empManagerNormalized === managerNameNormalized ||
+                    empManagerNormalized.startsWith(managerFirstNormalized);
+            })
+            : employees,
+        [employees, managerName, managerFirstName]
+    );
     
     // Filter projects by manager or team members
-    const teamMemberIds = teamMembers.map(emp => emp._id || emp.id);
-    const managerProjects = userId
-      ? projects.filter(proj => 
-          proj.managerId === userId || 
-          proj.manager?._id === userId ||
-          proj.projectLeader?._id && teamMemberIds.includes(proj.projectLeader._id.toString()) ||
-          proj.projectMembers?.some(member => 
-            teamMemberIds.includes(member._id?.toString()) || 
-            teamMemberIds.includes(member.toString())
-          )
-        )
-      : projects;
+    const teamMemberIds = useMemo(
+        () => teamMembers
+            .map(emp => (emp._id || emp.id || '').toString())
+            .filter(Boolean),
+        [teamMembers]
+    );
+    const teamMemberIdsKey = useMemo(() => teamMemberIds.join(','), [teamMemberIds]);
+    const managerProjects = useMemo(
+        () => userId
+            ? projects.filter(proj =>
+                String(proj.managerId || '') === String(userId) ||
+                String(proj.manager?._id || '') === String(userId) ||
+                (proj.projectLeader?._id && teamMemberIds.includes(proj.projectLeader._id.toString())) ||
+                proj.projectMembers?.some(member =>
+                    teamMemberIds.includes(member._id?.toString()) ||
+                    teamMemberIds.includes(member.toString())
+                )
+            )
+            : projects,
+        [projects, teamMemberIds, userId]
+    );
     
     // Filter tasks by team members (employees linked to manager)
-    const teamTasks = tasks.filter(task => 
-        teamMemberIds.includes(task.employee?._id?.toString()) ||
-        teamMemberIds.includes(task.employee?.toString()) ||
-        teamMemberIds.includes(task.assignedTo?._id?.toString()) ||
-        teamMemberIds.includes(task.assignedTo?.toString()) ||
-        teamMemberIds.includes(task.employeeId?.toString())
+    const teamTasks = useMemo(
+        () => tasks.filter(task =>
+            teamMemberIds.includes(task.employee?._id?.toString()) ||
+            teamMemberIds.includes(task.employee?.toString()) ||
+            teamMemberIds.includes(task.assignedTo?._id?.toString()) ||
+            teamMemberIds.includes(task.assignedTo?.toString()) ||
+            teamMemberIds.includes(task.employeeId?.toString())
+        ),
+        [tasks, teamMemberIds]
     );
 
     // Get attendance summary for team
@@ -117,7 +221,7 @@ const DashboardManager = () => {
       data: attendanceData = {}, 
       isLoading: attendanceLoading 
     } = useAttendanceSummary({
-      employeeIds: teamMemberIds.join(','),
+      employeeIds: teamMemberIdsKey,
       startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
       endDate: new Date().toISOString().split('T')[0]
     });
@@ -126,19 +230,157 @@ const DashboardManager = () => {
 
     // Calculate statistics
     const teamSize = teamMembers.length;
-    const activeProjects = managerProjects.filter(proj => proj.status === 'active').length;
-    const pendingTasks = teamTasks.filter(task => 
+    const pendingTasks = teamTasks.filter(task =>
         task.status === 'Not Started' || task.status === 'In Progress' || task.status === 'pending'
     ).length;
-    const completedTasks = teamTasks.filter(task => task.status === 'Completed' || task.status === 'completed').length;
-    const teamAttendance = Math.round(attendanceData?.attendanceRate || 0);
+    const teamAttendance = normalizeAttendancePercent(attendanceData?.attendanceRate);
     
-    // Filter leaves by team members
-    const teamPendingLeaves = leaves.filter(leave => 
-        teamMemberIds.includes(leave.employeeId?._id) ||
-        teamMemberIds.includes(leave.employeeId)
+    const teamLeaves = useMemo(
+        () => leaves.filter((leave) => isTeamLeave(leave, teamMemberIds)),
+        [leaves, teamMemberIds]
+    );
+    const teamPendingLeaves = useMemo(
+        () => teamLeaves.filter(isLeavePendingStatus),
+        [teamLeaves]
     );
     const pendingApprovals = teamPendingLeaves.length;
+
+    const leaveUpdating = useSelector((state) => state.leave.loading);
+
+    useEffect(() => {
+        teamAttendanceRef.current = teamAttendance;
+    }, [teamAttendance]);
+
+    useEffect(() => {
+        let stale = false;
+        const fetchTeamAttentionMetrics = async () => {
+            if (!teamMemberIds.length) {
+                setAttentionMembers([]);
+                setAttendanceHealth({
+                    onTimeScore: 0,
+                    absenceRisk: 0,
+                    avgCheckInTime: '--:--'
+                });
+                setAttentionLoading(false);
+                return;
+            }
+
+            const requestId = attentionRequestRef.current + 1;
+            attentionRequestRef.current = requestId;
+            setAttentionLoading(true);
+            try {
+                const startDate = format(new Date(new Date().setDate(new Date().getDate() - 30)), 'yyyy-MM-dd');
+                const endDate = format(new Date(), 'yyyy-MM-dd');
+                const responses = await Promise.allSettled(
+                    teamMembers.map((member) =>
+                        axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/employee/${member._id || member.id}/attendance`, {
+                            params: { startDate, endDate },
+                            withCredentials: true
+                        })
+                    )
+                );
+
+                let totalAttendancePct = 0;
+                let totalCheckInMinutes = 0;
+                let checkInCount = 0;
+                let successfulMembersCount = 0;
+
+                const memberScores = responses
+                    .map((response, index) => {
+                        if (response.status !== 'fulfilled') return null;
+                        successfulMembersCount += 1;
+                        const member = teamMembers[index];
+                        const payload = response.value?.data || {};
+                        const stats = payload.statistics || {};
+                        const records = payload.recentRecords || [];
+                        const period = payload.period || {};
+
+                        const workingDays = Number(period.workingDays || 0);
+                        const presentDays = Number(stats.presentDays || 0);
+                        const absentDays = Number(stats.absentDays || 0);
+                        const halfDays = Number(stats.halfDays || 0);
+                        const lateCount = Number(stats.lateDays || stats.lateCount || 0);
+                        const missedPunchCount = records.filter((record) => record?.clockIn && !record?.clockOut).length;
+
+                        const attendancePct =
+                            typeof stats.attendanceRate === 'number'
+                                ? normalizeAttendancePercent(stats.attendanceRate)
+                                : workingDays > 0
+                                  ? Math.max(0, Math.min(100, Math.round(((presentDays + halfDays * 0.5) / workingDays) * 100)))
+                                  : 0;
+
+                        let dominantIssue = 'Low attendance trend';
+                        if (missedPunchCount >= lateCount && missedPunchCount >= absentDays && missedPunchCount > 0) {
+                            dominantIssue = 'Punch compliance issues';
+                        } else if (lateCount >= absentDays && lateCount > 0) {
+                            dominantIssue = 'Frequent late check-ins';
+                        } else if (absentDays === 0 && lateCount === 0 && missedPunchCount === 0) {
+                            dominantIssue = 'Healthy attendance pattern';
+                        }
+
+                        const riskPenalty = (lateCount * 3) + (missedPunchCount * 8) + (absentDays * 4);
+                        const score = Math.max(0, Math.min(100, Math.round(attendancePct - riskPenalty)));
+
+                        totalAttendancePct += attendancePct;
+                        records.forEach((record) => {
+                            if (!record?.clockIn) return;
+                            const d = new Date(record.clockIn);
+                            if (Number.isNaN(d.getTime())) return;
+                            totalCheckInMinutes += d.getHours() * 60 + d.getMinutes();
+                            checkInCount += 1;
+                        });
+
+                        return {
+                            name: `${member?.name || member?.firstName || 'Team Member'} ${member?.lastName || ''}`.trim(),
+                            issue: dominantIssue,
+                            score
+                        };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => a.score - b.score)
+                    .slice(0, 5);
+
+                const avgAttendancePct = successfulMembersCount ? Math.round(totalAttendancePct / successfulMembersCount) : 0;
+                const avgMinutes = checkInCount ? Math.round(totalCheckInMinutes / checkInCount) : null;
+                const avgCheckInTime = (() => {
+                    if (avgMinutes == null) return '--:--';
+                    const hour24 = Math.floor(avgMinutes / 60);
+                    const minute = avgMinutes % 60;
+                    const hour12 = ((hour24 + 11) % 12) + 1;
+                    const suffix = hour24 >= 12 ? 'PM' : 'AM';
+                    return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${suffix}`;
+                })();
+
+                if (!stale && requestId === attentionRequestRef.current) {
+                    setAttentionMembers(memberScores);
+                    setAttendanceHealth({
+                        onTimeScore: avgAttendancePct,
+                        absenceRisk: Math.max(0, 100 - avgAttendancePct),
+                        avgCheckInTime
+                    });
+                }
+            } catch (e) {
+                if (!stale && requestId === attentionRequestRef.current) {
+                    const fallback = teamAttendanceRef.current;
+                    setAttentionMembers([]);
+                    setAttendanceHealth({
+                        onTimeScore: Math.max(0, Math.min(100, fallback)),
+                        absenceRisk: Math.max(0, 100 - fallback),
+                        avgCheckInTime: '--:--'
+                    });
+                }
+            } finally {
+                if (!stale && requestId === attentionRequestRef.current) {
+                    setAttentionLoading(false);
+                }
+            }
+        };
+
+        fetchTeamAttentionMetrics();
+        return () => {
+            stale = true;
+        };
+    }, [teamMemberIdsKey]);
 
     // Fetch employee own info
     useEffect(() => {
@@ -195,19 +437,6 @@ const DashboardManager = () => {
                     withCredentials: true
                 });
 
-                // Fetch current month payroll
-                let payrollAmount = 0;
-                try {
-                    const payrollRes = await axios.get('/v1/employee/payroll/current', {
-                        withCredentials: true
-                    });
-                    if (payrollRes.data?.inHandSalary) {
-                        payrollAmount = payrollRes.data.inHandSalary;
-                    }
-                } catch (err) {
-                    // Silently handle error
-                }
-
                 // Fetch leave balance from Leave data
                 let leaveBalance = 0;
                 try {
@@ -263,10 +492,9 @@ const DashboardManager = () => {
                 // Update state
                 setDashboardStats({
                     todayHours,
-                    thisMonth: `₹${payrollAmount.toLocaleString('en-IN')}`,
+                    thisMonth: '₹0',
                     leaveBalance: `${leaveBalance} days`,
                     tasksCount: tasksCount.toString(),
-                    currentMonthSalary: `₹${payrollAmount.toLocaleString('en-IN')}`,
                     leaveDaysRemaining: leaveBalance.toString(),
                     birthdays: birthdays
                 });
@@ -286,6 +514,38 @@ const DashboardManager = () => {
         }
     }, [user]);
 
+    useEffect(() => {
+        let stale = false;
+        const fetchMeetings = async () => {
+            if (!user) return;
+            try {
+                setMeetingsLoading(true);
+                setMeetingsError('');
+                const response = await axios.get('/v1/both/one-on-one/one-on-ones', {
+                    withCredentials: true
+                });
+                if (stale) return;
+                const rows = response.data?.data;
+                setMeetings(Array.isArray(rows) ? rows : []);
+            } catch (err) {
+                if (!stale) {
+                    setMeetings([]);
+                    setMeetingsError(err?.response?.data?.message || 'Failed to load meetings');
+                    toast.error(err?.response?.data?.message || 'Unable to fetch upcoming meetings');
+                }
+            } finally {
+                if (!stale) {
+                    setMeetingsLoading(false);
+                }
+            }
+        };
+
+        fetchMeetings();
+        return () => {
+            stale = true;
+        };
+    }, [user?._id, user?.id]);
+
     // Handle errors
     React.useEffect(() => {
         if (employeesError) {
@@ -296,7 +556,56 @@ const DashboardManager = () => {
         }
     }, [employeesError]);
 
-    const handleEditProfile = () => navigate('/profile-details');
+    const handleApproveLeave = async (leaveId) => {
+        if (!leaveId) return;
+        try {
+            await dispatch(updateLeave({ id: leaveId, updatedData: { status: 'approved' } })).unwrap();
+            toast.success('Leave approved successfully.');
+            queryClient.invalidateQueries({ queryKey: ['leaves'] });
+            setRejectDraft({ id: null, reason: '' });
+        } catch (err) {
+            const msg = typeof err === 'string' ? err : err?.message || err?.error || 'Failed to approve leave';
+            toast.error(msg);
+        }
+    };
+
+    const handleRejectLeaveConfirm = async (leaveId) => {
+        const reason = rejectDraft.reason?.trim();
+        if (!leaveId) return;
+        if (!reason) {
+            toast.warning('Please enter a rejection reason.');
+            return;
+        }
+        try {
+            await dispatch(
+                updateLeave({
+                    id: leaveId,
+                    updatedData: { status: 'rejected', rejectionReason: reason },
+                })
+            ).unwrap();
+            toast.success('Leave rejected.');
+            queryClient.invalidateQueries({ queryKey: ['leaves'] });
+            setRejectDraft({ id: null, reason: '' });
+        } catch (err) {
+            const msg = typeof err === 'string' ? err : err?.message || err?.error || 'Failed to reject leave';
+            toast.error(msg);
+        }
+    };
+    const upcomingMeetings = useMemo(() => {
+        const now = new Date();
+        return (meetings || [])
+            .map((meeting) => {
+                const scheduledAt = getMeetingScheduledAt(meeting);
+                return !scheduledAt || Number.isNaN(scheduledAt.getTime()) ? null : { ...meeting, scheduledAt };
+            })
+            .filter(Boolean)
+            .filter((meeting) => {
+                const status = String(meeting.status || '').toLowerCase();
+                return meeting.scheduledAt >= now && status !== 'cancelled' && status !== 'completed';
+            })
+            .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())
+            .slice(0, 2);
+    }, [meetings]);
     
     if (user?.mustResetPassword) {
         return (
@@ -342,418 +651,352 @@ const DashboardManager = () => {
         );
     }
     
+    const leaveBreakdown = teamPendingLeaves.reduce(
+        (acc, leave) => {
+            const leaveType = (leave?.leaveType || '').toLowerCase();
+            const days = getLeaveDurationDays(leave);
+            if (leaveType.includes('annual')) acc.annual += days;
+            else if (leaveType.includes('sick')) acc.sick += days;
+            else acc.casual += days;
+            return acc;
+        },
+        { annual: 0, sick: 0, casual: 0 }
+    );
+    const totalLeaveDays = Math.round(leaveBreakdown.annual + leaveBreakdown.sick + leaveBreakdown.casual + Number.EPSILON);
+    const lateTasks = teamTasks.filter((task) => {
+        if (!task?.dueDate) return false;
+        const dueDate = new Date(task.dueDate);
+        return dueDate < new Date() && task.status !== 'Completed' && task.status !== 'completed';
+    }).length;
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
+        <div className="min-h-screen bg-[#f6f8fb] p-4 sm:p-5 transition-all duration-300">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
-            
-            {/* Welcome Header */}
-            <div className="mb-6">
-                <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                        <div className="flex items-center gap-4">
-                            <ProfilePicture 
-                                user={user} 
-                                size="lg"
-                            />
-                            <div>
-                                <h1 className="text-xl font-semibold text-gray-800 mb-1">
-                                    Welcome back, {user?.name || user?.username || 'Manager'}!
-                                </h1>
-                                <p className="text-sm text-gray-600">{user?.jobTitle || user?.position || 'Manager'}</p>
-                            </div>
+
+            <div className="mx-auto max-w-[1400px] space-y-6">
+                <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm md:px-6">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-2xl font-semibold text-slate-900">
+                                Good morning, {user?.name || user?.username || 'Manager'} 👋
+                            </h1>
+                            <p className="text-sm text-slate-500">{format(new Date(), 'dd MMM yyyy')}</p>
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                            <button 
-                                onClick={handleEditProfile}
-                                className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2 text-sm font-medium"
+                        <div className="flex items-center gap-3">
+                            <div className="hidden min-w-[260px] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 lg:flex">
+                                <FaSearch className="text-slate-400" />
+                                <input
+                                    readOnly
+                                    value=""
+                                    placeholder="Search..."
+                                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                                />
+                            </div>
+                            <button
+                                className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+                                onClick={() => navigate('/notifications')}
                             >
-                                <FaEdit className="w-4 h-4" />
-                                Edit
+                                <FaBell />
+                                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-orange-500"></span>
                             </button>
-                            <Link to="/view-profile">
-                                <button className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2 text-sm font-medium">
-                                    <FaEye className="w-4 h-4" />
-                                    View
-                                </button>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-gray-500">Today's Hours</p>
-                            <p className="text-xl font-semibold text-theme-secondary">{statsLoading ? '...' : dashboardStats.todayHours}</p>
-                        </div>
-                        <div className="bg-theme-secondary/10 p-2 rounded-lg">
-                            <FaClock className="w-5 h-5 text-theme-secondary" />
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-gray-500">This Month</p>
-                            <p className="text-xl font-semibold text-theme-primary">{statsLoading ? '...' : dashboardStats.thisMonth}</p>
-                        </div>
-                        <div className="bg-theme-primary/10 p-2 rounded-lg">
-                            <FaMoneyBillWave className="w-5 h-5 text-theme-primary" />
+                            <button
+                                className="h-10 w-10 rounded-full bg-slate-100 text-sm font-semibold text-slate-700"
+                                onClick={() => navigate('/view-profile')}
+                            >
+                                {(user?.name || 'M').charAt(0).toUpperCase()}
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-gray-500">Leave Balance</p>
-                            <p className="text-xl font-semibold text-purple-600">{statsLoading ? '...' : dashboardStats.leaveBalance}</p>
+                <AttendanceBox variant="dashboard" />
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="mb-3 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Team Size</p>
+                            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600"><FaUsers /></div>
                         </div>
-                        <div className="bg-purple-100 p-2 rounded-lg">
-                            <FaCalendarAlt className="w-5 h-5 text-purple-600" />
+                        <p className="text-4xl font-bold text-slate-900">{teamSize}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="mb-3 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending Tasks</p>
+                            <div className="rounded-lg bg-amber-50 p-2 text-amber-600"><FaTasks /></div>
                         </div>
+                        <p className="text-4xl font-bold text-slate-900">{pendingTasks}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="mb-3 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance</p>
+                            <div className="rounded-lg bg-teal-50 p-2 text-teal-600"><FaCheckCircle /></div>
+                        </div>
+                        <p className="text-4xl font-bold text-slate-900">{teamAttendance}%</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="mb-3 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending Leave</p>
+                            <div className="rounded-lg bg-slate-100 p-2 text-slate-600"><FaCalendarAlt /></div>
+                        </div>
+                        <p className="text-4xl font-bold text-slate-900">{pendingApprovals}</p>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-gray-500">Tasks</p>
-                            <p className="text-xl font-semibold text-orange-600">{statsLoading ? '...' : dashboardStats.tasksCount}</p>
-                        </div>
-                        <div className="bg-orange-100 p-2 rounded-lg">
-                            <FaTasks className="w-5 h-5 text-orange-600" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            {/* Statistics Cards - Top Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard
-                    label="Active Projects"
-                    value={activeProjects}
-                    subtitle="In progress"
-                    icon={<FaProjectDiagram className="w-8 h-8" />}
-                    color="blue"
-                />
-                
-                <StatCard
-                    label="Pending Tasks"
-                    value={pendingTasks}
-                    subtitle={`${completedTasks} completed`}
-                    icon={<FaTasks className="w-8 h-8" />}
-                    color="green"
-                />
-                
-                <StatCard
-                    label="Pending Approvals"
-                    value={pendingApprovals}
-                    subtitle="Requires action"
-                    icon={<FaCheckCircle className="w-8 h-8" />}
-                    color="yellow"
-                    className="border-purple-500 border-2 relative"
-                    onClick={() => navigate('/leave-management')}
-                />
-            </div>
-            
-            {/* Quick Actions - Middle Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/employees')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-theme-primary/10 p-4 rounded-lg flex-shrink-0">
-                            <FaUsers className="w-6 h-6 text-theme-primary" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Team Members</h3>
-                            <p className="text-sm text-gray-600">Manage your team</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/leave-management')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-yellow-100 p-4 rounded-lg flex-shrink-0">
-                            <FaCheckCircle className="w-6 h-6 text-yellow-600" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Approvals</h3>
-                            <p className="text-sm text-gray-600">Review leave and expense requests</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/manager/attendance-regularization')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-purple-100 p-4 rounded-lg flex-shrink-0">
-                            <FaClock className="w-6 h-6 text-purple-600" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Attendance Regularization</h3>
-                            <p className="text-sm text-gray-600">Review team attendance requests</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/admin/reports')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-purple-100 p-4 rounded-lg flex-shrink-0">
-                            <FaChartLine className="w-6 h-6 text-purple-600" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Team Reports</h3>
-                            <p className="text-sm text-gray-600">View team performance reports</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            {/* Quick Actions - Bottom Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/admin-payroll')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gray-100 p-4 rounded-lg flex-shrink-0">
-                            <FaMoneyBill className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Team Payroll</h3>
-                            <p className="text-sm text-gray-600">View team payroll information</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/one-on-one')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-theme-secondary/10 p-4 rounded-lg flex-shrink-0">
-                            <FaUserCheck className="w-6 h-6 text-theme-secondary" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">One-on-Ones</h3>
-                            <p className="text-sm text-gray-600">Schedule and manage 1-on-1 meetings</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/team-learning')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-indigo-100 p-4 rounded-lg flex-shrink-0">
-                            <FaGraduationCap className="w-6 h-6 text-theme-accent" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Team Learning</h3>
-                            <p className="text-sm text-gray-600">Share learning resources with your team</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                    onClick={() => navigate('/team-learning')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-theme-primary/10 p-4 rounded-lg flex-shrink-0">
-                            <FaGraduationCap className="w-6 h-6 text-theme-primary" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-1">Team Learning</h3>
-                            <p className="text-sm text-gray-600">View team training progress</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Attendance Section */}
-            <div className="mb-8">
-                <AttendanceBox/>
-            </div>
-
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Notifications */}
-                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-theme-secondary p-3">
-                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                <FaBell className="w-4 h-4" />
-                                Announcements
-                            </h3>
-                        </div>
-                        <div className="p-0">
-                            <NotificationFeed/>
-                        </div>
-                    </div>
-
-                    {/* Tasks */}
-                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-orange-500 p-3">
-                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                <FaTasks className="w-4 h-4" />
-                                My Tasks
-                            </h3>
-                        </div>
-                        <div className="p-6">
-                            <Todo/>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Column */}
-                <div className="space-y-6">
-                    {/* Payroll Card */}
-                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-theme-primary p-3">
-                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                <FaMoneyBillWave className="w-4 h-4" />
-                                Payroll
-                            </h3>
-                        </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                <div className="bg-gradient-to-r from-white to-theme-primary/10 rounded-lg p-4 border border-theme-primary">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-medium text-gray-600">Current Month</span>
-                                        <span className="text-lg font-bold text-theme-primary">{statsLoading ? '...' : dashboardStats.currentMonthSalary}</span>
-                                    </div>
-                                    <div className="text-xs text-gray-500">Net Salary</div>
-                                </div>
-                                
-                                <div className="space-y-2 text-sm text-gray-600">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-theme-secondary rounded-full"></div>
-                                        <span>View detailed breakdown</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                                        <span>Download payslips</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                                        <span>Track payment history</span>
-                                    </div>
-                                </div>
-                                
-                                <Link to="/employee-payroll" className="block">
-                                    <button className="w-full bg-theme-primary text-white py-2 rounded-lg font-medium hover:bg-theme-primary transition flex items-center justify-center gap-2 text-sm">
-                                        <FaDownload className="w-4 h-4" />
-                                        View All Payslips
-                                    </button>
-                                </Link>
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 items-stretch">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                        <div className="mb-4 flex items-center justify-between">
+                            <h3 className="text-2xl font-semibold text-slate-900">Attendance Health</h3>
+                            <div className="flex items-center gap-4 text-xs text-slate-500">
+                                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
+                                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
                             </div>
                         </div>
-                    </div>
-                    
-                    {/* Leave Management */}
-                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-purple-500 p-3">
-                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                <FaCalendarAlt className="w-4 h-4" />
-                                Leave Management
-                            </h3>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">On-time score</p>
+                                <p className="mt-2 text-3xl font-bold text-emerald-700">{attendanceHealth.onTimeScore}%</p>
+                                <div className="mt-3 h-2 rounded-full bg-slate-200">
+                                    <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${attendanceHealth.onTimeScore}%` }}></div>
+                                </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absence risk</p>
+                                <p className="mt-2 text-3xl font-bold text-orange-500">{attendanceHealth.absenceRisk}%</p>
+                                <div className="mt-3 h-2 rounded-full bg-slate-200">
+                                    <div className="h-2 rounded-full bg-orange-400" style={{ width: `${attendanceHealth.absenceRisk}%` }}></div>
+                                </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avg Check-In Time</p>
+                                <p className="mt-2 text-2xl font-bold text-slate-900">{attendanceHealth.avgCheckInTime}</p>
+                                <p className="text-xs text-slate-500">Estimated team median</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overdue Team Tasks</p>
+                                <p className="mt-2 text-2xl font-bold text-slate-900">{lateTasks}</p>
+                                <p className="text-xs text-slate-500">Attendance impact indicator</p>
+                            </div>
                         </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-200">
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-purple-700 mb-1">{statsLoading ? '...' : dashboardStats.leaveDaysRemaining}</div>
-                                        <div className="text-sm text-gray-600">Days Remaining</div>
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                            <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Attention Needed</h4>
+                            <div className="space-y-2">
+                                {attentionLoading && attentionMembers.length === 0 ? (
+                                    <div className="text-sm text-slate-500">Calculating real attendance scores...</div>
+                                ) : attentionMembers.length > 0 ? attentionMembers.map((member, index) => (
+                                    <div key={`${member.name}-${index}`} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                                        <div>
+                                            <p className="text-sm font-medium text-slate-900">{member.name}</p>
+                                            <p className="text-xs text-slate-500">{member.issue}</p>
+                                        </div>
+                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${member.score >= 75 ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                            {member.score}%
+                                        </span>
                                     </div>
-                                </div>
-                                
-                                <div className="space-y-3">
-                                    <button 
-                                        onClick={() => navigate('/leave')}
-                                        className="w-full bg-theme-primary text-white py-2 rounded-lg font-medium hover:bg-theme-primary transition flex items-center justify-center gap-2 text-sm"
-                                    >
-                                        <FaPlus className="w-4 h-4" />
-                                        Apply for Leave
-                                    </button>
-                                    
-                                    <button 
-                                        onClick={() => navigate('/my-leave')}
-                                        className="w-full bg-theme-secondary text-white py-2 rounded-lg font-medium hover:bg-theme-primary transition flex items-center justify-center gap-2 text-sm"
-                                    >
-                                        <FaEye className="w-4 h-4" />
-                                        View My Leaves
-                                    </button>
-
-                                    <button 
-                                        onClick={() => navigate('/leave-management')}
-                                        className="w-full bg-yellow-500 text-white py-2 rounded-lg font-medium hover:bg-yellow-600 transition flex items-center justify-center gap-2 text-sm"
-                                    >
-                                        <FaCalendarAlt className="w-4 h-4" />
-                                        Manage Team Leaves
-                                    </button>
-                                </div>
+                                )) : (
+                                    <div className="text-sm text-slate-500">No attention flags right now.</div>
+                                )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Birthdays */}
-                    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                        <div className="bg-pink-500 p-3">
-                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                <FaBirthdayCake className="w-4 h-4" />
-                                Upcoming Birthdays
-                            </h3>
+                    <div className="grid gap-6 grid-rows-[auto_1fr] h-full">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm h-fit">
+                            <h3 className="text-2xl font-semibold text-slate-900">Leave Overview</h3>
+                            <p className="mb-4 text-xs text-slate-500">Pending team requests by type</p>
+                            <div className="mb-6 flex justify-center">
+                                <div
+                                    className="relative h-36 w-36 rounded-full"
+                                    style={{
+                                        background: totalLeaveDays
+                                            ? `conic-gradient(#22c55e 0 ${Math.round((leaveBreakdown.annual / totalLeaveDays) * 360)}deg, #fb923c ${Math.round((leaveBreakdown.annual / totalLeaveDays) * 360)}deg ${Math.round(((leaveBreakdown.annual + leaveBreakdown.sick) / totalLeaveDays) * 360)}deg, #14b8a6 ${Math.round(((leaveBreakdown.annual + leaveBreakdown.sick) / totalLeaveDays) * 360)}deg 360deg)`
+                                            : '#e2e8f0'
+                                    }}
+                                >
+                                    <div className="absolute inset-4 flex items-center justify-center rounded-full bg-white text-center">
+                                        <div>
+                                            <p className="text-3xl font-bold text-slate-900">{totalLeaveDays}</p>
+                                            <p className="text-xs text-slate-500">pending days</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500"></span>Annual</span><span>{leaveBreakdown.annual.toFixed(1)} Days</span></div>
+                                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Sick</span><span>{leaveBreakdown.sick.toFixed(1)} Days</span></div>
+                                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-teal-500"></span>Casual</span><span>{leaveBreakdown.casual.toFixed(1)} Days</span></div>
+                            </div>
                         </div>
-                        <div className="p-6">
-                            {dashboardStats.birthdays ? (
-                                dashboardStats.birthdays.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {dashboardStats.birthdays.map((item, idx) => (
-                                            <div key={idx} className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg p-4 border border-pink-200 hover:shadow-md transition-all duration-200">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <div className="font-medium text-gray-800">{item.name}</div>
-                                                        <div className="text-sm text-gray-600">{item.birthday}</div>
-                                                    </div>
-                                                    <button className="bg-pink-500 text-white px-3 py-1 rounded-lg hover:bg-pink-600 transition text-sm font-medium">
-                                                        Send Wishes
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm h-full">
+                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming Meetings</h3>
+                            <div className="space-y-3">
+                                {meetingsLoading ? (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                                        Loading upcoming meetings...
+                                    </div>
+                                ) : meetingsError ? (
+                                    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+                                        {meetingsError}
+                                    </div>
+                                ) : upcomingMeetings.length === 0 ? (
+                                    <div className="rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500">
+                                        No upcoming meetings scheduled.
+                                    </div>
+                                ) : (
+                                    upcomingMeetings.map((meeting) => {
+                                        const employeeName = `${meeting?.employeeId?.name || ''} ${meeting?.employeeId?.lastName || ''}`.trim() || 'Team member';
+                                        return (
+                                            <div key={meeting._id} className="rounded-xl border border-slate-200 bg-white p-3">
+                                                <p className="font-semibold text-slate-900">1:1 with {employeeName}</p>
+                                                <p className="text-xs text-slate-600">
+                                                    {format(meeting.scheduledAt, 'hh:mm a')} · {format(meeting.scheduledAt, 'dd MMM yyyy')}
+                                                    {meeting.location ? ` · ${meeting.location}` : ''}
+                                                </p>
+                                                <div className="mt-2 flex gap-2">
+                                                    {meeting.meetingLink ? (
+                                                        <a
+                                                            href={meeting.meetingLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 rounded-full bg-emerald-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"
+                                                        >
+                                                            <FaVideo className="text-[10px]" />
+                                                            Join
+                                                        </a>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => navigate('/one-on-one')}
+                                                            className="rounded-full bg-emerald-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800"
+                                                        >
+                                                            Open
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate('/one-on-one')}
+                                                        className="rounded-full border border-slate-300 px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                    >
+                                                        Details
                                                     </button>
                                                 </div>
                                             </div>
-                                        ))}
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Team Approvals</h3>
+                        <div className="space-y-4">
+                            {teamPendingLeaves.slice(0, 2).map((leave, index) => (
+                                <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <h4 className="font-semibold text-slate-900">{leave?.leaveType || 'Leave Request'}</h4>
+                                        <span className="text-xs text-slate-500">{leave?.createdAt ? format(new Date(leave.createdAt), 'd MMM') : 'Now'}</span>
                                     </div>
-                                ) : (
-                                    <div className="text-center py-4 text-gray-500">
-                                        No upcoming birthdays
+                                    <p className="mb-3 text-sm text-slate-600">
+                                        {(leave?.employee?.name || leave?.employeeId?.name || leave?.employeeName || 'Team Member')} requested approval
+                                        ({getLeaveDurationDays(leave)} day{getLeaveDurationDays(leave) === 1 ? '' : 's'}).
+                                    </p>
+                                    {rejectDraft.id === leave._id && (
+                                        <div className="mb-3">
+                                            <textarea
+                                                value={rejectDraft.reason}
+                                                onChange={(e) => setRejectDraft((d) => ({ ...d, reason: e.target.value }))}
+                                                placeholder="Reason for rejection"
+                                                rows={2}
+                                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500/30 focus:border-emerald-500 focus:ring-2"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={leaveUpdating || !leave?._id}
+                                            onClick={() => handleApproveLeave(leave._id)}
+                                            className="rounded-full bg-emerald-700 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            Approve
+                                        </button>
+                                        {rejectDraft.id === leave._id ? (
+                                            <button
+                                                type="button"
+                                                disabled={leaveUpdating || !leave?._id}
+                                                onClick={() => handleRejectLeaveConfirm(leave._id)}
+                                                className="rounded-full border border-red-300 bg-red-50 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                Confirm reject
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                disabled={leaveUpdating}
+                                                onClick={() => setRejectDraft({ id: leave._id, reason: '' })}
+                                                className="rounded-full border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                            >
+                                                Reject
+                                            </button>
+                                        )}
                                     </div>
-                                )
-                            ) : (
-                                <div className="text-center py-4">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto"></div>
+                                    {rejectDraft.id === leave._id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setRejectDraft({ id: null, reason: '' })}
+                                            className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-700"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                            {teamPendingLeaves.length === 0 && (
+                                <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                                    No pending approvals right now.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Active Projects</h3>
+                        <div className="space-y-4">
+                            {managerProjects.slice(0, 2).map((project, index) => {
+                                const progress = Number(project?.progress || project?.completion || 40 + index * 25);
+                                const clampedProgress = Math.max(10, Math.min(100, progress));
+                                return (
+                                    <div key={project?._id || index} className="rounded-xl border border-slate-200 p-4">
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <p className="font-semibold text-slate-900">{project?.name || 'Project'}</p>
+                                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700">
+                                                {clampedProgress >= 70 ? 'On Track' : 'At Risk'}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 rounded-full bg-slate-200">
+                                            <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${clampedProgress}%` }}></div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {managerProjects.length === 0 && (
+                                <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                                    No active projects found.
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            <button
+                className="fixed bottom-8 right-8 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
+                onClick={() => navigate('/leave-management')}
+            >
+                <FaPlus />
+            </button>
         </div>
     );
 };

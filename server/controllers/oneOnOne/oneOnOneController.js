@@ -3,6 +3,7 @@ import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { sendNotificationToUsers } from '../../helpers/notificationService.js';
 import { getManagerEmployeeIds } from '../../helpers/managerHelper.js';
+import { calculateFunctionalRoles } from '../../helpers/roleHelper.js';
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
 
@@ -92,17 +93,37 @@ export const getOneOnOnes = asyncHandler(async (req, res) => {
 
     const query = addOrganizationFilter(req, {});
 
-    // If user is a manager, show meetings they created or with their team members
-    if (req.employee?.isManager && !req.employee?.isHR && !req.user) {
-        const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
-        
-        query.$or = [
-            { managerId: req.employee._id }, // Meetings created by this manager
-            { employeeId: { $in: managerEmployeeIds } } // Meetings with their team members
-        ];
-    } else if (currentUserId && !req.user) {
+    // If user is a manager, show meetings they created or with their team members.
+    // Do not rely on req.employee.isManager here, because isAuthenticatedBoth only
+    // attaches base token fields and does not enrich manager flags.
+    if (currentUserId && !req.user) {
+        const currentEmployee = await Employee.findOne({
+            _id: currentUserId,
+            organizationId
+        })
+            .select('name lastName functionalRoles department position jobTitle')
+            .lean();
+
+        const storedRoles = Array.isArray(currentEmployee?.functionalRoles) ? currentEmployee.functionalRoles : [];
+        const effectiveRoles = storedRoles.length > 0
+            ? storedRoles
+            : calculateFunctionalRoles(currentEmployee || {});
+        const isManager = effectiveRoles.includes('manager');
+        const isHR = effectiveRoles.includes('hr');
+
+        if (isManager && !isHR) {
+            const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, {
+                ...currentEmployee,
+                _id: currentUserId
+            });
+            query.$or = [
+                { managerId: currentUserId }, // Meetings created by this manager
+                { employeeId: { $in: managerEmployeeIds } } // Meetings with their team members
+            ];
+        } else {
         // Regular employees see meetings where they are the employee
-        query.employeeId = currentUserId;
+            query.employeeId = currentUserId;
+        }
     }
 
     if (managerId) query.managerId = managerId;
@@ -149,6 +170,51 @@ export const updateOneOnOne = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         message: 'One-on-one updated successfully',
+        data: oneOnOne
+    });
+});
+
+/**
+ * Cancel one-on-one (soft cancel — keeps record, sets status to Cancelled)
+ */
+export const cancelOneOnOne = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const currentUserId = req.employee?._id || req.user?._id;
+
+    const oneOnOne = await OneOnOne.findOne({ _id: id, organizationId });
+
+    if (!oneOnOne) {
+        return res.status(404).json({
+            success: false,
+            message: 'One-on-one meeting not found'
+        });
+    }
+
+    if (!['Scheduled', 'Rescheduled'].includes(oneOnOne.status)) {
+        return res.status(400).json({
+            success: false,
+            message: `Only scheduled or rescheduled meetings can be cancelled (current status: ${oneOnOne.status})`
+        });
+    }
+
+    const isAdmin = !!req.user;
+    if (!isAdmin && String(oneOnOne.managerId) !== String(currentUserId)) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only the meeting organizer can cancel this meeting'
+        });
+    }
+
+    oneOnOne.status = 'Cancelled';
+    await oneOnOne.save();
+
+    await oneOnOne.populate('employeeId', 'name lastName email');
+    await oneOnOne.populate('managerId', 'name lastName email');
+
+    res.json({
+        success: true,
+        message: 'One-on-one meeting cancelled',
         data: oneOnOne
     });
 });

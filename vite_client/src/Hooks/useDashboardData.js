@@ -4,6 +4,19 @@ import { handleApiError } from '../utils/errorHandler';
 import { retryAxios } from '../utils/retry';
 
 /**
+ * APIs using sendSuccess merge payload at JSON root; older code expected `response.data.data`.
+ */
+export function unwrapSendSuccessPayload(body, fallback = {}) {
+  if (!body || typeof body !== 'object') return { ...fallback };
+  const { success: _s, message: _m, data, ...rest } = body;
+  const restKeys = Object.keys(rest).filter((k) => k !== 'success' && k !== 'message');
+  if (restKeys.length === 0 && data != null && typeof data === 'object') {
+    return { ...fallback, ...data };
+  }
+  return { ...fallback, ...rest };
+}
+
+/**
  * React Query hook for fetching dashboard data with caching
  */
 
@@ -275,7 +288,13 @@ export const useAttendanceSummary = (params = {}, options = {}) => {
           }),
           { maxRetries: 1, delay: 500 }
         );
-        return response.data || {};
+        const payload = response.data?.data || {};
+        const stats = payload.statistics || {};
+        return {
+          ...payload,
+          statistics: stats,
+          attendanceRate: stats.attendanceRate ?? 0,
+        };
       } catch (error) {
         // Handle backend unavailable (503) gracefully
         if (error.response?.status === 503 || error.isBackendUnavailable) {
@@ -341,7 +360,7 @@ export const useFinancialSummary = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || {};
+        return unwrapSendSuccessPayload(response.data);
       } catch (error) {
         handleApiError(error, { context: 'Financial Summary', showToast: false });
         return {};
@@ -371,7 +390,7 @@ export const useExecutiveKPIs = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || {};
+        return unwrapSendSuccessPayload(response.data);
       } catch (error) {
         handleApiError(error, { context: 'Executive KPIs', showToast: false });
         return {};
@@ -396,7 +415,7 @@ export const useCriticalAlerts = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || { alerts: [], total: 0, critical: 0 };
+        return unwrapSendSuccessPayload(response.data, { alerts: [], total: 0, critical: 0 });
       } catch (error) {
         handleApiError(error, { context: 'Critical Alerts', showToast: false });
         return { alerts: [], total: 0, critical: 0 };
@@ -422,7 +441,7 @@ export const useProjectPortfolio = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || {};
+        return unwrapSendSuccessPayload(response.data);
       } catch (error) {
         handleApiError(error, { context: 'Project Portfolio', showToast: false });
         return {};
@@ -481,7 +500,7 @@ export const useDepartmentPerformance = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || {};
+        return unwrapSendSuccessPayload(response.data);
       } catch (error) {
         handleApiError(error, { context: 'Department Performance', showToast: false });
         return {};
@@ -508,7 +527,7 @@ export const useEmployeeTrends = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || {};
+        return unwrapSendSuccessPayload(response.data);
       } catch (error) {
         handleApiError(error, { context: 'Employee Trends', showToast: false });
         return {};
@@ -533,7 +552,7 @@ export const useStrategicInsights = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || { insights: [], summary: {} };
+        return unwrapSendSuccessPayload(response.data, { insights: [], summary: {} });
       } catch (error) {
         handleApiError(error, { context: 'Strategic Insights', showToast: false });
         return { insights: [], summary: {} };
@@ -560,7 +579,7 @@ export const usePredictiveAnalytics = (options = {}) => {
           }),
           { maxRetries: 2, delay: 500 }
         );
-        return response.data?.data || {};
+        return unwrapSendSuccessPayload(response.data);
       } catch (error) {
         handleApiError(error, { context: 'Predictive Analytics', showToast: false });
         return {};

@@ -1,505 +1,482 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import NotificationSender from "./NotificationSender";
-import SentAnnouncements from "./SentAnnouncements";
-import { FiCoffee, FiClock, FiUser } from "react-icons/fi";
-import { FaUsers, FaFolder, FaMoneyBillWave } from "react-icons/fa";
+import {
+  FiArrowUpRight,
+  FiCalendar,
+  FiCheckCircle,
+  FiClock,
+  FiDollarSign,
+  FiEye,
+  FiFileText,
+  FiPlus,
+  FiUserPlus,
+  FiUsers
+} from "react-icons/fi";
 import LoadingSpinner from "../components/LoadingSpinner";
-import StatCard from "../components/StatCard";
-import { 
-  useEmployees, 
-  useProjects, 
-  usePayrolls, 
-  useEmployeesOnBreak 
-} from "../Hooks/useDashboardData";
-import { useAttendanceRealtime } from "../Hooks/useAttendanceRealtime";
+import { useEmployees, useLeaves, usePayrolls, useProjects } from "../Hooks/useDashboardData";
+import axios from "../utils/axios";
 import { handleApiError } from "../utils/errorHandler";
 
-// Memoized selectors
 const selectAuth = (state) => state.auth || {};
 
 function DashboardAdmin() {
   const navigate = useNavigate();
   const authState = useSelector(selectAuth);
   const user = authState?.user;
-  const [announcementRefreshKey, setAnnouncementRefreshKey] = useState(0);
-  const bumpAnnouncementHistory = useCallback(() => {
-    setAnnouncementRefreshKey((k) => k + 1);
-  }, []);
+  const [todayStatus, setTodayStatus] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
 
-  // Use React Query hooks for data fetching with caching
   const {
     data: employeeData = { employees: [], total: 0 },
     isLoading: employeesLoading,
     error: employeesError
   } = useEmployees();
+
+  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const { data: payrolls = [], isLoading: payrollsLoading } = usePayrolls();
+  const { data: leaves = [], isLoading: leavesLoading } = useLeaves();
+
   const employees = employeeData?.employees ?? [];
-  const employeeTotal = employeeData?.total ?? employees.length;
-
-  const { 
-    data: projects = [], 
-    isLoading: projectsLoading 
-  } = useProjects();
-
-  const { 
-    data: payrolls = [], 
-    isLoading: payrollsLoading 
-  } = usePayrolls();
-
-  const { 
-    data: employeesOnBreak = [], 
-    isLoading: breaksLoading,
-    error: breaksError 
-  } = useEmployeesOnBreak();
-
-  // Real-time: when an employee starts/ends break, server emits; we invalidate and refetch
-  useAttendanceRealtime();
-
-  const isLoading = employeesLoading || projectsLoading || payrollsLoading;
-  const employeeCount = employeeTotal;
+  const employeeCount = employeeData?.total ?? employees.length;
+  const isLoading = employeesLoading || projectsLoading || payrollsLoading || leavesLoading;
 
   useEffect(() => {
-    // Check authentication
-    const userRole = localStorage.getItem('role');
-    
-    if (!user && userRole !== 'admin') {
-      navigate('/dashboard', { replace: true });
-      return;
+    const userRole = localStorage.getItem("role");
+    if (!user && userRole !== "admin") {
+      navigate("/dashboard", { replace: true });
     }
   }, [user, navigate]);
 
-  // Handle errors
   useEffect(() => {
     if (employeesError) {
-      handleApiError(employeesError, { 
-        context: 'Admin Dashboard', 
-        showToast: employeesError.response?.status !== 401 
+      handleApiError(employeesError, {
+        context: "Admin Dashboard",
+        showToast: employeesError.response?.status !== 401
       });
     }
-    if (breaksError) {
-      handleApiError(breaksError, { 
-        context: 'Employees on Break', 
-        showToast: breaksError.response?.status !== 401 
-      });
-    }
-  }, [employeesError, breaksError]);
+  }, [employeesError]);
 
-  const formatBreakDuration = (minutes) => {
-    if (!minutes || isNaN(minutes) || minutes < 0) {
-      return '0m';
-    }
-    if (minutes < 60) {
-      return `${Math.round(minutes)}m`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-  };
+  useEffect(() => {
+    const loadDashboardExtras = async () => {
+      try {
+        const [todayRes, announcementsRes] = await Promise.all([
+          axios.get("/v1/both/attendance/today-status", { withCredentials: true }),
+          axios.get("/v1/both/notification/sent-announcements", {
+            params: { scope: "organization", page: 1, limit: 3 },
+            withCredentials: true
+          })
+        ]);
+
+        const todayList = todayRes?.data?.data || [];
+        const recentAnnouncements = announcementsRes?.data?.announcements || [];
+        setTodayStatus(Array.isArray(todayList) ? todayList : []);
+        setAnnouncements(Array.isArray(recentAnnouncements) ? recentAnnouncements : []);
+      } catch {
+        // Keep dashboard functional when optional sections fail.
+      }
+    };
+
+    loadDashboardExtras();
+  }, []);
 
   const formatCurrency = (amount) => {
-    if (!amount || isNaN(amount)) {
-      return '₹0';
-    }
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
+    if (!amount || isNaN(amount)) return "0";
+    return new Intl.NumberFormat("en-IN", {
       maximumFractionDigits: 0
     }).format(amount);
   };
 
-  const formatTime = (dateString) => {
-    if (!dateString) return 'N/A';
+  const formatDate = (dateString) => {
+    if (!dateString) return "--";
     try {
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return 'Invalid Date';
-      }
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (isNaN(date.getTime())) return "--";
+      return date.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
     } catch {
-      return 'Invalid Date';
+      return "--";
     }
   };
+
+  const todayAttendanceStats = useMemo(() => {
+    const total = todayStatus.length || employeeCount;
+    const present = todayStatus.filter((x) => x.status !== "absent").length;
+    const late = todayStatus.filter((x) => x.isLateArrival).length;
+    return { total, present, late };
+  }, [todayStatus, employeeCount]);
+
+  const pendingLeaves = useMemo(
+    () => leaves.filter((leave) => String(leave?.status || "").toLowerCase() === "pending").length,
+    [leaves]
+  );
+
+  const monthlyPayrollTotal = useMemo(() => {
+    const now = new Date();
+    return payrolls.reduce((sum, payroll) => {
+      const dateCandidate = payroll?.createdAt || payroll?.updatedAt || payroll?.date;
+      const d = dateCandidate ? new Date(dateCandidate) : null;
+      const isCurrentMonth =
+        d &&
+        !isNaN(d.getTime()) &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+      if (!isCurrentMonth) return sum;
+      const value = Number(payroll?.amount || payroll?.totalAmount || payroll?.netSalary || 0);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  }, [payrolls]);
+
+  const newHires = useMemo(() => {
+    const sorted = [...employees].sort((a, b) => {
+      const aDate = new Date(a?.createdAt || a?.joiningDate || 0).getTime();
+      const bDate = new Date(b?.createdAt || b?.joiningDate || 0).getTime();
+      return bDate - aDate;
+    });
+    return sorted.slice(0, 4);
+  }, [employees]);
+
+  const payrollByDepartment = useMemo(() => {
+    const deptMap = new Map();
+    payrolls.forEach((payroll) => {
+      const department = payroll?.department || payroll?.employeeId?.department || "General";
+      const amount = Number(payroll?.amount || payroll?.totalAmount || payroll?.netSalary || 0);
+      deptMap.set(department, (deptMap.get(department) || 0) + (Number.isFinite(amount) ? amount : 0));
+    });
+    const rows = [...deptMap.entries()].map(([department, amount]) => ({ department, amount }));
+    const max = rows.reduce((m, r) => Math.max(m, r.amount), 0);
+    return rows.slice(0, 4).map((r) => ({
+      ...r,
+      progress: max > 0 ? Math.round((r.amount / max) * 100) : 0
+    }));
+  }, [payrolls]);
+
+  const upcomingEvents = useMemo(() => {
+    const base = new Date();
+    return [
+      { label: "Today", date: base, tag: "Today" },
+      { label: "Tomorrow", date: new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1), tag: "Event" },
+      { label: "Review", date: new Date(base.getFullYear(), base.getMonth(), base.getDate() + 3), tag: "Reminder" }
+    ];
+  }, []);
+
+  const quickShortcuts = [
+    { label: "Mark Attendance", icon: <FiCheckCircle />, action: () => navigate("/today-attendance") },
+    { label: "Today's Log", icon: <FiClock />, action: () => navigate("/all-attendance-history") },
+    { label: "Leave Report", icon: <FiFileText />, action: () => navigate("/leave-management") },
+    { label: "Add Employee", icon: <FiUserPlus />, action: () => navigate("/add-employee") }
+  ];
+
+  const approvalsPreview = leaves
+    .filter((leave) => String(leave?.status || "").toLowerCase() === "pending")
+    .slice(0, 4);
+
+  const statCards = [
+    {
+      label: "Total Employees",
+      value: employeeCount.toLocaleString("en-IN"),
+      sub: `${projects.length} active projects`,
+      icon: <FiUsers className="h-5 w-5" />
+    },
+    {
+      label: "Present Today",
+      value: todayAttendanceStats.present.toLocaleString("en-IN"),
+      sub: `${todayAttendanceStats.total || 0} tracked`,
+      icon: <FiCheckCircle className="h-5 w-5" />
+    },
+    {
+      label: "Pending Leaves",
+      value: pendingLeaves.toLocaleString("en-IN"),
+      sub: "Needs review",
+      icon: <FiCalendar className="h-5 w-5" />
+    },
+    {
+      label: "Payroll This Month",
+      value: formatCurrency(monthlyPayrollTotal),
+      sub: `${payrolls.length} payroll records`,
+      icon: <FiDollarSign className="h-5 w-5" />
+    }
+  ];
+
+  const greetingName = user?.name || user?.email?.split("@")?.[0] || "Admin";
+  const todayLabel = new Date().toLocaleDateString([], {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+
+  const getInitials = (name = "") => {
+    const parts = name.trim().split(" ").filter(Boolean);
+    if (!parts.length) return "EM";
+    return parts
+      .slice(0, 2)
+      .map((p) => p[0].toUpperCase())
+      .join("");
+  };
+
+  const renderBar = (pct) => (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
+      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+    </div>
+  );
 
   if (isLoading) {
     return <LoadingSpinner message="Loading admin dashboard..." />;
   }
 
   return (
-    <div className="flex bg-gray-50 min-h-screen">
-      <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
-        {/* Header - Clean and Professional */}
-        <div className="mb-6 md:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
-                Dashboard
-              </h1>
-              <p className="text-sm md:text-base text-gray-600">
-                Your organization's key metrics and activities
-              </p>
-            </div>
-            {user && (
-              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-sm bg-theme-primary" style={{ backgroundColor: 'var(--color-primary)' }}>
-                  <FiUser className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Welcome back</p>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {user.name || user.email?.split('@')[0] || 'Admin'}
-                  </p>
-                </div>
-              </div>
-            )}
+    <div className="min-h-screen bg-[#F3F7F5]">
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
+        <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Good morning, {greetingName}</h1>
+            <p className="mt-1 text-sm text-slate-500">{todayLabel}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate("/today-attendance")}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+            >
+              <FiCheckCircle className="h-4 w-4" />
+              Mark Attendance
+            </button>
+            <button
+              onClick={() => navigate("/admin-payroll")}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+            >
+              <FiDollarSign className="h-4 w-4" />
+              Run Payroll
+            </button>
+            <button
+              onClick={() => navigate("/add-employee")}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
+              style={{ backgroundColor: "var(--color-primary)" }}
+            >
+              <FiPlus className="h-4 w-4" />
+              Add Employee
+            </button>
           </div>
         </div>
 
-        {/* Error Messages */}
         {employeesError && employeesError.response?.status !== 401 && (
-          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-sm">
-            <p className="font-semibold">Error Loading Data</p>
-            <p className="text-sm mt-1">{employeesError.response?.data?.message || 'Failed to load employees'}</p>
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {employeesError.response?.data?.message || "Failed to load employees"}
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-6 md:mb-8">
-          <StatCard
-            label="Employees"
-            value={employeeCount}
-            icon={<FaUsers className="w-6 h-6" />}
-            color="primary"
-          />
-          
-          <StatCard
-            label="Projects"
-            value={projects.length}
-            icon={<FaFolder className="w-6 h-6" />}
-            color="secondary"
-          />
-          
-          <StatCard
-            label="Payrolls"
-            value={payrolls.length}
-            icon={<FaMoneyBillWave className="w-6 h-6" />}
-            color="accent"
-          />
-        </div>
-
-        {/* Announcement Section */}
-        <div className="mb-6 md:mb-8">
-          <NotificationSender onSent={bumpAnnouncementHistory} />
-          <SentAnnouncements refreshKey={announcementRefreshKey} />
-        </div>
-
-        {/* Projects and Employees Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5 mb-6 md:mb-8">
-          {/* Projects Section */}
-          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Recent Projects</h2>
-                <p className="text-xs text-gray-500">Latest project activities</p>
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+          {statCards.map((card) => (
+            <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="mb-3 flex items-start justify-between">
+                <p className="text-sm text-slate-500">{card.label}</p>
+                <span className="rounded-lg bg-slate-100 p-2 text-slate-600">{card.icon}</span>
               </div>
+              <p className="break-words text-2xl font-bold text-slate-900 sm:text-3xl">{card.value}</p>
+              <p className="mt-1 text-xs text-slate-500">{card.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-2">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-slate-900">Attendance overview</h2>
+              <div className="hidden items-center gap-4 text-xs text-slate-500 sm:flex">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Present
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  Late
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  Absent
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+              <div className="rounded-xl bg-emerald-50 p-4">
+                <p className="text-xs text-emerald-700">Present</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-800">{todayAttendanceStats.present}</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 p-4">
+                <p className="text-xs text-amber-700">Late Arrivals</p>
+                <p className="mt-2 text-2xl font-bold text-amber-800">{todayAttendanceStats.late}</p>
+              </div>
+              <div className="rounded-xl bg-rose-50 p-4">
+                <p className="text-xs text-rose-700">Absent</p>
+                <p className="mt-2 text-2xl font-bold text-rose-800">
+                  {Math.max((todayAttendanceStats.total || employeeCount) - todayAttendanceStats.present, 0)}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              Live chart area can be plugged here if you want graph rendering.
+            </div>
+            <div className="mt-3 flex items-center gap-4 text-xs text-slate-500 sm:hidden">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Present
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Late
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                Absent
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-slate-900">Announcements</h2>
               <button
-                onClick={() => navigate("/add-project")}
-                className="text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap bg-theme-primary hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-primary)' }}
+                onClick={() => navigate("/notifications")}
+                className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary)] hover:opacity-80"
               >
-                <span className="mr-1.5">+</span> Add Project
+                <FiPlus className="h-4 w-4" />
+                New
               </button>
             </div>
-
-            <div className="overflow-x-auto">
-              {!Array.isArray(projects) || projects.length === 0 ? (
-                <div className="text-center py-10">
-                  <FaFolder className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm mb-2">No projects found</p>
-                  <button
-                    onClick={() => navigate("/add-project")}
-                    className="mt-2 text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
-                  >
-                    Create your first project →
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    {projects.slice(0, 5).map((project) => (
-                      <div 
-                        key={project._id || project.id} 
-                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
-                        onClick={() => navigate(`/projects/${project._id || project.id}`)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm md:text-base text-gray-800 truncate">
-                            {project.name || 'Unnamed Project'}
-                          </div>
-                          <div className="text-xs md:text-sm text-gray-500 mt-0.5">
-                            {project.status || 'N/A'}
-                          </div>
-                        </div>
-                        <FaFolder className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
-                      </div>
-                    ))}
-                  </div>
-                  {projects.length > 5 && (
-                    <div className="text-center mt-4 pt-3 border-t border-gray-100">
-                      <button 
-                        onClick={() => navigate("/projects")}
-                        className="text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
-                      >
-                        View All Projects →
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Employees Section */}
-          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Recent Employees</h2>
-                <p className="text-xs text-gray-500">Newly added team members</p>
-              </div>
-              <button
-                onClick={() => navigate("/add-employee")}
-                className="text-white py-2 px-3 rounded-md transition-colors flex items-center text-sm font-medium whitespace-nowrap bg-theme-primary hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-              >
-                <span className="mr-1.5">+</span> Add Employee
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              {employeesLoading ? (
-                <div className="text-center py-10">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"
-            style={{ borderBottomColor: 'var(--color-primary)' }}></div>
-                  <p className="text-gray-500 mt-2 text-sm">Loading employees...</p>
-                </div>
-              ) : !Array.isArray(employees) || employees.length === 0 ? (
-                <div className="text-center py-10">
-                  <FaUsers className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm mb-2">No employees found</p>
-                  <button
-                    onClick={() => navigate("/add-employee")}
-                    className="mt-2 text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
-                  >
-                    Add your first employee →
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    {employees.slice(0, 5).map((emp) => (
-                      <div 
-                        key={emp._id || emp.id} 
-                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
-                        onClick={() => navigate(`/employees/${emp._id || emp.id}`)}
-                      >
-                        <div className="flex items-center flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0 bg-theme-secondary/10" style={{ backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)' }}>
-                            <FiUser className="w-5 h-5 text-theme-secondary" style={{ color: 'var(--color-secondary)' }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm md:text-base text-gray-800 truncate">
-                              {emp.name || ''} {emp.lastName || ''}
-                            </div>
-                            <div className="text-xs md:text-sm text-gray-500 mt-0.5">
-                              {emp.position || 'N/A'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {employees.length > 5 && (
-                    <div className="text-center mt-4 pt-3 border-t border-gray-100">
-                      <button 
-                        onClick={() => navigate("/employees")}
-                        className="text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
-                      >
-                        View All Employees →
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Employees on Break Section */}
-        <div className="bg-white p-5 rounded-lg shadow-sm border-l-4 border-orange-500 mb-6 md:mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2.5 rounded-full bg-orange-100 text-orange-600">
-                <FiCoffee className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-900">Employees on Break</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Currently on break ({employeesOnBreak.length})</p>
-              </div>
-            </div>
-          </div>
-          
-          {breaksLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2 text-sm">Loading...</p>
-            </div>
-          ) : employeesOnBreak.length === 0 ? (
-            <div className="text-center py-8">
-              <FiCoffee className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-              <p className="text-gray-500 text-sm">No employees on break at the moment</p>
-            </div>
-          ) : (
             <div className="space-y-3">
-              {employeesOnBreak.map((item, index) => (
-                <div 
-                  key={item.attendanceId || index} 
-                  className="flex items-center justify-between p-3 md:p-4 bg-orange-50 rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors"
-                >
-                  <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    <div className="flex-shrink-0">
-                      {item.employee?.profilePhoto ? (
-                        <img 
-                          src={item.employee.profilePhoto.url || item.employee.profilePhoto} 
-                          alt={item.employee.name}
-                          className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border-2 border-orange-300"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-orange-200 flex items-center justify-center">
-                          <FiUser className="w-5 h-5 md:w-6 md:h-6 text-orange-600" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-sm md:text-base truncate">
-                        {item.employee?.name} {item.employee?.lastName || ''}
-                      </h3>
-                      <div className="flex items-center space-x-2 text-xs md:text-sm text-gray-600">
-                        <span>{item.employee?.department || 'N/A'}</span>
-                        <span>•</span>
-                        <span>{item.employee?.position || 'N/A'}</span>
-                      </div>
-                    </div>
+              {announcements.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  No announcements yet.
+                </div>
+              ) : (
+                announcements.map((item) => (
+                  <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-500">{formatDate(item.createdAt)}</p>
+                    <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">{item.message}</p>
                   </div>
-                  <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
-                    <div className="text-right">
-                      <div className="flex items-center space-x-1 text-orange-600">
-                        <FiClock className="w-4 h-4" />
-                        <span className="font-semibold text-sm md:text-base">
-                          {formatBreakDuration(item.breakDuration)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Started {formatTime(item.breakStartTime)}
+                ))
+              )}
+            </div>
+            <button
+              onClick={() => navigate("/notifications")}
+              className="mt-4 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              View All Announcements
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900">Pending approvals</h2>
+            <div className="space-y-3">
+              {approvalsPreview.length === 0 ? (
+                <p className="text-sm text-slate-500">No pending requests.</p>
+              ) : (
+                approvalsPreview.map((leave) => (
+                  <div key={leave._id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {leave.employeeName || leave.employee?.name || "Employee"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {leave.leaveType || "Leave"} - {leave.totalDays || 1} day(s)
                       </p>
                     </div>
+                    <button
+                      onClick={() => navigate("/leave-management")}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)]"
+                    >
+                      Review
+                      <FiArrowUpRight className="h-3 w-3" />
+                    </button>
                   </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900">Payroll snapshot</h2>
+            <div className="space-y-4">
+              {payrollByDepartment.length === 0 ? (
+                <p className="text-sm text-slate-500">No payroll data yet.</p>
+              ) : (
+                payrollByDepartment.map((row) => (
+                  <div key={row.department}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-700">{row.department}</span>
+                      <span className="text-slate-500">{formatCurrency(row.amount)}</span>
+                    </div>
+                    {renderBar(row.progress)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900">Quick shortcuts</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {quickShortcuts.map((shortcut) => (
+                <button
+                  key={shortcut.label}
+                  onClick={shortcut.action}
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <span className="text-lg text-slate-600">{shortcut.icon}</span>
+                  <span>{shortcut.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900">Upcoming events & holidays</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {upcomingEvents.map((event) => (
+                <div key={event.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">{event.tag}</p>
+                  <p className="mt-1 text-lg font-bold text-slate-900">{event.date.getDate()}</p>
+                  <p className="text-xs text-slate-600">{event.date.toLocaleDateString([], { month: "short", weekday: "short" })}</p>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Attendance Section */}
-        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 mb-6 md:mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-            <div>
-              <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Attendance Management</h2>
-              <p className="text-xs text-gray-500">View and manage employee attendance</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-              <button
-                onClick={() => navigate("/today-attendance")}
-                className="text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap bg-theme-primary hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-              >
-                Today's Attendance
-              </button>
-              <button
-                onClick={() => navigate("/all-attendance-history")}
-                className="text-white py-2 px-3 rounded-md transition-colors text-sm font-medium whitespace-nowrap bg-theme-secondary hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-secondary)' }}
-              >
-                All Attendance Report
-              </button>
-            </div>
           </div>
-        </div>
 
-        {/* Payrolls Section */}
-        <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-          <div className="mb-4">
-            <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Recent Payrolls</h2>
-            <p className="text-xs text-gray-500">Latest payroll transactions</p>
-          </div>
-          <div className="overflow-x-auto">
-            {!Array.isArray(payrolls) || payrolls.length === 0 ? (
-              <div className="text-center py-10">
-                <FaMoneyBillWave className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm mb-2">No payroll records found</p>
-                <button
-                  onClick={() => navigate("/add-payroll")}
-                  className="mt-2 text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
-                >
-                  Create your first payroll →
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  {payrolls.slice(0, 5).map((payroll) => (
-                    <div 
-                      key={payroll._id || payroll.id} 
-                      className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
-                      onClick={() => {
-                        const employeeId = payroll.employeeId?._id || payroll.employeeId;
-                        if (employeeId) {
-                          navigate(`/admin-employee-payroll/${employeeId}`);
-                        } else {
-                          navigate('/admin-payroll');
-                        }
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm md:text-base text-gray-800">
-                          {payroll.employeeName || 'Unknown Employee'}
-                        </div>
-                        <div className="text-xs md:text-sm text-gray-500 mt-0.5">
-                          {formatCurrency(payroll.amount || payroll.totalAmount || 0)} • {payroll.status || 'N/A'}
-                        </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900">New hires this month</h2>
+            <div className="space-y-3">
+              {newHires.length === 0 ? (
+                <p className="text-sm text-slate-500">No recent hires found.</p>
+              ) : (
+                newHires.map((employee) => (
+                  <div key={employee._id || employee.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                        {getInitials(`${employee.name || ""} ${employee.lastName || ""}`)}
                       </div>
-                      <FaMoneyBillWave className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800">
+                          {employee.name || ""} {employee.lastName || ""}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {employee.position || "Team Member"} - Joined {formatDate(employee.createdAt || employee.joiningDate)}
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                {payrolls.length > 5 && (
-                  <div className="text-center mt-4 pt-3 border-t border-gray-100">
-                    <button 
-                      onClick={() => navigate("/admin-payroll")}
-                      className="text-sm font-medium transition-colors text-theme-secondary hover:opacity-80"
-            style={{ color: 'var(--color-secondary)' }}
+                    <button
+                      onClick={() => navigate(`/employees/${employee._id || employee.id}`)}
+                      className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
                     >
-                      View All Payrolls →
+                      <FiEye className="h-3 w-3" />
+                      View
                     </button>
                   </div>
-                )}
-              </>
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

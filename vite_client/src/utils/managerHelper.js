@@ -3,6 +3,23 @@
  * Provides utilities for filtering and checking manager relationships
  */
 
+const normalizeRoleText = (value) => String(value || '').toLowerCase().trim();
+
+const hasManagerFunctionalRole = (user) => {
+    const functionalRoles = Array.isArray(user?.functionalRoles) ? user.functionalRoles : [];
+    return functionalRoles.some((role) => normalizeRoleText(role) === 'manager');
+};
+
+const getManagerFieldText = (managerField) => {
+    if (!managerField) return '';
+    if (typeof managerField === 'string') return managerField.trim();
+    if (typeof managerField === 'object') {
+        const fullName = `${managerField.name || ''} ${managerField.lastName || ''}`.trim();
+        return fullName || String(managerField.username || managerField.email || '').trim();
+    }
+    return String(managerField).trim();
+};
+
 /**
  * Check if an employee is linked to a manager
  * @param {Object} employee - Employee object
@@ -16,7 +33,7 @@ export const isEmployeeLinkedToManager = (employee, manager) => {
     
     const managerName = `${manager.name} ${manager.lastName || ''}`.trim();
     const managerFirstName = manager.name;
-    const employeeManager = (employee.manager || '').trim();
+    const employeeManager = getManagerFieldText(employee.manager);
     
     // Check exact matches
     if (employeeManager === managerName || employeeManager === managerFirstName) {
@@ -53,7 +70,7 @@ export const filterEmployeesByManager = (employees, manager) => {
     const managerFirstName = manager.name;
     
     return employees.filter(emp => {
-        const empManager = (emp.manager || '').trim();
+        const empManager = getManagerFieldText(emp.manager);
         return empManager === managerName || 
                empManager === managerFirstName ||
                empManager.toLowerCase().startsWith(managerFirstName.toLowerCase());
@@ -78,9 +95,13 @@ export const getTeamMemberIds = (employees, manager) => {
  */
 export const isManager = (user) => {
     if (!user) return false;
+
+    const role = normalizeRoleText(user.role);
+    if (role === 'manager') return true;
+    if (hasManagerFunctionalRole(user)) return true;
     
-    const position = (user.position || '').toLowerCase().trim();
-    const jobTitle = (user.jobTitle || '').toLowerCase().trim();
+    const position = normalizeRoleText(user.position);
+    const jobTitle = normalizeRoleText(user.jobTitle);
     
     return position === 'manager' || 
            position === 'director' ||

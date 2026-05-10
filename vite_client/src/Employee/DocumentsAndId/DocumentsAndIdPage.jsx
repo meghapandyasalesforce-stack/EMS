@@ -205,7 +205,7 @@ const DocumentsAndIdPage = () => {
                         </p>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           <a
-                            href={doc.fileUrl}
+                            href={getUploadUrl(doc.fileUrl) || '#'}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
@@ -213,7 +213,7 @@ const DocumentsAndIdPage = () => {
                             <FaEye className="text-xs" /> Preview
                           </a>
                           <a
-                            href={doc.fileUrl}
+                            href={getUploadUrl(doc.fileUrl) || '#'}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
@@ -266,7 +266,7 @@ const DocumentsAndIdPage = () => {
                         </p>
                       </div>
                       <a
-                        href={doc.fileUrl}
+                        href={getUploadUrl(doc.fileUrl) || '#'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-slate-500 hover:text-[#0a8f6c]"
@@ -315,7 +315,7 @@ const DocumentsAndIdPage = () => {
                           </td>
                           <td className="py-3 text-right">
                             <a
-                              href={doc.fileUrl}
+                              href={getUploadUrl(doc.fileUrl) || '#'}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"

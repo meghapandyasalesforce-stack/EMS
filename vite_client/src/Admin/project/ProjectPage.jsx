@@ -98,7 +98,7 @@ const ProjectsPageEnhanced = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   
   // View and display
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode] = useState('grid'); // locked to grid to match design
   const [sortBy, setSortBy] = useState('date-desc');
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
@@ -177,8 +177,13 @@ const ProjectsPageEnhanced = () => {
         (project.description && project.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase())) ||
         (project.projectLeader?.name && project.projectLeader.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()));
       
-      // Status filter
-      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      // Status filter (supports UI aliases like active/overdue)
+      const normalizedStatus = statusFilter === 'active' ? 'in-progress' : statusFilter;
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'overdue'
+          ? (project.endDate && new Date(project.endDate) < new Date() && project.status !== 'completed')
+          : project.status === normalizedStatus);
       
       // Priority filter
       const matchesPriority = priorityFilter === 'all' || project.priority === priorityFilter;
@@ -219,12 +224,14 @@ const ProjectsPageEnhanced = () => {
         return sorted.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       case 'date-asc':
         return sorted.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
-      case 'priority':
+      case 'priority': {
         const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
         return sorted.sort((a, b) => (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0));
-      case 'status':
-        const statusOrder = { 'in-progress': 1, 'pending': 2, 'on-hold': 3, 'completed': 4 };
+      }
+      case 'status': {
+        const statusOrder = { 'in-progress': 1, pending: 2, 'on-hold': 3, completed: 4 };
         return sorted.sort((a, b) => (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0));
+      }
       default:
         return sorted;
     }
@@ -306,14 +313,12 @@ const ProjectsPageEnhanced = () => {
   }, []);
 
   // Handle bulk actions
-  const handleBulkAction = useCallback((action) => {
+  const handleBulkAction = (action) => {
     if (selectedProjects.length === 0) return;
     
     switch(action) {
       case 'delete':
-        if (window.confirm(`Delete ${selectedProjects.length} project(s)?`)) {
-          // Implement bulk delete
-        }
+        // TODO: wire a dedicated confirmation modal + delete API call
         break;
       case 'status':
         // Open status change dialog
@@ -324,7 +329,7 @@ const ProjectsPageEnhanced = () => {
     }
     setSelectedProjects([]);
     setBulkActionMenu(null);
-  }, [selectedProjects]);
+  };
 
   // Export projects
   const handleExport = useCallback((projectsToExport = paginatedProjects) => {
@@ -421,20 +426,22 @@ const ProjectsPageEnhanced = () => {
               gap: 2,
               mb: 3
             }}>
-              <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Typography variant="h4" sx={{ 
                   fontWeight: 700,
                   color: 'text.primary',
-                  mb: 0.5
+                  mb: 0
                 }}>
-                  Projects Dashboard
+                  Projects
                 </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Manage and track all your projects
-                </Typography>
+                <Chip
+                  label={projectStats.total}
+                  size="small"
+                  sx={{ fontWeight: 700, bgcolor: '#f1f5f9', color: '#334155' }}
+                />
               </Box>
 
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: '100%' }}>
                 <Button
                   variant="outlined"
                   startIcon={<FiBarChart2 />}
@@ -449,7 +456,7 @@ const ProjectsPageEnhanced = () => {
                   onClick={() => setExportDialog(true)}
                   sx={{ textTransform: 'none' }}
                 >
-                  Export
+                  Export CSV
                 </Button>
                 {canCreateProject && (
                   <Button
@@ -457,28 +464,64 @@ const ProjectsPageEnhanced = () => {
                     startIcon={<FiPlus />}
                     onClick={() => navigate('/add-project')}
                     sx={{
-                      background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                      background: '#10b981',
+                      '&:hover': { background: '#059669' },
                       textTransform: 'none',
                       fontWeight: 600
                     }}
                   >
-                    Add New Project
+                    Add Project
                   </Button>
                 )}
               </Box>
             </Box>
 
             {/* Search and Filters Section */}
-            <Paper sx={{ p: 2, mb: 3 }}>
+            <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'active', label: 'Active' },
+                    { id: 'completed', label: 'Completed' },
+                    { id: 'on-hold', label: 'On Hold' },
+                    { id: 'cancelled', label: 'Cancelled' },
+                    { id: 'overdue', label: 'Overdue' }
+                  ].map((tab) => {
+                    const active = statusFilter === tab.id;
+                    return (
+                      <Button
+                        key={tab.id}
+                        size="small"
+                        onClick={() => setStatusFilter(tab.id)}
+                        sx={{
+                          borderRadius: 999,
+                          px: { xs: 1.4, sm: 2 },
+                          py: 0.6,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          minWidth: 'fit-content',
+                          fontSize: { xs: '0.72rem', sm: '0.78rem' },
+                          bgcolor: active ? '#0f766e' : '#ffffff',
+                          color: active ? '#ffffff' : '#334155',
+                          border: '1px solid #e2e8f0',
+                          '&:hover': { bgcolor: active ? '#115e59' : '#f1f5f9' }
+                        }}
+                      >
+                        {tab.label}
+                      </Button>
+                    );
+                  })}
+                </Box>
+
                 {/* Main Search Bar */}
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
                   <TextField
                     size="small"
                     label="Search projects"
                     variant="outlined"
-                    placeholder="Search by name, description, or leader..."
-                    sx={{ flex: 1, minWidth: 200 }}
+                    placeholder="Search projects..."
+                    sx={{ flex: 1, minWidth: { xs: '100%', sm: 220 } }}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     InputProps={{
@@ -499,14 +542,14 @@ const ProjectsPageEnhanced = () => {
                   
                   <Button
                     variant="outlined"
-                    startIcon={<FiFilter />}
+                    startIcon={<FiCalendar />}
                     onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-                    sx={{ textTransform: 'none' }}
+                    sx={{ textTransform: 'none', width: { xs: '100%', sm: 'auto' } }}
                   >
-                    Advanced Filters
+                    Date Range
                   </Button>
                   
-                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
                     <InputLabel>Sort By</InputLabel>
                     <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Sort By">
                       <MenuItem value="date-desc">Newest First</MenuItem>
@@ -518,24 +561,24 @@ const ProjectsPageEnhanced = () => {
                     </Select>
                   </FormControl>
                   
-                  <ToggleButtonGroup
-                    value={viewMode}
-                    exclusive
-                    onChange={(e, newMode) => newMode && setViewMode(newMode)}
-                    size="small"
+                  <Button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setStatusFilter('all');
+                      setPriorityFilter('all');
+                      setLeaderFilter('all');
+                      setDateRangeFilter({ start: '', end: '' });
+                      setCategoryFilter('all');
+                    }}
+                    sx={{ textTransform: 'none', color: '#b45309', fontWeight: 700, width: { xs: '100%', sm: 'auto' } }}
                   >
-                    <ToggleButton value="grid">
-                      <FiGrid />
-                    </ToggleButton>
-                    <ToggleButton value="list">
-                      <FiList />
-                    </ToggleButton>
-                  </ToggleButtonGroup>
+                    CLEAR
+                  </Button>
                 </Box>
 
                 {/* Quick Filters */}
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
                     <InputLabel>Status</InputLabel>
                     <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} label="Status">
                       <MenuItem value="all">All Status</MenuItem>
@@ -546,7 +589,7 @@ const ProjectsPageEnhanced = () => {
                     </Select>
                   </FormControl>
                   
-                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
                     <InputLabel>Priority</InputLabel>
                     <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} label="Priority">
                       <MenuItem value="all">All Priority</MenuItem>
@@ -557,7 +600,7 @@ const ProjectsPageEnhanced = () => {
                     </Select>
                   </FormControl>
                   
-                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
                     <InputLabel>Project Leader</InputLabel>
                     <Select value={leaderFilter} onChange={(e) => setLeaderFilter(e.target.value)} label="Project Leader">
                       <MenuItem value="all">All Leaders</MenuItem>
@@ -590,7 +633,7 @@ const ProjectsPageEnhanced = () => {
 
                 {/* Advanced Search */}
                 {showAdvancedSearch && (
-                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', pt: 2, borderTop: 1, borderColor: 'divider' }}>
                     <TextField
                       size="small"
                       label="Start Date From"
@@ -598,7 +641,7 @@ const ProjectsPageEnhanced = () => {
                       value={dateRangeFilter.start}
                       onChange={(e) => setDateRangeFilter({ ...dateRangeFilter, start: e.target.value })}
                       InputLabelProps={{ shrink: true }}
-                      sx={{ minWidth: 150 }}
+                      sx={{ minWidth: { xs: '100%', sm: 150 } }}
                     />
                     <TextField
                       size="small"
@@ -607,10 +650,10 @@ const ProjectsPageEnhanced = () => {
                       value={dateRangeFilter.end}
                       onChange={(e) => setDateRangeFilter({ ...dateRangeFilter, end: e.target.value })}
                       InputLabelProps={{ shrink: true }}
-                      sx={{ minWidth: 150 }}
+                      sx={{ minWidth: { xs: '100%', sm: 150 } }}
                     />
                     {categories.length > 0 && (
-                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                      <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
                         <InputLabel>Category</InputLabel>
                         <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} label="Category">
                           <MenuItem value="all">All Categories</MenuItem>
@@ -628,132 +671,71 @@ const ProjectsPageEnhanced = () => {
 
           {/* Statistics Cards */}
           {!loading && !error && (
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-              <Grid item xs={12} sm={6} md={3}>
+            <Box
+              sx={{
+                mb: 4,
+                display: 'grid',
+                gap: 2,
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  lg: 'repeat(4, minmax(0, 1fr))'
+                }
+              }}
+            >
+              <Box>
                 <Card sx={{ 
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'white',
+                  background: '#fff',
                   borderRadius: 2,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                  transition: 'transform 0.2s ease-in-out',
-                  '&:hover': { transform: 'translateY(-4px)' }
+                  border: '1px solid #e5e7eb'
                 }}>
                   <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {projectStats.total}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Total Projects
-                        </Typography>
-                      </Box>
-                      <Box sx={{ 
-                        backgroundColor: 'rgba(255,255,255,0.2)', 
-                        borderRadius: '50%', 
-                        p: 1.5
-                      }}>
-                        <FiTrendingUp size={24} />
-                      </Box>
-                    </Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>TOTAL PROJECTS</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.total}</Typography>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} sm={6} md={3}>
+              <Box>
                 <Card sx={{ 
-                  background: 'linear-gradient(135deg, #2196f3 0%, #21cbf3 100%)',
-                  color: 'white',
+                  background: '#fff',
                   borderRadius: 2,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                  transition: 'transform 0.2s ease-in-out',
-                  '&:hover': { transform: 'translateY(-4px)' }
+                  border: '1px solid #e5e7eb',
+                  borderBottom: '3px solid #0f766e'
                 }}>
                   <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {projectStats.inProgress}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          In Progress
-                        </Typography>
-                      </Box>
-                      <Box sx={{ 
-                        backgroundColor: 'rgba(255,255,255,0.2)', 
-                        borderRadius: '50%', 
-                        p: 1.5
-                      }}>
-                        <FiTrendingUp size={24} />
-                      </Box>
-                    </Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>ACTIVE</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.inProgress}</Typography>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} sm={6} md={3}>
+              <Box>
                 <Card sx={{ 
-                  background: 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)',
-                  color: 'white',
+                  background: '#fff',
                   borderRadius: 2,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                  transition: 'transform 0.2s ease-in-out',
-                  '&:hover': { transform: 'translateY(-4px)' }
+                  border: '1px solid #e5e7eb'
                 }}>
                   <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {projectStats.completed}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Completed
-                        </Typography>
-                      </Box>
-                      <Box sx={{ 
-                        backgroundColor: 'rgba(255,255,255,0.2)', 
-                        borderRadius: '50%', 
-                        p: 1.5
-                      }}>
-                        <FiCheckCircle size={24} />
-                      </Box>
-                    </Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>COMPLETED</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.completed}</Typography>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12} sm={6} md={3}>
+              <Box>
                 <Card sx={{ 
-                  background: projectStats.overdue > 0 
-                    ? 'linear-gradient(135deg, #f44336 0%, #ff7043 100%)'
-                    : 'linear-gradient(135deg, #9e9e9e 0%, #bdbdbd 100%)',
-                  color: 'white',
+                  background: '#fff',
                   borderRadius: 2,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                  transition: 'transform 0.2s ease-in-out',
-                  '&:hover': { transform: 'translateY(-4px)' }
+                  border: '1px solid #e5e7eb',
+                  borderBottom: '3px solid #b91c1c'
                 }}>
                   <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {projectStats.overdue}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Overdue
-                        </Typography>
-                      </Box>
-                      <Box sx={{ 
-                        backgroundColor: 'rgba(255,255,255,0.2)', 
-                        borderRadius: '50%', 
-                        p: 1.5
-                      }}>
-                        <FiAlertCircle size={24} />
-                      </Box>
-                    </Box>
+                    <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 700 }}>OVERDUE</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold', mt: 0.6 }}>{projectStats.overdue}</Typography>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
 
               {/* CEO Only: Financial Stats */}
               {isCEO && (
@@ -885,7 +867,7 @@ const ProjectsPageEnhanced = () => {
                   </Grid>
                 </>
               )}
-            </Grid>
+            </Box>
           )}
 
           {/* Analytics Dashboard */}
@@ -977,7 +959,7 @@ const ProjectsPageEnhanced = () => {
                 <Grid container spacing={3}>
                   {paginatedProjects.length > 0 ? (
                     paginatedProjects.map(project => (
-                      <Grid item xs={12} sm={6} lg={4} key={project._id}>
+                      <Grid item xs={12} sm={6} lg={6} key={project._id}>
                         <ProjectCard 
                           project={project} 
                           isOverdue={isOverdue(project)}

@@ -4,10 +4,12 @@ import axios from '../utils/axios'; // Use configured axios instance
 // Async thunks
 export const fetchPayrollHistory = createAsyncThunk(
     'employeePayroll/fetchPayrollHistory',
-    async ({ page = 1, limit = 12 }, { rejectWithValue }) => {
+    async ({ page = 1, limit = 12, year } = {}, { rejectWithValue }) => {
         try {
+            const params = { page, limit };
+            if (year !== undefined && year !== null && year !== '') params.year = year;
             const response = await axios.get(`/v1/employee/payroll/history`, {
-                params: { page, limit }
+                params
             });
             return response.data;
         } catch (error) {
@@ -82,6 +84,8 @@ export const downloadPayslip = createAsyncThunk(
 
 const initialState = {
     loading: false,
+    historyLoading: false,
+    payslipDownloading: false,
     error: null,
     payrollHistory: {
         payrolls: [],
@@ -105,6 +109,9 @@ const employeePayrollSlice = createSlice({
         clearSelectedPayroll: (state) => {
             state.selectedPayroll = null;
         },
+        clearMonthPayrollView: (state) => {
+            state.selectedMonthPayroll = null;
+        },
         clearPayslipData: (state) => {
             state.payslipData = null;
         }
@@ -113,15 +120,15 @@ const employeePayrollSlice = createSlice({
         builder
             // Fetch Payroll History
             .addCase(fetchPayrollHistory.pending, (state) => {
-                state.loading = true;
+                state.historyLoading = true;
                 state.error = null;
             })
             .addCase(fetchPayrollHistory.fulfilled, (state, action) => {
-                state.loading = false;
+                state.historyLoading = false;
                 state.payrollHistory = action.payload;
             })
             .addCase(fetchPayrollHistory.rejected, (state, action) => {
-                state.loading = false;
+                state.historyLoading = false;
                 state.error = action.payload;
             })
             // Fetch Current Month Payroll
@@ -164,19 +171,19 @@ const employeePayrollSlice = createSlice({
             })
             // Download Payslip
             .addCase(downloadPayslip.pending, (state) => {
-                state.loading = true;
+                state.payslipDownloading = true;
                 state.error = null;
             })
             .addCase(downloadPayslip.fulfilled, (state, action) => {
-                state.loading = false;
+                state.payslipDownloading = false;
                 state.payslipData = action.payload;
             })
             .addCase(downloadPayslip.rejected, (state, action) => {
-                state.loading = false;
+                state.payslipDownloading = false;
                 state.error = action.payload;
             });
     }
 });
 
-export const { clearError, clearSelectedPayroll, clearPayslipData } = employeePayrollSlice.actions;
+export const { clearError, clearSelectedPayroll, clearPayslipData, clearMonthPayrollView } = employeePayrollSlice.actions;
 export default employeePayrollSlice.reducer;

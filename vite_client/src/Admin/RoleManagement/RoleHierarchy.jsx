@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiUsers, FiShield, FiChevronDown, FiChevronRight } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiUsers, FiShield, FiChevronDown, FiChevronRight, FiUserPlus } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 
@@ -8,8 +8,12 @@ const RoleHierarchy = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
   const [expandedRoles, setExpandedRoles] = useState(new Set());
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -42,7 +46,11 @@ const RoleHierarchy = () => {
   const handleCreateRole = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('/v1/admin/roles', formData);
+      const payload = {
+        ...formData,
+        ...(formData.parentRole ? { parentRole: formData.parentRole } : {})
+      };
+      await axios.post('/v1/admin/roles', payload);
       toast.success('Role created successfully');
       setShowCreateModal(false);
       resetForm();
@@ -56,7 +64,11 @@ const RoleHierarchy = () => {
   const handleUpdateRole = async (e) => {
     e.preventDefault();
     try {
-      await axios.put(`/v1/admin/roles/${selectedRole._id}`, formData);
+      const payload = {
+        ...formData,
+        ...(formData.parentRole ? { parentRole: formData.parentRole } : { parentRole: null })
+      };
+      await axios.put(`/v1/admin/roles/${selectedRole._id}`, payload);
       toast.success('Role updated successfully');
       setShowEditModal(false);
       resetForm();
@@ -77,6 +89,55 @@ const RoleHierarchy = () => {
         // Removed console.error for production
         toast.error(error.response?.data?.message || 'Failed to delete role');
       }
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true);
+      const response = await axios.get('/v1/employee/auth/get-all-employees');
+      const employeesData = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data?.employees)
+            ? response.data.employees
+            : [];
+      setEmployees(employeesData);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to fetch employees');
+      setEmployees([]);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  const openAssignModal = async (role) => {
+    setSelectedRole(role);
+    setSelectedEmployeeId('');
+    setShowAssignModal(true);
+    if (!employees.length) {
+      await fetchEmployees();
+    }
+  };
+
+  const handleAssignRole = async (e) => {
+    e.preventDefault();
+    if (!selectedEmployeeId || !selectedRole?._id) {
+      toast.error('Please select an employee');
+      return;
+    }
+    try {
+      await axios.post('/v1/admin/roles/assign', {
+        employeeId: selectedEmployeeId,
+        roleId: selectedRole._id
+      });
+      toast.success(`Role "${selectedRole.name}" assigned successfully`);
+      setShowAssignModal(false);
+      setSelectedEmployeeId('');
+      setSelectedRole(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to assign role');
     }
   };
 
@@ -159,6 +220,13 @@ const RoleHierarchy = () => {
               {role.permissions?.length || 0} permissions
             </span>
             <div className="flex space-x-2">
+              <button
+                onClick={() => openAssignModal(role)}
+                className="p-3 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all duration-200 group-hover:bg-green-50"
+                title="Assign Role"
+              >
+                <FiUserPlus className="w-5 h-5" />
+              </button>
               <button
                 onClick={() => openEditModal(role)}
                 className="p-3 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 group-hover:bg-theme-secondary/10"
@@ -362,6 +430,23 @@ const RoleHierarchy = () => {
           roles={roles.filter(role => role._id !== selectedRole?._id)}
         />
       )}
+
+      {/* Assign Role Modal */}
+      {showAssignModal && selectedRole && (
+        <AssignRoleModal
+          role={selectedRole}
+          employees={employees}
+          selectedEmployeeId={selectedEmployeeId}
+          setSelectedEmployeeId={setSelectedEmployeeId}
+          loadingEmployees={loadingEmployees}
+          onSubmit={handleAssignRole}
+          onClose={() => {
+            setShowAssignModal(false);
+            setSelectedEmployeeId('');
+            setSelectedRole(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -537,6 +622,81 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
               className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
             >
               {title.includes('Create') ? 'Create Role' : 'Update Role'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const AssignRoleModal = ({
+  role,
+  employees,
+  selectedEmployeeId,
+  setSelectedEmployeeId,
+  loadingEmployees,
+  onSubmit,
+  onClose
+}) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-gray-900">Assign Role</h3>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
+            <input
+              type="text"
+              disabled
+              value={`${role?.name || ''} (Level ${role?.level || '-'})`}
+              className="w-full p-4 border border-gray-300 rounded-xl bg-gray-50 text-gray-700"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Select Employee</label>
+            <select
+              value={selectedEmployeeId}
+              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+              className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
+              required
+            >
+              <option value="">{loadingEmployees ? 'Loading employees...' : 'Choose an employee...'}</option>
+              {!loadingEmployees &&
+                employees.map((employee) => (
+                  <option key={employee._id} value={employee._id}>
+                    {employee.name} {employee.lastName} - {employee.employeeId}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-3 text-gray-600 hover:text-gray-800 font-semibold rounded-xl hover:bg-gray-100 transition-all duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2"
+            >
+              <FiUserPlus className="w-4 h-4" />
+              Assign Role
             </button>
           </div>
         </form>

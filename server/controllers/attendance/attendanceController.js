@@ -1,5 +1,6 @@
 import Attendance from "../../models/attendance.model.js";
 import Employee from "../../models/employee.model.js"
+import Leave from "../../models/leave.model.js";
 import AttendanceRule from "../../models/attendanceRule.model.js";
 import Calendar from "../../models/calendar.model.js";
 import User from "../../models/user.model.js";
@@ -1337,6 +1338,8 @@ export const getLogs = async (req, res) => {
     const organizationId = getOrganizationId(req);
     const { startDate, endDate } = req.query;
     const userId = req.employee._id;
+    const userIdString = String(userId);
+    const employeeEmail = (req.employee?.email || '').trim().toLowerCase();
     const query = addOrganizationFilter(req, { userId });
     // Resolve period (local time). If not provided, default to current month.
     let periodStart;
@@ -1359,7 +1362,50 @@ export const getLogs = async (req, res) => {
 
     query.date = { $gte: periodStart, $lte: periodEnd };
 
-    const logs = await Attendance.find(query).sort({ date: -1 });
+    let logs = await Attendance.find(query).sort({ date: -1 });
+
+    // Backward compatibility: older attendance rows may have:
+    // 1) missing organizationId, or
+    // 2) a previous employee _id for the same email.
+    // Merge these rows so employees can still view historical monthly logs.
+    if (employeeEmail) {
+      const sameEmailEmployees = await Employee.find({
+        email: employeeEmail
+      }).select('_id organizationId').lean();
+
+      const candidateUserIds = Array.from(
+        new Set(
+          sameEmailEmployees
+            .map((emp) => emp?._id?.toString?.())
+            .filter(Boolean)
+            .concat(userIdString)
+        )
+      );
+
+      if (candidateUserIds.length > 0) {
+        const legacyQuery = {
+          userId: { $in: candidateUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          date: { $gte: periodStart, $lte: periodEnd },
+          $or: [
+            { organizationId: organizationId || null },
+            { organizationId: { $exists: false } },
+            { organizationId: null }
+          ]
+        };
+
+        const legacyLogs = await Attendance.find(legacyQuery).sort({ date: -1 });
+
+        if (legacyLogs.length > 0) {
+          const seen = new Set();
+          logs = [...logs, ...legacyLogs].filter((row) => {
+            const key = row?._id?.toString?.();
+            if (!key || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        }
+      }
+    }
 
     const dailyStats = {};
     const sessions = [];
@@ -1553,8 +1599,8 @@ export const getTodayStatus = async (req, res) => {
     }
     
     const allEmployees = await Employee.find(
-      employeeQuery, 
-      '_id name email department position employeeId'
+      employeeQuery,
+      '_id name lastName email department position employeeId profilePhoto'
     );
     
     // 2. Get today's attendance records with breaks populated for this organization
@@ -1628,9 +1674,11 @@ export const getTodayStatus = async (req, res) => {
         employee: {
           _id: employee._id,
           name: employee.name,
+          lastName: employee.lastName,
           email: employee.email,
           department: employee.department,
-          position: employee.position
+          position: employee.position,
+          profilePhoto: employee.profilePhoto
         },
         status: isOnBreak ? 'onBreak' : (record.status || 'present'),
         clockIn: record.clockIn,
@@ -1655,9 +1703,11 @@ export const getTodayStatus = async (req, res) => {
         employee: {
           _id: emp._id,
           name: emp.name,
+          lastName: emp.lastName,
           email: emp.email,
           department: emp.department,
-          position: emp.position
+          position: emp.position,
+          profilePhoto: emp.profilePhoto
         },
         status: 'absent',
         clockIn: null,
@@ -1735,7 +1785,7 @@ export const getEmployeeList = async (req, res) => {
     if (includeInactive === 'true') delete query.active; // Remove active filter if including inactive
     
     const employees = await Employee.find(query)
-      .select('_id name email department position employeeId active')
+      .select('_id name lastName email department position employeeId active profilePhoto')
       .sort({ name: 1 });
     
     res.json({
@@ -1963,7 +2013,7 @@ export const getAttendanceSummary = async (req, res) => {
 export const getEmployeeAttendanceDetails = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, full } = req.query;
 
     // Validate employee exists and belongs to same organization
     const organizationId = getOrganizationId(req);
@@ -2030,6 +2080,7 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
       employee: {
         _id: employee._id,
         name: employee.name,
+        lastName: employee.lastName,
         email: employee.email,
         department: employee.department,
         position: employee.position,
@@ -2054,12 +2105,289 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
         lateArrivals: records.filter(r => r.isLateArrival).length,
         earlyDepartures: records.filter(r => r.isEarlyDeparture).length
       },
-      recentRecords: records.slice(0, 10) // Last 10 records
+      recentRecords: full === 'true' ? records : records.slice(0, 10)
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: error.message
+    });
+  }
+};
+
+const toYmd = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, '0');
+  const day = String(x.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const classifyTeamAttendanceRow = (record, leaveDaySet, userIdStr, dateYmd) => {
+  if (record.status === 'absent') {
+    if (leaveDaySet.has(`${userIdStr}|${dateYmd}`)) return 'leave';
+    return 'absent';
+  }
+  if (record.workLocation === 'work_from_home') return 'wfh';
+  if (record.isLateArrival) return 'late';
+  return 'present';
+};
+
+/**
+ * Team attendance history — flat rows with KPIs and chart series for admin/HR/manager.
+ */
+export const getTeamAttendanceHistory = async (req, res) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      department,
+      search,
+      status: statusFilter,
+      sort = 'date_desc',
+      page = '1',
+      limit = '25'
+    } = req.query;
+
+    const query = addOrganizationFilter(req, { active: true });
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManager && req.employee) {
+      const managerQuery = buildManagerMatchQuery(req.employee);
+      if (managerQuery?.$or) query.$or = managerQuery.$or;
+    } else if (department) {
+      query.department = department;
+    }
+
+    let employees = await Employee.find(query)
+      .select('_id name lastName email department position employeeId active profilePhoto')
+      .sort({ name: 1 })
+      .lean();
+
+    const q = (search || '').trim().toLowerCase();
+    if (q) {
+      employees = employees.filter((e) => {
+        const name = `${e.name || ''} ${e.lastName || ''}`.toLowerCase();
+        const mail = (e.email || '').toLowerCase();
+        return name.includes(q) || mail.includes(q);
+      });
+    }
+
+    const employeeIds = employees.map((e) => e._id);
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
+    const pg = Math.max(parseInt(page, 10) || 1, 1);
+
+    const empty = () =>
+      res.json({
+        success: true,
+        total: 0,
+        page: pg,
+        limit: lim,
+        kpis: {
+          avgAttendancePct: 0,
+          totalLateDays: 0,
+          totalAbsentDays: 0,
+          wfhDays: 0,
+          leaveDays: 0
+        },
+        dailyTrend: [],
+        memberBreakdown: [],
+        records: []
+      });
+
+    if (!employeeIds.length) {
+      return empty();
+    }
+
+    const now = new Date();
+    const rangeStart = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const rangeEnd = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    rangeStart.setHours(0, 0, 0, 0);
+    rangeEnd.setHours(23, 59, 59, 999);
+
+    const rangeStartDay = new Date(rangeStart);
+    rangeStartDay.setHours(0, 0, 0, 0);
+    const rangeEndDay = new Date(rangeEnd);
+    rangeEndDay.setHours(0, 0, 0, 0);
+
+    const leaveRows = await Leave.find(
+      addOrganizationFilter(req, {
+        employee: { $in: employeeIds },
+        status: 'approved',
+        startDate: { $lte: rangeEnd },
+        endDate: { $gte: rangeStart }
+      })
+    )
+      .select('employee startDate endDate')
+      .lean();
+
+    const leaveDaySet = new Set();
+    for (const L of leaveRows) {
+      const empKey = L.employee?.toString?.() || String(L.employee);
+      let d = new Date(L.startDate);
+      d.setHours(0, 0, 0, 0);
+      const last = new Date(L.endDate);
+      last.setHours(0, 0, 0, 0);
+      while (d <= last) {
+        if (d >= rangeStartDay && d <= rangeEndDay) {
+          leaveDaySet.add(`${empKey}|${toYmd(d)}`);
+        }
+        d.setDate(d.getDate() + 1);
+      }
+    }
+
+    const attQuery = addOrganizationFilter(req, {
+      userId: { $in: employeeIds },
+      date: { $gte: rangeStartDay, $lte: rangeEnd }
+    });
+
+    const rawRecords = await Attendance.find(attQuery)
+      .populate('userId', 'name lastName email department position employeeId profilePhoto')
+      .sort({ date: -1, createdAt: -1 })
+      .lean();
+
+    const mapped = [];
+    for (const record of rawRecords) {
+      const pop = record.userId;
+      if (!pop || !pop._id) continue;
+      const userIdStr = pop._id.toString();
+      const dateYmd = toYmd(record.date);
+      const uiStatus = classifyTeamAttendanceRow(record, leaveDaySet, userIdStr, dateYmd);
+
+      const photoRef = pop.profilePhoto?.url || pop.profilePhoto;
+      let profilePhoto = null;
+      if (typeof photoRef === 'string') profilePhoto = photoRef;
+      else if (photoRef?.url) profilePhoto = photoRef.url;
+
+      let breakMinutes = 0;
+      if (Array.isArray(record.breaks) && record.breaks.length > 0) {
+        for (const b of record.breaks) {
+          if (b?.breakIn && b?.breakOut) {
+            const ms = new Date(b.breakOut) - new Date(b.breakIn);
+            if (Number.isFinite(ms) && ms > 0) breakMinutes += Math.round(ms / 60000);
+          }
+        }
+      }
+
+      mapped.push({
+        _id: record._id,
+        date: record.date,
+        dateKey: dateYmd,
+        clockIn: record.clockIn,
+        clockOut: record.clockOut,
+        effectiveHours: record.effectiveHours,
+        grossHours: record.grossHours,
+        breakMinutes,
+        status: record.status,
+        uiStatus,
+        workLocation: record.workLocation,
+        isLateArrival: record.isLateArrival,
+        employee: {
+          _id: pop._id,
+          name: pop.name,
+          lastName: pop.lastName,
+          email: pop.email,
+          department: pop.department,
+          position: pop.position,
+          employeeId: pop.employeeId,
+          profilePhoto
+        }
+      });
+    }
+
+    let filtered = mapped;
+    if (statusFilter && statusFilter !== 'all') {
+      filtered = mapped.filter((r) => r.uiStatus === statusFilter);
+    }
+
+    const total = filtered.length;
+
+    if (sort === 'date_asc') {
+      filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+    } else {
+      filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+
+    const skip = (pg - 1) * lim;
+    const pageRows = filtered.slice(skip, skip + lim);
+
+    const strictAbsent = mapped.filter((r) => r.uiStatus === 'absent').length;
+    const avgAttendancePct =
+      mapped.length > 0 ? Math.round(((mapped.length - strictAbsent) / mapped.length) * 100) : 0;
+
+    const totalLateDays = mapped.filter((r) => r.uiStatus === 'late').length;
+    const totalAbsentDays = mapped.filter((r) => r.uiStatus === 'absent').length;
+    const wfhDays = mapped.filter((r) => r.uiStatus === 'wfh').length;
+    const leaveDays = mapped.filter((r) => r.uiStatus === 'leave').length;
+
+    const byDate = {};
+    for (const row of mapped) {
+      const k = row.dateKey;
+      if (!byDate[k]) byDate[k] = { total: 0, good: 0 };
+      byDate[k].total += 1;
+      if (row.uiStatus !== 'absent') byDate[k].good += 1;
+    }
+    const dailyTrend = Object.keys(byDate)
+      .sort()
+      .map((k) => {
+        const { total: t, good: g } = byDate[k];
+        const d = new Date(`${k}T12:00:00`);
+        return {
+          dateKey: k,
+          label: d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' }).toUpperCase(),
+          pct: t ? Math.round((g / t) * 100) : 0,
+          recordCount: t
+        };
+      });
+
+    const byMember = {};
+    for (const row of mapped) {
+      const id = row.employee._id.toString();
+      if (!byMember[id]) {
+        byMember[id] = {
+          employeeId: id,
+          name: [row.employee.name, row.employee.lastName].filter(Boolean).join(' ').trim(),
+          title: row.employee.position || '—',
+          present: 0,
+          late: 0,
+          absent: 0,
+          wfh: 0,
+          leave: 0
+        };
+      }
+      byMember[id][row.uiStatus] += 1;
+    }
+    const memberBreakdown = Object.values(byMember)
+      .sort(
+        (a, b) =>
+          b.present + b.late + b.wfh + b.absent + b.leave - (a.present + a.late + a.wfh + a.absent + a.leave)
+      )
+      .slice(0, 12);
+
+    return res.json({
+      success: true,
+      total,
+      page: pg,
+      limit: lim,
+      kpis: {
+        avgAttendancePct,
+        totalLateDays,
+        totalAbsentDays,
+        wfhDays,
+        leaveDays
+      },
+      dailyTrend,
+      memberBreakdown,
+      records: pageRows
+    });
+  } catch (error) {
+    logger.error('getTeamAttendanceHistory failed', {
+      error: error.message,
+      stack: error.stack
+    });
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load team attendance history'
     });
   }
 };

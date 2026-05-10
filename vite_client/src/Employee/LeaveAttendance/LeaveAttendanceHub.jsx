@@ -64,6 +64,25 @@ const formatHours = (value) => {
   return `${h}h ${String(m).padStart(2, '0')}m`;
 };
 
+const formatBreakTime = (row) => {
+  if (!row || !Array.isArray(row.breaks) || row.breaks.length === 0) return '--';
+  const nowMs = Date.now();
+  const totalMs = row.breaks.reduce((sum, b) => {
+    if (!b?.breakIn) return sum;
+    const breakIn = new Date(b.breakIn).getTime();
+    if (!Number.isFinite(breakIn)) return sum;
+    const breakOut = b.breakOut ? new Date(b.breakOut).getTime() : nowMs;
+    if (!Number.isFinite(breakOut) || breakOut <= breakIn) return sum;
+    return sum + (breakOut - breakIn);
+  }, 0);
+  if (totalMs <= 0) return '--';
+  const totalMinutes = Math.round(totalMs / (1000 * 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+};
+
 const statusPill = (status) => {
   const s = String(status || '').toLowerCase();
   if (s.includes('present')) return 'bg-[#DCFCE7] text-[#15803D]';
@@ -679,6 +698,10 @@ const LeaveAttendanceHub = () => {
                             <p className="text-[11px] text-[#64748B]">Hours</p>
                             <p className="mt-0.5 font-semibold text-[#1E293B]">{formatHours(row?.grossHours || row?.effectiveHours)}</p>
                           </div>
+                          <div className="rounded-lg bg-[#F8FAFC] px-2.5 py-2 col-span-2">
+                            <p className="text-[11px] text-[#64748B]">Break time</p>
+                            <p className="mt-0.5 font-semibold text-[#1E293B]">{formatBreakTime(row)}</p>
+                          </div>
                         </div>
                         <div className="mt-3">
                           {renderRegularizationAction(row, true)}
@@ -695,6 +718,7 @@ const LeaveAttendanceHub = () => {
                         <th className="px-4 py-3">Check-in</th>
                         <th className="px-4 py-3">Check-out</th>
                         <th className="px-4 py-3">Hours</th>
+                        <th className="px-4 py-3">Break time</th>
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3">Action</th>
                       </tr>
@@ -702,7 +726,7 @@ const LeaveAttendanceHub = () => {
                     <tbody>
                       {paginatedLogs.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-6 text-center text-sm text-[#64748B]">No attendance logs found.</td>
+                          <td colSpan={7} className="px-4 py-6 text-center text-sm text-[#64748B]">No attendance logs found.</td>
                         </tr>
                       ) : paginatedLogs.map((row) => {
                         const s = String(row?.status || '').toLowerCase();
@@ -712,6 +736,7 @@ const LeaveAttendanceHub = () => {
                             <td className="px-4 py-3">{formatTime(row?.clockIn)}</td>
                             <td className="px-4 py-3">{formatTime(row?.clockOut)}</td>
                             <td className="px-4 py-3">{formatHours(row?.grossHours || row?.effectiveHours)}</td>
+                            <td className="px-4 py-3">{formatBreakTime(row)}</td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusPill(s)}`}>
                                 {s.includes('weekend') ? 'Weekend' : (s || 'N/A').replaceAll('_', ' ')}

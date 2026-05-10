@@ -59,7 +59,7 @@ export const getAllLeaves = async (req, res) => {
         const [leaves, total] = await Promise.all([
             Leave.find(query)
                 .select('-__v')
-                .populate('employee', 'name email department')
+                .populate('employee', 'name lastName email department jobTitle designation position profilePhoto')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -177,7 +177,7 @@ export const updateLeaveStatus = async (req, res) => {
         // Example: Manager "Arun Kumar" can only approve/reject leaves for employees with manager="Arun Kumar" or "Arun"
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
         if (isManager && req.employee) {
-            const leaveEmployee = await Employee.findById(leave.employee?._id || leave.employee).select('manager').lean();
+            const leaveEmployee = await Employee.findById(leave.employee?._id || leave.employee).select('manager managerId').lean();
             if (!leaveEmployee) {
                 return res.status(404).json({ 
                     success: false,

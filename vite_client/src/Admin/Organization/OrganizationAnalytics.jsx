@@ -19,6 +19,7 @@ import {
     Filler
 } from 'chart.js';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { toast } from 'react-toastify';
 
 // Register Chart.js components
 ChartJS.register(
@@ -49,14 +50,30 @@ const OrganizationAnalytics = () => {
             const response = await axios.get(`${ORGANIZATION_ENDPOINT}/analytics`, {
                 params: { timeRange }
             });
-            if (response.data.success) {
+            if (response.data.success && response.data.analytics) {
                 setAnalytics(response.data.analytics);
+            } else {
+                setAnalytics(null);
+                toast.error(response.data?.message || 'Could not load organization analytics.');
             }
         } catch (error) {
             logger.error('Failed to fetch analytics', { error: error.message });
+            setAnalytics(null);
+            toast.error(
+                error.response?.data?.message || error.message || 'Failed to load organization analytics.'
+            );
         } finally {
             setLoading(false);
         }
+    };
+
+    const formatInr = (n) => {
+        const v = Number(n) || 0;
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            maximumFractionDigits: 0
+        }).format(v);
     };
 
     if (loading) {
@@ -211,7 +228,7 @@ const OrganizationAnalytics = () => {
                             <div>
                                 <p className="text-sm text-gray-600">Total Payroll</p>
                                 <p className="text-3xl font-bold text-gray-900 mt-2">
-                                    ${(stats.totalPayroll || 0).toLocaleString()}
+                                    {formatInr(stats.totalPayroll || 0)}
                                 </p>
                                 <p className="text-sm text-gray-600 mt-2">
                                     This {timeRange === '7d' ? 'week' : timeRange === '30d' ? 'month' : 'period'}

@@ -1,29 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FiDollarSign, 
-  FiPlus, 
-  FiEdit, 
-  FiTrash2, 
-  FiUsers, 
-  FiSettings, 
-  FiTrendingUp,
-  FiTrendingDown,
-  FiClock,
-  FiCheckCircle,
-  FiXCircle,
-  FiEye,
-  FiSave,
-  FiX,
+import React, { useEffect, useMemo, useState } from "react";
+import {
   FiCalendar,
-  FiUser,
+  FiCheckCircle,
+  FiClock,
+  FiDollarSign,
+  FiEdit,
+  FiPlus,
+  FiSave,
+  FiSettings,
   FiTarget,
-  FiAward,
-  FiPercent,
-  FiCreditCard
-} from 'react-icons/fi';
-import { FaCalculator, FaMoneyBillWave } from 'react-icons/fa';
-import { toast } from 'react-toastify';
-import axios from '../../utils/axios';
+  FiTrash2,
+  FiTrendingDown,
+  FiTrendingUp,
+  FiUser,
+  FiUsers,
+  FiXCircle
+} from "react-icons/fi";
+import { FaCalculator } from "react-icons/fa";
+import { toast } from "react-toastify";
+import axios from "../../utils/axios";
 
 const SalaryStructureManager = () => {
   const [structures, setStructures] = useState([]);
@@ -232,157 +227,167 @@ const SalaryStructureManager = () => {
     setShowCalculateModal(true);
   };
 
+  const totalStructures = structures.length;
+  const activeStructures = useMemo(
+    () => structures.filter((structure) => structure?.isActive).length,
+    [structures]
+  );
+  const avgDeductions = useMemo(() => {
+    if (!structures.length) return 0;
+    const total = structures.reduce((sum, structure) => {
+      const deductionPercent = Object.values(structure?.deductions || {}).reduce((sub, value) => {
+        const parsed = Number(value?.percentage || 0);
+        return sub + (Number.isFinite(parsed) ? parsed : 0);
+      }, 0);
+      return sum + deductionPercent;
+    }, 0);
+    return total / structures.length;
+  }, [structures]);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FaMoneyBillWave className="w-8 h-8 text-white animate-pulse" />
-          </div>
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-theme-accent border-t-indigo-500 mx-auto"></div>
-          <p className="text-gray-600 mt-4 font-medium">Loading salary structures...</p>
+      <div className="min-h-screen bg-[#F3F7F5] flex items-center justify-center">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-500" />
+          <p className="mt-3 text-sm font-medium text-slate-600">Loading salary structures...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 md:p-6 lg:p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header Section */}
-        <div className="bg-white/80 backdrop-blur-lg rounded-3xl p-6 md:p-8 shadow-2xl border border-white/20">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <FaMoneyBillWave className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-2">
-                  Salary Structure Management
-                </h1>
-                <p className="text-lg text-gray-600 flex items-center gap-2">
-                  <FiTarget className="w-5 h-5" />
-                  Create and manage comprehensive salary structures for employees
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5"
-              >
-                <FiPlus className="w-5 h-5" />
-                <span>Create Structure</span>
-              </button>
-            </div>
+    <div className="min-h-screen bg-[#F3F7F5]">
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
+        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Salary Structure Management</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Configure earnings, deductions, bonus rules and overtime in one place.
+            </p>
+          </div>
+          <div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
+              style={{ backgroundColor: "var(--color-primary)" }}
+            >
+              <FiPlus className="h-4 w-4" />
+              Create Structure
+            </button>
           </div>
         </div>
 
-        {/* Structures List */}
-        <div className="bg-white/80 backdrop-blur-lg rounded-3xl p-6 md:p-8 shadow-2xl border border-white/20">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
-              <FiDollarSign className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">Salary Structures</h2>
-              <p className="text-gray-600">Manage your organization's salary structures</p>
-            </div>
-            <div className="ml-auto">
-              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-2 rounded-xl font-semibold text-sm">
-                {structures.length} Structures
-              </div>
-            </div>
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Total structures</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{totalStructures}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Active structures</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{activeStructures}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Avg. deduction %</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{avgDeductions.toFixed(1)}%</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-slate-900">Salary Structures</h2>
+            <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {totalStructures} total
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
             {structures.map(structure => (
               <div 
                 key={structure._id} 
-                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 hover:border-indigo-300 group"
+                className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                      <FiDollarSign className="w-6 h-6 text-white" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600">
+                      <FiDollarSign className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-gray-900 text-lg mb-1">{structure.name}</h3>
-                      <p className="text-sm text-gray-600 capitalize flex items-center gap-1">
-                        <FiUser className="w-4 h-4" />
+                      <h3 className="font-semibold text-slate-900">{structure.name}</h3>
+                      <p className="text-xs text-slate-500 capitalize flex items-center gap-1">
+                        <FiUser className="h-3 w-3" />
                         {structure.applicableTo}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
                     <button
                       onClick={() => openCalculateModal(structure)}
-                      className="p-2 text-gray-400 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-xl transition-all duration-200 hover:scale-110"
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                       title="Calculate Salary"
                     >
-                      <FaCalculator className="w-4 h-4" />
+                      <FaCalculator className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => openApplyModal(structure)}
-                      className="p-2 text-gray-400 hover:text-green-500 hover:bg-theme-primary/10 rounded-xl transition-all duration-200 hover:scale-110"
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-emerald-600"
                       title="Apply to Employee"
                     >
-                      <FiUsers className="w-4 h-4" />
+                      <FiUsers className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => openEditModal(structure)}
-                      className="p-2 text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 rounded-xl transition-all duration-200 hover:scale-110"
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-amber-600"
                       title="Edit Structure"
                     >
-                      <FiEdit className="w-4 h-4" />
+                      <FiEdit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteStructure(structure._id)}
-                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 hover:scale-110"
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600"
                       title="Delete Structure"
                     >
-                      <FiTrash2 className="w-4 h-4" />
+                      <FiTrash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-600 mb-4 line-clamp-2">{structure.description}</p>
+                <p className="mb-4 line-clamp-2 text-sm text-slate-600">{structure.description || "No description added."}</p>
 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 flex items-center gap-1">
-                      <FiTarget className="w-4 h-4" />
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <FiTarget className="h-3 w-3" />
                       Applicable To:
                     </span>
-                    <span className="font-semibold text-gray-900 capitalize">{structure.applicableTo}</span>
+                    <span className="font-semibold text-slate-900 capitalize text-sm">{structure.applicableTo}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 flex items-center gap-1">
-                      <FiCalendar className="w-4 h-4" />
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <FiCalendar className="h-3 w-3" />
                       Created:
                     </span>
-                    <span className="font-semibold text-gray-900">
+                    <span className="font-semibold text-slate-900 text-sm">
                       {new Date(structure.createdAt).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 flex items-center gap-1">
-                      <FiCheckCircle className="w-4 h-4" />
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <FiCheckCircle className="h-3 w-3" />
                       Status:
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
                       structure.isActive 
-                        ? 'bg-theme-primary/10 text-theme-primary' 
-                        : 'bg-red-100 text-red-800'
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : 'bg-red-100 text-red-700'
                     }`}>
                       {structure.isActive ? (
                         <>
-                          <FiCheckCircle className="w-3 h-3" />
+                          <FiCheckCircle className="h-3 w-3" />
                           Active
                         </>
                       ) : (
                         <>
-                          <FiXCircle className="w-3 h-3" />
+                          <FiXCircle className="h-3 w-3" />
                           Inactive
                         </>
                       )}
@@ -395,20 +400,18 @@ const SalaryStructureManager = () => {
         </div>
 
         {structures.length === 0 && (
-          <div className="bg-white/80 backdrop-blur-lg rounded-3xl p-12 shadow-2xl border border-white/20 text-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
-              <FiDollarSign className="w-12 h-12 text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-3">No Salary Structures</h3>
-            <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto">
-              Create your first salary structure to start managing employee compensation effectively
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+            <h3 className="text-xl font-semibold text-slate-900">No Salary Structures</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+              Create your first structure to start assigning salary components to employees.
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 flex items-center gap-3 mx-auto"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              style={{ backgroundColor: "var(--color-primary)" }}
             >
-              <FiPlus className="w-5 h-5" />
-              Create Your First Structure
+              <FiPlus className="h-4 w-4" />
+              Create First Structure
             </button>
           </div>
         )}
@@ -519,49 +522,49 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
+      <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center">
-            <FiSettings className="w-6 h-6 text-white" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+            <FiSettings className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
-            <p className="text-gray-600">Configure salary structure details and rules</p>
+            <h3 className="text-2xl font-bold text-slate-900">{title}</h3>
+            <p className="text-slate-600">Configure salary structure details and rules</p>
           </div>
         </div>
         
         <form onSubmit={onSubmit} className="space-y-8">
           {/* Basic Information */}
-          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl p-6">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <FiUser className="w-4 h-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600">
+                <FiUser className="h-4 w-4" />
               </div>
               <h4 className="text-lg font-bold text-gray-900">Basic Information</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Structure Name
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                   placeholder="Enter structure name"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Applicable To
                 </label>
                 <select
                   value={formData.applicableTo}
                   onChange={(e) => setFormData({ ...formData, applicableTo: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                 >
                   <option value="all">All Employees</option>
                   <option value="department">Department</option>
@@ -572,13 +575,13 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
             </div>
 
             <div className="mt-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 resize-none"
+                className="w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                 rows="3"
                 placeholder="Describe this salary structure..."
               />
@@ -586,17 +589,17 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
           </div>
 
           {/* Earnings Section */}
-          <div className="bg-gradient-to-r from-white to-theme-primary/10 rounded-2xl p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                <FiTrendingUp className="w-4 h-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <FiTrendingUp className="h-4 w-4" />
               </div>
               <h4 className="text-lg font-bold text-gray-900">Earnings</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(formData.earnings).map(([field, config]) => (
-                <div key={field} className="bg-white rounded-xl p-4 border border-gray-200">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3 capitalize">
+                <div key={field} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-3 capitalize">
                     {field.replace(/([A-Z])/g, ' $1').trim()}
                   </label>
                   {field === 'specialAllowance' ? (
@@ -605,14 +608,14 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
                         <input
                           type="text"
                           value="Auto (Gross - Basic - HRA)"
-                          className="flex-1 px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg cursor-not-allowed"
+                          className="flex-1 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600"
                           readOnly
                         />
-                        <span className="px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg">
+                        <span className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600">
                           Auto
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-slate-500">
                         Special Allowance is auto-calculated during payroll generation as the balance amount.
                       </p>
                     </div>
@@ -623,13 +626,13 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
                         step="0.01"
                         value={config.isPercentage ? config.percentage : config.fixedAmount}
                         onChange={(e) => handleEarningChange(field, config.isPercentage ? 'percentage' : 'fixedAmount', parseFloat(e.target.value) || 0)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-theme-primary transition-all duration-200"
+                        className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                         placeholder="0.00"
                       />
                       <select
                         value={config.isPercentage ? 'percentage' : 'fixed'}
                         onChange={(e) => handleEarningChange(field, 'isPercentage', e.target.value === 'percentage')}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-theme-primary transition-all duration-200"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                       >
                         <option value="percentage">%</option>
                         <option value="fixed">₹</option>
@@ -642,17 +645,17 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
           </div>
 
           {/* Deductions Section */}
-          <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-600 rounded-lg flex items-center justify-center">
-                <FiTrendingDown className="w-4 h-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+                <FiTrendingDown className="h-4 w-4" />
               </div>
               <h4 className="text-lg font-bold text-gray-900">Deductions</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(formData.deductions).map(([field, config]) => (
-                <div key={field} className="bg-white rounded-xl p-4 border border-gray-200">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3 capitalize">
+                <div key={field} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-3 capitalize">
                     {field.replace(/([A-Z])/g, ' $1').trim()}
                   </label>
                   <div className="flex items-center gap-3">
@@ -661,13 +664,13 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
                       step="0.01"
                       value={config.isPercentage ? config.percentage : config.fixedAmount}
                       onChange={(e) => handleDeductionChange(field, config.isPercentage ? 'percentage' : 'fixedAmount', parseFloat(e.target.value) || 0)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                       placeholder="0.00"
                     />
                     <select
                       value={config.isPercentage ? 'percentage' : 'fixed'}
                       onChange={(e) => handleDeductionChange(field, 'isPercentage', e.target.value === 'percentage')}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                     >
                       <option value="percentage">%</option>
                       <option value="fixed">₹</option>
@@ -679,18 +682,18 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
           </div>
 
           {/* Bonus Structure */}
-          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg flex items-center justify-center">
-                <FiAward className="w-4 h-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                <FiCheckCircle className="h-4 w-4" />
               </div>
               <h4 className="text-lg font-bold text-gray-900">Bonus Structure</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {Object.entries(formData.bonusStructure).map(([field, config]) => (
-                <div key={field} className="bg-white rounded-xl p-4 border border-gray-200">
+                <div key={field} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <label className="text-sm font-semibold text-gray-700 capitalize">
+                    <label className="text-sm font-semibold text-slate-700 capitalize">
                       {field.replace(/([A-Z])/g, ' $1').trim()}
                     </label>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -700,30 +703,30 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
                         onChange={(e) => handleBonusChange(field, 'enabled', e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-700"></div>
                     </label>
                   </div>
                   {config.enabled && (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-2">Percentage</label>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">Percentage</label>
                         <input
                           type="number"
                           step="0.01"
                           value={config.percentage}
                           onChange={(e) => handleBonusChange(field, 'percentage', parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                           placeholder="0.00"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-2">Max Amount (₹)</label>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">Max Amount (₹)</label>
                         <input
                           type="number"
                           step="0.01"
                           value={config.maxAmount}
                           onChange={(e) => handleBonusChange(field, 'maxAmount', parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                           placeholder="0.00"
                         />
                       </div>
@@ -735,16 +738,16 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
           </div>
 
           {/* Overtime Rules */}
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <FiClock className="w-4 h-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                <FiClock className="h-4 w-4" />
               </div>
               <h4 className="text-lg font-bold text-gray-900">Overtime Rules</h4>
             </div>
             <div className="space-y-6">
-              <div className="flex items-center justify-between bg-white rounded-xl p-4 border border-gray-200">
-                <label className="text-sm font-semibold text-gray-700">Enable Overtime</label>
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <label className="text-sm font-semibold text-slate-700">Enable Overtime</label>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -752,39 +755,39 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
                     onChange={(e) => handleOvertimeChange('enabled', e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-700"></div>
                 </label>
               </div>
               {formData.overtimeRules.enabled && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-white rounded-xl p-4 border border-gray-200">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Rate (x)</label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Rate (x)</label>
                     <input
                       type="number"
                       step="0.1"
                       value={formData.overtimeRules.rate}
                       onChange={(e) => handleOvertimeChange('rate', parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                       placeholder="1.5"
                     />
                   </div>
-                  <div className="bg-white rounded-xl p-4 border border-gray-200">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Max Hours/Day</label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Max Hours/Day</label>
                     <input
                       type="number"
                       value={formData.overtimeRules.maxHoursPerDay}
                       onChange={(e) => handleOvertimeChange('maxHoursPerDay', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                       placeholder="4"
                     />
                   </div>
-                  <div className="bg-white rounded-xl p-4 border border-gray-200">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Max Hours/Month</label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Max Hours/Month</label>
                     <input
                       type="number"
                       value={formData.overtimeRules.maxHoursPerMonth}
                       onChange={(e) => handleOvertimeChange('maxHoursPerMonth', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                       placeholder="50"
                     />
                   </div>
@@ -797,15 +800,16 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 border-2 border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 font-semibold rounded-xl transition-all duration-200"
+              className="rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 flex items-center gap-2"
+              className="inline-flex items-center gap-2 rounded-full bg-theme-primary px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+              style={{ backgroundColor: "var(--color-primary)" }}
             >
-              <FiSave className="w-4 h-4" />
+              <FiSave className="h-4 w-4" />
               {title.includes('Create') ? 'Create Structure' : 'Update Structure'}
             </button>
           </div>
@@ -818,39 +822,39 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
 // Apply Modal Component
 const ApplyModal = ({ structure, employees, selectedEmployee, setSelectedEmployee, onSubmit, onClose }) => {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl border border-white/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center">
-            <FiUsers className="w-6 h-6 text-white" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <FiUsers className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-gray-900">Apply Salary Structure</h3>
-            <p className="text-gray-600">Assign this structure to an employee</p>
+            <h3 className="text-2xl font-bold text-slate-900">Apply Salary Structure</h3>
+            <p className="text-slate-600">Assign this structure to an employee</p>
           </div>
         </div>
         
         <form onSubmit={onSubmit} className="space-y-6">
-          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Structure
             </label>
             <input
               type="text"
               value={structure?.name || ''}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 font-medium text-gray-700"
+              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 font-medium text-slate-700"
               disabled
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Select Employee
             </label>
             <select
               value={selectedEmployee || ''}
               onChange={(e) => setSelectedEmployee(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-theme-primary transition-all duration-200"
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
               required
             >
               <option value="">Choose an employee...</option>
@@ -866,15 +870,16 @@ const ApplyModal = ({ structure, employees, selectedEmployee, setSelectedEmploye
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 border-2 border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 font-semibold rounded-xl transition-all duration-200"
+              className="rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 flex items-center gap-2"
+              className="inline-flex items-center gap-2 rounded-full bg-theme-primary px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+              style={{ backgroundColor: "var(--color-primary)" }}
             >
-              <FiUsers className="w-4 h-4" />
+              <FiUsers className="h-4 w-4" />
               Apply Structure
             </button>
           </div>
@@ -887,39 +892,39 @@ const ApplyModal = ({ structure, employees, selectedEmployee, setSelectedEmploye
 // Calculate Modal Component
 const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmployee, calculatedSalary, onCalculate, onClose }) => {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-3xl shadow-2xl border border-white/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
+      <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
-            <FaCalculator className="w-6 h-6 text-white" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+            <FaCalculator className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-2xl font-bold text-gray-900">Calculate Salary</h3>
-            <p className="text-gray-600">Calculate salary based on structure and employee data</p>
+            <h3 className="text-2xl font-bold text-slate-900">Calculate Salary</h3>
+            <p className="text-slate-600">Calculate salary based on structure and employee data</p>
           </div>
         </div>
         
         <div className="space-y-6">
-          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Structure
             </label>
             <input
               type="text"
               value={structure?.name || ''}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 font-medium text-gray-700"
+              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 font-medium text-slate-700"
               disabled
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Select Employee
             </label>
             <select
               value={selectedEmployee || ''}
               onChange={(e) => setSelectedEmployee(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200"
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             >
               <option value="">Choose an employee...</option>
               {employees.map(employee => (
@@ -933,41 +938,42 @@ const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmp
           {selectedEmployee && (
             <button
               onClick={onCalculate}
-              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-3 px-6 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+              style={{ backgroundColor: "var(--color-primary)" }}
             >
-              <FaCalculator className="w-5 h-5" />
+              <FaCalculator className="h-4 w-4" />
               Calculate Salary
             </button>
           )}
 
           {calculatedSalary && (
-            <div className="bg-gradient-to-r from-white to-theme-primary/10 rounded-2xl p-6 border border-theme-primary">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                  <FiDollarSign className="w-4 h-4 text-white" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                  <FiDollarSign className="h-4 w-4" />
                 </div>
-                <h4 className="text-lg font-bold text-gray-900">Calculated Salary Breakdown</h4>
+                <h4 className="text-lg font-bold text-slate-900">Calculated Salary Breakdown</h4>
               </div>
               <div className="space-y-4">
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-semibold text-gray-600">Basic Salary:</span>
-                    <span className="text-lg font-bold text-gray-900">₹{calculatedSalary.employee.currentSalary}</span>
+                    <span className="text-sm font-semibold text-slate-600">Basic Salary:</span>
+                    <span className="text-lg font-bold text-slate-900">₹{calculatedSalary.employee.currentSalary}</span>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-semibold text-gray-600">Total Earnings:</span>
-                    <span className="text-lg font-bold text-theme-primary">₹{calculatedSalary.calculatedSalary.totalEarnings}</span>
+                    <span className="text-sm font-semibold text-slate-600">Total Earnings:</span>
+                    <span className="text-lg font-bold text-emerald-700">₹{calculatedSalary.calculatedSalary.totalEarnings}</span>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-semibold text-gray-600">Total Deductions:</span>
+                    <span className="text-sm font-semibold text-slate-600">Total Deductions:</span>
                     <span className="text-lg font-bold text-red-600">₹{calculatedSalary.calculatedSalary.totalDeductions}</span>
                   </div>
                 </div>
-                <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-4 text-white">
+                <div className="rounded-xl bg-emerald-600 p-4 text-white">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold">Net Salary:</span>
                     <span className="text-2xl font-bold">₹{calculatedSalary.calculatedSalary.netSalary}</span>
@@ -981,7 +987,7 @@ const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmp
         <div className="flex justify-end pt-6">
           <button
             onClick={onClose}
-            className="px-6 py-3 border-2 border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50 font-semibold rounded-xl transition-all duration-200"
+            className="rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Close
           </button>

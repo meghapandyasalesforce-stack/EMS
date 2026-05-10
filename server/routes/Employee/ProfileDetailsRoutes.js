@@ -20,6 +20,7 @@ import {
 } from "../../controllers/employee/profileDetailsController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAdminOrHROrExecutiveAuthenticated from './../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import isAdminOrManagerOrHRAuthenticated from './../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 import { terminateEmployee, updateEmployeeStatus } from "../../controllers/admin/employeeManagementController.js";
 
 
@@ -29,7 +30,7 @@ const router = express.Router();
 
 
 router.route("/update-info").put(isAuthenticated, updateEmployeeInfo);
-router.route("/admin/get-info/:employeeId").get(isAdminOrHROrExecutiveAuthenticated, getEmployeeInfoByAdmin);
+router.route("/admin/get-info/:employeeId").get(isAdminOrManagerOrHRAuthenticated, getEmployeeInfoByAdmin);
 router.route("/get-my-details").get(isAuthenticated, getEmployeeInfoByEmployee);
 router.route("/add-academic-record").post(isAuthenticated, addAcademicRecord);
 router.route("/update-academic-record").put(isAuthenticated, updateAcademicRecord);

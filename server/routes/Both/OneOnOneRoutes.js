@@ -3,6 +3,7 @@ import {
     createOneOnOne,
     getOneOnOnes,
     updateOneOnOne,
+    cancelOneOnOne,
     completeOneOnOne
 } from '../../controllers/oneOnOne/oneOnOneController.js';
 import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
@@ -118,6 +119,9 @@ router.route('/one-on-ones')
  */
 router.route('/one-on-ones/:id')
     .put(isAuthenticatedBoth, writeLimiter, updateOneOnOne);
+
+router.route('/one-on-ones/:id/cancel')
+    .patch(isAuthenticatedBoth, writeLimiter, cancelOneOnOne);
 
 /**
  * @swagger

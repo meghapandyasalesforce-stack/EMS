@@ -1,827 +1,715 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { 
-    FaUsers, FaChartLine, FaDollarSign, FaProjectDiagram,
-    FaBuilding, FaCog, FaFileAlt, FaCalendarAlt, FaExclamationTriangle,
-    FaArrowUp, FaArrowDown, FaCheckCircle, FaClock,
-    FaChartBar, FaMoneyBillWave, FaTasks, FaUserCheck, FaBell
-} from 'react-icons/fa';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import StatCard from '../../components/StatCard';
-import { 
-  useEmployees, 
-  useProjects, 
-  usePayrolls,
+import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import {
+  FiActivity,
+  FiAlertCircle,
+  FiArrowUpRight,
+  FiBarChart2,
+  FiBriefcase,
+  FiCalendar,
+  FiClipboard,
+  FiClock,
+  FiDollarSign,
+  FiDownload,
+  FiLayers,
+  FiSearch,
+  FiTarget,
+  FiTrendingUp,
+  FiUsers,
+  FiZap
+} from "react-icons/fi";
+import { toast } from "react-toastify";
+import {
   useAttendanceSummary,
-  useFinancialSummary,
-  useExecutiveKPIs,
   useCriticalAlerts,
-  useProjectPortfolio,
   useDepartmentPerformance,
   useEmployeeTrends,
-  useStrategicInsights,
-  usePredictiveAnalytics
-} from '../../Hooks/useDashboardData';
-import { handleApiError } from '../../utils/errorHandler';
+  useEmployees,
+  useExecutiveKPIs,
+  useExpenses,
+  useFinancialSummary,
+  useLeaves,
+  usePayrolls,
+  usePredictiveAnalytics,
+  useProjectPortfolio,
+  useProjects,
+  useStrategicInsights
+} from "../../Hooks/useDashboardData";
+import LoadingSpinner from "../../components/LoadingSpinner";
+import { handleApiError } from "../../utils/errorHandler";
 
 const DashboardAdministration = () => {
-    const navigate = useNavigate();
-    const user = useSelector((state) => state.auth.user);
-    const employee = useSelector((state) => state.employeeDetails.employee);
-    const [selectedPeriod, setSelectedPeriod] = useState('month');
-    
-    // Get position (case-insensitive matching)
-    const position = (employee?.position || user?.position || '').toLowerCase().trim();
-    const isCEO = position === 'ceo';
-    const isCTO = position === 'cto';
-    const isCFO = position === 'cfo';
-    const isVP = position === 'vp';
-    
-    // Get display name for the executive
-    const executiveTitle = employee?.position || user?.position || 'Executive';
-    
-    // Use React Query hooks for parallel data fetching
-    const {
-      data: employeeData = { employees: [], total: 0 },
-      isLoading: employeesLoading,
-      error: employeesError
-    } = useEmployees();
-    const employees = employeeData?.employees ?? [];
-    const employeeTotal = employeeData?.total ?? employees.length;
+  const navigate = useNavigate();
+  const user = useSelector((state) => state.auth.user);
+  const employee = useSelector((state) => state.employeeDetails.employee);
+  const [selectedPeriod, setSelectedPeriod] = useState("month");
+  const [searchTerm, setSearchTerm] = useState("");
 
-    const { 
-      data: projects = [], 
-      isLoading: projectsLoading 
-    } = useProjects();
+  const position = (employee?.position || user?.position || "").toLowerCase().trim();
+  const isCEO = position === "ceo";
+  const isCTO = position === "cto";
+  const isCFO = position === "cfo";
+  const isVP = position === "vp";
+  const executiveTitle = employee?.position || user?.position || "Executive";
 
-    const { 
-      data: payrolls = [], 
-      isLoading: payrollsLoading 
-    } = usePayrolls();
+  const {
+    data: employeeData = { employees: [], total: 0 },
+    isLoading: employeesLoading,
+    error: employeesError
+  } = useEmployees();
+  const employees = employeeData?.employees ?? [];
+  const employeeTotal = employeeData?.total ?? employees.length;
 
-    const { 
-      data: attendanceData = {}, 
-      isLoading: attendanceLoading 
-    } = useAttendanceSummary({
-      startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0]
-    });
+  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const { data: payrolls = [], isLoading: payrollsLoading } = usePayrolls();
 
-    // Phase 1: Executive Data Hooks
-    const {
-      data: financialData = {},
-      isLoading: financialLoading
-    } = useFinancialSummary({ period: selectedPeriod });
+  const { data: attendanceData = {}, isLoading: attendanceLoading } = useAttendanceSummary({
+    startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0]
+  });
+  const { data: leavesList = [] } = useLeaves();
+  const { data: expensesList = [] } = useExpenses();
 
-    const {
-      data: kpiData = {},
-      isLoading: kpiLoading
-    } = useExecutiveKPIs();
+  const { data: financialData = {}, isLoading: financialLoading } = useFinancialSummary({ period: selectedPeriod });
+  const { data: kpiData = {} } = useExecutiveKPIs();
+  const { data: alertsData = { alerts: [], total: 0, critical: 0 } } = useCriticalAlerts();
+  const { data: portfolioData = {}, isLoading: portfolioLoading } = useProjectPortfolio();
+  const { data: departmentData = {}, isLoading: departmentLoading } = useDepartmentPerformance({ period: selectedPeriod });
+  const { data: trendsData = {}, isLoading: trendsLoading } = useEmployeeTrends({ months: 12 });
+  const { data: insightsData = { insights: [], summary: {} }, isLoading: insightsLoading } = useStrategicInsights();
+  const { data: predictiveData = {}, isLoading: predictiveLoading } = usePredictiveAnalytics({ forecastMonths: 6 });
 
-    const {
-      data: alertsData = { alerts: [], total: 0, critical: 0 },
-      isLoading: alertsLoading
-    } = useCriticalAlerts();
-
-    const {
-      data: portfolioData = {},
-      isLoading: portfolioLoading
-    } = useProjectPortfolio();
-
-    // Phase 2: Department Performance & Employee Trends
-    const {
-      data: departmentData = {},
-      isLoading: departmentLoading
-    } = useDepartmentPerformance({ period: selectedPeriod });
-
-    const {
-      data: trendsData = {},
-      isLoading: trendsLoading
-    } = useEmployeeTrends({ months: 12 });
-
-    // Phase 3: Strategic Insights & Predictive Analytics
-    const {
-      data: insightsData = { insights: [], summary: {} },
-      isLoading: insightsLoading
-    } = useStrategicInsights();
-
-    const {
-      data: predictiveData = {},
-      isLoading: predictiveLoading
-    } = usePredictiveAnalytics({ forecastMonths: 6 });
-
-    const isLoading = employeesLoading || projectsLoading || payrollsLoading || attendanceLoading;
-
-    // Calculate statistics
-    const totalEmployees = employeeTotal;
-    const activeEmployees = employees.filter(emp => emp.status === 'active' || emp.active).length;
-    const totalProjects = projects.length;
-    const activeProjects = projects.filter(proj => proj.status === 'active' || proj.status === 'in-progress').length;
-    const totalPayroll = payrolls.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
-    const attendanceRate = Math.round(attendanceData?.attendanceRate || 0);
-
-    // Handle errors
-    React.useEffect(() => {
-        if (employeesError) {
-            handleApiError(employeesError, { 
-                context: 'Administration Dashboard', 
-                showToast: employeesError.response?.status !== 401 
-            });
-        }
-    }, [employeesError]);
-
-    const formatCurrency = (amount) => {
-        if (!amount || isNaN(amount)) return '₹0';
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(amount);
-    };
-
-    const formatNumber = (num) => {
-        if (!num || isNaN(num)) return '0';
-        return new Intl.NumberFormat('en-US').format(num);
-    };
-
-    const getDashboardTitle = () => {
-        if (isCEO) return 'CEO Dashboard';
-        if (isCTO) return 'CTO Dashboard';
-        if (isCFO) return 'CFO Dashboard';
-        if (isVP) return 'VP Dashboard';
-        return `${executiveTitle} Dashboard`;
-    };
-    
-    const getWelcomeMessage = () => {
-        if (isCEO) return 'Welcome, Chief Executive Officer';
-        if (isCTO) return 'Welcome, Chief Technology Officer';
-        if (isCFO) return 'Welcome, Chief Financial Officer';
-        if (isVP) return 'Welcome, Vice President';
-        return 'Welcome to your Executive Dashboard';
-    };
-
-    const getAlertIcon = (type) => {
-        switch(type) {
-            case 'leave': return <FaCalendarAlt className="w-5 h-5" />;
-            case 'project': return <FaProjectDiagram className="w-5 h-5" />;
-            case 'attendance': return <FaUserCheck className="w-5 h-5" />;
-            case 'payroll': return <FaMoneyBillWave className="w-5 h-5" />;
-            case 'approval': return <FaCheckCircle className="w-5 h-5" />;
-            default: return <FaExclamationTriangle className="w-5 h-5" />;
-        }
-    };
-
-    const getSeverityColor = (severity) => {
-        switch(severity) {
-            case 'high': return 'bg-red-100 border-red-500 text-red-700';
-            case 'medium': return 'bg-yellow-100 border-yellow-500 text-yellow-700';
-            case 'low': return 'bg-theme-secondary/10 border-theme-secondary text-theme-secondary';
-            default: return 'bg-gray-100 border-gray-500 text-gray-700';
-        }
-    };
-
-    if (isLoading) {
-        return <LoadingSpinner message="Loading administration dashboard..." />;
+  React.useEffect(() => {
+    if (employeesError) {
+      handleApiError(employeesError, {
+        context: "Administration Dashboard",
+        showToast: employeesError.response?.status !== 401
+      });
     }
+  }, [employeesError]);
 
-    const financialSummary = financialData?.summary || {};
-    const kpis = kpiData || {};
-    const alerts = alertsData?.alerts || [];
-    const portfolio = portfolioData || {};
+  const isLoading = employeesLoading || projectsLoading || payrollsLoading || attendanceLoading;
 
-    return (
-        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gradient-to-br from-gray-50/50 to-white">
-            {/* Header */}
-            <div className="mb-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-2">{getDashboardTitle()}</h1>
-                        <p className="text-base text-gray-600 font-medium">{getWelcomeMessage()}</p>
-                        <p className="text-sm text-gray-500 mt-1">Comprehensive overview of organization operations and performance metrics</p>
-                    </div>
-                    {/* Period Selector for Financial Data */}
-                    <div className="flex gap-2">
-                        {['week', 'month', 'quarter', 'year'].map((period) => (
-                            <button
-                                key={period}
-                                onClick={() => setSelectedPeriod(period)}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                    selectedPeriod === period
-                                        ? 'bg-theme-primary text-white shadow-md'
-                                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                                }`}
-                            >
-                                {period.charAt(0).toUpperCase() + period.slice(1)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+  const totalEmployees = employeeTotal;
+  const activeEmployees = employees.filter((emp) => emp.status === "active" || emp.active).length;
+  const totalProjects = projects.length;
+  const activeProjects = projects.filter((proj) => proj.status === "active" || proj.status === "in-progress").length;
+  const totalPayroll = payrolls.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+  const attendanceRate = Math.round(attendanceData?.attendanceRate || 0);
+  const financialSummary = financialData?.summary || {};
+  const kpis = kpiData || {};
+  const alerts = alertsData?.alerts || [];
+  const portfolio = portfolioData || {};
+
+  const departmentHeadcount = useMemo(() => {
+    const map = new Map();
+    for (const emp of employees) {
+      const raw = emp.department ?? emp.departmentName ?? "";
+      const label = String(raw).trim() || "Unassigned";
+      map.set(label, (map.get(label) || 0) + 1);
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  }, [employees]);
+
+  const maxDeptCount = departmentHeadcount[0]?.[1] || 1;
+
+  const projectStatusBreakdown = useMemo(() => {
+    const map = new Map();
+    for (const p of projects) {
+      const raw = p.status != null ? String(p.status) : "unspecified";
+      const key = raw.trim() || "unspecified";
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  }, [projects]);
+
+  const leavesArray = Array.isArray(leavesList) ? leavesList : [];
+  const pendingLeaveCount = leavesArray.filter(
+    (lv) => String(lv?.status || "").toLowerCase() === "pending"
+  ).length;
+
+  const expensesArray = Array.isArray(expensesList) ? expensesList : [];
+  const pendingExpenseCount = expensesArray.filter(
+    (ex) => String(ex?.status || "").toLowerCase() === "pending"
+  ).length;
+
+  const formatProjectStatusLabel = (status) => {
+    const s = String(status || "").replace(/[-_]/g, " ");
+    if (!s.trim()) return "Unspecified";
+    return s.replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount || Number.isNaN(amount)) return "₹0";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const greeting = (() => {
+    if (isCEO) return "Good morning, Chief Executive Officer";
+    if (isCTO) return "Good morning, Chief Technology Officer";
+    if (isCFO) return "Good morning, Chief Financial Officer";
+    if (isVP) return "Good morning, Vice President";
+    return "Good morning, Leadership Team";
+  })();
+
+  const dashboardTitle = (() => {
+    if (isCEO) return "Strategic Overview";
+    if (isCTO) return "Technology Overview";
+    if (isCFO) return "Financial Overview";
+    if (isVP) return "Executive Overview";
+    return `${executiveTitle} Overview`;
+  })();
+
+  if (isLoading) return <LoadingSpinner message="Loading administration dashboard..." />;
+
+  const inactiveCount = Math.max(0, totalEmployees - activeEmployees);
+
+  const kpiCards = [
+    {
+      label: "Total Headcount",
+      value: totalEmployees.toLocaleString("en-IN"),
+      sub:
+        inactiveCount > 0
+          ? `${activeEmployees.toLocaleString("en-IN")} active · ${inactiveCount} inactive / other`
+          : `${activeEmployees.toLocaleString("en-IN")} active`,
+      icon: <FiUsers className="h-4 w-4" />
+    },
+    {
+      label: "Rev Per Employee",
+      value: formatCurrency(kpis.payroll?.avgPerEmployee || 0),
+      sub: `${activeEmployees} active employees`,
+      icon: <FiDollarSign className="h-4 w-4" />
+    },
+    {
+      label: "Project Completion",
+      value: `${kpis.projects?.completionRate || 0}%`,
+      sub: `${activeProjects} active / in progress`,
+      icon: <FiTarget className="h-4 w-4" />
+    },
+    isCEO
+      ? {
+          label: "Attendance (30d)",
+          value: `${attendanceRate}%`,
+          sub: "Org-wide punctuality signal",
+          icon: <FiCalendar className="h-4 w-4" />
+        }
+      : {
+          label: "Workforce utilization",
+          value: `${kpis.employees?.utilizationRate ?? "—"}${kpis.employees?.utilizationRate != null ? "%" : ""}`,
+          sub: "From executive KPIs",
+          icon: <FiActivity className="h-4 w-4" />
+        },
+    {
+      label: "Payroll Cost",
+      value: formatCurrency(financialSummary.totalPayroll || totalPayroll),
+      sub: `${selectedPeriod} window`,
+      icon: <FiBarChart2 className="h-4 w-4" />
+    }
+  ];
+
+  const executiveInsights = (insightsData?.insights || []).slice(0, 4);
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredInsights = executiveInsights.filter((insight) => {
+    if (!normalizedSearch) return true;
+    const title = String(insight?.title || "").toLowerCase();
+    const message = String(insight?.message || "").toLowerCase();
+    return title.includes(normalizedSearch) || message.includes(normalizedSearch);
+  });
+  const filteredProjects = (portfolio?.recentProjects || []).filter((project) => {
+    if (!normalizedSearch) return true;
+    const name = String(project?.name || "").toLowerCase();
+    const manager = String(project?.managerName || "").toLowerCase();
+    return name.includes(normalizedSearch) || manager.includes(normalizedSearch);
+  });
+  const filteredDepartments = (departmentData?.departments || []).filter((dept) => {
+    if (!normalizedSearch) return true;
+    return String(dept?.name || "").toLowerCase().includes(normalizedSearch);
+  });
+
+  const handleScheduleBoardMeeting = () => {
+    navigate("/calendar-management");
+    toast.info("Opening calendar management to schedule the meeting.");
+  };
+
+  const handleDownloadExecutiveReport = () => {
+    const reportRows = [
+      ["Executive Dashboard Report"],
+      [`Generated`, new Date().toLocaleString()],
+      ["Period", selectedPeriod],
+      [],
+      ["Metric", "Value"],
+      ["Total Headcount", totalEmployees],
+      ["Active Employees", activeEmployees],
+      ["Total Projects", totalProjects],
+      ["Active Projects", activeProjects],
+      ["Total Payroll", totalPayroll],
+      ["Attendance Rate", `${attendanceRate}%`],
+      ["Payroll Trend", predictiveData?.trends?.payroll?.direction || "stable"],
+      ["Headcount Trend", predictiveData?.trends?.employees?.direction || "stable"]
+    ];
+    const csv = reportRows
+      .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `executive-report-${selectedPeriod}-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    toast.success("Executive report downloaded.");
+  };
+
+  const handleInsightDetails = (insight) => {
+    const combinedText = `${insight?.title || ""} ${insight?.message || ""}`.toLowerCase();
+    if (combinedText.includes("attendance")) return navigate("/all-attendance-history");
+    if (combinedText.includes("project")) return navigate("/projects");
+    if (combinedText.includes("payroll")) return navigate("/admin-payroll");
+    if (combinedText.includes("hire") || combinedText.includes("employee")) return navigate("/employees");
+    toast.info("No dedicated detail route for this insight yet.");
+  };
+
+  const handleAllDepartments = () => {
+    navigate("/organization/analytics");
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F3F7F5]">
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <h1 className="text-xl font-bold text-emerald-700 sm:text-2xl">{dashboardTitle}</h1>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              <FiSearch className="h-4 w-4" />
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search enterprise data..."
+                className="w-48 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+              />
+            </label>
+            <div className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
+              {executiveTitle}
             </div>
-
-            {/* Critical Alerts Section - Phase 1 */}
-            {alerts.length > 0 && (
-                <div className="bg-white rounded-xl shadow-lg border-l-4 border-red-500 p-5 animate-slideDown">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-red-100 p-2 rounded-lg">
-                                <FaBell className="w-6 h-6 text-red-600" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-900">Critical Alerts</h2>
-                                <p className="text-sm text-gray-600">{alertsData.critical} critical, {alertsData.total} total</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {alerts.map((alert, index) => (
-                            <div
-                                key={index}
-                                onClick={() => navigate(alert.action)}
-                                className={`p-4 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-all ${getSeverityColor(alert.severity)}`}
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="mt-1">{getAlertIcon(alert.type)}</div>
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold mb-1">{alert.title}</h3>
-                                        <p className="text-sm opacity-90">{alert.message}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Executive Summary - Phase 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* KPI Cards */}
-                <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <FaChartBar className="w-5 h-5 text-theme-primary" />
-                        Key Performance Indicators
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <StatCard
-                            label="Employee Utilization"
-                            value={`${kpis.employees?.utilizationRate || 0}%`}
-                            subtitle={`${kpis.employees?.active || 0} of ${kpis.employees?.total || 0} active`}
-                            icon={<FaUsers className="w-6 h-6" />}
-                            color="blue"
-                        />
-                        <StatCard
-                            label="Project Completion Rate"
-                            value={`${kpis.projects?.completionRate || 0}%`}
-                            subtitle={`${kpis.projects?.active || 0} active projects`}
-                            icon={<FaProjectDiagram className="w-6 h-6" />}
-                            color="green"
-                        />
-                        <StatCard
-                            label="Attendance Rate"
-                            value={`${kpis.attendance?.rate || 0}%`}
-                            subtitle={`${formatNumber(kpis.attendance?.totalHours || 0)} total hours`}
-                            icon={<FaUserCheck className="w-6 h-6" />}
-                            color="orange"
-                        />
-                        <StatCard
-                            label="Avg Payroll per Employee"
-                            value={formatCurrency(kpis.payroll?.avgPerEmployee || 0)}
-                            subtitle={`${formatCurrency(kpis.payroll?.total || 0)} total`}
-                            icon={<FaDollarSign className="w-6 h-6" />}
-                            color="purple"
-                        />
-                    </div>
-                </div>
-
-                {/* Financial Summary Widget - Phase 1 */}
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaMoneyBillWave className="w-5 h-5 text-theme-primary" />
-                        Financial Summary
-                    </h2>
-                    {financialLoading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Total Payroll</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {formatCurrency(financialSummary.totalPayroll || 0)}
-                                </p>
-                                {financialSummary.growth !== undefined && (
-                                    <div className={`flex items-center gap-1 mt-1 ${financialSummary.growth >= 0 ? 'text-theme-primary' : 'text-red-600'}`}>
-                                        {financialSummary.growth >= 0 ? (
-                                            <FaArrowUp className="w-4 h-4" />
-                                        ) : (
-                                            <FaArrowDown className="w-4 h-4" />
-                                        )}
-                                        <span className="text-sm font-medium">{Math.abs(financialSummary.growth)}% vs previous period</span>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="pt-4 border-t border-gray-200">
-                                <p className="text-sm text-gray-600 mb-1">Average Payroll</p>
-                                <p className="text-xl font-semibold text-gray-800">
-                                    {formatCurrency(financialSummary.averagePayroll || 0)}
-                                </p>
-                            </div>
-                            <div className="pt-4 border-t border-gray-200">
-                                <p className="text-sm text-gray-600 mb-2">By Department</p>
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                    {(financialData.byDepartment || []).slice(0, 5).map((dept, idx) => (
-                                        <div key={idx} className="flex justify-between items-center">
-                                            <span className="text-sm text-gray-700">{dept._id || 'Unknown'}</span>
-                                            <span className="text-sm font-semibold text-gray-900">
-                                                {formatCurrency(dept.total || 0)}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Statistics Cards - Enhanced */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                <StatCard
-                    label="Total Employees"
-                    value={totalEmployees}
-                    subtitle={`${activeEmployees} active`}
-                    icon={<FaUsers className="w-6 h-6" />}
-                    color="blue"
-                />
-                
-                <StatCard
-                    label="Active Projects"
-                    value={activeProjects}
-                    subtitle={`${totalProjects} total`}
-                    icon={<FaProjectDiagram className="w-6 h-6" />}
-                    color="green"
-                />
-                
-                <StatCard
-                    label="Total Payroll"
-                    value={formatCurrency(totalPayroll)}
-                    subtitle="All time"
-                    icon={<FaDollarSign className="w-6 h-6" />}
-                    color="purple"
-                />
-                
-                <StatCard
-                    label="Attendance Rate"
-                    value={`${attendanceRate}%`}
-                    subtitle="Last 30 days"
-                    icon={<FaCalendarAlt className="w-6 h-6" />}
-                    color="orange"
-                />
-            </div>
-
-            {/* Project Portfolio Overview - Phase 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <FaProjectDiagram className="w-5 h-5 text-theme-primary" />
-                            Project Portfolio
-                        </h2>
-                        <button
-                            onClick={() => navigate('/projects')}
-                            className="text-sm text-theme-primary hover:opacity-80 font-medium"
-                        >
-                            View All →
-                        </button>
-                    </div>
-                    {portfolioLoading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="text-center p-4 bg-theme-secondary/10 rounded-lg">
-                                    <p className="text-2xl font-bold text-theme-secondary">{portfolio.overview?.total || 0}</p>
-                                    <p className="text-xs text-gray-600 mt-1">Total</p>
-                                </div>
-                                <div className="text-center p-4 bg-theme-primary/10 rounded-lg">
-                                    <p className="text-2xl font-bold text-theme-primary">{portfolio.overview?.active || 0}</p>
-                                    <p className="text-xs text-gray-600 mt-1">Active</p>
-                                </div>
-                                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                                    <p className="text-2xl font-bold text-purple-600">{portfolio.overview?.healthScore || 0}%</p>
-                                    <p className="text-xs text-gray-600 mt-1">Health</p>
-                                </div>
-                            </div>
-                            {portfolio.atRisk && portfolio.atRisk.length > 0 && (
-                                <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <FaExclamationTriangle className="w-5 h-5 text-red-600" />
-                                        <h3 className="font-semibold text-red-900">Projects at Risk ({portfolio.atRiskCount})</h3>
-                                    </div>
-                                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                                        {portfolio.atRisk.slice(0, 5).map((project, idx) => (
-                                            <div key={idx} className="text-sm text-red-700">
-                                                • {project.name} - {project.priority || 'N/A'} priority
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Recent Projects */}
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaClock className="w-5 h-5 text-theme-primary" />
-                        Recent Projects
-                    </h2>
-                    {portfolioLoading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-3 max-h-80 overflow-y-auto">
-                            {(portfolio.recentProjects || []).length > 0 ? (
-                                portfolio.recentProjects.map((project, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                                        onClick={() => navigate('/projects')}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex-1">
-                                                <h3 className="font-semibold text-gray-900">{project.name}</h3>
-                                                <p className="text-xs text-gray-600 mt-1">
-                                                    {project.status || 'N/A'} • {project.priority || 'N/A'} priority
-                                                </p>
-                                            </div>
-                                            <div className={`px-2 py-1 rounded text-xs font-medium ${
-                                                project.status === 'completed' ? 'bg-theme-primary/10 text-theme-primary' :
-                                                project.status === 'active' || project.status === 'in-progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
-                                                'bg-gray-100 text-gray-700'
-                                            }`}>
-                                                {project.status || 'N/A'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-center text-gray-500 py-8">No recent projects</p>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                <div 
-                    className="modern-card p-5 cursor-pointer hover:scale-[1.02] transition-all"
-                    onClick={() => navigate('/employees')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-[var(--color-secondary)] to-[var(--color-secondary)] p-4 rounded-xl shadow-lg">
-                            <FaUsers className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Employee Management</h3>
-                            <p className="text-sm text-gray-600">View and manage all employees</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="modern-card p-5 cursor-pointer hover:scale-[1.02] transition-all"
-                    onClick={() => navigate('/projects')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)] p-4 rounded-xl shadow-lg">
-                            <FaProjectDiagram className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Project Management</h3>
-                            <p className="text-sm text-gray-600">View and manage all projects</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="modern-card p-5 cursor-pointer hover:scale-[1.02] transition-all"
-                    onClick={() => navigate('/admin-payroll')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-purple-400 to-purple-600 p-4 rounded-xl shadow-lg">
-                            <FaDollarSign className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Payroll Management</h3>
-                            <p className="text-sm text-gray-600">View and manage payroll</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="modern-card p-5 cursor-pointer hover:scale-[1.02] transition-all"
-                    onClick={() => navigate('/organization/dashboard')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-indigo-400 to-indigo-600 p-4 rounded-xl shadow-lg">
-                            <FaBuilding className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">Organization Overview</h3>
-                            <p className="text-sm text-gray-600">View organization analytics</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div 
-                    className="modern-card p-5 cursor-pointer hover:scale-[1.02] transition-all"
-                    onClick={() => navigate('/admin-settings')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="bg-gradient-to-br from-gray-400 to-gray-600 p-4 rounded-xl shadow-lg">
-                            <FaCog className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-800">System Settings</h3>
-                            <p className="text-sm text-gray-600">Configure system settings</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Phase 2: Department Performance */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <FaChartBar className="w-5 h-5 text-theme-primary" />
-                        Department Performance
-                    </h2>
-                </div>
-                {departmentLoading ? (
-                    <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {(departmentData.departments || []).length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {departmentData.departments.map((dept, idx) => (
-                                    <div key={idx} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all">
-                                        <h3 className="font-semibold text-gray-900 mb-2">{dept.name}</h3>
-                                        <div className="space-y-2 text-sm">
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Performance Score:</span>
-                                                <span className={`font-bold ${
-                                                    dept.metrics?.performanceScore >= 80 ? 'text-theme-primary' :
-                                                    dept.metrics?.performanceScore >= 60 ? 'text-yellow-600' :
-                                                    'text-red-600'
-                                                }`}>
-                                                    {dept.metrics?.performanceScore || 0}%
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Employees:</span>
-                                                <span className="font-medium">{dept.employees?.active || 0}/{dept.employees?.total || 0}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Payroll:</span>
-                                                <span className="font-medium">{formatCurrency(dept.payroll?.total || 0)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-center text-gray-500 py-8">No department data available</p>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Phase 2: Employee Trends */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaChartLine className="w-5 h-5 text-theme-primary" />
-                        Employee Growth Trends
-                    </h2>
-                    {trendsLoading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                {(trendsData.trends?.employeeGrowth || []).slice(-6).map((item, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <span className="text-sm text-gray-700">{item.month}</span>
-                                        <span className="font-semibold text-gray-900">{item.count} employees</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {trendsData.growthRates && (
-                                <div className="pt-4 border-t border-gray-200">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">Growth Rate:</span>
-                                        <span className={`font-bold ${
-                                            trendsData.growthRates.employees >= 0 ? 'text-theme-primary' : 'text-red-600'
-                                        }`}>
-                                            {trendsData.growthRates.employees >= 0 ? '+' : ''}{trendsData.growthRates.employees}%
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <FaChartLine className="w-5 h-5 text-theme-primary" />
-                        Payroll Trends
-                    </h2>
-                    {trendsLoading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-primary mx-auto"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                {(trendsData.trends?.payroll || []).slice(-6).map((item, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <span className="text-sm text-gray-700">{item.month}</span>
-                                        <span className="font-semibold text-gray-900">{formatCurrency(item.total || 0)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {trendsData.growthRates && (
-                                <div className="pt-4 border-t border-gray-200">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">Growth Rate:</span>
-                                        <span className={`font-bold ${
-                                            trendsData.growthRates.payroll >= 0 ? 'text-theme-primary' : 'text-red-600'
-                                        }`}>
-                                            {trendsData.growthRates.payroll >= 0 ? '+' : ''}{trendsData.growthRates.payroll}%
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Phase 3: Strategic Insights */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <FaExclamationTriangle className="w-5 h-5 text-yellow-500" />
-                        Strategic Insights
-                    </h2>
-                    {insightsData.summary && (
-                        <div className="flex gap-4 text-sm">
-                            <span className="text-red-600 font-semibold">{insightsData.summary.critical || 0} Critical</span>
-                            <span className="text-yellow-600 font-semibold">{insightsData.summary.warnings || 0} Warnings</span>
-                            <span className="text-theme-primary font-semibold">{insightsData.summary.successes || 0} Positive</span>
-                        </div>
-                    )}
-                </div>
-                {insightsLoading ? (
-                    <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {(insightsData.insights || []).length > 0 ? (
-                            insightsData.insights.map((insight, idx) => (
-                                <div
-                                    key={idx}
-                                    className={`p-4 rounded-lg border-l-4 ${
-                                        insight.type === 'critical' ? 'bg-red-50 border-red-500' :
-                                        insight.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
-                                        'bg-theme-primary/10 border-theme-primary'
-                                    }`}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className={`mt-1 ${
-                                            insight.type === 'critical' ? 'text-red-600' :
-                                            insight.type === 'warning' ? 'text-yellow-600' :
-                                            'text-theme-primary'
-                                        }`}>
-                                            {insight.type === 'critical' || insight.type === 'warning' ? 
-                                                <FaExclamationTriangle className="w-5 h-5" /> :
-                                                <FaCheckCircle className="w-5 h-5" />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-900 mb-1">{insight.title}</h3>
-                                            <p className="text-sm text-gray-700 mb-2">{insight.message}</p>
-                                            <p className="text-xs text-gray-600 italic">💡 {insight.recommendation}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-center text-gray-500 py-8">No insights available at this time</p>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Phase 3: Predictive Analytics */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <FaChartLine className="w-5 h-5 text-purple-600" />
-                        Predictive Analytics
-                    </h2>
-                    {predictiveData.riskIndicators && (
-                        <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            predictiveData.riskIndicators.riskLevel === 'high' ? 'bg-red-100 text-red-700' :
-                            predictiveData.riskIndicators.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-theme-primary/10 text-theme-primary'
-                        }`}>
-                            Risk: {predictiveData.riskIndicators.riskLevel?.toUpperCase()}
-                        </div>
-                    )}
-                </div>
-                {predictiveLoading ? (
-                    <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Payroll Forecast */}
-                        <div>
-                            <h3 className="font-semibold text-gray-900 mb-3">Payroll Forecast (6 Months)</h3>
-                            <div className="space-y-2">
-                                {(predictiveData.forecasts?.payroll || []).slice(0, 6).map((forecast, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <span className="text-sm text-gray-700">{forecast.month}</span>
-                                        <span className="font-semibold text-gray-900">{formatCurrency(forecast.predicted || 0)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {predictiveData.trends?.payroll && (
-                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-gray-600">Trend:</span>
-                                        {predictiveData.trends.payroll.direction === 'increasing' ? (
-                                            <FaArrowUp className="w-4 h-4 text-theme-primary" />
-                                        ) : predictiveData.trends.payroll.direction === 'decreasing' ? (
-                                            <FaArrowDown className="w-4 h-4 text-red-600" />
-                                        ) : (
-                                            <FaChartLine className="w-4 h-4 text-gray-600" />
-                                        )}
-                                        <span className="text-sm font-medium text-gray-700 capitalize">
-                                            {predictiveData.trends.payroll.direction}
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Employee Forecast */}
-                        <div>
-                            <h3 className="font-semibold text-gray-900 mb-3">Employee Growth Forecast (6 Months)</h3>
-                            <div className="space-y-2">
-                                {(predictiveData.forecasts?.employees || []).slice(0, 6).map((forecast, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <span className="text-sm text-gray-700">{forecast.month}</span>
-                                        <span className="font-semibold text-gray-900">{Math.round(forecast.predicted || 0)} employees</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {predictiveData.trends?.employees && (
-                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-gray-600">Trend:</span>
-                                        {predictiveData.trends.employees.direction === 'increasing' ? (
-                                            <FaArrowUp className="w-4 h-4 text-theme-primary" />
-                                        ) : predictiveData.trends.employees.direction === 'decreasing' ? (
-                                            <FaArrowDown className="w-4 h-4 text-red-600" />
-                                        ) : (
-                                            <FaChartLine className="w-4 h-4 text-gray-600" />
-                                        )}
-                                        <span className="text-sm font-medium text-gray-700 capitalize">
-                                            {predictiveData.trends.employees.direction}
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
+          </div>
         </div>
-    );
+
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">{greeting}</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {isCEO
+                  ? "Live workforce, delivery, and cost signals from your EMS data—not sample dashboards."
+                  : "Headcount efficiency and delivery indicators for this quarter."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {["week", "month", "quarter", "year"].map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setSelectedPeriod(period)}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    selectedPeriod === period
+                      ? "bg-emerald-600 text-white"
+                      : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {period}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <button
+              onClick={handleScheduleBoardMeeting}
+              className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Schedule board meeting
+            </button>
+            <button
+              onClick={handleDownloadExecutiveReport}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              <FiDownload className="h-4 w-4" />
+              Download executive report
+            </button>
+            {isCEO && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate("/admin/pending-approvals")}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+                >
+                  <FiClipboard className="h-4 w-4" />
+                  Approvals queue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/organization/analytics")}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <FiBarChart2 className="h-4 w-4" />
+                  Organization analytics
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {kpiCards.map((card) => (
+            <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{card.label}</p>
+                <span className="rounded-lg bg-emerald-50 p-2 text-emerald-600">{card.icon}</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">{card.value}</p>
+              <p className="mt-1 text-xs text-slate-500">{card.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2 sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-slate-900">Business performance trends</h3>
+              <span className="text-xs text-slate-500">Headcount vs Payroll</span>
+            </div>
+            {trendsLoading ? (
+              <div className="h-64 animate-pulse rounded-xl bg-slate-100" />
+            ) : (
+              <div className="space-y-3">
+                {(trendsData?.trends?.employeeGrowth || []).slice(-6).map((point, idx) => (
+                  <div key={`${point.month}-${idx}`} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="text-sm text-slate-600">{point.month}</span>
+                    <span className="text-sm font-semibold text-slate-900">{point.count || 0} employees</span>
+                  </div>
+                ))}
+                {(trendsData?.trends?.employeeGrowth || []).length === 0 && (
+                  <p className="text-sm text-slate-500">No trend data available.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h3 className="mb-4 text-xl font-semibold text-slate-900">Key insights</h3>
+            {insightsLoading ? (
+              <div className="h-64 animate-pulse rounded-xl bg-slate-100" />
+            ) : (
+              <div className="space-y-3">
+                {filteredInsights.map((insight, idx) => (
+                  <div
+                    key={`${insight.title}-${idx}`}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <p className="text-sm font-medium text-slate-800">{insight.message || insight.title}</p>
+                    <button
+                      onClick={() => handleInsightDetails(insight)}
+                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:opacity-80"
+                    >
+                      View details <FiArrowUpRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {filteredInsights.length === 0 && (
+                  <p className="text-sm text-slate-500">No strategic insights yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-slate-900">Department health index</h3>
+              <button
+                onClick={handleAllDepartments}
+                className="text-xs font-medium text-emerald-700 hover:opacity-80"
+              >
+                All departments
+              </button>
+            </div>
+            {departmentLoading ? (
+              <div className="h-44 animate-pulse rounded-xl bg-slate-100" />
+            ) : (
+              <div className="space-y-4">
+                {filteredDepartments.slice(0, 4).map((dept, idx) => {
+                  const score = Math.max(0, Math.min(100, dept.metrics?.performanceScore || 0));
+                  return (
+                    <div key={`${dept.name}-${idx}`}>
+                      <div className="mb-1 flex items-center justify-between text-sm">
+                        <span className="font-medium text-slate-700">{dept.name || "Unknown"}</span>
+                        <span className="font-semibold text-slate-900">{score}% Health</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${score}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredDepartments.length === 0 && (
+                  <p className="text-sm text-slate-500">No department performance data.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-slate-900">Top performing projects</h3>
+              <button onClick={() => navigate("/projects")} className="text-xs font-medium text-emerald-700 hover:opacity-80">
+                View all
+              </button>
+            </div>
+            {portfolioLoading ? (
+              <div className="h-44 animate-pulse rounded-xl bg-slate-100" />
+            ) : (
+              <div className="space-y-3">
+                {filteredProjects.slice(0, 3).map((project, idx) => (
+                  <div key={`${project.name}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-800">{project.name || "Untitled Project"}</p>
+                        <p className="text-xs text-slate-500">Lead: {project.managerName || "NA"}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                        project.status === "completed" || project.status === "active"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {project.status || "at risk"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {filteredProjects.length === 0 && (
+                  <p className="text-sm text-slate-500">No project records available.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+                <FiLayers className="h-4 w-4 text-emerald-600" />
+                Headcount by department
+              </h3>
+              <button
+                type="button"
+                onClick={() => navigate("/employees")}
+                className="shrink-0 text-xs font-medium text-emerald-700 hover:opacity-80"
+              >
+                Roster
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-slate-500">
+              {isCEO
+                ? "Where people sit today—span, site, and cost conversations."
+                : "Active roster distribution across departments."}
+            </p>
+            {departmentHeadcount.length === 0 ? (
+              <p className="text-sm text-slate-500">No employee department data yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {departmentHeadcount.map(([name, count]) => (
+                  <li key={name}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-700">{name}</span>
+                      <span className="text-slate-600">
+                        {count}{" "}
+                        <span className="text-slate-400">
+                          ({totalEmployees > 0 ? Math.round((count / totalEmployees) * 100) : 0}%)
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-emerald-500 transition-[width]"
+                        style={{ width: `${Math.min(100, Math.round((count / maxDeptCount) * 100))}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+                <FiBriefcase className="h-4 w-4 text-emerald-600" />
+                Project portfolio mix
+              </h3>
+              <button
+                type="button"
+                onClick={() => navigate("/projects")}
+                className="shrink-0 text-xs font-medium text-emerald-700 hover:opacity-80"
+              >
+                Projects
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-slate-500">
+              {isCEO
+                ? "Delivery load from your project statuses—not a fictional hiring funnel."
+                : "Counts by project status across the portfolio."}
+            </p>
+            {projectStatusBreakdown.length === 0 ? (
+              <p className="text-sm text-slate-500">No projects on record.</p>
+            ) : (
+              <ul className="space-y-2">
+                {projectStatusBreakdown.map(([status, count]) => (
+                  <li
+                    key={status}
+                    className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-slate-800">{formatProjectStatusLabel(status)}</span>
+                    <span className="font-semibold text-emerald-700">{count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h3 className="mb-1 text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+              <FiZap className="h-4 w-4 text-amber-500" />
+              Decisions &amp; approvals
+            </h3>
+            <p className="mb-4 text-xs text-slate-500">
+              Pending items from leaves and expenses in this org (where your token can read them).
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => navigate("/leave-management")}
+                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 text-left text-sm transition hover:border-emerald-200 hover:bg-emerald-50/50"
+              >
+                <span className="flex items-center gap-2 font-medium text-slate-800">
+                  <FiCalendar className="h-4 w-4 text-emerald-600" />
+                  Pending leave approvals
+                </span>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  {pendingLeaveCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/dashboard/finance")}
+                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 text-left text-sm transition hover:border-emerald-200 hover:bg-emerald-50/50"
+              >
+                <span className="flex items-center gap-2 font-medium text-slate-800">
+                  <FiDollarSign className="h-4 w-4 text-emerald-600" />
+                  Expenses (finance)
+                </span>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  {pendingExpenseCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/admin/pending-approvals")}
+                className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 text-left text-sm transition hover:border-emerald-200 hover:bg-emerald-50/50"
+              >
+                <span className="flex items-center gap-2 font-medium text-slate-800">
+                  <FiClipboard className="h-4 w-4 text-emerald-600" />
+                  Full approvals queue
+                </span>
+                <FiArrowUpRight className="h-4 w-4 text-slate-400" />
+              </button>
+            </div>
+            {pendingLeaveCount === 0 && pendingExpenseCount === 0 && (
+              <p className="mt-3 text-xs text-slate-500">
+                No pending leaves or expenses in the loaded lists. Use the queue for workflow approvals.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {(alerts.length > 0 || !financialLoading || !predictiveLoading) && (
+          <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2 sm:p-5">
+              <h3 className="mb-3 text-lg font-semibold text-slate-900">Critical alerts</h3>
+              <div className="space-y-2">
+                {alerts.slice(0, 4).map((alert, idx) => (
+                  <button
+                    key={`${alert.title}-${idx}`}
+                    onClick={() => alert.action && navigate(alert.action)}
+                    className="flex w-full items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left hover:bg-slate-100"
+                  >
+                    <FiAlertCircle className="mt-0.5 h-4 w-4 text-rose-600" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{alert.title || "Alert"}</p>
+                      <p className="text-xs text-slate-600">{alert.message || "Action required."}</p>
+                    </div>
+                  </button>
+                ))}
+                {alerts.length === 0 && (
+                  <p className="text-sm text-slate-500">No critical alerts at the moment.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <h3 className="mb-3 text-lg font-semibold text-slate-900">Forecast snapshot</h3>
+              {predictiveLoading ? (
+                <div className="h-32 animate-pulse rounded-xl bg-slate-100" />
+              ) : (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="text-slate-600">Payroll trend</span>
+                    <span className="font-semibold text-slate-900">
+                      {predictiveData.trends?.payroll?.direction || "stable"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="text-slate-600">Headcount trend</span>
+                    <span className="font-semibold text-slate-900">
+                      {predictiveData.trends?.employees?.direction || "stable"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="text-slate-600">Attendance (30d)</span>
+                    <span className="font-semibold text-slate-900 inline-flex items-center gap-1">
+                      <FiCalendar className="h-3 w-3" />
+                      {attendanceRate}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="text-slate-600">Avg payroll</span>
+                    <span className="font-semibold text-slate-900 inline-flex items-center gap-1">
+                      <FiClock className="h-3 w-3" />
+                      {formatCurrency(financialSummary.averagePayroll || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2">
+                    <span className="text-emerald-700">Operational health</span>
+                    <span className="font-semibold text-emerald-700 inline-flex items-center gap-1">
+                      <FiTrendingUp className="h-3 w-3" />
+                      Stable
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default DashboardAdministration;

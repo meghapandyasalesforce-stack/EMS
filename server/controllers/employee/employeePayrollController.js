@@ -116,7 +116,7 @@ export const getEmployeePayrollHistory = async (req, res) => {
     try {
         const employeeId = req.employee._id;
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
-        const { page = 1, limit = 12 } = req.query;
+        const { page = 1, limit = 12, year: yearFilter } = req.query;
 
         const skip = (page - 1) * limit;
         const limitNum = Math.min(parseInt(limit, 10) || 12, 24);
@@ -124,6 +124,10 @@ export const getEmployeePayrollHistory = async (req, res) => {
         // Employee history should show published (non-provisional) payrolls only.
         const query = { employeeId, isVisible: true, isProvisional: false, type: 'monthly' };
         if (organizationId) query.organizationId = organizationId;
+        if (yearFilter !== undefined && yearFilter !== '') {
+            const y = parseInt(yearFilter, 10);
+            if (!Number.isNaN(y)) query.year = y;
+        }
 
         const total = await Payroll.countDocuments(query);
         const fetchSize = Math.min(skip + limitNum, 120);

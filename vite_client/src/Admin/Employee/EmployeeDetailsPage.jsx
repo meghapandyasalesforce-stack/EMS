@@ -13,6 +13,7 @@ import { useTheme } from '@mui/material/styles';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useSelector, useDispatch } from 'react-redux';
+import { isHR, isManager } from '../../utils/managerHelper';
 import { 
   fetchEmployeeDetails, 
   updateEmployeeStatus,
@@ -99,6 +100,8 @@ const EmployeeDetailsPage = () => {
     updatingWorkInfo,
     workInfoError
   } = useSelector((state) => state.employeeDetails);
+  const currentUser = useSelector((state) => state.auth?.user);
+  const isManagerReadOnly = isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
 
   useEffect(() => {
     dispatch(fetchEmployeeDetails(employeeId));
@@ -109,6 +112,12 @@ const EmployeeDetailsPage = () => {
   }, [dispatch, employeeId]);
 
   const fetchDropdownOptions = useCallback(async () => {
+    if (isManagerReadOnly) {
+      setManagerOptions([]);
+      setJobTitleOptions([]);
+      return;
+    }
+
     try {
       setLoadingDropdownOptions(true);
       const [managersRes, jobTitlesRes] = await Promise.all([
@@ -134,7 +143,7 @@ const EmployeeDetailsPage = () => {
     } finally {
       setLoadingDropdownOptions(false);
     }
-  }, []);
+  }, [isManagerReadOnly]);
 
   useEffect(() => {
     fetchDropdownOptions();
@@ -363,6 +372,8 @@ const EmployeeDetailsPage = () => {
 
   // Fetch employee statistics
   const fetchEmployeeStats = useCallback(async () => {
+    if (isManagerReadOnly) return;
+
     try {
       const { default: axiosInstance } = await import('../../utils/axios');
       const response = await axiosInstance.get(`/v1/admin/employee/${employeeId}/stats`);
@@ -375,7 +386,7 @@ const EmployeeDetailsPage = () => {
     } catch (error) {
       // Removed console.error for production
     }
-  }, [employeeId]);
+  }, [employeeId, isManagerReadOnly]);
 
   // Fetch stats when component mounts
   useEffect(() => {
@@ -550,24 +561,26 @@ const EmployeeDetailsPage = () => {
               gap: 2,
               width: isMobile ? '100%' : 'auto'
             }}>
-              <Button
-                variant="contained"
-                color={employee.active ? 'success' : 'error'}
-                onClick={handleStatusChangeClick}
-                disabled={updatingStatus || employee.status === 'terminated'}
-                fullWidth={isMobile}
-                size={isMobile ? 'medium' : 'small'}
-                startIcon={<FiActivity />}
-                sx={{ 
-                  bgcolor: employee.active ? 'rgba(76, 175, 80, 0.9)' : 'rgba(244, 67, 54, 0.9)',
-                  '&:hover': {
-                    bgcolor: employee.active ? 'rgba(76, 175, 80, 1)' : 'rgba(244, 67, 54, 1)'
-                  }
-                }}
-              >
-                {employee.status === 'terminated' ? 'TERMINATED' : employee.active ? 'DEACTIVATE' : 'ACTIVATE'}
-              </Button>
-              {employee.status !== 'terminated' && (
+              {!isManagerReadOnly && (
+                <Button
+                  variant="contained"
+                  color={employee.active ? 'success' : 'error'}
+                  onClick={handleStatusChangeClick}
+                  disabled={updatingStatus || employee.status === 'terminated'}
+                  fullWidth={isMobile}
+                  size={isMobile ? 'medium' : 'small'}
+                  startIcon={<FiActivity />}
+                  sx={{ 
+                    bgcolor: employee.active ? 'rgba(76, 175, 80, 0.9)' : 'rgba(244, 67, 54, 0.9)',
+                    '&:hover': {
+                      bgcolor: employee.active ? 'rgba(76, 175, 80, 1)' : 'rgba(244, 67, 54, 1)'
+                    }
+                  }}
+                >
+                  {employee.status === 'terminated' ? 'TERMINATED' : employee.active ? 'DEACTIVATE' : 'ACTIVATE'}
+                </Button>
+              )}
+              {!isManagerReadOnly && employee.status !== 'terminated' && (
                 <Button
                   variant="contained"
                   color="warning"
@@ -586,22 +599,24 @@ const EmployeeDetailsPage = () => {
                   TERMINATE
                 </Button>
               )}
-              <Button
-                variant="contained"
-                color="error"
-                onClick={handleDeleteClick}
-                fullWidth={isMobile}
-                size={isMobile ? 'medium' : 'small'}
-                startIcon={<FiTrash2 />}
-                sx={{ 
-                  bgcolor: 'rgba(244, 67, 54, 0.9)',
-                  '&:hover': {
-                    bgcolor: 'rgba(244, 67, 54, 1)'
-                  }
-                }}
-              >
-                Delete
-              </Button>
+              {!isManagerReadOnly && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleDeleteClick}
+                  fullWidth={isMobile}
+                  size={isMobile ? 'medium' : 'small'}
+                  startIcon={<FiTrash2 />}
+                  sx={{ 
+                    bgcolor: 'rgba(244, 67, 54, 0.9)',
+                    '&:hover': {
+                      bgcolor: 'rgba(244, 67, 54, 1)'
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
             </Box>
           </Box>
         </CardContent>
@@ -850,19 +865,21 @@ const EmployeeDetailsPage = () => {
                   <FiBriefcase style={{ marginRight: '8px', fontSize: '20px', color: '#667eea' }} />
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Work Information</Typography>
                 </Box>
-                <Tooltip title="Edit Work Information">
-                  <IconButton 
-                    onClick={handleEditWorkClick}
-                    color="primary"
-                    size="small"
-                    sx={{ 
-                      bgcolor: 'primary.50',
-                      '&:hover': { bgcolor: 'primary.100' }
-                    }}
-                  >
-                    <FiEdit size={16} />
-                  </IconButton>
-                </Tooltip>
+                {!isManagerReadOnly && (
+                  <Tooltip title="Edit Work Information">
+                    <IconButton 
+                      onClick={handleEditWorkClick}
+                      color="primary"
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'primary.50',
+                        '&:hover': { bgcolor: 'primary.100' }
+                      }}
+                    >
+                      <FiEdit size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
               <TableContainer>
                 <Table size="small">
@@ -1013,19 +1030,21 @@ const EmployeeDetailsPage = () => {
                   <FiTrendingUp style={{ marginRight: '8px', fontSize: '20px', color: '#667eea' }} />
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Performance & Statistics</Typography>
                 </Box>
-                <Tooltip title="Edit Performance Score">
-                  <IconButton 
-                    onClick={handleEditPerformanceClick}
-                    color="primary"
-                    size="small"
-                    sx={{ 
-                      bgcolor: 'primary.50',
-                      '&:hover': { bgcolor: 'primary.100' }
-                    }}
-                  >
-                    <FiEdit size={16} />
-                  </IconButton>
-                </Tooltip>
+                {!isManagerReadOnly && (
+                  <Tooltip title="Edit Performance Score">
+                    <IconButton 
+                      onClick={handleEditPerformanceClick}
+                      color="primary"
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'primary.50',
+                        '&:hover': { bgcolor: 'primary.100' }
+                      }}
+                    >
+                      <FiEdit size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
               <Grid container spacing={2}>
                 <Grid item xs={6}>

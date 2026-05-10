@@ -121,6 +121,7 @@ function DashboardEmployee() {
         tasksCount: '0',
         currentMonthSalary: '₹0',
         leaveDaysRemaining: '0',
+        monthlyCapSummary: null,
         birthdays: null,
         projects: [],
         monthHours: 0,
@@ -208,12 +209,23 @@ function DashboardEmployee() {
                 }
 
                 let leaveBalance = 0;
+                let monthlyCapSummary = null;
                 try {
                     const leaveRes = await axios.get(`${EMPLOYEE_LEAVE_ENDPOINT}/get-my-leaves`, {
                         withCredentials: true,
                     });
                     if (leaveRes.data?.statistics?.remainingLeaves !== undefined) {
                         leaveBalance = leaveRes.data.statistics.remainingLeaves;
+                    }
+                    const capsRaw = leaveRes.data?.statistics?.monthlyLeaveCaps;
+                    if (capsRaw?.types?.length) {
+                        monthlyCapSummary = {
+                            ...capsRaw,
+                            totalRemainingThisMonth: capsRaw.types.reduce(
+                                (sum, t) => sum + (Number(t.remainingThisMonth) || 0),
+                                0
+                            ),
+                        };
                     }
                 } catch {
                     /* optional */
@@ -303,6 +315,7 @@ function DashboardEmployee() {
                     tasksCount: tasksCount.toString(),
                     currentMonthSalary: `₹${payrollAmount.toLocaleString('en-IN')}`,
                     leaveDaysRemaining: leaveBalance.toString(),
+                    monthlyCapSummary,
                     birthdays,
                     projects,
                     monthHours,
@@ -482,9 +495,15 @@ function DashboardEmployee() {
                                 <FaCheckCircle className="h-5 w-5" />
                             )}
                             {kpiCard(
-                                'Leave remaining',
-                                statsLoading ? '…' : `${dashboardStats.leaveDaysRemaining} days`,
-                                'Available balance',
+                                dashboardStats.monthlyCapSummary ? 'Leave room this month' : 'Leave remaining',
+                                statsLoading
+                                    ? '…'
+                                    : dashboardStats.monthlyCapSummary
+                                      ? `${dashboardStats.monthlyCapSummary.totalRemainingThisMonth} days`
+                                      : `${dashboardStats.leaveDaysRemaining} days`,
+                                dashboardStats.monthlyCapSummary
+                                    ? `${dashboardStats.monthlyCapSummary.monthLabel || 'This month'} · policy monthly limits`
+                                    : 'Available balance',
                                 <FaCalendarAlt className="h-5 w-5" />
                             )}
                             {kpiCard(
@@ -700,10 +719,50 @@ function DashboardEmployee() {
 
                         <div className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: WS.border }}>
                             <h3 className="text-sm font-semibold text-slate-900">Leave balance</h3>
-                            <p className="mt-3 text-3xl font-bold text-[#006D4E]">
-                                {statsLoading ? '…' : dashboardStats.leaveDaysRemaining}
-                            </p>
-                            <p className="text-xs text-slate-500">days remaining</p>
+                            {statsLoading ? (
+                                <p className="mt-3 text-3xl font-bold text-[#006D4E]">…</p>
+                            ) : dashboardStats.monthlyCapSummary ? (
+                                <>
+                                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                                        {dashboardStats.monthlyCapSummary.monthLabel || 'This month'}
+                                    </p>
+                                    <ul className="mt-3 space-y-2.5">
+                                        {dashboardStats.monthlyCapSummary.types.map((t) => (
+                                            <li
+                                                key={t.leaveType}
+                                                className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
+                                            >
+                                                <span className="font-medium text-slate-800">{t.displayName}</span>
+                                                <span className="shrink-0 text-right text-slate-700">
+                                                    <span className="font-semibold text-[#006D4E]">
+                                                        {t.remainingThisMonth}
+                                                    </span>
+                                                    <span className="text-slate-500">
+                                                        {' '}
+                                                        / {t.maxDaysPerMonth} this month
+                                                    </span>
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
+                                        Used this month is counted from pending and approved requests.
+                                    </p>
+                                    <p className="mt-2 text-xs text-slate-500">
+                                        Annual days available:{' '}
+                                        <span className="font-semibold text-slate-800">
+                                            {dashboardStats.leaveDaysRemaining}
+                                        </span>
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="mt-3 text-3xl font-bold text-[#006D4E]">
+                                        {dashboardStats.leaveDaysRemaining}
+                                    </p>
+                                    <p className="text-xs text-slate-500">days remaining</p>
+                                </>
+                            )}
                             <div className="mt-4 space-y-2">
                                 <button
                                     type="button"

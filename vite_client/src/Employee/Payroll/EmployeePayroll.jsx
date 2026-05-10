@@ -1,62 +1,160 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    fetchPayrollHistory, 
-    fetchCurrentMonthPayroll, 
+import {
+    fetchPayrollHistory,
+    fetchCurrentMonthPayroll,
     fetchPayrollByMonth,
     fetchPayrollDetails,
     downloadPayslip,
-    clearError 
+    clearError,
+    clearMonthPayrollView,
 } from '../../context/employeePayrollSlice';
-import { 
-    FiDollarSign, 
-    FiDownload, 
-    FiEye, 
-    FiCalendar, 
-    FiUser, 
-    FiTrendingUp,
-    FiTrendingDown,
-    FiFileText,
+import {
+    FiDownload,
+    FiEye,
+    FiCalendar,
     FiClock,
     FiCheckCircle,
     FiAlertCircle,
     FiLoader,
-    FiX
+    FiX,
+    FiCheck,
 } from 'react-icons/fi';
-import { format } from 'date-fns';
+import { format, lastDayOfMonth } from 'date-fns';
 import { toast } from 'react-toastify';
+
+const TEAL = '#0a8f6c';
+const TEAL_LIGHT = '#14b887';
+const DEDUCTION_ORANGE = '#f97316';
+const PAGE_BG = '#f4f7f6';
+const HISTORY_PAGE_SIZE = 24;
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const EARN_ITEMS = [
+    { key: 'basicWage', label: 'Basic Pay' },
+    { key: 'houseRentAllowance', label: 'House Rent Allowance' },
+    { key: 'transportAllowance', label: 'Transport Allowance' },
+    { key: 'medicalAllowance', label: 'Medical Allowance' },
+    { key: 'specialAllowance', label: 'Special Allowance' },
+    { key: 'overtime', label: 'Overtime' },
+    { key: 'performanceBonus', label: 'Performance Bonus' },
+    { key: 'projectBonus', label: 'Project Bonus' },
+    { key: 'attendanceBonus', label: 'Attendance Bonus' },
+    { key: 'pfEmployer', label: 'PF (Employer)' },
+    { key: 'esiEmployer', label: 'ESI (Employer)' },
+];
+
+const DEDUCT_ITEMS = [
+    { key: 'pfEmployee', label: 'Provident Fund (PF)' },
+    { key: 'esiEmployee', label: 'ESI Contribution' },
+    { key: 'professionalTax', label: 'Professional Tax' },
+    { key: 'incomeTax', label: 'Income Tax (TDS)' },
+    { key: 'advanceSalary', label: 'Advance Salary' },
+    { key: 'loanDeduction', label: 'Loan Deduction' },
+    { key: 'otherDeductions', label: 'Other Deductions' },
+];
+
+function ProgressRow({ label, amount, formatCurrency, total, barColor }) {
+    const pct = total > 0 ? Math.min(100, Math.round((amount / total) * 100)) : 0;
+    return (
+        <div className="mb-4 last:mb-0">
+            <div className="mb-1 flex justify-between gap-2 text-sm">
+                <span className="text-slate-600">{label}</span>
+                <span className="shrink-0 font-semibold text-slate-900">{formatCurrency(amount)}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${pct}%`, background: barColor }}
+                />
+            </div>
+        </div>
+    );
+}
+
+function creditFallbackLabel(monthStr, yr) {
+    try {
+        const idx = MONTHS.indexOf(monthStr);
+        if (idx < 0 || yr == null) return null;
+        const y = Number(yr);
+        if (!Number.isFinite(y)) return null;
+        const d = lastDayOfMonth(new Date(y, idx, 1));
+        return format(d, 'd MMM yyyy');
+    } catch {
+        return null;
+    }
+}
+
+function statusHeroLabel(status) {
+    if (status === 'Paid') return 'Paid';
+    if (status === 'Processed') return 'Processed';
+    if (status === 'Pending') return 'Pending';
+    if (status === 'Cancelled') return 'Cancelled';
+    return status || '—';
+}
 
 const EmployeePayroll = () => {
     const dispatch = useDispatch();
-    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 3 }, (_, i) => currentYear - i);
+    const currentCalendarYear = new Date().getFullYear();
+    const years = Array.from({ length: 4 }, (_, i) => currentCalendarYear - i);
 
-    const { 
-        loading, 
-        error, 
-        payrollHistory, 
-        currentMonthPayroll, 
+    const {
+        loading,
+        historyLoading,
+        payslipDownloading,
+        error,
+        payrollHistory,
+        currentMonthPayroll,
         selectedMonthPayroll,
         selectedPayroll,
-        payslipData 
-    } = useSelector(state => state.employeePayroll);
+    } = useSelector((state) => state.employeePayroll);
 
     const [currentPage, setCurrentPage] = useState(1);
+    const [historyYear, setHistoryYear] = useState(currentCalendarYear);
     const [showPayrollDetails, setShowPayrollDetails] = useState(false);
     const [viewMonth, setViewMonth] = useState(new Date().toLocaleString('default', { month: 'long' }));
-    const [viewYear, setViewYear] = useState(currentYear);
+    const [viewYear, setViewYear] = useState(currentCalendarYear);
+
+    const featured = useMemo(() => {
+        if (selectedMonthPayroll && selectedMonthPayroll._id) return selectedMonthPayroll;
+        return currentMonthPayroll;
+    }, [selectedMonthPayroll, currentMonthPayroll]);
+
+    const earningsTotal = Number(featured?.earnings?.totalEarnings) || 0;
+    const deductionsTotal = Number(featured?.deductions?.total) || 0;
+
+    const earningRows = useMemo(() => {
+        if (!featured?.earnings) return [];
+        const e = featured.earnings;
+        return EARN_ITEMS.map(({ key, label }) => ({
+            key,
+            label,
+            amount: Number(e[key]) || 0,
+        })).filter((r) => r.amount > 0);
+    }, [featured]);
+
+    const deductionRows = useMemo(() => {
+        if (!featured?.deductions) return [];
+        const d = featured.deductions;
+        return DEDUCT_ITEMS.map(({ key, label }) => ({
+            key,
+            label,
+            amount: Number(d[key]) || 0,
+        })).filter((r) => r.amount > 0);
+    }, [featured]);
 
     useEffect(() => {
         dispatch(fetchCurrentMonthPayroll());
-        dispatch(fetchPayrollHistory({ page: currentPage, limit: 12 }));
-    }, [dispatch, currentPage]);
+    }, [dispatch]);
+
+    useEffect(() => {
+        dispatch(fetchPayrollHistory({ page: currentPage, limit: HISTORY_PAGE_SIZE, year: historyYear }));
+    }, [dispatch, currentPage, historyYear]);
 
     useEffect(() => {
         if (error) {
-            const timer = setTimeout(() => {
-                dispatch(clearError());
-            }, 5000);
+            const timer = setTimeout(() => dispatch(clearError()), 5000);
             return () => clearTimeout(timer);
         }
     }, [error, dispatch]);
@@ -69,518 +167,533 @@ const EmployeePayroll = () => {
     const handleViewMonth = async () => {
         const result = await dispatch(fetchPayrollByMonth({ month: viewMonth, year: viewYear }));
         if (fetchPayrollByMonth.fulfilled.match(result)) {
-            dispatch(fetchPayrollHistory({ page: 1, limit: 12 }));
+            setHistoryYear(viewYear);
+            setCurrentPage(1);
+            dispatch(fetchPayrollHistory({ page: 1, limit: HISTORY_PAGE_SIZE, year: viewYear }));
             toast.success(`${viewMonth} ${viewYear} payroll loaded.`);
         }
     };
 
-    const handleDownloadPayslip = async (payrollId) => {
+    const handleDownloadPayslip = async (payroll) => {
+        if (!payroll?._id) return;
         try {
-            const result = await dispatch(downloadPayslip(payrollId));
-            
+            const result = await dispatch(downloadPayslip(payroll._id));
             if (downloadPayslip.fulfilled.match(result)) {
-                // Create blob from the PDF data
                 const blob = new Blob([result.payload], { type: 'application/pdf' });
-                
-                // Create download link
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                
-                // Generate filename
-                const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-                link.download = `Payslip_${currentMonth}.pdf`;
-                
-                // Trigger download
+                const safeMonth = (payroll.month || 'Payroll').replace(/\s+/g, '_');
+                link.download = `Payslip_${safeMonth}_${payroll.year || ''}.pdf`;
                 document.body.appendChild(link);
                 link.click();
-                
-                // Cleanup
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(url);
-                
-                // Show success message
                 toast.success('Payslip downloaded successfully!');
             } else {
-                // Handle error
-                const errorMessage = result.payload || 'Failed to download payslip';
-                toast.error(errorMessage);
+                toast.error(result.payload || 'Failed to download payslip');
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to download payslip. Please try again.');
         }
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR'
-        }).format(amount || 0);
-    };
+    const formatCurrency = (amount) =>
+        new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount || 0);
 
     const canDownloadPayslip = (payroll) => {
         if (!payroll) return false;
         if (payroll.status === 'Paid') return true;
-
         const monthIndex = MONTHS.indexOf(payroll.month);
         if (monthIndex < 0) return false;
-
         const current = new Date();
         const payrollRank = (Number(payroll.year) || 0) * 12 + (monthIndex + 1);
         const currentRank = current.getFullYear() * 12 + (current.getMonth() + 1);
         const isPreviousMonthOrOlder = payrollRank < currentRank;
         const isFinalMonthly = payroll.isProvisional !== true && payroll.generationType !== 'preview';
-
         return isPreviousMonthOrOlder && isFinalMonthly;
     };
 
-    const getDownloadTitle = (payroll) => (
+    const getDownloadTitle = (payroll) =>
         canDownloadPayslip(payroll)
             ? 'Download Payslip'
-            : 'Payslip is available after payroll is paid or once a previous month is finalized.'
-    );
+            : 'Payslip is available after payroll is paid or once a previous month is finalized.';
 
-    const getStatusColor = (status) => {
+    const getStatusTableClass = (status) => {
         switch (status) {
             case 'Paid':
-                return 'text-theme-primary bg-theme-primary/10';
+                return { wrap: 'bg-emerald-50 text-emerald-800 border border-emerald-200', icon: FiCheckCircle };
             case 'Processed':
-                return 'text-theme-secondary bg-theme-secondary/10';
+                return { wrap: 'bg-sky-50 text-sky-800 border border-sky-200', icon: FiClock };
             case 'Pending':
-                return 'text-orange-600 bg-orange-100';
+                return { wrap: 'bg-amber-50 text-amber-900 border border-amber-200', icon: FiAlertCircle };
             default:
-                return 'text-gray-600 bg-gray-100';
+                return { wrap: 'bg-slate-100 text-slate-700 border border-slate-200', icon: FiAlertCircle };
         }
     };
 
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'Paid':
-                return <FiCheckCircle className="w-4 h-4" />;
-            case 'Processed':
-                return <FiClock className="w-4 h-4" />;
-            case 'Pending':
-                return <FiAlertCircle className="w-4 h-4" />;
-            default:
-                return <FiAlertCircle className="w-4 h-4" />;
+    const creditedLine = useMemo(() => {
+        if (!featured) return null;
+        if (featured.paymentDate) {
+            try {
+                return `Credited on ${format(new Date(featured.paymentDate), 'd MMM yyyy')}`;
+            } catch {
+                /* fall through */
+            }
         }
-    };
+        const fb = creditFallbackLabel(featured.month, featured.year);
+        if (fb && (featured.isProvisional || featured.generationType === 'preview')) {
+            return `Estimated · period ends ${fb}`;
+        }
+        if (fb) return `Typical credit by ${fb}`;
+        return null;
+    }, [featured]);
 
-    if (loading && !currentMonthPayroll) {
+    if (loading && !currentMonthPayroll && !selectedMonthPayroll) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
+            <div className="flex min-h-screen items-center justify-center" style={{ background: PAGE_BG }}>
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading payroll data...</p>
+                    <FiLoader className="mx-auto mb-4 h-10 w-10 animate-spin" style={{ color: TEAL }} />
+                    <p className="text-sm text-slate-600">Loading payroll…</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-6xl mx-auto">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-1">Payroll</h1>
-                    <p className="text-xs sm:text-sm text-gray-600">View your payroll details and download payslips</p>
-                </div>
+        <div className="min-h-screen p-4 transition-all duration-300 sm:p-6 lg:p-8" style={{ background: PAGE_BG }}>
+            <div className="mx-auto max-w-6xl">
+                <header className="mb-8">
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">My Payroll</h1>
+                    <p className="mt-1 text-sm text-slate-600">View your salary details and download payslips.</p>
+                </header>
 
-                {/* Error Message */}
                 {error && (
-                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex items-center">
-                            <FiAlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                            <span className="text-red-800">{error}</span>
+                    <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                        <div className="flex items-center gap-2">
+                            <FiAlertCircle className="h-5 w-5 shrink-0" />
+                            <span>{error}</span>
                         </div>
                     </div>
                 )}
 
-                {/* Current Month Payroll Card */}
-                {currentMonthPayroll && (
-                    <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-6 border border-gray-200">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-theme-secondary rounded-lg flex items-center justify-center">
-                                    <FiDollarSign className="w-5 h-5 text-white" />
-                                </div>
-                                <div>
-                                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">Current Month</h2>
-                                    <p className="text-xs sm:text-sm text-gray-600">
-                                        {currentMonthPayroll.month} {currentMonthPayroll.year}
+                {/* Hero payslip card */}
+                {featured ? (
+                    <section
+                        className="relative mb-8 overflow-hidden rounded-2xl p-6 text-white shadow-lg sm:p-8 lg:p-10"
+                        style={{
+                            background: `linear-gradient(135deg, ${TEAL} 0%, ${TEAL_LIGHT} 55%, #0d7a5c 100%)`,
+                        }}
+                    >
+                        <div className="relative z-[1] flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <p className="text-sm font-semibold uppercase tracking-wide text-white/90">
+                                        {featured.month} {featured.year} Payslip
                                     </p>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                                        {featured.status === 'Paid' || featured.status === 'Processed' ? (
+                                            <FiCheck className="h-3.5 w-3.5" />
+                                        ) : (
+                                            <FiClock className="h-3.5 w-3.5" />
+                                        )}
+                                        {statusHeroLabel(featured.status)}
+                                    </span>
+                                </div>
+                                <p className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+                                    {formatCurrency(featured.inHandSalary)}
+                                </p>
+                                <p className="mt-2 text-sm text-white/85">{creditedLine || 'Net pay for this period'}</p>
+                                {(featured.isProvisional || featured.generationType === 'preview') && (
+                                    <p className="mt-3 max-w-xl rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-xs text-white/95">
+                                        Estimated (provisional) preview. Final figures after month-end payroll run.
+                                    </p>
+                                )}
+                                <div className="mt-6 flex flex-wrap gap-3">
+                                    <div className="rounded-xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Gross</p>
+                                        <p className="text-lg font-semibold">{formatCurrency(earningsTotal)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-white/30 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Deductions</p>
+                                        <p className="text-lg font-semibold">{formatCurrency(deductionsTotal)}</p>
+                                    </div>
                                 </div>
                             </div>
-                            <div className={`px-3 py-1 rounded-lg flex items-center gap-2 text-sm ${getStatusColor(currentMonthPayroll.status)}`}>
-                                {getStatusIcon(currentMonthPayroll.status)}
-                                <span className="font-medium">{currentMonthPayroll.status}</span>
+                            <div className="flex w-full shrink-0 flex-col gap-3 sm:flex-row lg:w-auto lg:flex-col">
+                                <button
+                                    type="button"
+                                    onClick={() => handleDownloadPayslip(featured)}
+                                    disabled={!canDownloadPayslip(featured) || payslipDownloading}
+                                    title={getDownloadTitle(featured)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-bold shadow-md transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    style={{ color: TEAL }}
+                                >
+                                    {payslipDownloading ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiDownload className="h-4 w-4" />}
+                                    Download Payslip
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleViewDetails(featured._id)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-white/70 bg-transparent px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                                >
+                                    <FiEye className="h-4 w-4" />
+                                    Full breakdown
+                                </button>
                             </div>
                         </div>
-
-                        {(currentMonthPayroll.isProvisional || currentMonthPayroll.generationType === 'preview') && (
-                            <div className="mb-4 p-3 rounded bg-amber-50 border border-amber-200 text-amber-950 text-sm">
-                                Estimated (provisional) payroll preview. Final figures will be generated after month-end.
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-                            <div className="bg-theme-primary/10 rounded-lg p-4 border border-theme-primary">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xs text-gray-600 mb-1">In-Hand Salary</p>
-                                        <p className="text-lg sm:text-xl font-semibold text-theme-primary">
-                                            {formatCurrency(currentMonthPayroll.inHandSalary)}
-                                        </p>
-                                    </div>
-                                    <FiTrendingUp className="w-6 h-6 text-green-500" />
-                                </div>
-                            </div>
-
-                            <div className="bg-theme-secondary/10 rounded-lg p-4 border border-theme-secondary">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xs text-gray-600 mb-1">Total Earnings</p>
-                                        <p className="text-lg sm:text-xl font-semibold text-theme-secondary">
-                                            {formatCurrency(currentMonthPayroll.earnings?.totalEarnings)}
-                                        </p>
-                                    </div>
-                                    <FiTrendingUp className="w-6 h-6 text-theme-secondary" />
-                                </div>
-                            </div>
-
-                            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xs text-gray-600 mb-1">Total Deductions</p>
-                                        <p className="text-lg sm:text-xl font-semibold text-red-600">
-                                            {formatCurrency(currentMonthPayroll.deductions?.total)}
-                                        </p>
-                                    </div>
-                                    <FiTrendingDown className="w-6 h-6 text-red-500" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3">
+                        {selectedMonthPayroll && selectedMonthPayroll._id ? (
                             <button
-                                onClick={() => handleViewDetails(currentMonthPayroll._id)}
-                                className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition text-sm font-medium"
+                                type="button"
+                                onClick={() => dispatch(clearMonthPayrollView())}
+                                className="relative z-[1] mt-6 text-xs font-semibold underline decoration-white/50 hover:decoration-white"
                             >
-                                <FiEye className="w-4 h-4" />
-                                <span>View Details</span>
+                                Show current month payroll in summary
                             </button>
-                            <button
-                                onClick={() => handleDownloadPayslip(currentMonthPayroll._id)}
-                                disabled={!canDownloadPayslip(currentMonthPayroll)}
-                                title={getDownloadTitle(currentMonthPayroll)}
-                                className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <FiDownload className="w-4 h-4" />
-                                <span>Download Payslip</span>
-                            </button>
-                        </div>
-                    </div>
+                        ) : null}
+                    </section>
+                ) : (
+                    <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                        <FiCalendar className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+                        <h2 className="text-lg font-semibold text-slate-800">No payroll published yet</h2>
+                        <p className="mt-1 text-sm text-slate-500">Once your organization publishes payroll, it will show here.</p>
+                    </section>
                 )}
 
-                {/* View another month */}
-                <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-6 border border-gray-200">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">View any month</h2>
-                    <p className="text-xs sm:text-sm text-gray-600 mb-4">Select a month and year to view payroll. Payroll is generated by the payroll run (preview for the current month, final after month-end).</p>
-                    <div className="flex flex-wrap items-end gap-3">
+                {/* Breakdown cards */}
+                {featured ? (
+                    <div className="mb-8 grid gap-6 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+                            <div className="mb-5 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-4">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Component</p>
+                                    <p className="text-lg font-bold text-slate-900">Total Earnings</p>
+                                </div>
+                                <p className="text-xl font-bold" style={{ color: TEAL }}>
+                                    {formatCurrency(earningsTotal)}
+                                </p>
+                            </div>
+                            <div className="pt-1">
+                                {earningRows.length ? (
+                                    earningRows.map((row) => (
+                                        <ProgressRow
+                                            key={row.key}
+                                            label={row.label}
+                                            amount={row.amount}
+                                            total={earningsTotal}
+                                            formatCurrency={formatCurrency}
+                                            barColor={TEAL_LIGHT}
+                                        />
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-slate-500">No earning line items for this payslip.</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+                            <div className="mb-5 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-4">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Component</p>
+                                    <p className="text-lg font-bold text-slate-900">Total Deductions</p>
+                                </div>
+                                <p className="text-xl font-bold" style={{ color: DEDUCTION_ORANGE }}>
+                                    {formatCurrency(deductionsTotal)}
+                                </p>
+                            </div>
+                            <div className="pt-1">
+                                {deductionRows.length ? (
+                                    deductionRows.map((row) => (
+                                        <ProgressRow
+                                            key={row.key}
+                                            label={row.label}
+                                            amount={row.amount}
+                                            total={deductionsTotal || 1}
+                                            formatCurrency={formatCurrency}
+                                            barColor={DEDUCTION_ORANGE}
+                                        />
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-slate-500">No deduction line items for this payslip.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+
+                {/* View any month */}
+                <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+                    <h2 className="text-base font-bold text-slate-900">View any month</h2>
+                    <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+                        Select a month and year. Payroll reflects the payroll run (preview may show for the current month).
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-end gap-3">
                         <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Month</label>
                             <select
                                 value={viewMonth}
                                 onChange={(e) => setViewMonth(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
+                                className="w-full min-w-[140px] rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/25"
                             >
                                 {MONTHS.map((m) => (
-                                    <option key={m} value={m}>{m}</option>
+                                    <option key={m} value={m}>
+                                        {m}
+                                    </option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Year</label>
                             <select
                                 value={viewYear}
                                 onChange={(e) => setViewYear(Number(e.target.value))}
-                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
+                                className="w-full min-w-[100px] rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/25"
                             >
                                 {years.map((y) => (
-                                    <option key={y} value={y}>{y}</option>
+                                    <option key={y} value={y}>
+                                        {y}
+                                    </option>
                                 ))}
                             </select>
                         </div>
                         <button
+                            type="button"
                             onClick={handleViewMonth}
                             disabled={loading}
-                            className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow transition disabled:opacity-50"
+                            style={{ background: TEAL }}
                         >
-                            {loading ? <FiLoader className="animate-spin w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                            {loading ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiEye className="h-4 w-4" />}
                             View
                         </button>
                     </div>
-                    {selectedMonthPayroll && selectedMonthPayroll._id && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900">{selectedMonthPayroll.month} {selectedMonthPayroll.year}</p>
-                                    {(selectedMonthPayroll.isProvisional || selectedMonthPayroll.generationType === 'preview') && (
-                                        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 inline-block px-3 py-1 rounded mt-2">
-                                            Estimated (provisional)
-                                        </p>
-                                    )}
-                                    <p className="text-xs text-gray-600">In-Hand: {formatCurrency(selectedMonthPayroll.inHandSalary)}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleViewDetails(selectedMonthPayroll._id)}
-                                        className="flex items-center gap-2 px-3 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary text-sm font-medium"
-                                    >
-                                        <FiEye className="w-4 h-4" /> View Details
-                                    </button>
-                                    <button
-                                        onClick={() => handleDownloadPayslip(selectedMonthPayroll._id)}
-                                        disabled={!canDownloadPayslip(selectedMonthPayroll)}
-                                        title={getDownloadTitle(selectedMonthPayroll)}
-                                        className="flex items-center gap-2 px-3 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-primary text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <FiDownload className="w-4 h-4" /> Download Payslip
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                </section>
 
-                {/* Payroll History */}
-                <div className="bg-white rounded-lg shadow-md p-5 border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-gray-900">Payroll History</h2>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <FiCalendar className="w-4 h-4" />
-                            <span>All Months</span>
+                {/* Payroll history table */}
+                <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+                    <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <h2 className="text-lg font-bold text-slate-900">Payroll History</h2>
+                        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter history by year">
+                            {[currentCalendarYear, currentCalendarYear - 1, currentCalendarYear - 2].map((y) => (
+                                <button
+                                    key={y}
+                                    type="button"
+                                    onClick={() => {
+                                        setHistoryYear(y);
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${
+                                        historyYear === y
+                                            ? 'text-white shadow'
+                                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                    style={
+                                        historyYear === y ? { background: TEAL } : undefined
+                                    }
+                                >
+                                    {y}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {loading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <div className="flex items-center space-x-2">
-                                <FiLoader className="animate-spin w-6 h-6 text-theme-secondary" />
-                                <span className="text-gray-600">Loading history...</span>
+                    <div className="overflow-x-auto">
+                        {historyLoading ? (
+                            <div className="flex justify-center py-14">
+                                <FiLoader className="h-8 w-8 animate-spin text-slate-400" />
                             </div>
-                        </div>
-                    ) : payrollHistory.payrolls.length === 0 ? (
-                        <div className="text-center py-12">
-                            <FiFileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-gray-600 mb-2">No Payroll Records</h3>
-                            <p className="text-gray-500">Your payroll history will appear here once available.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {payrollHistory.payrolls.map((payroll) => (
-                                <div key={payroll._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-theme-secondary/10 rounded-lg flex items-center justify-center">
-                                                <FiCalendar className="w-5 h-5 text-theme-secondary" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold text-gray-900">
-                                                    {payroll.month} {payroll.year}
-                                                </h3>
-                                                <p className="text-sm text-gray-600">
-                                                    In-Hand: {formatCurrency(payroll.inHandSalary)}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`px-3 py-1 rounded-lg flex items-center gap-2 text-sm ${getStatusColor(payroll.status)}`}>
-                                                {getStatusIcon(payroll.status)}
-                                                <span className="font-medium">{payroll.status}</span>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => handleViewDetails(payroll._id)}
-                                                    className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition"
-                                                    title="View Details"
-                                                >
-                                                    <FiEye className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDownloadPayslip(payroll._id)}
-                                                    disabled={!canDownloadPayslip(payroll)}
-                                                    title={getDownloadTitle(payroll)}
-                                                    className="p-2 text-gray-600 hover:text-theme-primary hover:bg-theme-primary/10 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <FiDownload className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                        ) : payrollHistory.payrolls?.length === 0 ? (
+                            <div className="py-14 text-center text-slate-500">
+                                <FiCalendar className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+                                <p className="font-medium text-slate-700">No payroll records for {historyYear}</p>
+                                <p className="mt-1 text-sm">Records appear after payroll is published.</p>
+                            </div>
+                        ) : (
+                            <table className="min-w-full divide-y divide-slate-100 text-sm">
+                                <thead>
+                                    <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                        <th className="whitespace-nowrap px-5 py-3">Month</th>
+                                        <th className="whitespace-nowrap px-5 py-3">Gross pay</th>
+                                        <th className="whitespace-nowrap px-5 py-3">Deductions</th>
+                                        <th className="whitespace-nowrap px-5 py-3">Net pay</th>
+                                        <th className="whitespace-nowrap px-5 py-3">Status</th>
+                                        <th className="whitespace-nowrap px-5 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {payrollHistory.payrolls.map((row) => {
+                                        const st = getStatusTableClass(row.status);
+                                        const Icon = st.icon;
+                                        return (
+                                            <tr key={row._id} className="hover:bg-slate-50/80">
+                                                <td className="whitespace-nowrap px-5 py-4 font-semibold text-slate-900">
+                                                    {row.month} {row.year}
+                                                </td>
+                                                <td className="whitespace-nowrap px-5 py-4 text-slate-700">
+                                                    {formatCurrency(row.earnings?.totalEarnings)}
+                                                </td>
+                                                <td className="whitespace-nowrap px-5 py-4 text-slate-700">
+                                                    {formatCurrency(row.deductions?.total)}
+                                                </td>
+                                                <td className="whitespace-nowrap px-5 py-4 font-medium text-slate-900">
+                                                    {formatCurrency(row.inHandSalary)}
+                                                </td>
+                                                <td className="whitespace-nowrap px-5 py-4">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${st.wrap}`}
+                                                    >
+                                                        <Icon className="h-3.5 w-3.5" />
+                                                        {row.status}
+                                                    </span>
+                                                </td>
+                                                <td className="whitespace-nowrap px-5 py-4 text-right">
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleViewDetails(row._id)}
+                                                            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                                                            title="View details"
+                                                        >
+                                                            <FiEye className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownloadPayslip(row)}
+                                                            disabled={!canDownloadPayslip(row) || payslipDownloading}
+                                                            title={getDownloadTitle(row)}
+                                                            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                                                        >
+                                                            <FiDownload className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
 
-                    {/* Pagination */}
-                    {payrollHistory.totalPages > 1 && (
-                        <div className="mt-6 flex items-center justify-between">
-                            <p className="text-sm text-gray-600">
-                                Showing {((currentPage - 1) * 12) + 1} to {Math.min(currentPage * 12, payrollHistory.total)} of {payrollHistory.total} results
+                    {payrollHistory.totalPages > 1 ? (
+                        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-slate-600">
+                                Page {currentPage} of {payrollHistory.totalPages} · {payrollHistory.total} record(s) in {historyYear}
                             </p>
-                            <div className="flex space-x-2">
+                            <div className="flex gap-2">
                                 <button
-                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1}
-                                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    type="button"
+                                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1 || historyLoading}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-45"
                                 >
                                     Previous
                                 </button>
                                 <button
-                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, payrollHistory.totalPages))}
-                                    disabled={currentPage === payrollHistory.totalPages}
-                                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    type="button"
+                                    onClick={() => setCurrentPage((p) => Math.min(payrollHistory.totalPages, p + 1))}
+                                    disabled={currentPage === payrollHistory.totalPages || historyLoading}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-45"
                                 >
                                     Next
                                 </button>
                             </div>
                         </div>
-                    )}
-                </div>
+                    ) : null}
+                </section>
             </div>
 
-            {/* Payroll Details Modal */}
+            {/* Details modal */}
             {showPayrollDetails && selectedPayroll && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto mx-4">
-                        <div className="p-4 sm:p-5 border-b border-gray-200">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-gray-900">Payroll Details</h3>
-                                <button
-                                    onClick={() => setShowPayrollDetails(false)}
-                                    className="text-gray-400 hover:text-gray-600"
-                                >
-                                    <FiX className="w-5 h-5" />
-                                </button>
-                            </div>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+                        <div className="sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
+                            <h3 className="text-lg font-bold text-slate-900">Payroll Details</h3>
+                            <button
+                                type="button"
+                                onClick={() => setShowPayrollDetails(false)}
+                                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                aria-label="Close"
+                            >
+                                <FiX className="h-5 w-5" />
+                            </button>
                         </div>
-                        <div className="p-5">
-                            {/* Employee Info */}
-                            <div className="mb-5">
-                                <h4 className="text-base font-semibold text-gray-900 mb-3">Employee Information</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-5 sm:p-6">
+                            <div className="mb-6">
+                                <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Employee</h4>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div>
-                                        <p className="text-sm text-gray-600">Name</p>
-                                        <p className="font-medium">{selectedPayroll.employeeId?.name} {selectedPayroll.employeeId?.lastName}</p>
+                                        <p className="text-xs text-slate-500">Name</p>
+                                        <p className="font-medium text-slate-900">
+                                            {selectedPayroll.employeeId?.name} {selectedPayroll.employeeId?.lastName}
+                                        </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Employee ID</p>
-                                        <p className="font-medium">{selectedPayroll.employeeId?.employeeId}</p>
+                                        <p className="text-xs text-slate-500">Employee ID</p>
+                                        <p className="font-medium text-slate-900">{selectedPayroll.employeeId?.employeeId}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Job Title</p>
-                                        <p className="font-medium">{selectedPayroll.employeeId?.jobTitle}</p>
+                                        <p className="text-xs text-slate-500">Job title</p>
+                                        <p className="font-medium text-slate-900">{selectedPayroll.employeeId?.jobTitle}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Department</p>
-                                        <p className="font-medium">{selectedPayroll.employeeId?.department}</p>
+                                        <p className="text-xs text-slate-500">Department</p>
+                                        <p className="font-medium text-slate-900">{selectedPayroll.employeeId?.department}</p>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Earnings Breakdown */}
-                            <div className="mb-5">
-                                <h4 className="text-base font-semibold text-gray-900 mb-3">Earnings</h4>
-                                <div className="bg-theme-primary/10 rounded-lg p-4 border border-theme-primary">
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Basic Wage</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.basicWage)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">House Rent Allowance</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.houseRentAllowance)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Transport Allowance</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.transportAllowance)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Medical Allowance</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.medicalAllowance)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Overtime</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.overtime)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Performance Bonus</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.performanceBonus)}</span>
-                                        </div>
-                                        <div className="border-t border-theme-primary pt-2 mt-2">
-                                            <div className="flex justify-between font-bold text-theme-primary">
-                                                <span>Total Earnings</span>
-                                                <span>{formatCurrency(selectedPayroll.earnings?.totalEarnings)}</span>
-                                            </div>
+                            <div className="mb-6 grid gap-6 lg:grid-cols-2">
+                                <div className="rounded-xl border border-slate-100 p-4" style={{ borderLeftWidth: 4, borderLeftColor: TEAL }}>
+                                    <h4 className="mb-3 font-bold text-slate-900">Earnings</h4>
+                                    <div className="space-y-2 text-sm">
+                                        {EARN_ITEMS.map(({ key, label }) =>
+                                            Number(selectedPayroll.earnings?.[key]) ? (
+                                                <div key={key} className="flex justify-between gap-2">
+                                                    <span className="text-slate-600">{label}</span>
+                                                    <span className="font-medium">{formatCurrency(selectedPayroll.earnings?.[key])}</span>
+                                                </div>
+                                            ) : null
+                                        )}
+                                        <div className="flex justify-between border-t border-slate-100 pt-2 font-bold" style={{ color: TEAL }}>
+                                            <span>Total earnings</span>
+                                            <span>{formatCurrency(selectedPayroll.earnings?.totalEarnings)}</span>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Deductions Breakdown */}
-                            <div className="mb-5">
-                                <h4 className="text-base font-semibold text-gray-900 mb-3">Deductions</h4>
-                                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">PF Employee</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.deductions?.pfEmployee)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">ESI Employee</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.deductions?.esiEmployee)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Professional Tax</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.deductions?.professionalTax)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Income Tax</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.deductions?.incomeTax)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Other Deductions</span>
-                                            <span className="font-medium">{formatCurrency(selectedPayroll.deductions?.otherDeductions)}</span>
-                                        </div>
-                                        <div className="border-t border-red-200 pt-2 mt-2">
-                                            <div className="flex justify-between font-bold text-red-700">
-                                                <span>Total Deductions</span>
-                                                <span>{formatCurrency(selectedPayroll.deductions?.total)}</span>
-                                            </div>
+                                <div
+                                    className="rounded-xl border border-slate-100 p-4"
+                                    style={{ borderLeftWidth: 4, borderLeftColor: DEDUCTION_ORANGE }}
+                                >
+                                    <h4 className="mb-3 font-bold text-slate-900">Deductions</h4>
+                                    <div className="space-y-2 text-sm">
+                                        {DEDUCT_ITEMS.map(({ key, label }) =>
+                                            Number(selectedPayroll.deductions?.[key]) ? (
+                                                <div key={key} className="flex justify-between gap-2">
+                                                    <span className="text-slate-600">{label}</span>
+                                                    <span className="font-medium">{formatCurrency(selectedPayroll.deductions?.[key])}</span>
+                                                </div>
+                                            ) : null
+                                        )}
+                                        <div
+                                            className="flex justify-between border-t border-slate-100 pt-2 font-bold"
+                                            style={{ color: DEDUCTION_ORANGE }}
+                                        >
+                                            <span>Total deductions</span>
+                                            <span>{formatCurrency(selectedPayroll.deductions?.total)}</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Summary */}
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-lg">
-                                        <span className="font-semibold text-gray-900">In-Hand Salary</span>
-                                        <span className="font-bold text-theme-primary">{formatCurrency(selectedPayroll.inHandSalary)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">CTC</span>
-                                        <span className="font-medium">{formatCurrency(selectedPayroll.ctc)}</span>
-                                    </div>
+                            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                                <div className="flex flex-wrap justify-between gap-2 text-lg font-bold text-slate-900">
+                                    <span>Net pay</span>
+                                    <span style={{ color: TEAL }}>{formatCurrency(selectedPayroll.inHandSalary)}</span>
                                 </div>
+                                <p className="mt-1 text-sm text-slate-600">CTC · {formatCurrency(selectedPayroll.ctc)}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
     );
 };

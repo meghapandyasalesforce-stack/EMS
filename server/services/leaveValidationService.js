@@ -448,6 +448,112 @@ class LeaveValidationService {
     }
 
     /**
+     * Pending + approved leave days of a type that fall in a calendar month.
+     * Matches the monthly cap logic in validateLeaveRequest (section 8).
+     */
+    async countMonthlyUsageForLeaveType(employeeId, organizationId, policy, leaveTypeConfig, monthStart, monthEnd) {
+        const calendar = await Calendar.findOne({
+            organizationId,
+            year: monthStart.getFullYear()
+        });
+
+        const candidateLeaves = await Leave.find({
+            organizationId,
+            employee: employeeId,
+            leaveType: { $in: getLeaveTypeVariantsForBalance(leaveTypeConfig.type) },
+            status: { $in: ['pending', 'approved'] },
+            startDate: { $lte: monthEnd },
+            endDate: { $gte: monthStart }
+        });
+
+        const totalLeaveDaysCache = new Map();
+        for (const l of candidateLeaves) {
+            const lStart = new Date(l.startDate);
+            const lEnd = new Date(l.endDate);
+            const totalLeaveDaysCounted = await this.calculateDuration(
+                lStart,
+                lEnd,
+                policy.dateHandlingRules,
+                calendar,
+                organizationId
+            );
+            totalLeaveDaysCache.set(String(l._id), totalLeaveDaysCounted);
+        }
+
+        let usedDays = 0;
+        for (const l of candidateLeaves) {
+            const lStart = new Date(l.startDate);
+            const lEnd = new Date(l.endDate);
+            if (lEnd.getTime() < monthStart.getTime() || lStart.getTime() > monthEnd.getTime()) {
+                continue;
+            }
+            const overlapStart = new Date(Math.max(lStart.getTime(), monthStart.getTime()));
+            const overlapEnd = new Date(Math.min(lEnd.getTime(), monthEnd.getTime()));
+            if (overlapStart.getTime() > overlapEnd.getTime()) continue;
+
+            const totalLeaveDaysCounted = totalLeaveDaysCache.get(String(l._id)) ?? 0;
+            const overlapWorkingDays = await this.calculateDuration(
+                overlapStart,
+                overlapEnd,
+                policy.dateHandlingRules,
+                calendar,
+                organizationId
+            );
+
+            if (totalLeaveDaysCounted > 0) {
+                const ratio = overlapWorkingDays / totalLeaveDaysCounted;
+                usedDays += (Number(l.duration) || 0) * ratio;
+            }
+        }
+
+        return usedDays;
+    }
+
+    /**
+     * Per leave type: monthly cap, used this month, remaining this month.
+     * Only includes types with maxDaysPerMonth set on the active policy.
+     */
+    async getMonthlyLeaveCapSummary(employeeId, organizationId, year, month) {
+        const employee = await Employee.findById(employeeId);
+        if (!employee) {
+            return { year, month, monthLabel: '', types: [] };
+        }
+        const policy = await this.getApplicablePolicy(employee, organizationId);
+        if (!policy) {
+            return { year, month, monthLabel: '', types: [] };
+        }
+
+        const monthStart = new Date(year, month - 1, 1);
+        const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+        const monthLabel = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
+        const types = [];
+        for (const lt of policy.leaveTypes || []) {
+            const cap = Number(lt.maxDaysPerMonth);
+            if (!Number.isFinite(cap) || cap <= 0) continue;
+
+            const usedThisMonth = await this.countMonthlyUsageForLeaveType(
+                employeeId,
+                organizationId,
+                policy,
+                lt,
+                monthStart,
+                monthEnd
+            );
+            const remainingThisMonth = Math.max(0, cap - usedThisMonth);
+            types.push({
+                leaveType: lt.type,
+                displayName: lt.displayName || lt.type,
+                maxDaysPerMonth: cap,
+                usedThisMonth: Math.round(usedThisMonth * 1000) / 1000,
+                remainingThisMonth: Math.round(remainingThisMonth * 1000) / 1000
+            });
+        }
+
+        return { year, month, monthLabel, types };
+    }
+
+    /**
      * Get applicable policy for employee
      */
     async getApplicablePolicy(employee, organizationId) {

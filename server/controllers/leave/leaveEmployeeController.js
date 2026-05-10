@@ -339,11 +339,27 @@ export const getMyLeaves = async (req, res) => {
             }
         }
 
+        let monthlyLeaveCaps = { year: new Date().getFullYear(), month: new Date().getMonth() + 1, monthLabel: '', types: [] };
+        if (organizationId) {
+            try {
+                const now = new Date();
+                monthlyLeaveCaps = await leaveValidationService.getMonthlyLeaveCapSummary(
+                    employeeId,
+                    organizationId,
+                    now.getFullYear(),
+                    now.getMonth() + 1
+                );
+            } catch (e) {
+                logger.warn('Get My Leaves: monthly cap summary failed', { employeeId, error: e.message });
+            }
+        }
+
         const statistics = {
             totalLeaves,
             leavesTaken,
             remainingLeaves: totalLeaves > 0 ? remainingLeaves : Math.max(0, totalLeaves - leavesTaken),
-            leavesByType
+            leavesByType,
+            monthlyLeaveCaps
         };
 
         res.json({ leaves, statistics });

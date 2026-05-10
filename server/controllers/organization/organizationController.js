@@ -980,3 +980,219 @@ export const getOrganizationActivity = async (req, res) => {
     }
 };
 
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+/** End of calendar month for `monthIndex` 0–11 */
+function endOfCalendarMonthUtc(year, monthIndex) {
+    return new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999));
+}
+
+/**
+ * Organization Analytics for CEO / exec dashboard charts
+ * @route GET /api/v1/admin/organization/analytics
+ */
+export const getOrganizationAnalytics = async (req, res) => {
+    try {
+        const organizationId = getOrganizationId(req);
+
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const query = addOrganizationFilter(req, {});
+        const { timeRange = '30d' } = req.query;
+        const daysMap = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
+        const periodDays = daysMap[timeRange] != null ? daysMap[timeRange] : 30;
+
+        const now = new Date();
+        const periodStart = new Date(now);
+        periodStart.setDate(periodStart.getDate() - periodDays);
+        periodStart.setHours(0, 0, 0, 0);
+
+        const oid = mongoose.Types.ObjectId.isValid(String(organizationId))
+            ? new mongoose.Types.ObjectId(String(organizationId))
+            : null;
+
+        if (!oid) {
+            return sendError(res, 'Invalid organization ID', 400, 'INVALID_ORGANIZATION_ID');
+        }
+
+        const payrollVisibilityMatch = {
+            organizationId: oid,
+            type: 'monthly',
+            isProvisional: false,
+            $or: [{ isSuperseded: false }, { isSuperseded: { $exists: false } }],
+            isVisible: { $ne: false }
+        };
+
+        const [
+            totalEmployees,
+            activeProjects,
+            completedProjects,
+            onHoldProjects,
+            payrollWindowAgg,
+            attendanceAgg,
+            empTrendCounts,
+            payrollByMonthAgg,
+            recentEmployees,
+            recentLeaves,
+            recentProjects
+        ] = await Promise.all([
+            Employee.countDocuments(query),
+            Project.countDocuments({ ...query, status: { $in: ['pending', 'in-progress'] } }),
+            Project.countDocuments({ ...query, status: 'completed' }),
+            Project.countDocuments({ ...query, status: 'on-hold' }),
+            Payroll.aggregate([
+                {
+                    $match: {
+                        ...payrollVisibilityMatch,
+                        createdAt: { $gte: periodStart, $lte: now }
+                    }
+                },
+                { $group: { _id: null, total: { $sum: { $ifNull: ['$inHandSalary', 0] } } } }
+            ]),
+            Attendance.aggregate([
+                {
+                    $match: {
+                        organizationId: oid,
+                        date: { $gte: periodStart, $lte: now }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        n: { $sum: 1 },
+                        present: {
+                            $sum: {
+                                $cond: [{ $in: ['$status', ['present', 'loggedOut', 'half-day']] }, 1, 0]
+                            }
+                        },
+                        hours: { $sum: { $ifNull: ['$effectiveHours', 0] } }
+                    }
+                }
+            ]),
+            (async () => {
+                const out = [];
+                for (let i = 5; i >= 0; i--) {
+                    const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const y = ref.getFullYear();
+                    const m = ref.getMonth();
+                    const end = endOfCalendarMonthUtc(y, m);
+                    const count = await Employee.countDocuments({
+                        organizationId: oid,
+                        createdAt: { $lte: end }
+                    });
+                    out.push({
+                        month: ref.toLocaleString('en-US', { month: 'short' }),
+                        year: y,
+                        count
+                    });
+                }
+                return out;
+            })(),
+            (async () => {
+                const rows = [];
+                for (let i = 5; i >= 0; i--) {
+                    const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const y = ref.getFullYear();
+                    const m = ref.getMonth();
+                    const label = MONTH_NAMES[m];
+                    const [row] = await Payroll.aggregate([
+                        {
+                            $match: {
+                                ...payrollVisibilityMatch,
+                                year: y,
+                                month: label
+                            }
+                        },
+                        { $group: { _id: null, amount: { $sum: { $ifNull: ['$inHandSalary', 0] } } } }
+                    ]);
+                    rows.push({
+                        month: ref.toLocaleString('en-US', { month: 'short' }),
+                        amount: Math.round(row?.amount || 0)
+                    });
+                }
+                return rows;
+            })(),
+            Employee.find(query).select('name createdAt').sort({ createdAt: -1 }).limit(6).lean(),
+            Leave.find(query)
+                .select('employeeName leaveType status createdAt')
+                .sort({ createdAt: -1 })
+                .limit(6)
+                .lean(),
+            Project.find(query).select('name status createdAt').sort({ createdAt: -1 }).limit(6).lean()
+        ]);
+
+        const totalPayroll = Math.round(payrollWindowAgg[0]?.total || 0);
+        const att = attendanceAgg[0];
+        const attendanceRows = att?.n || 0;
+        const attendanceRate = attendanceRows > 0 ? Math.round((att.present / attendanceRows) * 100) : 0;
+        const totalHours = Math.round((att?.hours || 0) * 10) / 10;
+        const avgHoursPerDay =
+            attendanceRows > 0 ? Math.round(((att?.hours || 0) / attendanceRows) * 10) / 10 : 0;
+
+        const firstCount = empTrendCounts[0]?.count ?? 0;
+        const lastCount = empTrendCounts[empTrendCounts.length - 1]?.count ?? 0;
+        const employeeGrowth =
+            firstCount > 0
+                ? Math.round(((lastCount - firstCount) / firstCount) * 1000) / 10
+                : lastCount > 0
+                  ? 100
+                  : 0;
+
+        const recentActivity = [];
+        for (const e of recentEmployees) {
+            recentActivity.push({
+                title: `Employee added: ${e.name || 'Team member'}`,
+                timestamp: e.createdAt ? new Date(e.createdAt).toLocaleString() : ''
+            });
+        }
+        for (const lv of recentLeaves) {
+            recentActivity.push({
+                title: `Leave ${lv.status || 'update'}: ${lv.employeeName || 'Employee'} (${lv.leaveType || 'leave'})`,
+                timestamp: lv.createdAt ? new Date(lv.createdAt).toLocaleString() : ''
+            });
+        }
+        for (const p of recentProjects) {
+            recentActivity.push({
+                title: `Project: ${p.name || 'Untitled'} (${p.status || 'status'})`,
+                timestamp: p.createdAt ? new Date(p.createdAt).toLocaleString() : ''
+            });
+        }
+        recentActivity.sort((a, b) => {
+            const ta = new Date(a.timestamp).getTime();
+            const tb = new Date(b.timestamp).getTime();
+            return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+        });
+
+        const analytics = {
+            stats: {
+                totalEmployees,
+                activeProjects,
+                completedProjects,
+                onHoldProjects,
+                cancelledProjects: 0,
+                totalPayroll,
+                attendanceRate,
+                totalHours,
+                avgHoursPerDay
+            },
+            trends: {
+                employeeGrowth,
+                employeeGrowthData: empTrendCounts.map(({ month, count }) => ({ month, count })),
+                payrollTrendData: payrollByMonthAgg.map(({ month, amount }) => ({ month, amount }))
+            },
+            recentActivity: recentActivity.slice(0, 15),
+            meta: { timeRange: timeRange || '30d', periodStart, generatedAt: new Date().toISOString() }
+        };
+
+        return sendSuccess(res, { analytics }, 'Organization analytics retrieved successfully');
+    } catch (error) {
+        logger.error('Error fetching organization analytics', { error: error.message, stack: error.stack });
+        return sendError(res, error.message || 'Failed to fetch organization analytics', 500);
+    }
+};
+

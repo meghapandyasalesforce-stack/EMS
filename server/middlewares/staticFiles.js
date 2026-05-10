@@ -153,22 +153,33 @@ export const staticFiles404Handler = (req, res, next) => {
       }
       
       if (!fileExists) {
-        // Legacy: try public/uploads (e.g. documents previously saved by multer to public/uploads/documents)
-        const legacyPath = path.join(process.cwd(), 'public', req.path);
-        try {
-          if (fs.existsSync(legacyPath)) {
-            const origin = req.headers.origin;
-            if (origin) {
-              res.setHeader("Access-Control-Allow-Origin", origin);
-              res.setHeader("Access-Control-Allow-Credentials", "true");
-            } else {
-              res.setHeader("Access-Control-Allow-Origin", "*");
+        // Legacy: older multer saved under server/public/uploads/... (cwd may be repo root)
+        const legacyCandidates = [
+          path.join(__dirname, '..', 'public', req.path),
+          path.join(process.cwd(), 'server', 'public', req.path),
+          path.join(process.cwd(), 'public', req.path),
+        ];
+        let sent = false;
+        for (const legacyPath of legacyCandidates) {
+          try {
+            if (fs.existsSync(legacyPath)) {
+              const origin = req.headers.origin;
+              if (origin) {
+                res.setHeader("Access-Control-Allow-Origin", origin);
+                res.setHeader("Access-Control-Allow-Credentials", "true");
+              } else {
+                res.setHeader("Access-Control-Allow-Origin", "*");
+              }
+              res.sendFile(path.resolve(legacyPath));
+              sent = true;
+              break;
             }
-            res.sendFile(path.resolve(legacyPath));
-            return;
+          } catch (legacyErr) {
+            logger.warn('Legacy static file serve failed', { path: req.path, legacyPath, error: legacyErr?.message });
           }
-        } catch (legacyErr) {
-          logger.warn('Legacy static file serve failed', { path: req.path, error: legacyErr?.message });
+        }
+        if (sent) {
+          return;
         }
 
         logger.warn('Static file not found - returning 404', {

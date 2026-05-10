@@ -4,6 +4,7 @@ import logger from '../../helpers/logger.js';
 import { validateAndNormalizeNationalId } from '../../helpers/nationalIdValidation.js';
 import { mergeLegacyAndCanonicalEmployeeDocuments } from '../../helpers/employeeDocumentUploadHelper.js';
 import Notification from '../../models/notification.model.js';
+import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 
 // Employee updates their additional information
 // Employee updates their additional information
@@ -722,6 +723,17 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
 
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Manager can access only employees linked to them.
+    const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManagerScope) {
+      const linked = isEmployeeLinkedToManager(employee, req.employee);
+      if (!linked) {
+        return res.status(403).json({
+          message: 'Access denied. You can only view employees linked to you.'
+        });
+      }
     }
 
     // Ensure salary field is explicitly included (even if it's 0 or null)

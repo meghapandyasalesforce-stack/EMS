@@ -4,7 +4,7 @@ import Employee from '../../models/employee.model.js';
 import AttendanceRule from '../../models/attendanceRule.model.js';
 import logger from '../../helpers/logger.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
-import { parsePagination, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
+import { parsePagination, sendPaginatedResponse, createPaginationMeta } from '../../helpers/paginationHelper.js';
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import {
     harmonizeRegularizationRequestedTimes,
@@ -13,6 +13,25 @@ import {
 
 const DEFAULT_OFFICE_START = '09:00';
 const DEFAULT_OFFICE_END = '17:00';
+
+/** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
+function parseCalendarDayQuery(raw, boundary) {
+    if (raw == null || raw === '') return null;
+    const s = String(raw).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const y = Number(s.slice(0, 4));
+    const mo = Number(s.slice(5, 7));
+    const d = Number(s.slice(8, 10));
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+    const dt = new Date(y, mo - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    if (boundary === 'start') {
+        dt.setHours(0, 0, 0, 0);
+    } else {
+        dt.setHours(23, 59, 59, 999);
+    }
+    return dt;
+}
 
 function parseTimeParts(timeValue, fallbackTime) {
     const source = typeof timeValue === 'string' && timeValue.includes(':') ? timeValue : fallbackTime;
@@ -371,7 +390,7 @@ export const getMyRegularizationRequests = async (req, res) => {
 export const getRegularizationRequestsForManager = async (req, res) => {
     try {
         const organizationId = getOrganizationId(req);
-        const { status, page = 1, limit = 20 } = req.query;
+        const { status: statusFilter, startDate, endDate } = req.query;
 
         // If user is a manager (not admin or HR), filter by their department
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
@@ -402,32 +421,57 @@ export const getRegularizationRequestsForManager = async (req, res) => {
             // No additional filtering needed
         }
 
-        if (status) {
-            query.status = status;
+        const startBound = parseCalendarDayQuery(startDate, 'start');
+        const endBound = parseCalendarDayQuery(endDate, 'end');
+        if (startDate && !startBound) {
+            logger.warn('Invalid startDate for manager regularization list', { startDate });
+        }
+        if (endDate && !endBound) {
+            logger.warn('Invalid endDate for manager regularization list', { endDate });
+        }
+        if (startBound || endBound) {
+            query.attendanceDate = {};
+            if (startBound) query.attendanceDate.$gte = startBound;
+            if (endBound) query.attendanceDate.$lte = endBound;
         }
 
-        const { page: parsedPage, limit: parsedLimit, skip } = parsePagination(req, { defaultLimit: 20, maxLimit: 100 });
+        if (statusFilter) {
+            query.status = statusFilter;
+        }
 
-        const [requests, total] = await Promise.all([
-            AttendanceRegularization.find(query)
-                .populate('employeeId', 'name lastName email employeeId department')
-                .populate('managerId', 'name lastName email employeeId')
-                .populate('reviewedBy', 'name lastName email employeeId')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parsedLimit)
-                .lean(),
-            AttendanceRegularization.countDocuments(query)
+        const { page: parsedPage, limit: parsedLimit, skip } = parsePagination(req, {
+            defaultLimit: 100,
+            maxLimit: 500
+        });
+
+        const countBase = { ...query };
+        delete countBase.status;
+
+        const [pending, approved, rejected, cancelled] = await Promise.all([
+            AttendanceRegularization.countDocuments({ ...countBase, status: 'pending' }),
+            AttendanceRegularization.countDocuments({ ...countBase, status: 'approved' }),
+            AttendanceRegularization.countDocuments({ ...countBase, status: 'rejected' }),
+            AttendanceRegularization.countDocuments({ ...countBase, status: 'cancelled' })
         ]);
 
-        return sendPaginatedResponse(
-            res,
-            requests,
-            parsedPage,
-            parsedLimit,
-            total,
-            'Regularization requests retrieved successfully'
-        );
+        const total = await AttendanceRegularization.countDocuments(query);
+
+        const requests = await AttendanceRegularization.find(query)
+            .populate('employeeId', 'name lastName email employeeId department profilePhoto position')
+            .populate('managerId', 'name lastName email employeeId')
+            .populate('reviewedBy', 'name lastName email employeeId')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parsedLimit)
+            .lean();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Regularization requests retrieved successfully',
+            data: requests,
+            pagination: createPaginationMeta(parsedPage, parsedLimit, total),
+            statusCounts: { pending, approved, rejected, cancelled }
+        });
     } catch (error) {
         logger.error('Get Regularization Requests For Manager Error', {
             error: error.message,

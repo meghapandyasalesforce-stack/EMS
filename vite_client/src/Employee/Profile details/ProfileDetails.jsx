@@ -111,15 +111,20 @@ function ProfileDetails() {
     setFormValues(buildPersonalFormValues(profileSource));
   }, [profileSource]);
 
-  const filledFields = [
-    formValues.firstName,
-    formValues.lastName,
-    formValues.dateOfBirth,
-    formValues.gender,
-    formValues.professionalBio
-  ].filter(Boolean).length;
-  const completionPercent = Math.max(20, Math.min(100, Math.round((filledFields / 5) * 100)));
-  const stepsLeft = Math.max(0, 5 - filledFields);
+  const progressChecklist = [
+    Boolean(formValues.firstName && formValues.lastName && formValues.dateOfBirth && formValues.gender && formValues.professionalBio), // Personal
+    Boolean(profileSource?.phone1 && profileSource?.personalEmail && profileSource?.address), // Contact
+    Boolean((profileSource?.nextOfKins || []).length > 0), // Next of kin
+    Boolean((profileSource?.academicRecords || []).length > 0 || (profileSource?.professionalQualifications || []).length > 0), // Education
+    Boolean((profileSource?.guarantors || []).length > 0), // Guarantor
+    Boolean((profileSource?.familyDetails || []).length > 0), // Family
+    Boolean(profileSource?.financialDetails?.bankName && profileSource?.financialDetails?.ifsc && profileSource?.financialDetails?.accountNo && profileSource?.financialDetails?.accountName), // Financial
+    Boolean(profileSource?.documents && profileSource.documents.length > 0), // Job docs
+  ];
+  const completedSections = progressChecklist.filter(Boolean).length;
+  const totalSections = progressChecklist.length;
+  const completionPercent = Math.max(10, Math.min(100, Math.round((completedSections / totalSections) * 100)));
+  const stepsLeft = Math.max(0, totalSections - completedSections);
   const joinDateValue = employeeDetails?.joiningDate || user?.joiningDate;
 
   const handleChange = (field, value) => {

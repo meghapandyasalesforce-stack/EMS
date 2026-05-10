@@ -5,6 +5,7 @@ import Project from '../../models/project.model.js';
 import logger from '../../helpers/logger.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 
 function deriveRoleFlagsFromWorkInfo({ department, position, jobTitle }) {
   const dept = (department || '').toLowerCase().trim();
@@ -90,6 +91,18 @@ export const updateEmployeeWorkInfo = async (req, res) => {
         success: false,
         message: 'Employee not found' 
       });
+    }
+
+    // Manager can update only employees linked to them.
+    const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (isManagerScope) {
+      const linked = isEmployeeLinkedToManager(employee, req.employee);
+      if (!linked) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You can only update employees linked to you.'
+        });
+      }
     }
 
     // Prepare update data

@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { FaFileAlt, FaDownload, FaUpload, FaFolder, FaCheckCircle, FaTimesCircle, FaClock, FaUser, FaHistory } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import axios from '../../utils/axios';
+import axios, { getUploadUrl } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import logger from '../../utils/logger';
 import { isHR } from '../../utils/managerHelper';
@@ -324,7 +324,7 @@ const DocumentsPage = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-2">
                                                     <a
-                                                        href={doc.fileUrl}
+                                                        href={getUploadUrl(doc.fileUrl) || '#'}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-theme-secondary hover:text-theme-secondary"
@@ -457,7 +457,7 @@ const DocumentsPage = () => {
                                             </button>
                                         )}
                                         <a
-                                            href={doc.fileUrl}
+                                            href={getUploadUrl(doc.fileUrl) || '#'}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-theme-secondary hover:text-theme-secondary"

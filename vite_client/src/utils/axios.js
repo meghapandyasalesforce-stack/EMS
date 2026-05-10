@@ -129,9 +129,17 @@ export const getUploadUrl = (relativePath) => {
     return path;
   }
   
-  // If it's a relative path starting with /uploads, prepend backend URL
+  // If it's a relative path starting with /uploads, prepend backend origin.
+  // Files are served by the API node's /uploads, not the SPA shell—do not rely on naked relative paths when the SPA is hosted separately.
   if (path.startsWith('/uploads')) {
-    return `${getBackendBaseURL()}${path}`;
+    const base = getBackendBaseURL();
+    if (base) {
+      return `${base}${path}`;
+    }
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}${path}`;
+    }
+    return path;
   }
   
   // If it's just a filename or path without leading slash, add /uploads

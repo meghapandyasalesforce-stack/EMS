@@ -9,6 +9,7 @@ import {
   getMyTodayStatus,
   getEmployeeList,
   getEmployeeAttendanceDetails,
+  getTeamAttendanceHistory,
   forceEndBreak,
   getEmployeesOnBreak,
   getAttendanceSummary,
@@ -51,6 +52,8 @@ router.route("/all-employee-list")
 // Allow managers to view attendance for employees in their department - cache for 2 minutes
 router.route("/employee/:employeeId/attendance")
   .get(isAdminOrManagerOrHRAuthenticated, cacheMiddleware('attendance:employee', 120), getEmployeeAttendanceDetails);
+
+router.route("/team-attendance-history").get(isAdminOrManagerOrHRAuthenticated, getTeamAttendanceHistory);
 
 // Allow managers to view today's attendance for their department - cache for 1 minute (real-time data)
 router.route("/today-status").get(isAdminOrManagerOrHRAuthenticated, cacheMiddleware('attendance:today', 60), getTodayStatus);
