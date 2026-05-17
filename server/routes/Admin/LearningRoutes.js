@@ -4,6 +4,7 @@ import {
     getAdminCourses,
     getAdminCourseById,
     updateCourse,
+    getAllLearningEnrollments,
     createLearningPath,
     getLearningPaths,
     generateCertificate,
@@ -24,6 +25,9 @@ router.route('/courses')
 router.route('/courses/:id')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAdminCourseById)
     .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, updateCourse);
+
+router.route('/enrollments')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getAllLearningEnrollments);
 
 // Learning Paths
 router.route('/learning-paths')

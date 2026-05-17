@@ -10,7 +10,8 @@ import {
     getMyPendingApprovals,
     processApproval,
     initiateApprovalRequest,
-    delegateApprovalRequest
+    delegateApprovalRequest,
+    backfillAttendanceRegularizationApprovals
 } from '../../controllers/admin/approvalWorkflowController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
@@ -48,6 +49,10 @@ router.route('/delegate/:id')
 // Initiate approval
 router.route('/initiate')
     .post(isAdminOrHROrExecutiveAuthenticated, initiateApprovalRequest);
+
+// Admin backfill utilities
+router.route('/backfill/attendance-regularization')
+    .post(isAdminAuthenticated, backfillAttendanceRegularizationApprovals);
 
 export default router;
 

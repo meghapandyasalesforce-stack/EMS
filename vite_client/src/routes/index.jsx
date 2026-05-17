@@ -157,7 +157,7 @@ export const attendanceRoutes = [
   { path: '/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/manager/attendance-regularization', component: lazy(() => import('../Manager/AttendanceRegularization/RegularizationRequests')), message: 'Loading attendance regularization...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
   { path: '/my-attendance-regularization', component: lazy(() => import('../Employee/AttendanceRegularization/MyRegularizationRequests')), message: 'Loading my attendance regularization...', allowedRoles: [] },
-  { path: '/team-learning', component: lazy(() => import('../components/LearningRouteWrapper')), message: 'Loading learning...', allowedRoles: [] },
+  { path: '/team-learning', component: lazy(() => import('../Manager/TeamLearning/TeamLearningPage')), message: 'Loading team learning...', allowedRoles: [] },
   { path: '/one-on-one', component: lazy(() => import('../components/OneOnOneRouteWrapper')), message: 'Loading one-on-one meetings...', allowedRoles: [] }
 ];
 
@@ -205,6 +205,7 @@ export const hrRoutes = [
   { path: '/learning/create-course', component: lazy(() => import('../HR/Learning/CreateCourse')), message: 'Loading course creator...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/learning/edit-course/:courseId', component: lazy(() => import('../HR/Learning/EditCourse')), message: 'Loading course editor...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/engagement', component: lazy(() => import('../HR/Engagement/EngagementPage')), message: 'Loading employee engagement...', allowedRoles: [] },
+  { path: '/engagement/surveys/:surveyId', component: lazy(() => import('../HR/Engagement/SurveyDetailPage')), message: 'Loading survey...', allowedRoles: [] },
   { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: [] },
   { path: '/employee/documents-id', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },
@@ -216,7 +217,7 @@ export const hrRoutes = [
   { path: '/workforce', component: lazy(() => import('../HR/Workforce/WorkforcePage')), message: 'Loading workforce planning...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/workforce/:id', component: lazy(() => import('../HR/Workforce/WorkforceDetailPage')), message: 'Loading workforce plan details...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/helpdesk', component: lazy(() => import('../HR/Helpdesk/HelpdeskPage')), message: 'Loading helpdesk...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/admin/reports', component: lazy(() => import('../HR/Reports/HRReportsPage')), message: 'Loading HR reports...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin/reports/*', component: lazy(() => import('../HR/Reports/HRReportsLayout')), message: 'Loading HR reports...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/hr/analytics', component: lazy(() => import('../HR/Analytics/HRAnalyticsPage')), message: 'Loading HR analytics...', allowedRoles: ['admin', 'hr', 'executive'] }
 ];
 

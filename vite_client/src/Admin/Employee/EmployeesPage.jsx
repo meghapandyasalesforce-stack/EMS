@@ -152,6 +152,9 @@ const EmployeesPage = () => {
       const empId = String(emp?._id || '');
       const attendance = todayStatusMap[empId];
       const statusText = String(attendance?.status || emp?.status || '').toLowerCase();
+      const employmentStatus = String(emp?.status || '').toLowerCase();
+      const isTerminated = employmentStatus === 'terminated';
+      const isInactive = emp?.active === false || employmentStatus === 'inactive' || employmentStatus === 'suspended';
       const departmentText = String(emp?.department || '').toLowerCase();
       const titleText = String(emp?.jobTitle || '').toLowerCase();
       const positionText = String(emp?.position || '').toLowerCase();
@@ -159,6 +162,7 @@ const EmployeesPage = () => {
       const workLocationText = String(attendance?.workLocation || '').toLowerCase();
       const onLeaveToday = !!onLeaveTodayMap[empId];
 
+      if (isInactive || isTerminated) return false;
       if (activeFilter === 'present') return !onLeaveToday && statusText !== 'absent' && statusText !== 'inactive';
       if (activeFilter === 'leave') return onLeaveToday;
       if (activeFilter === 'remote') return workLocationText.includes('remote') || probationText.includes('remote') || probationText.includes('wfh');
@@ -248,16 +252,39 @@ const EmployeesPage = () => {
                 const empId = String(row?._id || '');
                 const attendance = todayStatusMap[empId];
                 const statusText = String(attendance?.status || row?.status || 'active').toLowerCase();
+                const employmentStatus = String(row?.status || '').toLowerCase();
                 const onLeave = !!onLeaveTodayMap[empId];
-                const statusPill = onLeave ? 'ON LEAVE' : 'ACTIVE';
-                const statusClass = onLeave ? 'text-amber-700 bg-amber-100' : 'text-emerald-700 bg-emerald-100';
-                const todayValue = onLeave
-                  ? 'Out of Office'
-                  : attendance?.clockIn
-                    ? new Date(attendance.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : statusText === 'absent'
-                      ? '--:--'
-                      : 'Present';
+                const isTerminated = employmentStatus === 'terminated';
+                const isInactive = row?.active === false || employmentStatus === 'inactive' || employmentStatus === 'suspended';
+                const statusPill = isTerminated
+                  ? 'TERMINATED'
+                  : isInactive
+                    ? 'INACTIVE'
+                    : onLeave
+                      ? 'ON LEAVE'
+                      : statusText === 'absent'
+                        ? 'ABSENT'
+                        : 'ACTIVE';
+                const statusClass = isTerminated
+                  ? 'text-slate-700 bg-slate-200'
+                  : isInactive
+                    ? 'text-rose-700 bg-rose-100'
+                    : onLeave
+                      ? 'text-amber-700 bg-amber-100'
+                      : statusText === 'absent'
+                        ? 'text-slate-700 bg-slate-100'
+                        : 'text-emerald-700 bg-emerald-100';
+                const todayValue = isTerminated
+                  ? 'Terminated'
+                  : isInactive
+                    ? 'Inactive'
+                    : onLeave
+                      ? 'Out of Office'
+                      : attendance?.clockIn
+                        ? new Date(attendance.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : statusText === 'absent'
+                          ? '--:--'
+                          : 'Present';
 
                 return (
                   <button

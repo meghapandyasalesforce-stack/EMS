@@ -79,6 +79,12 @@ const attendanceRegularizationSchema = new mongoose.Schema({
     attendanceRecordId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Attendance'
+    },
+    // Optional workflow instance when routed through Approval Workflows
+    approvalInstanceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ApprovalInstance',
+        index: true
     }
 }, {
     timestamps: true

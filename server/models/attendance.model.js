@@ -1,4 +1,10 @@
 import mongoose from "mongoose";
+import AttendanceRule from "./attendanceRule.model.js";
+import {
+    getExpectedWorkingHoursFromRule,
+    getEffectiveOfficeStartForLate,
+    getEffectiveOfficeEndForEarlyDeparture,
+} from "../helpers/attendanceSecurityHelper.js";
 
 const attendanceSchema = new mongoose.Schema({
     // Organization reference (multi-tenancy)
@@ -117,50 +123,60 @@ const attendanceSchema = new mongoose.Schema({
     timestamps: true,
 });
 
-attendanceSchema.pre("save", function (next) {
-    if (this.clockIn) {
-        const startOfDay = new Date(this.clockIn);
-        startOfDay.setHours(0, 0, 0, 0);
-        this.date = startOfDay;
-    }
-
-    if (this.clockIn && this.clockOut) {
-        const durationMs = this.clockOut - this.clockIn;
-        const grossHours = durationMs / (1000 * 60 * 60);
-        this.grossHours = Math.round(grossHours * 100) / 100;
-
-        // Calculate total break duration
-        let totalBreakMs = 0;
-        if (this.breaks && this.breaks.length > 0) {
-            this.breaks.forEach(b => {
-                if (b.breakIn && b.breakOut) {
-                    totalBreakMs += new Date(b.breakOut) - new Date(b.breakIn);
-                }
-            });
+attendanceSchema.pre("save", async function (next) {
+    try {
+        if (this.clockIn) {
+            const startOfDay = new Date(this.clockIn);
+            startOfDay.setHours(0, 0, 0, 0);
+            this.date = startOfDay;
         }
 
-        const effectiveHours = (durationMs - totalBreakMs) / (1000 * 60 * 60);
-        this.effectiveHours = Math.round(effectiveHours * 100) / 100;
+        if (this.clockIn && this.clockOut) {
+            const durationMs = this.clockOut - this.clockIn;
+            const grossHours = durationMs / (1000 * 60 * 60);
+            this.grossHours = Math.round(grossHours * 100) / 100;
 
-        // Mark late if clock-in is after 9:00 AM
-        const nineAM = new Date(this.clockIn);
-        nineAM.setHours(9, 0, 0, 0);
-        this.isLateArrival = this.clockIn > nineAM;
-        this.isOnTime = !this.isLateArrival;
+            let totalBreakMs = 0;
+            if (this.breaks && this.breaks.length > 0) {
+                this.breaks.forEach(b => {
+                    if (b.breakIn && b.breakOut) {
+                        totalBreakMs += new Date(b.breakOut) - new Date(b.breakIn);
+                    }
+                });
+            }
 
-        // Mark early departure if clock-out is before 5:00 PM
-        const fivePM = new Date(this.clockIn);
-        fivePM.setHours(17, 0, 0, 0);
-        const clockOutDate = new Date(this.clockOut);
-        this.isEarlyDeparture = clockOutDate < fivePM;
+            const effectiveHours = (durationMs - totalBreakMs) / (1000 * 60 * 60);
+            this.effectiveHours = Math.round(effectiveHours * 100) / 100;
 
-        // Calculate overtime (anything over 8 hrs)
-        this.overtimeHours = this.effectiveHours > 8
-            ? Math.round((this.effectiveHours - 8) * 100) / 100
-            : 0;
+            let rule = null;
+            if (this.organizationId) {
+                rule = await AttendanceRule.findOne({
+                    isActive: true,
+                    organizationId: this.organizationId,
+                })
+                    .sort({ priority: -1, updatedAt: -1 })
+                    .lean();
+            }
+
+            const referenceDate = this.date || this.clockIn;
+
+            const effectiveStart = getEffectiveOfficeStartForLate(rule, referenceDate);
+            this.isLateArrival = new Date(this.clockIn) > effectiveStart;
+            this.isOnTime = !this.isLateArrival;
+
+            const effectiveEnd = getEffectiveOfficeEndForEarlyDeparture(rule, referenceDate);
+            this.isEarlyDeparture = new Date(this.clockOut) < effectiveEnd;
+
+            const expectedHours = getExpectedWorkingHoursFromRule(rule, referenceDate);
+            this.overtimeHours = this.effectiveHours > expectedHours
+                ? Math.round((this.effectiveHours - expectedHours) * 100) / 100
+                : 0;
+        }
+
+        next();
+    } catch (err) {
+        next(err);
     }
-
-    next();
 });
 
 // Add database indexes for better query performance

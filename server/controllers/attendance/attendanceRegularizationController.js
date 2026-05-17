@@ -1,18 +1,17 @@
 import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
-import Attendance from '../../models/attendance.model.js';
 import Employee from '../../models/employee.model.js';
-import AttendanceRule from '../../models/attendanceRule.model.js';
 import logger from '../../helpers/logger.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, sendPaginatedResponse, createPaginationMeta } from '../../helpers/paginationHelper.js';
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import { harmonizeRegularizationRequestedTimes } from '../../helpers/attendanceRegularizationTimeHelper.js';
+import { ApprovalInstance } from '../../models/approvalWorkflow.model.js';
+import { initiateApproval, processApprovalAction } from '../../services/approvalWorkflowService.js';
 import {
-    harmonizeRegularizationRequestedTimes,
-    ensureClockOutAfterClockIn
-} from '../../helpers/attendanceRegularizationTimeHelper.js';
-
-const DEFAULT_OFFICE_START = '09:00';
-const DEFAULT_OFFICE_END = '17:00';
+    applyRegularizationApproval,
+    applyRegularizationRejection,
+    cancelRegularizationApprovalWorkflow
+} from '../../services/attendanceRegularizationWorkflowService.js';
 
 /** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
 function parseCalendarDayQuery(raw, boundary) {
@@ -31,48 +30,6 @@ function parseCalendarDayQuery(raw, boundary) {
         dt.setHours(23, 59, 59, 999);
     }
     return dt;
-}
-
-function parseTimeParts(timeValue, fallbackTime) {
-    const source = typeof timeValue === 'string' && timeValue.includes(':') ? timeValue : fallbackTime;
-    const [hStr, mStr] = source.split(':');
-    const hours = Number(hStr);
-    const minutes = Number(mStr);
-    return {
-        hours: Number.isFinite(hours) ? Math.max(0, Math.min(23, hours)) : 9,
-        minutes: Number.isFinite(minutes) ? Math.max(0, Math.min(59, minutes)) : 0
-    };
-}
-
-function setClockWithTime(anchorDay, timeValue, fallbackTime) {
-    const out = new Date(anchorDay);
-    const { hours, minutes } = parseTimeParts(timeValue, fallbackTime);
-    out.setHours(hours, minutes, 0, 0);
-    return out;
-}
-
-async function getDefaultOfficeDateTimes(organizationId, anchorDay) {
-    const activeRule = await AttendanceRule.findOne({
-        organizationId,
-        isActive: true
-    })
-        .sort({ priority: -1, updatedAt: -1 })
-        .select('officeHours checkInOutTimes')
-        .lean();
-
-    const startTime =
-        activeRule?.officeHours?.startTime ||
-        activeRule?.checkInOutTimes?.checkInStartTime ||
-        DEFAULT_OFFICE_START;
-    const endTime =
-        activeRule?.officeHours?.endTime ||
-        activeRule?.checkInOutTimes?.checkOutStartTime ||
-        DEFAULT_OFFICE_END;
-
-    return {
-        defaultClockIn: setClockWithTime(anchorDay, startTime, DEFAULT_OFFICE_START),
-        defaultClockOut: setClockWithTime(anchorDay, endTime, DEFAULT_OFFICE_END)
-    };
 }
 
 /**
@@ -303,6 +260,44 @@ export const createRegularizationRequest = async (req, res) => {
         // Populate employee and manager details for response
         await regularizationRequest.populate('employeeId', 'name lastName email employeeId department');
         await regularizationRequest.populate('managerId', 'name lastName email employeeId');
+
+        // Route through approval workflow when configured.
+        try {
+            const approvalResult = await initiateApproval({
+                organizationId,
+                entityType: 'AttendanceRegularization',
+                entityId: regularizationRequest._id,
+                requestedBy: employeeId,
+                metadata: {
+                    attendanceDate,
+                    regularizationType,
+                    managerId: manager._id,
+                    requestedClockIn: finalRequestedClockIn,
+                    requestedClockOut: finalRequestedClockOut
+                },
+                priority: regularizationType === 'full_day' ? 'High' : 'Medium'
+            });
+
+            if (approvalResult.approvalInstanceId) {
+                regularizationRequest.approvalInstanceId = approvalResult.approvalInstanceId;
+                await regularizationRequest.save();
+            }
+
+            if (approvalResult.autoApproved && approvalResult.status === 'Approved') {
+                await applyRegularizationApproval({
+                    regularizationRequest,
+                    organizationId,
+                    reviewerId: manager._id,
+                    managerResponse: 'Auto-approved through workflow'
+                });
+            }
+        } catch (approvalError) {
+            logger.error('Error initiating approval workflow for regularization', {
+                error: approvalError.message,
+                requestId: regularizationRequest._id,
+                stack: approvalError.stack
+            });
+        }
 
         logger.info('Attendance regularization request created', {
             requestId: regularizationRequest._id,
@@ -552,99 +547,57 @@ export const approveRegularization = async (req, res) => {
             });
         }
 
-        // Update request status
-        regularizationRequest.status = 'approved';
-        regularizationRequest.reviewedBy = reviewerId;
-        regularizationRequest.reviewedAt = new Date();
-        regularizationRequest.managerResponse = req.body.managerResponse || 'Approved';
+        if (regularizationRequest.approvalInstanceId) {
+            const approvalInstance = await ApprovalInstance.findById(regularizationRequest.approvalInstanceId);
 
-        await regularizationRequest.save();
+            if (approvalInstance && approvalInstance.status === 'In Progress') {
+                const currentStep = approvalInstance.steps.find((step) => step.status === 'Pending');
 
-        // Create or update attendance record
-        const attendanceDate = new Date(regularizationRequest.attendanceDate);
-        const startOfDay = new Date(attendanceDate);
-        startOfDay.setHours(0, 0, 0, 0);
-
-        let attendanceRecord = await Attendance.findOne({
-            userId: regularizationRequest.employeeId._id || regularizationRequest.employeeId,
-            date: startOfDay,
-            organizationId
-        });
-
-        // Build final times by merging request + existing attendance + dynamic office defaults.
-        // This keeps existing punched side for missing_clock_in/out while still filling any truly missing side.
-        const { defaultClockIn, defaultClockOut } = await getDefaultOfficeDateTimes(organizationId, startOfDay);
-
-        let clockInTime = regularizationRequest.requestedClockIn || attendanceRecord?.clockIn || defaultClockIn;
-        let clockOutTime = regularizationRequest.requestedClockOut || attendanceRecord?.clockOut || defaultClockOut;
-
-        const fixed = ensureClockOutAfterClockIn(clockInTime, clockOutTime);
-        clockInTime = fixed.clockInTime;
-        clockOutTime = fixed.clockOutTime;
-
-        if (!attendanceRecord) {
-            // Create new attendance record
-            attendanceRecord = new Attendance({
-                organizationId,
-                userId: regularizationRequest.employeeId._id || regularizationRequest.employeeId,
-                date: startOfDay,
-                clockIn: clockInTime,
-                clockOut: clockOutTime,
-                status: 'present',
-                workLocation: 'office'
-            });
-        } else {
-            // Update existing attendance record
-            attendanceRecord.clockIn = clockInTime;
-            attendanceRecord.clockOut = clockOutTime;
-            attendanceRecord.status = 'present';
-        }
-
-        try {
-            await attendanceRecord.save();
-        } catch (saveError) {
-            // If another request inserted the same (org,user,date) row in parallel,
-            // reuse that row and apply the requested update.
-            if (saveError?.code === 11000) {
-                attendanceRecord = await Attendance.findOne({
-                    userId: regularizationRequest.employeeId._id || regularizationRequest.employeeId,
-                    date: startOfDay,
-                    organizationId
-                });
-
-                if (!attendanceRecord) {
-                    throw saveError;
+                if (!currentStep) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'No pending workflow step found for this regularization request'
+                    });
                 }
 
-                attendanceRecord.clockIn = clockInTime;
-                attendanceRecord.clockOut = clockOutTime;
-                attendanceRecord.status = 'present';
-                await attendanceRecord.save();
-            } else {
-                throw saveError;
+                await processApprovalAction({
+                    approvalInstanceId: regularizationRequest.approvalInstanceId,
+                    stepNumber: currentStep.stepNumber,
+                    approverId: reviewerId,
+                    action: 'Approve',
+                    comments: req.body.managerResponse || 'Approved',
+                    metadata: {
+                        regularizationId: regularizationRequest._id,
+                        regularizationType: regularizationRequest.regularizationType
+                    }
+                });
+
+                const updatedRequest = await AttendanceRegularization.findById(id)
+                    .populate('employeeId', 'name lastName email employeeId department')
+                    .populate('managerId', 'name lastName email employeeId')
+                    .populate('reviewedBy', 'name lastName email employeeId');
+
+                return res.json({
+                    success: true,
+                    message: updatedRequest?.status === 'approved'
+                        ? 'Regularization request approved and attendance record updated'
+                        : 'Approval processed, moving to next workflow step',
+                    data: updatedRequest
+                });
             }
         }
 
-        // Link attendance record to regularization request
-        regularizationRequest.attendanceRecordId = attendanceRecord._id;
-        await regularizationRequest.save();
-
-        // Populate for response
-        await regularizationRequest.populate('employeeId', 'name lastName email employeeId department');
-        await regularizationRequest.populate('managerId', 'name lastName email employeeId');
-        await regularizationRequest.populate('reviewedBy', 'name lastName email employeeId');
-
-        logger.info('Attendance regularization approved', {
-            requestId: id,
+        const updatedRequest = await applyRegularizationApproval({
+            regularizationRequest,
+            organizationId,
             reviewerId,
-            employeeId: regularizationRequest.employeeId._id,
-            attendanceRecordId: attendanceRecord._id
+            managerResponse: req.body.managerResponse || 'Approved'
         });
 
         res.json({
             success: true,
             message: 'Regularization request approved and attendance record updated',
-            data: regularizationRequest
+            data: updatedRequest
         });
     } catch (error) {
         logger.error('Approve Regularization Error', {
@@ -732,29 +685,54 @@ export const rejectRegularization = async (req, res) => {
             });
         }
 
-        // Update request status
-        regularizationRequest.status = 'rejected';
-        regularizationRequest.reviewedBy = reviewerId;
-        regularizationRequest.reviewedAt = new Date();
-        regularizationRequest.managerResponse = rejectionReason;
+        if (regularizationRequest.approvalInstanceId) {
+            const approvalInstance = await ApprovalInstance.findById(regularizationRequest.approvalInstanceId);
 
-        await regularizationRequest.save();
+            if (approvalInstance && approvalInstance.status === 'In Progress') {
+                const currentStep = approvalInstance.steps.find((step) => step.status === 'Pending');
 
-        // Populate for response
-        await regularizationRequest.populate('employeeId', 'name lastName email employeeId department');
-        await regularizationRequest.populate('managerId', 'name lastName email employeeId');
-        await regularizationRequest.populate('reviewedBy', 'name lastName email employeeId');
+                if (!currentStep) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'No pending workflow step found for this regularization request'
+                    });
+                }
 
-        logger.info('Attendance regularization rejected', {
-            requestId: id,
+                await processApprovalAction({
+                    approvalInstanceId: regularizationRequest.approvalInstanceId,
+                    stepNumber: currentStep.stepNumber,
+                    approverId: reviewerId,
+                    action: 'Reject',
+                    comments: rejectionReason,
+                    metadata: {
+                        regularizationId: regularizationRequest._id,
+                        regularizationType: regularizationRequest.regularizationType
+                    }
+                });
+
+                const updatedRequest = await AttendanceRegularization.findById(id)
+                    .populate('employeeId', 'name lastName email employeeId department')
+                    .populate('managerId', 'name lastName email employeeId')
+                    .populate('reviewedBy', 'name lastName email employeeId');
+
+                return res.json({
+                    success: true,
+                    message: 'Regularization request rejected',
+                    data: updatedRequest
+                });
+            }
+        }
+
+        const updatedRequest = await applyRegularizationRejection({
+            regularizationRequest,
             reviewerId,
-            employeeId: regularizationRequest.employeeId._id
+            rejectionReason
         });
 
         res.json({
             success: true,
             message: 'Regularization request rejected',
-            data: regularizationRequest
+            data: updatedRequest
         });
     } catch (error) {
         logger.error('Reject Regularization Error', {
@@ -802,6 +780,10 @@ export const cancelRegularizationRequest = async (req, res) => {
 
         regularizationRequest.status = 'cancelled';
         await regularizationRequest.save();
+        await cancelRegularizationApprovalWorkflow({
+            approvalInstanceId: regularizationRequest.approvalInstanceId,
+            actorId: employeeId
+        });
 
         logger.info('Attendance regularization request cancelled', {
             requestId: id,

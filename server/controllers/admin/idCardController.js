@@ -63,14 +63,15 @@ const generateAndSaveQRCode = async (employee, employeeCode) => {
 export const autoGenerateIdCard = async (employeeId, organizationId, generatedBy = null) => {
     try {
         // Check if ID card already exists
-        const existingIdCard = await IdCard.findOne({ 
-            employeeId, 
-            organizationId 
+        const existingActiveCard = await IdCard.findOne({
+            employeeId,
+            organizationId,
+            status: 'active',
         });
-        
-        if (existingIdCard) {
-            logger.debug('ID card already exists for employee', { employeeId });
-            return { success: false, reason: 'already_exists', idCard: existingIdCard };
+
+        if (existingActiveCard) {
+            logger.debug('Active ID card already exists for employee', { employeeId });
+            return { success: false, reason: 'already_exists', idCard: existingActiveCard };
         }
 
         // Fetch employee data
@@ -213,14 +214,17 @@ export const generateIdCard = async (req, res) => {
 
         logger.info('Found employee', { employeeId: employee._id, name: employee.name });
 
-        // Check if an ID card already exists for this employee (within same organization)
-        const existingIdCard = await IdCard.findOne({ 
+        // Block only if an active ID card already exists (cancelled cards can be replaced or reactivated)
+        const existingActiveCard = await IdCard.findOne({
             employeeId,
-            organizationId // Check within same organization
+            organizationId,
+            status: 'active',
         });
-        if (existingIdCard) {
-            logger.warn('ID card already exists for employee', { employeeId });
-            return res.status(400).json({ message: 'ID card already exists for this employee. Please update it instead.' });
+        if (existingActiveCard) {
+            logger.warn('Active ID card already exists for employee', { employeeId });
+            return res.status(400).json({
+                message: 'An active ID card already exists for this employee. Deactivate it first or use Reactivate on a deactivated card.',
+            });
         }
 
         // Generate QR code using helper function
@@ -263,8 +267,16 @@ export const generateIdCard = async (req, res) => {
                 ? explicitAddr
                 : orgAddress || explicitAddr || 'Your Company Address';
 
+        const allowedTemplates = new Set([
+            'standard', 'premium', 'executive', 'custom',
+            'mint', 'corporate', 'modern', 'professional'
+        ]);
+        const template = allowedTemplates.has(cardDesign?.template)
+            ? cardDesign.template
+            : 'standard';
+
         const defaultCardDesign = {
-            template: cardDesign?.template || 'standard',
+            template,
             backgroundColor: cardDesign?.backgroundColor || '#ffffff',
             textColor: cardDesign?.textColor || '#000000',
             companyName: resolvedName,
@@ -320,7 +332,26 @@ export const generateIdCard = async (req, res) => {
 export const getAllIdCards = async (req, res) => {
     try {
         const query = addOrganizationFilter(req, {});
-        const idCards = await IdCard.find(query).populate('employeeId', 'name lastName email employeeId');
+        const { status, cardType } = req.query;
+
+        const allowedStatuses = ['active', 'expired', 'suspended', 'cancelled'];
+        if (status && allowedStatuses.includes(String(status))) {
+            query.status = status;
+        }
+
+        const allowedTypes = ['employee', 'visitor', 'contractor', 'temporary'];
+        if (cardType && allowedTypes.includes(String(cardType))) {
+            query.cardType = cardType;
+        }
+
+        const idCards = await IdCard.find(query)
+            .populate(
+                'employeeId',
+                'name lastName email employeeId department position jobTitle profilePhoto phone1 phone2 address bloodGroup joiningDate'
+            )
+            .sort({ updatedAt: -1 })
+            .lean();
+
         res.status(200).json({ success: true, data: idCards });
     } catch (error) {
         res.status(500).json({ message: 'Failed to retrieve ID cards', error: error.message });
@@ -353,9 +384,24 @@ export const updateIdCard = async (req, res) => {
         }
 
         const orgQuery = addOrganizationFilter(req, { _id: id });
+
+        const allowedUpdates = {};
+        if (updates.status) {
+            const allowedStatuses = ['active', 'expired', 'suspended', 'cancelled'];
+            if (allowedStatuses.includes(updates.status)) {
+                allowedUpdates.status = updates.status;
+            }
+        }
+        if (updates.accessLevel) {
+            allowedUpdates.accessLevel = updates.accessLevel;
+        }
+        if (updates.cardType) {
+            allowedUpdates.cardType = updates.cardType;
+        }
+
         const updatedIdCard = await IdCard.findOneAndUpdate(
             orgQuery,
-            { ...updates, updatedBy },
+            allowedUpdates,
             { new: true, runValidators: true }
         );
 

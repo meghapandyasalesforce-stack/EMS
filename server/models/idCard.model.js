@@ -35,7 +35,16 @@ const idCardSchema = new mongoose.Schema({
         type: {
             template: {
                 type: String,
-                enum: ['standard', 'premium', 'executive', 'custom'],
+                enum: [
+                    'standard',
+                    'premium',
+                    'executive',
+                    'custom',
+                    'mint',
+                    'corporate',
+                    'modern',
+                    'professional'
+                ],
                 default: 'standard'
             },
             backgroundColor: {

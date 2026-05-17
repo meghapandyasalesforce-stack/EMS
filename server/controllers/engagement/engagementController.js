@@ -1,6 +1,13 @@
 import { Survey, SurveyResponse, Feedback, Recognition } from '../../models/engagement.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
-import logger from '../../helpers/logger.js';
+import {
+    loadRequestEmployee,
+    isEngagementManager,
+    surveyMatchesEmployee,
+    isSurveyActiveForResponse,
+    filterSurveysForEmployee,
+    getRequestActorId
+} from '../../helpers/engagementHelper.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
 
 /**
@@ -29,33 +36,174 @@ export const createSurvey = asyncHandler(async (req, res) => {
  * Get surveys
  */
 export const getSurveys = asyncHandler(async (req, res) => {
-    const organizationId = getOrganizationId(req);
     const { status, type, page = 1, limit = 20 } = req.query;
+    const employee = await loadRequestEmployee(req);
+    const manager = isEngagementManager(req, employee);
 
     const query = addOrganizationFilter(req, {});
 
     if (status) query.status = status;
+    else if (!manager) query.status = 'Active';
+
     if (type) query.type = type;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const parsedLimit = parseInt(limit, 10);
+    const skip = (parseInt(page, 10) - 1) * parsedLimit;
 
-    const surveys = await Survey.find(query)
-        .populate('createdBy', 'name email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit));
+    if (!manager && employee) {
+        const allActive = await Survey.find(query)
+            .populate('createdBy', 'name email')
+            .sort({ createdAt: -1 })
+            .lean();
+        const filtered = filterSurveysForEmployee(allActive, employee);
+        const paged = filtered.slice(skip, skip + parsedLimit);
+        return res.json({
+            success: true,
+            data: paged,
+            pagination: {
+                page: parseInt(page, 10),
+                limit: parsedLimit,
+                total: filtered.length,
+                pages: Math.ceil(filtered.length / parsedLimit) || 1
+            }
+        });
+    }
 
-    const total = await Survey.countDocuments(query);
+    const [surveys, total] = await Promise.all([
+        Survey.find(query)
+            .populate('createdBy', 'name email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parsedLimit),
+        Survey.countDocuments(query)
+    ]);
 
     res.json({
         success: true,
         data: surveys,
         pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: parseInt(page, 10),
+            limit: parsedLimit,
             total,
-            pages: Math.ceil(total / parseInt(limit))
+            pages: Math.ceil(total / parsedLimit) || 1
         }
+    });
+});
+
+/**
+ * Get single survey by id
+ */
+export const getSurveyById = asyncHandler(async (req, res) => {
+    const { surveyId } = req.params;
+    const employee = await loadRequestEmployee(req);
+    const manager = isEngagementManager(req, employee);
+
+    const survey = await Survey.findOne(addOrganizationFilter(req, { _id: surveyId }))
+        .populate('createdBy', 'name lastName email');
+
+    if (!survey) {
+        return res.status(404).json({
+            success: false,
+            message: 'Survey not found'
+        });
+    }
+
+    if (!manager) {
+        if (!employee) {
+            return res.status(403).json({
+                success: false,
+                message: 'Employee access required'
+            });
+        }
+        if (!surveyMatchesEmployee(survey, employee)) {
+            return res.status(403).json({
+                success: false,
+                message: 'This survey is not available for you'
+            });
+        }
+        if (!['Active', 'Closed'].includes(survey.status)) {
+            return res.status(403).json({
+                success: false,
+                message: 'This survey is not available yet'
+            });
+        }
+    }
+
+    res.json({
+        success: true,
+        data: survey
+    });
+});
+
+/**
+ * Admin/HR: Update survey
+ */
+export const updateSurvey = asyncHandler(async (req, res) => {
+    const { surveyId } = req.params;
+
+    const survey = await Survey.findOne(addOrganizationFilter(req, { _id: surveyId }));
+    if (!survey) {
+        return res.status(404).json({
+            success: false,
+            message: 'Survey not found'
+        });
+    }
+
+    const allowed = [
+        'title',
+        'description',
+        'type',
+        'questions',
+        'targetAudience',
+        'targetDepartments',
+        'targetRoles',
+        'targetEmployees',
+        'startDate',
+        'endDate',
+        'anonymous',
+        'status'
+    ];
+
+    allowed.forEach((key) => {
+        if (req.body[key] !== undefined) {
+            survey[key] = req.body[key];
+        }
+    });
+
+    await survey.save();
+
+    res.json({
+        success: true,
+        message: 'Survey updated successfully',
+        data: survey
+    });
+});
+
+/**
+ * Admin/HR: Get responses for a survey
+ */
+export const getSurveyResponses = asyncHandler(async (req, res) => {
+    const { surveyId } = req.params;
+
+    const survey = await Survey.findOne(addOrganizationFilter(req, { _id: surveyId }));
+    if (!survey) {
+        return res.status(404).json({
+            success: false,
+            message: 'Survey not found'
+        });
+    }
+
+    const responses = await SurveyResponse.find({
+        organizationId: getOrganizationId(req),
+        surveyId: survey._id
+    })
+        .populate('employeeId', 'name lastName email employeeId')
+        .sort({ submittedAt: -1 })
+        .limit(500);
+
+    res.json({
+        success: true,
+        data: responses
     });
 });
 
@@ -66,6 +214,15 @@ export const submitSurveyResponse = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
     const { surveyId } = req.params;
     const employeeId = req.employee?._id;
+
+    if (!employeeId) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only employees can submit survey responses'
+        });
+    }
+
+    const employee = await loadRequestEmployee(req);
 
     const survey = await Survey.findOne({
         _id: surveyId,
@@ -79,14 +236,20 @@ export const submitSurveyResponse = asyncHandler(async (req, res) => {
         });
     }
 
-    if (survey.status !== 'Active') {
-        return res.status(400).json({
+    if (!surveyMatchesEmployee(survey, employee)) {
+        return res.status(403).json({
             success: false,
-            message: 'Survey is not active'
+            message: 'This survey is not assigned to you'
         });
     }
 
-    // Check if already responded
+    if (!isSurveyActiveForResponse(survey)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Survey is not open for responses'
+        });
+    }
+
     const existingResponse = await SurveyResponse.findOne({
         organizationId,
         surveyId,
@@ -127,20 +290,37 @@ export const submitSurveyResponse = asyncHandler(async (req, res) => {
  */
 export const createFeedback = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const employeeId = req.employee?._id || req.user?._id;
+    const employeeId = req.employee?._id;
+
+    if (!employeeId) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only employees can submit feedback'
+        });
+    }
+
+    const { subject, message, type, category, priority, anonymous } = req.body;
 
     const feedback = new Feedback({
-        ...req.body,
         organizationId,
-        employeeId
+        employeeId: anonymous ? employeeId : employeeId,
+        subject,
+        message,
+        type,
+        category,
+        priority,
+        anonymous: Boolean(anonymous)
     });
 
     await feedback.save();
 
+    const populated = await Feedback.findById(feedback._id)
+        .populate('employeeId', 'name lastName email');
+
     res.status(201).json({
         success: true,
         message: 'Feedback submitted successfully',
-        data: feedback
+        data: populated
     });
 });
 
@@ -148,35 +328,101 @@ export const createFeedback = asyncHandler(async (req, res) => {
  * Get feedbacks
  */
 export const getFeedbacks = asyncHandler(async (req, res) => {
-    const organizationId = getOrganizationId(req);
-    const { employeeId, status, type, page = 1, limit = 20 } = req.query;
+    const { status, type, page = 1, limit = 20 } = req.query;
+    const employee = await loadRequestEmployee(req);
+    const manager = isEngagementManager(req, employee);
 
     const query = addOrganizationFilter(req, {});
 
-    if (employeeId) query.employeeId = employeeId;
+    if (!manager) {
+        if (!employee?._id) {
+            return res.json({ success: true, data: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
+        }
+        query.employeeId = employee._id;
+    } else if (req.query.employeeId) {
+        query.employeeId = req.query.employeeId;
+    }
+
     if (status) query.status = status;
     if (type) query.type = type;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const parsedLimit = parseInt(limit, 10);
+    const skip = (parseInt(page, 10) - 1) * parsedLimit;
 
-    const feedbacks = await Feedback.find(query)
-        .populate('employeeId', 'name email')
-        .populate('assignedTo', 'name email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit));
+    const [feedbacks, total] = await Promise.all([
+        Feedback.find(query)
+            .populate('employeeId', 'name lastName email department')
+            .populate('assignedTo', 'name lastName email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parsedLimit),
+        Feedback.countDocuments(query)
+    ]);
 
-    const total = await Feedback.countDocuments(query);
+    const data = manager
+        ? feedbacks
+        : feedbacks.map((f) => {
+              const doc = f.toObject();
+              if (doc.anonymous) {
+                  doc.employeeId = { name: 'Anonymous', lastName: '' };
+              }
+              return doc;
+          });
 
     res.json({
         success: true,
-        data: feedbacks,
+        data,
         pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: parseInt(page, 10),
+            limit: parsedLimit,
             total,
-            pages: Math.ceil(total / parseInt(limit))
+            pages: Math.ceil(total / parsedLimit) || 1
         }
+    });
+});
+
+/**
+ * Admin/HR: Update feedback status or add HR reply
+ */
+export const updateFeedback = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { status, priority, hrResponse } = req.body;
+
+    const feedback = await Feedback.findOne(addOrganizationFilter(req, { _id: id }));
+    if (!feedback) {
+        return res.status(404).json({
+            success: false,
+            message: 'Feedback not found'
+        });
+    }
+
+    if (status) feedback.status = status;
+    if (priority) feedback.priority = priority;
+
+    if (hrResponse && String(hrResponse).trim()) {
+        const responderId = getRequestActorId(req);
+        feedback.responses = feedback.responses || [];
+        feedback.responses.push({
+            respondedBy: responderId,
+            response: String(hrResponse).trim(),
+            respondedAt: new Date()
+        });
+        if (feedback.status === 'Open') {
+            feedback.status = 'In Review';
+        }
+    }
+
+    await feedback.save();
+
+    const populated = await Feedback.findById(feedback._id)
+        .populate('employeeId', 'name lastName email department')
+        .populate('assignedTo', 'name lastName email')
+        .populate('responses.respondedBy', 'name lastName email');
+
+    res.json({
+        success: true,
+        message: 'Feedback updated successfully',
+        data: populated
     });
 });
 

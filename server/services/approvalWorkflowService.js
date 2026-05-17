@@ -7,6 +7,81 @@ import logger from '../helpers/logger.js';
 import { ApprovalWorkflow, ApprovalInstance } from '../models/approvalWorkflow.model.js';
 import Employee from '../models/employee.model.js';
 import { sendNotification } from '../helpers/notificationService.js';
+import { calculateFunctionalRoles } from '../helpers/roleHelper.js';
+import {
+    applyRegularizationApproval,
+    applyRegularizationRejection
+} from './attendanceRegularizationWorkflowService.js';
+
+const normalizeText = (value = '') => String(value).trim().toLowerCase();
+
+const formatEmployeeName = (employee) =>
+    [employee?.name, employee?.lastName].filter(Boolean).join(' ').trim() || employee?.name || 'Employee';
+
+const getEffectiveFunctionalRoles = (employee) => {
+    const explicitRoles = Array.isArray(employee?.functionalRoles)
+        ? employee.functionalRoles.map(normalizeText).filter(Boolean)
+        : [];
+
+    if (explicitRoles.length > 0) {
+        return [...new Set(explicitRoles)];
+    }
+
+    return [...new Set(calculateFunctionalRoles(employee).map(normalizeText).filter(Boolean))];
+};
+
+const findFirstActiveEmployeeByRole = async (organizationId, roleMatcher) => {
+    const activeEmployees = await Employee.find({
+        organizationId,
+        status: 'active'
+    })
+        .select('name lastName functionalRoles department position jobTitle')
+        .lean();
+
+    const match = activeEmployees.find((employee) => roleMatcher(getEffectiveFunctionalRoles(employee), employee));
+    return match ? { id: match._id, name: formatEmployeeName(match) } : null;
+};
+
+const resolveManagerApprover = async (requester, organizationId) => {
+    const requesterManagerId = requester?.managerId || null;
+    if (requesterManagerId) {
+        const managerById = await Employee.findOne({
+            _id: requesterManagerId,
+            organizationId,
+            status: 'active'
+        })
+            .select('name lastName')
+            .lean();
+
+        if (managerById) {
+            return { id: managerById._id, name: formatEmployeeName(managerById) };
+        }
+    }
+
+    const managerReference = normalizeText(requester?.manager);
+    if (!managerReference) {
+        return null;
+    }
+
+    const activeEmployees = await Employee.find({
+        organizationId,
+        status: 'active'
+    })
+        .select('name lastName')
+        .lean();
+
+    const managerByName = activeEmployees.find((employee) => {
+        const fullName = normalizeText(`${employee?.name || ''} ${employee?.lastName || ''}`);
+        const firstName = normalizeText(employee?.name);
+        return (
+            managerReference === fullName ||
+            managerReference === firstName ||
+            fullName.startsWith(`${managerReference} `)
+        );
+    });
+
+    return managerByName ? { id: managerByName._id, name: formatEmployeeName(managerByName) } : null;
+};
 
 /**
  * Create approval instance and start workflow
@@ -155,6 +230,8 @@ export const processApprovalAction = async ({
             instance.rejectionReason = comments;
             await instance.save();
 
+            await updateEntityStatus(instance);
+
             // Notify requester
             await notifyRequester(instance, 'rejected', comments);
 
@@ -250,11 +327,7 @@ const determineApprover = async (step, requestedBy, organizationId) => {
 
         switch (step.approverType) {
             case 'Manager':
-                if (requester.manager) {
-                    const manager = await Employee.findById(requester.manager);
-                    return { id: manager?._id, name: manager?.name };
-                }
-                break;
+                return await resolveManagerApprover(requester, organizationId);
 
             case 'Role':
                 if (step.approverRole) {
@@ -287,30 +360,30 @@ const determineApprover = async (step, requestedBy, organizationId) => {
                 break;
 
             case 'HR':
-                const hrEmployee = await Employee.findOne({
+                return await findFirstActiveEmployeeByRole(
                     organizationId,
-                    position: { $regex: /HR|Human Resources/i },
-                    status: 'active'
-                });
-                return { id: hrEmployee?._id, name: hrEmployee?.name };
+                    (roles) => roles.includes('hr')
+                );
 
             case 'Finance':
-                const financeEmployee = await Employee.findOne({
+                return await findFirstActiveEmployeeByRole(
                     organizationId,
-                    department: 'Finance',
-                    status: 'active'
-                });
-                return { id: financeEmployee?._id, name: financeEmployee?.name };
+                    (roles) => roles.includes('finance')
+                );
 
             case 'Executive':
-                const executive = await Employee.findOne({
+                return await findFirstActiveEmployeeByRole(
                     organizationId,
-                    position: { $in: ['CEO', 'CTO', 'CFO', 'VP'] },
-                    status: 'active'
-                });
-                return { id: executive?._id, name: executive?.name };
+                    (roles) => ['executive', 'ceo', 'cto', 'cfo', 'vp'].some((role) => roles.includes(role))
+                );
         }
 
+        logger.warn('No approver resolved for workflow step', {
+            approverType: step?.approverType,
+            stepNumber: step?.stepNumber,
+            requestedBy,
+            organizationId
+        });
         return null;
     } catch (error) {
         logger.error('Error determining approver', { error: error.message });
@@ -423,6 +496,26 @@ const updateEntityStatus = async (instance) => {
                     expense.rejectionReason = instance.rejectionReason || 'Rejected through approval workflow';
                 }
                 await expense.save();
+            }
+        } else if (instance.entityType === 'AttendanceRegularization') {
+            const AttendanceRegularization = (await import('../models/attendanceRegularization.model.js')).default;
+            const regularizationRequest = await AttendanceRegularization.findById(instance.entityId);
+
+            if (regularizationRequest) {
+                if (instance.status === 'Approved') {
+                    await applyRegularizationApproval({
+                        regularizationRequest,
+                        organizationId: regularizationRequest.organizationId,
+                        reviewerId: instance.steps[instance.steps.length - 1]?.approverId || instance.rejectedBy || null,
+                        managerResponse: 'Approved through workflow'
+                    });
+                } else if (instance.status === 'Rejected') {
+                    await applyRegularizationRejection({
+                        regularizationRequest,
+                        reviewerId: instance.rejectedBy || null,
+                        rejectionReason: instance.rejectionReason || 'Rejected through approval workflow'
+                    });
+                }
             }
         }
         // Add other entity types (Document, etc.) as needed

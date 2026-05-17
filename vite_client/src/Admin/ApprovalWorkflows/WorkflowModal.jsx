@@ -130,6 +130,7 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
                 <option value="Document">Document</option>
                 <option value="WorkforcePlan">Workforce Plan</option>
                 <option value="Project">Project</option>
+                <option value="AttendanceRegularization">Attendance Regularization</option>
               </select>
             </div>
           </div>

@@ -11,10 +11,13 @@ import { addOrganizationFilter, getOrganizationId } from "../../helpers/organiza
 import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
 import { deleteCacheByPattern } from "../../helpers/cache.js";
+import {
+  getExpectedWorkingHoursFromRule,
+  getEffectiveOfficeEndForEarlyDeparture,
+} from "../../helpers/attendanceSecurityHelper.js";
 
 
-const OFFICE_START_TIME = 9;  // 9 AM
-const OFFICE_END_TIME = 17;   // 5 PM (24-hour format)
+const OFFICE_START_TIME = 9;  // 9 AM — fallback when rule has no start time
 
 // Helper function to detect device type from user agent
 const detectDeviceType = (userAgent) => {
@@ -961,7 +964,9 @@ export const clockOut = async (req, res) => {
     const activeRule = await AttendanceRule.findOne({ 
       isActive: true,
       organizationId 
-    }).lean();
+    })
+      .sort({ priority: -1, updatedAt: -1 })
+      .lean();
     
     const attendance = await Attendance.findOne({ 
       userId: req.employee._id, 
@@ -1229,24 +1234,20 @@ export const clockOut = async (req, res) => {
     attendance.grossHours = grossHours / (1000 * 60 * 60); // convert ms to hours
     attendance.effectiveHours = effectiveHours / (1000 * 60 * 60);
 
-    // Check for early departure
-    const officeEndTime = new Date(startOfDay);
-    officeEndTime.setHours(OFFICE_END_TIME, 0, 0, 0);
-    let effectiveEndTime = new Date(officeEndTime);
-    if (activeRule?.enablePenaltyRules && activeRule?.penaltyRules?.earlyDeparture?.enabled) {
-      const graceMinutes = Number(activeRule.penaltyRules.earlyDeparture.gracePeriod || 0);
-      // Allow leaving up to grace minutes early without flagging
-      effectiveEndTime = new Date(officeEndTime.getTime() - graceMinutes * 60 * 1000);
-    }
+    const expectedHours = getExpectedWorkingHoursFromRule(activeRule, startOfDay);
+    const effectiveEndTime = getEffectiveOfficeEndForEarlyDeparture(activeRule, startOfDay);
     attendance.isEarlyDeparture = now < effectiveEndTime;
 
-    // Calculate overtime (anything over 8 effective hours)
-    if (attendance.effectiveHours > 8) {
-      attendance.overtimeHours = parseFloat((attendance.effectiveHours - 8).toFixed(2));
+    if (attendance.effectiveHours > expectedHours) {
+      attendance.overtimeHours = parseFloat(
+        (attendance.effectiveHours - expectedHours).toFixed(2)
+      );
+    } else {
+      attendance.overtimeHours = 0;
     }
 
-    // Determine half-day status
-    if (attendance.effectiveHours < 4) {
+    const halfDayThreshold = expectedHours / 2;
+    if (attendance.effectiveHours < halfDayThreshold) {
       attendance.status = "half-day";
     }
 
@@ -2124,14 +2125,83 @@ const toYmd = (d) => {
   return `${y}-${m}-${day}`;
 };
 
+const resolveProfilePhoto = (profilePhoto) => {
+  const photoRef = profilePhoto?.url || profilePhoto;
+  if (typeof photoRef === 'string') return photoRef;
+  if (photoRef?.url) return photoRef.url;
+  return null;
+};
+
+const isWorkFromHomeLocation = (workLocation) =>
+  workLocation === 'work_from_home' || workLocation === 'home';
+
+const buildCalendarLookups = async (organizationId, startDay, endDay) => {
+  const years = [];
+  for (let year = startDay.getFullYear(); year <= endDay.getFullYear(); year += 1) {
+    years.push(year);
+  }
+
+  if (!organizationId || years.length === 0) {
+    return {
+      calendarByYear: new Map(),
+      holidayKeysByYear: new Map()
+    };
+  }
+
+  const calendars = await Calendar.find({
+    organizationId,
+    year: { $in: years }
+  }).lean();
+
+  const calendarByYear = new Map(calendars.map((calendar) => [calendar.year, calendar]));
+  const holidayKeysByYear = new Map();
+
+  for (const year of years) {
+    const calendar = calendarByYear.get(year);
+    const holidayKeys = new Set(
+      (calendar?.holidays || [])
+        .filter((holiday) => holiday?.isActive !== false)
+        .map((holiday) => toYmd(holiday.date))
+    );
+    holidayKeysByYear.set(year, holidayKeys);
+  }
+
+  return { calendarByYear, holidayKeysByYear };
+};
+
+const isWorkingCalendarDay = (value, calendarByYear, holidayKeysByYear) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+
+  const year = date.getFullYear();
+  const calendar = calendarByYear.get(year);
+  const workingDays = calendar?.workingDays || DEFAULT_WORKING_DAYS;
+  const dayName = getDayName(date);
+  const dateKey = toYmd(date);
+
+  if (!workingDays?.[dayName]) return false;
+  if (holidayKeysByYear.get(year)?.has(dateKey)) return false;
+  return true;
+};
+
 const classifyTeamAttendanceRow = (record, leaveDaySet, userIdStr, dateYmd) => {
   if (record.status === 'absent') {
     if (leaveDaySet.has(`${userIdStr}|${dateYmd}`)) return 'leave';
     return 'absent';
   }
-  if (record.workLocation === 'work_from_home') return 'wfh';
+  if (isWorkFromHomeLocation(record.workLocation)) return 'wfh';
   if (record.isLateArrival) return 'late';
   return 'present';
+};
+
+const matchesTeamAttendanceFilter = (row, statusFilter) => {
+  if (!statusFilter || statusFilter === 'all') return true;
+
+  if (statusFilter === 'present') {
+    return ['present', 'late', 'wfh'].includes(row.uiStatus);
+  }
+
+  return row.uiStatus === statusFilter;
 };
 
 /**
@@ -2160,7 +2230,9 @@ export const getTeamAttendanceHistory = async (req, res) => {
     }
 
     let employees = await Employee.find(query)
-      .select('_id name lastName email department position employeeId active profilePhoto')
+      .select(
+        '_id name lastName email department position employeeId active profilePhoto joiningDate lastWorkingDate terminationDate status'
+      )
       .sort({ name: 1 })
       .lean();
 
@@ -2236,6 +2308,13 @@ export const getTeamAttendanceHistory = async (req, res) => {
       }
     }
 
+    const organizationId = getOrganizationId(req);
+    const { calendarByYear, holidayKeysByYear } = await buildCalendarLookups(
+      organizationId,
+      rangeStartDay,
+      rangeEndDay
+    );
+
     const attQuery = addOrganizationFilter(req, {
       userId: { $in: employeeIds },
       date: { $gte: rangeStartDay, $lte: rangeEnd }
@@ -2247,17 +2326,17 @@ export const getTeamAttendanceHistory = async (req, res) => {
       .lean();
 
     const mapped = [];
+    const existingRowKeys = new Set();
     for (const record of rawRecords) {
       const pop = record.userId;
       if (!pop || !pop._id) continue;
       const userIdStr = pop._id.toString();
       const dateYmd = toYmd(record.date);
-      const uiStatus = classifyTeamAttendanceRow(record, leaveDaySet, userIdStr, dateYmd);
+      const rowKey = `${userIdStr}|${dateYmd}`;
+      if (existingRowKeys.has(rowKey)) continue;
+      existingRowKeys.add(rowKey);
 
-      const photoRef = pop.profilePhoto?.url || pop.profilePhoto;
-      let profilePhoto = null;
-      if (typeof photoRef === 'string') profilePhoto = photoRef;
-      else if (photoRef?.url) profilePhoto = photoRef.url;
+      const uiStatus = classifyTeamAttendanceRow(record, leaveDaySet, userIdStr, dateYmd);
 
       let breakMinutes = 0;
       if (Array.isArray(record.breaks) && record.breaks.length > 0) {
@@ -2290,15 +2369,82 @@ export const getTeamAttendanceHistory = async (req, res) => {
           department: pop.department,
           position: pop.position,
           employeeId: pop.employeeId,
-          profilePhoto
+          profilePhoto: resolveProfilePhoto(pop.profilePhoto)
         }
       });
     }
 
-    let filtered = mapped;
-    if (statusFilter && statusFilter !== 'all') {
-      filtered = mapped.filter((r) => r.uiStatus === statusFilter);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const employee of employees) {
+      const employeeIdStr = employee._id.toString();
+      const employeePayload = {
+        _id: employee._id,
+        name: employee.name,
+        lastName: employee.lastName,
+        email: employee.email,
+        department: employee.department,
+        position: employee.position,
+        employeeId: employee.employeeId,
+        profilePhoto: resolveProfilePhoto(employee.profilePhoto)
+      };
+
+      const eligibleStart = new Date(
+        Math.max(
+          rangeStartDay.getTime(),
+          new Date(employee.joiningDate || rangeStartDay).setHours(0, 0, 0, 0)
+        )
+      );
+
+      const employmentEndCandidates = [rangeEndDay.getTime(), today.getTime()];
+      if (employee.lastWorkingDate) {
+        const lastWorkingDay = new Date(employee.lastWorkingDate);
+        lastWorkingDay.setHours(0, 0, 0, 0);
+        employmentEndCandidates.push(lastWorkingDay.getTime());
+      } else if (employee.terminationDate) {
+        const terminationDay = new Date(employee.terminationDate);
+        terminationDay.setHours(0, 0, 0, 0);
+        employmentEndCandidates.push(terminationDay.getTime());
+      }
+
+      const eligibleEnd = new Date(Math.min(...employmentEndCandidates));
+      if (eligibleStart > eligibleEnd) continue;
+
+      const cursor = new Date(eligibleStart);
+      while (cursor <= eligibleEnd) {
+        if (isWorkingCalendarDay(cursor, calendarByYear, holidayKeysByYear)) {
+          const dateKey = toYmd(cursor);
+          const rowKey = `${employeeIdStr}|${dateKey}`;
+
+          if (!existingRowKeys.has(rowKey)) {
+            const uiStatus = leaveDaySet.has(rowKey) ? 'leave' : 'absent';
+            const syntheticDate = new Date(cursor);
+            syntheticDate.setHours(12, 0, 0, 0);
+
+            mapped.push({
+              _id: `synthetic-${employeeIdStr}-${dateKey}-${uiStatus}`,
+              date: syntheticDate,
+              dateKey,
+              clockIn: null,
+              clockOut: null,
+              effectiveHours: 0,
+              grossHours: 0,
+              breakMinutes: 0,
+              status: uiStatus === 'leave' ? 'leave' : 'absent',
+              uiStatus,
+              workLocation: null,
+              isLateArrival: false,
+              employee: employeePayload
+            });
+          }
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
+      }
     }
+
+    const filtered = mapped.filter((row) => matchesTeamAttendanceFilter(row, statusFilter));
 
     const total = filtered.length;
 

@@ -383,6 +383,103 @@ export const processEarlyDeparture = async ({ employee, clockOutTime, expectedTi
     }
 };
 
+const DEFAULT_START = '09:00';
+const DEFAULT_END = '17:00';
+
+const parseHHmmParts = (timeStr, fallbackHour, fallbackMinute = 0) => {
+    if (!timeStr || typeof timeStr !== 'string') {
+        return { hour: fallbackHour, minute: fallbackMinute };
+    }
+    const parts = timeStr.split(':').map((p) => Number(String(p).trim()));
+    const hour = Number.isFinite(parts[0]) ? parts[0] : fallbackHour;
+    const minute = Number.isFinite(parts[1]) ? parts[1] : fallbackMinute;
+    return { hour, minute };
+};
+
+/**
+ * Scheduled open/close for a calendar day from attendance rule (office hours,
+ * with sensible fallbacks to check-in/out config then defaults).
+ * If end is not after start on the same day, end is moved to the next day (night shift).
+ * @param {Object|null|undefined} rule - Attendance rule (lean doc or null)
+ * @param {Date} date - Reference day
+ * @returns {{ startTime: Date, endTime: Date, timezone: string }}
+ */
+export const resolveScheduledWorkWindow = (rule, date = new Date()) => {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const oh = rule?.officeHours || {};
+    const cit = rule?.checkInOutTimes || {};
+    const startStr = oh.startTime || cit.checkInStartTime || DEFAULT_START;
+    const endStr = oh.endTime || cit.checkOutStartTime || DEFAULT_END;
+
+    const sh = parseHHmmParts(startStr, 9, 0);
+    const eh = parseHHmmParts(endStr, 17, 0);
+
+    const startTime = new Date(startOfDay);
+    startTime.setHours(sh.hour, sh.minute, 0, 0);
+
+    const endTime = new Date(startOfDay);
+    endTime.setHours(eh.hour, eh.minute, 0, 0);
+
+    if (endTime <= startTime) {
+        endTime.setDate(endTime.getDate() + 1);
+    }
+
+    return {
+        startTime,
+        endTime,
+        timezone: rule?.timezone || 'UTC',
+    };
+};
+
+/**
+ * Expected length of a full workday (hours) from rule office window.
+ * @param {Object|null|undefined} rule
+ * @param {Date} date
+ * @returns {number}
+ */
+export const getExpectedWorkingHoursFromRule = (rule, date = new Date()) => {
+    const { startTime, endTime } = resolveScheduledWorkWindow(rule, date);
+    const hours = (endTime - startTime) / (1000 * 60 * 60);
+    if (!Number.isFinite(hours) || hours <= 0) {
+        return 8;
+    }
+    return Math.round(hours * 100) / 100;
+};
+
+/**
+ * Latest clock-in time that still counts as on time (office start + grace when configured).
+ */
+export const getEffectiveOfficeStartForLate = (rule, date = new Date()) => {
+    const { startTime: officeStart } = resolveScheduledWorkWindow(rule, date);
+    if (rule?.enablePenaltyRules && rule?.penaltyRules?.lateArrival?.enabled) {
+        const graceMinutes = Number(
+            rule.penaltyRules.lateArrival.gracePeriod ||
+                rule.checkInOutTimes?.checkInGracePeriod ||
+                0
+        );
+        return new Date(officeStart.getTime() + graceMinutes * 60 * 1000);
+    }
+    if (rule?.checkInOutTimes?.checkInGracePeriod != null) {
+        const graceMinutes = Number(rule.checkInOutTimes.checkInGracePeriod || 0);
+        return new Date(officeStart.getTime() + graceMinutes * 60 * 1000);
+    }
+    return new Date(officeStart);
+};
+
+/**
+ * Earliest clock-out that is not flagged as early departure (office end − grace when configured).
+ */
+export const getEffectiveOfficeEndForEarlyDeparture = (rule, date = new Date()) => {
+    const { endTime: officeEnd } = resolveScheduledWorkWindow(rule, date);
+    if (rule?.enablePenaltyRules && rule?.penaltyRules?.earlyDeparture?.enabled) {
+        const graceMinutes = Number(rule.penaltyRules.earlyDeparture.gracePeriod || 0);
+        return new Date(officeEnd.getTime() - graceMinutes * 60 * 1000);
+    }
+    return new Date(officeEnd);
+};
+
 /**
  * Get office hours with timezone support
  * @param {Object} rule - Attendance rule
@@ -390,29 +487,12 @@ export const processEarlyDeparture = async ({ employee, clockOutTime, expectedTi
  * @returns {Object} - Office start and end times
  */
 export const getOfficeHours = (rule, date = new Date()) => {
-    const timezone = rule?.timezone || 'UTC';
-    const officeHours = rule?.officeHours || { startTime: '09:00', endTime: '17:00' };
-
-    // Parse time strings (HH:mm format)
-    const [startHour, startMinute] = officeHours.startTime.split(':').map(Number);
-    const [endHour, endMinute] = officeHours.endTime.split(':').map(Number);
-
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const startTime = new Date(startOfDay);
-    startTime.setHours(startHour, startMinute, 0);
-
-    const endTime = new Date(startOfDay);
-    endTime.setHours(endHour, endMinute, 0);
-
-    // TODO: Apply timezone conversion if needed
-    // For now, using server timezone
-
+    const { startTime, endTime, timezone } = resolveScheduledWorkWindow(rule, date);
+    // TODO: Apply timezone conversion if needed — for now, server local time
     return {
         startTime,
         endTime,
-        timezone
+        timezone,
     };
 };
 

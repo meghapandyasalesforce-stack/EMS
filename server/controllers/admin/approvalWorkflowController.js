@@ -4,6 +4,8 @@ import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
+import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
+import { applyRegularizationApproval } from '../../services/attendanceRegularizationWorkflowService.js';
 
 /**
  * Create approval workflow
@@ -310,5 +312,125 @@ export const delegateApprovalRequest = asyncHandler(async (req, res) => {
         });
         return sendError(res, error.message || 'Error delegating approval', 400);
     }
+});
+
+/**
+ * Backfill pending attendance regularization requests into approval workflow.
+ */
+export const backfillAttendanceRegularizationApprovals = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const dryRun = req.body?.dryRun === true;
+    const parsedLimit = Number(req.body?.limit);
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 2000) : 500;
+
+    if (!organizationId) {
+        return sendError(res, 'Organization ID is required', 400);
+    }
+
+    const workflow = await ApprovalWorkflow.findOne({
+        organizationId,
+        entityType: 'AttendanceRegularization',
+        isActive: true
+    }).select('_id name');
+
+    if (!workflow) {
+        return sendError(res, 'No active attendance regularization workflow found', 400);
+    }
+
+    const pendingRequests = await AttendanceRegularization.find({
+        organizationId,
+        status: 'pending'
+    })
+        .sort({ createdAt: 1 })
+        .limit(limit);
+
+    const existingInstanceIds = pendingRequests
+        .map((request) => request.approvalInstanceId)
+        .filter(Boolean);
+
+    const existingInstances = existingInstanceIds.length > 0
+        ? await ApprovalInstance.find({
+            _id: { $in: existingInstanceIds },
+            organizationId
+        })
+            .select('_id status')
+            .lean()
+        : [];
+
+    const existingInstanceMap = new Map(existingInstances.map((instance) => [String(instance._id), instance]));
+
+    const summary = {
+        scanned: pendingRequests.length,
+        created: 0,
+        autoApproved: 0,
+        alreadyLinked: 0,
+        errors: []
+    };
+
+    for (const request of pendingRequests) {
+        try {
+            if (request.approvalInstanceId && existingInstanceMap.has(String(request.approvalInstanceId))) {
+                summary.alreadyLinked += 1;
+                continue;
+            }
+
+            if (dryRun) {
+                summary.created += 1;
+                continue;
+            }
+
+            const approvalResult = await initiateApproval({
+                organizationId,
+                entityType: 'AttendanceRegularization',
+                entityId: request._id,
+                requestedBy: request.employeeId,
+                metadata: {
+                    attendanceDate: request.attendanceDate,
+                    regularizationType: request.regularizationType,
+                    managerId: request.managerId,
+                    requestedClockIn: request.requestedClockIn,
+                    requestedClockOut: request.requestedClockOut
+                },
+                priority: request.regularizationType === 'full_day' ? 'High' : 'Medium'
+            });
+
+            if (approvalResult.approvalInstanceId) {
+                request.approvalInstanceId = approvalResult.approvalInstanceId;
+                await request.save();
+                summary.created += 1;
+                continue;
+            }
+
+            if (approvalResult.autoApproved && approvalResult.status === 'Approved') {
+                await applyRegularizationApproval({
+                    regularizationRequest: request,
+                    organizationId,
+                    reviewerId: request.managerId || null,
+                    managerResponse: 'Auto-approved through regularization backfill'
+                });
+                summary.autoApproved += 1;
+                continue;
+            }
+
+            summary.errors.push({
+                requestId: request._id,
+                message: 'Workflow did not create an approval instance'
+            });
+        } catch (error) {
+            logger.error('Regularization workflow backfill error', {
+                error: error.message,
+                requestId: request._id,
+                stack: error.stack
+            });
+            summary.errors.push({
+                requestId: request._id,
+                message: error.message
+            });
+        }
+    }
+
+    return sendSuccess(res, summary, dryRun
+        ? 'Regularization workflow backfill preview completed'
+        : 'Regularization workflow backfill completed');
 });
 

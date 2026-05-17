@@ -128,7 +128,7 @@ export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
  * Get documents with proper access control
  */
 export const getDocuments = asyncHandler(async (req, res) => {
-    const { category, relatedTo, relatedId, approvalStatus, page = 1, limit = 20 } = req.query;
+    const { category, relatedTo, relatedId, approvalStatus, page = 1, limit = 20, search, accessBuckets } = req.query;
 
     const query = addOrganizationFilter(req, {});
 
@@ -206,16 +206,41 @@ export const getDocuments = asyncHandler(async (req, res) => {
         query.isActive = true;
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const searchTrim = typeof search === 'string' ? search.trim() : '';
+    if (searchTrim) {
+        const escaped = searchTrim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.name = { $regex: escaped, $options: 'i' };
+    }
+
+    if (accessBuckets != null && String(accessBuckets).length) {
+        const buckets = String(accessBuckets).split(',').map((s) => s.trim()).filter(Boolean);
+        const bucketConditions = [];
+        if (buckets.includes('public')) bucketConditions.push({ accessLevel: 'Public' });
+        if (buckets.includes('confidential')) bucketConditions.push({ accessLevel: 'Private' });
+        if (buckets.includes('restricted')) {
+            bucketConditions.push({ accessLevel: { $in: ['Department', 'Role', 'Specific'] } });
+        }
+        if (bucketConditions.length > 0) {
+            const bucketFilter = bucketConditions.length === 1
+                ? bucketConditions[0]
+                : { $or: bucketConditions };
+            query.$and = Array.isArray(query.$and) ? [...query.$and, bucketFilter] : [bucketFilter];
+        }
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
+    const skip = (pageNum - 1) * limitNum;
 
     const documents = await Document.find(query)
-        .populate('uploadedBy', 'name email employeeId department')
+        .populate('uploadedBy', 'name lastName email employeeId department')
         .populate('approvedBy', 'name email')
         .populate('allowedEmployees', 'name email employeeId')
         .populate('allowedRoles', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(parseInt(limit));
+        .limit(limitNum);
 
     const total = await Document.countDocuments(query);
 
@@ -223,10 +248,10 @@ export const getDocuments = asyncHandler(async (req, res) => {
         success: true,
         data: documents,
         pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: pageNum,
+            limit: limitNum,
             total,
-            pages: Math.ceil(total / parseInt(limit))
+            pages: Math.ceil(total / limitNum) || 0
         }
     });
 });
@@ -374,7 +399,7 @@ export const getPendingDocuments = asyncHandler(async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const documents = await Document.find(query)
-        .populate('uploadedBy', 'name email employeeId department')
+        .populate('uploadedBy', 'name lastName email employeeId department')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -461,8 +486,8 @@ export const getDocumentVersions = asyncHandler(async (req, res) => {
     const document = await Document.findOne({
         _id: id,
         organizationId
-    }).populate('uploadedBy', 'name email')
-      .populate('previousVersions.uploadedBy', 'name email');
+    }).populate('uploadedBy', 'name lastName email')
+      .populate('previousVersions.uploadedBy', 'name lastName email');
 
     if (!document) {
         return res.status(404).json({
@@ -657,7 +682,7 @@ export const getSharedDocuments = asyncHandler(async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const documents = await Document.find(query)
-        .populate('uploadedBy', 'name email employeeId department')
+        .populate('uploadedBy', 'name lastName email employeeId department')
         .populate('allowedEmployees', 'name email employeeId')
         .populate('allowedRoles', 'name')
         .sort({ createdAt: -1 })

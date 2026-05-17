@@ -1,7 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { FaFileAlt, FaDownload, FaUpload, FaFolder, FaCheckCircle, FaTimesCircle, FaClock, FaUser, FaHistory } from 'react-icons/fa';
+import {
+    FaFileAlt,
+    FaDownload,
+    FaUpload,
+    FaFolder,
+    FaHistory,
+    FaSearch,
+    FaFilter,
+    FaEye,
+    FaShareAlt,
+    FaPlus,
+    FaFilePdf,
+    FaFileWord
+} from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios, { getUploadUrl } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -14,31 +27,136 @@ const DOCUMENT_CATEGORY_OPTIONS = [
     'Training', 'Compliance', 'Financial', 'Legal', 'Other'
 ];
 
+/** Sidebar category key → backend `category` enum */
+const CATEGORY_NAV = [
+    { key: 'all', label: 'All Documents', categoryParam: null },
+    { key: 'Policy', label: 'Policies', categoryParam: 'Policy' },
+    { key: 'Contract', label: 'Contracts', categoryParam: 'Contract' },
+    { key: 'Certificate', label: 'Certificates', categoryParam: 'Certificate' },
+    { key: 'Other', label: 'Forms', categoryParam: 'Other' },
+];
+
+function formatRelativeTime(iso) {
+    if (!iso) return '—';
+    const then = new Date(iso).getTime();
+    const now = Date.now();
+    const sec = Math.round((now - then) / 1000);
+    if (sec < 45) return 'just now';
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
+    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** Full name from populated employee (matches org standard: first + last). */
+function formatEmployeeFullName(person) {
+    if (!person) return 'Unknown';
+    const first = String(person.name || '').trim();
+    const last = String(person.lastName || '').trim();
+    const combined = [first, last].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+    const email = String(person.email || '').trim();
+    if (email) return email;
+    return 'Unknown';
+}
+
+function initialsFromPerson(person) {
+    const first = String(person?.name || '').trim();
+    const last = String(person?.lastName || '').trim();
+    if (first && last) return `${first[0]}${last[0]}`.toUpperCase();
+    const n = person?.name || person?.email || '?';
+    const parts = String(n).trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return String(n).slice(0, 2).toUpperCase();
+}
+
+function fileIcon(doc) {
+    const t = (doc?.type || '').toLowerCase();
+    if (t === 'pdf') return FaFilePdf;
+    if (t === 'word') return FaFileWord;
+    return FaFileAlt;
+}
+
+function DocumentFileIcon({ doc, className = 'w-5 h-5' }) {
+    const Icon = fileIcon(doc);
+    return <Icon className={className} />;
+}
+
+function categoryPillClass(cat) {
+    const c = String(cat || '');
+    if (c === 'Policy') return 'bg-emerald-50 text-emerald-800 border border-emerald-100';
+    if (c === 'Contract') return 'bg-violet-50 text-violet-800 border border-violet-100';
+    if (c === 'Certificate') return 'bg-amber-50 text-amber-900 border border-amber-100';
+    if (c === 'Other') return 'bg-slate-100 text-slate-800 border border-slate-200';
+    return 'bg-gray-100 text-gray-800 border border-gray-200';
+}
+
+function statusPill(doc) {
+    if (doc.requiresApproval && doc.approvalStatus === 'Pending') {
+        return { label: 'Pending approval', className: 'bg-amber-50 text-amber-800 border border-amber-200' };
+    }
+    if (doc.approvalStatus === 'Rejected') {
+        return { label: 'Rejected', className: 'bg-red-50 text-red-800 border border-red-100' };
+    }
+    return { label: 'Active', className: 'bg-emerald-50 text-emerald-800 border border-emerald-100' };
+}
+
+function useDebouncedValue(value, ms) {
+    const [d, setD] = React.useState(value);
+    React.useEffect(() => {
+        const id = window.setTimeout(() => setD(value), ms);
+        return () => window.clearTimeout(id);
+    }, [value, ms]);
+    return d;
+}
+
 const DocumentsPage = () => {
+    const navigate = useNavigate();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
-    
-    // Check if user is HR or Admin
+
     const isHRUser = useMemo(() => {
         const userRole = user?.role || employee?.role;
         if (userRole === 'admin') return true;
         const userObj = user || employee;
         return isHR(userObj);
     }, [user, employee]);
+
     const [documents, setDocuments] = useState([]);
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });
     const [pendingDocuments, setPendingDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('all');
-    const [filter, setFilter] = useState('all');
-    const [rejectReason, setRejectReason] = useState('');
-    const [showRejectModal, setShowRejectModal] = useState(false);
-    const [selectedDoc, setSelectedDoc] = useState(null);
+    const [sidebarCategoryKey, setSidebarCategoryKey] = useState('all');
+    const [accessPublic, setAccessPublic] = useState(false);
+    const [accessRestricted, setAccessRestricted] = useState(false);
+    const [accessConfidential, setAccessConfidential] = useState(false);
+    const [page, setPage] = useState(1);
+    const [searchInput, setSearchInput] = useState('');
+    const debouncedSearch = useDebouncedValue(searchInput, 350);
+    const [pendingNotes, setPendingNotes] = useState({});
+    const [rejectingDoc, setRejectingDoc] = useState(null);
+
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadName, setUploadName] = useState('');
     const [uploadCategory, setUploadCategory] = useState('Company');
     const [uploadDescription, setUploadDescription] = useState('');
     const [uploading, setUploading] = useState(false);
+
+    const PAGE_SIZE = 10;
+
+    const accessBucketsParam = useMemo(() => {
+        const buckets = [];
+        if (accessPublic) buckets.push('public');
+        if (accessRestricted) buckets.push('restricted');
+        if (accessConfidential) buckets.push('confidential');
+        return buckets.length ? buckets.join(',') : undefined;
+    }, [accessPublic, accessRestricted, accessConfidential]);
+
+    const selectedCategoryParam = useMemo(() => {
+        const nav = CATEGORY_NAV.find((x) => x.key === sidebarCategoryKey);
+        return nav?.categoryParam ?? null;
+    }, [sidebarCategoryKey]);
 
     const resetUploadForm = () => {
         setUploadFile(null);
@@ -51,6 +169,65 @@ const DocumentsPage = () => {
         resetUploadForm();
         setShowUploadModal(true);
     };
+
+    const listFetchEverCompleted = useRef(false);
+
+    const fetchPendingDocuments = useCallback(async () => {
+        try {
+            const response = await axios.get('/v1/admin/documents/pending', { withCredentials: true });
+            setPendingDocuments(response.data?.data || []);
+        } catch (error) {
+            logger.error('Error fetching pending documents:', error);
+        }
+    }, []);
+
+    const fetchDocuments = useCallback(async () => {
+        try {
+            if (!listFetchEverCompleted.current) {
+                setLoading(true);
+            }
+            const params = {
+                page,
+                limit: PAGE_SIZE,
+            };
+            if (selectedCategoryParam) params.category = selectedCategoryParam;
+            if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+            if (accessBucketsParam) params.accessBuckets = accessBucketsParam;
+
+            const response = await axios.get('/v1/both/documents', {
+                params,
+                withCredentials: true,
+            });
+            setDocuments(response.data?.data || []);
+            const p = response.data?.pagination;
+            if (p) {
+                setPagination({
+                    page: p.page ?? page,
+                    limit: p.limit ?? PAGE_SIZE,
+                    total: p.total ?? 0,
+                    pages: p.pages ?? 0,
+                });
+            }
+        } catch (error) {
+            logger.error('Error fetching documents:', error);
+            toast.error('Failed to load documents. Please try again.');
+        } finally {
+            setLoading(false);
+            listFetchEverCompleted.current = true;
+        }
+    }, [page, selectedCategoryParam, debouncedSearch, accessBucketsParam]);
+
+    useEffect(() => {
+        fetchDocuments();
+    }, [fetchDocuments]);
+
+    useEffect(() => {
+        if (isHRUser) fetchPendingDocuments();
+    }, [isHRUser, fetchPendingDocuments]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [debouncedSearch, accessBucketsParam]);
 
     const handleUploadSubmit = async (e) => {
         e.preventDefault();
@@ -72,7 +249,7 @@ const DocumentsPage = () => {
             toast.success('Document uploaded successfully');
             setShowUploadModal(false);
             resetUploadForm();
-            await fetchDocuments(false);
+            await fetchDocuments();
             if (isHRUser) await fetchPendingDocuments();
         } catch (error) {
             logger.error('Error uploading document:', error);
@@ -82,47 +259,15 @@ const DocumentsPage = () => {
         }
     };
 
-    useEffect(() => {
-        fetchDocuments();
-        if (isHRUser) {
-            fetchPendingDocuments();
-        }
-    }, [activeTab, filter, isHRUser]);
-
-    const fetchDocuments = async (showFullPageLoading = true) => {
-        try {
-            if (showFullPageLoading) setLoading(true);
-            const params = {};
-            if (filter !== 'all') {
-                params.category = filter;
-            }
-            // For HR, show all documents including pending ones
-            const response = await axios.get('/v1/both/documents', { 
-                params,
-                withCredentials: true 
-            });
-            setDocuments(response.data?.data || []);
-        } catch (error) {
-            logger.error('Error fetching documents:', error);
-            toast.error('Failed to load documents. Please try again.');
-        } finally {
-            if (showFullPageLoading) setLoading(false);
-        }
-    };
-
-    const fetchPendingDocuments = async () => {
-        try {
-            const response = await axios.get('/v1/admin/documents/pending', { withCredentials: true });
-            setPendingDocuments(response.data?.data || []);
-        } catch (error) {
-            logger.error('Error fetching pending documents:', error);
-        }
-    };
-
     const handleApprove = async (documentId) => {
         try {
             await axios.post(`/v1/admin/documents/${documentId}/approve`, {}, { withCredentials: true });
             toast.success('Document approved successfully!');
+            setPendingNotes((prev) => {
+                const next = { ...prev };
+                delete next[documentId];
+                return next;
+            });
             fetchDocuments();
             fetchPendingDocuments();
         } catch (error) {
@@ -131,20 +276,25 @@ const DocumentsPage = () => {
         }
     };
 
-    const handleReject = async () => {
-        if (!rejectReason.trim()) {
-            toast.error('Please provide a rejection reason');
+    const handleReject = async (doc) => {
+        const note = (pendingNotes[doc._id] || '').trim();
+        if (!note) {
+            toast.error('Please add a reason for rejection');
             return;
         }
         try {
-            await axios.post(`/v1/admin/documents/${selectedDoc._id}/reject`, 
-                { rejectionReason: rejectReason }, 
+            await axios.post(
+                `/v1/admin/documents/${doc._id}/reject`,
+                { rejectionReason: note },
                 { withCredentials: true }
             );
             toast.success('Document rejected successfully!');
-            setShowRejectModal(false);
-            setRejectReason('');
-            setSelectedDoc(null);
+            setPendingNotes((prev) => {
+                const next = { ...prev };
+                delete next[doc._id];
+                return next;
+            });
+            setRejectingDoc(null);
             fetchDocuments();
             fetchPendingDocuments();
         } catch (error) {
@@ -153,475 +303,523 @@ const DocumentsPage = () => {
         }
     };
 
-    const openRejectModal = (doc) => {
-        setSelectedDoc(doc);
-        setShowRejectModal(true);
+    const copyShareLink = async (doc) => {
+        const path = getUploadUrl(doc.fileUrl);
+        const full = path?.startsWith('http') ? path : `${window.location.origin}${path || ''}`;
+        try {
+            await navigator.clipboard.writeText(full);
+            toast.success('Link copied to clipboard');
+        } catch {
+            toast.error('Could not copy link');
+        }
     };
 
-    if (loading) {
+    const pendingCount = pendingDocuments.length;
+    const { page: curPage, total, pages } = pagination;
+    const rangeStart = total === 0 ? 0 : (curPage - 1) * PAGE_SIZE + 1;
+    const rangeEnd = Math.min(curPage * PAGE_SIZE, total);
+
+    if (!listFetchEverCompleted.current && loading) {
         return <LoadingSpinner message="Loading documents..." />;
     }
 
-    const displayDocuments = activeTab === 'pending' ? pendingDocuments : documents;
-    const pendingCount = pendingDocuments.length;
-
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-6 flex justify-between items-center gap-4 relative z-10">
-                    <div className="min-w-0">
-                        <h1 className="text-3xl font-bold text-gray-800">Document Management</h1>
-                        <p className="text-gray-600 mt-1">Manage company documents and employee uploads</p>
+        <div className="min-h-screen bg-[#f4f6f8] p-4 sm:p-6 transition-all duration-300">
+            <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-6">
+                {/* Sidebar */}
+                <aside className="w-full lg:w-64 shrink-0 space-y-6">
+                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Categories</p>
+                        <nav className="space-y-1">
+                            {CATEGORY_NAV.map((item) => {
+                                const active = sidebarCategoryKey === item.key;
+                                return (
+                                    <button
+                                        key={item.key}
+                                        type="button"
+                                        onClick={() => {
+                                            setSidebarCategoryKey(item.key);
+                                            setPage(1);
+                                        }}
+                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-medium transition ${
+                                            active
+                                                ? 'bg-theme-secondary/12 text-theme-secondary'
+                                                : 'text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <FaFolder className={`w-4 h-4 shrink-0 ${active ? 'text-theme-secondary' : 'text-gray-400'}`} />
+                                        {item.label}
+                                    </button>
+                                );
+                            })}
+                        </nav>
                     </div>
+
+                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Access level</p>
+                        <div className="space-y-2 text-sm">
+                            <label className="flex items-center gap-2 cursor-pointer text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={accessPublic}
+                                    onChange={(e) => setAccessPublic(e.target.checked)}
+                                    className="rounded border-gray-300 text-theme-secondary focus:ring-theme-secondary"
+                                />
+                                Public
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={accessRestricted}
+                                    onChange={(e) => setAccessRestricted(e.target.checked)}
+                                    className="rounded border-gray-300 text-theme-secondary focus:ring-theme-secondary"
+                                />
+                                Restricted
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={accessConfidential}
+                                    onChange={(e) => setAccessConfidential(e.target.checked)}
+                                    className="rounded border-gray-300 text-theme-secondary focus:ring-theme-secondary"
+                                />
+                                Confidential
+                            </label>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3">
+                            Leave unchecked to show all access levels.
+                        </p>
+                    </div>
+
                     {isHRUser && (
                         <button
                             type="button"
                             onClick={openUploadModal}
-                            className="shrink-0 bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2 cursor-pointer"
+                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-theme-secondary text-white font-medium shadow-sm hover:bg-theme-primary transition"
                         >
-                            <FaUpload className="w-4 h-4" />
+                            <FaPlus className="w-4 h-4" />
                             Upload Document
                         </button>
                     )}
-                </div>
+                </aside>
 
-                {/* Tabs */}
-                <div className="bg-white rounded-lg shadow-md mb-6">
-                    <div className="flex border-b">
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-6 py-3 font-medium ${activeTab === 'all' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
-                        >
-                            All Documents ({documents.length})
-                        </button>
+                {/* Main */}
+                <main className="flex-1 min-w-0 space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Documents</h1>
+                            <p className="text-gray-600 mt-1">
+                                Manage, approve, and track organization-wide records.
+                            </p>
+                        </div>
                         {isHRUser && (
                             <button
-                                onClick={() => setActiveTab('pending')}
-                                className={`px-6 py-3 font-medium relative ${activeTab === 'pending' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
+                                type="button"
+                                onClick={openUploadModal}
+                                className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-secondary text-white font-medium hover:bg-theme-primary transition shadow-sm"
                             >
-                                Pending Approval ({pendingCount})
-                                {pendingCount > 0 && (
-                                    <span className="absolute top-2 right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                        {pendingCount}
-                                    </span>
-                                )}
+                                <FaPlus className="w-4 h-4" />
+                                Upload Document
                             </button>
                         )}
                     </div>
-                </div>
 
-                {/* Filters for All Documents */}
-                {activeTab === 'all' && (
-                    <div className="bg-white rounded-lg shadow-md mb-6 p-4">
-                        <div className="flex gap-2 flex-wrap">
-                            <button
-                                onClick={() => setFilter('all')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                                    filter === 'all' 
-                                        ? 'bg-theme-secondary text-white' 
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                All
-                            </button>
-                            <button
-                                onClick={() => setFilter('Employee')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                                    filter === 'Employee' 
-                                        ? 'bg-theme-secondary text-white' 
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                Employee Documents
-                            </button>
-                            <button
-                                onClick={() => setFilter('Company')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                                    filter === 'Company' 
-                                        ? 'bg-theme-secondary text-white' 
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                Company Documents
-                            </button>
-                            <button
-                                onClick={() => setFilter('Policy')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                                    filter === 'Policy' 
-                                        ? 'bg-theme-secondary text-white' 
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                Policies
-                            </button>
-                        </div>
+                    {/* Search */}
+                    <div className="relative max-w-xl">
+                        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                        <input
+                            type="search"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            placeholder="Search documents…"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+                        />
                     </div>
-                )}
 
-                {/* Documents Grid/Table */}
-                {activeTab === 'pending' ? (
-                    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <div className="p-4 bg-yellow-50 border-b border-yellow-200">
-                            <h2 className="text-lg font-semibold text-yellow-800">
-                                Documents Pending HR Approval
-                            </h2>
-                            <p className="text-sm text-yellow-600 mt-1">
-                                Review and approve or reject employee-uploaded documents
-                            </p>
+                    {/* Pending approvals */}
+                    {isHRUser && (
+                        <section className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <FaFileAlt className="w-5 h-5 text-gray-600" />
+                                    <h2 className="text-lg font-semibold text-gray-900">Pending Approvals</h2>
+                                    {pendingCount > 0 ? (
+                                        <span className="text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-orange-50 text-orange-800 border border-orange-100">
+                                            {pendingCount} action required
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-gray-500">All caught up</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="p-4 space-y-4">
+                                {pendingDocuments.length === 0 ? (
+                                    <p className="text-sm text-gray-500 text-center py-8">
+                                        No documents pending HR approval.
+                                    </p>
+                                ) : (
+                                    pendingDocuments.map((doc) => (
+                                        <div
+                                            key={doc._id}
+                                            className="flex flex-col xl:flex-row xl:items-stretch gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition"
+                                        >
+                                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                                                <div className="shrink-0 p-3 rounded-xl bg-white border border-gray-100 shadow-sm">
+                                                    <DocumentFileIcon doc={doc} className="w-8 h-8 text-theme-secondary" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-gray-900 truncate">{doc.fileName || doc.name}</div>
+                                                    <p className="text-sm text-gray-500 mt-0.5">
+                                                        Requested by{' '}
+                                                        <span className="text-gray-700 font-medium">
+                                                            {formatEmployeeFullName(doc.uploadedBy)}
+                                                        </span>
+                                                        <span className="text-gray-400"> • </span>
+                                                        {formatRelativeTime(doc.createdAt)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2 xl:w-[340px] shrink-0">
+                                                <label className="sr-only" htmlFor={`note-${doc._id}`}>Review note</label>
+                                                <textarea
+                                                    id={`note-${doc._id}`}
+                                                    rows={2}
+                                                    value={pendingNotes[doc._id] || ''}
+                                                    onChange={(e) =>
+                                                        setPendingNotes((prev) => ({ ...prev, [doc._id]: e.target.value }))
+                                                    }
+                                                    placeholder="Add a reason for your decision…"
+                                                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent resize-y min-h-[2.75rem]"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApprove(doc._id)}
+                                                        className="flex-1 py-2 rounded-lg bg-theme-secondary text-white text-sm font-medium hover:bg-theme-primary transition"
+                                                    >
+                                                        Approve
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleReject(doc)}
+                                                        className="flex-1 py-2 rounded-lg bg-white border border-red-200 text-red-700 text-sm font-medium hover:bg-red-50 transition"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Recent documents table */}
+                    <section className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-gray-900">Recent Documents</h2>
+                            <FaFilter className="w-4 h-4 text-gray-400" title="Filtered by sidebar" />
                         </div>
+
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Document</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Uploaded By</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Uploaded Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            <table className="min-w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50/80">
+                                        <th className="px-5 py-3">Document Name</th>
+                                        <th className="px-5 py-3">Category</th>
+                                        <th className="px-5 py-3">Uploaded By</th>
+                                        <th className="px-5 py-3">Version</th>
+                                        <th className="px-5 py-3">Status</th>
+                                        <th className="px-5 py-3">Last Modified</th>
+                                        <th className="px-5 py-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {pendingDocuments.map((doc) => (
-                                        <tr key={doc._id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="bg-theme-secondary/10 p-2 rounded-lg">
-                                                        <FaFileAlt className="w-5 h-5 text-theme-secondary" />
+                                <tbody className="divide-y divide-gray-100">
+                                    {documents.map((doc) => {
+                                        const st = statusPill(doc);
+                                        const Icon = fileIcon(doc);
+                                        return (
+                                            <tr key={doc._id} className="hover:bg-gray-50/80 transition-colors">
+                                                <td className="px-5 py-3.5">
+                                                    <div className="flex items-center gap-2 min-w-0 max-w-xs sm:max-w-md">
+                                                        <span className="shrink-0 p-2 rounded-lg bg-theme-secondary/10 text-theme-secondary">
+                                                            <Icon className="w-4 h-4" />
+                                                        </span>
+                                                        <span className="font-medium text-gray-900 truncate">{doc.name}</span>
                                                     </div>
-                                                    <div>
-                                                        <div className="font-medium text-gray-900">{doc.name}</div>
-                                                        {doc.description && (
-                                                            <div className="text-sm text-gray-500">{doc.description}</div>
+                                                </td>
+                                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${categoryPillClass(doc.category)}`}
+                                                    >
+                                                        {doc.category || 'Other'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold flex items-center justify-center">
+                                                            {initialsFromPerson(doc.uploadedBy)}
+                                                        </span>
+                                                        <span className="text-gray-800 font-medium truncate max-w-[200px]">
+                                                            {formatEmployeeFullName(doc.uploadedBy)}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-3.5 whitespace-nowrap text-gray-700">
+                                                    v{doc.version ?? 1}
+                                                </td>
+                                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${st.className}`}>
+                                                        {st.label}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5 whitespace-nowrap text-gray-600">
+                                                    {doc.updatedAt
+                                                        ? `${new Date(doc.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} (${formatRelativeTime(doc.updatedAt)})`
+                                                        : formatRelativeTime(doc.createdAt)}
+                                                </td>
+                                                <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                                                    <div className="inline-flex items-center gap-1 justify-end">
+                                                        <a
+                                                            href={getUploadUrl(doc.fileUrl) || '#'}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
+                                                            title="View"
+                                                        >
+                                                            <FaEye className="w-4 h-4" />
+                                                        </a>
+                                                        <a
+                                                            href={getUploadUrl(doc.fileUrl) || '#'}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            download
+                                                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
+                                                            title="Download"
+                                                        >
+                                                            <FaDownload className="w-4 h-4" />
+                                                        </a>
+                                                        {isHRUser && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => copyShareLink(doc)}
+                                                                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
+                                                                title="Copy link"
+                                                            >
+                                                                <FaShareAlt className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {doc.version > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate(`/documents/${doc._id}/versions`)}
+                                                                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-violet-600 transition"
+                                                                title="Version history"
+                                                            >
+                                                                <FaHistory className="w-4 h-4" />
+                                                            </button>
                                                         )}
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <FaUser className="w-4 h-4 text-gray-400" />
-                                                    <div>
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {doc.uploadedBy?.name || 'Unknown'}
-                                                        </div>
-                                                        <div className="text-sm text-gray-500">
-                                                            {doc.uploadedBy?.employeeId || 'N/A'}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="px-2 py-1 rounded text-xs bg-theme-secondary/10 text-theme-secondary">
-                                                    {doc.category}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {(doc.fileSize / 1024).toFixed(2)} KB
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {new Date(doc.createdAt).toLocaleDateString()}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <a
-                                                        href={getUploadUrl(doc.fileUrl) || '#'}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-theme-secondary hover:text-theme-secondary"
-                                                        title="View Document"
-                                                    >
-                                                        <FaDownload className="w-4 h-4" />
-                                                    </a>
-                                                    {isHRUser && (
-                                                        <>
+                                                    {isHRUser && doc.requiresApproval && doc.approvalStatus === 'Pending' && (
+                                                        <div className="flex gap-1 mt-2 justify-end">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleApprove(doc._id)}
-                                                                className="text-theme-primary hover:text-theme-primary"
-                                                                title="Approve"
+                                                                className="text-xs px-2 py-1 rounded bg-theme-primary text-white hover:opacity-90"
                                                             >
-                                                                <FaCheckCircle className="w-5 h-5" />
+                                                                Approve
                                                             </button>
                                                             <button
-                                                                onClick={() => openRejectModal(doc)}
-                                                                className="text-red-600 hover:text-red-800"
-                                                                title="Reject"
+                                                                type="button"
+                                                                onClick={() => setRejectingDoc(doc)}
+                                                                className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
                                                             >
-                                                                <FaTimesCircle className="w-5 h-5" />
+                                                                Reject
                                                             </button>
-                                                        </>
+                                                        </div>
                                                     )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
-                            {pendingDocuments.length === 0 && (
-                                <div className="text-center py-12">
-                                    <FaCheckCircle className="mx-auto text-green-400 text-5xl mb-4" />
-                                    <p className="text-gray-500">No documents pending approval.</p>
-                                </div>
-                            )}
                         </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {documents.map((doc) => (
-                            <div key={doc._id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="bg-theme-secondary/10 p-3 rounded-lg">
-                                        <FaFileAlt className="w-6 h-6 text-theme-secondary" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-gray-800">{doc.name}</h3>
-                                        <p className="text-sm text-gray-600">{doc.category}</p>
-                                        {doc.uploadedBy && (
-                                            <div className="mt-1">
-                                                <p className="text-xs text-gray-500">
-                                                    By: {doc.uploadedBy.name}
-                                                    {doc.uploadedBy.employeeId && ` (${doc.uploadedBy.employeeId})`}
-                                                </p>
-                                                {doc.uploadedBy.department && (
-                                                    <p className="text-xs text-gray-400">
-                                                        {doc.uploadedBy.department}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                
-                                {/* Approval Status Badge */}
-                                {doc.requiresApproval && (
-                                    <div className="mb-3">
-                                        <span className={`px-2 py-1 rounded text-xs ${
-                                            doc.approvalStatus === 'Approved' 
-                                                ? 'bg-theme-primary/10 text-theme-primary' 
-                                                : doc.approvalStatus === 'Rejected'
-                                                ? 'bg-red-100 text-red-800'
-                                                : 'bg-yellow-100 text-yellow-800'
-                                        }`}>
-                                            {doc.approvalStatus === 'Approved' && <FaCheckCircle className="inline mr-1" />}
-                                            {doc.approvalStatus === 'Rejected' && <FaTimesCircle className="inline mr-1" />}
-                                            {doc.approvalStatus === 'Pending' && <FaClock className="inline mr-1" />}
-                                            {doc.approvalStatus || 'Pending'}
-                                        </span>
-                                    </div>
-                                )}
 
-                                {/* Action buttons for pending documents */}
-                                {isHRUser && doc.requiresApproval && doc.approvalStatus === 'Pending' && (
-                                    <div className="mb-3 flex gap-2">
-                                        <button
-                                            onClick={() => handleApprove(doc._id)}
-                                            className="flex-1 bg-theme-primary text-white px-3 py-1 rounded text-sm hover:bg-theme-primary transition"
-                                        >
-                                            <FaCheckCircle className="inline mr-1" />
-                                            Approve
-                                        </button>
-                                        <button
-                                            onClick={() => openRejectModal(doc)}
-                                            className="flex-1 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition"
-                                        >
-                                            <FaTimesCircle className="inline mr-1" />
-                                            Reject
-                                        </button>
-                                    </div>
-                                )}
-
-                                {doc.rejectionReason && (
-                                    <div className="mb-3 p-2 bg-red-50 rounded text-xs text-red-700">
-                                        <strong>Rejection Reason:</strong> {doc.rejectionReason}
-                                    </div>
-                                )}
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-gray-500">
-                                            {(doc.fileSize / 1024).toFixed(2)} KB
-                                        </span>
-                                        {doc.version > 1 && (
-                                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                                                v{doc.version}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {doc.version > 1 && (
-                                            <button
-                                                onClick={() => navigate(`/documents/${doc._id}/versions`)}
-                                                className="text-purple-600 hover:text-purple-800"
-                                                title="View Versions"
-                                            >
-                                                <FaHistory className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        <a
-                                            href={getUploadUrl(doc.fileUrl) || '#'}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-theme-secondary hover:text-theme-secondary"
-                                            title="Download"
-                                        >
-                                            <FaDownload className="w-5 h-5" />
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        {documents.length === 0 && (
-                            <div className="col-span-3 text-center py-12">
-                                <FaFolder className="mx-auto text-gray-400 text-5xl mb-4" />
-                                <p className="text-gray-500">No documents found.</p>
+                        {documents.length === 0 && !loading && (
+                            <div className="text-center py-16">
+                                <FaFolder className="mx-auto text-gray-300 text-5xl mb-3" />
+                                <p className="text-gray-500">No documents match your filters.</p>
                             </div>
                         )}
-                    </div>
-                )}
 
-                {/* Upload modal */}
-                {showUploadModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                                Upload document
-                            </h3>
-                            <p className="text-sm text-gray-600 mb-4">
-                                PDF, Word, PNG or JPEG up to 5 MB. HR uploads are approved automatically.
-                            </p>
-                            <form onSubmit={handleUploadSubmit} className="space-y-4">
-                                <div>
-                                    <label htmlFor="upload-file" className="block text-sm font-medium text-gray-700 mb-1">
-                                        File <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        id="upload-file"
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/*"
-                                        className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-theme-secondary file:text-white"
-                                        onChange={(ev) => {
-                                            const f = ev.target.files?.[0];
-                                            setUploadFile(f || null);
-                                            if (f) {
-                                                setUploadName((prev) =>
-                                                    prev.trim() ? prev : f.name.replace(/\.[^/.]+$/, '')
-                                                );
-                                            }
-                                        }}
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="upload-name" className="block text-sm font-medium text-gray-700 mb-1">
-                                        Display name <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        id="upload-name"
-                                        type="text"
-                                        value={uploadName}
-                                        onChange={(ev) => setUploadName(ev.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                                        placeholder="e.g. Employee handbook 2025"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="upload-category" className="block text-sm font-medium text-gray-700 mb-1">
-                                        Category
-                                    </label>
-                                    <select
-                                        id="upload-category"
-                                        value={uploadCategory}
-                                        onChange={(ev) => setUploadCategory(ev.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                                    >
-                                        {DOCUMENT_CATEGORY_OPTIONS.map((c) => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="upload-description" className="block text-sm font-medium text-gray-700 mb-1">
-                                        Description (optional)
-                                    </label>
-                                    <textarea
-                                        id="upload-description"
-                                        value={uploadDescription}
-                                        onChange={(ev) => setUploadDescription(ev.target.value)}
-                                        rows={3}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                                        placeholder="Short summary"
-                                    />
-                                </div>
-                                <div className="flex justify-end gap-3 pt-2">
+                        {total > 0 && (
+                            <div className="px-5 py-3 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-600">
+                                <span>
+                                    Showing {rangeStart}–{rangeEnd} of {total} documents
+                                </span>
+                                <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setShowUploadModal(false);
-                                            resetUploadForm();
-                                        }}
-                                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
+                                        disabled={curPage <= 1}
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
                                     >
-                                        Cancel
+                                        Previous
                                     </button>
+                                    <span className="text-gray-500 px-2">
+                                        Page {curPage} of {Math.max(1, pages || 1)}
+                                    </span>
                                     <button
-                                        type="submit"
-                                        disabled={uploading || !uploadFile}
-                                        className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50"
+                                        type="button"
+                                        disabled={curPage >= (pages || 1)}
+                                        onClick={() => setPage((p) => p + 1)}
+                                        className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
                                     >
-                                        {uploading ? 'Uploading…' : 'Upload'}
+                                        Next
                                     </button>
                                 </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
+                            </div>
+                        )}
+                    </section>
+                </main>
+            </div>
 
-                {showRejectModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                                Reject Document
-                            </h3>
-                            <p className="text-sm text-gray-600 mb-2">
-                                Document: <strong>{selectedDoc?.name}</strong>
-                            </p>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Rejection Reason <span className="text-red-500">*</span>
+            {/* Upload modal */}
+            {showUploadModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Upload document</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            PDF, Word, PNG or JPEG up to 5 MB. HR uploads are approved automatically.
+                        </p>
+                        <form onSubmit={handleUploadSubmit} className="space-y-4">
+                            <div>
+                                <label htmlFor="upload-file" className="block text-sm font-medium text-gray-700 mb-1">
+                                    File <span className="text-red-500">*</span>
                                 </label>
-                                <textarea
-                                    value={rejectReason}
-                                    onChange={(e) => setRejectReason(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                                    rows="4"
-                                    placeholder="Please provide a reason for rejection..."
+                                <input
+                                    id="upload-file"
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/*"
+                                    className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-theme-secondary file:text-white"
+                                    onChange={(ev) => {
+                                        const f = ev.target.files?.[0];
+                                        setUploadFile(f || null);
+                                        if (f) {
+                                            setUploadName((prev) =>
+                                                prev.trim() ? prev : f.name.replace(/\.[^/.]+$/, '')
+                                            );
+                                        }
+                                    }}
                                 />
                             </div>
-                            <div className="flex justify-end gap-3">
+                            <div>
+                                <label htmlFor="upload-name" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Display name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    id="upload-name"
+                                    type="text"
+                                    value={uploadName}
+                                    onChange={(ev) => setUploadName(ev.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                    placeholder="e.g. Employee handbook 2025"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="upload-category" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Category
+                                </label>
+                                <select
+                                    id="upload-category"
+                                    value={uploadCategory}
+                                    onChange={(ev) => setUploadCategory(ev.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                >
+                                    {DOCUMENT_CATEGORY_OPTIONS.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="upload-description" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Description (optional)
+                                </label>
+                                <textarea
+                                    id="upload-description"
+                                    value={uploadDescription}
+                                    onChange={(ev) => setUploadDescription(ev.target.value)}
+                                    rows={3}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                    placeholder="Short summary"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
                                 <button
+                                    type="button"
                                     onClick={() => {
-                                        setShowRejectModal(false);
-                                        setRejectReason('');
-                                        setSelectedDoc(null);
+                                        setShowUploadModal(false);
+                                        resetUploadForm();
                                     }}
-                                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
                                 >
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={handleReject}
-                                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                                    type="submit"
+                                    disabled={uploading || !uploadFile}
+                                    className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50"
                                 >
-                                    Reject Document
+                                    {uploading ? 'Uploading…' : 'Upload'}
                                 </button>
                             </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Reject from table row */}
+            {rejectingDoc && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">Reject document</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            <strong>{rejectingDoc.name}</strong>
+                        </p>
+                        <textarea
+                            value={pendingNotes[rejectingDoc._id] || ''}
+                            onChange={(e) =>
+                                setPendingNotes((prev) => ({ ...prev, [rejectingDoc._id]: e.target.value }))
+                            }
+                            rows={4}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] mb-4"
+                            placeholder="Rejection reason…"
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setRejectingDoc(null)}
+                                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleReject(rejectingDoc)}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                            >
+                                Reject
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default DocumentsPage;
-
-

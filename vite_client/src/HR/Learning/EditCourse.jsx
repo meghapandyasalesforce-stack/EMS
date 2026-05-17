@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaPlus, FaTrash, FaSave, FaArrowLeft } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
+import CourseFormShell from './CourseFormShell';
+import { MINT_GRADIENT } from '../Reports/constants';
 
 const EditCourse = () => {
     const { courseId } = useParams();
@@ -134,22 +136,12 @@ const EditCourse = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-4xl mx-auto">
-                <div className="mb-6 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={() => navigate('/learning')}
-                            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                            <FaArrowLeft /> Back
-                        </button>
-                        <h1 className="text-2xl font-bold text-gray-800">Edit Course</h1>
-                    </div>
-                </div>
-
-                <form onSubmit={handleSave} className="space-y-6 rounded-lg bg-white p-6 shadow-md">
+        <CourseFormShell
+            title="Edit Course"
+            subtitle={formData.title || 'Update course details and modules'}
+            onBack={() => navigate('/learning')}
+        >
+            <form onSubmit={handleSave} className="space-y-6">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="md:col-span-2">
                             <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
@@ -276,14 +268,14 @@ const EditCourse = () => {
                         <button
                             type="submit"
                             disabled={saving}
-                            className="inline-flex items-center gap-2 rounded-lg bg-theme-secondary px-5 py-2 text-white hover:bg-theme-primary disabled:opacity-60"
+                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
+                            style={{ background: MINT_GRADIENT }}
                         >
                             <FaSave /> {saving ? 'Saving...' : 'Save Course'}
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </CourseFormShell>
     );
 };
 

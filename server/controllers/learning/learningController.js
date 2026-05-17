@@ -243,22 +243,66 @@ export const enrollInCourse = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get employee enrollments
+ * Get employee enrollments (current user only)
  */
 export const getEmployeeEnrollments = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
     const employeeId = req.employee?._id || req.params.employeeId;
 
+    if (!employeeId) {
+        return res.json({
+            success: true,
+            data: []
+        });
+    }
+
     const enrollments = await Enrollment.find({
         organizationId,
         employeeId
     })
-        .populate('courseId')
+        .populate('courseId', 'title category status duration level')
+        .populate('employeeId', 'name lastName email employeeId department')
         .sort({ enrollmentDate: -1 });
 
     res.json({
         success: true,
         data: enrollments
+    });
+});
+
+/**
+ * Admin/HR: Get all learning enrollments for the organization
+ */
+export const getAllLearningEnrollments = asyncHandler(async (req, res) => {
+    const { status, courseId, employeeId, page = 1, limit = 200 } = req.query;
+
+    const query = addOrganizationFilter(req, {});
+    if (status) query.status = status;
+    if (courseId) query.courseId = courseId;
+    if (employeeId) query.employeeId = employeeId;
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const parsedLimit = parseInt(limit, 10);
+
+    const [enrollments, total] = await Promise.all([
+        Enrollment.find(query)
+            .populate('courseId', 'title category status duration level')
+            .populate('employeeId', 'name lastName email employeeId department')
+            .sort({ enrollmentDate: -1 })
+            .skip(skip)
+            .limit(parsedLimit),
+        Enrollment.countDocuments(query)
+    ]);
+
+    res.json({
+        success: true,
+        data: enrollments,
+        pagination: {
+            page: parseInt(page, 10),
+            limit: parsedLimit,
+            total,
+            pages: Math.ceil(total / parsedLimit) || 1
+        }
     });
 });
 

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaPlus, FaTrash, FaSave, FaTimes, FaGripVertical } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import EngagementFormShell from './EngagementFormShell';
+import { MINT_GRADIENT } from '../Reports/constants';
 
 const CreateSurvey = () => {
     const navigate = useNavigate();
@@ -78,13 +81,13 @@ const CreateSurvey = () => {
 
     const addQuestion = () => {
         if (!newQuestion.question.trim()) {
-            alert('Please enter a question');
+            toast.error('Please enter a question');
             return;
         }
 
         if ((newQuestion.type === 'Multiple Choice' || newQuestion.type === 'Scale') && 
             newQuestion.options.filter(o => o.trim()).length < 2) {
-            alert('Please add at least 2 options');
+            toast.error('Please add at least 2 options');
             return;
         }
 
@@ -156,7 +159,7 @@ const CreateSurvey = () => {
         e.preventDefault();
         
         if (formData.questions.length === 0) {
-            alert('Please add at least one question');
+            toast.error('Please add at least one question');
             return;
         }
 
@@ -172,11 +175,11 @@ const CreateSurvey = () => {
                 targetEmployees: formData.targetAudience === 'Specific Employees' ? formData.targetEmployees : []
             };
 
-            const response = await axios.post('/v1/both/engagement/surveys', payload, { withCredentials: true });
-            alert('Survey created successfully!');
+            await axios.post('/v1/both/engagement/surveys', payload, { withCredentials: true });
+            toast.success('Survey created successfully');
             navigate('/engagement');
         } catch (error) {
-            alert(error.response?.data?.message || 'Failed to create survey');
+            toast.error(error.response?.data?.message || 'Failed to create survey');
         } finally {
             setLoading(false);
         }
@@ -187,22 +190,12 @@ const CreateSurvey = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-4xl mx-auto">
-                <div className="mb-6 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Create Survey</h1>
-                        <p className="text-gray-600 mt-1">Design employee engagement surveys</p>
-                    </div>
-                    <button
-                        onClick={() => navigate('/engagement')}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                    >
-                        <FaTimes className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-6">
+        <EngagementFormShell
+            title="Create Survey"
+            subtitle="Design employee engagement surveys"
+            onBack={() => navigate('/engagement')}
+        >
+            <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Basic Information */}
                     <div className="space-y-4">
                         <h2 className="text-xl font-semibold text-gray-800">Survey Information</h2>
@@ -562,15 +555,15 @@ const CreateSurvey = () => {
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
+                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                            style={{ background: MINT_GRADIENT }}
                         >
                             <FaSave className="w-4 h-4" />
                             Create Survey
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </EngagementFormShell>
     );
 };
 

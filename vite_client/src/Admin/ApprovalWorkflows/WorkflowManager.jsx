@@ -58,6 +58,29 @@ const WorkflowManager = () => {
     }
   };
 
+  const handleBackfillRegularization = async () => {
+    if (!window.confirm('Backfill pending attendance regularization requests into workflow?')) return;
+
+    try {
+      const response = await axios.post('/v1/admin/approvals/backfill/attendance-regularization', {});
+      const data = response.data || {};
+      const created = data.created ?? data.data?.created ?? 0;
+      const alreadyLinked = data.alreadyLinked ?? data.data?.alreadyLinked ?? 0;
+      const autoApproved = data.autoApproved ?? data.data?.autoApproved ?? 0;
+      const errors = data.errors ?? data.data?.errors ?? [];
+
+      toast.success(
+        `Backfill complete: ${created} linked, ${alreadyLinked} already linked, ${autoApproved} auto-approved`
+      );
+
+      if (Array.isArray(errors) && errors.length > 0) {
+        toast.warning(`${errors.length} requests could not be backfilled. Check server logs for details.`);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to backfill regularization workflow');
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading workflows...</div>;
   }
@@ -71,13 +94,21 @@ const WorkflowManager = () => {
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Approval Workflows</h1>
             <p className="text-lg text-gray-600">Manage multi-step approval processes</p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
-          >
-            <FiPlus className="w-5 h-5" />
-            Create Workflow
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handleBackfillRegularization}
+              className="bg-white text-gray-800 px-6 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition-all duration-200 shadow-sm font-medium"
+            >
+              Backfill Regularization
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-theme-primary text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+            >
+              <FiPlus className="w-5 h-5" />
+              Create Workflow
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -96,6 +127,7 @@ const WorkflowManager = () => {
                 <option value="Document">Document</option>
                 <option value="WorkforcePlan">Workforce Plan</option>
                 <option value="Project">Project</option>
+                <option value="AttendanceRegularization">Attendance Regularization</option>
               </select>
             </div>
             <div>

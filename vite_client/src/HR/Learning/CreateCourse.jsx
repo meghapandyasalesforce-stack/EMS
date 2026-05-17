@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaPlus, FaTrash, FaSave, FaTimes } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import CourseFormShell from './CourseFormShell';
+import { MINT_GRADIENT } from '../Reports/constants';
 
 const CreateCourse = () => {
     const navigate = useNavigate();
@@ -163,10 +166,10 @@ const CreateCourse = () => {
             };
 
             await axios.post('/v1/admin/learning/courses', payload, { withCredentials: true });
-            alert('Course created successfully!');
+            toast.success('Course created successfully');
             navigate('/learning');
         } catch (error) {
-            alert(error.response?.data?.message || 'Failed to create course');
+            toast.error(error.response?.data?.message || 'Failed to create course');
         } finally {
             setLoading(false);
         }
@@ -177,22 +180,12 @@ const CreateCourse = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-4xl mx-auto">
-                <div className="mb-6 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Create New Course</h1>
-                        <p className="text-gray-600 mt-1">Design and publish training courses</p>
-                    </div>
-                    <button
-                        onClick={() => navigate('/learning')}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                    >
-                        <FaTimes className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-6">
+        <CourseFormShell
+            title="Create New Course"
+            subtitle="Design and publish training courses"
+            onBack={() => navigate('/learning')}
+        >
+            <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Basic Information */}
                     <div className="space-y-4">
                         <h2 className="text-xl font-semibold text-gray-800">Basic Information</h2>
@@ -633,15 +626,15 @@ const CreateCourse = () => {
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
+                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                            style={{ background: MINT_GRADIENT }}
                         >
                             <FaSave className="w-4 h-4" />
                             Create Course
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </CourseFormShell>
     );
 };
 

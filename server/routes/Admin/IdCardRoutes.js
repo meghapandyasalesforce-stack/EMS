@@ -56,7 +56,7 @@ router.route('/employee/my-card').get(isAuthenticated, getEmployeeIdCard);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.route('/card/:id/download').get(downloadIdCard);
+router.route('/card/:id/download').get(isAuthenticated, downloadIdCard);
 
 /**
  * @swagger
@@ -87,7 +87,7 @@ router.route('/card/:id/download').get(downloadIdCard);
  *                 properties:
  *                   template:
  *                     type: string
- *                     enum: [standard, premium, executive, custom]
+ *                     enum: [standard, premium, executive, custom, mint, corporate, modern, professional]
  *                   backgroundColor:
  *                     type: string
  *                   textColor:

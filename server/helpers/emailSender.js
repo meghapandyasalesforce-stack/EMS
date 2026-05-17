@@ -9,7 +9,7 @@ import { createEmailTransporter, getEmailFrom, detectEmailProvider, getEmailConf
  * @param {string|null} resetUrl - Password reset URL (for production)
  * @returns {Promise<void>}
  */
-const sendWelcomeEmail = async (email, name, password = null, resetUrl = null) => {
+export const sendWelcomeEmail = async (email, name, password = null, resetUrl = null) => {
   // Get email configuration and create transporter
   const emailConfig = getEmailConfig();
   const transporter = createEmailTransporter();

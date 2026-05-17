@@ -2,6 +2,7 @@ import express from 'express';
 import {
     createSurvey,
     getSurveys,
+    getSurveyById,
     submitSurveyResponse,
     createFeedback,
     getFeedbacks,
@@ -20,6 +21,9 @@ const router = express.Router();
 router.route('/surveys')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, createSurvey)
     .get(isAuthenticatedBoth, readLimiter, getSurveys);
+
+router.route('/surveys/:surveyId')
+    .get(isAuthenticatedBoth, readLimiter, getSurveyById);
 
 router.route('/surveys/:surveyId/respond')
     .post(isAuthenticatedBoth, writeLimiter, submitSurveyResponse);

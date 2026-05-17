@@ -78,7 +78,7 @@ function toYmd(d) {
 function monthRange(year, monthIndex) {
   const start = new Date(year, monthIndex, 1);
   const end = new Date(year, monthIndex + 1, 0);
-  return { start: toYmd(start), end: toYmd(end) };
+  return { startDate: toYmd(start), endDate: toYmd(end) };
 }
 
 function initials(emp) {
@@ -234,7 +234,7 @@ const AllAttendanceStatsComponent = () => {
     if (Number.isNaN(s.getTime())) return;
     const y = s.getFullYear();
     const m = s.getMonth();
-    const { start: expStart, end: expEnd } = monthRange(y, m);
+    const { startDate: expStart, endDate: expEnd } = monthRange(y, m);
     if (startDate === expStart && endDate === expEnd) {
       setFilterYear(y);
       setActiveMonth(m);

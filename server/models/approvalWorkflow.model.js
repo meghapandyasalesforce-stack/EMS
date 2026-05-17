@@ -23,7 +23,7 @@ const approvalWorkflowSchema = new mongoose.Schema({
     entityType: {
         type: String,
         required: true,
-        enum: ['Leave', 'Expense', 'Document', 'WorkforcePlan', 'Project', 'Other'],
+        enum: ['Leave', 'Expense', 'Document', 'WorkforcePlan', 'Project', 'AttendanceRegularization', 'Other'],
         index: true
     },
     isActive: {
@@ -136,7 +136,7 @@ const approvalInstanceSchema = new mongoose.Schema({
     entityType: {
         type: String,
         required: true,
-        enum: ['Leave', 'Expense', 'Document', 'WorkforcePlan', 'Project', 'Other']
+        enum: ['Leave', 'Expense', 'Document', 'WorkforcePlan', 'Project', 'AttendanceRegularization', 'Other']
     },
     entityId: {
         type: mongoose.Schema.Types.ObjectId,
