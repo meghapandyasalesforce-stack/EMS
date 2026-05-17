@@ -14,6 +14,7 @@ import { FaCrown } from 'react-icons/fa6';
 import { IoBookmarks } from 'react-icons/io5';
 import { CgProfile } from 'react-icons/cg';
 import { VscProject } from 'react-icons/vsc';
+import { mergeSessionProfile } from './profileUtils';
 
 /**
  * Get navigation items based on user role, department, and position
@@ -22,11 +23,11 @@ import { VscProject } from 'react-icons/vsc';
  * @returns {Array} Array of navigation items
  */
 export const getNavigationItems = (user, employee) => {
-    // Get user attributes
-    const role = user?.role || employee?.role || 'employee';
-    const department = (user?.department || employee?.department || '').toLowerCase().trim();
-    const position = (user?.position || employee?.position || '').toLowerCase().trim();
-    const jobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
+    const profile = mergeSessionProfile(user, employee);
+    const role = profile?.role || 'employee';
+    const department = (profile?.department || '').toLowerCase().trim();
+    const position = (profile?.position || '').toLowerCase().trim();
+    const jobTitle = (profile?.jobTitle || '').toLowerCase().trim();
 
     // Admin Navigation (for admin users)
     if (role === 'admin') {

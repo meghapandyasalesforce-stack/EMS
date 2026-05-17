@@ -3,6 +3,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../context/Auth/authSlice";
+import { clearEmployeeDetails } from "../context/employeeDetailsSlice";
 import { resetAttendance } from "../context/attendanceSlice";
 import { toast } from 'react-toastify';
 import { Dialog, Transition } from '@headlessui/react';
@@ -43,8 +44,8 @@ const Header = () => {
 
     const handleLogout = async () => {
         try {
-            // Clear attendance sessions
             dispatch(resetAttendance());
+            dispatch(clearEmployeeDetails());
             
             await dispatch(logoutUser(email)).unwrap();
             
@@ -68,17 +69,16 @@ const Header = () => {
             
             // Clear attendance even if logout API fails
             dispatch(resetAttendance());
+            dispatch(clearEmployeeDetails());
             await persistor.purge();
             
-            // SECURITY FIX: Tokens are stored in httpOnly cookies and cleared by server on logout
-            // Only clear non-sensitive UI-related data from localStorage
-            localStorage.removeItem('csrfToken'); // CSRF token is safe to store (not a secret)
-            localStorage.removeItem('role'); // UI state only
-            localStorage.removeItem('email'); // UI state only
-            localStorage.removeItem('organizationId'); // UI state only
-            localStorage.removeItem('userId'); // UI state only
-            localStorage.removeItem('isOrganizationLogin'); // UI state only
-            navigate('/login'); // Use navigate for consistent routing
+            localStorage.removeItem('csrfToken');
+            localStorage.removeItem('role');
+            localStorage.removeItem('email');
+            localStorage.removeItem('organizationId');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('isOrganizationLogin');
+            navigate('/login');
         } finally {
             setLogoutModalOpen(false);
         }

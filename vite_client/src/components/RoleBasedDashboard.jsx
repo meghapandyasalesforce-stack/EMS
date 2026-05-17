@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import axios from '../utils/axios';
 import LoadingSpinner from './LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
+import { mergeSessionProfile } from '../utils/profileUtils';
 import FirstLoginPermissionRequest from './FirstLoginPermissionRequest';
 
 const RoleBasedDashboard = () => {
@@ -11,11 +12,11 @@ const RoleBasedDashboard = () => {
     const location = useLocation();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
+    const profile = mergeSessionProfile(user, employee);
     const [dashboardRoute, setDashboardRoute] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // Get user's role
-    const userRole = user?.role || employee?.role;
+    const userRole = profile?.role;
     
     useEffect(() => {
         const fetchDashboardRoute = async () => {
@@ -86,7 +87,7 @@ const RoleBasedDashboard = () => {
         };
         
         fetchDashboardRoute();
-    }, [userRole, navigate, location, user, employee]);
+    }, [userRole, navigate, location, user, employee, profile]);
     
     /**
      * Comprehensive fallback routing - used when server is unavailable
@@ -94,15 +95,13 @@ const RoleBasedDashboard = () => {
      * Priority order matches server-side logic
      */
     const getComprehensiveFallback = () => {
-        // Get all fields from Redux state
-        const userPosition = (user?.position || employee?.position || '').toLowerCase().trim();
-        const userDepartment = (user?.department || employee?.department || '').toLowerCase().trim();
-        const userJobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
-        const userRole = user?.role || employee?.role;
-        const userAssignedRole = user?.assignedRole || employee?.assignedRole;
+        const userPosition = (profile?.position || '').toLowerCase().trim();
+        const userDepartment = (profile?.department || '').toLowerCase().trim();
+        const userJobTitle = (profile?.jobTitle || '').toLowerCase().trim();
+        const fallbackRole = profile?.role;
+        const userAssignedRole = profile?.assignedRole;
         
-        // If no user data at all, default to employee dashboard
-        if (!user && !employee) {
+        if (!profile) {
             return '/dashboard-employee';
         }
         
@@ -115,7 +114,7 @@ const RoleBasedDashboard = () => {
         const isOrganizationLogin = localStorage.getItem('isOrganizationLogin') === 'true';
         const userEmail = user?.email?.toLowerCase() || '';
         const isGmailUser = userEmail.endsWith('@gmail.com');
-        if ((isOrganizationLogin || isGmailUser) && userRole === 'admin') {
+        if ((isOrganizationLogin || isGmailUser) && fallbackRole === 'admin') {
             return '/organization/dashboard';
         }
         
@@ -169,7 +168,7 @@ const RoleBasedDashboard = () => {
         }
         
         // PRIORITY 8: Check Admin Role
-        if (userRole === 'admin') {
+        if (fallbackRole === 'admin') {
             return '/dashboard-admin';
         }
         

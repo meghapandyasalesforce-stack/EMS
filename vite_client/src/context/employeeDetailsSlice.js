@@ -1,5 +1,26 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../utils/axios';
+import { checkAuthSession, logoutUser, setUser } from './Auth/authSlice';
+
+function isEmployeeProfile(user) {
+  if (!user) return false;
+  if (
+    user.organizationId &&
+    user.employeeId == null &&
+    user.position == null &&
+    user.department == null
+  ) {
+    return false;
+  }
+  const hasId = user._id != null || user.id != null;
+  return (
+    hasId &&
+    (user.employeeId != null ||
+      user.position != null ||
+      user.department != null ||
+      user.joiningDate != null)
+  );
+}
 import { BOTH_PROFILE_ENDPOINT, ADMIN_EMPLOYEE_ENDPOINT } from '../utils/constant';
 // Base URL - use environment variable or default to relative path
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -395,7 +416,12 @@ const employeeDetailsSlice = createSlice({
       state.workInfoError = null;
       state.updatingStatus = false;
       state.updatingWorkInfo = false;
-    }
+    },
+    setEmployeeProfile: (state, action) => {
+      if (action.payload) {
+        state.employee = action.payload;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -429,6 +455,26 @@ const employeeDetailsSlice = createSlice({
       .addCase(fetchEmployeeOwnInfo.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+
+      .addCase(checkAuthSession.fulfilled, (state, action) => {
+        state.employee = action.payload || null;
+      })
+      .addCase(checkAuthSession.rejected, (state) => {
+        state.employee = null;
+      })
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.employee = null;
+      })
+      .addCase(logoutUser.rejected, (state) => {
+        state.employee = null;
+      })
+      .addCase(setUser, (state, action) => {
+        if (action.payload === null) {
+          state.employee = null;
+        } else if (isEmployeeProfile(action.payload)) {
+          state.employee = action.payload;
+        }
       })
 
       // Update employee status cases
@@ -621,5 +667,5 @@ const employeeDetailsSlice = createSlice({
   }
 });
 
-export const { clearEmployeeDetails } = employeeDetailsSlice.actions;
+export const { clearEmployeeDetails, setEmployeeProfile } = employeeDetailsSlice.actions;
 export default employeeDetailsSlice.reducer;

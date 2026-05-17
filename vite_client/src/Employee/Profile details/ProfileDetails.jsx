@@ -12,6 +12,7 @@ import JobDetails from '../Additional details/JobDetails';
 import FinancialDetails from './FinancialDetails';
 import { setUser } from '../../context/Auth/authSlice';
 import { fetchEmployeeOwnInfo, updateEmployeeInfo } from '../../context/employeeDetailsSlice';
+import { mergeSessionProfile } from '../../utils/profileUtils';
 import { toast } from 'react-toastify';
 
 function ProfileDetails() {
@@ -35,7 +36,7 @@ function ProfileDetails() {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const profileSource = employeeDetails || user;
+  const profileSource = mergeSessionProfile(user, employeeDetails);
 
   // Fetch fresh employee data on mount and when user changes to ensure we have the latest Employee ID
   useEffect(() => {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { setLoading, setUser } from '../context/Auth/authSlice';
+import { setEmployeeProfile, clearEmployeeDetails } from '../context/employeeDetailsSlice';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
@@ -190,7 +191,7 @@ function Login() {
                 
                 // Store user data in Redux
                 if (isOrganizationLogin) {
-                    // Organization login - store organization context
+                    dispatch(clearEmployeeDetails());
                     dispatch(setUser({
                         id: userData.id || userData._id,
                         name: userData.name,
@@ -201,13 +202,12 @@ function Login() {
                 } else {
                     // Employee/Admin login — API may send Mongo id as `id` (employee) or `_id`; normalize for Redux consumers.
                     const docId = userData._id ?? userData.id;
-                    dispatch(
-                        setUser(
-                            docId != null && userData._id == null
-                                ? { ...userData, _id: docId }
-                                : userData
-                        )
-                    );
+                    const normalizedUser =
+                        docId != null && userData._id == null
+                            ? { ...userData, _id: docId }
+                            : userData;
+                    dispatch(setUser(normalizedUser));
+                    dispatch(setEmployeeProfile(normalizedUser));
                 }
                 
                 // SECURITY FIX: Tokens are stored in httpOnly cookies only (not localStorage)

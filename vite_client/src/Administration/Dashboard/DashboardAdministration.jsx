@@ -38,6 +38,7 @@ import {
 import LoadingSpinner from "../../components/LoadingSpinner";
 import AttendanceBox from "../../Employee/Attendance/AttendanceBox";
 import { handleApiError } from "../../utils/errorHandler";
+import { mergeSessionProfile } from "../../utils/profileUtils";
 
 const DashboardAdministration = () => {
   const navigate = useNavigate();
@@ -46,12 +47,13 @@ const DashboardAdministration = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("month");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const position = (employee?.position || user?.position || "").toLowerCase().trim();
+  const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
+  const position = (profile?.position || "").toLowerCase().trim();
   const isCEO = position === "ceo";
   const isCTO = position === "cto";
   const isCFO = position === "cfo";
   const isVP = position === "vp";
-  const executiveTitle = employee?.position || user?.position || "Executive";
+  const executiveTitle = profile?.position || "Executive";
 
   const {
     data: employeeData = { employees: [], total: 0 },
