@@ -5,6 +5,7 @@ import AttendanceRule from "../../models/attendanceRule.model.js";
 import Calendar from "../../models/calendar.model.js";
 import User from "../../models/user.model.js";
 import mongoose from 'mongoose';
+import { DateTime } from 'luxon';
 import logger from "../../helpers/logger.js";
 import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/notificationService.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
@@ -15,6 +16,18 @@ import {
   getExpectedWorkingHoursFromRule,
   getEffectiveOfficeEndForEarlyDeparture,
 } from "../../helpers/attendanceSecurityHelper.js";
+import {
+  getEffectiveTimezone,
+} from "../../helpers/organizationTimezoneService.js";
+import {
+  getAttendanceDayContext,
+  findTodayAttendance,
+  buildOrgTodayAttendanceFilter,
+  buildAttendancePeriodFilter,
+  parseDateKeyInTimezone,
+  resolveAttendanceDateKey,
+} from "../../helpers/attendanceDayHelper.js";
+import { getStartOfDayInTimezone, getEndOfDayInTimezone } from "../../helpers/timezoneHelper.js";
 
 
 const OFFICE_START_TIME = 9;  // 9 AM — fallback when rule has no start time
@@ -203,7 +216,7 @@ async function calculateWorkingDays(startDate, endDate, organizationId) {
 // Enhanced Clock In with image capture, geolocation, and network tracking
 export const clockIn = async (req, res) => {
   let userId;
-  let startOfDay;
+  let dayContext;
   let organizationId;
 
   // Log incoming request for debugging
@@ -241,11 +254,6 @@ export const clockIn = async (req, res) => {
     }
 
     userId = req.employee._id;
-    const today = new Date();
-    startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    // Get organizationId from request
     organizationId = getOrganizationId(req);
     
     if (!organizationId) {
@@ -260,6 +268,9 @@ export const clockIn = async (req, res) => {
         code: 'MISSING_ORGANIZATION_ID'
       });
     }
+
+    dayContext = await getAttendanceDayContext(organizationId);
+    const { startOfDay, attendanceDateKey, timezone: orgTimezone } = dayContext;
     
     // Load active attendance rule for this organization (if any)
     const activeRule = await AttendanceRule.findOne({ 
@@ -289,10 +300,10 @@ export const clockIn = async (req, res) => {
       return R * c;
     };
 
-    const existing = await Attendance.findOne({ 
-      userId, 
-      date: startOfDay,
-      organizationId 
+    const existing = await findTodayAttendance(Attendance, {
+      organizationId,
+      userId,
+      dayContext,
     });
     if (existing) {
       return res.status(400).json({
@@ -581,6 +592,8 @@ export const clockIn = async (req, res) => {
       organizationId, // Add organizationId
       userId,
       date: startOfDay,
+      attendanceDateKey,
+      timezoneUsed: orgTimezone,
       clockIn: clockInTime,
       breaks: [],
       status: "present",
@@ -676,10 +689,10 @@ export const clockIn = async (req, res) => {
     
     // Handle duplicate attendance safely (race condition fallback with unique index)
     if (error?.code === 11000) {
-      const existingSession = await Attendance.findOne({
+      const existingSession = await findTodayAttendance(Attendance, {
         organizationId,
         userId,
-        date: startOfDay
+        dayContext,
       });
 
       return res.status(400).json({
@@ -732,14 +745,12 @@ export const clockIn = async (req, res) => {
 
 export const breakIn = async (req, res) => {
   try {
-    const today = new Date();
-    const startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
     const organizationId = getOrganizationId(req);
-    const attendance = await Attendance.findOne({ 
-      userId: req.employee._id, 
-      date: startOfDay,
-      organizationId 
+    const dayContext = await getAttendanceDayContext(organizationId);
+    const attendance = await findTodayAttendance(Attendance, {
+      organizationId,
+      userId: req.employee._id,
+      dayContext,
     });
 
     if (!attendance) {
@@ -836,14 +847,12 @@ export const breakIn = async (req, res) => {
 
 export const breakOut = async (req, res) => {
   try {
-    const today = new Date();
-    const startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
     const organizationId = getOrganizationId(req);
-    const attendance = await Attendance.findOne({ 
-      userId: req.employee._id, 
-      date: startOfDay,
-      organizationId 
+    const dayContext = await getAttendanceDayContext(organizationId);
+    const attendance = await findTodayAttendance(Attendance, {
+      organizationId,
+      userId: req.employee._id,
+      dayContext,
     });
 
     if (!attendance) {
@@ -952,13 +961,10 @@ export const breakOut = async (req, res) => {
  */
 // Enhanced Clock Out with image capture, geolocation, and network tracking
 export const clockOut = async (req, res) => {
-  const today = new Date();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
-
   try {
-    // Get organizationId first
     const organizationId = getOrganizationId(req);
+    const dayContext = await getAttendanceDayContext(organizationId);
+    const { startOfDay, timezone: orgTimezone } = dayContext;
     
     // Load active rule for this organization (if any)
     const activeRule = await AttendanceRule.findOne({ 
@@ -968,10 +974,10 @@ export const clockOut = async (req, res) => {
       .sort({ priority: -1, updatedAt: -1 })
       .lean();
     
-    const attendance = await Attendance.findOne({ 
-      userId: req.employee._id, 
-      date: startOfDay,
-      organizationId 
+    const attendance = await findTodayAttendance(Attendance, {
+      organizationId,
+      userId: req.employee._id,
+      dayContext,
     });
 
     if (!attendance || attendance.clockOut) {
@@ -1234,8 +1240,8 @@ export const clockOut = async (req, res) => {
     attendance.grossHours = grossHours / (1000 * 60 * 60); // convert ms to hours
     attendance.effectiveHours = effectiveHours / (1000 * 60 * 60);
 
-    const expectedHours = getExpectedWorkingHoursFromRule(activeRule, startOfDay);
-    const effectiveEndTime = getEffectiveOfficeEndForEarlyDeparture(activeRule, startOfDay);
+    const expectedHours = getExpectedWorkingHoursFromRule(activeRule, startOfDay, orgTimezone);
+    const effectiveEndTime = getEffectiveOfficeEndForEarlyDeparture(activeRule, startOfDay, orgTimezone);
     attendance.isEarlyDeparture = now < effectiveEndTime;
 
     if (attendance.effectiveHours > expectedHours) {
@@ -1342,26 +1348,33 @@ export const getLogs = async (req, res) => {
     const userIdString = String(userId);
     const employeeEmail = (req.employee?.email || '').trim().toLowerCase();
     const query = addOrganizationFilter(req, { userId });
-    // Resolve period (local time). If not provided, default to current month.
+    const orgTimezone = await getEffectiveTimezone(organizationId);
+
+    let startDateKey;
+    let endDateKey;
     let periodStart;
     let periodEnd;
-    const now = new Date();
-    if (startDate) {
-      periodStart = new Date(startDate);
-    }
-    if (endDate) {
-      periodEnd = new Date(endDate);
-    }
-    if (!periodStart || Number.isNaN(periodStart.getTime())) {
-      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
-    if (!periodEnd || Number.isNaN(periodEnd.getTime())) {
-      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    }
-    periodStart.setHours(0, 0, 0, 0);
-    periodEnd.setHours(23, 59, 59, 999);
+    const nowDt = DateTime.now().setZone(orgTimezone);
 
-    query.date = { $gte: periodStart, $lte: periodEnd };
+    if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate).slice(0, 10))) {
+      startDateKey = String(startDate).slice(0, 10);
+      periodStart = parseDateKeyInTimezone(startDateKey, orgTimezone).startOf('day').toJSDate();
+    }
+    if (endDate && /^\d{4}-\d{2}-\d{2}$/.test(String(endDate).slice(0, 10))) {
+      endDateKey = String(endDate).slice(0, 10);
+      periodEnd = parseDateKeyInTimezone(endDateKey, orgTimezone).endOf('day').toJSDate();
+    }
+    if (!startDateKey || !endDateKey) {
+      startDateKey = nowDt.startOf('month').toFormat('yyyy-MM-dd');
+      endDateKey = nowDt.endOf('month').toFormat('yyyy-MM-dd');
+      periodStart = nowDt.startOf('month').toJSDate();
+      periodEnd = nowDt.endOf('month').toJSDate();
+    }
+
+    Object.assign(
+      query,
+      buildAttendancePeriodFilter({ startDateKey, endDateKey, periodStart, periodEnd })
+    );
 
     let logs = await Attendance.find(query).sort({ date: -1 });
 
@@ -1386,12 +1399,16 @@ export const getLogs = async (req, res) => {
       if (candidateUserIds.length > 0) {
         const legacyQuery = {
           userId: { $in: candidateUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
-          date: { $gte: periodStart, $lte: periodEnd },
-          $or: [
-            { organizationId: organizationId || null },
-            { organizationId: { $exists: false } },
-            { organizationId: null }
-          ]
+          $and: [
+            buildAttendancePeriodFilter({ startDateKey, endDateKey, periodStart, periodEnd }),
+            {
+              $or: [
+                { organizationId: organizationId || null },
+                { organizationId: { $exists: false } },
+                { organizationId: null },
+              ],
+            },
+          ],
         };
 
         const legacyLogs = await Attendance.find(legacyQuery).sort({ date: -1 });
@@ -1431,7 +1448,7 @@ export const getLogs = async (req, res) => {
     logs.forEach(log => {
       sessions.push(log);
 
-      const dateKey = getDateKey(log.date);
+      const dateKey = resolveAttendanceDateKey(log, orgTimezone) || getDateKey(log.date);
 
       if (!dailyStats[dateKey]) {
         dailyStats[dateKey] = {
@@ -1505,16 +1522,11 @@ export const getLogs = async (req, res) => {
 // Get employees currently on break
 export const getEmployeesOnBreak = async (req, res) => {
   try {
-    const today = new Date();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
-    
-    // Get all attendance records for today with status 'onBreak'
     const organizationId = getOrganizationId(req);
+    const dayContext = await getAttendanceDayContext(organizationId);
     let attendanceQuery = { 
-      date: startOfDay,
+      ...buildOrgTodayAttendanceFilter(organizationId, dayContext),
       status: 'onBreak',
-      organizationId
     };
     
     // If user is a manager (not admin or HR), filter by manager field
@@ -1573,14 +1585,12 @@ export const getEmployeesOnBreak = async (req, res) => {
 };
 
 export const getTodayStatus = async (req, res) => {
-  const today = new Date();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
   const now = new Date();
 
   try {
-    // 1. Get all active employees for this organization
     const organizationId = getOrganizationId(req);
+    const dayContext = await getAttendanceDayContext(organizationId);
+    // 1. Get all active employees for this organization
     let employeeQuery = addOrganizationFilter(req, { active: true });
     
     // If user is a manager (not admin or HR), filter by manager field
@@ -1606,10 +1616,7 @@ export const getTodayStatus = async (req, res) => {
     
     // 2. Get today's attendance records with breaks populated for this organization
     // If manager, filter attendance records by manager's team employee IDs
-    const attendanceQuery = { 
-      date: startOfDay,
-      organizationId 
-    };
+    const attendanceQuery = buildOrgTodayAttendanceFilter(organizationId, dayContext);
     
     // Filter attendance records by manager's team if user is a manager
     if (isManager && managerEmployeeIds.length > 0) {
@@ -1747,13 +1754,11 @@ export const getTodayStatus = async (req, res) => {
 export const getMyTodayStatus = async (req, res) => {
   try {
     const organizationId = getOrganizationId(req);
-    const today = new Date();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
-    const session = await Attendance.findOne({ 
-      userId: req.employee._id, 
-      date: startOfDay,
-      organizationId 
+    const dayContext = await getAttendanceDayContext(organizationId);
+    const session = await findTodayAttendance(Attendance, {
+      organizationId,
+      userId: req.employee._id,
+      dayContext,
     });
     res.json({ success: true, session });
   } catch (error) {
@@ -1805,14 +1810,12 @@ export const getEmployeeList = async (req, res) => {
 // Force end all active breaks (helper function for edge cases)
 export const forceEndBreak = async (req, res) => {
   try {
-    const today = new Date();
-    const startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
     const organizationId = getOrganizationId(req);
-    const attendance = await Attendance.findOne({ 
-      userId: req.employee._id, 
-      date: startOfDay,
-      organizationId 
+    const dayContext = await getAttendanceDayContext(organizationId);
+    const attendance = await findTodayAttendance(Attendance, {
+      organizationId,
+      userId: req.employee._id,
+      dayContext,
     });
 
     if (!attendance) {

@@ -120,7 +120,7 @@ const employeeSchema = new mongoose.Schema({
     functionalRoles: {
         type: [{
             type: String,
-            enum: ['hr', 'manager', 'executive', 'finance', 'tech', 'ceo', 'cto', 'cfo', 'vp']
+            enum: ['hr', 'manager', 'project_manager', 'executive', 'finance', 'tech', 'ceo', 'cto', 'cfo', 'vp']
         }],
         default: []
     },
@@ -518,9 +518,15 @@ employeeSchema.pre('save', async function(next) {
             roles.push('hr');
         }
         
-        // Manager detection
-        if (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
-            pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director')) {
+        // Project Manager (org-wide projects; not line-manager scope)
+        if (jobTitle === 'project manager') {
+            roles.push('project_manager');
+        }
+
+        // Line manager detection (exclude Project Manager job title)
+        if (jobTitle !== 'project manager' &&
+            (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
+            pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director'))) {
             roles.push('manager');
         }
         

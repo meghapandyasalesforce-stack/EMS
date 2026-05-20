@@ -15,6 +15,7 @@ import { IoBookmarks } from 'react-icons/io5';
 import { CgProfile } from 'react-icons/cg';
 import { VscProject } from 'react-icons/vsc';
 import { mergeSessionProfile } from './profileUtils';
+import { isProjectManager } from './projectManagerHelper';
 
 /**
  * Get navigation items based on user role, department, and position
@@ -41,14 +42,14 @@ export const getNavigationItems = (user, employee) => {
 
     // Check if user is HR (priority - HR takes precedence over Manager)
     const isHRRole = isHR(department, jobTitle, position);
-    const isManagerRole = isManager(position, jobTitle);
+    const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
     
     // HR Navigation (HR takes priority - even HR Managers get HR navigation only)
     if (isHRRole) {
         return getHRNavigation();
     }
     
-    // Manager/Director Navigation (for non-HR managers only)
+    // Project Manager / line Manager navigation (for non-HR managers only)
     if (isManagerRole) {
         return getManagerNavigation();
     }

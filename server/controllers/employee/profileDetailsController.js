@@ -793,9 +793,19 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
         const employeeObj = employee.toObject ? employee.toObject() : employee;
         await mergeLegacyAndCanonicalEmployeeDocuments(employeeObj);
 
+        let timezoneContext = null;
+        const organizationId =
+            employeeObj.organizationId || req.employee?.organizationId || req.user?.organizationId;
+        if (organizationId) {
+            const { getTimezoneContext } = await import('../../helpers/organizationTimezoneService.js');
+            timezoneContext = await getTimezoneContext(organizationId.toString?.() ? organizationId : organizationId);
+        }
+
         res.status(200).json({
             message: 'Your information has been retrieved successfully.',
             employee: employeeObj,
+            timezone: timezoneContext?.timezone || 'UTC',
+            timezoneContext,
         });
 
     } catch (error) {

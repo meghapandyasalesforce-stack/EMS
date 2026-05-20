@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { setLoading, setUser } from '../context/Auth/authSlice';
 import { setEmployeeProfile, clearEmployeeDetails } from '../context/employeeDetailsSlice';
+import { setTimezoneContext } from '../context/timezoneSlice';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
@@ -208,6 +209,11 @@ function Login() {
                             : userData;
                     dispatch(setUser(normalizedUser));
                     dispatch(setEmployeeProfile(normalizedUser));
+                    if (data.timezoneContext) {
+                        dispatch(setTimezoneContext(data.timezoneContext));
+                    } else if (data.timezone) {
+                        dispatch(setTimezoneContext({ timezone: data.timezone }));
+                    }
                 }
                 
                 // SECURITY FIX: Tokens are stored in httpOnly cookies only (not localStorage)

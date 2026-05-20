@@ -7,6 +7,7 @@ import {
     updateProject, 
     getAvailableManagers, 
     getProjectById,
+    getProjectTemplates,
     updateProjectStatus,
     createProjectUpdate,
     getProjectUpdates
@@ -18,6 +19,12 @@ import {
     getTeamPerformance,
     getBudgetAnalysis
 } from "../../controllers/admin/projectDashboardController.js";
+import {
+    getProjectWorkItems,
+    postProjectWorkItems,
+    updateProjectWorkItem,
+    deleteProjectWorkItem
+} from "../../controllers/admin/projectWorkItemController.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
 import isAdminOrExecutiveAuthenticated from "../../middlewares/isAdminOrExecutiveAuthenticated.js";
@@ -37,6 +44,10 @@ router.route("/")
 router.route("/get-all-project")
     .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getAllProjects);
 
+// Built-in project templates (tasks / subtasks presets)
+router.route("/templates")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectTemplates);
+
 // Create new project - write operations have stricter limits
 // Allow Admin, Managers, and HR to create projects
 router.route("/create-project")
@@ -55,6 +66,15 @@ router.route("/delete-project/:id")
 // Allow managers to view projects they manage or in their department
 router.route("/get-project/:id")
     .get(isAdminOrManagerOrHRAuthenticated, projectValidations.getById, getProjectById);
+
+// Project work breakdown (tasks / subtasks) — register before generic :id sub-routes if any conflict
+router.route("/work-items/:workItemId")
+    .put(isAdminOrManagerOrHRAuthenticated, writeLimiter, updateProjectWorkItem)
+    .delete(isAdminOrManagerOrHRAuthenticated, writeLimiter, deleteProjectWorkItem);
+
+router.route("/:id/work-items")
+    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectWorkItems)
+    .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, postProjectWorkItems);
 
 // Get available managers for project assignment
 router.route("/get-managers")

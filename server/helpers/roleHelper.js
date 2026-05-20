@@ -5,6 +5,7 @@
  */
 
 import logger from './logger.js';
+import { isProjectManagerJobTitle } from './projectManagerHelper.js';
 
 /**
  * Calculate functional roles from employee data
@@ -26,9 +27,15 @@ export const calculateFunctionalRoles = (employeeData) => {
         roles.push('hr');
     }
     
-    // Manager detection
-    if (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
-        pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director')) {
+    // Project Manager: org-wide projects (not line-manager team scope)
+    if (isProjectManagerJobTitle(employeeData.jobTitle)) {
+        roles.push('project_manager');
+    }
+
+    // Line manager detection (exclude Project Manager job title)
+    if (!isProjectManagerJobTitle(employeeData.jobTitle) &&
+        (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
+        pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director'))) {
         roles.push('manager');
     }
     
@@ -84,7 +91,7 @@ export const setFunctionalRoles = (employee, explicitRoles = null) => {
  * @returns {boolean} - True if valid role
  */
 export const isValidFunctionalRole = (role) => {
-    const validRoles = ['hr', 'manager', 'executive', 'finance', 'tech', 'ceo', 'cto', 'cfo', 'vp'];
+    const validRoles = ['hr', 'manager', 'project_manager', 'executive', 'finance', 'tech', 'ceo', 'cto', 'cfo', 'vp'];
     return validRoles.includes(role);
 };
 

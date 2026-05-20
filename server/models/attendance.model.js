@@ -5,6 +5,11 @@ import {
     getEffectiveOfficeStartForLate,
     getEffectiveOfficeEndForEarlyDeparture,
 } from "../helpers/attendanceSecurityHelper.js";
+import { getEffectiveTimezone } from "../helpers/organizationTimezoneService.js";
+import {
+    getDateKeyInTimezone,
+    getStartOfDayInTimezone,
+} from "../helpers/timezoneHelper.js";
 
 const attendanceSchema = new mongoose.Schema({
     // Organization reference (multi-tenancy)
@@ -19,9 +24,21 @@ const attendanceSchema = new mongoose.Schema({
         ref: "Employee",
         required: true,
     },
+    /** Start-of-day UTC instant in effective org timezone (legacy compatibility). */
     date: {
         type: Date,
         required: true,
+    },
+    /** Calendar day yyyy-MM-dd in effective timezone at punch-in (canonical day key). */
+    attendanceDateKey: {
+        type: String,
+        trim: true,
+        index: true,
+    },
+    /** IANA timezone used when this row's attendance day was opened. */
+    timezoneUsed: {
+        type: String,
+        trim: true,
     },
     clockIn: {
         type: Date,
@@ -125,10 +142,19 @@ const attendanceSchema = new mongoose.Schema({
 
 attendanceSchema.pre("save", async function (next) {
     try {
-        if (this.clockIn) {
-            const startOfDay = new Date(this.clockIn);
-            startOfDay.setHours(0, 0, 0, 0);
-            this.date = startOfDay;
+        // Set canonical day fields only when creating a row (never overwrite on clock-out).
+        if (this.isNew && this.clockIn && this.organizationId) {
+            const tz = await getEffectiveTimezone(this.organizationId);
+            const ref = this.clockIn;
+            if (!this.attendanceDateKey) {
+                this.attendanceDateKey = getDateKeyInTimezone(ref, tz);
+            }
+            if (!this.date) {
+                this.date = getStartOfDayInTimezone(ref, tz);
+            }
+            if (!this.timezoneUsed) {
+                this.timezoneUsed = tz;
+            }
         }
 
         if (this.clockIn && this.clockOut) {
@@ -179,15 +205,21 @@ attendanceSchema.pre("save", async function (next) {
     }
 });
 
-// Add database indexes for better query performance
+// One attendance row per user per calendar day per organization
 attendanceSchema.index(
-    { organizationId: 1, userId: 1, date: 1 },
-    { unique: true }
-); // Enforce one attendance record per user per day per organization
-attendanceSchema.index({ userId: 1, date: 1 }); // Composite index for user attendance queries
-attendanceSchema.index({ date: 1 }); // For date range queries
-attendanceSchema.index({ status: 1 }); // For filtering by status
-attendanceSchema.index({ userId: 1, status: 1 }); // For user status queries
+    { organizationId: 1, userId: 1, attendanceDateKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            attendanceDateKey: { $exists: true, $gt: '' },
+        },
+    }
+);
+attendanceSchema.index({ organizationId: 1, attendanceDateKey: 1 });
+attendanceSchema.index({ userId: 1, attendanceDateKey: 1 });
+attendanceSchema.index({ date: 1 });
+attendanceSchema.index({ status: 1 });
+attendanceSchema.index({ userId: 1, status: 1 });
 
 const Attendance = mongoose.model("Attendance", attendanceSchema);
 export default Attendance;

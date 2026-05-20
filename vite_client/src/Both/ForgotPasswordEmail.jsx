@@ -8,7 +8,7 @@ const ForgotPasswordEmail = () => {
   const [email, setEmail] = useState('');
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { loading, success, error, message } = useSelector((state) => state.forgotPassword);
+  const { loading, success, error, message, emailSent } = useSelector((state) => state.forgotPassword);
 
   useEffect(() => {
     dispatch(resetForgotPasswordState());
@@ -16,16 +16,20 @@ const ForgotPasswordEmail = () => {
 
   useEffect(() => {
     if (success) {
-      toast.success(message || 'Password reset email sent!');
+      if (emailSent) {
+        toast.success(message || 'Password reset link sent. Check your inbox.');
+      } else {
+        toast.info(message || 'Request received. Check your inbox if an account exists for this email.');
+      }
     }
     if (error) {
       toast.error(error);
     }
-  }, [success, error, message]);
+  }, [success, error, message, emailSent]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    dispatch(requestPasswordReset(email));
+    dispatch(requestPasswordReset(email.trim()));
   };
 
   return (
@@ -41,9 +45,21 @@ const ForgotPasswordEmail = () => {
         </div>
 
         {success && (
-          <div className="bg-theme-primary/10 border border-theme-primary text-theme-primary px-4 py-3 rounded relative" role="alert">
-            <strong className="font-bold">Success! </strong>
-            <span className="block sm:inline">{message || 'Password reset email sent!'}</span>
+          <div
+            className={
+              emailSent
+                ? 'bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded relative'
+                : 'bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded relative'
+            }
+            role="alert"
+          >
+            <strong className="font-bold">{emailSent ? 'Email sent — ' : 'Request received — '}</strong>
+            <span className="block sm:inline">{message}</span>
+            {!emailSent && (
+              <p className="mt-2 text-sm opacity-90">
+                Use the same email you use to log in. If you do not receive a message within a few minutes, contact your administrator.
+              </p>
+            )}
           </div>
         )}
         

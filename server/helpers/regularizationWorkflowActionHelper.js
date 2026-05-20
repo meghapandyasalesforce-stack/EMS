@@ -1,0 +1,378 @@
+import { ApprovalWorkflow, ApprovalInstance } from '../models/approvalWorkflow.model.js';
+import {
+    processApprovalAction,
+    adminBypassApprovalInstance,
+} from '../services/approvalWorkflowService.js';
+
+export const EARLY_APPROVAL_CONFIRM_CODE = 'EARLY_APPROVAL_CONFIRM_REQUIRED';
+
+/**
+ * Employee id for reviewedBy / audit (never admin User id).
+ */
+export const getReviewerEmployeeId = (req) => req.employee?._id || null;
+
+export const isAdminUser = (req) => Boolean(req.user);
+
+export const isHrEmployee = (req) => Boolean(req.employee?.isHR && !req.user);
+
+/**
+ * First pending step in workflow order.
+ */
+export const getCurrentPendingStep = (approvalInstance) => {
+    if (!approvalInstance?.steps?.length) return null;
+    const sorted = [...approvalInstance.steps].sort(
+        (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
+    );
+    return sorted.find((step) => step.status === 'Pending') || null;
+};
+
+export const loadWorkflowStepDefinition = async (approvalInstance, currentStep) => {
+    if (!approvalInstance?.workflowId || currentStep?.stepNumber == null) {
+        return null;
+    }
+    const workflow = await ApprovalWorkflow.findById(approvalInstance.workflowId)
+        .select('steps.stepNumber steps.stepName steps.approverType')
+        .lean();
+    return workflow?.steps?.find((s) => s.stepNumber === currentStep.stepNumber) || null;
+};
+
+/**
+ * Whether the logged-in employee is the natural actor for this step type.
+ */
+export const isNaturalActorForStep = (req, approverType, currentStep, employeeLinked = true) => {
+    const reviewerEmployeeId = getReviewerEmployeeId(req);
+    if (!reviewerEmployeeId || !currentStep) return false;
+
+    const assignedApproverId = currentStep.approverId;
+    const isAssignedApprover =
+        assignedApproverId &&
+        String(assignedApproverId) === String(reviewerEmployeeId);
+
+    if (isAssignedApprover) return true;
+
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isHR = req.employee?.isHR && !req.user;
+    const isExecutive = req.employee?.isExecutive && !req.user;
+
+    switch (approverType) {
+        case 'Manager':
+            return isManager && employeeLinked;
+        case 'HR':
+            return isHR;
+        case 'Executive':
+            return isExecutive;
+        default:
+            return false;
+    }
+};
+
+/**
+ * HR/Admin acting on a step that is not theirs (e.g. HR on Manager step).
+ */
+export const needsEarlyApprovalConfirm = (
+    req,
+    approverType,
+    currentStep,
+    employeeLinked = true
+) => {
+    if (isAdminUser(req)) return false;
+    if (!isHrEmployee(req)) return false;
+    return !isNaturalActorForStep(req, approverType, currentStep, employeeLinked);
+};
+
+export const buildWorkflowSummary = async (approvalInstanceId) => {
+    if (!approvalInstanceId) {
+        return { hasWorkflow: false };
+    }
+
+    const instance = await ApprovalInstance.findById(approvalInstanceId).lean();
+    if (!instance) {
+        return { hasWorkflow: false };
+    }
+
+    const workflow = instance.workflowId
+        ? await ApprovalWorkflow.findById(instance.workflowId)
+              .select('steps.stepNumber steps.stepName steps.approverType')
+              .lean()
+        : null;
+
+    const stepTypeByNumber = new Map(
+        (workflow?.steps || []).map((s) => [s.stepNumber, s.approverType])
+    );
+    const stepNameByNumber = new Map(
+        (workflow?.steps || []).map((s) => [s.stepNumber, s.stepName])
+    );
+
+    const sortedSteps = [...(instance.steps || [])].sort(
+        (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
+    );
+
+    const pendingStep = sortedSteps.find((s) => s.status === 'Pending') || null;
+    const pendingApproverType = pendingStep
+        ? stepTypeByNumber.get(pendingStep.stepNumber) || null
+        : null;
+
+    return {
+        hasWorkflow: true,
+        instanceStatus: instance.status,
+        pendingStep: pendingStep
+            ? {
+                  stepNumber: pendingStep.stepNumber,
+                  stepName:
+                      pendingStep.stepName ||
+                      stepNameByNumber.get(pendingStep.stepNumber) ||
+                      `Step ${pendingStep.stepNumber}`,
+                  approverType: pendingApproverType,
+                  approverName: pendingStep.approverName || null,
+                  status: pendingStep.status,
+              }
+            : null,
+        steps: sortedSteps.map((s) => ({
+            stepNumber: s.stepNumber,
+            stepName: s.stepName || stepNameByNumber.get(s.stepNumber) || `Step ${s.stepNumber}`,
+            approverType: stepTypeByNumber.get(s.stepNumber) || null,
+            approverName: s.approverName || null,
+            status: s.status,
+        })),
+    };
+};
+
+export const attachWorkflowSummariesToRequests = async (requests) => {
+    if (!requests?.length) return requests;
+
+    const withWorkflow = requests.filter((r) => r.approvalInstanceId);
+    if (!withWorkflow.length) {
+        return requests.map((r) => ({ ...r, workflowSummary: { hasWorkflow: false } }));
+    }
+
+    const instanceIds = [
+        ...new Set(withWorkflow.map((r) => String(r.approvalInstanceId))),
+    ];
+    const instances = await ApprovalInstance.find({ _id: { $in: instanceIds } }).lean();
+    const instanceMap = new Map(instances.map((i) => [String(i._id), i]));
+
+    const workflowIds = [
+        ...new Set(instances.map((i) => String(i.workflowId)).filter(Boolean)),
+    ];
+    const workflows = workflowIds.length
+        ? await ApprovalWorkflow.find({ _id: { $in: workflowIds } })
+              .select('steps.stepNumber steps.stepName steps.approverType')
+              .lean()
+        : [];
+    const workflowMap = new Map(workflows.map((w) => [String(w._id), w]));
+
+    return requests.map((request) => {
+        const instance = request.approvalInstanceId
+            ? instanceMap.get(String(request.approvalInstanceId))
+            : null;
+        if (!instance) {
+            return { ...request, workflowSummary: { hasWorkflow: false } };
+        }
+
+        const workflow = instance.workflowId
+            ? workflowMap.get(String(instance.workflowId))
+            : null;
+        const stepTypeByNumber = new Map(
+            (workflow?.steps || []).map((s) => [s.stepNumber, s.approverType])
+        );
+        const stepNameByNumber = new Map(
+            (workflow?.steps || []).map((s) => [s.stepNumber, s.stepName])
+        );
+
+        const sortedSteps = [...(instance.steps || [])].sort(
+            (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
+        );
+        const pendingStep = sortedSteps.find((s) => s.status === 'Pending') || null;
+
+        return {
+            ...request,
+            workflowSummary: {
+                hasWorkflow: true,
+                instanceStatus: instance.status,
+                pendingStep: pendingStep
+                    ? {
+                          stepNumber: pendingStep.stepNumber,
+                          stepName:
+                              pendingStep.stepName ||
+                              stepNameByNumber.get(pendingStep.stepNumber) ||
+                              `Step ${pendingStep.stepNumber}`,
+                          approverType:
+                              stepTypeByNumber.get(pendingStep.stepNumber) || null,
+                          approverName: pendingStep.approverName || null,
+                          status: pendingStep.status,
+                      }
+                    : null,
+                steps: sortedSteps.map((s) => ({
+                    stepNumber: s.stepNumber,
+                    stepName:
+                        s.stepName ||
+                        stepNameByNumber.get(s.stepNumber) ||
+                        `Step ${s.stepNumber}`,
+                    approverType: stepTypeByNumber.get(s.stepNumber) || null,
+                    approverName: s.approverName || null,
+                    status: s.status,
+                })),
+            },
+        };
+    });
+};
+
+/**
+ * Resolve params for processApprovalAction on regularization requests.
+ */
+export const resolveRegularizationWorkflowAction = async ({
+    req,
+    approvalInstance,
+    currentStep,
+    employeeLinked = true,
+    confirmEarlyApproval = false,
+}) => {
+    const reviewerEmployeeId = getReviewerEmployeeId(req);
+    const workflowStep = await loadWorkflowStepDefinition(approvalInstance, currentStep);
+    const approverType = workflowStep?.approverType || null;
+    const assignedApproverId = currentStep?.approverId;
+
+    const naturalActor = isNaturalActorForStep(
+        req,
+        approverType,
+        currentStep,
+        employeeLinked
+    );
+
+    const earlyConfirmNeeded = needsEarlyApprovalConfirm(
+        req,
+        approverType,
+        currentStep,
+        employeeLinked
+    );
+
+    if (earlyConfirmNeeded && !confirmEarlyApproval) {
+        const stepLabel = workflowStep?.stepName || approverType || 'current';
+        const err = new Error(
+            `The ${stepLabel} step has not been completed by the assigned approver yet. Confirm to proceed on this step only.`
+        );
+        err.statusCode = 409;
+        err.code = EARLY_APPROVAL_CONFIRM_CODE;
+        throw err;
+    }
+
+    const isManager =
+        req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManagerStep = approverType === 'Manager';
+    const managerTeamOverride =
+        isManager && employeeLinked && isManagerStep && Boolean(reviewerEmployeeId);
+
+    const isAssignedApprover =
+        reviewerEmployeeId &&
+        assignedApproverId &&
+        String(assignedApproverId) === String(reviewerEmployeeId);
+
+    const hrEarlyOverride = earlyConfirmNeeded && confirmEarlyApproval && isHrEmployee(req);
+
+    const mayAct = Boolean(
+        naturalActor || managerTeamOverride || isAssignedApprover || hrEarlyOverride
+    );
+
+    let overrideLabel = null;
+    if (hrEarlyOverride) overrideLabel = 'HR';
+    else if (managerTeamOverride && !isAssignedApprover) overrideLabel = 'Manager';
+
+    const approverIdForAction =
+        reviewerEmployeeId || assignedApproverId || null;
+    const performedByEmployeeId = reviewerEmployeeId || assignedApproverId || null;
+
+    if (!mayAct) {
+        const err = new Error(
+            'You are not authorized for the current workflow step. Wait for the previous approver or contact HR.'
+        );
+        err.statusCode = 403;
+        throw err;
+    }
+
+    return {
+        approverIdForAction,
+        performedByEmployeeId,
+        reviewerEmployeeId,
+        overrideLabel,
+        approverType,
+    };
+};
+
+export const prefixWorkflowComment = (comments, overrideLabel) => {
+    if (!overrideLabel) return comments;
+    const base = String(comments || '').trim();
+    return base ? `[${overrideLabel} override] ${base}` : `[${overrideLabel} override]`;
+};
+
+export const executeRegularizationWorkflowAction = async ({
+    req,
+    approvalInstance,
+    currentStep,
+    action,
+    comments,
+    regularizationRequest,
+    employeeLinked = true,
+    confirmEarlyApproval = false,
+}) => {
+    const params = await resolveRegularizationWorkflowAction({
+        req,
+        approvalInstance,
+        currentStep,
+        employeeLinked,
+        confirmEarlyApproval,
+    });
+
+    return processApprovalAction({
+        approvalInstanceId: approvalInstance._id,
+        stepNumber: currentStep.stepNumber,
+        approverId: params.approverIdForAction,
+        action,
+        comments: prefixWorkflowComment(comments, params.overrideLabel),
+        metadata: {
+            regularizationId: regularizationRequest._id,
+            regularizationType: regularizationRequest.regularizationType,
+            overrideRole: params.overrideLabel,
+        },
+        skipApproverValidation: true,
+        performedByEmployeeId: params.performedByEmployeeId,
+    });
+};
+
+/**
+ * Admin: approve all remaining workflow steps and finalize the request.
+ */
+export const executeAdminBypassRegularization = async ({
+    approvalInstance,
+    comments,
+    regularizationRequest,
+}) => {
+    return adminBypassApprovalInstance({
+        approvalInstanceId: approvalInstance._id,
+        comments: prefixWorkflowComment(comments, 'Admin'),
+        metadata: {
+            regularizationId: regularizationRequest._id,
+            regularizationType: regularizationRequest.regularizationType,
+            adminBypass: true,
+        },
+    });
+};
+
+export const sendRegularizationActionError = (res, error, defaultMessage) => {
+    const statusCode = error.statusCode || 500;
+    let message = defaultMessage;
+
+    if (statusCode === 403) {
+        message = error.message;
+    } else if (statusCode === 409) {
+        message = error.message;
+    } else if (error.message?.includes('Unauthorized')) {
+        message = 'You are not authorized for the current workflow step.';
+    }
+
+    return res.status(statusCode).json({
+        success: false,
+        message,
+        code: error.code,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+};

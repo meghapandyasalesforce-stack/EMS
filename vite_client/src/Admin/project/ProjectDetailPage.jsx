@@ -27,11 +27,12 @@ import {
   Avatar,
   Card,
   CardContent,
-  InputAdornment
+  InputAdornment,
+  Autocomplete
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { FiEdit2, FiTrash2, FiSave, FiX, FiChevronLeft, FiRefreshCw, FiMessageSquare, FiCalendar, FiUser, FiTrendingUp } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiSave, FiX, FiChevronLeft, FiRefreshCw, FiMessageSquare, FiCalendar, FiUser, FiTrendingUp, FiPlus } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import useUpdateProject from '../../Hooks/useUpdateProject';
@@ -123,6 +124,26 @@ const ProjectDetailPage = () => {
     nextSteps: ''
   });
   const [submittingUpdate, setSubmittingUpdate] = useState(false);
+
+  // Project work plan (tasks / subtasks — not daily logs)
+  const [workPlanTree, setWorkPlanTree] = useState([]);
+  const [workPlanLoading, setWorkPlanLoading] = useState(false);
+  const [workPlanError, setWorkPlanError] = useState(null);
+  const [newRootTaskTitle, setNewRootTaskTitle] = useState('');
+  const [workItemEditOpen, setWorkItemEditOpen] = useState(false);
+  const [workItemEditSaving, setWorkItemEditSaving] = useState(false);
+  const [workItemEditForm, setWorkItemEditForm] = useState({
+    _id: '',
+    title: '',
+    description: '',
+    assignee: null,
+    dueDate: '',
+    priority: 'medium',
+    status: 'todo',
+  });
+  const [subtaskParentId, setSubtaskParentId] = useState(null);
+  const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [subtaskSaving, setSubtaskSaving] = useState(false);
 
   // Check if current user is project leader
   const isProjectLeader = useMemo(() => {
@@ -268,6 +289,26 @@ const ProjectDetailPage = () => {
     useGetAllProjects();
   }, [navigate]);
 
+  const loadWorkPlan = useCallback(async () => {
+    if (!project?._id) return;
+    setWorkPlanLoading(true);
+    setWorkPlanError(null);
+    try {
+      const response = await axios.get(`${ADMIN_PROJECT_ENDPOINT}/${project._id}/work-items`, {
+        withCredentials: true,
+      });
+      if (response.data?.success) {
+        setWorkPlanTree(response.data.workItems || []);
+      } else {
+        setWorkPlanError('Could not load work plan');
+      }
+    } catch (err) {
+      setWorkPlanError(err.response?.data?.error || err.message || 'Failed to load work plan');
+    } finally {
+      setWorkPlanLoading(false);
+    }
+  }, [project?._id]);
+
   useEffect(() => {
     if (project) {
       setEditedProject({
@@ -283,12 +324,278 @@ const ProjectDetailPage = () => {
       });
       dispatch(fetchProjectTasks(project._id));
       fetchProjectUpdates();
+      loadWorkPlan();
     }
     
     if (employeesStatus === 'idle') {
       dispatch(fetchEmployees());
     }
-  }, [project, employeesStatus, dispatch, mapStatusToFrontend]);
+  }, [project, employeesStatus, dispatch, mapStatusToFrontend, loadWorkPlan]);
+
+  const handleWorkItemStatusChange = useCallback(
+    async (workItemId, status) => {
+      try {
+        await axios.put(
+          `${ADMIN_PROJECT_ENDPOINT}/work-items/${workItemId}`,
+          { status },
+          { withCredentials: true }
+        );
+        toast.success('Task updated');
+        loadWorkPlan();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to update task');
+      }
+    },
+    [loadWorkPlan]
+  );
+
+  const handleDeleteWorkItem = useCallback(
+    async (workItemId) => {
+      if (!window.confirm('Delete this task and all its subtasks?')) return;
+      try {
+        await axios.delete(`${ADMIN_PROJECT_ENDPOINT}/work-items/${workItemId}`, {
+          withCredentials: true,
+        });
+        toast.success('Task removed');
+        loadWorkPlan();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to delete task');
+      }
+    },
+    [loadWorkPlan]
+  );
+
+  const handleAddRootWorkItem = useCallback(async () => {
+    if (!newRootTaskTitle.trim() || !project?._id) return;
+    try {
+      await axios.post(
+        `${ADMIN_PROJECT_ENDPOINT}/${project._id}/work-items`,
+        { items: [{ title: newRootTaskTitle.trim() }] },
+        { withCredentials: true }
+      );
+      toast.success('Task added');
+      setNewRootTaskTitle('');
+      loadWorkPlan();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add task');
+    }
+  }, [newRootTaskTitle, project?._id, loadWorkPlan]);
+
+  const formatDueDateInput = useCallback((dateVal) => {
+    if (!dateVal) return '';
+    try {
+      return format(new Date(dateVal), 'yyyy-MM-dd');
+    } catch {
+      return '';
+    }
+  }, []);
+
+  const openWorkItemEdit = useCallback((item) => {
+    setWorkItemEditForm({
+      _id: item._id,
+      title: item.title || '',
+      description: item.description || '',
+      assignee: item.assignee?._id || null,
+      dueDate: formatDueDateInput(item.dueDate),
+      priority: item.priority || 'medium',
+      status: item.status || 'todo',
+    });
+    setWorkItemEditOpen(true);
+  }, [formatDueDateInput]);
+
+  const handleSaveWorkItemEdit = useCallback(async () => {
+    if (!workItemEditForm.title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    setWorkItemEditSaving(true);
+    try {
+      await axios.put(
+        `${ADMIN_PROJECT_ENDPOINT}/work-items/${workItemEditForm._id}`,
+        {
+          title: workItemEditForm.title.trim(),
+          description: workItemEditForm.description.trim() || '',
+          assignee: workItemEditForm.assignee || null,
+          dueDate: workItemEditForm.dueDate || null,
+          priority: workItemEditForm.priority,
+          status: workItemEditForm.status,
+        },
+        { withCredentials: true }
+      );
+      toast.success('Task updated');
+      setWorkItemEditOpen(false);
+      loadWorkPlan();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update task');
+    } finally {
+      setWorkItemEditSaving(false);
+    }
+  }, [workItemEditForm, loadWorkPlan]);
+
+  const handleAddSubtask = useCallback(async () => {
+    if (!subtaskTitle.trim() || !subtaskParentId || !project?._id) return;
+    setSubtaskSaving(true);
+    try {
+      await axios.post(
+        `${ADMIN_PROJECT_ENDPOINT}/${project._id}/work-items`,
+        {
+          items: [{
+            title: subtaskTitle.trim(),
+            parentTask: subtaskParentId,
+          }],
+        },
+        { withCredentials: true }
+      );
+      toast.success('Subtask added');
+      setSubtaskTitle('');
+      setSubtaskParentId(null);
+      loadWorkPlan();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add subtask');
+    } finally {
+      setSubtaskSaving(false);
+    }
+  }, [subtaskTitle, subtaskParentId, project?._id, loadWorkPlan]);
+
+  const workItemStatusLabel = useCallback((s) => {
+    const map = { todo: 'To do', 'in-progress': 'In progress', completed: 'Completed', 'on-hold': 'On hold' };
+    return map[s] || s;
+  }, []);
+
+  const renderWorkItem = useCallback(
+    (item, depth = 0) => (
+      <Box
+        key={item._id}
+        sx={{
+          pl: depth * 2,
+          mb: 1.5,
+          borderLeft: depth ? '2px solid' : 'none',
+          borderColor: 'divider',
+        }}
+      >
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Box
+            display="flex"
+            flexDirection={isMobile ? 'column' : 'row'}
+            alignItems={isMobile ? 'stretch' : 'flex-start'}
+            justifyContent="space-between"
+            gap={1.5}
+          >
+            <Box flex={1}>
+              <Typography variant="subtitle1">{item.title}</Typography>
+              {item.description ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {item.description}
+                </Typography>
+              ) : null}
+              <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
+                <Chip size="small" label={`Priority: ${item.priority || 'medium'}`} variant="outlined" />
+                {item.assignee ? (
+                  <Chip
+                    size="small"
+                    icon={<FiUser size={14} />}
+                    label={`${item.assignee.name || ''} ${item.assignee.lastName || ''}`.trim()}
+                    variant="outlined"
+                  />
+                ) : null}
+                {item.dueDate ? (
+                  <Chip
+                    size="small"
+                    icon={<FiCalendar size={14} />}
+                    label={format(new Date(item.dueDate), 'MMM d, yyyy')}
+                    variant="outlined"
+                  />
+                ) : null}
+              </Box>
+            </Box>
+            <Box display="flex" flexWrap="wrap" gap={1} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 130 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  label="Status"
+                  value={item.status || 'todo'}
+                  onChange={(e) => handleWorkItemStatusChange(item._id, e.target.value)}
+                >
+                  <MenuItem value="todo">{workItemStatusLabel('todo')}</MenuItem>
+                  <MenuItem value="in-progress">{workItemStatusLabel('in-progress')}</MenuItem>
+                  <MenuItem value="completed">{workItemStatusLabel('completed')}</MenuItem>
+                  <MenuItem value="on-hold">{workItemStatusLabel('on-hold')}</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<FiEdit2 />}
+                onClick={() => openWorkItemEdit(item)}
+              >
+                Edit
+              </Button>
+              <Button
+                size="small"
+                color="error"
+                startIcon={<FiTrash2 />}
+                onClick={() => handleDeleteWorkItem(item._id)}
+              >
+                Delete
+              </Button>
+            </Box>
+          </Box>
+          {subtaskParentId === item._id ? (
+            <Box display="flex" gap={1} mt={1.5} flexWrap="wrap" alignItems="center">
+              <TextField
+                size="small"
+                label="Subtask title"
+                value={subtaskTitle}
+                onChange={(e) => setSubtaskTitle(e.target.value)}
+                sx={{ flex: 1, minWidth: 160 }}
+              />
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!subtaskTitle.trim() || subtaskSaving}
+                onClick={handleAddSubtask}
+              >
+                {subtaskSaving ? 'Adding…' : 'Save subtask'}
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  setSubtaskParentId(null);
+                  setSubtaskTitle('');
+                }}
+              >
+                Cancel
+              </Button>
+            </Box>
+          ) : (
+            <Button
+              size="small"
+              startIcon={<FiPlus />}
+              sx={{ mt: 1 }}
+              onClick={() => {
+                setSubtaskParentId(item._id);
+                setSubtaskTitle('');
+              }}
+            >
+              Add subtask
+            </Button>
+          )}
+        </Paper>
+        {(item.subtasks || []).map((st) => renderWorkItem(st, depth + 1))}
+      </Box>
+    ),
+    [
+      isMobile,
+      handleWorkItemStatusChange,
+      handleDeleteWorkItem,
+      workItemStatusLabel,
+      openWorkItemEdit,
+      subtaskParentId,
+      subtaskTitle,
+      subtaskSaving,
+      handleAddSubtask,
+    ]
+  );
 
   // Fetch project updates
   const fetchProjectUpdates = useCallback(async () => {
@@ -497,9 +804,10 @@ const ProjectDetailPage = () => {
         </Alert>
       )}
 
-      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }}>
+      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
         <Tab label="Project Details" />
-        <Tab label="Team Tasks" />
+        <Tab label="Work plan" />
+        <Tab label="Team daily logs" />
         <Tab label="Daily Updates" />
       </Tabs>
 
@@ -799,7 +1107,60 @@ const ProjectDetailPage = () => {
 
       {tabValue === 1 && (
         <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>Project Tasks</Typography>
+          <Typography variant="h6" gutterBottom>
+            Work plan
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Tasks and subtasks for this project. This is separate from employees&apos; daily task logs.
+          </Typography>
+
+          <Box display="flex" flexDirection={isMobile ? 'column' : 'row'} gap={1} alignItems="flex-start" sx={{ mb: 3 }}>
+            <TextField
+              size="small"
+              fullWidth={isMobile}
+              label="New task title"
+              value={newRootTaskTitle}
+              onChange={(e) => setNewRootTaskTitle(e.target.value)}
+              sx={{ minWidth: isMobile ? '100%' : 280 }}
+            />
+            <Button
+              variant="contained"
+              startIcon={<FiPlus />}
+              onClick={handleAddRootWorkItem}
+              disabled={!newRootTaskTitle.trim()}
+              size={isMobile ? 'medium' : 'medium'}
+            >
+              Add task
+            </Button>
+            <Button variant="outlined" startIcon={<FiRefreshCw />} onClick={loadWorkPlan} size="small">
+              Refresh
+            </Button>
+          </Box>
+
+          {workPlanLoading ? (
+            <Box display="flex" justifyContent="center" py={3}>
+              <CircularProgress />
+            </Box>
+          ) : workPlanError ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {workPlanError}
+            </Alert>
+          ) : workPlanTree.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No work items yet. Add a task above, or create tasks when you add a new project.
+            </Typography>
+          ) : (
+            <Box>{workPlanTree.map((node) => renderWorkItem(node, 0))}</Box>
+          )}
+        </Paper>
+      )}
+
+      {tabValue === 2 && (
+        <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
+          <Typography variant="h6" gutterBottom>Daily task logs</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Per-day work entries logged by team members (not the project work breakdown).
+          </Typography>
           
           {tasksStatus === 'loading' ? (
             <Box display="flex" justifyContent="center">
@@ -846,7 +1207,7 @@ const ProjectDetailPage = () => {
         </Paper>
       )}
 
-      {tabValue === 2 && (
+      {tabValue === 3 && (
         <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Typography variant="h6">Daily Updates</Typography>
@@ -1106,6 +1467,96 @@ const ProjectDetailPage = () => {
             disabled={!newUpdate.update.trim() || submittingUpdate}
           >
             {submittingUpdate ? 'Posting...' : 'Post Update'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Work item edit (assignee, due date, details) */}
+      <Dialog
+        open={workItemEditOpen}
+        onClose={() => !workItemEditSaving && setWorkItemEditOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit task</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Title"
+              value={workItemEditForm.title}
+              onChange={(e) => setWorkItemEditForm((f) => ({ ...f, title: e.target.value }))}
+              required
+              fullWidth
+            />
+            <TextField
+              label="Description"
+              value={workItemEditForm.description}
+              onChange={(e) => setWorkItemEditForm((f) => ({ ...f, description: e.target.value }))}
+              multiline
+              minRows={2}
+              fullWidth
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel>Priority</InputLabel>
+              <Select
+                label="Priority"
+                value={workItemEditForm.priority}
+                onChange={(e) => setWorkItemEditForm((f) => ({ ...f, priority: e.target.value }))}
+              >
+                <MenuItem value="low">Low</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="critical">Critical</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                label="Status"
+                value={workItemEditForm.status}
+                onChange={(e) => setWorkItemEditForm((f) => ({ ...f, status: e.target.value }))}
+              >
+                <MenuItem value="todo">To do</MenuItem>
+                <MenuItem value="in-progress">In progress</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+                <MenuItem value="on-hold">On hold</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Due date"
+              type="date"
+              value={workItemEditForm.dueDate}
+              onChange={(e) => setWorkItemEditForm((f) => ({ ...f, dueDate: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <Autocomplete
+              options={activeEmployees}
+              getOptionLabel={(emp) => `${emp.name} ${emp.lastName || ''}`.trim()}
+              value={
+                workItemEditForm.assignee
+                  ? activeEmployees.find((e) => e._id === workItemEditForm.assignee) || null
+                  : null
+              }
+              onChange={(_, newVal) =>
+                setWorkItemEditForm((f) => ({ ...f, assignee: newVal ? newVal._id : null }))
+              }
+              renderInput={(params) => (
+                <TextField {...params} label="Assignee (optional)" />
+              )}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWorkItemEditOpen(false)} disabled={workItemEditSaving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveWorkItemEdit}
+            disabled={workItemEditSaving || !workItemEditForm.title.trim()}
+          >
+            {workItemEditSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

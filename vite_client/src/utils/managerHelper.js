@@ -3,6 +3,8 @@
  * Provides utilities for filtering and checking manager relationships
  */
 
+import { isProjectManager } from './projectManagerHelper';
+
 const normalizeRoleText = (value) => String(value || '').toLowerCase().trim();
 
 const hasManagerFunctionalRole = (user) => {
@@ -96,6 +98,8 @@ export const getTeamMemberIds = (employees, manager) => {
 export const isManager = (user) => {
     if (!user) return false;
 
+    if (isProjectManager(user)) return true;
+
     const role = normalizeRoleText(user.role);
     if (role === 'manager') return true;
     if (hasManagerFunctionalRole(user)) return true;
@@ -110,6 +114,9 @@ export const isManager = (user) => {
            jobTitle.includes('manager') ||
            jobTitle.includes('director');
 };
+
+/** Line manager only (team-scoped HR/attendance), not Project Manager. */
+export const isLineManager = (user) => isManager(user) && !isProjectManager(user);
 
 /**
  * Check if user is HR
@@ -164,6 +171,10 @@ export const getUserRoleBadge = (user) => {
         return { label: 'HR', color: 'blue' };
     }
     
+    if (isProjectManager(user)) {
+        return { label: 'Project Manager', color: 'teal' };
+    }
+
     if (isManager(user)) {
         return { label: 'Manager', color: 'green' };
     }

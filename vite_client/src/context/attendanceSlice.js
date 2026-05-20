@@ -561,8 +561,17 @@ const attendanceSlice = createSlice({
       .addCase(fetchMyTodayStatus.fulfilled, (state, action) => {
         state.loading = false;
         const session = action.payload?.session;
-        if (session) {
-          state.sessions = [session];
+        if (!session || (!session._id && !session.id)) {
+          return;
+        }
+        const payloadId = String(session._id || session.id);
+        const idx = state.sessions.findIndex(
+          (s) => String(s._id || s.id) === payloadId
+        );
+        if (idx !== -1) {
+          state.sessions[idx] = session;
+        } else {
+          state.sessions = [...state.sessions, session];
         }
       })
       .addCase(fetchMyTodayStatus.rejected, rejected)

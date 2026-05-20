@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   FiPlus, 
   FiSave, 
-  FiTrash2, 
   FiEdit3, 
   FiCheck, 
   FiClock, 
@@ -11,34 +10,88 @@ import {
   FiArrowLeft,
   FiCalendar,
   FiUser,
-  FiMessageSquare
+  FiMessageSquare,
+  FiClipboard
 } from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
+  fetchMyProjects,
   fetchMyTasks, 
   createNewTask, 
-  updateExistingTask 
+  updateExistingTask,
+  fetchEmployeeWorkPlan,
+  updateEmployeeWorkItem,
 } from '../../context/employeeTaskSlice';
+
+const projectStatusDisplay = (status) => {
+  const s = String(status || '').toLowerCase();
+  if (s === 'completed') return { label: 'Completed', className: 'bg-theme-primary/10 text-theme-primary' };
+  if (s === 'in-progress') return { label: 'In Progress', className: 'bg-theme-secondary/10 text-theme-secondary' };
+  if (s === 'on-hold') return { label: 'On Hold', className: 'bg-yellow-100 text-yellow-800' };
+  if (s === 'pending') return { label: 'Pending', className: 'bg-gray-100 text-gray-800' };
+  return { label: status || 'Active', className: 'bg-gray-100 text-gray-800' };
+};
+import EmployeeWorkPlanSection from './EmployeeWorkPlanSection';
 
 const EmployeeTasks = () => {
   const { projectId } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { myProjects, myTasks, status, error } = useSelector(state => state.employeeTask);
+  const {
+    myProjects,
+    myTasks,
+    workPlan,
+    workPlanProgress,
+    workPlanStatus,
+    workPlanError,
+    status,
+    error,
+  } = useSelector((state) => state.employeeTask);
+  const employee = useSelector(
+    (state) => state.employeeDetails?.employee || state.auth?.user
+  );
+  const [activeTab, setActiveTab] = useState('plan');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskStatus, setTaskStatus] = useState('Not Started');
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [comments, setComments] = useState('');
+  const [updatingWorkItemId, setUpdatingWorkItemId] = useState(null);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
 
-  const currentProject = myProjects.find(p => p._id === projectId);
+  const currentProject = useMemo(
+    () => myProjects.find((p) => String(p._id) === String(projectId)),
+    [myProjects, projectId]
+  );
+
+  const projectStatus = useMemo(
+    () => projectStatusDisplay(currentProject?.status),
+    [currentProject?.status]
+  );
 
   useEffect(() => {
-    if (projectId) {
-      dispatch(fetchMyTasks({ projectId }));
-    }
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      await dispatch(fetchMyProjects());
+      if (!cancelled) setProjectsLoaded(true);
+    })();
+    dispatch(fetchMyTasks({ projectId }));
+    dispatch(fetchEmployeeWorkPlan(projectId));
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, dispatch]);
+
+  const handleWorkItemStatusChange = useCallback(
+    async (workItemId, newStatus) => {
+      setUpdatingWorkItemId(workItemId);
+      await dispatch(updateEmployeeWorkItem(workItemId, projectId, { status: newStatus }));
+      setUpdatingWorkItemId(null);
+    },
+    [dispatch, projectId]
+  );
 
   const handleCreateTask = async () => {
     if (!taskDescription.trim()) return;
@@ -51,10 +104,11 @@ const EmployeeTasks = () => {
     };
 
     const result = await dispatch(createNewTask(taskData));
-    if (result.payload?.success) {
+    if (result?.success) {
       setTaskDescription('');
       setTaskStatus('Not Started');
       setComments('');
+      dispatch(fetchMyTasks({ projectId }));
     }
   };
 
@@ -68,11 +122,12 @@ const EmployeeTasks = () => {
     };
 
     const result = await dispatch(updateExistingTask(taskId, updateData));
-    if (result.payload?.success) {
+    if (result?.success) {
       setEditingTaskId(null);
       setTaskDescription('');
       setTaskStatus('Not Started');
       setComments('');
+      dispatch(fetchMyTasks({ projectId }));
     }
   };
 
@@ -89,6 +144,14 @@ const EmployeeTasks = () => {
     setTaskStatus('Not Started');
     setComments('');
   };
+
+  if (!projectsLoaded) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary" />
+      </div>
+    );
+  }
 
   if (!currentProject) {
     return (
@@ -133,19 +196,18 @@ const EmployeeTasks = () => {
                 <h1 className="text-xl font-semibold text-gray-900 mb-0.5">
                   {currentProject.name}
                 </h1>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <FiCalendar size={14} className="text-gray-500" />
-                  <span className="text-gray-600 text-xs">Project Tasks Management</span>
+                  <span className="text-gray-600 text-xs">
+                    {currentProject.progress != null
+                      ? `Progress ${currentProject.progress}%`
+                      : 'Project workspace'}
+                  </span>
                 </div>
               </div>
             </div>
-            <div className={`inline-flex items-center px-3 py-1 rounded-lg font-medium text-sm ${
-              currentProject.status === 'Completed' ? 'bg-theme-primary/10 text-theme-primary' :
-              currentProject.status === 'In Progress' ? 'bg-theme-secondary/10 text-theme-secondary' :
-              currentProject.status === 'On Hold' ? 'bg-yellow-100 text-yellow-800' : 
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {currentProject.status}
+            <div className={`inline-flex items-center px-3 py-1 rounded-lg font-medium text-sm ${projectStatus.className}`}>
+              {projectStatus.label}
             </div>
           </div>
         </div>
@@ -156,6 +218,61 @@ const EmployeeTasks = () => {
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="flex gap-2 mb-5 border-b border-gray-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('plan')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-2 ${
+            activeTab === 'plan'
+              ? 'border-theme-secondary text-theme-secondary'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <FiClipboard size={16} />
+          Work plan
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('daily')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-2 ${
+            activeTab === 'daily'
+              ? 'border-theme-secondary text-theme-secondary'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <FiMessageSquare size={16} />
+          Today&apos;s log
+        </button>
+      </div>
+
+      {activeTab === 'plan' && (
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 bg-theme-primary rounded-lg flex items-center justify-center">
+              <FiClipboard size={18} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Project work plan</h2>
+              <p className="text-gray-600 text-xs">
+                Tasks from your manager — update items assigned to you or under your assigned tasks
+              </p>
+            </div>
+          </div>
+          <EmployeeWorkPlanSection
+            workPlan={workPlan}
+            workPlanProgress={workPlanProgress}
+            workPlanStatus={workPlanStatus}
+            workPlanError={workPlanError}
+            currentEmployeeId={employee?._id}
+            onStatusChange={handleWorkItemStatusChange}
+            updatingId={updatingWorkItemId}
+          />
+        </div>
+      )}
+
+      {activeTab === 'daily' && (
+        <>
       {/* Task Input Form */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
         <div className="flex items-center gap-3 mb-4">
@@ -164,10 +281,12 @@ const EmployeeTasks = () => {
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900 mb-0.5">
-              {editingTaskId ? 'Update Task' : 'Add New Task'}
+              {editingTaskId ? 'Update log' : 'Today&apos;s work log'}
             </h2>
             <p className="text-gray-600 text-xs">
-              {editingTaskId ? 'Modify your task details' : 'Create a new task for this project'}
+              {editingTaskId
+                ? 'Modify what you logged for today'
+                : 'Record what you worked on today (separate from the work plan)'}
             </p>
           </div>
         </div>
@@ -267,10 +386,10 @@ const EmployeeTasks = () => {
             </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900 mb-0.5">
-                My Tasks
+                My daily logs
               </h2>
               <p className="text-gray-600 text-xs">
-                Manage and track your project tasks
+                Your per-day entries for this project
               </p>
             </div>
           </div>
@@ -351,6 +470,8 @@ const EmployeeTasks = () => {
           </div>
         )}
       </div>
+        </>
+      )}
       </div>
     </div>
   );

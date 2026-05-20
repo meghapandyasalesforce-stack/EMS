@@ -136,6 +136,15 @@ export const authValidations = {
         handleValidationErrors
     ],
 
+    forgotPassword: [
+        body('email')
+            .trim()
+            .notEmpty().withMessage('Email is required')
+            .isEmail().withMessage('Invalid email format')
+            .normalizeEmail(),
+        handleValidationErrors
+    ],
+
     login: [
         body('email')
             .trim()
@@ -325,6 +334,9 @@ export const projectValidations = {
         body('status')
             .notEmpty().withMessage('Project status is required')
             .isIn(['pending', 'in-progress', 'on-hold', 'completed']).withMessage('Invalid project status'),
+        body('workItems')
+            .optional()
+            .isArray().withMessage('workItems must be an array'),
         handleValidationErrors
     ],
     update: [
@@ -608,6 +620,10 @@ export const organizationValidations = {
             .optional()
             .isInt({ min: 2, max: 10 }).withMessage('employeeIdMinDigits must be between 2 and 10')
             .toInt(),
+        body('timezone')
+            .optional()
+            .trim()
+            .isLength({ min: 2, max: 64 }).withMessage('timezone must be a valid IANA timezone string'),
         handleValidationErrors
     ],
 

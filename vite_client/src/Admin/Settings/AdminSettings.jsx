@@ -12,6 +12,9 @@ import {
     fetchOrganizationProfile,
     updateOrganizationSettings
 } from '../../context/organizationSlice';
+import TimezoneSelect from '../../components/TimezoneSelect';
+import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
+import { DEFAULT_TIMEZONE } from '../../utils/timezoneOptions';
 import { setUser } from '../../context/Auth/authSlice';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchEmployees } from '../../context/employeeSlice';
@@ -187,7 +190,8 @@ const GeneralSettingsContent = () => {
         allowSelfService: true,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
-        employeeIdMinDigits: 3
+        employeeIdMinDigits: 3,
+        timezone: DEFAULT_TIMEZONE,
     });
     const [isSaving, setIsSaving] = useState(false);
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -208,7 +212,8 @@ const GeneralSettingsContent = () => {
                 allowSelfService: profile.settings.allowSelfService ?? true,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
-                employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3
+                employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
+                timezone: profile.timezone || DEFAULT_TIMEZONE,
             });
         }
     }, [profile]);
@@ -256,11 +261,12 @@ const GeneralSettingsContent = () => {
         try {
             setIsSaving(true);
             const result = await dispatch(updateOrganizationSettings(settingsToSave)).unwrap();
+            if (result?.timezone || settingsToSave.timezone) {
+                dispatch(fetchOrganizationTimezone());
+            }
             
-            // Re-fetch profile to ensure we have the latest data
             const updatedProfile = await dispatch(fetchOrganizationProfile()).unwrap();
             
-            // Update local state from the freshly fetched profile
             if (updatedProfile?.settings) {
                 setSettings({
                     allowEmployeeRegistration: updatedProfile.settings.allowEmployeeRegistration ?? true,
@@ -268,7 +274,8 @@ const GeneralSettingsContent = () => {
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
-                    employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3
+                    employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
+                    timezone: updatedProfile.timezone || DEFAULT_TIMEZONE,
                 });
             }
             
@@ -411,6 +418,16 @@ const GeneralSettingsContent = () => {
                             <FiToggleLeft className="w-12 h-6 text-gray-400" />
                         )}
                     </button>
+                </div>
+
+                <div className="p-4 border border-gray-200 rounded-lg">
+                    <TimezoneSelect
+                        id="admin-general-timezone"
+                        value={settings.timezone}
+                        onChange={(tz) => setSettings((prev) => ({ ...prev, timezone: tz }))}
+                        label="Organization timezone"
+                        hint="Company-wide default. Attendance rules can override this for punch and office-hour logic."
+                    />
                 </div>
 
                 <div className="p-4 border border-gray-200 rounded-lg">

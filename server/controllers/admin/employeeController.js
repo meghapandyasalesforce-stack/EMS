@@ -6,6 +6,7 @@ import logger from '../../helpers/logger.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import { isProjectManagerJobTitle } from '../../helpers/projectManagerHelper.js';
 
 function deriveRoleFlagsFromWorkInfo({ department, position, jobTitle }) {
   const dept = (department || '').toLowerCase().trim();
@@ -21,15 +22,17 @@ function deriveRoleFlagsFromWorkInfo({ department, position, jobTitle }) {
     title.includes('hr') ||
     (pos.includes('hr') && pos.includes('manager'));
 
-  const isManager =
-    pos === 'manager' ||
+  const isProjectManager = isProjectManagerJobTitle(jobTitle);
+
+  const isManager = !isProjectManager &&
+    (pos === 'manager' ||
     pos === 'director' ||
     pos.includes('manager') ||
     pos.includes('director') ||
     title.includes('manager') ||
-    title.includes('director');
+    title.includes('director'));
 
-  return { isHR, isManager };
+  return { isHR, isManager, isProjectManager };
 }
 
 async function resolveManagerReference(organizationId, managerInput) {
@@ -94,7 +97,7 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     }
 
     // Manager can update only employees linked to them.
-    const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isProjectManager && !req.employee?.isHR && !req.user;
     if (isManagerScope) {
       const linked = isEmployeeLinkedToManager(employee, req.employee);
       if (!linked) {
@@ -131,7 +134,7 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     const effectiveDepartment = updateData.department ?? employee.department;
     const effectivePosition = updateData.position ?? employee.position;
     const effectiveJobTitle = updateData.jobTitle ?? employee.jobTitle;
-    const { isHR, isManager } = deriveRoleFlagsFromWorkInfo({
+    const { isHR, isManager, isProjectManager } = deriveRoleFlagsFromWorkInfo({
       department: effectiveDepartment,
       position: effectivePosition,
       jobTitle: effectiveJobTitle
@@ -140,6 +143,8 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     const nextRoles = new Set(Array.isArray(employee.functionalRoles) ? employee.functionalRoles : []);
     if (isHR) nextRoles.add('hr');
     else nextRoles.delete('hr');
+    if (isProjectManager) nextRoles.add('project_manager');
+    else nextRoles.delete('project_manager');
     if (isManager) nextRoles.add('manager');
     else nextRoles.delete('manager');
     updateData.functionalRoles = Array.from(nextRoles);

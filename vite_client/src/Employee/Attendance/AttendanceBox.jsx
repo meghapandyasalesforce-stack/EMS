@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { clockIn, clockOut, breakIn, breakOut, fetchLogs, fetchMyTodayStatus } from '../../context/attendanceSlice';
+import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
 import { format } from 'date-fns';
+import {
+  formatInOrgTimezone,
+  todayDateKeyInTimezone,
+  isSessionForToday,
+} from '../../utils/orgTimezone';
 import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -23,8 +29,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
     _breakSession // Marked as unused to satisfy lint rule
   } = useSelector((state) => state.attendance);
   
-  // Get current user from auth state
   const currentUser = useSelector((state) => state.auth.user);
+  const orgTimezone = useSelector((state) => state.timezone.timezone);
 
   const [currentSession, setCurrentSession] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -40,32 +46,35 @@ const AttendanceBox = ({ variant = 'default' }) => {
     isPermissionDenied
   } = usePermissions();
 
-  // Fetch today's logs on component mount
+  // Load org timezone first, then today's logs, then my-today-status (authoritative merge last)
   useEffect(() => {
     const fetchTodayLogs = async () => {
       try {
         setInitialLoading(true);
-        const today = format(new Date(), 'yyyy-MM-dd');
-        // Removed console.log for production
-        const result = await dispatch(fetchLogs({
-          startDate: today,
-          endDate: today
-        })).unwrap();
-        // Removed console.log statements for production
-
-        // Fallback: if no sessions returned but user is already checked in, try today-status
-        if (!result?.sessions || result.sessions.length === 0) {
-          try {
-            const status = await dispatch(fetchMyTodayStatus()).unwrap();
-            if (status?.session && !status.session.clockOut) {
-              setCurrentSession(status.session);
-            }
-          } catch {
-            // swallow - optional enrichment
-          }
+        let tz = orgTimezone;
+        try {
+          const ctx = await dispatch(fetchOrganizationTimezone()).unwrap();
+          tz = ctx?.timezone || tz;
+        } catch {
+          // keep existing Redux timezone
+        }
+        const today = todayDateKeyInTimezone(tz);
+        try {
+          await dispatch(
+            fetchLogs({
+              startDate: today,
+              endDate: today,
+            })
+          ).unwrap();
+        } catch {
+          // non-fatal
+        }
+        try {
+          await dispatch(fetchMyTodayStatus()).unwrap();
+        } catch {
+          // non-fatal
         }
       } catch {
-        // Removed console.error for production
         // If fetch fails, don't show error - might be page refresh issue
       } finally {
         setInitialLoading(false);
@@ -73,48 +82,39 @@ const AttendanceBox = ({ variant = 'default' }) => {
     };
 
     fetchTodayLogs();
-  }, [dispatch]);
+  }, [dispatch, orgTimezone]);
 
   // Removed automatic refresh - data will only refresh on user actions (button clicks)
 
-  // Find current active session and check break status
+  // Today's row for this user (open or punched out — both need correct UI)
   useEffect(() => {
-    // Removed console.log statements for production
-    
     if (sessions && sessions.length > 0) {
-      // Find open session that belongs to the current user
-      const openSession = sessions.find(session => {
-        // Check if this session belongs to current user
+      const todaySession = sessions.find((session) => {
         const sessionUserId = session.userId?._id || session.userId;
         const currentUserId = currentUser?.id || currentUser?._id;
-        const belongsToUser = sessionUserId?.toString() === currentUserId?.toString();
-        
-        // Get today's date for comparison
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const sessionDate = format(new Date(session.date), 'yyyy-MM-dd');
-        const isToday = sessionDate === today;
-        
-        return belongsToUser && isToday;
+        const belongsToUser =
+          sessionUserId?.toString() === currentUserId?.toString();
+        return belongsToUser && isSessionForToday(session, orgTimezone);
       });
-      
-      // Set the session (will be null if no session for today)
-      setCurrentSession(openSession || null);
-      
-      // Check if user is on break
-      if (openSession?.breaks) {
-        const activeBreak = openSession.breaks.find(b => b.breakIn && !b.breakOut);
+
+      setCurrentSession(todaySession || null);
+
+      if (todaySession && !todaySession.clockOut && todaySession.breaks) {
+        const activeBreak = todaySession.breaks.find(
+          (b) => b.breakIn && !b.breakOut
+        );
         setIsOnBreak(!!activeBreak);
-        setBreakCount(openSession.breaks.length);
+        setBreakCount(todaySession.breaks.length);
       } else {
         setIsOnBreak(false);
-        setBreakCount(0);
+        setBreakCount(todaySession?.breaks?.length || 0);
       }
     } else {
       setCurrentSession(null);
       setIsOnBreak(false);
       setBreakCount(0);
     }
-  }, [sessions, currentUser]);
+  }, [sessions, currentUser, orgTimezone]);
 
   // Update current time every second
   useEffect(() => {
@@ -231,25 +231,20 @@ const AttendanceBox = ({ variant = 'default' }) => {
       // Check if user already has an active session
       const openSession = sessions.find(session => {
         if (session.clockOut) return false;
-        // Ensure it is for current user and today
         const sessionUserId = session.userId?._id || session.userId;
         const currentUserId = currentUser?.id || currentUser?._id;
         const belongsToUser = sessionUserId?.toString() === currentUserId?.toString();
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const sessionDate = format(new Date(session.date), 'yyyy-MM-dd');
-        return belongsToUser && sessionDate === today;
+        return belongsToUser && isSessionForToday(session, orgTimezone);
       });
 
       if (openSession) {
-        // User already checked in - just refresh logs silently
-        const today = format(new Date(), 'yyyy-MM-dd');
-        await dispatch(fetchLogs({
-          startDate: today,
-          endDate: today
-        })).unwrap();
-        // Also reflect currentSession instantly for UX
+        try {
+          await dispatch(fetchMyTodayStatus()).unwrap();
+        } catch {
+          // non-fatal
+        }
         setCurrentSession(openSession);
-        return; // Don't try to punch in again
+        return;
       }
 
       setIsProcessing(true);
@@ -345,14 +340,19 @@ const AttendanceBox = ({ variant = 'default' }) => {
         }
         
         toast.error(errorMessage);
-        
-        // If already checked in, refetch logs to show current session
-        if (errorData?.code === 'ALREADY_CLOCKED_IN' || errorMessage.includes('Already clocked in')) {
-          const today = format(new Date(), 'yyyy-MM-dd');
-          await dispatch(fetchLogs({
-            startDate: today,
-            endDate: today
-          })).unwrap();
+
+        if (
+          errorData?.code === 'ALREADY_CLOCKED_IN' ||
+          errorMessage.includes('Already clocked in')
+        ) {
+          if (errorData?.session) {
+            setCurrentSession(errorData.session);
+          }
+          try {
+            await dispatch(fetchMyTodayStatus()).unwrap();
+          } catch {
+            // non-fatal
+          }
         }
       } finally {
         setIsProcessing(false);
@@ -360,13 +360,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
       
     } catch {
       setIsProcessing(false);
-      // If already checked in, try to fetch logs anyway
-      const today = format(new Date(), 'yyyy-MM-dd');
       try {
-        await dispatch(fetchLogs({
-          startDate: today,
-          endDate: today
-        })).unwrap();
+        await dispatch(fetchMyTodayStatus()).unwrap();
       } catch {
         // Silently fail
       }
@@ -447,10 +442,14 @@ const AttendanceBox = ({ variant = 'default' }) => {
       }
 
       await dispatch(clockOut(clockOutData)).unwrap();
-      // State is updated in clockOut.fulfilled; don't refetch or cached get-logs can overwrite with stale data
       toast.success('Punched out successfully!');
       setIsOnBreak(false);
       setBreakCount(0);
+      try {
+        await dispatch(fetchMyTodayStatus()).unwrap();
+      } catch {
+        // non-fatal
+      }
     } catch (err) {
       const errorMessage = err?.message || 'Failed to punch out';
       toast.error(errorMessage);
@@ -458,11 +457,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
       
       // If already clocked out, fetch fresh state
       if (errorMessage.includes('Already clocked out')) {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        dispatch(fetchLogs({
-          startDate: today,
-          endDate: today
-        }));
+        dispatch(fetchMyTodayStatus());
       }
     } finally {
       setIsProcessing(false);
@@ -496,8 +491,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
       toast.error(errorMessage);
       // If server says already on break, refetch to sync UI (cache is invalidated on break-in so this gets fresh data)
       if (errorMessage.toLowerCase().includes('already on break')) {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        dispatch(fetchLogs({ startDate: today, endDate: today }));
+        dispatch(fetchMyTodayStatus());
       }
     }
   };
@@ -756,9 +750,9 @@ const AttendanceBox = ({ variant = 'default' }) => {
           <div className="text-white">
             <div className="flex items-center gap-2 text-lg font-bold">
               <div className="w-2 h-2 rounded-full animate-pulse bg-theme-primary" style={{ backgroundColor: 'var(--color-primary)' }}></div>
-              {format(currentTime, 'h:mm:ss a')}
+              {formatInOrgTimezone(currentTime, 'h:mm:ss a', orgTimezone)}
             </div>
-            <div className="text-xs text-white/80">{format(currentTime, 'EEEE, MMM dd')}</div>
+            <div className="text-xs text-white/80">{formatInOrgTimezone(currentTime, 'EEEE, MMM dd', orgTimezone)}</div>
           </div>
         </div>
       </div>

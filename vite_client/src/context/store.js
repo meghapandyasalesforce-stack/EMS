@@ -54,6 +54,7 @@ import employeeTaskReducer from "./../context/employeeTaskSlice"
 import employeePayrollReducer from "./employeePayrollSlice"
 import adminEmployeePayrollReducer from "./adminEmployeePayrollSlice"
 import organizationReducer from "./organizationSlice"
+import timezoneReducer from "./timezoneSlice"
 
 // Combine reducers
 const rootReducer = combineReducers({
@@ -70,7 +71,8 @@ const rootReducer = combineReducers({
   employeeTask: employeeTaskReducer,
   employeePayroll: employeePayrollReducer,
   adminEmployeePayroll: adminEmployeePayrollReducer,
-  organization: organizationReducer
+  organization: organizationReducer,
+  timezone: timezoneReducer,
 });
 
 // Persistence configuration

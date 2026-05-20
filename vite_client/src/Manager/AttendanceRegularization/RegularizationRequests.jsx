@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import axios, { getUploadUrl } from '../../utils/axios';
+import { isHR as checkIsHR } from '../../utils/managerHelper';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
@@ -87,6 +89,39 @@ function getTypeLabel(type) {
   return labels[type] || type || '—';
 }
 
+const APPROVER_TYPE_WAITING = {
+  Manager: 'Waiting for manager',
+  HR: 'Waiting for HR',
+  Executive: 'Waiting for executive',
+  Finance: 'Waiting for finance',
+};
+
+function getWorkflowWaitingLabel(req) {
+  const pending = req?.workflowSummary?.pendingStep;
+  if (!req?.workflowSummary?.hasWorkflow || !pending) return null;
+  return (
+    APPROVER_TYPE_WAITING[pending.approverType] ||
+    `Waiting: ${pending.stepName || `step ${pending.stepNumber}`}`
+  );
+}
+
+/** HR acting before the natural approver for the current step */
+function requestNeedsEarlyConfirm(req, isHrUser) {
+  if (!isHrUser) return false;
+  const type = req?.workflowSummary?.pendingStep?.approverType;
+  return Boolean(type && type !== 'HR');
+}
+
+function WorkflowStepPill({ req }) {
+  const label = getWorkflowWaitingLabel(req);
+  if (!label || req.status !== 'pending') return null;
+  return (
+    <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+      {label}
+    </span>
+  );
+}
+
 function StatusPill({ status }) {
   const map = {
     pending: {
@@ -115,6 +150,20 @@ function StatusPill({ status }) {
 }
 
 const RegularizationRequests = () => {
+  const authUser = useSelector((state) => state.auth.user);
+  const employeeProfile = useSelector((state) => state.employeeDetails.employee);
+  const userObj = authUser || employeeProfile;
+
+  const userRole = userObj?.role || localStorage.getItem('role') || 'employee';
+  const isAdmin = userRole === 'admin';
+  const isHr = useMemo(() => {
+    const roles = Array.isArray(userObj?.functionalRoles) ? userObj.functionalRoles : [];
+    return (
+      checkIsHR(userObj) ||
+      roles.some((r) => String(r).toLowerCase() === 'hr')
+    );
+  }, [userObj]);
+
   const { start: defaultStart, end: defaultEnd } = useMemo(() => currentMonthBounds(), []);
   const [requests, setRequests] = useState([]);
   const [statusCounts, setStatusCounts] = useState({
@@ -278,20 +327,64 @@ const RegularizationRequests = () => {
     [statusCounts]
   );
 
-  const handleApproveIds = async (ids) => {
+  const getRequestById = useCallback(
+    (id) => requests.find((r) => String(r._id) === String(id)),
+    [requests]
+  );
+
+  const promptEarlyApprovalConfirm = (targetRequests) => {
+    if (!targetRequests.length) return true;
+    const stepLabel =
+      targetRequests[0]?.workflowSummary?.pendingStep?.stepName ||
+      targetRequests[0]?.workflowSummary?.pendingStep?.approverType ||
+      'current step';
+    const count = targetRequests.length;
+    return window.confirm(
+      `The assigned approver has not completed the current step yet (${stepLabel}).\n\n` +
+        `If you continue, only this workflow step will be completed for ${count === 1 ? 'this request' : `${count} requests`}, ` +
+        `and ${count === 1 ? 'it' : 'they'} will move to the next approver.\n\nProceed?`
+    );
+  };
+
+  const handleApproveIds = async (ids, { adminBypass = false } = {}) => {
     if (!ids.length) return;
+
+    const targets = ids.map((id) => getRequestById(id)).filter(Boolean);
+    let confirmEarlyApproval = false;
+    const useAdminBypass = adminBypass || isAdmin;
+
+    if (!useAdminBypass) {
+      const needsEarly = targets.filter((r) => requestNeedsEarlyConfirm(r, isHr));
+      if (needsEarly.length && !promptEarlyApprovalConfirm(needsEarly)) {
+        return;
+      }
+      if (needsEarly.length) confirmEarlyApproval = true;
+    }
+
     setActionBusy(ids.length === 1 ? `${ids[0]}` : '__bulk');
     try {
       await Promise.all(
         ids.map((requestId) =>
           axios.patch(
             `/v1/both/attendance-regularization/manager/approve/${requestId}`,
-            { managerResponse: 'Approved' },
+            {
+              managerResponse: 'Approved',
+              ...(confirmEarlyApproval ? { confirmEarlyApproval: true } : {}),
+              ...(useAdminBypass ? { adminBypass: true } : {}),
+            },
             { withCredentials: true }
           )
         )
       );
-      toast.success(ids.length === 1 ? 'Request approved' : `${ids.length} requests approved`);
+      toast.success(
+        useAdminBypass
+          ? ids.length === 1
+            ? 'Request approved (all workflow steps completed)'
+            : `${ids.length} requests approved (all steps completed)`
+          : ids.length === 1
+            ? 'Request approved'
+            : `${ids.length} requests approved`
+      );
       setSelectedIds(new Set());
       setDrawerReq(null);
       fetchRequests();
@@ -315,13 +408,27 @@ const RegularizationRequests = () => {
       toast.warning('Provide a rejection reason');
       return;
     }
+
+    const rejectTargets = rejectTargetIds.map((id) => getRequestById(id)).filter(Boolean);
+    let confirmEarlyApproval = false;
+    if (!isAdmin) {
+      const needsEarly = rejectTargets.filter((r) => requestNeedsEarlyConfirm(r, isHr));
+      if (needsEarly.length && !promptEarlyApprovalConfirm(needsEarly)) {
+        return;
+      }
+      if (needsEarly.length) confirmEarlyApproval = true;
+    }
+
     setActionBusy(rejectTargetIds.length === 1 ? String(rejectTargetIds[0]) : '__bulk');
     try {
       for (const requestId of rejectTargetIds) {
         /* eslint-disable no-await-in-loop */
         await axios.patch(
           `/v1/both/attendance-regularization/manager/reject/${requestId}`,
-          { rejectionReason: rejectReason },
+          {
+            rejectionReason: rejectReason,
+            ...(confirmEarlyApproval ? { confirmEarlyApproval: true } : {}),
+          },
           { withCredentials: true }
         );
         /* eslint-enable no-await-in-loop */
@@ -486,11 +593,11 @@ const RegularizationRequests = () => {
               <button
                 type="button"
                 disabled={!!actionBusy}
-                onClick={() => handleApproveIds([...selectedIds])}
+                onClick={() => handleApproveIds([...selectedIds], { adminBypass: isAdmin })}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow disabled:opacity-50"
                 style={{ background: TEAL }}
               >
-                Approve selected
+                {isAdmin ? 'Approve & finalize selected' : 'Approve selected'}
               </button>
               <button
                 type="button"
@@ -597,6 +704,7 @@ const RegularizationRequests = () => {
                       </td>
                       <td className="whitespace-nowrap px-4 py-4">
                         <StatusPill status={req.status} />
+                        <WorkflowStepPill req={req} />
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 pr-5 text-right">
                         <div className="inline-flex items-center gap-2">
@@ -604,9 +712,11 @@ const RegularizationRequests = () => {
                             <>
                               <button
                                 type="button"
-                                title="Approve"
+                                title={isAdmin ? 'Approve and complete all steps' : 'Approve current step'}
                                 disabled={!!actionBusy}
-                                onClick={() => handleApproveIds([req._id])}
+                                onClick={() =>
+                                  handleApproveIds([req._id], { adminBypass: isAdmin })
+                                }
                                 className="rounded-lg p-2 text-white disabled:opacity-40"
                                 style={{ background: TEAL }}
                               >
@@ -707,6 +817,7 @@ const RegularizationRequests = () => {
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Regularization Request</p>
                   <StatusPill status={drawerReq.status} />
+                  <WorkflowStepPill req={drawerReq} />
                 </div>
                 <button
                   type="button"
@@ -770,16 +881,34 @@ const RegularizationRequests = () => {
                 </section>
               ) : null}
 
+              {drawerReq.workflowSummary?.steps?.length > 1 ? (
+                <section className="mb-6 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Workflow steps</h3>
+                  <ul className="space-y-1 text-sm text-slate-700">
+                    {drawerReq.workflowSummary.steps.map((step) => (
+                      <li key={step.stepNumber} className="flex justify-between gap-2">
+                        <span>
+                          {step.stepNumber}. {step.stepName}
+                        </span>
+                        <span className="text-xs font-semibold uppercase text-slate-500">{step.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
               {drawerReq.status === 'pending' ? (
                 <div className="mt-6 flex gap-2">
                   <button
                     type="button"
                     disabled={!!actionBusy}
-                    onClick={() => handleApproveIds([drawerReq._id])}
+                    onClick={() =>
+                      handleApproveIds([drawerReq._id], { adminBypass: isAdmin })
+                    }
                     className="flex-1 rounded-xl py-3 text-sm font-semibold text-white shadow"
                     style={{ background: TEAL }}
                   >
-                    Approve
+                    {isAdmin ? 'Approve & finalize' : 'Approve'}
                   </button>
                   <button
                     type="button"

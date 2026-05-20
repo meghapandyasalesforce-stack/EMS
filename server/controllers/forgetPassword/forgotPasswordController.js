@@ -3,7 +3,13 @@ import Employee from '../../models/employee.model.js';
 import User from '../../models/user.model.js';
 import bcrypt from 'bcryptjs';
 import logger from '../../helpers/logger.js';
+import { normalizeEmail } from '../../helpers/authHelpers.js';
 import { createEmailTransporter, getEmailFrom } from '../../config/email.config.js';
+
+const GENERIC_RESET_MESSAGE =
+  'If an account exists for this email, you will receive a password reset link shortly. Check your inbox and spam folder.';
+const EMAIL_SENT_MESSAGE =
+  'Password reset link sent. Check your inbox and spam folder. The link expires in 15 minutes.';
 
 const maskEmail = (email = '') => {
   const normalized = String(email || '').trim().toLowerCase();
@@ -25,72 +31,41 @@ const generateResetToken = async () => {
 
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
-    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(req.body?.email);
     const maskedEmail = maskEmail(normalizedEmail);
     logger.info('Forgot password request received', {
       maskedEmail,
       ip: req.ip
     });
-    
-    // Validate email format
-    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
-    if (!email || !emailRegex.test(email)) {
+
+    if (!normalizedEmail) {
       logger.warn('Forgot password rejected: invalid email format', {
         maskedEmail,
         ip: req.ip
       });
-      return res.status(400).json({ 
-        message: 'Please provide a valid email address.' 
+      return res.status(400).json({
+        message: 'Please provide a valid email address.',
+        emailSent: false,
       });
     }
-    
-    // Case-insensitive email search - check both Employee and User (Admin) collections
-    let user = await Employee.findOne({ 
-      email: { $regex: new RegExp(`^${email}$`, 'i') }
-    });
-    
+
+    // Employees store email lowercase; admins use the same convention
+    let user = await Employee.findOne({ email: normalizedEmail });
     let userType = 'employee';
-    
-    // If not found in Employee, check User (Admin) collection
+
     if (!user) {
-      user = await User.findOne({ 
-        email: { $regex: new RegExp(`^${email}$`, 'i') }
-      });
+      user = await User.findOne({ email: normalizedEmail });
       userType = 'admin';
     }
 
-    // Always return same message to prevent email enumeration
-    // Don't reveal whether email exists or not
     if (!user) {
-      // Return success to prevent email enumeration attacks
-      // Still return 200 but don't send email
       logger.info('Forgot password handled with generic success (user not found)', {
         maskedEmail,
         ip: req.ip
       });
-      return res.status(200).json({ 
-        message: 'If the email exists, a password reset link has been sent.' 
-      });
-    }
-
-    // Check if there's already a valid reset token (prevent spam)
-    if (user.resetPasswordToken && user.resetPasswordExpire > Date.now()) {
-      // Don't create new token if one already exists and is valid
-      // Return success to prevent information leakage
-      const resendAfterMinutes = Math.max(
-        1,
-        Math.ceil((new Date(user.resetPasswordExpire).getTime() - Date.now()) / (60 * 1000))
-      );
-      logger.info('Forgot password suppressed: active token already exists', {
-        maskedEmail,
-        userType,
-        resendAfterMinutes,
-        ip: req.ip
-      });
-      return res.status(200).json({ 
-        message: 'If the email exists, a password reset link has been sent succusfully.',
-        resendAfterMinutes
+      return res.status(200).json({
+        message: GENERIC_RESET_MESSAGE,
+        emailSent: false,
       });
     }
 
@@ -245,7 +220,10 @@ export const forgotPassword = async (req, res) => {
       ip: req.ip
     });
 
-    res.status(200).json({ message: 'Reset link sent to your email' });
+    res.status(200).json({
+      message: EMAIL_SENT_MESSAGE,
+      emailSent: true,
+    });
   } catch (error) {
     logger.error('Forgot password error', {
       error: error.message,

@@ -4,6 +4,7 @@ import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from 
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../context/Auth/authSlice";
 import { clearEmployeeDetails } from "../context/employeeDetailsSlice";
+import { clearTimezoneContext } from "../context/timezoneSlice";
 import { resetAttendance } from "../context/attendanceSlice";
 import { toast } from 'react-toastify';
 import { Dialog, Transition } from '@headlessui/react';
@@ -46,6 +47,7 @@ const Header = () => {
         try {
             dispatch(resetAttendance());
             dispatch(clearEmployeeDetails());
+            dispatch(clearTimezoneContext());
             
             await dispatch(logoutUser(email)).unwrap();
             
@@ -70,6 +72,7 @@ const Header = () => {
             // Clear attendance even if logout API fails
             dispatch(resetAttendance());
             dispatch(clearEmployeeDetails());
+            dispatch(clearTimezoneContext());
             await persistor.purge();
             
             localStorage.removeItem('csrfToken');

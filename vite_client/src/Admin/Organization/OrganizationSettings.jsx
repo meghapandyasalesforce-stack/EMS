@@ -13,8 +13,12 @@ import {
     FiUsers,
     FiToggleLeft,
     FiToggleRight,
-    FiCheckCircle
+    FiCheckCircle,
+    FiGlobe
 } from 'react-icons/fi';
+import TimezoneSelect from '../../components/TimezoneSelect';
+import { setTimezoneContext, fetchOrganizationTimezone } from '../../context/timezoneSlice';
+import { DEFAULT_TIMEZONE } from '../../utils/timezoneOptions';
 
 const OrganizationSettings = () => {
     const dispatch = useDispatch();
@@ -25,7 +29,8 @@ const OrganizationSettings = () => {
         allowSelfService: true,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
-        employeeIdMinDigits: 3
+        employeeIdMinDigits: 3,
+        timezone: DEFAULT_TIMEZONE,
     });
     const [subscription, setSubscription] = useState({
         subscriptionPlan: 'free',
@@ -46,7 +51,8 @@ const OrganizationSettings = () => {
                 allowSelfService: profile.settings.allowSelfService ?? true,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
-                employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3
+                employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
+                timezone: profile.timezone || DEFAULT_TIMEZONE,
             });
         }
         if (profile) {
@@ -89,8 +95,15 @@ const OrganizationSettings = () => {
     const handleSaveSettings = async () => {
         try {
             setIsSaving(true);
-            await dispatch(updateOrganizationSettings(settings)).unwrap();
-            // Re-fetch profile to ensure we have the latest data
+            const result = await dispatch(updateOrganizationSettings(settings)).unwrap();
+            if (result?.timezone || settings.timezone) {
+                dispatch(setTimezoneContext({
+                    timezone: result?.timezone || settings.timezone,
+                    organizationTimezone: result?.timezone || settings.timezone,
+                    attendanceRuleTimezone: null,
+                }));
+                dispatch(fetchOrganizationTimezone());
+            }
             const updatedProfile = await dispatch(fetchOrganizationProfile()).unwrap();
             // Update local state from the freshly fetched profile
             if (updatedProfile?.settings) {
@@ -100,7 +113,8 @@ const OrganizationSettings = () => {
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
-                    employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3
+                    employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
+                    timezone: updatedProfile.timezone || DEFAULT_TIMEZONE,
                 });
             }
             toast.success('Settings updated successfully');
@@ -218,6 +232,20 @@ const OrganizationSettings = () => {
                                 <FiToggleLeft className="w-12 h-6 text-gray-400" />
                             )}
                         </button>
+                    </div>
+
+                    <div className="p-4 border border-gray-200 rounded-lg mb-6">
+                        <h3 className="text-lg font-medium text-gray-800 flex items-center mb-3">
+                            <FiGlobe className="mr-2" />
+                            Organization timezone
+                        </h3>
+                        <TimezoneSelect
+                            id="org-timezone"
+                            value={settings.timezone}
+                            onChange={(tz) => setSettings((prev) => ({ ...prev, timezone: tz }))}
+                            label=""
+                            hint="Default timezone for attendance, leave, payroll, and displayed times across the app."
+                        />
                     </div>
 
                     {/* Employee ID Format */}

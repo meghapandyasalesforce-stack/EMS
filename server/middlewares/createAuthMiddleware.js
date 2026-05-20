@@ -210,9 +210,15 @@ const deriveFunctionalRolesFromLegacy = (employee) => {
         roles.push('hr');
     }
 
-    // Manager detection
-    if (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
-        pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director')) {
+    // Project Manager
+    if (jobTitle === 'project manager') {
+        roles.push('project_manager');
+    }
+
+    // Line manager detection (exclude Project Manager job title)
+    if (jobTitle !== 'project manager' &&
+        (pos === 'manager' || pos === 'director' || pos.includes('manager') ||
+        pos.includes('director') || jobTitle.includes('manager') || jobTitle.includes('director'))) {
         roles.push('manager');
     }
 
@@ -463,9 +469,11 @@ export const isAdminOrManagerOrHR = createAuthMiddleware({
             const effectiveRoles = getEffectiveFunctionalRoles(employee);
             const isHR = effectiveRoles.includes('hr');
             const isManager = effectiveRoles.includes('manager');
+            const isProjectManager = effectiveRoles.includes('project_manager') ||
+                (employee.jobTitle || '').toLowerCase().trim() === 'project manager';
             const isExec = effectiveRoles.includes('executive') || effectiveRoles.includes('ceo') || effectiveRoles.includes('cto') || effectiveRoles.includes('cfo') || effectiveRoles.includes('vp');
 
-            if (isHR || isManager || isExec) {
+            if (isHR || isManager || isProjectManager || isExec) {
                 // Always attach role enrichments so downstream controllers can safely branch on flags.
                 req.employee = {
                     ...(req.employee || {}),
@@ -474,6 +482,7 @@ export const isAdminOrManagerOrHR = createAuthMiddleware({
                     functionalRoles: effectiveRoles,
                     organizationId: employee.organizationId || decoded.organizationId || req.organizationId,
                     isManager: isManager,
+                    isProjectManager,
                     isHR: isHR,
                     isExecutive: isExec
                 };

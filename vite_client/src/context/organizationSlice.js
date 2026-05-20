@@ -221,6 +221,9 @@ const organizationSlice = createSlice({
                 state.loading = false;
                 if (state.profile) {
                     state.profile.settings = action.payload.settings || action.payload;
+                    if (action.payload.timezone) {
+                        state.profile.timezone = action.payload.timezone;
+                    }
                 }
                 // Store migration status if available
                 if (action.payload.migrationCompleted !== undefined) {

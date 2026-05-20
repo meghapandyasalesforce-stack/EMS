@@ -13,6 +13,7 @@ import { addOrganizationFilter, getOrganizationId } from '../../helpers/organiza
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { buildManagerMatchQuery, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import { shouldApplyLineManagerScope } from '../../helpers/projectManagerHelper.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 
 /**    
@@ -114,7 +115,7 @@ export const getAllEmployees = async (req, res) => {
         const roles = Array.isArray(req.employee?.functionalRoles) ? req.employee.functionalRoles : [];
         const isHR = roles.includes('hr') || req.employee?.isHR === true;
         const isManager = roles.includes('manager') || req.employee?.isManager === true;
-        const shouldApplyManagerFilter = !req.user && isManager && !isHR;
+        const shouldApplyManagerFilter = shouldApplyLineManagerScope(req) && isManager;
         if (shouldApplyManagerFilter && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
@@ -210,7 +211,7 @@ export const updateEmployeeStatus = async (req, res) => {
         }
 
         // Manager can update status only for employees linked to them.
-        const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManagerScope = shouldApplyLineManagerScope(req) && !!req.employee?.isManager;
         if (isManagerScope) {
             const linked = isEmployeeLinkedToManager(employeeBefore, req.employee);
             if (!linked) {
@@ -306,7 +307,7 @@ export const terminateEmployee = async (req, res) => {
         }
 
         // Manager can terminate only employees linked to them.
-        const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManagerScope = shouldApplyLineManagerScope(req) && !!req.employee?.isManager;
         if (isManagerScope) {
             const linked = isEmployeeLinkedToManager(employeeBefore, req.employee);
             if (!linked) {

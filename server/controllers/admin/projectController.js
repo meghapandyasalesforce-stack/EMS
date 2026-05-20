@@ -1,9 +1,13 @@
 import Project from "../../models/project.model.js";
 import ProjectUpdate from "../../models/projectUpdate.model.js";
+import ProjectWorkItem from "../../models/projectWorkItem.model.js";
 import Employee from "../../models/employee.model.js";
+import { createWorkItemsForProject } from "./projectWorkItemController.js";
+import { PROJECT_TEMPLATES } from "../../constants/projectTemplates.js";
 import logger from "../../helpers/logger.js";
 import { getOrganizationId } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
+import { shouldApplyLineManagerScope } from "../../helpers/projectManagerHelper.js";
 
 // Helper function to get employees with Manager role
 const getManagersOnly = async () => {
@@ -70,8 +74,7 @@ export const getAllProjects = async (req, res) => {
         
         // If user is a manager (not admin or HR), filter by manager field or projects they manage
         // Example: Manager "Arun Kumar" sees projects with employees linked to them (manager="Arun Kumar" or "Arun")
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
-        if (isManager && req.employee) {
+        if (shouldApplyLineManagerScope(req) && req.employee) {
             const managerId = req.employee._id;
             const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
             
@@ -130,6 +133,22 @@ export const getAllProjects = async (req, res) => {
     }
 };
 
+/** GET built-in project templates (work plan presets) */
+export const getProjectTemplates = async (req, res) => {
+    try {
+        res.status(200).json({
+            success: true,
+            templates: PROJECT_TEMPLATES
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: "Failed to fetch project templates",
+            details: error.message
+        });
+    }
+};
+
 // Create a new project with validation
 export const createProject = async (req, res) => {
     try {
@@ -139,7 +158,7 @@ export const createProject = async (req, res) => {
             memberCount: req.body.projectMembers?.length || 0
         });
         
-        const { name, description, projectLeader, projectMembers, status, priority, startDate, endDate, budget, actualCost, revenue, currency, tags, category } = req.body;
+        const { name, description, projectLeader, projectMembers, status, priority, startDate, endDate, budget, actualCost, revenue, currency, tags, category, workItems } = req.body;
 
         // Validate required fields
         if (!name || !name.trim()) {
@@ -238,6 +257,18 @@ export const createProject = async (req, res) => {
         });
 
         await newProject.save();
+
+        if (Array.isArray(workItems) && workItems.length > 0) {
+            try {
+                await createWorkItemsForProject(req, newProject._id, organizationId, workItems);
+            } catch (workErr) {
+                logger.error("Create project work items failed", { error: workErr.message, projectId: newProject._id });
+                await Project.findByIdAndDelete(newProject._id);
+                return res.status(400).json({
+                    error: workErr.message || "Invalid work items; project was not created"
+                });
+            }
+        }
         
         // Return populated project data
         const populatedProject = await Project.findById(newProject._id)
@@ -375,6 +406,8 @@ export const deleteProject = async (req, res) => {
             return res.status(404).json({ error: 'Project not found' });
         }
 
+        await ProjectWorkItem.deleteMany({ projectId: id });
+
         res.status(200).json({ 
             success: true,
             message: 'Project deleted successfully',
@@ -425,8 +458,7 @@ export const getProjectById = async (req, res) => {
 
         // If user is a manager (not admin or HR), verify access
         // Example: Manager "Arun Kumar" can only view projects with employees linked to them
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
-        if (isManager && req.employee) {
+        if (shouldApplyLineManagerScope(req) && req.employee) {
             const managerId = req.employee._id;
             const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
             

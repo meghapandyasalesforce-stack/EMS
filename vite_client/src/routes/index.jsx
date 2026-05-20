@@ -111,9 +111,9 @@ export const employeeRoutes = [
 
 // Project routes
 export const projectRoutes = [
-  { path: '/add-project', component: lazy(() => import('../Admin/project/AddProject')), message: 'Loading...', allowedRoles: ['admin', 'manager', 'hr', 'executive'] },
-  { path: '/projects', component: lazy(() => import('../Admin/project/ProjectPage')), message: 'Loading projects...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
-  { path: '/projects/:id', component: lazy(() => import('../Admin/project/ProjectDetailPage')), message: 'Loading project details...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
+  { path: '/add-project', component: lazy(() => import('../Admin/project/AddProject')), message: 'Loading...', allowedRoles: ['admin', 'manager', 'project_manager', 'hr', 'executive'] },
+  { path: '/projects', component: lazy(() => import('../Admin/project/ProjectPage')), message: 'Loading projects...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'] },
+  { path: '/projects/:id', component: lazy(() => import('../Admin/project/ProjectDetailPage')), message: 'Loading project details...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'] },
   { path: '/employee/projects', component: lazy(() => import('../Employee/Project/EmployeeProjects')), message: 'Loading projects...', allowedRoles: [] },
   { path: '/employee/projects/:projectId', component: lazy(() => import('../Employee/Project/EmployeeTasks')), message: 'Loading tasks...', allowedRoles: [] }
 ];

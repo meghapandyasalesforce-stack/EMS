@@ -7,6 +7,7 @@ import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import { checkAuthSession } from './context/Auth/authSlice';
 import { clearEmployeeDetails } from './context/employeeDetailsSlice';
+import { fetchOrganizationTimezone, setTimezoneContext, clearTimezoneContext } from './context/timezoneSlice';
 import {
   authRoutes,
   dashboardRoutes,
@@ -38,13 +39,22 @@ function App() {
             try {
                 const result = await dispatch(checkAuthSession());
                 if (cancelled) return;
+                if (checkAuthSession.fulfilled.match(result)) {
+                    const ctx = result.payload?.timezoneContext;
+                    if (ctx) {
+                        dispatch(setTimezoneContext(ctx));
+                    } else if (result.payload?.employee) {
+                        dispatch(fetchOrganizationTimezone());
+                    }
+                }
                 if (checkAuthSession.rejected.match(result)) {
-                    // Remove stale persisted employee details when session is invalid/deleted.
                     dispatch(clearEmployeeDetails());
+                    dispatch(clearTimezoneContext());
                 }
             } catch {
                 if (!cancelled) {
                     dispatch(clearEmployeeDetails());
+                    dispatch(clearTimezoneContext());
                 }
             }
         };

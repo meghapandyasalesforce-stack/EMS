@@ -4,9 +4,17 @@ import { toast } from 'react-toastify';
 import { FaMapMarkerAlt, FaRuler, FaSave, FaTimes, FaCalendarAlt } from 'react-icons/fa';
 import GoogleMapsComponent from '../../utils/GoogleMaps';
 import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
+import TimezoneSelect from '../../components/TimezoneSelect';
+import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
+import { fetchOrganizationProfile } from '../../context/organizationSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { DEFAULT_TIMEZONE } from '../../utils/timezoneOptions';
 
 const AttendanceRules = () => {
+    const dispatch = useDispatch();
+    const orgTimezone = useSelector((state) => state.organization.profile?.timezone) || DEFAULT_TIMEZONE;
     const [formData, setFormData] = useState({
+        timezone: DEFAULT_TIMEZONE,
         location: '',
         address: '',
         coordinates: { latitude: 0, longitude: 0 },
@@ -47,8 +55,9 @@ const AttendanceRules = () => {
 
     // Fetch current attendance rule on component mount
     useEffect(() => {
+        dispatch(fetchOrganizationProfile());
         fetchAttendanceRule();
-    }, []);
+    }, [dispatch]);
 
     const fetchAttendanceRule = async () => {
         try {
@@ -58,6 +67,7 @@ const AttendanceRules = () => {
             if (response.data.success && response.data.rule) {
                 const rule = response.data.rule;
                 const newFormData = {
+                    timezone: rule.timezone || orgTimezone || DEFAULT_TIMEZONE,
                     location: rule.location || '',
                     address: rule.address || '',
                     coordinates: rule.coordinates || { latitude: 0, longitude: 0 },
@@ -201,6 +211,7 @@ const AttendanceRules = () => {
 
             if (response.data.success) {
                 toast.success('Attendance rules saved successfully!');
+                dispatch(fetchOrganizationTimezone());
                 fetchAttendanceRule();
             }
         } catch (error) {
@@ -389,6 +400,16 @@ const AttendanceRules = () => {
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="mb-8 border-t pt-6">
+                            <TimezoneSelect
+                                id="attendance-rule-timezone"
+                                value={formData.timezone}
+                                onChange={(tz) => setFormData((prev) => ({ ...prev, timezone: tz }))}
+                                label="Attendance timezone"
+                                hint="Overrides organization timezone for punch times and office hours. Match organization settings unless you need a different rule."
+                            />
                         </div>
 
                         {/* Office Hours Section */}

@@ -14,6 +14,7 @@ import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { autoGenerateIdCard } from '../admin/idCardController.js';
 import mongoose from 'mongoose';
+import { isValidTimezone } from '../../constants/timezoneOptions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -247,7 +248,8 @@ export const updateOrganizationSettings = async (req, res) => {
             allowSelfService,
             employeeIdPrefix,
             employeeIdStartNumber,
-            employeeIdMinDigits
+            employeeIdMinDigits,
+            timezone,
         } = req.body;
 
         const organization = await Organization.findById(organizationId);
@@ -306,6 +308,12 @@ export const updateOrganizationSettings = async (req, res) => {
         }
         if (employeeIdStartNumber !== undefined) {
             organization.settings.employeeIdNextNumber = newStartNumber;
+        }
+        if (timezone !== undefined) {
+            if (!isValidTimezone(timezone)) {
+                return sendError(res, 'Invalid timezone', 400);
+            }
+            organization.timezone = timezone.trim();
         }
 
         // Variables to track ID card generation stats (declared at function level)
@@ -459,6 +467,7 @@ export const updateOrganizationSettings = async (req, res) => {
 
         const response = {
             settings: organization.settings,
+            timezone: organization.timezone,
             migrationCompleted: formatChanged && newPrefix ? true : false
         };
 

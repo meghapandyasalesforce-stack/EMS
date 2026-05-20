@@ -56,10 +56,14 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
                 dashboardRoute = '/dashboard-administration';
                 logger.debug('Executive Dashboard matched', { userId, position });
             }
-            // PRIORITY 3: Manager/Director → Manager Dashboard
-            else if (position === 'manager' || position === 'director') {
+            // PRIORITY 3: Project Manager / Manager / Director → Manager Dashboard
+            else if (
+                jobTitle === 'project manager' ||
+                position === 'manager' ||
+                position === 'director'
+            ) {
                 dashboardRoute = '/dashboard/manager';
-                logger.debug('Manager Dashboard matched', { userId, position });
+                logger.debug('Manager Dashboard matched', { userId, position, jobTitle });
             }
             // PRIORITY 4: Tech Department → Tech Dashboard
             else if (

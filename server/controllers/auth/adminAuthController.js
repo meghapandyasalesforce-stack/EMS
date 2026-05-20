@@ -382,11 +382,21 @@ export const loginUser = asyncHandler(async (req, res) => {
         role: 'admin'
     };
 
+    let timezoneContext = null;
+    try {
+        const { getTimezoneContext } = await import('../../helpers/organizationTimezoneService.js');
+        timezoneContext = await getTimezoneContext(organizationId);
+    } catch (tzError) {
+        logger.warn('Failed to load timezone on admin login', { error: tzError.message });
+    }
+
     // CODE QUALITY FIX: Unified response structure across all login endpoints
     // Structure: { token, user/employee, dashboardRoute, refreshToken?, csrfToken? }
     const response = {
         token,
         dashboardRoute, // Add dashboard route for automatic redirection
+        timezone: timezoneContext?.timezone || 'UTC',
+        timezoneContext,
         user: userData
     };
     

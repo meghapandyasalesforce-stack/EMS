@@ -736,11 +736,21 @@ export const loginEmployee = asyncHandler(async (req, res) => {
         });
     }
 
+    let timezoneContext = null;
+    try {
+        const { getTimezoneContext } = await import('../../helpers/organizationTimezoneService.js');
+        timezoneContext = await getTimezoneContext(employee.organizationId);
+    } catch (tzError) {
+        logger.warn('Failed to load timezone on login', { error: tzError.message });
+    }
+
     // CODE QUALITY FIX: Unified response structure across all login endpoints
     // Structure: { token, user/employee, dashboardRoute, refreshToken?, csrfToken? }
     const response = {
         token,
         dashboardRoute, // Add dashboard route for automatic redirection
+        timezone: timezoneContext?.timezone || 'UTC',
+        timezoneContext,
         employee: {
             id: employee._id,
             name: employee.name,
@@ -751,6 +761,7 @@ export const loginEmployee = asyncHandler(async (req, res) => {
             department: employee.department,
             jobTitle: employee.jobTitle,
             jobCategory: employee.jobCategory,
+            functionalRoles: employee.functionalRoles || [],
             birthDate: employee.birthDate,
             profilePhoto: employee.profilePhoto,
             mustResetPassword: employee.mustResetPassword

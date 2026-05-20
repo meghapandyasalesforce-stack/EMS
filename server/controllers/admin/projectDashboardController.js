@@ -6,6 +6,7 @@ import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { getManagerEmployeeIds } from '../../helpers/managerHelper.js';
+import { shouldApplyLineManagerScope } from '../../helpers/projectManagerHelper.js';
 
 /**
  * Get project dashboard statistics
@@ -17,8 +18,7 @@ export const getProjectStatistics = async (req, res) => {
         const query = addOrganizationFilter(req, {});
 
         // Manager filtering
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
-        if (isManager && req.employee) {
+        if (shouldApplyLineManagerScope(req) && req.employee) {
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
             query.$or = [
                 { projectLeader: req.employee._id },
@@ -129,9 +129,8 @@ export const getProjectProgress = async (req, res) => {
             .lean();
 
         // Manager filtering
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
         let filteredProjects = projects;
-        if (isManager && req.employee) {
+        if (shouldApplyLineManagerScope(req) && req.employee) {
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
             const managerEmployeeIdStrings = managerEmployeeIds.map(id => id.toString());
             filteredProjects = projects.filter(p => {
@@ -417,9 +416,8 @@ export const getProjectDashboard = async (req, res) => {
         ]);
 
         // Manager filtering
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
         let filteredProjects = projects;
-        if (isManager && req.employee) {
+        if (shouldApplyLineManagerScope(req) && req.employee) {
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
             const managerEmployeeIdStrings = managerEmployeeIds.map(id => id.toString());
             filteredProjects = projects.filter(p => {

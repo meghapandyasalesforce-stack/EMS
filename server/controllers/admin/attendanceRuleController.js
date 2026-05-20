@@ -5,6 +5,7 @@ import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError } from '../../helpers/responseHelper.js';
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { geocodeAddress, isGeocodingAvailable } from '../../helpers/geocodingService.js';
+import { isValidTimezone } from '../../constants/timezoneOptions.js';
 
 // Helper to get client IP
 const getClientIP = (req) => {
@@ -68,7 +69,7 @@ const detectFieldChanges = (oldRule, newRule) => {
 };
 
 // Sync attendance office hours to current-year calendar working hours.
-const syncCalendarWorkingHoursFromRule = async (req, organizationId, officeHours) => {
+const syncCalendarWorkingHoursFromRule = async (req, organizationId, officeHours, timezone = 'UTC') => {
     if (!officeHours?.startTime || !officeHours?.endTime) return;
 
     const currentYear = new Date().getFullYear();
@@ -95,7 +96,7 @@ const syncCalendarWorkingHoursFromRule = async (req, organizationId, officeHours
                 breakDuration: 60
             },
             companySettings: {
-                timezone: "UTC",
+                timezone: timezone || 'UTC',
                 dateFormat: "DD/MM/YYYY",
                 weekStartsOn: "monday"
             }
@@ -105,6 +106,10 @@ const syncCalendarWorkingHoursFromRule = async (req, organizationId, officeHours
             ...calendar.workingHours,
             startTime: officeHours.startTime,
             endTime: officeHours.endTime
+        };
+        calendar.companySettings = {
+            ...calendar.companySettings,
+            timezone: timezone || calendar.companySettings?.timezone || 'UTC',
         };
     }
 
@@ -235,7 +240,12 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
             attendanceRule.enablePenaltyRules = enablePenaltyRules !== undefined ? enablePenaltyRules : true;
 
             // Update new fields if provided
-            if (req.body.timezone) attendanceRule.timezone = req.body.timezone;
+            if (req.body.timezone !== undefined) {
+                if (!isValidTimezone(req.body.timezone)) {
+                    return sendValidationError(res, 'Invalid timezone');
+                }
+                attendanceRule.timezone = req.body.timezone;
+            }
             if (req.body.officeHours) attendanceRule.officeHours = req.body.officeHours;
             if (req.body.checkInOutTimes) attendanceRule.checkInOutTimes = req.body.checkInOutTimes;
             if (req.body.autoCheckOut) attendanceRule.autoCheckOut = req.body.autoCheckOut;
@@ -285,7 +295,12 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
 
             // Keep calendar working hours in sync with attendance office hours.
             try {
-                await syncCalendarWorkingHoursFromRule(req, organizationId, attendanceRule.officeHours);
+                await syncCalendarWorkingHoursFromRule(
+                    req,
+                    organizationId,
+                    attendanceRule.officeHours,
+                    attendanceRule.timezone
+                );
             } catch (syncError) {
                 logger.error('Sync attendance->calendar working hours failed', {
                     error: syncError.message,
@@ -371,7 +386,12 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
 
             // Keep calendar working hours in sync with attendance office hours.
             try {
-                await syncCalendarWorkingHoursFromRule(req, organizationId, attendanceRule.officeHours);
+                await syncCalendarWorkingHoursFromRule(
+                    req,
+                    organizationId,
+                    attendanceRule.officeHours,
+                    attendanceRule.timezone
+                );
             } catch (syncError) {
                 logger.error('Sync attendance->calendar working hours failed', {
                     error: syncError.message,

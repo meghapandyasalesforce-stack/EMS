@@ -10,6 +10,10 @@ import { getRedisConfig, isRedisConnected } from '../config/redis.js';
 import Attendance from '../models/attendance.model.js';
 import AttendanceRule from '../models/attendanceRule.model.js';
 import { sendNotification } from '../helpers/notificationService.js';
+import {
+    getAttendanceDayContext,
+    buildOrgTodayAttendanceFilter,
+} from '../helpers/attendanceDayHelper.js';
 
 // Get Redis connection config
 const getConnection = () => {
@@ -42,7 +46,6 @@ const getConnection = () => {
 async function processAutoCheckOut() {
     try {
         const now = new Date();
-        const today = new Date(now.setHours(0, 0, 0, 0));
         const currentTime = new Date().toTimeString().slice(0, 5); // HH:mm format
 
         // Get all active attendance rules with auto check-out enabled
@@ -60,12 +63,12 @@ async function processAutoCheckOut() {
                 
                 // Check if current time matches auto check-out time
                 if (currentTime === autoCheckOutTime) {
+                    const dayContext = await getAttendanceDayContext(rule.organizationId, now);
                     // Find all employees checked in but not checked out for this organization
                     const activeAttendances = await Attendance.find({
-                        organizationId: rule.organizationId,
-                        date: today,
+                        ...buildOrgTodayAttendanceFilter(rule.organizationId, dayContext),
                         clockIn: { $exists: true },
-                        clockOut: { $exists: false }
+                        clockOut: { $exists: false },
                     }).populate('userId', 'name email').lean();
 
                     for (const attendance of activeAttendances) {
@@ -175,15 +178,13 @@ async function sendPreCheckOutNotifications() {
 
                 // Check if current time matches notification time
                 if (currentTime === notificationTimeStr) {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
+                    const dayContext = await getAttendanceDayContext(rule.organizationId, now);
 
                     // Find all employees checked in but not checked out
                     const activeAttendances = await Attendance.find({
-                        organizationId: rule.organizationId,
-                        date: today,
+                        ...buildOrgTodayAttendanceFilter(rule.organizationId, dayContext),
                         clockIn: { $exists: true },
-                        clockOut: { $exists: false }
+                        clockOut: { $exists: false },
                     }).populate('userId', 'name email').lean();
 
                     for (const attendance of activeAttendances) {

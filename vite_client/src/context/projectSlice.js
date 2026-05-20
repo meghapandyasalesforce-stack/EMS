@@ -8,6 +8,7 @@ const projectSlice = createSlice({
   initialState: {
     allProjects: [],
     projectTasks: [],
+    /** Used for daily task log fetch on project detail — not project create/update */
     status: 'idle',
     error: null
   },
@@ -16,27 +17,14 @@ const projectSlice = createSlice({
       state.allProjects = action.payload;
     },
     addProject: (state, action) => {
-      const normalizedProject = {
-        ...action.payload,
-        projectLeader: Array.isArray(action.payload.projectLeader)
-          ? action.payload.projectLeader.map(p => p._id)
-          : [action.payload.projectLeader._id],
-        projectMembers: action.payload.projectMembers.map(member => member._id),
-      };
-      state.allProjects.unshift(normalizedProject);
+      // Keep populated projectLeader / projectMembers from API (objects with _id, name, etc.)
+      state.allProjects.unshift(action.payload);
     },
     updateProject: (state, action) => {
       const { _id } = action.payload;
       const index = state.allProjects.findIndex(project => project._id === _id);
       if (index !== -1) {
-        const normalizedProject = {
-          ...action.payload,
-          projectLeader: Array.isArray(action.payload.projectLeader)
-            ? action.payload.projectLeader.map(p => p._id)
-            : [action.payload.projectLeader._id],
-          projectMembers: action.payload.projectMembers.map(member => member._id),
-        };
-        state.allProjects[index] = normalizedProject;
+        state.allProjects[index] = action.payload;
       }
     },
     deleteProject: (state, action) => {
@@ -46,39 +34,52 @@ const projectSlice = createSlice({
     },
     setProjectTasks: (state, action) => {
       state.projectTasks = action.payload;
+      state.status = 'idle';
+      state.error = null;
     },
-    setLoading: (state) => {
+    setProjectTasksLoading: (state) => {
       state.status = 'loading';
     },
-    setError: (state, action) => {
+    setProjectTasksError: (state, action) => {
       state.error = action.payload;
       state.status = 'failed';
+    },
+    clearProjectTasksError: (state) => {
+      state.error = null;
+      state.status = 'idle';
     }
   }
 });
 
-// Thunk actions
+// Thunk: fetch daily task logs for a project (Team daily logs tab)
 export const fetchProjectTasks = (projectId, filters = {}) => async (dispatch) => {
   try {
-    dispatch(setLoading());
+    dispatch(setProjectTasksLoading());
     const queryString = new URLSearchParams(filters).toString();
-    const res = await axios.get(`${BOTH_TASK_ENDPOINT}/admin/projects/${projectId}/tasks?${queryString}`);
-    dispatch(setProjectTasks(res.data.tasks));
-    dispatch(setError(null));
+    const res = await axios.get(
+      `${BOTH_TASK_ENDPOINT}/admin/projects/${projectId}/tasks?${queryString}`
+    );
+    dispatch(setProjectTasks(res.data?.tasks ?? []));
   } catch (error) {
-    dispatch(setError(error.response?.data?.error || 'Failed to fetch project tasks'));
-    toast.error(error.response?.data?.error || 'Failed to fetch project tasks');
+    const message = error.response?.data?.error || 'Failed to fetch project tasks';
+    dispatch(setProjectTasksError(message));
+    toast.error(message);
   }
 };
 
-export const { 
-  setAllProjects, 
+export const {
+  setAllProjects,
   addProject,
   updateProject,
   deleteProject,
   setProjectTasks,
-  setLoading,
-  setError
+  setProjectTasksLoading,
+  setProjectTasksError,
+  clearProjectTasksError,
 } = projectSlice.actions;
+
+// Backward-compatible aliases (avoid breaking any other imports)
+export const setLoading = setProjectTasksLoading;
+export const setError = setProjectTasksError;
 
 export default projectSlice.reducer;

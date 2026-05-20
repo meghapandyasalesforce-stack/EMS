@@ -42,6 +42,7 @@ const forgotPasswordSlice = createSlice({
     success: false,
     error: null,
     message: '',
+    emailSent: false,
   },
   reducers: {
     resetForgotPasswordState: (state) => {
@@ -49,6 +50,7 @@ const forgotPasswordSlice = createSlice({
       state.success = false;
       state.error = null;
       state.message = '';
+      state.emailSent = false;
     },
   },
   extraReducers: (builder) => {
@@ -63,10 +65,14 @@ const forgotPasswordSlice = createSlice({
         state.loading = false;
         state.success = true;
         state.message = action.payload.message;
+        state.emailSent = Boolean(action.payload.emailSent);
       })
       .addCase(requestPasswordReset.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload?.message || 'Failed to send reset link';
+        state.emailSent = false;
+        const payload = action.payload;
+        const validationMsg = payload?.errors?.[0]?.message;
+        state.error = validationMsg || payload?.message || 'Failed to send reset link';
       })
       // Reset Password
       .addCase(resetPassword.pending, (state) => {

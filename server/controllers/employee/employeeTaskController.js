@@ -1,11 +1,14 @@
 import Task from "../../models/task.model.js";
 import Project from "../../models/project.model.js";
 import ProjectUpdate from "../../models/projectUpdate.model.js";
+import ProjectWorkItem from "../../models/projectWorkItem.model.js";
+import { computeWorkPlanProgress } from "../../helpers/projectWorkItemPermissionHelper.js";
 import Employee from "../../models/employee.model.js";
 import { sendTaskUpdateNotification } from "../../helpers/notificationService.js";
 import { sendSuccess, sendError, sendForbidden, sendInternalError } from "../../helpers/responseHelper.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
+import { isProjectManager } from "../../helpers/projectManagerHelper.js";
 import logger from "../../helpers/logger.js";
 
 // Get all projects for the logged-in employee
@@ -14,13 +17,14 @@ export const getMyProjects = async (req, res) => {
         const employeeId = req.employee._id;
         const organizationId = getOrganizationId(req);
 
-        // Keep this endpoint organization-scoped for reliable progress calculations.
-        const projectQuery = addOrganizationFilter(req, {
-            $or: [
+        // Project Managers see all organization projects; others see assigned projects only.
+        const projectQuery = addOrganizationFilter(req, {});
+        if (!isProjectManager(req.employee)) {
+            projectQuery.$or = [
                 { projectLeader: employeeId },
                 { projectMembers: employeeId }
-            ]
-        });
+            ];
+        }
 
         const projects = await Project.find(projectQuery)
         .populate('projectLeader', 'name email')
@@ -68,6 +72,21 @@ export const getMyProjects = async (req, res) => {
             }
         });
 
+        const workItemsQuery = addOrganizationFilter(req, {
+            projectId: { $in: projectIds }
+        });
+        const allWorkItems = await ProjectWorkItem.find(workItemsQuery)
+            .select("projectId status")
+            .lean();
+        const workPlanStatsByProject = new Map();
+        allWorkItems.forEach((wi) => {
+            const pid = wi.projectId?.toString();
+            if (!pid) return;
+            const current = workPlanStatsByProject.get(pid) || [];
+            current.push(wi);
+            workPlanStatsByProject.set(pid, current);
+        });
+
         const projectsWithProgress = projects.map((projectDoc) => {
             const project = projectDoc.toObject();
             const pid = projectDoc._id.toString();
@@ -75,13 +94,25 @@ export const getMyProjects = async (req, res) => {
             const taskProgress = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
             const updateProgress = latestUpdateProgressByProject.get(pid);
 
-            let overallProgress = typeof updateProgress === 'number' ? updateProgress : taskProgress;
+            const planItems = workPlanStatsByProject.get(pid) || [];
+            const workPlanStats = computeWorkPlanProgress(planItems);
+            const workPlanProgress = workPlanStats.percent;
+
+            let overallProgress = taskProgress;
+            if (planItems.length > 0) {
+                overallProgress = workPlanProgress;
+            } else if (typeof updateProgress === 'number') {
+                overallProgress = updateProgress;
+            }
             if (String(project.status || '').toLowerCase() === 'completed') {
                 overallProgress = 100;
             }
 
             project.progress = Math.round(overallProgress);
             project.taskProgress = Math.round(taskProgress);
+            project.workPlanProgress = planItems.length > 0 ? workPlanProgress : null;
+            project.workPlanTotal = workPlanStats.total;
+            project.workPlanCompleted = workPlanStats.completed;
             project.updateProgress = typeof updateProgress === 'number' ? Math.round(updateProgress) : null;
             project.totalTasks = stats.total;
             project.completedTasks = stats.completed;
@@ -101,11 +132,14 @@ export const createTodayTask = async (req, res) => {
     try {
         const employeeId = req.employee._id;
         const organizationId = getOrganizationId(req);
-        const { projectId, taskDescription } = req.body;
+        const { projectId, taskDescription, status, comments } = req.body;
 
         if (!organizationId) {
             return sendError(res, 'Organization ID is required', 400, 'ORG_ID_MISSING');
         }
+
+        const allowedStatuses = ['Not Started', 'In Progress', 'Completed', 'On Hold'];
+        const initialStatus = allowedStatuses.includes(status) ? status : 'Not Started';
 
         // Validate the employee is part of the project
         const project = await Project.findOne({
@@ -142,7 +176,8 @@ export const createTodayTask = async (req, res) => {
             employee: employeeId,
             project: projectId,
             taskDescription,
-            status: 'Not Started'
+            status: initialStatus,
+            ...(comments?.trim() && { comments: comments.trim() })
         });
 
         await newTask.save();

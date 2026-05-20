@@ -36,10 +36,12 @@ import { addDays, format, startOfMonth, subMonths } from 'date-fns';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
+import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
 import axios from '../../utils/axios';
 import { useEmployees, useLeaves } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
 import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
+import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 
 const WS = {
     bg: '#F5F7FB',
@@ -302,6 +304,10 @@ const DashboardHR = () => {
     const dispatch = useDispatch();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
+
+    useEffect(() => {
+        dispatch(fetchOrganizationTimezone());
+    }, [dispatch]);
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -767,6 +773,13 @@ const DashboardHR = () => {
                         </div>
                     </div>
                 </header>
+
+                <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                        Punch in / punch out
+                    </h3>
+                    <AttendanceBox variant="dashboard" />
+                </section>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <StatCard

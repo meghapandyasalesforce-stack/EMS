@@ -10,19 +10,18 @@ const addNewProject = async (projectData) => {
   // Removed console.log statements for production
 
   try {
-    // Removed console.log for production
     const res = await axios.post(`${ADMIN_PROJECT_ENDPOINT}/create-project`, projectData, {
       withCredentials: true,
     });
 
     if (res.data) {
-      const normalizedProject = {
-        ...res.data,
-        projectLeader: res.data.projectLeader?._id ? [res.data.projectLeader._id] : [],
-        projectMembers: res.data.projectMembers?.map(m => m._id) || [],
-      };
-      dispatch(addProject(normalizedProject));
-      return { success: true, project: normalizedProject };
+      const p = res.data.project;
+      if (!p?._id) {
+        return { success: false, error: 'Invalid response structure' };
+      }
+      // projectSlice addProject expects populated projectLeader / projectMembers (objects with _id)
+      dispatch(addProject({ ...p }));
+      return { success: true, project: p };
     } else {
       // Removed console.error for production
       return { success: false, error: "Invalid response structure" };

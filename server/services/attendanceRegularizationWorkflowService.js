@@ -4,6 +4,10 @@ import AttendanceRule from '../models/attendanceRule.model.js';
 import { ApprovalInstance } from '../models/approvalWorkflow.model.js';
 import logger from '../helpers/logger.js';
 import { ensureClockOutAfterClockIn } from '../helpers/attendanceRegularizationTimeHelper.js';
+import {
+    getAttendanceDayContext,
+    buildTodayAttendanceFilter,
+} from '../helpers/attendanceDayHelper.js';
 
 const DEFAULT_OFFICE_START = '09:00';
 const DEFAULT_OFFICE_END = '17:00';
@@ -77,14 +81,14 @@ export async function applyRegularizationApproval({
     await regularizationRequest.save();
 
     const attendanceDate = new Date(regularizationRequest.attendanceDate);
-    const startOfDay = new Date(attendanceDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    const dayContext = await getAttendanceDayContext(organizationId, attendanceDate);
+    const { startOfDay, attendanceDateKey, timezone: orgTimezone } = dayContext;
 
     const employeeRef = regularizationRequest.employeeId?._id || regularizationRequest.employeeId;
     let attendanceRecord = await Attendance.findOne({
         userId: employeeRef,
-        date: startOfDay,
-        organizationId
+        organizationId,
+        ...buildTodayAttendanceFilter(dayContext),
     });
 
     const { defaultClockIn, defaultClockOut } = await getDefaultOfficeDateTimes(organizationId, startOfDay);
@@ -101,6 +105,8 @@ export async function applyRegularizationApproval({
             organizationId,
             userId: employeeRef,
             date: startOfDay,
+            attendanceDateKey,
+            timezoneUsed: orgTimezone,
             clockIn: clockInTime,
             clockOut: clockOutTime,
             status: 'present',
@@ -118,8 +124,8 @@ export async function applyRegularizationApproval({
         if (saveError?.code === 11000) {
             attendanceRecord = await Attendance.findOne({
                 userId: employeeRef,
-                date: startOfDay,
-                organizationId
+                organizationId,
+                ...buildTodayAttendanceFilter(dayContext),
             });
 
             if (!attendanceRecord) {

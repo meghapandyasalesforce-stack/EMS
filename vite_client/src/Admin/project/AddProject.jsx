@@ -26,6 +26,33 @@ import { fetchEmployees } from '../../context/employeeSlice';
 import useAddProject from '../../Hooks/useAddProject';
 import { isManager, isHR } from '../../utils/managerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
+import { FiPlus, FiTrash2 } from 'react-icons/fi';
+import {
+    PROJECT_TEMPLATES,
+    getProjectTemplate,
+    templateToWorkPlanRows,
+} from '../../constants/projectTemplates';
+
+/** @typedef {{ title: string, description: string, assignee: string|null, dueDate: string, priority: string, subtasks: { title: string, description: string }[] }} WorkPlanRow */
+
+function buildWorkItemsPayload(rows) {
+    return rows
+        .filter((t) => t.title?.trim())
+        .map((t) => ({
+            title: t.title.trim(),
+            description: t.description?.trim() || undefined,
+            assignee: t.assignee || undefined,
+            dueDate: t.dueDate || undefined,
+            priority: t.priority || 'medium',
+            subtasks: (t.subtasks || [])
+                .filter((s) => s.title?.trim())
+                .map((s) => ({
+                    title: s.title.trim(),
+                    description: s.description?.trim() || undefined,
+                    priority: s.priority || 'medium',
+                })),
+        }));
+}
 
 function AddProject() {
     const dispatch = useDispatch();
@@ -82,6 +109,45 @@ function AddProject() {
     
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+
+    /** @type {[WorkPlanRow[], function]} */
+    const [workPlanRows, setWorkPlanRows] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('blank');
+
+    const applyProjectTemplate = (templateId) => {
+        const template = getProjectTemplate(templateId);
+        if (!template || templateId === 'blank') {
+            setSelectedTemplateId('blank');
+            return;
+        }
+        const hasExisting =
+            workPlanRows.length > 0 ||
+            form.description?.trim() ||
+            form.category?.trim();
+        if (hasExisting) {
+            const ok = window.confirm(
+                'Apply this template? It will replace the current work plan and overwrite category, priority, and description from the template.'
+            );
+            if (!ok) return;
+        }
+        setSelectedTemplateId(templateId);
+        setForm((prev) => ({
+            ...prev,
+            ...(template.defaults?.category && { category: template.defaults.category }),
+            ...(template.defaults?.priority && { priority: template.defaults.priority }),
+            ...(template.defaults?.description && { description: template.defaults.description }),
+        }));
+        setWorkPlanRows(templateToWorkPlanRows(template));
+    };
+
+    const handleTemplateSelect = (e) => {
+        const templateId = e.target.value;
+        if (templateId === 'blank') {
+            setSelectedTemplateId('blank');
+            return;
+        }
+        applyProjectTemplate(templateId);
+    };
 
     // Redirect if no permission
     useEffect(() => {
@@ -168,7 +234,10 @@ function AddProject() {
             tags: form.tags || []
         };
 
-        // Removed console.log for production
+        const workItems = buildWorkItemsPayload(workPlanRows);
+        if (workItems.length) {
+            projectData.workItems = workItems;
+        }
 
         const result = await addProject(projectData);
 
@@ -217,7 +286,7 @@ function AddProject() {
         return (
             <Box p={2}>
                 <Alert severity="error">
-                    You do not have permission to create projects. Only Admins, Managers, and HR can create projects.
+                    You do not have permission to create projects. Only Admins, Project Managers, Managers, and HR can create projects.
                 </Alert>
             </Box>
         );
@@ -286,6 +355,26 @@ function AddProject() {
                 }
             }}>
                 <form onSubmit={handleSubmit}>
+                    <FormControl fullWidth margin="normal">
+                        <InputLabel>Project template</InputLabel>
+                        <Select
+                            label="Project template"
+                            value={selectedTemplateId}
+                            onChange={handleTemplateSelect}
+                        >
+                            {PROJECT_TEMPLATES.map((t) => (
+                                <MenuItem key={t.id} value={t.id}>
+                                    {t.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    {selectedTemplateId !== 'blank' && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            {getProjectTemplate(selectedTemplateId)?.description}
+                        </Typography>
+                    )}
+
                     <TextField
                         fullWidth
                         label="Project Name"
@@ -556,6 +645,224 @@ function AddProject() {
                             </Grid>
                         </Box>
                     )}
+
+                    {/* Work plan: tasks & subtasks (optional) */}
+                    <Box mt={3}>
+                        <Typography variant="h6" gutterBottom sx={{ [theme.breakpoints.down('md')]: { fontSize: '1.1rem' } }}>
+                            Work plan <Typography component="span" variant="body2" color="text.secondary">(optional)</Typography>
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Add main tasks and subtasks now, or leave blank and define them later on the project page.
+                        </Typography>
+                        <Button
+                            type="button"
+                            size="small"
+                            startIcon={<FiPlus />}
+                            variant="outlined"
+                            onClick={() =>
+                                setWorkPlanRows((prev) => [
+                                    ...prev,
+                                    {
+                                        title: '',
+                                        description: '',
+                                        assignee: null,
+                                        dueDate: '',
+                                        priority: 'medium',
+                                        subtasks: [],
+                                    },
+                                ])
+                            }
+                            sx={{ mb: 2 }}
+                        >
+                            Add task
+                        </Button>
+                        {workPlanRows.map((row, rowIdx) => (
+                            <Paper key={rowIdx} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                                <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={1}>
+                                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                        Task {rowIdx + 1}
+                                    </Typography>
+                                    <Button
+                                        type="button"
+                                        size="small"
+                                        color="error"
+                                        startIcon={<FiTrash2 />}
+                                        onClick={() =>
+                                            setWorkPlanRows((prev) => prev.filter((_, i) => i !== rowIdx))
+                                        }
+                                    >
+                                        Remove
+                                    </Button>
+                                </Box>
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Task title"
+                                    value={row.title}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        setWorkPlanRows((prev) =>
+                                            prev.map((r, i) => (i === rowIdx ? { ...r, title: v } : r))
+                                        );
+                                    }}
+                                    margin="dense"
+                                    sx={{ mb: 1 }}
+                                />
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Description"
+                                    value={row.description}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        setWorkPlanRows((prev) =>
+                                            prev.map((r, i) => (i === rowIdx ? { ...r, description: v } : r))
+                                        );
+                                    }}
+                                    margin="dense"
+                                    multiline
+                                    minRows={2}
+                                    sx={{ mb: 1 }}
+                                />
+                                <Box display="flex" gap={2} flexWrap="wrap" sx={{ mb: 1 }}>
+                                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                                        <InputLabel>Priority</InputLabel>
+                                        <Select
+                                            label="Priority"
+                                            value={row.priority}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setWorkPlanRows((prev) =>
+                                                    prev.map((r, i) => (i === rowIdx ? { ...r, priority: v } : r))
+                                                );
+                                            }}
+                                        >
+                                            <MenuItem value="low">Low</MenuItem>
+                                            <MenuItem value="medium">Medium</MenuItem>
+                                            <MenuItem value="high">High</MenuItem>
+                                            <MenuItem value="critical">Critical</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                    <TextField
+                                        size="small"
+                                        label="Due date"
+                                        type="date"
+                                        value={row.dueDate}
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            setWorkPlanRows((prev) =>
+                                                prev.map((r, i) => (i === rowIdx ? { ...r, dueDate: v } : r))
+                                            );
+                                        }}
+                                        InputLabelProps={{ shrink: true }}
+                                    />
+                                </Box>
+                                <Autocomplete
+                                    size="small"
+                                    options={filteredActiveEmployees}
+                                    getOptionLabel={(emp) => `${emp.name} ${emp.lastName || ''}`}
+                                    value={
+                                        row.assignee
+                                            ? activeEmployees.find((e) => e._id === row.assignee) || null
+                                            : null
+                                    }
+                                    onChange={(_, newVal) => {
+                                        setWorkPlanRows((prev) =>
+                                            prev.map((r, i) =>
+                                                i === rowIdx ? { ...r, assignee: newVal ? newVal._id : null } : r
+                                            )
+                                        );
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Assignee (optional)" margin="dense" />
+                                    )}
+                                />
+                                <Box mt={2}>
+                                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                                        Subtasks
+                                    </Typography>
+                                    <Button
+                                        type="button"
+                                        size="small"
+                                        startIcon={<FiPlus />}
+                                        onClick={() => {
+                                            setWorkPlanRows((prev) =>
+                                                prev.map((r, i) =>
+                                                    i === rowIdx
+                                                        ? {
+                                                              ...r,
+                                                              subtasks: [
+                                                                  ...(r.subtasks || []),
+                                                                  { title: '', description: '', priority: 'medium' },
+                                                              ],
+                                                          }
+                                                        : r
+                                                )
+                                            );
+                                        }}
+                                    >
+                                        Add subtask
+                                    </Button>
+                                    {(row.subtasks || []).map((st, si) => (
+                                        <Box key={si} display="flex" gap={1} alignItems="flex-start" mt={1} ml={1}>
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                label={`Subtask ${si + 1}`}
+                                                value={st.title}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    setWorkPlanRows((prev) =>
+                                                        prev.map((r, i) => {
+                                                            if (i !== rowIdx) return r;
+                                                            const subs = [...(r.subtasks || [])];
+                                                            subs[si] = { ...subs[si], title: v };
+                                                            return { ...r, subtasks: subs };
+                                                        })
+                                                    );
+                                                }}
+                                            />
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                label="Notes"
+                                                value={st.description || ''}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    setWorkPlanRows((prev) =>
+                                                        prev.map((r, i) => {
+                                                            if (i !== rowIdx) return r;
+                                                            const subs = [...(r.subtasks || [])];
+                                                            subs[si] = { ...subs[si], description: v };
+                                                            return { ...r, subtasks: subs };
+                                                        })
+                                                    );
+                                                }}
+                                            />
+                                            <Button
+                                                type="button"
+                                                size="small"
+                                                color="error"
+                                                onClick={() =>
+                                                    setWorkPlanRows((prev) =>
+                                                        prev.map((r, i) => {
+                                                            if (i !== rowIdx) return r;
+                                                            return {
+                                                                ...r,
+                                                                subtasks: (r.subtasks || []).filter((_, j) => j !== si),
+                                                            };
+                                                        })
+                                                    )
+                                                }
+                                            >
+                                                ×
+                                            </Button>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Paper>
+                        ))}
+                    </Box>
 
                     {/* Category */}
                     <Box mt={3} sx={{ [theme.breakpoints.down('md')]: { marginTop: 2 } }}>

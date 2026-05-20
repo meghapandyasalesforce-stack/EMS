@@ -11,7 +11,11 @@ export const checkAuthSession = createAsyncThunk(
       const response = await axios.get('/v1/both/profile-details/get-my-details', {
         withCredentials: true
       });
-      return response.data?.employee || null;
+      return {
+        employee: response.data?.employee || null,
+        timezoneContext: response.data?.timezoneContext || null,
+        timezone: response.data?.timezone || null,
+      };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Session invalid');
     }
@@ -69,7 +73,7 @@ const authSlice = createSlice({
       })
       .addCase(checkAuthSession.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload;
+        state.user = action.payload?.employee ?? action.payload;
         state.error = null;
         state.authChecked = true;
       })

@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import LoadingSpinner from './LoadingSpinner';
 import { isManager, isHR } from '../utils/managerHelper';
+import { isProjectManager } from '../utils/projectManagerHelper';
 import { isExecutive } from '../utils/navigationConfig';
 import { getDefaultDashboardRoute } from '../utils/dashboardRedirect';
 
@@ -38,6 +39,7 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo }) => {
     // Check if user is manager
     const userObj = user || employee;
     const userIsManager = isManager(userObj);
+    const userIsProjectManager = isProjectManager(userObj);
     
     // Check if user is HR
     const userIsHR = isHR(userObj);
@@ -54,6 +56,7 @@ const ProtectedRoute = ({ children, allowedRoles = [], redirectTo }) => {
     const effectiveRoles = [];
     if (isAdmin) effectiveRoles.push('admin');
     if (userIsManager) effectiveRoles.push('manager');
+    if (userIsProjectManager) effectiveRoles.push('project_manager');
     if (userIsHR) effectiveRoles.push('hr');
     if (userIsExecutive) effectiveRoles.push('executive');
     if (isFinanceDept) effectiveRoles.push('finance');

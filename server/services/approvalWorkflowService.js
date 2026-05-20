@@ -136,8 +136,11 @@ export const initiateApproval = async ({
         }
 
         // Build steps array (await approver determination)
+        const sortedWorkflowSteps = [...workflow.steps].sort(
+            (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
+        );
         const steps = [];
-        for (const step of workflow.steps) {
+        for (const step of sortedWorkflowSteps) {
             const approver = await determineApprover(step, requestedBy, organizationId);
             steps.push({
                 stepNumber: step.stepNumber,
@@ -191,7 +194,9 @@ export const processApprovalAction = async ({
     approverId,
     action,
     comments = '',
-    metadata = {}
+    metadata = {},
+    skipApproverValidation = false,
+    performedByEmployeeId = null
 }) => {
     try {
         const instance = await ApprovalInstance.findById(approvalInstanceId);
@@ -208,8 +213,15 @@ export const processApprovalAction = async ({
             throw new Error('Step not found');
         }
 
-        if (step.approverId?.toString() !== approverId?.toString()) {
-            throw new Error('Unauthorized: You are not the assigned approver for this step');
+        if (
+            !skipApproverValidation &&
+            step.approverId?.toString() !== approverId?.toString()
+        ) {
+            const err = new Error(
+                'Unauthorized: You are not the assigned approver for this step'
+            );
+            err.statusCode = 403;
+            throw err;
         }
 
         if (step.status !== 'Pending') {
@@ -226,7 +238,7 @@ export const processApprovalAction = async ({
         if (action === 'Reject') {
             instance.status = 'Rejected';
             instance.rejectedAt = new Date();
-            instance.rejectedBy = approverId;
+            instance.rejectedBy = performedByEmployeeId || approverId || step.approverId;
             instance.rejectionReason = comments;
             await instance.save();
 
@@ -279,6 +291,52 @@ export const processApprovalAction = async ({
         });
         throw error;
     }
+};
+
+/**
+ * Admin bypass: mark all pending steps approved and finalize the entity.
+ */
+export const adminBypassApprovalInstance = async ({
+    approvalInstanceId,
+    comments = 'Approved by admin (all steps)',
+    metadata = {},
+}) => {
+    const instance = await ApprovalInstance.findById(approvalInstanceId);
+    if (!instance) {
+        throw new Error('Approval instance not found');
+    }
+
+    if (instance.status !== 'In Progress') {
+        throw new Error(`Cannot bypass workflow. Current status: ${instance.status}`);
+    }
+
+    const now = new Date();
+    const bypassComment = String(comments || '').trim() || 'Approved by admin (all steps)';
+
+    for (const step of instance.steps) {
+        if (step.status === 'Pending') {
+            step.status = 'Approved';
+            step.action = 'Approve';
+            step.comments = bypassComment;
+            step.actionDate = now;
+        }
+    }
+
+    instance.status = 'Approved';
+    instance.approvedAt = now;
+    instance.currentStep = instance.steps.length;
+    if (metadata && Object.keys(metadata).length) {
+        instance.metadata = { ...(instance.metadata || {}), ...metadata };
+    }
+    await instance.save();
+
+    await updateEntityStatus(instance);
+    await notifyRequester(instance, 'approved');
+
+    return {
+        status: 'Approved',
+        message: 'Request approved by admin (all workflow steps completed)',
+    };
 };
 
 /**

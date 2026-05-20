@@ -6,12 +6,21 @@ import { parsePagination, sendPaginatedResponse, createPaginationMeta } from '..
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { harmonizeRegularizationRequestedTimes } from '../../helpers/attendanceRegularizationTimeHelper.js';
 import { ApprovalInstance } from '../../models/approvalWorkflow.model.js';
-import { initiateApproval, processApprovalAction } from '../../services/approvalWorkflowService.js';
+import { initiateApproval } from '../../services/approvalWorkflowService.js';
 import {
     applyRegularizationApproval,
     applyRegularizationRejection,
     cancelRegularizationApprovalWorkflow
 } from '../../services/attendanceRegularizationWorkflowService.js';
+import {
+    getReviewerEmployeeId,
+    getCurrentPendingStep,
+    executeRegularizationWorkflowAction,
+    executeAdminBypassRegularization,
+    attachWorkflowSummariesToRequests,
+    sendRegularizationActionError,
+    isAdminUser,
+} from '../../helpers/regularizationWorkflowActionHelper.js';
 
 /** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
 function parseCalendarDayQuery(raw, boundary) {
@@ -280,6 +289,15 @@ export const createRegularizationRequest = async (req, res) => {
 
             if (approvalResult.approvalInstanceId) {
                 regularizationRequest.approvalInstanceId = approvalResult.approvalInstanceId;
+                const approvalInstance = await ApprovalInstance.findById(
+                    approvalResult.approvalInstanceId
+                ).select('steps');
+                const firstPending = approvalInstance?.steps?.find(
+                    (s) => s.status === 'Pending'
+                );
+                if (firstPending?.approverId) {
+                    regularizationRequest.managerId = firstPending.approverId;
+                }
                 await regularizationRequest.save();
             }
 
@@ -399,11 +417,10 @@ export const getRegularizationRequestsForManager = async (req, res) => {
             // Example: Manager "Arun Kumar" sees requests for employees with manager="Arun Kumar" or "Arun"
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
 
-            // Filter requests for employees linked to this manager
+            // Team scope: any direct/indirect report may regularize (workflow assigns step approvers)
             query.employeeId = { $in: managerEmployeeIds };
-            query.managerId = managerId; // Also ensure manager is assigned
 
-            logger.info('Manager filtering regularization requests by manager field', {
+            logger.info('Manager filtering regularization requests by team', {
                 managerId: managerId,
                 managerName: managerName,
                 employeeCount: managerEmployeeIds.length
@@ -451,7 +468,7 @@ export const getRegularizationRequestsForManager = async (req, res) => {
 
         const total = await AttendanceRegularization.countDocuments(query);
 
-        const requests = await AttendanceRegularization.find(query)
+        const requestsRaw = await AttendanceRegularization.find(query)
             .populate('employeeId', 'name lastName email employeeId department profilePhoto position')
             .populate('managerId', 'name lastName email employeeId')
             .populate('reviewedBy', 'name lastName email employeeId')
@@ -459,6 +476,8 @@ export const getRegularizationRequestsForManager = async (req, res) => {
             .skip(skip)
             .limit(parsedLimit)
             .lean();
+
+        const requests = await attachWorkflowSummariesToRequests(requestsRaw);
 
         return res.status(200).json({
             success: true,
@@ -488,7 +507,7 @@ export const approveRegularization = async (req, res) => {
     try {
         const { id } = req.params;
         const organizationId = getOrganizationId(req);
-        const reviewerId = req.user?._id || req.employee?._id;
+        const reviewerEmployeeId = getReviewerEmployeeId(req);
 
         const regularizationRequest = await AttendanceRegularization.findById(id)
             .populate('employeeId', 'department');
@@ -508,12 +527,11 @@ export const approveRegularization = async (req, res) => {
             });
         }
 
-        // If user is a manager, verify they can approve this request
-        // Example: Manager "Arun Kumar" can only approve requests for employees with manager="Arun Kumar" or "Arun"
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        let employeeLinked = true;
         if (isManager && req.employee) {
             const employee = await Employee.findById(regularizationRequest.employeeId?._id || regularizationRequest.employeeId)
-                .select('manager').lean();
+                .select('manager managerId').lean();
             
             if (!employee) {
                 return res.status(404).json({
@@ -522,10 +540,9 @@ export const approveRegularization = async (req, res) => {
                 });
             }
             
-            // Check if employee's manager field matches this manager
-            const isLinked = isEmployeeLinkedToManager(employee, req.employee);
+            employeeLinked = isEmployeeLinkedToManager(employee, req.employee);
             
-            if (!isLinked) {
+            if (!employeeLinked) {
                 const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
                 logger.warn('Manager trying to approve regularization for unlinked employee', {
                     managerId: req.employee._id,
@@ -551,7 +568,7 @@ export const approveRegularization = async (req, res) => {
             const approvalInstance = await ApprovalInstance.findById(regularizationRequest.approvalInstanceId);
 
             if (approvalInstance && approvalInstance.status === 'In Progress') {
-                const currentStep = approvalInstance.steps.find((step) => step.status === 'Pending');
+                const currentStep = getCurrentPendingStep(approvalInstance);
 
                 if (!currentStep) {
                     return res.status(400).json({
@@ -560,17 +577,29 @@ export const approveRegularization = async (req, res) => {
                     });
                 }
 
-                await processApprovalAction({
-                    approvalInstanceId: regularizationRequest.approvalInstanceId,
-                    stepNumber: currentStep.stepNumber,
-                    approverId: reviewerId,
-                    action: 'Approve',
-                    comments: req.body.managerResponse || 'Approved',
-                    metadata: {
-                        regularizationId: regularizationRequest._id,
-                        regularizationType: regularizationRequest.regularizationType
-                    }
-                });
+                const managerResponse = req.body.managerResponse || 'Approved';
+                const confirmEarlyApproval = Boolean(req.body.confirmEarlyApproval);
+                const adminBypass =
+                    isAdminUser(req) && req.body.adminBypass !== false;
+
+                if (adminBypass) {
+                    await executeAdminBypassRegularization({
+                        approvalInstance,
+                        comments: managerResponse,
+                        regularizationRequest,
+                    });
+                } else {
+                    await executeRegularizationWorkflowAction({
+                        req,
+                        approvalInstance,
+                        currentStep,
+                        action: 'Approve',
+                        comments: managerResponse,
+                        regularizationRequest,
+                        employeeLinked,
+                        confirmEarlyApproval,
+                    });
+                }
 
                 const updatedRequest = await AttendanceRegularization.findById(id)
                     .populate('employeeId', 'name lastName email employeeId department')
@@ -580,7 +609,9 @@ export const approveRegularization = async (req, res) => {
                 return res.json({
                     success: true,
                     message: updatedRequest?.status === 'approved'
-                        ? 'Regularization request approved and attendance record updated'
+                        ? adminBypass
+                            ? 'Regularization approved by admin (all workflow steps completed)'
+                            : 'Regularization request approved and attendance record updated'
                         : 'Approval processed, moving to next workflow step',
                     data: updatedRequest
                 });
@@ -590,7 +621,7 @@ export const approveRegularization = async (req, res) => {
         const updatedRequest = await applyRegularizationApproval({
             regularizationRequest,
             organizationId,
-            reviewerId,
+            reviewerId: reviewerEmployeeId,
             managerResponse: req.body.managerResponse || 'Approved'
         });
 
@@ -605,11 +636,11 @@ export const approveRegularization = async (req, res) => {
             stack: error.stack,
             requestId: req.params.id
         });
-        res.status(500).json({
-            success: false,
-            message: 'Failed to approve regularization request',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
+        return sendRegularizationActionError(
+            res,
+            error,
+            'Failed to approve regularization request'
+        );
     }
 };
 
@@ -622,7 +653,7 @@ export const rejectRegularization = async (req, res) => {
         const { id } = req.params;
         const { rejectionReason } = req.body;
         const organizationId = getOrganizationId(req);
-        const reviewerId = req.user?._id || req.employee?._id;
+        const reviewerEmployeeId = getReviewerEmployeeId(req);
 
         const regularizationRequest = await AttendanceRegularization.findById(id)
             .populate('employeeId', 'department');
@@ -642,8 +673,8 @@ export const rejectRegularization = async (req, res) => {
             });
         }
 
-        // If user is a manager, verify they can reject this request
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        let employeeLinked = true;
         if (isManager && req.employee) {
             const employee = await Employee.findById(regularizationRequest.employeeId?._id || regularizationRequest.employeeId)
                 .select('manager managerId').lean();
@@ -655,8 +686,8 @@ export const rejectRegularization = async (req, res) => {
                 });
             }
 
-            const isLinked = isEmployeeLinkedToManager(employee, req.employee);
-            if (!isLinked) {
+            employeeLinked = isEmployeeLinkedToManager(employee, req.employee);
+            if (!employeeLinked) {
                 const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
                 logger.warn('Manager trying to reject regularization for unlinked employee', {
                     managerId: req.employee._id,
@@ -689,7 +720,7 @@ export const rejectRegularization = async (req, res) => {
             const approvalInstance = await ApprovalInstance.findById(regularizationRequest.approvalInstanceId);
 
             if (approvalInstance && approvalInstance.status === 'In Progress') {
-                const currentStep = approvalInstance.steps.find((step) => step.status === 'Pending');
+                const currentStep = getCurrentPendingStep(approvalInstance);
 
                 if (!currentStep) {
                     return res.status(400).json({
@@ -698,16 +729,15 @@ export const rejectRegularization = async (req, res) => {
                     });
                 }
 
-                await processApprovalAction({
-                    approvalInstanceId: regularizationRequest.approvalInstanceId,
-                    stepNumber: currentStep.stepNumber,
-                    approverId: reviewerId,
+                await executeRegularizationWorkflowAction({
+                    req,
+                    approvalInstance,
+                    currentStep,
                     action: 'Reject',
                     comments: rejectionReason,
-                    metadata: {
-                        regularizationId: regularizationRequest._id,
-                        regularizationType: regularizationRequest.regularizationType
-                    }
+                    regularizationRequest,
+                    employeeLinked,
+                    confirmEarlyApproval: Boolean(req.body.confirmEarlyApproval),
                 });
 
                 const updatedRequest = await AttendanceRegularization.findById(id)
@@ -725,7 +755,7 @@ export const rejectRegularization = async (req, res) => {
 
         const updatedRequest = await applyRegularizationRejection({
             regularizationRequest,
-            reviewerId,
+            reviewerId: reviewerEmployeeId,
             rejectionReason
         });
 
@@ -740,11 +770,11 @@ export const rejectRegularization = async (req, res) => {
             stack: error.stack,
             requestId: req.params.id
         });
-        res.status(500).json({
-            success: false,
-            message: 'Failed to reject regularization request',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
+        return sendRegularizationActionError(
+            res,
+            error,
+            'Failed to reject regularization request'
+        );
     }
 };
 
