@@ -27,11 +27,6 @@ import useAddProject from '../../Hooks/useAddProject';
 import { isManager, isHR } from '../../utils/managerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
-import {
-    PROJECT_TEMPLATES,
-    getProjectTemplate,
-    templateToWorkPlanRows,
-} from '../../constants/projectTemplates';
 
 /** @typedef {{ title: string, description: string, assignee: string|null, dueDate: string, priority: string, subtasks: { title: string, description: string }[] }} WorkPlanRow */
 
@@ -112,42 +107,6 @@ function AddProject() {
 
     /** @type {[WorkPlanRow[], function]} */
     const [workPlanRows, setWorkPlanRows] = useState([]);
-    const [selectedTemplateId, setSelectedTemplateId] = useState('blank');
-
-    const applyProjectTemplate = (templateId) => {
-        const template = getProjectTemplate(templateId);
-        if (!template || templateId === 'blank') {
-            setSelectedTemplateId('blank');
-            return;
-        }
-        const hasExisting =
-            workPlanRows.length > 0 ||
-            form.description?.trim() ||
-            form.category?.trim();
-        if (hasExisting) {
-            const ok = window.confirm(
-                'Apply this template? It will replace the current work plan and overwrite category, priority, and description from the template.'
-            );
-            if (!ok) return;
-        }
-        setSelectedTemplateId(templateId);
-        setForm((prev) => ({
-            ...prev,
-            ...(template.defaults?.category && { category: template.defaults.category }),
-            ...(template.defaults?.priority && { priority: template.defaults.priority }),
-            ...(template.defaults?.description && { description: template.defaults.description }),
-        }));
-        setWorkPlanRows(templateToWorkPlanRows(template));
-    };
-
-    const handleTemplateSelect = (e) => {
-        const templateId = e.target.value;
-        if (templateId === 'blank') {
-            setSelectedTemplateId('blank');
-            return;
-        }
-        applyProjectTemplate(templateId);
-    };
 
     // Redirect if no permission
     useEffect(() => {
@@ -156,12 +115,11 @@ function AddProject() {
         }
     }, [user, hasPermission, navigate]);
 
-    // Fetch employees when component mounts
+    // Load full org roster for leader / member / work-plan assignee pickers (paginated API)
     useEffect(() => {
-        if (hasPermission && status === 'idle') {
-            dispatch(fetchEmployees());
-        }
-    }, [status, dispatch, hasPermission]);
+        if (!hasPermission) return;
+        dispatch(fetchEmployees({ fetchAllPages: true }));
+    }, [dispatch, hasPermission]);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -266,19 +224,19 @@ function AddProject() {
     // Get selected leader employee object
     const selectedLeader = employees.find(emp => emp._id === form.projectLeader);
 
-    // Filter employees based on search term and position
-    const filteredEmployees = employees.filter(employee => 
-        `${employee.name} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+    const activeEmployees = useMemo(
+        () =>
+            employees.filter(
+                (employee) => employee.status === 'active' || employee.active === true
+            ),
+        [employees]
     );
 
-    // Filter active employees for project members
-    const activeEmployees = employees.filter(employee => 
-        employee.status === 'active' || employee.active === true
-    );
+    const matchesEmployeeSearch = (employee) =>
+        `${employee.name} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const filteredActiveEmployees = activeEmployees.filter(employee => 
-        `${employee.name} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredEmployees = activeEmployees.filter(matchesEmployeeSearch);
+    const filteredActiveEmployees = activeEmployees.filter(matchesEmployeeSearch);
 
     // Removed console.log statements for production
 
@@ -355,26 +313,6 @@ function AddProject() {
                 }
             }}>
                 <form onSubmit={handleSubmit}>
-                    <FormControl fullWidth margin="normal">
-                        <InputLabel>Project template</InputLabel>
-                        <Select
-                            label="Project template"
-                            value={selectedTemplateId}
-                            onChange={handleTemplateSelect}
-                        >
-                            {PROJECT_TEMPLATES.map((t) => (
-                                <MenuItem key={t.id} value={t.id}>
-                                    {t.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    {selectedTemplateId !== 'blank' && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            {getProjectTemplate(selectedTemplateId)?.description}
-                        </Typography>
-                    )}
-
                     <TextField
                         fullWidth
                         label="Project Name"

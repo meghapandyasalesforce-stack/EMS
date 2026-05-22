@@ -327,10 +327,8 @@ const ProjectDetailPage = () => {
       loadWorkPlan();
     }
     
-    if (employeesStatus === 'idle') {
-      dispatch(fetchEmployees());
-    }
-  }, [project, employeesStatus, dispatch, mapStatusToFrontend, loadWorkPlan]);
+    dispatch(fetchEmployees({ fetchAllPages: true }));
+  }, [project, dispatch, mapStatusToFrontend, loadWorkPlan]);
 
   const handleWorkItemStatusChange = useCallback(
     async (workItemId, status) => {
@@ -851,7 +849,7 @@ const ProjectDetailPage = () => {
                     label="Project Leader"
                     required
                   >
-                    {employees.map(employee => (
+                    {activeEmployees.map(employee => (
                       <MenuItem key={employee._id} value={employee._id}>
                         {getEmployeeName(employee)}
                       </MenuItem>

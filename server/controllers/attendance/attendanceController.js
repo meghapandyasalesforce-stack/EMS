@@ -27,7 +27,11 @@ import {
   parseDateKeyInTimezone,
   resolveAttendanceDateKey,
 } from "../../helpers/attendanceDayHelper.js";
-import { getStartOfDayInTimezone, getEndOfDayInTimezone } from "../../helpers/timezoneHelper.js";
+import {
+  getStartOfDayInTimezone,
+  getEndOfDayInTimezone,
+  getDateKeyInTimezone,
+} from "../../helpers/timezoneHelper.js";
 
 
 const OFFICE_START_TIME = 9;  // 9 AM — fallback when rule has no start time
@@ -2050,22 +2054,38 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
       }
     }
 
-    // Date filtering
-    const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
-    if (endDate) dateFilter.$lte = new Date(endDate);
+    const orgTimezone = await getEffectiveTimezone(organizationId);
+    const nowDt = DateTime.now().setZone(orgTimezone);
+
+    let startDateKey;
+    let endDateKey;
+    let periodStart;
+    let periodEnd;
+
+    if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate).slice(0, 10))) {
+      startDateKey = String(startDate).slice(0, 10);
+      periodStart = parseDateKeyInTimezone(startDateKey, orgTimezone).startOf('day').toJSDate();
+    }
+    if (endDate && /^\d{4}-\d{2}-\d{2}$/.test(String(endDate).slice(0, 10))) {
+      endDateKey = String(endDate).slice(0, 10);
+      periodEnd = parseDateKeyInTimezone(endDateKey, orgTimezone).endOf('day').toJSDate();
+    }
+    if (!startDateKey || !endDateKey) {
+      startDateKey = nowDt.startOf('month').toFormat('yyyy-MM-dd');
+      endDateKey = nowDt.endOf('month').toFormat('yyyy-MM-dd');
+      periodStart = nowDt.startOf('month').toJSDate();
+      periodEnd = nowDt.endOf('month').toJSDate();
+    }
 
     const query = addOrganizationFilter(req, { userId: employeeId });
-    if (startDate || endDate) query.date = dateFilter;
+    Object.assign(
+      query,
+      buildAttendancePeriodFilter({ startDateKey, endDateKey, periodStart, periodEnd })
+    );
 
     // Get all attendance records
     const records = await Attendance.find(query).sort({ date: -1 });
 
-    // Calculate working days in period (still useful for context)
-    const periodStart = startDate ? new Date(startDate) : records.length > 0 
-      ? new Date(Math.min(...records.map(r => r.date.getTime()))) 
-      : new Date();
-    const periodEnd = endDate ? new Date(endDate) : new Date();
     const workingDays = await calculateWorkingDays(periodStart, periodEnd, organizationId);
 
     // Calculate statistics
@@ -2109,7 +2129,16 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
         lateArrivals: records.filter(r => r.isLateArrival).length,
         earlyDepartures: records.filter(r => r.isEarlyDeparture).length
       },
-      recentRecords: full === 'true' ? records : records.slice(0, 10)
+      recentRecords: (full === 'true' ? records : records.slice(0, 10)).map((r) => {
+        const doc = r.toObject ? r.toObject() : r;
+        const attendanceDateKey =
+          doc.attendanceDateKey || resolveAttendanceDateKey(doc, orgTimezone);
+        return {
+          ...doc,
+          attendanceDateKey,
+          dateKey: attendanceDateKey,
+        };
+      }),
     });
   } catch (error) {
     res.status(500).json({
@@ -2187,6 +2216,22 @@ const isWorkingCalendarDay = (value, calendarByYear, holidayKeysByYear) => {
   return true;
 };
 
+/** Working day check for yyyy-MM-dd in org IANA timezone (team attendance history). */
+const isWorkingCalendarDayKey = (dateKey, timezone, calendarByYear, holidayKeysByYear) => {
+  const dt = parseDateKeyInTimezone(dateKey, timezone);
+  const year = dt.year;
+  const calendar = calendarByYear.get(year);
+  const workingDays = calendar?.workingDays || DEFAULT_WORKING_DAYS;
+  const dayName = getDayName(dt.toJSDate());
+
+  if (!workingDays?.[dayName]) return false;
+  if (holidayKeysByYear.get(year)?.has(dateKey)) return false;
+  return true;
+};
+
+const minDateKey = (a, b) => (a <= b ? a : b);
+const maxDateKey = (a, b) => (a >= b ? a : b);
+
 const classifyTeamAttendanceRow = (record, leaveDaySet, userIdStr, dateYmd) => {
   if (record.status === 'absent') {
     if (leaveDaySet.has(`${userIdStr}|${dateYmd}`)) return 'leave';
@@ -2194,6 +2239,7 @@ const classifyTeamAttendanceRow = (record, leaveDaySet, userIdStr, dateYmd) => {
   }
   if (isWorkFromHomeLocation(record.workLocation)) return 'wfh';
   if (record.isLateArrival) return 'late';
+  // present, loggedOut, onBreak, half-day (with punch) — any non-absent logged session
   return 'present';
 };
 
@@ -2274,23 +2320,36 @@ export const getTeamAttendanceHistory = async (req, res) => {
       return empty();
     }
 
-    const now = new Date();
-    const rangeStart = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const rangeEnd = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    rangeStart.setHours(0, 0, 0, 0);
-    rangeEnd.setHours(23, 59, 59, 999);
+    const organizationId = getOrganizationId(req);
+    const orgTimezone = await getEffectiveTimezone(organizationId);
+    const nowDt = DateTime.now().setZone(orgTimezone);
 
-    const rangeStartDay = new Date(rangeStart);
-    rangeStartDay.setHours(0, 0, 0, 0);
-    const rangeEndDay = new Date(rangeEnd);
-    rangeEndDay.setHours(0, 0, 0, 0);
+    let startDateKey;
+    let endDateKey;
+    let periodStart;
+    let periodEnd;
+
+    if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate).slice(0, 10))) {
+      startDateKey = String(startDate).slice(0, 10);
+      periodStart = parseDateKeyInTimezone(startDateKey, orgTimezone).startOf('day').toJSDate();
+    }
+    if (endDate && /^\d{4}-\d{2}-\d{2}$/.test(String(endDate).slice(0, 10))) {
+      endDateKey = String(endDate).slice(0, 10);
+      periodEnd = parseDateKeyInTimezone(endDateKey, orgTimezone).endOf('day').toJSDate();
+    }
+    if (!startDateKey || !endDateKey) {
+      startDateKey = nowDt.startOf('month').toFormat('yyyy-MM-dd');
+      endDateKey = nowDt.endOf('month').toFormat('yyyy-MM-dd');
+      periodStart = nowDt.startOf('month').toJSDate();
+      periodEnd = nowDt.endOf('month').toJSDate();
+    }
 
     const leaveRows = await Leave.find(
       addOrganizationFilter(req, {
         employee: { $in: employeeIds },
         status: 'approved',
-        startDate: { $lte: rangeEnd },
-        endDate: { $gte: rangeStart }
+        startDate: { $lte: periodEnd },
+        endDate: { $gte: periodStart }
       })
     )
       .select('employee startDate endDate')
@@ -2299,28 +2358,26 @@ export const getTeamAttendanceHistory = async (req, res) => {
     const leaveDaySet = new Set();
     for (const L of leaveRows) {
       const empKey = L.employee?.toString?.() || String(L.employee);
-      let d = new Date(L.startDate);
-      d.setHours(0, 0, 0, 0);
-      const last = new Date(L.endDate);
-      last.setHours(0, 0, 0, 0);
+      let d = DateTime.fromJSDate(new Date(L.startDate), { zone: orgTimezone }).startOf('day');
+      const last = DateTime.fromJSDate(new Date(L.endDate), { zone: orgTimezone }).startOf('day');
       while (d <= last) {
-        if (d >= rangeStartDay && d <= rangeEndDay) {
-          leaveDaySet.add(`${empKey}|${toYmd(d)}`);
+        const key = d.toFormat('yyyy-MM-dd');
+        if (key >= startDateKey && key <= endDateKey) {
+          leaveDaySet.add(`${empKey}|${key}`);
         }
-        d.setDate(d.getDate() + 1);
+        d = d.plus({ days: 1 });
       }
     }
 
-    const organizationId = getOrganizationId(req);
     const { calendarByYear, holidayKeysByYear } = await buildCalendarLookups(
       organizationId,
-      rangeStartDay,
-      rangeEndDay
+      periodStart,
+      periodEnd
     );
 
     const attQuery = addOrganizationFilter(req, {
       userId: { $in: employeeIds },
-      date: { $gte: rangeStartDay, $lte: rangeEnd }
+      ...buildAttendancePeriodFilter({ startDateKey, endDateKey, periodStart, periodEnd })
     });
 
     const rawRecords = await Attendance.find(attQuery)
@@ -2334,7 +2391,8 @@ export const getTeamAttendanceHistory = async (req, res) => {
       const pop = record.userId;
       if (!pop || !pop._id) continue;
       const userIdStr = pop._id.toString();
-      const dateYmd = toYmd(record.date);
+      const dateYmd = resolveAttendanceDateKey(record, orgTimezone);
+      if (!dateYmd || dateYmd < startDateKey || dateYmd > endDateKey) continue;
       const rowKey = `${userIdStr}|${dateYmd}`;
       if (existingRowKeys.has(rowKey)) continue;
       existingRowKeys.add(rowKey);
@@ -2351,10 +2409,14 @@ export const getTeamAttendanceHistory = async (req, res) => {
         }
       }
 
+      const displayDate = parseDateKeyInTimezone(dateYmd, orgTimezone).toJSDate();
+
       mapped.push({
         _id: record._id,
-        date: record.date,
+        date: displayDate,
         dateKey: dateYmd,
+        attendanceDateKey: record.attendanceDateKey || dateYmd,
+        timezoneUsed: record.timezoneUsed || orgTimezone,
         clockIn: record.clockIn,
         clockOut: record.clockOut,
         effectiveHours: record.effectiveHours,
@@ -2377,8 +2439,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
       });
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayKey = nowDt.toFormat('yyyy-MM-dd');
 
     for (const employee of employees) {
       const employeeIdStr = employee._id.toString();
@@ -2393,42 +2454,39 @@ export const getTeamAttendanceHistory = async (req, res) => {
         profilePhoto: resolveProfilePhoto(employee.profilePhoto)
       };
 
-      const eligibleStart = new Date(
-        Math.max(
-          rangeStartDay.getTime(),
-          new Date(employee.joiningDate || rangeStartDay).setHours(0, 0, 0, 0)
-        )
-      );
-
-      const employmentEndCandidates = [rangeEndDay.getTime(), today.getTime()];
-      if (employee.lastWorkingDate) {
-        const lastWorkingDay = new Date(employee.lastWorkingDate);
-        lastWorkingDay.setHours(0, 0, 0, 0);
-        employmentEndCandidates.push(lastWorkingDay.getTime());
-      } else if (employee.terminationDate) {
-        const terminationDay = new Date(employee.terminationDate);
-        terminationDay.setHours(0, 0, 0, 0);
-        employmentEndCandidates.push(terminationDay.getTime());
+      let eligibleStartKey = startDateKey;
+      if (employee.joiningDate) {
+        const joiningKey = getDateKeyInTimezone(new Date(employee.joiningDate), orgTimezone);
+        eligibleStartKey = maxDateKey(eligibleStartKey, joiningKey);
       }
 
-      const eligibleEnd = new Date(Math.min(...employmentEndCandidates));
-      if (eligibleStart > eligibleEnd) continue;
+      const employmentEndKeys = [endDateKey, todayKey];
+      if (employee.lastWorkingDate) {
+        employmentEndKeys.push(getDateKeyInTimezone(new Date(employee.lastWorkingDate), orgTimezone));
+      } else if (employee.terminationDate) {
+        employmentEndKeys.push(getDateKeyInTimezone(new Date(employee.terminationDate), orgTimezone));
+      }
+      const eligibleEndKey = employmentEndKeys.reduce(minDateKey);
 
-      const cursor = new Date(eligibleStart);
-      while (cursor <= eligibleEnd) {
-        if (isWorkingCalendarDay(cursor, calendarByYear, holidayKeysByYear)) {
-          const dateKey = toYmd(cursor);
+      if (eligibleStartKey > eligibleEndKey) continue;
+
+      let cursor = parseDateKeyInTimezone(eligibleStartKey, orgTimezone);
+      const endCursor = parseDateKeyInTimezone(eligibleEndKey, orgTimezone);
+
+      while (cursor <= endCursor) {
+        const dateKey = cursor.toFormat('yyyy-MM-dd');
+        if (isWorkingCalendarDayKey(dateKey, orgTimezone, calendarByYear, holidayKeysByYear)) {
           const rowKey = `${employeeIdStr}|${dateKey}`;
 
           if (!existingRowKeys.has(rowKey)) {
             const uiStatus = leaveDaySet.has(rowKey) ? 'leave' : 'absent';
-            const syntheticDate = new Date(cursor);
-            syntheticDate.setHours(12, 0, 0, 0);
 
             mapped.push({
               _id: `synthetic-${employeeIdStr}-${dateKey}-${uiStatus}`,
-              date: syntheticDate,
+              date: cursor.toJSDate(),
               dateKey,
+              attendanceDateKey: dateKey,
+              timezoneUsed: orgTimezone,
               clockIn: null,
               clockOut: null,
               effectiveHours: 0,
@@ -2443,7 +2501,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
           }
         }
 
-        cursor.setDate(cursor.getDate() + 1);
+        cursor = cursor.plus({ days: 1 });
       }
     }
 
@@ -2452,9 +2510,9 @@ export const getTeamAttendanceHistory = async (req, res) => {
     const total = filtered.length;
 
     if (sort === 'date_asc') {
-      filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+      filtered.sort((a, b) => (a.dateKey || '').localeCompare(b.dateKey || ''));
     } else {
-      filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+      filtered.sort((a, b) => (b.dateKey || '').localeCompare(a.dateKey || ''));
     }
 
     const skip = (pg - 1) * lim;
@@ -2480,10 +2538,12 @@ export const getTeamAttendanceHistory = async (req, res) => {
       .sort()
       .map((k) => {
         const { total: t, good: g } = byDate[k];
-        const d = new Date(`${k}T12:00:00`);
+        const label = parseDateKeyInTimezone(k, orgTimezone)
+          .toFormat('dd MMM')
+          .toUpperCase();
         return {
           dateKey: k,
-          label: d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' }).toUpperCase(),
+          label,
           pct: t ? Math.round((g / t) * 100) : 0,
           recordCount: t
         };

@@ -37,3 +37,21 @@ export function isSessionForToday(session, timezone = DEFAULT_TIMEZONE) {
   const today = todayDateKeyInTimezone(timezone);
   return getAttendanceDateKeyFromSession(session, timezone) === today;
 }
+
+/** yyyy-MM-dd calendar key from API row (attendanceDateKey preferred). */
+export function resolveAttendanceDateKeyFromRow(row, timezone = DEFAULT_TIMEZONE) {
+  if (row?.attendanceDateKey) {
+    return String(row.attendanceDateKey).slice(0, 10);
+  }
+  if (row?.dateKey) {
+    return String(row.dateKey).slice(0, 10);
+  }
+  return getAttendanceDateKeyFromSession(row, timezone);
+}
+
+/** Format a yyyy-MM-dd attendance day key for display in org timezone. */
+export function formatAttendanceDateKey(dateKey, pattern = 'd MMM yyyy', timezone = DEFAULT_TIMEZONE) {
+  const key = dateKey ? String(dateKey).slice(0, 10) : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return '—';
+  return formatInOrgTimezone(`${key}T12:00:00`, pattern, timezone);
+}

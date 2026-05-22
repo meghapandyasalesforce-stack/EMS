@@ -31,6 +31,11 @@ import {
   fetchEmployeeAttendanceDetails,
   clearEmployeeDetails,
 } from '../../context/attendanceSlice';
+import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
+import {
+  formatAttendanceDateKey,
+  resolveAttendanceDateKeyFromRow,
+} from '../../utils/orgTimezone';
 
 const TEAL = '#0a8f6c';
 const TEAL_LIGHT = '#e8f7f2';
@@ -67,7 +72,8 @@ const MONTH_SHORT = [
   'December',
 ];
 
-function toYmd(d) {
+/** Local calendar yyyy-MM-dd for month filter UI only (API interprets keys in org TZ). */
+function toLocalDateKey(d) {
   const x = new Date(d);
   const y = x.getFullYear();
   const m = String(x.getMonth() + 1).padStart(2, '0');
@@ -78,7 +84,7 @@ function toYmd(d) {
 function monthRange(year, monthIndex) {
   const start = new Date(year, monthIndex, 1);
   const end = new Date(year, monthIndex + 1, 0);
-  return { startDate: toYmd(start), endDate: toYmd(end) };
+  return { startDate: toLocalDateKey(start), endDate: toLocalDateKey(end) };
 }
 
 function initials(emp) {
@@ -204,6 +210,21 @@ const AllAttendanceStatsComponent = () => {
   const attendanceState = useSelector((s) => s.attendance) ?? {};
   const { employeeDetails, employeeStats } = attendanceState;
   const team = attendanceState.teamAttendanceHistory ?? EMPTY_TEAM_HISTORY;
+  const orgTimezone = useSelector((s) => s.timezone?.timezone) || 'UTC';
+
+  const formatRowDate = useCallback(
+    (row) => formatAttendanceDateKey(resolveAttendanceDateKeyFromRow(row, orgTimezone), 'd MMM yyyy', orgTimezone),
+    [orgTimezone]
+  );
+
+  const formatRowDateIso = useCallback(
+    (row) => resolveAttendanceDateKeyFromRow(row, orgTimezone) || '—',
+    [orgTimezone]
+  );
+
+  useEffect(() => {
+    dispatch(fetchOrganizationTimezone());
+  }, [dispatch]);
 
   const now = useMemo(() => new Date(), []);
   const [filterYear, setFilterYear] = useState(now.getFullYear());
@@ -380,7 +401,7 @@ const AllAttendanceStatsComponent = () => {
             escape(name),
             escape(r.employee?.email),
             escape(r.employee?.department),
-            escape(r.dateKey),
+            escape(resolveAttendanceDateKeyFromRow(r, orgTimezone)),
             escape(formatTime(r.clockIn)),
             escape(formatTime(r.clockOut)),
             escape(formatHours(r.effectiveHours)),
@@ -499,7 +520,9 @@ const AllAttendanceStatsComponent = () => {
                 <tbody className="divide-y divide-slate-100">
                   {recordsFull.map((record) => (
                     <tr key={record._id} className="hover:bg-slate-50/50">
-                      <td className="px-6 py-3 whitespace-nowrap">{toYmd(record.date)}</td>
+                      <td className="px-6 py-3 whitespace-nowrap">
+                        {formatRowDateIso(record)}
+                      </td>
                       <td className="px-6 py-3 whitespace-nowrap">{formatTime(record.clockIn)}</td>
                       <td className="px-6 py-3 whitespace-nowrap">{formatTime(record.clockOut)}</td>
                       <td className="px-6 py-3">{formatHours(record.effectiveHours)}</td>
@@ -832,11 +855,7 @@ const AllAttendanceStatsComponent = () => {
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-slate-700">
-                        {new Date(`${row.dateKey}T12:00:00`).toLocaleDateString(undefined, {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                        {formatRowDate(row)}
                       </td>
                       <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
                         {hasPunch ? (
