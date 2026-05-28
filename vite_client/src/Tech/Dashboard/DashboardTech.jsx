@@ -9,6 +9,7 @@ import {
   useAttendanceSummary 
 } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
+import AnnouncementBanner from '../../components/AnnouncementBanner';
 
 const DashboardTech = () => {
     const user = useSelector((state) => state.auth.user);
@@ -63,6 +64,7 @@ const DashboardTech = () => {
     
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
+            <AnnouncementBanner />
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Technology Dashboard</h1>
                 <p className="text-gray-600 mt-2">

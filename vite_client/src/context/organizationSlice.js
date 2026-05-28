@@ -65,6 +65,7 @@ export const updateOrganizationSettings = createAsyncThunk(
             const response = await axios.put(`${ORGANIZATION_ENDPOINT}/settings`, settings);
             return {
                 settings: response.data.settings,
+                timezone: response.data.timezone,
                 migrationCompleted: response.data.migrationCompleted || false
             };
         } catch (error) {

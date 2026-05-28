@@ -1,21 +1,30 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  Box, Button, Alert, Typography, Chip, Avatar,
-  CircularProgress, Card, CardContent, Grid,
-  Tooltip, IconButton, Snackbar,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  TextField, FormControl, InputLabel, Select, MenuItem,
-  TableContainer, Table, TableBody, TableRow, TableCell, TableHead,
-  Paper, Accordion, AccordionSummary, AccordionDetails
+import {
+  Button,
+  Alert,
+  Typography,
+  CircularProgress,
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Box,
+  Grid,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useTheme } from '@mui/material/styles';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useSelector, useDispatch } from 'react-redux';
+import { FiChevronRight, FiEdit, FiStar } from 'react-icons/fi';
 import { isHR, isManager } from '../../utils/managerHelper';
-import { 
-  fetchEmployeeDetails, 
+import {
+  fetchEmployeeDetails,
   updateEmployeeStatus,
   updateEmployeeWorkInfo,
   clearEmployeeDetails,
@@ -23,35 +32,30 @@ import {
 import { deleteEmployee } from '../../context/employeeSlice';
 import { BOTH_DOCUMENT_ENDPOINT, BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
 import axiosInstance, { getBackendBaseURL } from '../../utils/axios';
-import { 
-  FiUser, 
-  FiMail, 
-  FiPhone, 
-  FiMapPin, 
-  FiCalendar, 
-  FiDollarSign, 
-  FiBriefcase, 
-  FiAward, 
-  FiFileText, 
-  FiDownload, 
-  FiEye, 
-  FiEdit, 
-  FiTrash2,
-  FiClock,
-  FiTrendingUp,
-  FiShield,
-  FiHeart,
-  FiUsers,
-  FiStar,
-  FiActivity
-} from 'react-icons/fi';
-import { MdOutlineCurrencyRupee } from "react-icons/md";
+import { DETAIL_TABS } from './employeeDetails/constants';
+import EmployeeDetailsHeader from './employeeDetails/EmployeeDetailsHeader';
+import PersonalTab from './employeeDetails/tabs/PersonalTab';
+import JobDetailsTab from './employeeDetails/tabs/JobDetailsTab';
+import DocumentsTab from './employeeDetails/tabs/DocumentsTab';
+import LeaveTab from './employeeDetails/tabs/LeaveTab';
+import PayrollTab from './employeeDetails/tabs/PayrollTab';
+import PerformanceTab from './employeeDetails/tabs/PerformanceTab';
+import TimelineTab from './employeeDetails/tabs/TimelineTab';
+import LeaveBalancesWidget from './employeeDetails/widgets/LeaveBalancesWidget';
+import CareerTimelineWidget from './employeeDetails/widgets/CareerTimelineWidget';
+import ReportingHierarchyWidget from './employeeDetails/widgets/ReportingHierarchyWidget';
+import PayrollHighlightWidget from './employeeDetails/widgets/PayrollHighlightWidget';
+import {
+  calculateYearsOfExperience,
+  getAttendanceRate,
+  getFullName,
+} from './employeeDetails/utils';
 
 const EmployeeDetailsPage = () => {
-  const theme = useTheme();
   const { employeeId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const [activeTab, setActiveTab] = useState('personal');
   const [openDialog, setOpenDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [openTerminateDialog, setOpenTerminateDialog] = useState(false);
@@ -63,7 +67,7 @@ const EmployeeDetailsPage = () => {
     lastWorkingDate: '',
     reason: '',
     notes: '',
-    eligibleForRehire: false
+    eligibleForRehire: false,
   });
   const [editWorkForm, setEditWorkForm] = useState({
     jobTitle: '',
@@ -71,44 +75,38 @@ const EmployeeDetailsPage = () => {
     position: '',
     manager: '',
     salary: '',
-    joiningDate: ''
+    joiningDate: '',
   });
-  const [editPerformanceForm, setEditPerformanceForm] = useState({
-    performanceScore: ''
-  });
+  const [editPerformanceForm, setEditPerformanceForm] = useState({ performanceScore: '' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  
-  // Check if mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [deletingEmployee, setDeletingEmployee] = useState(false);
   const [managerOptions, setManagerOptions] = useState([]);
   const [jobTitleOptions, setJobTitleOptions] = useState([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
-  
+  const [managerPreview, setManagerPreview] = useState(null);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  
-  const { 
-    employee, 
-    loading, 
+
+  const {
+    employee,
+    loading,
     error,
     updatingStatus,
     statusUpdateError,
     updatingWorkInfo,
-    workInfoError
+    workInfoError,
   } = useSelector((state) => state.employeeDetails);
   const currentUser = useSelector((state) => state.auth?.user);
   const isManagerReadOnly = isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
 
   useEffect(() => {
     dispatch(fetchEmployeeDetails(employeeId));
-    
-    return () => {
-      dispatch(clearEmployeeDetails());
-    };
+    return () => dispatch(clearEmployeeDetails());
   }, [dispatch, employeeId]);
 
   const fetchDropdownOptions = useCallback(async () => {
@@ -117,27 +115,23 @@ const EmployeeDetailsPage = () => {
       setJobTitleOptions([]);
       return;
     }
-
     try {
       setLoadingDropdownOptions(true);
       const [managersRes, jobTitlesRes] = await Promise.all([
         axiosInstance.get('/v1/admin/employee/managers?limit=500', { withCredentials: true }),
         axiosInstance.get('/v1/admin/employee/job-titles', { withCredentials: true }),
       ]);
-
       const managersData = managersRes?.data;
       const managerList = Array.isArray(managersData?.data)
         ? managersData.data
-        : (Array.isArray(managersData) ? managersData : []);
-
+        : Array.isArray(managersData) ? managersData : [];
       const titlesData = jobTitlesRes?.data;
       const titleList = Array.isArray(titlesData?.data?.jobTitles)
         ? titlesData.data.jobTitles
-        : (Array.isArray(titlesData?.jobTitles) ? titlesData.jobTitles : []);
-
+        : Array.isArray(titlesData?.jobTitles) ? titlesData.jobTitles : [];
       setManagerOptions(managerList);
       setJobTitleOptions(titleList);
-    } catch (e) {
+    } catch {
       setManagerOptions([]);
       setJobTitleOptions([]);
     } finally {
@@ -149,22 +143,45 @@ const EmployeeDetailsPage = () => {
     fetchDropdownOptions();
   }, [fetchDropdownOptions]);
 
-  const handleStatusChangeClick = () => {
-    setOpenDialog(true);
-  };
+  useEffect(() => {
+    if (!employee?.managerId) {
+      setManagerPreview(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axiosInstance.get(
+          `${BOTH_PROFILE_ENDPOINT}/admin/get-info/${employee.managerId}`,
+          { withCredentials: true }
+        );
+        if (!cancelled) setManagerPreview(res.data?.employee || null);
+      } catch {
+        if (!cancelled) setManagerPreview(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [employee?.managerId]);
+
+  const fetchEmployeeStats = useCallback(async () => {
+    if (isManagerReadOnly || !employeeId) return;
+    try {
+      await axiosInstance.get(`/v1/admin/employee/${employeeId}/stats`);
+    } catch {
+      /* stats optional */
+    }
+  }, [employeeId, isManagerReadOnly]);
+
+  useEffect(() => {
+    if (employee) fetchEmployeeStats();
+  }, [employee, fetchEmployeeStats]);
 
   const handleDownloadDocument = async (documentId, fileName) => {
     try {
-      // Use /api prefix so Vite proxy forwards to backend (same as other API calls)
       const base = BOTH_DOCUMENT_ENDPOINT.startsWith('http') ? '' : '/api';
       const downloadUrl = `${base}${BOTH_DOCUMENT_ENDPOINT}/${employeeId}/documents/${documentId}/download`;
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (!response.ok) throw new Error('Failed to download document');
-
+      const response = await fetch(downloadUrl, { method: 'GET', credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to download');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -174,78 +191,19 @@ const EmployeeDetailsPage = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      // Removed console.error for production
+    } catch {
       alert('Failed to download document. Please try again.');
     }
   };
 
+  const handleViewDocument = (doc) => {
+    const backendUrl = getBackendBaseURL();
+    window.open(`${backendUrl}${doc.filePath}`, '_blank');
+  };
+
   const handleConfirmStatusChange = () => {
-    dispatch(updateEmployeeStatus({
-      employeeId: employee._id,
-      active: !employee.active
-    }));
+    dispatch(updateEmployeeStatus({ employeeId: employee._id, active: !employee.active }));
     setOpenDialog(false);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-  };
-
-  const handleDeleteClick = () => {
-    setOpenDeleteDialog(true);
-  };
-
-  const handleOpenTerminateDialog = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    setTerminateForm({
-      terminationDate: today,
-      lastWorkingDate: today,
-      reason: '',
-      notes: '',
-      eligibleForRehire: false
-    });
-    setOpenTerminateDialog(true);
-  };
-
-  const handleCloseTerminateDialog = () => {
-    if (terminatingEmployee) return;
-    setOpenTerminateDialog(false);
-  };
-
-  const handleConfirmTerminate = async () => {
-    if (!employee?._id) return;
-    if (!terminateForm.terminationDate) {
-      toast.error('Termination date is required.');
-      return;
-    }
-
-    setTerminatingEmployee(true);
-    try {
-      await axiosInstance.patch(
-        `${BOTH_PROFILE_ENDPOINT}/admin/terminate/${employee._id}`,
-        {
-          terminationDate: terminateForm.terminationDate,
-          lastWorkingDate: terminateForm.lastWorkingDate || terminateForm.terminationDate,
-          reason: terminateForm.reason,
-          notes: terminateForm.notes,
-          eligibleForRehire: terminateForm.eligibleForRehire
-        },
-        { withCredentials: true }
-      );
-      toast.success('Employee terminated successfully');
-      setOpenTerminateDialog(false);
-      dispatch(fetchEmployeeDetails(employeeId));
-    } catch (err) {
-      const message =
-        err?.response?.data?.message ||
-        err?.response?.data?.errors?.[0]?.terminationDate ||
-        err?.response?.data?.errors?.[0]?.lastWorkingDate ||
-        'Failed to terminate employee';
-      toast.error(message);
-    } finally {
-      setTerminatingEmployee(false);
-    }
   };
 
   const handleConfirmDelete = () => {
@@ -257,18 +215,43 @@ const EmployeeDetailsPage = () => {
         setOpenDeleteDialog(false);
         navigate('/employees');
       })
-      .catch((error) => {
-        const message = error || 'Failed to delete employee';
-        toast.error(message);
+      .catch((err) => {
+        toast.error(err || 'Failed to delete employee');
         setOpenDeleteDialog(false);
       })
-      .finally(() => {
-        setDeletingEmployee(false);
-      });
+      .finally(() => setDeletingEmployee(false));
   };
 
-  const handleCloseDeleteDialog = () => {
-    setOpenDeleteDialog(false);
+  const handleConfirmTerminate = async () => {
+    if (!employee?._id || !terminateForm.terminationDate) {
+      toast.error('Termination date is required.');
+      return;
+    }
+    setTerminatingEmployee(true);
+    try {
+      await axiosInstance.patch(
+        `${BOTH_PROFILE_ENDPOINT}/admin/terminate/${employee._id}`,
+        {
+          terminationDate: terminateForm.terminationDate,
+          lastWorkingDate: terminateForm.lastWorkingDate || terminateForm.terminationDate,
+          reason: terminateForm.reason,
+          notes: terminateForm.notes,
+          eligibleForRehire: terminateForm.eligibleForRehire,
+        },
+        { withCredentials: true }
+      );
+      toast.success('Employee terminated successfully');
+      setOpenTerminateDialog(false);
+      dispatch(fetchEmployeeDetails(employeeId));
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.errors?.[0]?.terminationDate ||
+          'Failed to terminate employee'
+      );
+    } finally {
+      setTerminatingEmployee(false);
+    }
   };
 
   const handleEditWorkClick = () => {
@@ -277,1527 +260,500 @@ const EmployeeDetailsPage = () => {
       department: employee.department || '',
       position: employee.position || '',
       manager: employee.managerId || employee.manager || '',
-      salary: employee.salary !== undefined && employee.salary !== null ? employee.salary : '',
-      joiningDate: employee.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : ''
+      salary: employee.salary != null ? employee.salary : '',
+      joiningDate: employee.joiningDate
+        ? new Date(employee.joiningDate).toISOString().split('T')[0]
+        : '',
     });
     setOpenEditWorkDialog(true);
   };
 
   const handleEditWorkFormChange = (field) => (event) => {
-    setEditWorkForm({
-      ...editWorkForm,
-      [field]: event.target.value
-    });
+    setEditWorkForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
   const handleSaveWorkInfo = async () => {
-    try {
-      // Validate salary - ensure it's a valid number
-      const salaryValue = editWorkForm.salary === '' || editWorkForm.salary === null || editWorkForm.salary === undefined
+    const salaryValue =
+      editWorkForm.salary === '' || editWorkForm.salary == null
         ? 0
         : parseFloat(editWorkForm.salary);
-      
-      if (isNaN(salaryValue) || salaryValue < 0) {
-        setSnackbar({
-          open: true,
-          message: 'Please enter a valid salary (must be a positive number)',
-          severity: 'error'
-        });
-        return;
-      }
-
-      const updateData = {
-        jobTitle: editWorkForm.jobTitle,
-        department: editWorkForm.department,
-        position: editWorkForm.position,
-        manager: editWorkForm.manager,
-        salary: salaryValue,
-        joiningDate: editWorkForm.joiningDate ? new Date(editWorkForm.joiningDate).toISOString() : null
-      };
-
-      const resultAction = await dispatch(updateEmployeeWorkInfo({
+    if (Number.isNaN(salaryValue) || salaryValue < 0) {
+      setSnackbar({ open: true, message: 'Enter a valid salary.', severity: 'error' });
+      return;
+    }
+    const resultAction = await dispatch(
+      updateEmployeeWorkInfo({
         employeeId,
-        workData: updateData
-      }));
-
-      if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
-        setSnackbar({
-          open: true,
-          message: 'Work information updated successfully!',
-          severity: 'success'
-        });
-        setOpenEditWorkDialog(false);
-      } else {
-        throw new Error(resultAction.payload || 'Failed to update work information');
-      }
-      
-    } catch (error) {
-      // Removed console.error for production
+        workData: {
+          jobTitle: editWorkForm.jobTitle,
+          department: editWorkForm.department,
+          position: editWorkForm.position,
+          manager: editWorkForm.manager,
+          salary: salaryValue,
+          joiningDate: editWorkForm.joiningDate
+            ? new Date(editWorkForm.joiningDate).toISOString()
+            : null,
+        },
+      })
+    );
+    if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
+      setSnackbar({ open: true, message: 'Work information updated.', severity: 'success' });
+      setOpenEditWorkDialog(false);
+    } else {
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to update work information. Please try again.',
-        severity: 'error'
+        message: resultAction.payload || 'Failed to update work information',
+        severity: 'error',
       });
     }
   };
 
-  const handleCloseEditWorkDialog = () => {
-    setOpenEditWorkDialog(false);
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  // Calculate years of experience from joining date
-  const calculateYearsOfExperience = () => {
-    if (!employee?.joiningDate) return '0';
-    
-    const joiningDate = new Date(employee.joiningDate);
-    const currentDate = new Date();
-    const diffTime = Math.abs(currentDate - joiningDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const years = Math.floor(diffDays / 365);
-    
-    return years.toString();
-  };
-
-  // Calculate attendance rate from employee data
-  const calculateAttendanceRate = () => {
-    if (employee?.attendanceRate !== null && employee?.attendanceRate !== undefined) {
-      return employee.attendanceRate;
-    }
-    return 'N/A';
-  };
-
-  // Fetch employee statistics
-  const fetchEmployeeStats = useCallback(async () => {
-    if (isManagerReadOnly) return;
-
-    try {
-      const { default: axiosInstance } = await import('../../utils/axios');
-      const response = await axiosInstance.get(`/v1/admin/employee/${employeeId}/stats`);
-      
-      if (response.data) {
-        const data = response.data;
-        // The stats are already updated in the employee object via the API
-        // Removed console.log for production
-      }
-    } catch (error) {
-      // Removed console.error for production
-    }
-  }, [employeeId, isManagerReadOnly]);
-
-  // Fetch stats when component mounts
-  useEffect(() => {
-    if (employee) {
-      fetchEmployeeStats();
-    }
-  }, [employee, fetchEmployeeStats]);
-
-  // Handle performance score edit
   const handleEditPerformanceClick = () => {
-    setEditPerformanceForm({
-      performanceScore: employee.performanceScore || ''
-    });
+    setEditPerformanceForm({ performanceScore: employee.performanceScore ?? '' });
     setOpenEditPerformanceDialog(true);
   };
 
-  const handlePerformanceFormChange = (field) => (event) => {
-    setEditPerformanceForm({
-      ...editPerformanceForm,
-      [field]: event.target.value
-    });
-  };
-
   const handleSavePerformanceScore = async () => {
-    try {
-      const updateData = {
-        performanceScore: parseFloat(editPerformanceForm.performanceScore) || 0
-      };
-
-      const resultAction = await dispatch(updateEmployeeWorkInfo({
+    const resultAction = await dispatch(
+      updateEmployeeWorkInfo({
         employeeId,
-        workData: updateData
-      }));
-
-      if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
-        setSnackbar({
-          open: true,
-          message: 'Performance score updated successfully!',
-          severity: 'success'
-        });
-        setOpenEditPerformanceDialog(false);
-      } else {
-        throw new Error(resultAction.payload || 'Failed to update performance score');
-      }
-      
-    } catch (error) {
-      // Removed console.error for production
+        workData: { performanceScore: parseFloat(editPerformanceForm.performanceScore) || 0 },
+      })
+    );
+    if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
+      setSnackbar({ open: true, message: 'Performance score updated.', severity: 'success' });
+      setOpenEditPerformanceDialog(false);
+    } else {
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to update performance score. Please try again.',
-        severity: 'error'
+        message: resultAction.payload || 'Failed to update score',
+        severity: 'error',
       });
     }
   };
 
-  const handleCloseEditPerformanceDialog = () => {
-    setOpenEditPerformanceDialog(false);
+  const renderTabContent = () => {
+    if (!employee) return null;
+    switch (activeTab) {
+      case 'personal':
+        return <PersonalTab employee={employee} />;
+      case 'job':
+        return (
+          <JobDetailsTab
+            employee={employee}
+            isManagerReadOnly={isManagerReadOnly}
+            onEditWork={handleEditWorkClick}
+          />
+        );
+      case 'documents':
+        return (
+          <DocumentsTab
+            employee={employee}
+            onDownload={handleDownloadDocument}
+            onView={handleViewDocument}
+          />
+        );
+      case 'leave':
+        return <LeaveTab employeeId={employee._id} />;
+      case 'payroll':
+        return <PayrollTab employee={employee} />;
+      case 'performance':
+        return (
+          <PerformanceTab
+            employee={employee}
+            isManagerReadOnly={isManagerReadOnly}
+            onEditPerformance={handleEditPerformanceClick}
+            yearsExperience={calculateYearsOfExperience(employee.joiningDate)}
+            attendanceRate={getAttendanceRate(employee)}
+          />
+        );
+      case 'timeline':
+        return <TimelineTab employee={employee} />;
+      default:
+        return <PersonalTab employee={employee} />;
+    }
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" p={4}>
-        <CircularProgress />
-      </Box>
+      <div className="flex min-h-[50vh] items-center justify-center bg-[#F5F7FB]">
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-transparent border-t-[#20C997] border-r-[#20C997]" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Box p={2}>
-        <Alert severity="error">
-          {error}
-          <Button onClick={() => navigate(-1)} sx={{ ml: 2 }}>Go Back</Button>
-        </Alert>
-      </Box>
+      <div className="bg-[#F5F7FB] p-8">
+        <div className="mx-auto max-w-lg rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800">
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => navigate('/employees')}
+            className="mt-4 text-sm font-semibold text-[#0d9488] hover:underline"
+          >
+            Back to employees
+          </button>
+        </div>
+      </div>
     );
   }
 
   if (!employee) {
     return (
-      <Box p={2}>
-        <Alert severity="warning">
-          Employee not found
-          <Button onClick={() => navigate(-1)} sx={{ ml: 2 }}>Go Back</Button>
-        </Alert>
-      </Box>
+      <div className="bg-[#F5F7FB] p-8">
+        <p className="text-slate-600">Employee not found.</p>
+        <button type="button" onClick={() => navigate('/employees')} className="mt-2 text-[#0d9488]">
+          Go back
+        </button>
+      </div>
     );
   }
 
   return (
-    <Box 
-      sx={{ 
-        p: 3,
-        marginLeft: 0,
-        width: {
-          xs: '100%',
-          sm: '100%',
-          md: '100%'
-        }
-      }}
-    >
-      <Button 
-        variant="outlined" 
-        onClick={() => navigate(-1)}
-        sx={{ mb: 2 }}
-      >
-        Back to Employees
-      </Button>
+    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1400px] space-y-6">
+        <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <Link to="/employees" className="font-medium text-[#0d9488] hover:underline">
+            Employee Directory
+          </Link>
+          <FiChevronRight className="h-4 w-4 shrink-0" />
+          <span className="font-medium text-slate-800">{getFullName(employee)}</span>
+        </nav>
 
-      {statusUpdateError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {statusUpdateError}
-        </Alert>
-      )}
+        <button
+          type="button"
+          onClick={() => navigate('/employees')}
+          className="inline-flex items-center rounded-full border-2 border-[#20C997] px-4 py-2 text-sm font-semibold text-[#0d9488] transition hover:bg-[#20C997]/10"
+        >
+          Back to employees
+        </button>
 
-      {workInfoError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {workInfoError}
-        </Alert>
-      )}
+        {(statusUpdateError || workInfoError) && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {statusUpdateError || workInfoError}
+          </div>
+        )}
 
-      {/* Enhanced Header Section */}
-      <Card sx={{ mb: 4, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-        <CardContent sx={{ p: 4 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: isMobile ? 'column' : 'row',
-            justifyContent: 'space-between', 
-            alignItems: isMobile ? 'flex-start' : 'center', 
-            gap: 3
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <Avatar 
-                sx={{ 
-                  width: 80, 
-                  height: 80, 
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  fontSize: '2rem',
-                  fontWeight: 'bold'
-                }}
+        <EmployeeDetailsHeader
+          employee={employee}
+          isManagerReadOnly={isManagerReadOnly}
+          updatingStatus={updatingStatus}
+          terminatingEmployee={terminatingEmployee}
+          onStatusClick={() => setOpenDialog(true)}
+          onTerminateClick={() => {
+            const today = new Date().toISOString().slice(0, 10);
+            setTerminateForm({
+              terminationDate: today,
+              lastWorkingDate: today,
+              reason: '',
+              notes: '',
+              eligibleForRehire: false,
+            });
+            setOpenTerminateDialog(true);
+          }}
+          onDeleteClick={() => setOpenDeleteDialog(true)}
+        />
+
+        <div className="overflow-x-auto border-b border-slate-200">
+          <div className="flex min-w-max gap-1" role="tablist">
+            {DETAIL_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`border-b-2 px-4 py-3 text-sm font-medium transition ${
+                  activeTab === tab.id
+                    ? 'border-[#20C997] text-[#0d9488]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
               >
-                {employee.name?.charAt(0)}{employee.lastName?.charAt(0)}
-              </Avatar>
-              <Box>
-                <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 'bold', mb: 1 }}>
-                  {employee.name} {employee.lastName}
-                </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.9, mb: 1 }}>
-                  {employee.jobTitle} • {employee.department}
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <Chip 
-                    label={employee.status === 'terminated' ? 'Terminated' : employee.active ? 'Active' : 'Inactive'} 
-                    color={employee.status === 'terminated' ? 'error' : employee.active ? 'success' : 'default'}
-                    sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-                  />
-                  <Chip 
-                    label={employee.position || 'Employee'} 
-                    sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-                  />
-                  <Chip 
-                    label={`ID: ${employee.employeeId || 'N/A'}`} 
-                    sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-                  />
-                </Box>
-              </Box>
-            </Box>
-            
-            <Box sx={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: 2,
-              width: isMobile ? '100%' : 'auto'
-            }}>
-              {!isManagerReadOnly && (
-                <Button
-                  variant="contained"
-                  color={employee.active ? 'success' : 'error'}
-                  onClick={handleStatusChangeClick}
-                  disabled={updatingStatus || employee.status === 'terminated'}
-                  fullWidth={isMobile}
-                  size={isMobile ? 'medium' : 'small'}
-                  startIcon={<FiActivity />}
-                  sx={{ 
-                    bgcolor: employee.active ? 'rgba(76, 175, 80, 0.9)' : 'rgba(244, 67, 54, 0.9)',
-                    '&:hover': {
-                      bgcolor: employee.active ? 'rgba(76, 175, 80, 1)' : 'rgba(244, 67, 54, 1)'
-                    }
-                  }}
-                >
-                  {employee.status === 'terminated' ? 'TERMINATED' : employee.active ? 'DEACTIVATE' : 'ACTIVATE'}
-                </Button>
-              )}
-              {!isManagerReadOnly && employee.status !== 'terminated' && (
-                <Button
-                  variant="contained"
-                  color="warning"
-                  onClick={handleOpenTerminateDialog}
-                  disabled={terminatingEmployee}
-                  fullWidth={isMobile}
-                  size={isMobile ? 'medium' : 'small'}
-                  startIcon={<FiClock />}
-                  sx={{
-                    bgcolor: 'rgba(251, 146, 60, 0.95)',
-                    '&:hover': {
-                      bgcolor: 'rgba(249, 115, 22, 1)'
-                    }
-                  }}
-                >
-                  TERMINATE
-                </Button>
-              )}
-              {!isManagerReadOnly && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  onClick={handleDeleteClick}
-                  fullWidth={isMobile}
-                  size={isMobile ? 'medium' : 'small'}
-                  startIcon={<FiTrash2 />}
-                  sx={{ 
-                    bgcolor: 'rgba(244, 67, 54, 0.9)',
-                    '&:hover': {
-                      bgcolor: 'rgba(244, 67, 54, 1)'
-                    }
-                  }}
-                >
-                  Delete
-                </Button>
-              )}
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* Status Change Dialog */}
-      <Dialog
-        open={openDialog}
-        onClose={handleCloseDialog}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-        fullScreen={isMobile}
-      >
-        <DialogTitle id="alert-dialog-title">
-          Confirm Status Change
-        </DialogTitle>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="xl:col-span-2">{renderTabContent()}</div>
+          <aside className="space-y-4 xl:col-span-1">
+            <PayrollHighlightWidget employee={employee} />
+            <LeaveBalancesWidget employeeId={employee._id} compact />
+            <CareerTimelineWidget employee={employee} />
+            <ReportingHierarchyWidget employee={employee} managerPreview={managerPreview} />
+          </aside>
+        </div>
+      </div>
+
+      {/* Status dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullScreen={isMobile}>
+        <DialogTitle>Confirm status change</DialogTitle>
         <DialogContent>
-          <DialogContentText id="alert-dialog-description">
-            Are you sure you want to change the status of {employee.name} {employee.lastName} from {employee.active ? 'Active' : 'Inactive'} to {employee.active ? 'Inactive' : 'Active'}?
+          <DialogContentText>
+            Change {getFullName(employee)} from {employee.active ? 'Active' : 'Inactive'} to{' '}
+            {employee.active ? 'Inactive' : 'Active'}?
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog} color="primary">
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmStatusChange} 
-            color={employee.active ? 'error' : 'success'} 
-            autoFocus
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmStatusChange}
+            color={employee.active ? 'error' : 'success'}
             disabled={updatingStatus}
           >
-            {updatingStatus ? 'Updating...' : 'Confirm'}
+            {updatingStatus ? 'Updating…' : 'Confirm'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={openDeleteDialog}
-        onClose={handleCloseDeleteDialog}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-        fullScreen={isMobile}
-      >
-        <DialogTitle id="alert-dialog-title">
-          Confirm Employee Deletion
-        </DialogTitle>
+      <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)} fullScreen={isMobile}>
+        <DialogTitle>Delete employee</DialogTitle>
         <DialogContent>
-          <DialogContentText id="alert-dialog-description">
-            Are you sure you want to permanently delete {employee.name} {employee.lastName}? 
-            This action cannot be undone and will also delete all associated records (payroll, documents, etc.).
+          <DialogContentText>
+            Permanently delete {getFullName(employee)}? This cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDeleteDialog} color="primary">
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmDelete} 
-            color="error" 
-            autoFocus
-            disabled={deletingEmployee}
-          >
-            {deletingEmployee ? 'Deleting...' : 'Confirm Delete'}
+          <Button onClick={() => setOpenDeleteDialog(false)}>Cancel</Button>
+          <Button color="error" onClick={handleConfirmDelete} disabled={deletingEmployee}>
+            {deletingEmployee ? 'Deleting…' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Termination Dialog */}
       <Dialog
         open={openTerminateDialog}
-        onClose={handleCloseTerminateDialog}
-        aria-labelledby="terminate-dialog-title"
+        onClose={() => !terminatingEmployee && setOpenTerminateDialog(false)}
         fullScreen={isMobile}
       >
-        <DialogTitle id="terminate-dialog-title">Terminate Employee</DialogTitle>
+        <DialogTitle>Terminate employee</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            This will mark {employee.name} {employee.lastName} as terminated and stop normal active payroll participation.
+            Mark {getFullName(employee)} as terminated.
           </DialogContentText>
-          <Box sx={{ display: 'grid', gap: 2, mt: 1 }}>
+          <Box sx={{ display: 'grid', gap: 2 }}>
             <TextField
-              label="Termination Date"
+              label="Termination date"
               type="date"
               value={terminateForm.terminationDate}
-              onChange={(e) => setTerminateForm((prev) => ({ ...prev, terminationDate: e.target.value }))}
+              onChange={(e) =>
+                setTerminateForm((p) => ({ ...p, terminationDate: e.target.value }))
+              }
               InputLabelProps={{ shrink: true }}
               fullWidth
               required
             />
             <TextField
-              label="Last Working Date"
+              label="Last working date"
               type="date"
               value={terminateForm.lastWorkingDate}
-              onChange={(e) => setTerminateForm((prev) => ({ ...prev, lastWorkingDate: e.target.value }))}
+              onChange={(e) =>
+                setTerminateForm((p) => ({ ...p, lastWorkingDate: e.target.value }))
+              }
               InputLabelProps={{ shrink: true }}
               fullWidth
             />
             <TextField
               label="Reason"
               value={terminateForm.reason}
-              onChange={(e) => setTerminateForm((prev) => ({ ...prev, reason: e.target.value }))}
+              onChange={(e) => setTerminateForm((p) => ({ ...p, reason: e.target.value }))}
               fullWidth
             />
             <TextField
               label="Notes"
               value={terminateForm.notes}
-              onChange={(e) => setTerminateForm((prev) => ({ ...prev, notes: e.target.value }))}
+              onChange={(e) => setTerminateForm((p) => ({ ...p, notes: e.target.value }))}
               fullWidth
               multiline
               minRows={3}
             />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <label className="flex items-center gap-2 text-sm">
               <input
-                id="eligible-rehire"
                 type="checkbox"
                 checked={terminateForm.eligibleForRehire}
-                onChange={(e) => setTerminateForm((prev) => ({ ...prev, eligibleForRehire: e.target.checked }))}
+                onChange={(e) =>
+                  setTerminateForm((p) => ({ ...p, eligibleForRehire: e.target.checked }))
+                }
               />
-              <label htmlFor="eligible-rehire">Eligible for rehire</label>
-            </Box>
+              Eligible for rehire
+            </label>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseTerminateDialog} disabled={terminatingEmployee}>
+          <Button onClick={() => setOpenTerminateDialog(false)} disabled={terminatingEmployee}>
             Cancel
           </Button>
-          <Button
-            onClick={handleConfirmTerminate}
-            color="error"
-            variant="contained"
-            disabled={terminatingEmployee}
-          >
-            {terminatingEmployee ? 'Terminating...' : 'Confirm Termination'}
+          <Button color="error" variant="contained" onClick={handleConfirmTerminate} disabled={terminatingEmployee}>
+            {terminatingEmployee ? 'Terminating…' : 'Confirm'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Enhanced Main Content Grid */}
-      <Grid container spacing={3}>
-        {/* Personal Information */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <FiUser style={{ marginRight: '8px', fontSize: '20px', color: '#667eea' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Personal Information</Typography>
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableBody>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold', width: '40%' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiMail size={16} />
-                          Work Email
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.email || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiMail size={16} />
-                          Personal Email
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.personalEmail || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiPhone size={16} />
-                          Primary Phone
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.phone1 || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiPhone size={16} />
-                          Secondary Phone
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.phone2 || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiMapPin size={16} />
-                          Address
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.address || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiCalendar size={16} />
-                          Date of Birth
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.birthDate ? new Date(employee.birthDate).toLocaleDateString() : 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiUser size={16} />
-                          Gender
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.gender || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiShield size={16} />
-                          National ID document
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.nationalIdType || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiShield size={16} />
-                          National ID number
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.nationalId || 'N/A'}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Work Information */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <FiBriefcase style={{ marginRight: '8px', fontSize: '20px', color: '#667eea' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Work Information</Typography>
-                </Box>
-                {!isManagerReadOnly && (
-                  <Tooltip title="Edit Work Information">
-                    <IconButton 
-                      onClick={handleEditWorkClick}
-                      color="primary"
-                      size="small"
-                      sx={{ 
-                        bgcolor: 'primary.50',
-                        '&:hover': { bgcolor: 'primary.100' }
-                      }}
-                    >
-                      <FiEdit size={16} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableBody>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold', width: '40%' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiBriefcase size={16} />
-                          Job Title
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.jobTitle || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiUsers size={16} />
-                          Department
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.department || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiAward size={16} />
-                          Position
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.position || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiUsers size={16} />
-                          Manager
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.manager || 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <MdOutlineCurrencyRupee size={16} />
-                          Salary
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {employee.salary !== undefined && employee.salary !== null
-                          ? `₹${Number(employee.salary).toLocaleString('en-IN')}`
-                          : 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiCalendar size={16} />
-                          Joining Date
-                        </Box>
-                      </TableCell>
-                      <TableCell>{employee.joiningDate ? new Date(employee.joiningDate).toLocaleDateString() : 'N/A'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiCalendar size={16} />
-                          Created At
-                        </Box>
-                      </TableCell>
-                      <TableCell>{new Date(employee.createdAt).toLocaleString()}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FiActivity size={16} />
-                          Status
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={employee.active ? 'Active' : 'Inactive'} 
-                          color={employee.active ? 'success' : 'error'}
-                          size="small"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Financial Details */}
-        {employee.financialDetails && (
-          <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <FiDollarSign style={{ marginRight: '8px', fontSize: '20px', color: '#667eea' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Financial Details</Typography>
-                </Box>
-                <TableContainer>
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold', width: '40%' }}>Bank Name</TableCell>
-                        <TableCell>{employee.financialDetails.bankName || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Account Name</TableCell>
-                        <TableCell>{employee.financialDetails.accountName || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Account Number</TableCell>
-                        <TableCell>{employee.financialDetails.accountNo || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>IFSC Code</TableCell>
-                        <TableCell>{employee.financialDetails.ifsc || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>PAN Number</TableCell>
-                        <TableCell>{employee.financialDetails.panNumber || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>EPF UAN</TableCell>
-                        <TableCell>{employee.financialDetails.epfUan || 'N/A'}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Tax Regime</TableCell>
-                        <TableCell>{employee.financialDetails.taxRegime || employee.financialDetails.taxId || 'N/A'}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Performance & Statistics */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <FiTrendingUp style={{ marginRight: '8px', fontSize: '20px', color: '#667eea' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Performance & Statistics</Typography>
-                </Box>
-                {!isManagerReadOnly && (
-                  <Tooltip title="Edit Performance Score">
-                    <IconButton 
-                      onClick={handleEditPerformanceClick}
-                      color="primary"
-                      size="small"
-                      sx={{ 
-                        bgcolor: 'primary.50',
-                        '&:hover': { bgcolor: 'primary.100' }
-                      }}
-                    >
-                      <FiEdit size={16} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Box>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {employee.performanceScore || 'N/A'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">Performance Score</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      Set by Admin/Manager
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                      {calculateAttendanceRate()}%
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">Attendance Rate</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      Auto-calculated
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-                      {employee.projectsCompleted || '0'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">Projects Completed</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      Auto-calculated
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'info.main' }}>
-                      {calculateYearsOfExperience()}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">Years Experience</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      Auto-calculated
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Enhanced Accordion sections for additional details */}
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3, color: 'text.primary' }}>
-          Additional Information
-        </Typography>
-        
-        {/* Academic Records */}
-        {employee.academicRecords?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'primary.50',
-                '&:hover': { bgcolor: 'primary.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiAward style={{ fontSize: '20px', color: '#667eea' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Academic Records ({employee.academicRecords.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Institution</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Degree / qualification</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Field of study</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Period</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>CGPA / grade</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Notes</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.academicRecords.map((record, index) => {
-                      const degreeLine = record.degree || record.certificate || record.details || 'N/A';
-                      let period = '—';
-                      if (record.startDate || record.endDate) {
-                        const opts = { year: 'numeric', month: 'short' };
-                        const s = record.startDate
-                          ? new Date(record.startDate).toLocaleDateString(undefined, opts)
-                          : '';
-                        const e = record.endDate
-                          ? new Date(record.endDate).toLocaleDateString(undefined, opts)
-                          : '';
-                        period = [s || null, e || (s ? 'Present' : null)].filter(Boolean).join(' → ');
-                      } else if (record.year) {
-                        period = String(record.year);
-                      }
-                      const grade = record.cgpa || record.gpa || record.grade || '—';
-                      const notes =
-                        record.details && record.degree
-                          ? record.details
-                          : record.details && !record.degree
-                            ? '—'
-                            : record.details || '—';
-                      return (
-                      <TableRow key={record._id || index} hover>
-                        <TableCell>{record.institution || 'N/A'}</TableCell>
-                        <TableCell>{degreeLine}</TableCell>
-                        <TableCell>{record.fieldOfStudy || '—'}</TableCell>
-                        <TableCell>{period}</TableCell>
-                        <TableCell>{grade}</TableCell>
-                        <TableCell>{notes}</TableCell>
-                      </TableRow>
-                    );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Professional Qualifications */}
-        {employee.professionalQualifications?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'success.50',
-                '&:hover': { bgcolor: 'success.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiBriefcase style={{ fontSize: '20px', color: '#4caf50' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Professional Qualifications ({employee.professionalQualifications.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Title</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Organization</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Duration</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Description</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.professionalQualifications.map((qualification, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{qualification.title || 'N/A'}</TableCell>
-                        <TableCell>{qualification.organization || 'N/A'}</TableCell>
-                        <TableCell>{qualification.duration || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={qualification.status || 'Completed'} 
-                            color={qualification.status === 'Completed' ? 'success' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{qualification.description || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Family Details */}
-        {employee.familyDetails?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'warning.50',
-                '&:hover': { bgcolor: 'warning.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiHeart style={{ fontSize: '20px', color: '#ff9800' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Family Details ({employee.familyDetails.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Relationship</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Phone</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Occupation</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Address</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.familyDetails.map((member, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{member.fullName || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={member.relationship || 'N/A'} 
-                            color="primary"
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{member.phoneNo || 'N/A'}</TableCell>
-                        <TableCell>{member.occupation || 'N/A'}</TableCell>
-                        <TableCell>{member.address || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Next of Kins */}
-        {employee.nextOfKins?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'info.50',
-                '&:hover': { bgcolor: 'info.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiUsers style={{ fontSize: '20px', color: '#2196f3' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Next of Kins ({employee.nextOfKins.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Relationship</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Phone</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Occupation</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Address</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.nextOfKins.map((kin, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{kin.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={kin.relationship || 'N/A'} 
-                            color="secondary"
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{kin.phone || 'N/A'}</TableCell>
-                        <TableCell>{kin.occupation || 'N/A'}</TableCell>
-                        <TableCell>{kin.address || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Guarantors */}
-        {employee.guarantors?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'error.50',
-                '&:hover': { bgcolor: 'error.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiShield style={{ fontSize: '20px', color: '#f44336' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Guarantors ({employee.guarantors.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Relationship</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Occupation</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Address</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.guarantors.map((guarantor, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{guarantor.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={guarantor.relationship || 'N/A'} 
-                            color="error"
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{guarantor.occupation || 'N/A'}</TableCell>
-                        <TableCell>{guarantor.address || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Documents */}
-        {employee.documents?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'secondary.50',
-                '&:hover': { bgcolor: 'secondary.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiFileText style={{ fontSize: '20px', color: '#9c27b0' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Documents ({employee.documents.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Document Type</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>File Name</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>File Size</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Uploaded At</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.documents.map((doc, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>
-                          <Chip 
-                            label={doc.documentType || 'Document'} 
-                            color="primary"
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <FiFileText size={16} />
-                            {doc.fileName || doc.originalName || 'Unknown File'}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          {(doc.size ?? doc.fileSize) ? `${((doc.size ?? doc.fileSize) / 1024).toFixed(1)} KB` : 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(doc.uploadedAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{
-                            display: 'flex',
-                            flexDirection: isMobile ? 'column' : 'row',
-                            gap: 1
-                          }}>
-                            <Tooltip title="Download Document">
-                              <IconButton 
-                                size="small"
-                                onClick={() => handleDownloadDocument(doc._id, doc.fileName || doc.originalName)}
-                                color="primary"
-                              >
-                                <FiDownload size={16} />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="View Document">
-                              <IconButton 
-                                size="small"
-                                onClick={() => {
-                                  // Use environment-based URL for file paths
-                                  const backendUrl = getBackendBaseURL();
-                                  window.open(`${backendUrl}${doc.filePath}`, '_blank');
-                                }}
-                                color="secondary"
-                              >
-                                <FiEye size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Work History */}
-        {employee.workHistory?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'grey.50',
-                '&:hover': { bgcolor: 'grey.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiClock style={{ fontSize: '20px', color: '#607d8b' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Work History ({employee.workHistory.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Company</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Position</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Start Date</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>End Date</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Description</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.workHistory.map((work, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{work.company || 'N/A'}</TableCell>
-                        <TableCell>{work.position || 'N/A'}</TableCell>
-                        <TableCell>{work.startDate ? new Date(work.startDate).toLocaleDateString() : 'N/A'}</TableCell>
-                        <TableCell>{work.endDate ? new Date(work.endDate).toLocaleDateString() : 'Current'}</TableCell>
-                        <TableCell>{work.description || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Emergency Contacts */}
-        {employee.emergencyContacts?.length > 0 && (
-          <Accordion sx={{ mb: 2, boxShadow: 2 }}>
-            <AccordionSummary 
-              expandIcon={<ExpandMoreIcon />}
-              sx={{ 
-                bgcolor: 'error.50',
-                '&:hover': { bgcolor: 'error.100' }
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FiPhone style={{ fontSize: '20px', color: '#f44336' }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Emergency Contacts ({employee.emergencyContacts.length})
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TableContainer component={Paper} sx={{ boxShadow: 1 }}>
-                <Table>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Relationship</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Phone</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Priority</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {employee.emergencyContacts.map((contact, index) => (
-                      <TableRow key={index} hover>
-                        <TableCell>{contact.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={contact.relationship || 'N/A'} 
-                            color={contact.priority === 'Primary' ? 'error' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{contact.phone || 'N/A'}</TableCell>
-                        <TableCell>{contact.email || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={contact.priority || 'Secondary'} 
-                            color={contact.priority === 'Primary' ? 'error' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </AccordionDetails>
-          </Accordion>
-        )}
-      </Box>
-
-      {/* Edit Work Information Dialog */}
       <Dialog
         open={openEditWorkDialog}
-        onClose={handleCloseEditWorkDialog}
+        onClose={() => setOpenEditWorkDialog(false)}
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FiEdit style={{ fontSize: '24px', color: '#667eea' }} />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              Edit Work Information
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FiEdit /> Edit work information
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Job Title</InputLabel>
-                  <Select
-                    value={editWorkForm.jobTitle}
-                    onChange={handleEditWorkFormChange('jobTitle')}
-                    label="Job Title"
-                    disabled={loadingDropdownOptions}
-                  >
-                    {editWorkForm.jobTitle && !jobTitleOptions.includes(editWorkForm.jobTitle) && (
-                      <MenuItem value={editWorkForm.jobTitle}>{editWorkForm.jobTitle}</MenuItem>
-                    )}
-                    {jobTitleOptions.map((title) => (
-                      <MenuItem key={title} value={title}>{title}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Department</InputLabel>
-                  <Select
-                    value={editWorkForm.department}
-                    onChange={handleEditWorkFormChange('department')}
-                    label="Department"
-                  >
-                    <MenuItem value="Engineering">Engineering</MenuItem>
-                    <MenuItem value="HR">HR</MenuItem>
-                    <MenuItem value="Finance">Finance</MenuItem>
-                    <MenuItem value="Sales">Sales</MenuItem>
-                    <MenuItem value="Marketing">Marketing</MenuItem>
-                    <MenuItem value="IT Support">IT Support</MenuItem>
-                    <MenuItem value="Operations">Operations</MenuItem>
-                    <MenuItem value="Customer Support">Customer Support</MenuItem>
-                    <MenuItem value="Legal">Legal</MenuItem>
-                    <MenuItem value="Product">Product</MenuItem>
-                    <MenuItem value="Research & Development">Research & Development</MenuItem>
-                    <MenuItem value="Design">Design</MenuItem>
-                    <MenuItem value="Administration">Administration</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Position</InputLabel>
-                  <Select
-                    value={editWorkForm.position}
-                    onChange={handleEditWorkFormChange('position')}
-                    label="Position"
-                  >
-                    <MenuItem value="Intern">Intern</MenuItem>
-                    <MenuItem value="Junior">Junior</MenuItem>
-                    <MenuItem value="Mid-Level">Mid-Level</MenuItem>
-                    <MenuItem value="Senior">Senior</MenuItem>
-                    <MenuItem value="Lead">Lead</MenuItem>
-                    <MenuItem value="Supervisor">Supervisor</MenuItem>
-                    <MenuItem value="Manager">Manager</MenuItem>
-                    <MenuItem value="Director">Director</MenuItem>
-                    <MenuItem value="VP">VP</MenuItem>
-                    <MenuItem value="CTO">CTO</MenuItem>
-                    <MenuItem value="CFO">CFO</MenuItem>
-                    <MenuItem value="CEO">CEO</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Manager</InputLabel>
-                  <Select
-                    value={editWorkForm.manager}
-                    onChange={handleEditWorkFormChange('manager')}
-                    label="Manager"
-                    disabled={loadingDropdownOptions}
-                  >
-                    {editWorkForm.manager && !managerOptions.some((m) => (m?._id || `${m?.name || ''} ${m?.lastName || ''}`.trim()) === editWorkForm.manager) && (
-                      <MenuItem value={editWorkForm.manager}>{editWorkForm.manager}</MenuItem>
-                    )}
-                    {managerOptions.map((manager) => {
-                      const managerName = `${manager?.name || ''} ${manager?.lastName || ''}`.trim();
-                      return (
-                        <MenuItem key={manager?._id || managerName} value={manager?._id || managerName}>
-                          {managerName || 'N/A'}
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Salary"
-                  type="number"
-                  value={editWorkForm.salary}
-                  onChange={handleEditWorkFormChange('salary')}
-                  variant="outlined"
-                  size="small"
-                  InputProps={{
-                    startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography>
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Joining Date"
-                  type="date"
-                  value={editWorkForm.joiningDate}
-                  onChange={handleEditWorkFormChange('joiningDate')}
-                  variant="outlined"
-                  size="small"
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-              </Grid>
+          <Grid container spacing={2} sx={{ pt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Job title</InputLabel>
+                <Select
+                  value={editWorkForm.jobTitle}
+                  onChange={handleEditWorkFormChange('jobTitle')}
+                  label="Job title"
+                  disabled={loadingDropdownOptions}
+                >
+                  {editWorkForm.jobTitle && !jobTitleOptions.includes(editWorkForm.jobTitle) && (
+                    <MenuItem value={editWorkForm.jobTitle}>{editWorkForm.jobTitle}</MenuItem>
+                  )}
+                  {jobTitleOptions.map((t) => (
+                    <MenuItem key={t} value={t}>{t}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
-          </Box>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Department</InputLabel>
+                <Select
+                  value={editWorkForm.department}
+                  onChange={handleEditWorkFormChange('department')}
+                  label="Department"
+                >
+                  {['Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations', 'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration'].map((d) => (
+                    <MenuItem key={d} value={d}>{d}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Position</InputLabel>
+                <Select
+                  value={editWorkForm.position}
+                  onChange={handleEditWorkFormChange('position')}
+                  label="Position"
+                >
+                  {['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'VP', 'CTO', 'CFO', 'CEO'].map((p) => (
+                    <MenuItem key={p} value={p}>{p}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Manager</InputLabel>
+                <Select
+                  value={editWorkForm.manager}
+                  onChange={handleEditWorkFormChange('manager')}
+                  label="Manager"
+                  disabled={loadingDropdownOptions}
+                >
+                  {managerOptions.map((m) => {
+                    const id = m?._id;
+                    const name = `${m?.name || ''} ${m?.lastName || ''}`.trim();
+                    return (
+                      <MenuItem key={id || name} value={id || name}>
+                        {name || 'N/A'}
+                      </MenuItem>
+                    );
+                  })}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Salary"
+                type="number"
+                value={editWorkForm.salary}
+                onChange={handleEditWorkFormChange('salary')}
+                InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography> }}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Joining date"
+                type="date"
+                value={editWorkForm.joiningDate}
+                onChange={handleEditWorkFormChange('joiningDate')}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+          </Grid>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={handleCloseEditWorkDialog}
-            color="inherit"
-            disabled={updatingWorkInfo}
-          >
+        <DialogActions>
+          <Button onClick={() => setOpenEditWorkDialog(false)} disabled={updatingWorkInfo}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSaveWorkInfo}
-            variant="contained"
-            disabled={updatingWorkInfo}
-            startIcon={updatingWorkInfo ? <CircularProgress size={16} /> : <FiEdit />}
-          >
-            {updatingWorkInfo ? 'Saving...' : 'Save Changes'}
+          <Button variant="contained" onClick={handleSaveWorkInfo} disabled={updatingWorkInfo}>
+            {updatingWorkInfo ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Edit Performance Score Dialog */}
       <Dialog
         open={openEditPerformanceDialog}
-        onClose={handleCloseEditPerformanceDialog}
+        onClose={() => setOpenEditPerformanceDialog(false)}
         maxWidth="sm"
         fullWidth
         fullScreen={isMobile}
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FiStar style={{ fontSize: '24px', color: '#667eea' }} />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              Edit Performance Score
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FiStar /> Edit performance score
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <TextField
-              fullWidth
-              label="Performance Score"
-              type="number"
-              value={editPerformanceForm.performanceScore}
-              onChange={handlePerformanceFormChange('performanceScore')}
-              variant="outlined"
-              size="small"
-              inputProps={{ min: 0, max: 100, step: 0.1 }}
-              helperText="Enter a score between 0 and 100"
-            />
-          </Box>
+          <TextField
+            fullWidth
+            size="small"
+            label="Performance score"
+            type="number"
+            value={editPerformanceForm.performanceScore}
+            onChange={(e) =>
+              setEditPerformanceForm({ performanceScore: e.target.value })
+            }
+            inputProps={{ min: 0, max: 100, step: 0.1 }}
+            helperText="0–100"
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={handleCloseEditPerformanceDialog}
-            color="inherit"
-            disabled={updatingWorkInfo}
-          >
+        <DialogActions>
+          <Button onClick={() => setOpenEditPerformanceDialog(false)} disabled={updatingWorkInfo}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSavePerformanceScore}
-            variant="contained"
-            disabled={updatingWorkInfo}
-            startIcon={updatingWorkInfo ? <CircularProgress size={16} /> : <FiStar />}
-          >
-            {updatingWorkInfo ? 'Saving...' : 'Save Score'}
+          <Button variant="contained" onClick={handleSavePerformanceScore} disabled={updatingWorkInfo}>
+            Save
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </div>
   );
 };
 

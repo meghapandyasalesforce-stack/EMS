@@ -12,6 +12,7 @@ import {
   useExpenses 
 } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
+import AnnouncementBanner from '../../components/AnnouncementBanner';
 import axios from '../../utils/axios';
 import { retryAxios } from '../../utils/retry';
 import { useQuery } from '@tanstack/react-query';
@@ -99,6 +100,7 @@ const DashboardFinance = () => {
     
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6 space-y-4 sm:space-y-6 transition-all duration-300">
+            <AnnouncementBanner />
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 truncate">Finance Dashboard</h1>
                 <div className="text-xs sm:text-sm text-gray-600 truncate">

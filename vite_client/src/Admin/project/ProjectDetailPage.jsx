@@ -42,6 +42,10 @@ import useGetAllProjects from '../../Hooks/useGetAllProjects';
 import { fetchProjectTasks } from '../../context/projectSlice';
 import axios from '../../utils/axios';
 import { ADMIN_PROJECT_ENDPOINT } from '../../utils/constant';
+import {
+  canViewProjectFinancials,
+  projectFinancialPayload,
+} from '../../utils/projectFinancialsHelper';
 import { format } from 'date-fns';
 import { isExecutive } from '../../utils/navigationConfig';
 
@@ -75,11 +79,10 @@ const ProjectDetailPage = () => {
   const user = useSelector((state) => state.auth.user);
   const employee = useSelector((state) => state.employeeDetails.employee);
 
-  // Check if user is CEO (for cost tracking access)
-  const isCEO = useMemo(() => {
-    const position = (user?.position || employee?.position || '').toLowerCase().trim();
-    return position === 'ceo' || position.includes('chief executive');
-  }, [user, employee]);
+  const canViewFinancials = useMemo(
+    () => canViewProjectFinancials(user, employee),
+    [user, employee]
+  );
 
   // Filter active employees for project members - memoized
   const activeEmployees = useMemo(() => 
@@ -229,12 +232,7 @@ const ProjectDetailPage = () => {
         priority: project.priority,
         startDate: project.startDate,
         endDate: project.endDate,
-        ...(isCEO && {
-          budget: editedProject.budget ? parseFloat(editedProject.budget) : undefined,
-          actualCost: editedProject.actualCost ? parseFloat(editedProject.actualCost) : undefined,
-          revenue: editedProject.revenue ? parseFloat(editedProject.revenue) : undefined,
-          currency: editedProject.currency || 'USD'
-        }),
+        ...(canViewFinancials && projectFinancialPayload(editedProject)),
         category: editedProject.category || undefined
       };
 
@@ -253,7 +251,7 @@ const ProjectDetailPage = () => {
     } catch (error) {
       toast.error(error.response?.data?.error || 'An error occurred while updating the project');
     }
-  }, [editedProject, employees, updateProject, project, isCEO, mapStatusToBackend]);
+  }, [editedProject, employees, updateProject, project, canViewFinancials, mapStatusToBackend]);
 
   const handleDelete = useCallback(async () => {
     if (window.confirm('Are you sure you want to delete this project?')) {
@@ -901,7 +899,7 @@ const ProjectDetailPage = () => {
                 </FormControl>
 
                 {/* Cost Tracking Fields (CEO Only) */}
-                {isCEO && (
+                {canViewFinancials && (
                   <>
                     <Divider sx={{ my: 2 }} />
                     <Typography variant="h6" sx={{ mb: 2 }}>
@@ -1032,11 +1030,11 @@ const ProjectDetailPage = () => {
               )}
 
               {/* Cost Information (CEO Only) */}
-              {isCEO && (project.budget || project.revenue || project.actualCost) && (
+              {canViewFinancials && (
                 <>
                   <Divider sx={{ my: 3 }} />
                   <Typography variant="h6" sx={{ mb: 2 }}>
-                    Financial Overview <Chip label="CEO Only" size="small" color="primary" sx={{ ml: 1 }} />
+                    Financial Overview
                   </Typography>
                   <Box 
                     display="flex" 

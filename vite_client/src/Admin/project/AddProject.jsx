@@ -26,6 +26,10 @@ import { fetchEmployees } from '../../context/employeeSlice';
 import useAddProject from '../../Hooks/useAddProject';
 import { isManager, isHR } from '../../utils/managerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
+import {
+  canViewProjectFinancials,
+  projectFinancialPayload,
+} from '../../utils/projectFinancialsHelper';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 
 /** @typedef {{ title: string, description: string, assignee: string|null, dueDate: string, priority: string, subtasks: { title: string, description: string }[] }} WorkPlanRow */
@@ -79,11 +83,10 @@ function AddProject() {
         return isManager(userObj) || isHR(userObj) || isCEO || isExecutive(position);
     }, [user, employee]);
 
-    // Check if user is CEO (for cost tracking access)
-    const isCEO = useMemo(() => {
-        const position = (user?.position || employee?.position || '').toLowerCase().trim();
-        return position === 'ceo' || position.includes('chief executive');
-    }, [user, employee]);
+    const canViewFinancials = useMemo(
+        () => canViewProjectFinancials(user, employee),
+        [user, employee]
+    );
 
     const [form, setForm] = useState({ 
         name: '', 
@@ -182,12 +185,7 @@ function AddProject() {
             endDate: form.endDate || undefined,
             projectLeader: form.projectLeader,
             projectMembers: form.projectMembers,
-            ...(isCEO && {
-                budget: form.budget ? parseFloat(form.budget) : 0,
-                actualCost: form.actualCost ? parseFloat(form.actualCost) : 0,
-                revenue: form.revenue ? parseFloat(form.revenue) : 0,
-                currency: form.currency || 'USD'
-            }),
+            ...(canViewFinancials && projectFinancialPayload(form)),
             category: form.category || undefined,
             tags: form.tags || []
         };
@@ -507,11 +505,10 @@ function AddProject() {
                         />
                     </Box>
 
-                    {/* Cost Tracking Section (CEO Only) */}
-                    {isCEO && (
+                    {canViewFinancials && (
                         <Box mt={3} sx={{ [theme.breakpoints.down('md')]: { marginTop: 2 }, p: 2, bgcolor: '#e3f2fd', borderRadius: 2 }}>
                             <Typography variant="h6" gutterBottom sx={{ [theme.breakpoints.down('md')]: { fontSize: '1.1rem' } }}>
-                                Cost Tracking <Chip label="CEO Only" size="small" color="primary" sx={{ ml: 1 }} />
+                                Cost Tracking
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                                 Track project budget, costs, and revenue.

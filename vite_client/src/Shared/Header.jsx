@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
@@ -104,8 +104,14 @@ const Header = () => {
     );
     const useLightEmployeeNav = !isAdminUser;
 
-    // Highlight active route
-    const isActive = (path) => location.pathname === path;
+    // Highlight active route — exact match for '/', startsWith for all others
+    const isActive = useCallback(
+        (path) =>
+            path === '/'
+                ? location.pathname === '/'
+                : location.pathname === path || location.pathname.startsWith(path + '/'),
+        [location.pathname]
+    );
 
     // Logout Confirmation Modal
     const LogoutConfirmationModal = () => (
@@ -172,7 +178,7 @@ const Header = () => {
     );
 
     // Desktop Sidebar - non-admin: light surface to match employee pages; admin: dark
-    const DesktopSidebar = () => (
+    const DesktopSidebar = useMemo(() => () => (
         <div
             className={
                 useLightEmployeeNav
@@ -277,10 +283,11 @@ const Header = () => {
                 </button>
             </div>
         </div>
-    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [navItems, isActive, useLightEmployeeNav, dropdownOpen, username]);
 
     // Mobile Header
-    const MobileHeader = () => (
+    const MobileHeader = useMemo(() => () => (
         <header
             className={
                 useLightEmployeeNav
@@ -409,7 +416,8 @@ const Header = () => {
                 </div>
             )}
         </header>
-    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [navItems, isActive, useLightEmployeeNav, mobileMenuOpen, dropdownOpen, username]);
 
     return (
         <>

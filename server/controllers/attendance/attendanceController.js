@@ -31,6 +31,7 @@ import {
   getStartOfDayInTimezone,
   getEndOfDayInTimezone,
   getDateKeyInTimezone,
+  combineDateAndTimeInTimezone,
 } from "../../helpers/timezoneHelper.js";
 
 
@@ -320,32 +321,21 @@ export const clockIn = async (req, res) => {
 
     const clockInTime = new Date();
     
-    // Get office start time from rule or use default
-    let officeStartTime = new Date(startOfDay);
+    // Get office start time from rule or use default — use org timezone to avoid server-local-time drift
+    let officeStartTime;
     if (activeRule?.officeHours?.startTime) {
-      // Parse time string (HH:mm format)
-      const [hours, minutes] = activeRule.officeHours.startTime.split(':').map(Number);
-      officeStartTime.setHours(hours || OFFICE_START_TIME, minutes || 0, 0, 0);
+      officeStartTime = combineDateAndTimeInTimezone(startOfDay, activeRule.officeHours.startTime, orgTimezone);
     } else if (activeRule?.checkInOutTimes?.checkInStartTime) {
-      // Use check-in start time if available
-      const [hours, minutes] = activeRule.checkInOutTimes.checkInStartTime.split(':').map(Number);
-      officeStartTime.setHours(hours || OFFICE_START_TIME, minutes || 0, 0, 0);
+      officeStartTime = combineDateAndTimeInTimezone(startOfDay, activeRule.checkInOutTimes.checkInStartTime, orgTimezone);
     } else {
-      // Fallback to default
-      officeStartTime.setHours(OFFICE_START_TIME, 0, 0, 0);
+      officeStartTime = combineDateAndTimeInTimezone(startOfDay, `${OFFICE_START_TIME}:00`, orgTimezone);
     }
 
     // Validate check-in time window if configured (warning only, don't block)
     let checkInWindowWarning = null;
     if (activeRule?.checkInOutTimes?.checkInStartTime && activeRule?.checkInOutTimes?.checkInEndTime) {
-      const [startHour, startMin] = activeRule.checkInOutTimes.checkInStartTime.split(':').map(Number);
-      const [endHour, endMin] = activeRule.checkInOutTimes.checkInEndTime.split(':').map(Number);
-      
-      const checkInWindowStart = new Date(startOfDay);
-      checkInWindowStart.setHours(startHour, startMin, 0, 0);
-      
-      const checkInWindowEnd = new Date(startOfDay);
-      checkInWindowEnd.setHours(endHour, endMin, 0, 0);
+      const checkInWindowStart = combineDateAndTimeInTimezone(startOfDay, activeRule.checkInOutTimes.checkInStartTime, orgTimezone);
+      const checkInWindowEnd = combineDateAndTimeInTimezone(startOfDay, activeRule.checkInOutTimes.checkInEndTime, orgTimezone);
       
       // Check if current time is within check-in window
       if (clockInTime < checkInWindowStart) {

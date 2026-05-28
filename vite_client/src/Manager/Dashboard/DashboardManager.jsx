@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
+import AnnouncementBanner from '../../components/AnnouncementBanner';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { updateLeave } from '../../context/leaveSlice';
@@ -708,6 +709,7 @@ const DashboardManager = () => {
                     </div>
                 </div>
 
+                <AnnouncementBanner />
                 <AttendanceBox variant="dashboard" />
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -38,6 +38,7 @@ import {
 import LoadingSpinner from "../../components/LoadingSpinner";
 import AttendanceBox from "../../Employee/Attendance/AttendanceBox";
 import { handleApiError } from "../../utils/errorHandler";
+import AnnouncementBanner from '../../components/AnnouncementBanner';
 import { mergeSessionProfile } from "../../utils/profileUtils";
 
 const DashboardAdministration = () => {
@@ -289,6 +290,7 @@ const DashboardAdministration = () => {
 
   return (
     <div className="min-h-screen bg-[#F3F7F5]">
+      <AnnouncementBanner />
       <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
         <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <h1 className="text-xl font-bold text-emerald-700 sm:text-2xl">{dashboardTitle}</h1>

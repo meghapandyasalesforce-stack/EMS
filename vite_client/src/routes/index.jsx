@@ -225,6 +225,7 @@ export const hrRoutes = [
 export const otherRoutes = [
   { path: '/employee/calendar', component: lazy(() => import('../Employee/Calendar/EmployeeCalendar')), message: 'Loading calendar...', allowedRoles: [] },
   { path: '/notifications', component: lazy(() => import('../Both/Notifications')), message: 'Loading notifications...', allowedRoles: [] },
+  { path: '/sent-announcements', component: lazy(() => import('../Admin/SentAnnouncementsPage')), message: 'Loading announcements...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/daily-report', component: lazy(() => import('../Others/DailyReport')), message: 'Loading daily report...', allowedRoles: [] },
   { path: '*', component: lazy(() => import('../Others/NotFound')), message: 'Loading...', allowedRoles: [] }
 ];

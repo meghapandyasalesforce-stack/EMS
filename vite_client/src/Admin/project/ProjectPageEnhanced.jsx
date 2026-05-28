@@ -5,6 +5,10 @@ import ProjectCard from './ProjectCard';
 import useGetAllProjects from '../../Hooks/useGetAllProjects';
 import { isManager, isHR } from '../../utils/managerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
+import {
+  canViewProjectFinancials,
+  sumProjectFinancials,
+} from '../../utils/projectFinancialsHelper';
 import { 
   TextField, 
   InputAdornment, 
@@ -126,10 +130,10 @@ const ProjectsPageEnhanced = () => {
     return isManager(userObj) || isHR(userObj);
   }, [user, employee]);
   
-  const isCEO = useMemo(() => {
-    const position = (user?.position || employee?.position || '').toLowerCase().trim();
-    return position === 'ceo' || position.includes('chief executive');
-  }, [user, employee]);
+  const canViewFinancials = useMemo(
+    () => canViewProjectFinancials(user, employee),
+    [user, employee]
+  );
 
   // Debounce search
   useEffect(() => {
@@ -268,20 +272,22 @@ const ProjectsPageEnhanced = () => {
         acc.overdue++;
       }
       
-      // Cost tracking (CEO only)
-      if (isCEO && project.budget) acc.totalBudget += project.budget || 0;
-      if (isCEO && project.revenue) acc.totalRevenue += project.revenue || 0;
-      if (isCEO && project.actualCost) acc.totalCost += project.actualCost || 0;
-      
       return acc;
     }, { 
       total: 0, pending: 0, inProgress: 0, completed: 0, onHold: 0,
       low: 0, medium: 0, high: 0, critical: 0,
       overdue: 0, totalBudget: 0, totalRevenue: 0, totalCost: 0
     });
+
+    if (canViewFinancials) {
+      const financials = sumProjectFinancials(allProjects);
+      stats.totalBudget = financials.totalBudget;
+      stats.totalRevenue = financials.totalRevenue;
+      stats.totalCost = financials.totalCost;
+    }
     
     return stats;
-  }, [allProjects, isCEO]);
+  }, [allProjects, canViewFinancials]);
 
   // Check if project is overdue
   const isOverdue = useCallback((project) => {
@@ -335,7 +341,7 @@ const ProjectsPageEnhanced = () => {
       Members: project.projectMembers?.map(m => m.name).join(', ') || '',
       StartDate: project.startDate ? format(new Date(project.startDate), 'yyyy-MM-dd') : '',
       EndDate: project.endDate ? format(new Date(project.endDate), 'yyyy-MM-dd') : '',
-      ...(isCEO && {
+      ...(canViewFinancials && {
         Budget: project.budget || 0,
         ActualCost: project.actualCost || 0,
         Revenue: project.revenue || 0,
@@ -360,7 +366,7 @@ const ProjectsPageEnhanced = () => {
     window.URL.revokeObjectURL(url);
     
     setExportDialog(false);
-  }, [paginatedProjects, isCEO]);
+  }, [paginatedProjects, canViewFinancials]);
 
   // Analytics data
   const analyticsData = useMemo(() => {
@@ -385,7 +391,7 @@ const ProjectsPageEnhanced = () => {
     };
     
     // Revenue/Cost chart (CEO only)
-    const financialData = isCEO ? {
+    const financialData = canViewFinancials ? {
       labels: ['Budget', 'Actual Cost', 'Revenue'],
       datasets: [{
         label: 'Amount',
@@ -395,7 +401,7 @@ const ProjectsPageEnhanced = () => {
     } : null;
     
     return { statusData, priorityData, financialData };
-  }, [allProjects, projectStats, isCEO]);
+  }, [allProjects, projectStats, canViewFinancials]);
 
   return (
     <Box sx={{ width: '100%', minWidth: 0 }}>
@@ -754,7 +760,7 @@ const ProjectsPageEnhanced = () => {
               </Grid>
 
               {/* CEO Only: Financial Stats */}
-              {isCEO && (
+              {canViewFinancials && (
                 <>
                   <Grid item xs={12} sm={6} md={3}>
                     <Card sx={{ 
@@ -905,7 +911,7 @@ const ProjectsPageEnhanced = () => {
                     <Doughnut data={analyticsData.priorityData} />
                   </Box>
                 </Grid>
-                {isCEO && analyticsData.financialData && (
+                {canViewFinancials && analyticsData.financialData && (
                   <Grid item xs={12}>
                     <Typography variant="subtitle1" sx={{ mb: 2 }}>Financial Overview</Typography>
                     <Box sx={{ height: 300 }}>
@@ -980,7 +986,7 @@ const ProjectsPageEnhanced = () => {
                           project={project} 
                           isOverdue={isOverdue(project)}
                           progress={getProjectProgress(project)}
-                          isCEO={isCEO}
+                          canViewFinancials={canViewFinancials}
                           selected={selectedProjects.includes(project._id)}
                           onSelect={(selected) => {
                             if (selected) {
@@ -1029,8 +1035,8 @@ const ProjectsPageEnhanced = () => {
                         <TableCell>Leader</TableCell>
                         <TableCell>Progress</TableCell>
                         <TableCell>Due Date</TableCell>
-                        {isCEO && <TableCell>Budget</TableCell>}
-                        {isCEO && <TableCell>Revenue</TableCell>}
+                        {canViewFinancials && <TableCell>Budget</TableCell>}
+                        {canViewFinancials && <TableCell>Revenue</TableCell>}
                         <TableCell>Actions</TableCell>
                       </TableRow>
                     </TableHead>
@@ -1111,12 +1117,12 @@ const ProjectsPageEnhanced = () => {
                               </Box>
                             ) : 'N/A'}
                           </TableCell>
-                          {isCEO && (
+                          {canViewFinancials && (
                             <TableCell>
                               {project.budget ? `$${(project.budget / 1000).toFixed(1)}K` : 'N/A'}
                             </TableCell>
                           )}
-                          {isCEO && (
+                          {canViewFinancials && (
                             <TableCell>
                               {project.revenue ? `$${(project.revenue / 1000).toFixed(1)}K` : 'N/A'}
                             </TableCell>

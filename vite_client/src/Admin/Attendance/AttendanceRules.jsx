@@ -14,7 +14,7 @@ const AttendanceRules = () => {
     const dispatch = useDispatch();
     const orgTimezone = useSelector((state) => state.organization.profile?.timezone) || DEFAULT_TIMEZONE;
     const [formData, setFormData] = useState({
-        timezone: DEFAULT_TIMEZONE,
+        timezone: orgTimezone,
         location: '',
         address: '',
         coordinates: { latitude: 0, longitude: 0 },
@@ -193,11 +193,13 @@ const AttendanceRules = () => {
         // Prepare the data to send
         const dataToSend = {
             ...formData,
-            location: formData.location || formData.address, // Ensure location is set
+            location: formData.location || formData.address,
             coordinates: {
                 latitude: formData.coordinates.latitude || 0,
                 longitude: formData.coordinates.longitude || 0
-            }
+            },
+            // Send null if rule timezone matches org timezone — avoids overriding org timezone unnecessarily
+            timezone: formData.timezone === orgTimezone ? null : formData.timezone,
         };
 
         // Removed console.log statements for production

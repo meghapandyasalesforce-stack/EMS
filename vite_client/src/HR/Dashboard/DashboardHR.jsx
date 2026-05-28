@@ -42,6 +42,7 @@ import { useEmployees, useLeaves } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
 import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
+import AnnouncementBanner from '../../components/AnnouncementBanner';
 
 const WS = {
     bg: '#F5F7FB',
@@ -774,6 +775,7 @@ const DashboardHR = () => {
                     </div>
                 </header>
 
+                <AnnouncementBanner />
                 <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                     <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
                         Punch in / punch out

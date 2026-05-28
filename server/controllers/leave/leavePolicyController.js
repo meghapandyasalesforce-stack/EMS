@@ -1,10 +1,12 @@
 import LeavePolicy from '../../models/leavePolicy.model.js';
 import LeaveBalance from '../../models/leaveBalance.model.js';
+import Leave from '../../models/leave.model.js';
 import Employee from '../../models/employee.model.js';
 import leaveBalanceEngine from '../../services/leaveBalanceEngine.js';
 import logger from '../../helpers/logger.js';
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
+import { getLeaveTypeVariantsForBalance } from '../../helpers/leaveTypeHelper.js';
 
 /**
  * Create a new leave policy
@@ -237,9 +239,28 @@ export const getEmployeeLeaveBalance = async (req, res) => {
 
         await balance.populate('policy', 'policyName leaveTypes');
 
+        // Calculate usedThisMonth for each leave type
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        const balanceObj = balance.toObject();
+        balanceObj.balances = await Promise.all(balanceObj.balances.map(async (b) => {
+            const types = getLeaveTypeVariantsForBalance(b.leaveType);
+            const monthLeaves = await Leave.find({
+                organizationId,
+                employee: targetEmployeeId,
+                leaveType: { $in: types },
+                startDate: { $gte: monthStart, $lte: monthEnd },
+                status: { $in: ['approved', 'pending'] }
+            });
+            b.usedThisMonth = monthLeaves.reduce((sum, l) => sum + (l.duration || 0), 0);
+            return b;
+        }));
+
         res.json({
             success: true,
-            balance
+            balance: balanceObj
         });
     } catch (error) {
         logger.error('Get Employee Leave Balance Error', { error: error.message });

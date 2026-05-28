@@ -17,6 +17,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { useEmployees, useLeaves, usePayrolls, useProjects } from "../Hooks/useDashboardData";
 import axios from "../utils/axios";
 import { handleApiError } from "../utils/errorHandler";
+import NotificationSender from "./NotificationSender";
 
 const selectAuth = (state) => state.auth || {};
 
@@ -26,6 +27,7 @@ function DashboardAdmin() {
   const user = authState?.user;
   const [todayStatus, setTodayStatus] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
 
   const {
     data: employeeData = { employees: [], total: 0 },
@@ -225,6 +227,17 @@ function DashboardAdmin() {
   }
 
   return (
+    <>
+      {showAnnouncementModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowAnnouncementModal(false)}
+        >
+          <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <NotificationSender onSent={() => setShowAnnouncementModal(false)} />
+          </div>
+        </div>
+      )}
     <div className="min-h-screen bg-[#F3F7F5]">
       <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
         <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -335,7 +348,7 @@ function DashboardAdmin() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-slate-900">Announcements</h2>
               <button
-                onClick={() => navigate("/notifications")}
+                onClick={() => setShowAnnouncementModal(true)}
                 className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary)] hover:opacity-80"
               >
                 <FiPlus className="h-4 w-4" />
@@ -357,7 +370,7 @@ function DashboardAdmin() {
               )}
             </div>
             <button
-              onClick={() => navigate("/notifications")}
+              onClick={() => navigate("/sent-announcements")}
               className="mt-4 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               View All Announcements
@@ -481,6 +494,7 @@ function DashboardAdmin() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

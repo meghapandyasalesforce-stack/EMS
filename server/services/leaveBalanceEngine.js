@@ -225,11 +225,13 @@ class LeaveBalanceEngine {
      */
     async calculateUsedBalance(employeeId, leaveType, year, organizationId) {
         const types = getLeaveTypeVariantsForBalance(leaveType);
+        const yearStart = new Date(year, 0, 1);
+        const yearEnd = new Date(year, 11, 31, 23, 59, 59);
         const leaves = await Leave.find({
             organizationId,
             employee: employeeId,
             leaveType: { $in: types },
-            year,
+            $or: [{ year }, { startDate: { $gte: yearStart, $lte: yearEnd } }],
             status: 'approved'
         });
 
@@ -241,11 +243,13 @@ class LeaveBalanceEngine {
      */
     async calculatePendingBalance(employeeId, leaveType, year, organizationId) {
         const types = getLeaveTypeVariantsForBalance(leaveType);
+        const yearStart = new Date(year, 0, 1);
+        const yearEnd = new Date(year, 11, 31, 23, 59, 59);
         const leaves = await Leave.find({
             organizationId,
             employee: employeeId,
             leaveType: { $in: types },
-            year,
+            $or: [{ year }, { startDate: { $gte: yearStart, $lte: yearEnd } }],
             status: 'pending'
         });
 

@@ -149,7 +149,7 @@ const attendanceRuleSchema = new mongoose.Schema({
     // Timezone support
     timezone: {
         type: String,
-        default: 'UTC',
+        default: null,
         trim: true
     },
     // Office hours (timezone-aware)
