@@ -20,15 +20,15 @@ const FinancialDetails = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (employee?.financialDetails) {
+    if (employee) {
       setFormData({
-        bankName: employee.financialDetails.bankName || '',
-        ifsc: employee.financialDetails.ifsc || '',
-        accountNo: employee.financialDetails.accountNo || '',
-        accountName: employee.financialDetails.accountName || '',
-        panNumber: employee.financialDetails.panNumber || '',
-        epfUan: employee.financialDetails.epfUan || '',
-        taxRegime: employee.financialDetails.taxRegime || '',
+        bankName: employee.financialDetails?.bankName || '',
+        ifsc: employee.financialDetails?.ifsc || '',
+        accountNo: employee.financialDetails?.accountNo || '',
+        accountName: employee.financialDetails?.accountName || '',
+        panNumber: employee.financialDetails?.panNumber || '',
+        epfUan: employee.financialDetails?.epfUan || '',
+        taxRegime: employee.financialDetails?.taxRegime || '',
       });
       setLoading(false);
     }

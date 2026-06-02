@@ -270,19 +270,20 @@ export const deleteProfessionalQualification = createAsyncThunk(
 // Async thunk for adding next of kin
 export const addNextOfKin = createAsyncThunk(
   'employeeDetails/addNextOfKin',
-  async (nextOfKinData, { rejectWithValue }) => {
+  async (nextOfKinData, { rejectWithValue, getState }) => {
     try {
+      const { employee } = getState().employeeDetails;
       const response = await axios.post(
-        `${BOTH_PROFILE_ENDPOINT}/add-nok-detail`, // Ensure this is employee endpoint
+        `${BOTH_PROFILE_ENDPOINT}/add-nok-detail`,
         nextOfKinData,
         {
-          withCredentials: true, // Crucial for cookie-based auth
+          withCredentials: true,
           headers: {
             'Content-Type': 'application/json'
           }
         }
       );
-      return response.data.nextOfKin;
+      return { ...employee, nextOfKins: response.data.nextOfKins };
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || 
@@ -474,7 +475,11 @@ const employeeDetailsSlice = createSlice({
         if (action.payload === null) {
           state.employee = null;
         } else if (isEmployeeProfile(action.payload)) {
-          state.employee = action.payload;
+          // Merge into existing employee so sub-fields like phone1, address,
+          // nationalId, financialDetails etc. are not wiped out.
+          state.employee = state.employee
+            ? { ...state.employee, ...action.payload }
+            : action.payload;
         }
       })
 
@@ -620,7 +625,9 @@ const employeeDetailsSlice = createSlice({
       })
       .addCase(addNextOfKin.fulfilled, (state, action) => {
         state.addingNextOfKin = false;
-        state.employee = action.payload;
+        if (state.employee) {
+          state.employee.nextOfKins = action.payload.nextOfKins;
+        }
       })
       .addCase(addNextOfKin.rejected, (state, action) => {
         state.addingNextOfKin = false;

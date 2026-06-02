@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProfilePhotoUpload from '../Profile/ProfilePhotoUpload';
@@ -10,14 +10,13 @@ import GuarantorDetails from '../Additional details/GuarantorDetails';
 import FamilyDetails from '../Additional details/FamilyDetails';
 import JobDetails from '../Additional details/JobDetails';
 import FinancialDetails from './FinancialDetails';
+import { fetchEmployeeOwnInfo, updateEmployeeInfo, setEmployeeProfile } from '../../context/employeeDetailsSlice';
 import { setUser } from '../../context/Auth/authSlice';
-import { fetchEmployeeOwnInfo, updateEmployeeInfo } from '../../context/employeeDetailsSlice';
 import { mergeSessionProfile } from '../../utils/profileUtils';
 import { toast } from 'react-toastify';
 
 function ProfileDetails() {
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const [isFetchingFreshData, setIsFetchingFreshData] = useState(false);
   const [isSavingPersonalDetails, setIsSavingPersonalDetails] = useState(false);
   const [isPersonalEditing, setIsPersonalEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('personalDetails');
@@ -36,37 +35,10 @@ function ProfileDetails() {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const profileSource = mergeSessionProfile(user, employeeDetails);
-
-  // Fetch fresh employee data on mount and when user changes to ensure we have the latest Employee ID
-  useEffect(() => {
-    const fetchFreshData = async () => {
-      // Wait for user to be available
-      if (!user) return;
-      
-      if (user?.role === 'employee' || user?.role === 'hr' || user?.role === 'manager') {
-        try {
-          setIsFetchingFreshData(true);
-          const result = await dispatch(fetchEmployeeOwnInfo()).unwrap();
-          // Update auth state with fresh data including updated employeeId
-          if (result && result.employeeId) {
-            dispatch(setUser({
-              ...user,
-              ...result,
-              employeeId: result.employeeId // Always use the fresh employeeId from server
-            }));
-          }
-        } catch (err) {
-          // Error is silently handled - user can refresh page if needed
-        } finally {
-          setIsFetchingFreshData(false);
-        }
-      }
-    };
-
-    fetchFreshData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, user?.id]); // Run when user.id changes (user logs in or data updates)
+  const profileSource = useMemo(
+    () => mergeSessionProfile(user, employeeDetails),
+    [user, employeeDetails]
+  );
 
   const buildPersonalFormValues = (source) => {
     if (!source) {
@@ -108,6 +80,10 @@ function ProfileDetails() {
   };
 
   useEffect(() => {
+    dispatch(fetchEmployeeOwnInfo());
+  }, [dispatch]);
+
+  useEffect(() => {
     if (!profileSource) return;
     setFormValues(buildPersonalFormValues(profileSource));
   }, [profileSource]);
@@ -147,7 +123,19 @@ function ProfileDetails() {
       };
 
       await dispatch(updateEmployeeInfo(payload)).unwrap();
-      await dispatch(fetchEmployeeOwnInfo()).unwrap();
+      const freshEmployee = await dispatch(fetchEmployeeOwnInfo()).unwrap();
+
+      // Patch auth.user so mergeSessionProfile returns the updated values.
+      // Without this, auth.user wins in the merge and the form resets to old data.
+      if (freshEmployee && user) {
+        dispatch(setUser({
+          ...user,
+          birthDate: freshEmployee.birthDate,
+          gender: freshEmployee.gender,
+          professionalBio: freshEmployee.professionalBio,
+        }));
+      }
+
       toast.success('Personal details updated successfully.');
       setIsPersonalEditing(false);
     } catch (error) {
@@ -195,7 +183,7 @@ function ProfileDetails() {
     if (mappedTab && mappedTab !== activeTab) {
       setActiveTab(mappedTab);
     }
-  }, [location.pathname, activeTab]);
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabClick = (tabId) => {
     const targetPath = tabPathMap[tabId] || '/profile-details';
@@ -255,9 +243,6 @@ function ProfileDetails() {
                       {joinDateValue ? new Date(joinDateValue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                     </span>
                   </div>
-                  {isFetchingFreshData && (
-                    <p className="pt-1 text-xs font-medium text-[#0a8f6c] animate-pulse">Refreshing latest profile info...</p>
-                  )}
                 </div>
               </div>
 
@@ -293,16 +278,16 @@ function ProfileDetails() {
                             <span className="text-sm font-medium text-slate-600">First Name</span>
                             <input
                               value={formValues.firstName}
-                              onChange={(e) => handleChange('firstName', e.target.value)}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                              readOnly
+                              className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed"
                             />
                           </label>
                           <label className="space-y-1">
                             <span className="text-sm font-medium text-slate-600">Last Name</span>
                             <input
                               value={formValues.lastName}
-                              onChange={(e) => handleChange('lastName', e.target.value)}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
+                              readOnly
+                              className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed"
                             />
                           </label>
                           <label className="space-y-1">
@@ -449,22 +434,8 @@ function ProfileDetails() {
                 userType="employee"
                 userId={user?.id}
                 onPhotoUpdate={(photoData) => {
-                  // Ensure we extract the profilePhoto correctly
-                  let profilePhoto = photoData;
-                  
-                  // Handle different response structures
-                  if (photoData && typeof photoData === 'object') {
-                    // If it has a profilePhoto property, use that
-                    profilePhoto = photoData.profilePhoto || photoData;
-                  }
-                  
-                  // Update user data in Redux store with the new profile photo
-                  const updatedUser = { 
-                    ...user, 
-                    profilePhoto: profilePhoto 
-                  };
-                  
-                  dispatch(setUser(updatedUser));
+                  const profilePhoto = photoData?.profilePhoto || photoData;
+                  dispatch(setEmployeeProfile({ ...employeeDetails, profilePhoto }));
                   setShowPhotoUpload(false);
                 }}
               />

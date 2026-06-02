@@ -657,8 +657,8 @@ export const updateFinancialDetails = async (req, res) => {
         }
 
         // Basic validation
-        if (!/^[A-Za-z0-9]{4,20}$/.test(ifsc)) {
-            return res.status(400).json({ message: 'Invalid IFSC format' });
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.toUpperCase())) {
+            return res.status(400).json({ message: 'Invalid IFSC format (e.g. SBIN0001234)' });
         }
 
         if (!/^\d{9,18}$/.test(accountNo)) {

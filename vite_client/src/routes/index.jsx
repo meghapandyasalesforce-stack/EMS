@@ -118,7 +118,7 @@ export const projectRoutes = [
   { path: '/employee/projects/:projectId', component: lazy(() => import('../Employee/Project/EmployeeTasks')), message: 'Loading tasks...', allowedRoles: [] }
 ];
 
-// Profile detail routes - any authenticated user
+// Profile detail routes - single route, tab driven by URL internally
 const ProfileDetailsPage = lazy(() => import('../Employee/Profile details/ProfileDetails'));
 export const profileDetailRoutes = [
   { path: '/profile-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
@@ -130,6 +130,35 @@ export const profileDetailRoutes = [
   { path: '/job-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] }
 ];
+
+export const renderProfileRoutes = () => {
+  const paths = [
+    '/profile-details',
+    '/contact-details',
+    '/next-of-kin-details',
+    '/education-qualifications',
+    '/guarantor-details',
+    '/family-details',
+    '/job-details',
+    '/financial-details',
+  ];
+
+  return paths.map((path) => (
+    <Route
+      key={path}
+      path={path}
+      element={
+        <ProtectedRoute allowedRoles={[]}>
+          <RouteErrorBoundary>
+            <Suspense fallback={<LoadingSpinner message="Loading profile details..." />}>
+              <ProfileDetailsPage />
+            </Suspense>
+          </RouteErrorBoundary>
+        </ProtectedRoute>
+      }
+    />
+  ));
+};
 
 // Leave routes
 export const leaveRoutes = [

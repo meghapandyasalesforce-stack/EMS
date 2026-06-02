@@ -6,6 +6,7 @@ import {
     getNationalIdPlaceholder,
     validateNationalIdInput,
 } from '../../utils/nationalIdValidation';
+import { toast } from 'react-toastify';
 
 const ContactDetails = () => {
     const dispatch = useDispatch();
@@ -49,14 +50,14 @@ const ContactDetails = () => {
         const { phone1, personalEmail, address, birthDate, gender, nationalId, nationalIdType } = formData;
 
         if (!phone1 || !personalEmail || !address) {
-            alert('Please fill in all required fields.');
+            toast.error('Please fill in all required fields.');
             return;
         }
 
         if (birthDate) {
             const selectedDate = new Date(birthDate);
             if (Number.isNaN(selectedDate.getTime()) || selectedDate > new Date()) {
-                alert('Please enter a valid birth date.');
+                toast.error('Please enter a valid birth date.');
                 return;
             }
         }
@@ -64,17 +65,17 @@ const ContactDetails = () => {
         let nationalPayload = {};
         if (nationalId?.trim()) {
             if (!nationalIdType) {
-                alert('Select which national ID document you are using.');
+                toast.error('Select which national ID document you are using.');
                 return;
             }
             const check = validateNationalIdInput(nationalIdType, nationalId);
             if (!check.ok) {
-                alert(check.message);
+                toast.error(check.message);
                 return;
             }
             nationalPayload = { nationalId: check.normalized, nationalIdType };
         } else if (nationalIdType && !nationalId?.trim()) {
-            alert('Enter the ID number, or clear the document type.');
+            toast.error('Enter the ID number, or clear the document type.');
             return;
         } else if (employee?.nationalId || employee?.nationalIdType) {
             nationalPayload = { nationalId: '' };
@@ -92,10 +93,10 @@ const ContactDetails = () => {
             };
 
             await dispatch(updateEmployeeInfo(payload)).unwrap();
-            alert('Contact details updated successfully!');
+            toast.success('Contact details updated successfully!');
             setIsEditing(false);
         } catch (err) {
-            alert(typeof err === 'string' ? err : (err?.message || 'Something went wrong.'));
+            toast.error(typeof err === 'string' ? err : (err?.message || 'Something went wrong.'));
         }
     };
 

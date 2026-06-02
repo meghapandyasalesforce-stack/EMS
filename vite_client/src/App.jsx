@@ -13,7 +13,6 @@ import {
   dashboardRoutes,
   employeeRoutes,
   projectRoutes,
-  profileDetailRoutes,
   leaveRoutes,
   payrollRoutes,
   attendanceRoutes,
@@ -22,11 +21,20 @@ import {
   hrRoutes,
   otherRoutes,
   renderRoutes,
-  renderProtectedRoutes
+  renderProtectedRoutes,
+  renderProfileRoutes
 } from './routes/index.jsx';
 
 // All routes are now defined in routes/index.jsx
 // Components are lazy-loaded through the route configuration
+
+function ScrollToTop() {
+    const { pathname } = useLocation();
+    useEffect(() => {
+        document.querySelector('.main-scroll-area')?.scrollTo(0, 0);
+    }, [pathname]);
+    return null;
+}
 
 function App() {
     const location = useLocation();
@@ -75,23 +83,22 @@ function App() {
 
     return (
         <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
-            {!shouldHideLayout && <Header />} {/* Conditionally render Header */}
-            <InstallPrompt /> {/* PWA Install Prompt */}
+            {!shouldHideLayout && <Header />}
+            <InstallPrompt />
             {shouldHideLayout ? (
-                // Full-screen layout for auth pages (no header, no sidebar, no flex container)
                 <Routes>
                     {renderRoutes(authRoutes)}
                 </Routes>
             ) : (
-                // Push content right of fixed main nav
                 <div className="flex min-h-[calc(100vh-64px)] ml-0 lg:ml-64">
-                    <div className="flex-1 min-w-0 overflow-auto bg-[var(--color-bg)]">
+                    <div className="main-scroll-area flex-1 min-w-0 overflow-auto bg-[var(--color-bg)]">
+                        <ScrollToTop />
                         <Routes>
                             {renderRoutes(authRoutes)}
                             {renderProtectedRoutes(dashboardRoutes)}
                             {renderProtectedRoutes(employeeRoutes)}
                             {renderProtectedRoutes(projectRoutes)}
-                            {renderProtectedRoutes(profileDetailRoutes)}
+                            {renderProfileRoutes()}
                             {renderProtectedRoutes(leaveRoutes)}
                             {renderProtectedRoutes(payrollRoutes)}
                             {renderProtectedRoutes(attendanceRoutes)}
@@ -109,7 +116,7 @@ function App() {
 
 function AppWrapper() {
     return (
-        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Router future={{ v7_relativeSplatPath: true }}>
             <App />
         </Router>
     );
