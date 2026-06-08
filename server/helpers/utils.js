@@ -10,9 +10,10 @@ import { DEFAULT_JWT_ACCESS_EXPIRE, DEFAULT_JWT_REFRESH_EXPIRE, CSRF_TOKEN_BYTES
  * @param {string} organizationId - Organization ID (for multi-tenancy)
  * @param {Object} res - Express response object (optional)
  * @param {Date|number} passwordChangedAt - Timestamp for token invalidation (optional)
+ * @param {Object} extraClaims - Optional JWT claims (employeeProfileId, platformRoles, etc.)
  * @returns {Object|string} - Token object with accessToken, refreshToken, csrfToken or just accessToken
  */
-export const generateToken = (userId, role = null, organizationId = null, res = null, passwordChangedAt = null) => {
+export const generateToken = (userId, role = null, organizationId = null, res = null, passwordChangedAt = null, extraClaims = null) => {
     try {
         // Validate JWT_SECRET is set
         if (!process.env.JWT_SECRET) {
@@ -32,6 +33,15 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
             }
         }
 
+        if (extraClaims && typeof extraClaims === 'object') {
+            if (extraClaims.employeeProfileId) {
+                payload.employeeProfileId = String(extraClaims.employeeProfileId);
+            }
+            if (Array.isArray(extraClaims.platformRoles) && extraClaims.platformRoles.length) {
+                payload.platformRoles = extraClaims.platformRoles;
+            }
+        }
+
         // Access token - shorter expiration (1 hour default, configurable)
         const accessTokenExpiry = process.env.JWT_ACCESS_EXPIRE || DEFAULT_JWT_ACCESS_EXPIRE;
         const accessToken = jwt.sign(
@@ -45,6 +55,8 @@ export const generateToken = (userId, role = null, organizationId = null, res = 
         const refreshPayload = { userId, role, type: 'refresh' };
         if (organizationId) refreshPayload.organizationId = organizationId;
         if (payload.passwordChangedAt) refreshPayload.passwordChangedAt = payload.passwordChangedAt;
+        if (payload.employeeProfileId) refreshPayload.employeeProfileId = payload.employeeProfileId;
+        if (payload.platformRoles) refreshPayload.platformRoles = payload.platformRoles;
         const refreshToken = jwt.sign(
             refreshPayload,
             process.env.JWT_SECRET,

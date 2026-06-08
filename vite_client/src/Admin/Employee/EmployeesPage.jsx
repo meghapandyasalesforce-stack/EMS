@@ -6,6 +6,8 @@ import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye, FaUserPlus, FaEllipsisV, FaC
 import axios from '../../utils/axios';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import RoleBadge from '../../components/RoleBadge';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { PERMISSIONS } from '../../utils/permissions';
 
 const EmployeesPage = () => {
   const dispatch = useDispatch();
@@ -21,31 +23,8 @@ const EmployeesPage = () => {
   const [onLeaveTodayMap, setOnLeaveTodayMap] = useState({});
   const pageSize = 20;
 
-  // Check if user is HR or Admin
-  const canAddEmployee = useMemo(() => {
-    const userRole = user?.role || employee?.role || localStorage.getItem('role');
-    const department = (user?.department || employee?.department || '').toLowerCase().trim();
-    const jobTitle = (user?.jobTitle || employee?.jobTitle || '').toLowerCase().trim();
-    const position = (user?.position || employee?.position || '').toLowerCase().trim();
-
-    // Admin can always add employees
-    if (userRole === 'admin') {
-      return true;
-    }
-
-    // Check if user is HR
-    const isHR = 
-      department === 'hr' || 
-      department.includes('hr') || 
-      department.includes('human resource') ||
-      jobTitle.includes('hr manager') ||
-      jobTitle.includes('human resource') ||
-      jobTitle.includes('hr') ||
-      position.includes('hr manager') ||
-      (position.includes('hr') && position.includes('manager'));
-
-    return isHR;
-  }, [user, employee]);
+  const { hasPermission, isOrgOwner } = useAuthPermissions();
+  const canAddEmployee = isOrgOwner || hasPermission(PERMISSIONS.EMPLOYEE_CREATE);
 
   useEffect(() => {
     dispatch(fetchEmployees({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }));
@@ -358,14 +337,16 @@ const EmployeesPage = () => {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => canAddEmployee && navigate('/add-employee')}
-        className="fixed bottom-8 right-8 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
-        aria-label="Add employee"
-      >
-        <FaUserPlus className="h-4 w-4" />
-      </button>
+      {canAddEmployee && (
+        <button
+          type="button"
+          onClick={() => navigate('/add-employee')}
+          className="fixed bottom-8 right-8 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
+          aria-label="Add employee"
+        >
+          <FaUserPlus className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 };

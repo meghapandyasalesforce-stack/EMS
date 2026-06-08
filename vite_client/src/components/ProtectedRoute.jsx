@@ -6,76 +6,77 @@ import { isManager, isHR } from '../utils/managerHelper';
 import { isProjectManager } from '../utils/projectManagerHelper';
 import { isExecutive } from '../utils/navigationConfig';
 import { getDefaultDashboardRoute } from '../utils/dashboardRedirect';
+import { canAccess } from '../utils/permissions';
 
 /**
- * ProtectedRoute Component
- * Protects routes based on user roles
- *
- * @param {Object} props
- * @param {React.ReactNode} props.children - Component to render if authorized
- * @param {Array<string>} props.allowedRoles - Array of allowed roles: ['admin', 'manager', 'hr', 'employee', 'executive']
- * @param {string} props.redirectTo - Path to redirect if unauthorized (default: use role-based dashboard)
+ * Protects routes by RBAC permissions (preferred) or legacy role strings.
  */
-const ProtectedRoute = ({ children, allowedRoles = [], redirectTo }) => {
-    const user = useSelector((state) => state.auth.user);
-    const authChecked = useSelector((state) => state.auth.authChecked);
-    const employee = useSelector((state) => state.employeeDetails.employee);
+const ProtectedRoute = ({
+  children,
+  allowedRoles = [],
+  requiredPermissions = [],
+  redirectTo,
+}) => {
+  const user = useSelector((state) => state.auth.user);
+  const authChecked = useSelector((state) => state.auth.authChecked);
+  const permissions = useSelector((state) => state.auth.permissions) || [];
+  const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+  const employee = useSelector((state) => state.employeeDetails.employee);
 
-    if (!authChecked) {
-        return <LoadingSpinner message="Checking permissions..." />;
-    }
+  if (!authChecked) {
+    return <LoadingSpinner message="Checking permissions..." />;
+  }
 
-    // If no user, redirect to login
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
-    // Get user role
-    const userRole = user?.role || employee?.role || 'employee';
-    
-    // Check if user is admin
-    const isAdmin = userRole === 'admin';
-    
-    // Check if user is manager
-    const userObj = user || employee;
-    const userIsManager = isManager(userObj);
-    const userIsProjectManager = isProjectManager(userObj);
-    
-    // Check if user is HR
-    const userIsHR = isHR(userObj);
-    
-    // Check if user is Executive (CEO, CTO, CFO, VP)
-    const position = (userObj?.position || '').toLowerCase().trim();
-    const userIsExecutive = isExecutive(position);
+  const userRole = user?.role || employee?.role || 'employee';
+  const isAdmin = userRole === 'admin';
+  const userObj = user || employee;
+  const userIsManager = isManager(userObj);
+  const userIsProjectManager = isProjectManager(userObj);
+  const userIsHR = isHR(userObj);
+  const position = (userObj?.position || '').toLowerCase().trim();
+  const userIsExecutive = isExecutive(position);
 
-    const department = (userObj?.department || '').toLowerCase().trim();
-    const isFinanceDept = department === 'finance' || department.includes('finance') || department === 'accounting';
-    const isTechDept = department === 'technology' || department === 'tech' || department.includes('technology') ||
-      department === 'it' || (department.includes('it') && !department.includes('support'));
+  const department = (userObj?.department || '').toLowerCase().trim();
+  const isFinanceDept =
+    department === 'finance' ||
+    department.includes('finance') ||
+    department === 'accounting';
+  const isTechDept =
+    department === 'technology' ||
+    department === 'tech' ||
+    department.includes('technology') ||
+    department === 'it' ||
+    (department.includes('it') && !department.includes('support'));
 
-    const effectiveRoles = [];
-    if (isAdmin) effectiveRoles.push('admin');
-    if (userIsManager) effectiveRoles.push('manager');
-    if (userIsProjectManager) effectiveRoles.push('project_manager');
-    if (userIsHR) effectiveRoles.push('hr');
-    if (userIsExecutive) effectiveRoles.push('executive');
-    if (isFinanceDept) effectiveRoles.push('finance');
-    if (isTechDept) effectiveRoles.push('tech');
-    effectiveRoles.push('employee');
+  const effectiveRoles = [];
+  if (isAdmin) effectiveRoles.push('admin');
+  if (userIsManager) effectiveRoles.push('manager');
+  if (userIsProjectManager) effectiveRoles.push('project_manager');
+  if (userIsHR) effectiveRoles.push('hr');
+  if (userIsExecutive) effectiveRoles.push('executive');
+  if (isFinanceDept) effectiveRoles.push('finance');
+  if (isTechDept) effectiveRoles.push('tech');
+  effectiveRoles.push('employee');
 
-    // Check if user has any of the allowed roles
-    const hasAccess = allowedRoles.length === 0 || 
-                      allowedRoles.some(role => effectiveRoles.includes(role));
+  const hasAccess = canAccess(permissions, requiredPermissions, {
+    isOrgOwner: !!permissionFlags.isOrgOwner,
+    allowedRoles,
+    effectiveRoles,
+  });
 
-    if (!hasAccess) {
-        const targetRedirect = redirectTo != null && redirectTo !== '' && redirectTo !== '/dashboard'
-            ? redirectTo
-            : getDefaultDashboardRoute(user, employee);
-        return <Navigate to={targetRedirect} replace />;
-    }
+  if (!hasAccess) {
+    const targetRedirect =
+      redirectTo != null && redirectTo !== '' && redirectTo !== '/dashboard'
+        ? redirectTo
+        : getDefaultDashboardRoute(user, employee);
+    return <Navigate to={targetRedirect} replace />;
+  }
 
-    return <>{children}</>;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;
-

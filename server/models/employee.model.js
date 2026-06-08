@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { hashPassword, comparePassword } from "../helpers/passwordUtils.js";
+import User from "./user.model.js";
 import { organizationIsolationPlugin } from "../plugins/organizationIsolation.js";
 
 /**
@@ -37,6 +38,17 @@ const employeeSchema = new mongoose.Schema({
         required: true,
         index: true
     },
+
+    /**
+     * Unified auth: links HR profile to User login (one password).
+     * When set, login/forgot-password use User credentials.
+     */
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        sparse: true,
+        index: true
+    },
     
     /**
      * Employee first name
@@ -71,7 +83,13 @@ const employeeSchema = new mongoose.Schema({
      * @required
      * @private
      */
-    password: { type: String, required: true, select: false },
+    password: {
+        type: String,
+        required: function passwordRequired() {
+            return !this.userId;
+        },
+        select: false
+    },
     
     /**
      * Manager name or ID (optional for first employee e.g. CEO/Manager; default 'CEO')
@@ -411,8 +429,15 @@ const employeeSchema = new mongoose.Schema({
 
 // Hash password before saving
 employeeSchema.pre('save', async function(next) {
+    // Unified auth: skip local password when linked to User
+    if (this.userId && !this.isModified('password')) {
+        return next();
+    }
+    if (this.userId && this.isModified('password') && !this.password) {
+        return next();
+    }
     // Only hash password if it's been modified (or is new)
-    if (this.isModified('password')) {
+    if (this.isModified('password') && this.password) {
         try {
             this.password = await hashPassword(this.password);
             // Update passwordChangedAt when password is changed (but not on initial creation)
@@ -447,6 +472,12 @@ employeeSchema.pre('save', async function(next) {
 
 // Compare password method for consistency with User model
 employeeSchema.methods.comparePassword = async function(candidatePassword) {
+    if (this.userId) {
+        const linkedUser = await User.findById(this.userId).select('+password');
+        if (linkedUser) {
+            return linkedUser.comparePassword(candidatePassword);
+        }
+    }
     return await comparePassword(candidatePassword, this.password, this._id?.toString());
 };
 
@@ -481,6 +512,7 @@ employeeSchema.methods.toJSON = function() {
 // Add database indexes for better query performance
 // Compound unique index: email must be unique per organization
 employeeSchema.index({ email: 1, organizationId: 1 }, { unique: true });
+employeeSchema.index({ userId: 1, organizationId: 1 }, { sparse: true });
 // Compound unique index: employeeId must be unique per organization
 employeeSchema.index({ employeeId: 1, organizationId: 1 }, { unique: true });
 employeeSchema.index({ status: 1 });
@@ -503,6 +535,9 @@ employeeSchema.plugin(organizationIsolationPlugin, { requireOrganizationId: fals
 // Pre-save hook to auto-populate functionalRoles based on department/position (backward compatibility)
 // SECURITY: This is for migration only. New code should explicitly set functionalRoles
 employeeSchema.pre('save', async function(next) {
+    if (this._skipFunctionalRoleInference) {
+        return next();
+    }
     // Only auto-populate if functionalRoles is empty (new employee or migration)
     const currentRoles = Array.isArray(this.functionalRoles) ? this.functionalRoles : [];
     if (currentRoles.length === 0 && this.department && this.position) {

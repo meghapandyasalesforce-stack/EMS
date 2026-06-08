@@ -18,6 +18,8 @@ import {
     FiUsers,
 } from 'react-icons/fi';
 import { HiOutlineBell, HiOutlineQuestionMarkCircle } from 'react-icons/hi2';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { PERMISSIONS, hasAnyPermission } from '../../utils/permissions';
 import {
     Area,
     AreaChart,
@@ -305,6 +307,8 @@ const DashboardHR = () => {
     const dispatch = useDispatch();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
+    const { permissions, permissionFlags } = useAuthPermissions();
+    const rbacOpts = { isOrgOwner: !!permissionFlags.isOrgOwner };
 
     useEffect(() => {
         dispatch(fetchOrganizationTimezone());
@@ -605,43 +609,43 @@ const DashboardHR = () => {
     }, [orgEmployees, searchQuery]);
 
     const quickActions = [
-        {
+        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts) && {
             label: 'Add Employee',
             subtitle: 'Create a profile',
             icon: <FiUserPlus className="h-5 w-5" />,
             onClick: () => navigate('/add-employee'),
         },
-        {
+        hasAnyPermission(permissions, [PERMISSIONS.PAYROLL_VIEW_ALL], rbacOpts) && {
             label: 'Run Payroll',
             subtitle: 'Process salaries',
             icon: <FiFileText className="h-5 w-5" />,
             onClick: () => navigate('/admin-payroll'),
         },
-        {
+        hasAnyPermission(permissions, [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM], rbacOpts) && {
             label: 'Leave Review',
             subtitle: `${pendingLeaves} pending`,
             icon: <FiCalendar className="h-5 w-5" />,
             onClick: () => navigate('/leave-management'),
         },
-        {
+        hasAnyPermission(permissions, [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM], rbacOpts) && {
             label: 'Approvals',
             subtitle: `${dashboardExtras.pendingApprovals.length} queued`,
             icon: <FiClock className="h-5 w-5" />,
             onClick: () => navigate('/admin/pending-approvals'),
         },
-        {
+        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_VIEW_ALL], rbacOpts) && {
             label: 'Recruitment',
             subtitle: `${openPositions} open roles`,
             icon: <FiBriefcase className="h-5 w-5" />,
             onClick: () => navigate('/recruitment'),
         },
-        {
+        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_VIEW_ALL], rbacOpts) && {
             label: 'Reports',
             subtitle: 'HR analytics',
             icon: <FiTrendingUp className="h-5 w-5" />,
             onClick: () => navigate('/admin/reports'),
         },
-    ];
+    ].filter(Boolean);
 
     const pageLoading = loading || employeesLoading || leavesLoading || allEmployeesLoading;
     const todayLabel = format(new Date(), 'EEEE, do MMMM yyyy');

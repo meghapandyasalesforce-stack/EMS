@@ -41,6 +41,9 @@ import LeaveTab from './employeeDetails/tabs/LeaveTab';
 import PayrollTab from './employeeDetails/tabs/PayrollTab';
 import PerformanceTab from './employeeDetails/tabs/PerformanceTab';
 import TimelineTab from './employeeDetails/tabs/TimelineTab';
+import AccessTab from './employeeDetails/tabs/AccessTab';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { PERMISSIONS } from '../../utils/permissions';
 import LeaveBalancesWidget from './employeeDetails/widgets/LeaveBalancesWidget';
 import CareerTimelineWidget from './employeeDetails/widgets/CareerTimelineWidget';
 import ReportingHierarchyWidget from './employeeDetails/widgets/ReportingHierarchyWidget';
@@ -102,6 +105,13 @@ const EmployeeDetailsPage = () => {
     workInfoError,
   } = useSelector((state) => state.employeeDetails);
   const currentUser = useSelector((state) => state.auth?.user);
+  const { hasAnyPermission, isOrgOwner } = useAuthPermissions();
+  const canManageAccess =
+    isOrgOwner ||
+    hasAnyPermission([PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE]);
+  const visibleTabs = DETAIL_TABS.filter(
+    (tab) => !tab.permissionGated || canManageAccess
+  );
   const isManagerReadOnly = isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
 
   useEffect(() => {
@@ -369,6 +379,13 @@ const EmployeeDetailsPage = () => {
         );
       case 'timeline':
         return <TimelineTab employee={employee} />;
+      case 'access':
+        return (
+          <AccessTab
+            employeeId={employee._id}
+            canEdit={canManageAccess && !isManagerReadOnly}
+          />
+        );
       default:
         return <PersonalTab employee={employee} />;
     }
@@ -457,7 +474,7 @@ const EmployeeDetailsPage = () => {
 
         <div className="overflow-x-auto border-b border-slate-200">
           <div className="flex min-w-max gap-1" role="tablist">
-            {DETAIL_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"

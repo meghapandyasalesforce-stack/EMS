@@ -1,7 +1,6 @@
 import { DateTime } from 'luxon';
-import {
-  getEffectiveTimezone,
-} from './organizationTimezoneService.js';
+import { getCachedEffectiveTimezone } from './orgContextCache.js';
+import { getCachedActiveAttendanceRule } from './orgContextCache.js';
 import {
   getStartOfDayInTimezone,
   getEndOfDayInTimezone,
@@ -13,11 +12,20 @@ import {
  * @returns {{ timezone: string, attendanceDateKey: string, startOfDay: Date, endOfDay: Date }}
  */
 export async function getAttendanceDayContext(organizationId, refDate = new Date()) {
-  const timezone = await getEffectiveTimezone(organizationId);
+  const timezone = await getCachedEffectiveTimezone(organizationId);
   const attendanceDateKey = getDateKeyInTimezone(refDate, timezone);
   const startOfDay = getStartOfDayInTimezone(refDate, timezone);
   const endOfDay = getEndOfDayInTimezone(refDate, timezone);
   return { timezone, attendanceDateKey, startOfDay, endOfDay };
+}
+
+/** Parallel day context + active rule (for punch in/out). */
+export async function getAttendanceDayContextAndRule(organizationId, refDate = new Date()) {
+  const [dayContext, activeRule] = await Promise.all([
+    getAttendanceDayContext(organizationId, refDate),
+    getCachedActiveAttendanceRule(organizationId),
+  ]);
+  return { dayContext, activeRule };
 }
 
 /** Match today's row by date key, with legacy fallback on exact `date` instant. */

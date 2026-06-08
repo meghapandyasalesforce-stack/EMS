@@ -1,5 +1,3 @@
-import Organization from '../models/organization.model.js';
-import AttendanceRule from '../models/attendanceRule.model.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezoneOptions.js';
 import {
   getStartOfDayInTimezone,
@@ -7,6 +5,12 @@ import {
   getDateKeyInTimezone,
   normalizeTimezone,
 } from './timezoneHelper.js';
+import {
+  getCachedTimezoneContext,
+  getCachedEffectiveTimezone,
+} from './orgContextCache.js';
+
+export { invalidateOrgContextCache } from './orgContextCache.js';
 
 /**
  * Effective timezone: attendance rule override, then organization, then UTC.
@@ -19,36 +23,11 @@ export function resolveEffectiveTimezone(organizationTimezone, ruleTimezone) {
 }
 
 export async function getTimezoneContext(organizationId) {
-  if (!organizationId) {
-    return {
-      timezone: DEFAULT_TIMEZONE,
-      organizationTimezone: DEFAULT_TIMEZONE,
-      attendanceRuleTimezone: null,
-    };
-  }
-
-  const [org, rule] = await Promise.all([
-    Organization.findById(organizationId).select('timezone').lean(),
-    AttendanceRule.findOne({ organizationId, isActive: true })
-      .sort({ priority: -1, updatedAt: -1 })
-      .select('timezone')
-      .lean(),
-  ]);
-
-  const organizationTimezone = normalizeTimezone(org?.timezone);
-  const attendanceRuleTimezone = rule?.timezone ? normalizeTimezone(rule.timezone) : null;
-  const timezone = resolveEffectiveTimezone(organizationTimezone, attendanceRuleTimezone);
-
-  return {
-    timezone,
-    organizationTimezone,
-    attendanceRuleTimezone,
-  };
+  return getCachedTimezoneContext(organizationId);
 }
 
 export async function getEffectiveTimezone(organizationId) {
-  const ctx = await getTimezoneContext(organizationId);
-  return ctx.timezone;
+  return getCachedEffectiveTimezone(organizationId);
 }
 
 export async function getStartOfDayForOrganization(organizationId, refDate = new Date()) {

@@ -4,6 +4,7 @@ import User from '../../models/user.model.js';
 import bcrypt from 'bcryptjs';
 import logger from '../../helpers/logger.js';
 import { normalizeEmail } from '../../helpers/authHelpers.js';
+import { resolvePasswordResetTarget } from '../../helpers/identityService.js';
 import { createEmailTransporter, getEmailFrom } from '../../config/email.config.js';
 
 const GENERIC_RESET_MESSAGE =
@@ -49,14 +50,10 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    // Employees store email lowercase; admins use the same convention
-    let user = await Employee.findOne({ email: normalizedEmail });
-    let userType = 'employee';
-
-    if (!user) {
-      user = await User.findOne({ email: normalizedEmail });
-      userType = 'admin';
-    }
+    const organizationId = req.body?.organizationId || null;
+    const resetTarget = await resolvePasswordResetTarget(normalizedEmail, organizationId);
+    const user = resetTarget?.account ?? null;
+    const userType = resetTarget?.userType ?? null;
 
     if (!user) {
       logger.info('Forgot password handled with generic success (user not found)', {

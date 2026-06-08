@@ -32,6 +32,7 @@ import NotificationFeed from './NotificationFeed';
 import PasswordResetPopup from '../PasswordResetPopup';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
+import { mergeSessionProfile } from '../../utils/profileUtils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from 'date-fns';
 import axios from '../../utils/axios';
 
@@ -137,11 +138,16 @@ function DashboardEmployee() {
     const employee = useSelector((state) => state.employeeDetails.employee);
     const dispatch = useDispatch();
 
+    const profile = useMemo(
+        () => mergeSessionProfile(user, employee),
+        [user, employee]
+    );
+
     const departmentLabel = useMemo(() => {
-        const d = user?.department || employee?.department;
+        const d = profile?.department;
         if (!d) return '';
         return typeof d === 'string' ? d : '';
-    }, [user?.department, employee?.department]);
+    }, [profile?.department]);
 
     const handleEditProfile = () => navigate('/profile-details');
 
@@ -447,13 +453,13 @@ function DashboardEmployee() {
                             style={{ borderColor: WS.border }}
                         >
                             <div className="flex min-w-0 items-center gap-4">
-                                <ProfilePicture user={user} size="lg" />
+                                <ProfilePicture user={profile || user} size="lg" />
                                 <div className="min-w-0">
                                     <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
-                                        Welcome back, {user?.name || 'User'}!
+                                        Welcome back, {profile?.name || 'User'}!
                                     </h1>
                                     <p className="mt-0.5 text-sm text-slate-600">
-                                        {[user?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
+                                        {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
                                     </p>
                                 </div>
                             </div>

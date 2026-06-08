@@ -11,7 +11,6 @@ import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/no
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
 import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
-import { deleteCacheByPattern } from "../../helpers/cache.js";
 import {
   getExpectedWorkingHoursFromRule,
   getEffectiveOfficeEndForEarlyDeparture,
@@ -21,12 +20,19 @@ import {
 } from "../../helpers/organizationTimezoneService.js";
 import {
   getAttendanceDayContext,
+  getAttendanceDayContextAndRule,
   findTodayAttendance,
   buildOrgTodayAttendanceFilter,
   buildAttendancePeriodFilter,
   parseDateKeyInTimezone,
   resolveAttendanceDateKey,
 } from "../../helpers/attendanceDayHelper.js";
+import {
+  runInBackground,
+  invalidateAttendanceCachesAsync,
+  emitAttendanceTodayChangedAsync,
+  emitEmployeesOnBreakChangedAsync,
+} from "../../helpers/backgroundTasks.js";
 import {
   getStartOfDayInTimezone,
   getEndOfDayInTimezone,
@@ -274,15 +280,10 @@ export const clockIn = async (req, res) => {
       });
     }
 
-    dayContext = await getAttendanceDayContext(organizationId);
+    const { dayContext: dayCtx, activeRule } = await getAttendanceDayContextAndRule(organizationId);
+    dayContext = dayCtx;
     const { startOfDay, attendanceDateKey, timezone: orgTimezone } = dayContext;
-    
-    // Load active attendance rule for this organization (if any)
-    const activeRule = await AttendanceRule.findOne({ 
-      isActive: true,
-      organizationId 
-    }).lean();
-    
+
     logger.debug('Clock-in attempt', {
       userId,
       organizationId,
@@ -600,58 +601,44 @@ export const clockIn = async (req, res) => {
       clockInNetwork: networkInfo
     });
 
-    // Send notification to admins about check-in
-    try {
-      const employee = await Employee.findById(userId).select('name lastName email department position organizationId');
+    runInBackground('clock-in-notify-admins', async () => {
+      const employee = await Employee.findById(userId).select(
+        'name lastName email department position organizationId'
+      );
       const admins = await User.find({ role: 'admin', organizationId }).select('_id');
-      
-      if (admins.length > 0 && employee) {
-        const locationStatus = locationMatch 
-          ? `✅ At office location (${Math.round(locationDistance || 0)}m away)` 
-          : activeRule ? '⚠️ Location not verified' : '📍 Location not required';
-        
-        const deviceEmoji = networkInfo.deviceType === 'mobile' ? '📱' : 
-                           networkInfo.deviceType === 'tablet' ? '📱' : '💻';
-        
-        const message = `${deviceEmoji} ${employee.name} ${employee.lastName || ''} checked in from ${networkInfo.deviceType} device. ${locationStatus}`;
-        
-        const adminIds = admins.map(admin => admin._id);
-        await sendNotificationToUsers(
-          adminIds,
-          employee,
-          message,
-          'system',
-          {
-            organizationId: organizationId, // Add organizationId to metadata as fallback
-            employeeId: employee._id,
-            employeeName: `${employee.name} ${employee.lastName || ''}`,
-            deviceType: networkInfo.deviceType,
-            locationMatch: locationMatch,
-            locationDistance: locationDistance,
-            checkInTime: clockInTime,
-            attendanceId: attendance._id
-          }
-        );
-      }
-    } catch (notifError) {
-      logger.error('Error sending check-in notification to admins', { error: notifError.message });
-      // Don't fail the check-in if notification fails
-    }
+      if (!admins.length || !employee) return;
 
-    // Invalidate caches so employee and admin UIs get fresh data without delay
-    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after clock-in', { error: err?.message }));
-    try {
-      const { getIO } = await import('../../config/websocket.js');
-      getIO().to(`org:${organizationId}`).emit('attendance:today_status_changed', {});
-    } catch (e) {
-      logger.warn('Socket emit after clock-in', { error: e?.message });
-    }
+      const locationStatus = locationMatch
+        ? `✅ At office location (${Math.round(locationDistance || 0)}m away)`
+        : activeRule
+          ? '⚠️ Location not verified'
+          : '📍 Location not required';
+      const deviceEmoji =
+        networkInfo.deviceType === 'mobile' || networkInfo.deviceType === 'tablet'
+          ? '📱'
+          : '💻';
+      const message = `${deviceEmoji} ${employee.name} ${employee.lastName || ''} checked in from ${networkInfo.deviceType} device. ${locationStatus}`;
+
+      await sendNotificationToUsers(
+        admins.map((admin) => admin._id),
+        employee,
+        message,
+        'system',
+        {
+          organizationId,
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          deviceType: networkInfo.deviceType,
+          locationMatch,
+          locationDistance,
+          checkInTime: clockInTime,
+          attendanceId: attendance._id,
+        }
+      );
+    });
+
+    invalidateAttendanceCachesAsync();
+    emitAttendanceTodayChangedAsync(organizationId);
 
     // Return attendance object directly with additional metadata
     const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
@@ -805,33 +792,15 @@ export const breakIn = async (req, res) => {
 
     await attendance.save();
 
-    // Invalidate caches so admin dashboard and employee UI get fresh data without delay
-    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after break-in', { error: err?.message }));
+    invalidateAttendanceCachesAsync();
+    emitEmployeesOnBreakChangedAsync(organizationId);
 
-    // Real-time: notify admin dashboard to refresh employees on break
-    try {
-      const { getIO } = await import('../../config/websocket.js');
-      getIO().to(`org:${organizationId}`).emit('attendance:employees_on_break_changed', {});
-    } catch (e) {
-      logger.warn('Socket emit after break-in', { error: e?.message });
-    }
-
-    // Get employee details and send notification to admins
-    try {
-      const employee = await Employee.findById(req.employee._id).select('name lastName email organizationId');
-      if (employee) {
-        await sendBreakNotification(employee);
-      }
-    } catch (notifError) {
-      logger.error('Error sending break notification', { error: notifError.message });
-      // Don't fail the break request if notification fails
-    }
+    runInBackground('break-in-notify-admins', async () => {
+      const employee = await Employee.findById(req.employee._id).select(
+        'name lastName email organizationId'
+      );
+      if (employee) await sendBreakNotification(employee);
+    });
 
     res.json(attendance);
   } catch (error) {
@@ -874,22 +843,8 @@ export const breakOut = async (req, res) => {
 
     await attendance.save();
 
-    // Invalidate caches so admin dashboard and employee UI get fresh data without delay
-    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after break-out', { error: err?.message }));
-
-    // Real-time: notify admin dashboard to refresh employees on break
-    try {
-      const { getIO } = await import('../../config/websocket.js');
-      getIO().to(`org:${organizationId}`).emit('attendance:employees_on_break_changed', {});
-    } catch (e) {
-      logger.warn('Socket emit after break-out', { error: e?.message });
-    }
+    invalidateAttendanceCachesAsync();
+    emitEmployeesOnBreakChangedAsync(organizationId);
 
     res.json(attendance);
   } catch (error) {
@@ -957,17 +912,9 @@ export const breakOut = async (req, res) => {
 export const clockOut = async (req, res) => {
   try {
     const organizationId = getOrganizationId(req);
-    const dayContext = await getAttendanceDayContext(organizationId);
+    const { dayContext, activeRule } = await getAttendanceDayContextAndRule(organizationId);
     const { startOfDay, timezone: orgTimezone } = dayContext;
-    
-    // Load active rule for this organization (if any)
-    const activeRule = await AttendanceRule.findOne({ 
-      isActive: true,
-      organizationId 
-    })
-      .sort({ priority: -1, updatedAt: -1 })
-      .lean();
-    
+
     const attendance = await findTodayAttendance(Attendance, {
       organizationId,
       userId: req.employee._id,
@@ -1253,20 +1200,8 @@ export const clockOut = async (req, res) => {
 
     await attendance.save();
 
-    // Invalidate caches so employee and admin UIs get fresh data without delay
-    deleteCacheByPattern('attendance:logs*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:today*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:on-break*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:summary*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:my-today*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    deleteCacheByPattern('attendance:employee-list*').catch(err => logger.warn('Cache invalidation after clock-out', { error: err?.message }));
-    try {
-      const { getIO } = await import('../../config/websocket.js');
-      getIO().to(`org:${organizationId}`).emit('attendance:today_status_changed', {});
-    } catch (e) {
-      logger.warn('Socket emit after clock-out', { error: e?.message });
-    }
+    invalidateAttendanceCachesAsync();
+    emitAttendanceTodayChangedAsync(organizationId);
 
     const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
     res.json({

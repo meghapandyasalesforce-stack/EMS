@@ -16,6 +16,7 @@ import { CgProfile } from 'react-icons/cg';
 import { VscProject } from 'react-icons/vsc';
 import { mergeSessionProfile } from './profileUtils';
 import { isProjectManager } from './projectManagerHelper';
+import { PERMISSIONS, filterNavByPermissions } from './permissions';
 
 /**
  * Get navigation items based on user role, department, and position
@@ -23,49 +24,65 @@ import { isProjectManager } from './projectManagerHelper';
  * @param {Object} employee - Employee object from Redux
  * @returns {Array} Array of navigation items
  */
-export const getNavigationItems = (user, employee) => {
+const resolveNavFromRbac = (permissionFlags, role, position) => {
+    if (!permissionFlags || !Object.keys(permissionFlags).length) {
+        return null;
+    }
+    if (permissionFlags.isOrgOwner || (role === 'admin' && permissionFlags.isHrManager)) {
+        return getAdminNavigation();
+    }
+    if (permissionFlags.isExecutive) {
+        return getExecutiveNavigation(position);
+    }
+    if (permissionFlags.isHrManager || permissionFlags.isHrExecutive) {
+        return getHRNavigation();
+    }
+    if (permissionFlags.isPayrollAdmin) {
+        return getFinanceNavigation();
+    }
+    if (permissionFlags.isLineManager) {
+        return getManagerNavigation();
+    }
+    return null;
+};
+
+export const getNavigationItems = (
+    user,
+    employee,
+    permissions = [],
+    permissionFlags = {}
+) => {
     const profile = mergeSessionProfile(user, employee);
     const role = profile?.role || 'employee';
     const department = (profile?.department || '').toLowerCase().trim();
     const position = (profile?.position || '').toLowerCase().trim();
     const jobTitle = (profile?.jobTitle || '').toLowerCase().trim();
 
-    // Admin Navigation (for admin users)
-    if (role === 'admin') {
-        return getAdminNavigation();
+    let items =
+        resolveNavFromRbac(permissionFlags, role, position) ||
+        (role === 'admin' ? getAdminNavigation() : null);
+
+    if (!items) {
+        if (isExecutive(position)) {
+            items = getExecutiveNavigation(position);
+        } else {
+            const isHRRole = isHR(department, jobTitle, position);
+            const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
+            if (isHRRole) {
+                items = getHRNavigation();
+            } else if (isManagerRole) {
+                items = getManagerNavigation();
+            } else if (isFinance(department)) {
+                items = getFinanceNavigation();
+            } else if (isTech(department)) {
+                items = getTechNavigation();
+            } else {
+                items = getEmployeeNavigation();
+            }
+        }
     }
 
-    // Executive Navigation (CEO, CTO, CFO, VP)
-    if (isExecutive(position)) {
-        return getExecutiveNavigation(position);
-    }
-
-    // Check if user is HR (priority - HR takes precedence over Manager)
-    const isHRRole = isHR(department, jobTitle, position);
-    const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
-    
-    // HR Navigation (HR takes priority - even HR Managers get HR navigation only)
-    if (isHRRole) {
-        return getHRNavigation();
-    }
-    
-    // Project Manager / line Manager navigation (for non-HR managers only)
-    if (isManagerRole) {
-        return getManagerNavigation();
-    }
-
-    // Finance Navigation
-    if (isFinance(department)) {
-        return getFinanceNavigation();
-    }
-
-    // Tech Navigation
-    if (isTech(department)) {
-        return getTechNavigation();
-    }
-
-    // Default Employee Navigation
-    return getEmployeeNavigation();
+    return filterNavByPermissions(items, permissions);
 };
 
 /**
@@ -133,19 +150,20 @@ const isTech = (department) => {
  */
 const getAdminNavigation = () => [
     { path: "/dashboard-admin", name: "Dashboard", icon: <FaHome /> },
-    { path: "/organization/dashboard", name: "Organization", icon: <FaBuilding /> },
-    { path: "/employees", name: "Employees", icon: <FaUsers /> },
-    { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
-    { path: "/projects", name: "Projects", icon: <FaProjectDiagram /> },
-    { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks /> },
-    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/role-hierarchy", name: "Role Management", icon: <FaShieldAlt /> },
-    { path: "/admin/approval-workflows", name: "Approval Workflows", icon: <FaTasks /> },
-    { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock /> },
-    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
-    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
-    { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign /> },
-    { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
+    { path: "/organization/dashboard", name: "Organization", icon: <FaBuilding />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EXECUTIVE_DASHBOARD] },
+    { path: "/employees", name: "Employees", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
+    { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },
+    { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
+    { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
+    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
+    { path: "/role-hierarchy", name: "Role Hierarchy", icon: <FaShieldAlt />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
+    { path: "/admin/platform-roles", name: "Users & Roles", icon: <FaUserTie />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE] },
+    { path: "/admin/approval-workflows", name: "Approval Workflows", icon: <FaTasks />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
+    { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock />, permissions: [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM] },
+    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
+    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard />, permissions: [PERMISSIONS.ID_CARD_MANAGE] },
+    { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
+    { path: "/admin-settings", name: "Settings", icon: <FaCog />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
 ];
 
 /**
@@ -157,9 +175,9 @@ const getExecutiveNavigation = (position) => {
         { path: "/organization/dashboard", name: "Organization", icon: <FaBuilding /> },
         { path: "/employees", name: "Employees", icon: <FaUsers /> },
         { path: "/projects", name: "Projects", icon: <FaProjectDiagram /> },
-        { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-        { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks /> },
-        { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
+        { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
+        { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
+        { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },
         { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
         { path: "/admin/reports", name: "Reports & Analytics", icon: <FaChartBar /> },
         { path: "/admin-settings", name: "Settings", icon: <FaCog /> }
@@ -188,11 +206,11 @@ const getExecutiveNavigation = (position) => {
  */
 const getManagerNavigation = () => [
     { path: "/dashboard-manager", name: "Dashboard", icon: <FaUserTie /> },
-    { path: "/employees", name: "My Team", icon: <FaUsers /> },
-    { path: "/projects", name: "All Projects", icon: <FaProjectDiagram /> },
-    { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
+    { path: "/employees", name: "My Team", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
+    { path: "/projects", name: "All Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW] },
+    { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_TEAM, PERMISSIONS.LEAVE_VIEW_ALL] },
     { path: "/employee/leave-attendance", name: "Leave & Attendance", icon: <FaChartLine /> },
-    { path: "/all-attendance-history", name: "Team Attendance", icon: <IoBookmarks /> },
+    { path: "/all-attendance-history", name: "Team Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_TEAM, PERMISSIONS.ATTENDANCE_VIEW_ALL] },
     { path: "/manager/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/team-learning", name: "Team Learning", icon: <FaGraduationCap /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
@@ -207,20 +225,20 @@ const getManagerNavigation = () => [
  */
 const getHRNavigation = () => [
     { path: "/dashboard-hr", name: "Dashboard", icon: <FaUsers /> },
-    { path: "/employees", name: "Employees", icon: <FaUsers /> },
-    { path: "/recruitment", name: "Recruitment", icon: <FaHandshake /> },
-    { path: "/onboarding", name: "Onboarding", icon: <FaUserCheck /> },
+    { path: "/employees", name: "Employees", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
+    { path: "/recruitment", name: "Recruitment", icon: <FaHandshake />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL] },
+    { path: "/onboarding", name: "Onboarding", icon: <FaUserCheck />, permissions: [PERMISSIONS.ONBOARDING_MANAGE, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/learning", name: "Learning & Development", icon: <FaGraduationCap /> },
-    { path: "/engagement", name: "Employee Engagement", icon: <FaBell /> },
+    { path: "/engagement", name: "Employee Engagement", icon: <FaBell />, permissions: [PERMISSIONS.ENGAGEMENT_MANAGE] },
     { path: "/documents", name: "Documents", icon: <FaFolderOpen /> },
     { path: "/benefits", name: "Benefits", icon: <FaGift /> },
     { path: "/succession", name: "Succession Planning", icon: <FaUserTie /> },
     { path: "/workforce", name: "Workforce Planning", icon: <FaChartBar /> },
-    { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt /> },
-    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt /> },
-    { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks /> },
-    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
+    { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },
+    { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
+    { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
+    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
+    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard />, permissions: [PERMISSIONS.ID_CARD_MANAGE] },
     { path: "/admin/reports", name: "HR Reports", icon: <FaFileAlt /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
 ];
@@ -231,8 +249,8 @@ const getHRNavigation = () => [
  */
 const getFinanceNavigation = () => [
     { path: "/dashboard-finance", name: "Dashboard", icon: <FaDollarSign /> },
-    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign /> },
+    { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
+    { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
     { path: "/admin/reports", name: "Financial Reports", icon: <FaChartBar /> },
     { path: "/employees", name: "Employees", icon: <FaUsers /> },
     { path: "/my-leave", name: "My Leave", icon: <FaCalendarAlt /> },

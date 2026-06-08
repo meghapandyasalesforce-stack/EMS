@@ -74,7 +74,21 @@ export const refreshToken = async (req, res) => {
         const role = decoded.role || userType;
         const organizationId = decoded.organizationId || user.organizationId;
         const passwordChangedAt = user.passwordChangedAt || user.createdAt;
-        const tokenResult = generateToken(user._id, role, organizationId, res, passwordChangedAt);
+        const extraClaims = {};
+        if (decoded.employeeProfileId) {
+            extraClaims.employeeProfileId = decoded.employeeProfileId;
+        }
+        if (decoded.platformRoles) {
+            extraClaims.platformRoles = decoded.platformRoles;
+        }
+        const tokenResult = generateToken(
+            user._id,
+            role,
+            organizationId,
+            res,
+            passwordChangedAt,
+            Object.keys(extraClaims).length ? extraClaims : null
+        );
         const accessToken = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
         const csrfToken = typeof tokenResult === 'object' ? tokenResult.csrfToken : undefined;
 

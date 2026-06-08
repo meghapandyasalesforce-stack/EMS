@@ -24,6 +24,7 @@ import notificationRouter from "../routes/Admin/NotificationRoutes.js";
 import pushSubscriptionRouter from "../routes/Admin/PushSubscriptionRoutes.js";
 import uploadRouter from "../routes/Both/UploadRoutes.js";
 import forgotPasswordRouter from "../routes/Both/ForgotPasswordRoutes.js";
+import unifiedAuthRouter from "../routes/Both/UnifiedAuthRoutes.js";
 import taskRouter from "../routes/Both/TaskRoutes.js";
 import profilePhotoRouter from "../routes/Both/ProfilePhotoRoutes.js";
 import emailTestRouter from "../routes/Both/EmailTestRoutes.js";
@@ -71,6 +72,7 @@ import compOffRouter from "../routes/Both/CompOffRoutes.js";
 import compOffAdminRouter from "../routes/Admin/CompOffAdminRoutes.js";
 import payrollReportsRouter from "../routes/Admin/PayrollReportsRoutes.js";
 import auditLogRouter from "../routes/Admin/AuditLogRoutes.js";
+import platformRolesRouter from "../routes/Admin/PlatformRolesRoutes.js";
 
 import { setCacheHeaders } from "../middlewares/cacheHeaders.js";
 
@@ -99,6 +101,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/admin/employee", employeeAdminRouter);
   app.use("/api/v1/admin/audit-logs", auditLogRouter);
   app.use("/api/v1/admin/roles", roleRouter);
+  app.use("/api/v1/admin/platform-roles", platformRolesRouter);
   app.use("/api/v1/admin/calendar", calendarRouter);
   app.use("/api/v1/admin/id-cards", idCardRouter);
   app.use("/api/v1/admin/salary-structure", salaryStructureRouter);
@@ -126,6 +129,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/profile-details", profileDetailsRouter);
   app.use("/api/v1/both/document", uploadRouter);
   app.use("/api/v1/both/password", forgotPasswordRouter);
+  app.use("/api/v1/both/auth", unifiedAuthRouter);
   app.use("/api/v1/both/project-task", taskRouter);
   app.use("/api/v1/both/profile-photo", profilePhotoRouter);
   app.use("/api/v1/both/email", emailTestRouter);

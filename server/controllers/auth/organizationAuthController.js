@@ -9,6 +9,7 @@ import logger from '../../helpers/logger.js';
 import asyncHandler from '../../helpers/asyncHandler.js';
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from '../../helpers/authHelpers.js';
 import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
+import { PLATFORM_ROLES } from '../../config/identity.constants.js';
 
 /**
  * @swagger
@@ -220,6 +221,7 @@ export const registerOrganization = asyncHandler(async (req, res) => {
             title: adminTitle?.trim(),
             position: adminPosition?.trim(),
             role: 'admin',
+            roles: [PLATFORM_ROLES.ORG_OWNER, PLATFORM_ROLES.HR_ADMIN],
             organizationId: organization._id,
             isActive: true,
             emailVerified: false,

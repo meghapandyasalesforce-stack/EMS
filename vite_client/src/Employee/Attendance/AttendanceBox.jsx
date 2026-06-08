@@ -13,6 +13,7 @@ import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft 
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
+import { isLocationRequiredForPunch } from '../../utils/attendanceLocationUtils';
 
 /**
  * @param {{ variant?: 'default' | 'dashboard' }} [props]
@@ -40,11 +41,12 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [attendanceRule, setAttendanceRule] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [cachedLocation, setCachedLocation] = useState(null);
 
-  // Permission management
-  const {
-    isPermissionDenied
-  } = usePermissions();
+  const locationRequiredForPunch = isLocationRequiredForPunch(attendanceRule);
+
+  // Permission management (do not block GPS before browser prompt)
+  usePermissions();
 
   // Load org timezone first, then today's logs, then my-today-status (authoritative merge last)
   useEffect(() => {
@@ -160,70 +162,113 @@ const AttendanceBox = ({ variant = 'default' }) => {
           setAttendanceRule(response.data.rule);
         }
       } catch {
-        // Silently fail - location validation will still work
+        // Rule refetch on punch will use server response if clock-in fails
       }
     };
     fetchAttendanceRule();
   }, []);
 
-  // Get current location with permission check
-  const getCurrentLocation = async () => {
-    if (!navigator.geolocation) {
-      return Promise.reject(new Error('Geolocation not supported'));
+  const mapGeolocationError = (error) => {
+    const errorCode = error?.code;
+    if (errorCode === 1 || error?.message?.includes('permission')) {
+      return 'Location permission denied. Please enable it in browser settings for this site.';
     }
-
-    const isSecure = window.location.protocol === 'https:' || 
-                     window.location.hostname === 'localhost' || 
-                     window.location.hostname === '127.0.0.1';
-    
-    if (!isSecure) {
-      return Promise.reject(new Error('Geolocation requires HTTPS'));
+    if (errorCode === 2 || error?.message?.includes('unavailable')) {
+      return 'GPS position unavailable. Please check your device location settings.';
     }
-
-    if (isPermissionDenied('location')) {
-      return Promise.reject(new Error('Location permission denied'));
+    if (errorCode === 3 || error?.message?.includes('timeout')) {
+      return 'Location request timed out. Please try again.';
     }
+    return error?.message || 'Unable to get location. Please enable location services and try again.';
+  };
 
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error('Location request timed out'));
-      }, 30000);
-
+  const readPosition = (options) =>
+    new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          clearTimeout(timeoutId);
-          const locationData = {
-            latitude: Number(position.coords.latitude),
-            longitude: Number(position.coords.longitude),
-            accuracy: Number(position.coords.accuracy) || 0,
-            address: 'Location detected'
-          };
-          resolve(locationData);
-        },
-        (error) => {
-          clearTimeout(timeoutId);
-          let errorMessage = 'Location error: ';
-          const errorCode = error?.code;
-          
-          if (errorCode === 1 || errorCode === error?.PERMISSION_DENIED) {
-            errorMessage = 'Location permission denied. Please enable it in browser settings.';
-          } else if (errorCode === 2 || errorCode === error?.POSITION_UNAVAILABLE) {
-            errorMessage = 'GPS position unavailable. Please check your device settings and ensure GPS is enabled.';
-          } else if (errorCode === 3 || errorCode === error?.TIMEOUT) {
-            errorMessage = 'Location request timed out. Please try again or check your GPS settings.';
-          } else {
-            errorMessage += error.message || 'Unknown error';
+          const latitude = Number(position.coords.latitude);
+          const longitude = Number(position.coords.longitude);
+          if (
+            Number.isNaN(latitude) ||
+            Number.isNaN(longitude) ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180 ||
+            (latitude === 0 && longitude === 0)
+          ) {
+            reject(new Error('Invalid location coordinates received'));
+            return;
           }
-          
-          reject(new Error(errorMessage));
+          resolve({
+            latitude,
+            longitude,
+            accuracy: Number(position.coords.accuracy) || 0,
+            address: 'Location detected',
+          });
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 25000,
-          maximumAge: 0
-        }
+        (err) => reject(err),
+        options
       );
     });
+
+  const getCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      throw new Error('Geolocation is not supported by this browser');
+    }
+
+    const isSecure =
+      window.location.protocol === 'https:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (!isSecure) {
+      throw new Error('Geolocation requires HTTPS or localhost');
+    }
+
+    try {
+      return await readPosition({
+        enableHighAccuracy: true,
+        timeout: 25000,
+        maximumAge: 0,
+      });
+    } catch (highAccuracyError) {
+      return readPosition({
+        enableHighAccuracy: false,
+        timeout: 30000,
+        maximumAge: 60000,
+      }).catch(() => {
+        throw new Error(mapGeolocationError(highAccuracyError));
+      });
+    }
+  };
+
+  // Prefetch GPS when rule requires it so punch-in is not sent without coordinates
+  useEffect(() => {
+    if (!locationRequiredForPunch || cachedLocation) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const loc = await getCurrentLocation();
+        if (!cancelled) setCachedLocation(loc);
+      } catch {
+        // User will be prompted again on punch
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationRequiredForPunch, attendanceRule]);
+
+  const resolveLocationForPunch = async () => {
+    if (cachedLocation?.latitude != null && cachedLocation?.longitude != null) {
+      return cachedLocation;
+    }
+    const loc = await getCurrentLocation();
+    setCachedLocation(loc);
+    return loc;
   };
 
   const handleClockIn = async () => {
@@ -249,62 +294,24 @@ const AttendanceBox = ({ variant = 'default' }) => {
 
       setIsProcessing(true);
 
-      // Check attendance rule to see if location is required
-      const hasRuleWithCoordinates = attendanceRule && 
-                                      attendanceRule.coordinates && 
-                                      attendanceRule.coordinates.latitude && 
-                                      attendanceRule.coordinates.longitude;
-      
-      const requiresLocation = !!(hasRuleWithCoordinates && (
-        typeof attendanceRule.locationRequired === 'boolean'
-          ? attendanceRule.locationRequired
-          : !attendanceRule.enableSimplePunches
-      ));
+      const requiresLocation = isLocationRequiredForPunch(attendanceRule);
 
-      let locationData = null;
-
-      // Get location if required
-      if (requiresLocation || hasRuleWithCoordinates) {
-        try {
-          locationData = await getCurrentLocation();
-        } catch (error) {
-          if (requiresLocation) {
-            let errorMsg = 'Location is required for punch-in. ';
-            if (error.code === 1 || error.message.includes('permission')) {
-              errorMsg += 'Please enable location permission in browser settings.';
-            } else if (error.code === 2) {
-              errorMsg += 'GPS position unavailable. Please enable GPS on your device.';
-            } else if (error.code === 3 || error.message.includes('timeout')) {
-              errorMsg += 'Location request timed out. Please try again.';
-            } else {
-              errorMsg += error.message || 'Please enable location services and try again.';
-            }
-            
-            toast.error(errorMsg);
-            setIsProcessing(false);
-            return;
-          }
-        }
-      }
-
-      // Build clock-in payload
       const clockInData = {
-        workLocation: 'office'
+        workLocation: 'office',
       };
 
-      // Add location if available
-      if (locationData && locationData.latitude && locationData.longitude) {
-        clockInData.latitude = locationData.latitude;
-        clockInData.longitude = locationData.longitude;
-        clockInData.address = locationData.address;
-        clockInData.accuracy = locationData.accuracy;
-      }
-
-      // Final validation before sending
-      if (requiresLocation && (!clockInData.latitude || !clockInData.longitude)) {
-        toast.error('Location is required for punch-in at this site. Please enable location services and try again.');
-        setIsProcessing(false);
-        return;
+      if (requiresLocation) {
+        try {
+          const locationData = await resolveLocationForPunch();
+          clockInData.latitude = locationData.latitude;
+          clockInData.longitude = locationData.longitude;
+          clockInData.address = locationData.address;
+          clockInData.accuracy = locationData.accuracy;
+        } catch (error) {
+          toast.error(`Location is required for punch-in. ${mapGeolocationError(error)}`);
+          setIsProcessing(false);
+          return;
+        }
       }
 
       // Try to punch in
@@ -389,56 +396,21 @@ const AttendanceBox = ({ variant = 'default' }) => {
     try {
       setIsProcessing(true);
 
-      // Check attendance rule to see if location is required for clock-out
-      const hasRuleWithCoordinates = attendanceRule && 
-                                      attendanceRule.coordinates && 
-                                      attendanceRule.coordinates.latitude && 
-                                      attendanceRule.coordinates.longitude;
-      
-      const requiresLocation = !!(hasRuleWithCoordinates && (
-        typeof attendanceRule.locationRequired === 'boolean'
-          ? attendanceRule.locationRequired
-          : !attendanceRule.enableSimplePunches
-      ));
-
-      let locationData = null;
-
-      if (requiresLocation || hasRuleWithCoordinates) {
-        try {
-          locationData = await getCurrentLocation();
-        } catch (error) {
-          if (requiresLocation) {
-            let errorMsg = 'Location is required for punch-out. ';
-            if (error.code === 1 || error.message.includes('permission')) {
-              errorMsg += 'Please enable location permission in browser settings.';
-            } else if (error.code === 2) {
-              errorMsg += 'GPS position unavailable. Please enable GPS on your device.';
-            } else if (error.code === 3 || error.message.includes('timeout')) {
-              errorMsg += 'Location request timed out. Please try again.';
-            } else {
-              errorMsg += error.message || 'Please enable location services and try again.';
-            }
-
-            toast.error(errorMsg);
-            setIsProcessing(false);
-            return;
-          }
-        }
-      }
-
+      const requiresLocation = isLocationRequiredForPunch(attendanceRule);
       const clockOutData = {};
-      if (locationData && locationData.latitude && locationData.longitude) {
-        clockOutData.latitude = locationData.latitude;
-        clockOutData.longitude = locationData.longitude;
-        clockOutData.address = locationData.address;
-        clockOutData.accuracy = locationData.accuracy;
-      }
 
-      // Final validation before sending
-      if (requiresLocation && (!clockOutData.latitude || !clockOutData.longitude)) {
-        toast.error('Location is required for punch-out at this site. Please enable location services and try again.');
-        setIsProcessing(false);
-        return;
+      if (requiresLocation) {
+        try {
+          const locationData = await resolveLocationForPunch();
+          clockOutData.latitude = locationData.latitude;
+          clockOutData.longitude = locationData.longitude;
+          clockOutData.address = locationData.address;
+          clockOutData.accuracy = locationData.accuracy;
+        } catch (error) {
+          toast.error(`Location is required for punch-out. ${mapGeolocationError(error)}`);
+          setIsProcessing(false);
+          return;
+        }
       }
 
       await dispatch(clockOut(clockOutData)).unwrap();

@@ -6,6 +6,7 @@ import asyncHandler from "../../helpers/asyncHandler.js";
 import { sendSuccess, sendError, sendValidationError, sendInternalError, sendUnauthorized, sendForbidden } from "../../helpers/responseHelper.js";
 import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts, getLockoutMessage, clearAuthCookies } from "../../helpers/authHelpers.js";
 import { getDashboardRouteForUser } from "../../helpers/dashboardRouteHelper.js";
+import { PLATFORM_ROLES } from "../../config/identity.constants.js";
 
 
 /**
@@ -131,7 +132,8 @@ export const registerUser = asyncHandler(async (req, res) => {
             email: normalizedEmail, 
             password,
             organizationId,
-            role: 'admin'
+            role: 'admin',
+            roles: [PLATFORM_ROLES.HR_ADMIN]
         });
         await newUser.save();
         

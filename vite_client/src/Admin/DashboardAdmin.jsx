@@ -18,6 +18,9 @@ import { useEmployees, useLeaves, usePayrolls, useProjects } from "../Hooks/useD
 import axios from "../utils/axios";
 import { handleApiError } from "../utils/errorHandler";
 import NotificationSender from "./NotificationSender";
+import useAuthPermissions from "../Hooks/useAuthPermissions";
+import { PERMISSIONS, hasAnyPermission } from "../utils/permissions";
+import PermissionGate from "../components/PermissionGate";
 
 const selectAuth = (state) => state.auth || {};
 
@@ -25,6 +28,7 @@ function DashboardAdmin() {
   const navigate = useNavigate();
   const authState = useSelector(selectAuth);
   const user = authState?.user;
+  const { permissions, permissionFlags } = useAuthPermissions();
   const [todayStatus, setTodayStatus] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -161,12 +165,33 @@ function DashboardAdmin() {
     ];
   }, []);
 
-  const quickShortcuts = [
-    { label: "Mark Attendance", icon: <FiCheckCircle />, action: () => navigate("/today-attendance") },
-    { label: "Today's Log", icon: <FiClock />, action: () => navigate("/all-attendance-history") },
-    { label: "Leave Report", icon: <FiFileText />, action: () => navigate("/leave-management") },
-    { label: "Add Employee", icon: <FiUserPlus />, action: () => navigate("/add-employee") }
-  ];
+  const rbacOpts = { isOrgOwner: !!permissionFlags.isOrgOwner };
+  const quickShortcuts = useMemo(
+    () =>
+      [
+        hasAnyPermission(permissions, [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM], rbacOpts) && {
+          label: "Mark Attendance",
+          icon: <FiCheckCircle />,
+          action: () => navigate("/today-attendance"),
+        },
+        hasAnyPermission(permissions, [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM], rbacOpts) && {
+          label: "Today's Log",
+          icon: <FiClock />,
+          action: () => navigate("/all-attendance-history"),
+        },
+        hasAnyPermission(permissions, [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM], rbacOpts) && {
+          label: "Leave Report",
+          icon: <FiFileText />,
+          action: () => navigate("/leave-management"),
+        },
+        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts) && {
+          label: "Add Employee",
+          icon: <FiUserPlus />,
+          action: () => navigate("/add-employee"),
+        },
+      ].filter(Boolean),
+    [permissions, permissionFlags, navigate]
+  );
 
   const approvalsPreview = leaves
     .filter((leave) => String(leave?.status || "").toLowerCase() === "pending")
@@ -253,21 +278,25 @@ function DashboardAdmin() {
               <FiCheckCircle className="h-4 w-4" />
               Mark Attendance
             </button>
-            <button
-              onClick={() => navigate("/admin-payroll")}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
-            >
-              <FiDollarSign className="h-4 w-4" />
-              Run Payroll
-            </button>
-            <button
-              onClick={() => navigate("/add-employee")}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
-              style={{ backgroundColor: "var(--color-primary)" }}
-            >
-              <FiPlus className="h-4 w-4" />
-              Add Employee
-            </button>
+            <PermissionGate permissions={[PERMISSIONS.PAYROLL_VIEW_ALL]}>
+              <button
+                onClick={() => navigate("/admin-payroll")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+              >
+                <FiDollarSign className="h-4 w-4" />
+                Run Payroll
+              </button>
+            </PermissionGate>
+            <PermissionGate permissions={[PERMISSIONS.EMPLOYEE_CREATE]}>
+              <button
+                onClick={() => navigate("/add-employee")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
+                style={{ backgroundColor: "var(--color-primary)" }}
+              >
+                <FiPlus className="h-4 w-4" />
+                Add Employee
+              </button>
+            </PermissionGate>
           </div>
         </div>
 

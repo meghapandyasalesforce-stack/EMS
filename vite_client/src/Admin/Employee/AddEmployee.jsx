@@ -5,6 +5,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createEmployee } from '../../context/employeeSlice';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import SystemRolePicker from '../../components/SystemRolePicker';
+import { DEFAULT_SYSTEM_ROLE } from '../../utils/systemRoles';
 
 function AddEmployee() {
     const queryClient = useQueryClient();
@@ -19,7 +21,10 @@ function AddEmployee() {
         password: '',
         position: '',
         salary: '',
+        systemRole: DEFAULT_SYSTEM_ROLE,
     });
+    const [roleCatalog, setRoleCatalog] = useState([]);
+    const [loadingRoles, setLoadingRoles] = useState(true);
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -114,6 +119,22 @@ function AddEmployee() {
         fetchManagers();
     }, [fetchManagers]);
 
+    useEffect(() => {
+        const loadCatalog = async () => {
+            try {
+                setLoadingRoles(true);
+                const res = await axios.get('/v1/admin/platform-roles/catalog', { withCredentials: true });
+                const data = res.data?.data || res.data;
+                setRoleCatalog(data.catalog || []);
+            } catch {
+                setRoleCatalog([]);
+            } finally {
+                setLoadingRoles(false);
+            }
+        };
+        loadCatalog();
+    }, []);
+
     // Refetch managers when page gains focus (e.g. after creating first employee and coming back to add second)
     useEffect(() => {
         const onFocus = () => fetchManagers();
@@ -147,9 +168,15 @@ function AddEmployee() {
         if (createEmployee.fulfilled.match(resultAction)) {
             queryClient.invalidateQueries({ queryKey: ['employees'] });
             // Check email status and show appropriate notifications
-            const { emailSent, emailWarning, emailError } = resultAction.payload;
-            
-            if (emailSent) {
+            const { emailSent, emailWarning, emailError, linkedToExistingUser, linkMessage } = resultAction.payload;
+
+            if (linkedToExistingUser) {
+                toast.success(
+                    linkMessage ||
+                        'Employee profile linked to existing login. They should use their current account password.',
+                    { autoClose: 6000 }
+                );
+            } else if (emailSent) {
                 toast.success('Employee created successfully! Welcome email sent.', {
                     autoClose: 3000
                 });
@@ -323,6 +350,25 @@ function AddEmployee() {
                                 required
                             />
                         </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <h2 className="mb-3 text-sm font-semibold text-slate-800">System access</h2>
+                            {loadingRoles ? (
+                                <p className="text-sm text-slate-500">Loading roles…</p>
+                            ) : (
+                                <SystemRolePicker
+                                    catalog={roleCatalog}
+                                    value={form.systemRole}
+                                    onChange={(systemRole) => setForm((prev) => ({ ...prev, systemRole }))}
+                                    label="What can this person do in the app?"
+                                />
+                            )}
+                            <p className="mt-2 text-xs text-slate-500">
+                                Separate from job title — e.g. an &quot;HR Manager&quot; job title does not grant admin
+                                access unless you choose HR Manager here.
+                            </p>
+                        </div>
+
                         <button
                             type="submit"
                             disabled={employeeStatus === 'loading'}

@@ -104,19 +104,129 @@ export const handleAuthError = (error, res) => {
  * @param {Object} decoded - Decoded JWT token
  */
 export const attachUserToRequest = (req, decoded) => {
-    const userData = {
-        _id: decoded.userId,
-        role: decoded.role || 'employee',
-        organizationId: decoded.organizationId || null
-    };
-    
+    const tokenOrgId = decoded.organizationId || null;
+
     if (decoded.role === 'admin') {
-        req.user = userData;
+        req.user = {
+            ...(req.user || {}),
+            _id: decoded.userId,
+            role: 'admin',
+            organizationId:
+                tokenOrgId ||
+                req.user?.organizationId ||
+                req.employee?.organizationId ||
+                null,
+            platformRoles: decoded.platformRoles || req.user?.platformRoles || [],
+        };
+        if (decoded.employeeProfileId) {
+            req.employeeProfileId = decoded.employeeProfileId;
+            const profileId = String(decoded.employeeProfileId);
+            const existingId = req.employee?._id ? String(req.employee._id) : null;
+            if (!existingId || existingId === profileId) {
+                req.employee = {
+                    ...(req.employee || {}),
+                    _id: decoded.employeeProfileId,
+                    role: 'employee',
+                    organizationId:
+                        req.employee?.organizationId ||
+                        tokenOrgId ||
+                        req.user?.organizationId ||
+                        null,
+                };
+            }
+        }
     } else {
-        req.employee = userData;
+        req.employee = {
+            ...(req.employee || {}),
+            _id: decoded.userId,
+            role: 'employee',
+            organizationId:
+                req.employee?.organizationId ||
+                tokenOrgId ||
+                null,
+            platformRoles: decoded.platformRoles || req.employee?.platformRoles || [],
+        };
     }
-    
-    // Also set organizationId on request for easy access
-    req.organizationId = decoded.organizationId || null;
+
+    req.organizationId =
+        req.employee?.organizationId ||
+        req.user?.organizationId ||
+        tokenOrgId ||
+        req.organizationId ||
+        null;
+};
+
+/**
+ * Copy authContext identity onto req for controllers using req.user / req.employee.
+ * Permission middleware only built req.authContext; this restores the legacy shape.
+ */
+export const hydrateRequestIdentity = async (req, decoded, authContext) => {
+    if (!decoded || !authContext) {
+        return;
+    }
+
+    const platformRoles = authContext.platformRoles || [];
+
+    if (authContext.user) {
+        req.user = {
+            ...authContext.user,
+            _id: authContext.user._id || decoded.userId,
+            role: 'admin',
+            organizationId:
+                authContext.user.organizationId ||
+                decoded.organizationId ||
+                authContext.employee?.organizationId ||
+                null,
+            platformRoles,
+        };
+    }
+
+    const employeeId =
+        decoded.role === 'employee'
+            ? decoded.userId
+            : decoded.employeeProfileId || authContext.employee?._id;
+
+    if (employeeId) {
+        const Employee = (await import('../models/employee.model.js')).default;
+        const fullEmployee = await Employee.findById(employeeId)
+            .select('-password -__v')
+            .lean();
+        if (fullEmployee) {
+            req.employee = {
+                ...fullEmployee,
+                role: 'employee',
+                platformRoles,
+            };
+        } else if (authContext.employee) {
+            req.employee = {
+                ...authContext.employee,
+                role: 'employee',
+                platformRoles,
+            };
+        }
+    }
+
+    attachUserToRequest(req, decoded);
+
+    if (authContext.user && decoded.role === 'admin') {
+        req.user = {
+            ...req.user,
+            ...authContext.user,
+            _id: authContext.user._id || decoded.userId,
+            role: 'admin',
+            platformRoles,
+        };
+    }
+
+    const orgId =
+        req.employee?.organizationId ||
+        req.user?.organizationId ||
+        decoded.organizationId ||
+        null;
+
+    req.organizationId = orgId;
+    if (orgId && !decoded.organizationId) {
+        decoded.organizationId = orgId;
+    }
 };
 

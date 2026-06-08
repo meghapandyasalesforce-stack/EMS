@@ -14,7 +14,9 @@ export const createEmployee = createAsyncThunk(
         employee: response.data.employee,
         emailSent: response.data.emailSent || false,
         emailWarning: response.data.emailWarning || null,
-        emailError: response.data.emailError || null
+        emailError: response.data.emailError || null,
+        linkedToExistingUser: response.data.linkedToExistingUser || false,
+        linkMessage: response.data.message || null,
       };
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to create employee');

@@ -1,9 +1,19 @@
 import Employee from '../../models/employee.model.js';
+import User from '../../models/user.model.js';
 import Organization from '../../models/organization.model.js';
+import {
+    findOrgUserForEmployeeEmail,
+    linkUserToEmployeeProfile,
+    unifiedAuthPlaceholderPassword,
+    verifyEmployeeLoginPassword,
+    getEmployeeLoginAuthRecord,
+    getEmployeeTokenPasswordChangedAt,
+} from '../../helpers/identityService.js';
 import { generateToken, generateSecurePassword } from '../../helpers/utils.js';
 import bcrypt from 'bcryptjs';
 import mongoose from "mongoose";
-import sendWelcomeEmail from '../../helpers/emailSender.js';
+import { queueWelcomeEmail } from '../../helpers/emailQueue.js';
+import { runInBackground } from '../../helpers/backgroundTasks.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendValidationError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden } from '../../helpers/responseHelper.js';
 import asyncHandler from '../../helpers/asyncHandler.js';
@@ -11,6 +21,11 @@ import { normalizeEmail, isAccountLocked, handleFailedLogin, resetLoginAttempts,
 import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js';
 import { autoGenerateIdCard } from '../admin/idCardController.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
+import { ALL_SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
+import {
+    applySystemRoleToEmployee,
+    syncLinkedUserForSystemRole,
+} from '../../helpers/systemRoleService.js';
 
 // Generate token with employeeId instead of email
 
@@ -128,8 +143,16 @@ export const registerEmployee = async (req, res) => {
         const {
             name, lastName, email, password,
             position, department, manager,
-            jobTitle, jobCategory, salary
+            jobTitle, jobCategory, salary,
+            systemRole: systemRoleInput,
         } = req.body;
+
+        const systemRole = systemRoleInput || 'employee';
+        if (!ALL_SYSTEM_ROLE_IDS.includes(systemRole)) {
+            return sendValidationError(res, {
+                systemRole: `Invalid system role. Allowed: ${ALL_SYSTEM_ROLE_IDS.join(', ')}`,
+            });
+        }
 
         // Validate required fields (password and manager optional - manager defaults to 'CEO' for first employee only)
         if (!name || !lastName || !email || !position ||
@@ -149,10 +172,10 @@ export const registerEmployee = async (req, res) => {
             );
         }
 
-        const existingEmployeeCount = await Employee.countDocuments({ organizationId });
+        const orgHasEmployees = await Employee.exists({ organizationId });
         const managerTrimmed = manager && String(manager).trim();
-        // First employee (count === 0) can have no manager / CEO; every employee after must have a manager selected
-        if (existingEmployeeCount >= 1) {
+        // First employee (none yet) can have no manager / CEO; every employee after must have a manager selected
+        if (orgHasEmployees) {
             if (!managerTrimmed || managerTrimmed === 'CEO') {
                 return sendError(res, 
                     'Manager is required. Please select a manager from the list. Only the first employee can be added without a manager (CEO/Manager).',
@@ -163,7 +186,7 @@ export const registerEmployee = async (req, res) => {
         }
         let managerValue = managerTrimmed || 'CEO';
         let managerId = null;
-        if (existingEmployeeCount >= 1) {
+        if (orgHasEmployees) {
             const managerInput = managerTrimmed;
             const managerBaseQuery = { organizationId, status: 'active' };
             let managerEmployee = null;
@@ -195,15 +218,6 @@ export const registerEmployee = async (req, res) => {
             managerId = managerEmployee._id;
             managerValue = `${managerEmployee.name || ''} ${managerEmployee.lastName || ''}`.trim() || managerInput;
         }
-        
-        // Generate secure password if not provided
-        const employeePassword = password || generateSecurePassword(16);
-        const mustResetPassword = !password;
-        logger.info('Password generation', { 
-            provided: !!password, 
-            generated: !password,
-            email: email.toLowerCase().trim()
-        });
 
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -220,11 +234,10 @@ export const registerEmployee = async (req, res) => {
         // Normalize email (lowercase and trim) for case-insensitive check
         const normalizedEmail = email.toLowerCase().trim();
         
-        // Check if employee already exists in this organization (use direct query for better performance)
-        const existingEmployee = await Employee.findOne({ 
-            email: normalizedEmail,
-            organizationId
-        });
+        const [existingEmployee, linkedOrgUser] = await Promise.all([
+            Employee.findOne({ email: normalizedEmail, organizationId }).select('_id').lean(),
+            findOrgUserForEmployeeEmail(normalizedEmail, organizationId),
+        ]);
         if (existingEmployee) {
             return sendError(res, 
                 'An employee with this email already exists in this organization. Please use a different email address.',
@@ -232,6 +245,39 @@ export const registerEmployee = async (req, res) => {
                 'DUPLICATE_EMAIL'
             );
         }
+
+        // Unified auth: link HR profile to existing org User (e.g. admin email) — one password
+        let linkedToExistingUser = false;
+        if (linkedOrgUser?.employeeProfileId) {
+            return sendError(
+                res,
+                'This email already has an employee profile in this organization.',
+                409,
+                'USER_ALREADY_HAS_PROFILE'
+            );
+        }
+        if (linkedOrgUser) {
+            linkedToExistingUser = true;
+            logger.info('Linking new employee profile to existing User account', {
+                email: normalizedEmail,
+                userId: linkedOrgUser._id,
+                organizationId
+            });
+        }
+
+        // Generate secure password if not provided (skipped when linking to existing User)
+        let employeePassword = password || generateSecurePassword(16);
+        let mustResetPassword = !password;
+        if (linkedToExistingUser) {
+            employeePassword = unifiedAuthPlaceholderPassword();
+            mustResetPassword = false;
+        }
+        logger.info('Password generation', {
+            provided: !!password,
+            generated: !password && !linkedToExistingUser,
+            linkedToExistingUser,
+            email: normalizedEmail
+        });
 
         // Password will be hashed automatically by the model's pre-save hook
         // No need to hash manually
@@ -295,6 +341,7 @@ export const registerEmployee = async (req, res) => {
         // Create the employee (normalize email to lowercase)
         const employee = new Employee({
             organizationId, // Add organizationId
+            ...(linkedToExistingUser && linkedOrgUser ? { userId: linkedOrgUser._id } : {}),
             name,
             lastName,
             email: normalizedEmail, // Use normalized email
@@ -313,9 +360,28 @@ export const registerEmployee = async (req, res) => {
             active: true // ✅ Explicitly set active to true for new employees
         });
 
+        applySystemRoleToEmployee(employee, systemRole);
+
         // Save employee - this will trigger password hashing
         try {
             await employee.save();
+            if (linkedToExistingUser && linkedOrgUser) {
+                await linkUserToEmployeeProfile(linkedOrgUser, employee);
+                await syncLinkedUserForSystemRole({
+                    employee,
+                    systemRoleId: systemRole,
+                    organizationId,
+                    existingUser: linkedOrgUser,
+                });
+            } else {
+                const plaintextForUser = password || employeePassword;
+                await syncLinkedUserForSystemRole({
+                    employee,
+                    systemRoleId: systemRole,
+                    plaintextPassword: plaintextForUser,
+                    organizationId,
+                });
+            }
         } catch (saveError) {
             // Handle MongoDB duplicate key error (E11000)
             if (saveError.code === 11000) {
@@ -335,36 +401,37 @@ export const registerEmployee = async (req, res) => {
             throw saveError;
         }
 
-        // Invalidate employees and managers cache so new employee appears in lists/dropdowns
-        try {
+        runInBackground('register-employee-cache-invalidate', async () => {
             await invalidateEmployeesCache(organizationId);
-        } catch (cacheErr) {
-            logger.warn('Failed to invalidate employees cache after registration', { error: cacheErr.message });
-        }
+        });
         
-        // Send welcome email BEFORE creating payroll (so if email fails, we can still rollback)
         let emailSent = false;
+        let emailQueued = false;
         let emailErrorMessage = null;
         try {
-            await sendWelcomeEmail(normalizedEmail, `${name} ${lastName}`, employeePassword);
-            emailSent = true;
-            logger.info('Welcome email sent successfully', { 
-                email: normalizedEmail, 
-                employeeId: employee._id,
-                employeeName: `${name} ${lastName}` 
-            });
+            if (linkedToExistingUser) {
+                logger.info('Skipped welcome email with password — account uses existing admin/login credentials', {
+                    email: normalizedEmail,
+                    employeeId: employee._id
+                });
+            } else {
+                await queueWelcomeEmail(normalizedEmail, `${name} ${lastName}`, employeePassword);
+                emailQueued = true;
+                emailSent = true;
+                logger.info('Welcome email queued', {
+                    email: normalizedEmail,
+                    employeeId: employee._id,
+                    employeeName: `${name} ${lastName}`
+                });
+            }
         } catch (emailError) {
-            logger.error('Failed to send welcome email', { 
+            logger.error('Failed to queue welcome email', { 
                 email: normalizedEmail, 
                 employeeId: employee._id,
                 employeeName: `${name} ${lastName}`,
                 error: emailError.message,
-                stack: emailError.stack,
-                errorCode: emailError.code,
-                errorResponse: emailError.response 
             });
             emailErrorMessage = emailError.message || 'Email service unavailable';
-            // Don't fail registration - employee is already created
         }
         
         // SECURITY FIX: Do NOT generate tokens when admin/HR creates employee.
@@ -388,6 +455,7 @@ export const registerEmployee = async (req, res) => {
         
         const response = {
             emailSent,
+            emailQueued,
             ...(emailErrorMessage && { 
                 emailWarning: `Welcome email could not be sent: ${emailErrorMessage}`,
                 emailError: emailErrorMessage 
@@ -399,8 +467,15 @@ export const registerEmployee = async (req, res) => {
                 email: employee.email,
                 position: employee.position,
                 jobTitle: employee.jobTitle,
-                employeeId: employee.employeeId
-            }
+                employeeId: employee.employeeId,
+                unifiedAuth: !!employee.userId,
+                systemRole,
+                functionalRoles: employee.functionalRoles,
+            },
+            ...(linkedToExistingUser && {
+                linkedToExistingUser: true,
+                message: 'Employee profile created and linked to existing login. Use your existing account password for admin and employee portals.'
+            })
         };
         
         // Only include tokens if they were generated (non-admin registration)
@@ -414,47 +489,29 @@ export const registerEmployee = async (req, res) => {
             response.csrfToken = csrfToken;
         }
 
-        // Auto-generate ID card for new employee
-        let idCardGenerated = false;
-        let idCardError = null;
-        try {
+        const createdById = req.user?._id || req.employee?._id;
+        runInBackground('register-employee-id-card', async () => {
             const idCardResult = await autoGenerateIdCard(
-                employee._id, 
+                employee._id,
                 organizationId,
-                req.user?._id || req.employee?._id // Use admin/HR ID if available
+                createdById
             );
-            
             if (idCardResult.success) {
-                idCardGenerated = true;
                 logger.info('ID card auto-generated for new employee', {
                     employeeId: employee._id,
-                    idCardId: idCardResult.idCard._id
+                    idCardId: idCardResult.idCard?._id,
                 });
-            } else if (idCardResult.reason === 'already_exists') {
-                logger.debug('ID card already exists for new employee', { employeeId: employee._id });
-            } else {
-                idCardError = idCardResult.error || idCardResult.reason;
+            } else if (idCardResult.reason !== 'already_exists') {
                 logger.warn('Failed to auto-generate ID card for new employee', {
                     employeeId: employee._id,
                     reason: idCardResult.reason,
-                    error: idCardError
+                    error: idCardResult.error,
                 });
             }
-        } catch (idCardGenError) {
-            idCardError = idCardGenError.message;
-            logger.error('Exception during ID card auto-generation', {
-                employeeId: employee._id,
-                error: idCardGenError.message
-            });
-            // Don't fail employee creation if ID card generation fails
-        }
+        });
 
-        // Add ID card status to response
-        response.idCardGenerated = idCardGenerated;
-        if (idCardError) {
-            response.idCardError = idCardError;
-        }
-        
+        response.idCardQueued = true;
+
         return sendSuccess(res, response, 'Employee registered successfully', 201);
     } catch (error) {
         logger.error('Registration error', { 
@@ -670,16 +727,29 @@ export const loginEmployee = asyncHandler(async (req, res) => {
 
     logger.debug('Employee found', { requestId, email: normalizedEmail, employeeId: employee._id, active: employee.active });
 
-    // Check if account is locked
-    if (isAccountLocked(employee)) {
-        const lockoutMessage = getLockoutMessage(employee);
-        logger.warn('Employee login failed: Account locked', { 
-            requestId, 
-            email: normalizedEmail, 
+    const { record: authRecord, type: authRecordType, unified: unifiedAuth } =
+        await getEmployeeLoginAuthRecord(employee);
+
+    // Check if account is locked (User record when unified auth)
+    if (isAccountLocked(authRecord)) {
+        const lockoutMessage = getLockoutMessage(authRecord);
+        logger.warn('Employee login failed: Account locked', {
+            requestId,
+            email: normalizedEmail,
             employeeId: employee._id,
-            lockUntil: employee.lockUntil 
+            authRecordType,
+            lockUntil: authRecord.lockUntil
         });
         return sendForbidden(res, lockoutMessage);
+    }
+
+    if (unifiedAuth && authRecordType === 'user' && !authRecord.isActive) {
+        logger.warn('Employee login failed: Linked user account inactive', {
+            requestId,
+            email: normalizedEmail,
+            employeeId: employee._id
+        });
+        return sendForbidden(res, 'Your account is inactive. Please contact administrator.');
     }
 
     if (!employee.active) {
@@ -687,24 +757,22 @@ export const loginEmployee = asyncHandler(async (req, res) => {
         return sendForbidden(res, 'Your account is inactive. Please contact HR or Admin.');
     }
 
-    // Use the model's comparePassword method for consistency
-    logger.debug('Comparing password', { requestId, employeeId: employee._id });
-    const isPasswordValid = await employee.comparePassword(password);
-    
+    logger.debug('Comparing password', { requestId, employeeId: employee._id, unifiedAuth });
+    const isPasswordValid = await verifyEmployeeLoginPassword(employee, password);
+
     if (!isPasswordValid) {
-        // Handle failed login attempt (account lockout)
-        await handleFailedLogin(employee);
-        logger.warn('Employee login failed: Invalid password', { 
-            requestId, 
-            email: normalizedEmail, 
+        await handleFailedLogin(authRecord);
+        logger.warn('Employee login failed: Invalid password', {
+            requestId,
+            email: normalizedEmail,
             employeeId: employee._id,
-            attempts: employee.loginAttempts 
+            unifiedAuth,
+            attempts: authRecord.loginAttempts
         });
         return sendUnauthorized(res, 'Invalid email or password');
     }
-    
-    // Reset login attempts on successful login
-    await resetLoginAttempts(employee);
+
+    await resetLoginAttempts(authRecord);
     
     logger.info('Employee login successful', { 
         requestId, 
@@ -713,8 +781,7 @@ export const loginEmployee = asyncHandler(async (req, res) => {
         organizationId: employee.organizationId 
     });
 
-    // Generate token with organizationId
-    const passwordChangedAt = employee.passwordChangedAt || employee.createdAt;
+    const passwordChangedAt = await getEmployeeTokenPasswordChangedAt(employee);
     const tokenResult = generateToken(employee._id, "employee", employee.organizationId, res, passwordChangedAt);
     const token = typeof tokenResult === 'object' ? tokenResult.token : tokenResult;
     const refreshToken = typeof tokenResult === 'object' ? tokenResult.refreshToken : undefined;
@@ -764,7 +831,8 @@ export const loginEmployee = asyncHandler(async (req, res) => {
             functionalRoles: employee.functionalRoles || [],
             birthDate: employee.birthDate,
             profilePhoto: employee.profilePhoto,
-            mustResetPassword: employee.mustResetPassword
+            mustResetPassword: employee.mustResetPassword,
+            unifiedAuth: !!employee.userId
         }
     };
     
@@ -809,19 +877,25 @@ export const resetEmployeePassword = async (req, res) => {
             return sendValidationError(res, { password: 'Password must be at least 8 characters long' });
         }
 
-        // Find the employee first
         const employee = await Employee.findById(employeeId);
         if (!employee) {
             return sendNotFound(res, 'Employee');
         }
 
-        // Set the new password and mustResetPassword flag
-        // The pre-save hook will automatically hash the password when we call save()
-        employee.password = newPassword;
-        employee.mustResetPassword = false;
-        
-        // Save the employee - this will trigger the pre-save hook to hash the password
-        await employee.save();
+        if (employee.userId) {
+            const linkedUser = await User.findById(employee.userId);
+            if (!linkedUser) {
+                return sendNotFound(res, 'Linked user account');
+            }
+            linkedUser.password = newPassword;
+            await linkedUser.save();
+            employee.mustResetPassword = false;
+            await employee.save();
+        } else {
+            employee.password = newPassword;
+            employee.mustResetPassword = false;
+            await employee.save();
+        }
 
         // Clear authentication cookies to force logout
         await clearAuthCookies(res, req);

@@ -49,6 +49,27 @@ const userSchema = new mongoose.Schema({
         enum: [ 'admin', 'employee'],
         default: 'admin'
     },
+    /**
+     * Platform roles (SaaS-style): org_owner, hr_admin, manager, employee.
+     * Legacy `role` field remains for JWT routing (admin vs employee portal).
+     */
+    roles: {
+        type: [{
+            type: String,
+            enum: ['org_owner', 'hr_admin', 'hr_executive', 'payroll_admin', 'manager', 'employee']
+        }],
+        default: []
+    },
+    /** Linked HR/workforce profile when this user is also on payroll. */
+    employeeProfileId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        sparse: true,
+        index: true
+    },
+    passwordChangedAt: {
+        type: Date
+    },
     isActive: {
         type: Boolean,
         default: true
@@ -98,6 +119,9 @@ userSchema.pre('save', async function(next) {
         try {
             const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
             this.password = await bcrypt.hash(this.password, salt);
+            if (!this.isNew) {
+                this.passwordChangedAt = new Date();
+            }
         } catch (error) {
             return next(new Error('Error hashing password'));
         }

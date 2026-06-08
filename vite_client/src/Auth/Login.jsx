@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { setLoading, setUser } from '../context/Auth/authSlice';
+import { setLoading, setUser, setAuthPermissions } from '../context/Auth/authSlice';
 import { setEmployeeProfile, clearEmployeeDetails } from '../context/employeeDetailsSlice';
 import { setTimezoneContext } from '../context/timezoneSlice';
 import { toast } from 'react-toastify';
 import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
-import { ORGANIZATION_AUTH_ENDPOINT } from '../utils/constant';
+import { ORGANIZATION_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from '../utils/constant';
 import logger from '../utils/logger';
 
 function Login() {
@@ -90,160 +90,112 @@ function Login() {
             return;
         }
 
-        // If login type is unknown, show manual selection
-        if (loginType === 'unknown') {
-            setShowLoginTypeSelector(true);
-            return;
-        }
-
         try {
             dispatch(setLoading(true));
 
-            // Unified login: Try all login types in order based on detection
-            // 1. Organization login (if detected as organization or null - before detection)
-            // 2. Employee login (if detected as employee_admin or if org login failed)
-            // 3. Admin login (if employee login failed)
-            let response;
-            let userData = null;
-            let userRole = null;
-            let isOrganizationLogin = false;
-            
-            // Try organization login first if:
-            // - Detected as organization
-            // - Type is null (before detection - try all types)
-            // Skip if detected as employee_admin (more efficient - go straight to employee/admin)
-            if (loginType === 'organization' || loginType === null) {
-                try {
-                    response = await axios.post(`${ORGANIZATION_AUTH_ENDPOINT}/login`, form, {
-                        withCredentials: true
-                    });
-                    
-                    if (response.status === 200 && response.data.success) {
-                        userData = response.data.user;
-                        userRole = response.data.user?.role || 'admin';
-                        isOrganizationLogin = true;
-                        
-                        // Store organization info
-                        if (response.data.organization?.id) {
-                            localStorage.setItem('organizationId', response.data.organization.id);
-                        }
-                        localStorage.setItem('isOrganizationLogin', 'true');
-                    }
-                } catch (orgError) {
-                    // Organization login failed, continue to try employee/admin
-                    // Only log if it's not a 401 (which is expected if user is not org admin)
-                    if (orgError.response?.status !== 401) {
-                        logger.debug('Organization login failed, trying employee/admin', {
-                            error: orgError.response?.data?.message
-                        });
-                    }
-                }
-            }
-            
-            // If organization login didn't succeed (or not organization type), try employee login
-            if (!userData) {
-                try {
-                    response = await axios.post('/v1/employee/auth/login', form, {
-                        withCredentials: true
-                    });
-                    
-                    if (response.status === 200 && response.data.success) {
-                        userData = response.data.employee;
-                        userRole = 'employee';
-                        localStorage.removeItem('isOrganizationLogin');
-                    }
-                } catch (employeeError) {
-                    // If employee login fails with 401, try admin login
-                    if (employeeError.response?.status === 401) {
-                        try {
-                            response = await axios.post('/v1/admin/auth/login', form, {
-                                withCredentials: true
-                            });
-                            
-                            if (response.status === 200 && response.data.success) {
-                                userData = response.data.user;
-                                userRole = 'admin';
-                                localStorage.removeItem('isOrganizationLogin');
-                            }
-                        } catch (adminError) {
-                            // All three logins failed
-                            const errorMessage = adminError.response?.data?.message || 
-                                               employeeError.response?.data?.message || 
-                                               'Invalid credentials. Please check your email and password.';
-                            
-                            if (adminError.response?.status === 403 || employeeError.response?.status === 403) {
-                                const lockoutMessage = adminError.response?.data?.message || employeeError.response?.data?.message;
-                                toast.error(lockoutMessage || 'Account is locked or inactive. Please try again later.');
-                            } else {
-                                toast.error(errorMessage);
-                            }
-                            return;
-                        }
-                    } else {
-                        // Network or server error
-                        throw employeeError;
-                    }
-                }
+            const response = await axios.post(`${UNIFIED_AUTH_ENDPOINT}/login`, form, {
+                withCredentials: true,
+            });
+
+            const data = response?.data;
+            if (!response || response.status !== 200 || !data?.success) {
+                toast.error(data?.message || 'Login failed. Please try again.');
+                return;
             }
 
-            // Handle successful login
-            if (response && response.status === 200 && response.data.success && userData) {
-                const data = response.data;
-                
-                // Store user data in Redux
-                if (isOrganizationLogin) {
-                    dispatch(clearEmployeeDetails());
-                    dispatch(setUser({
-                        id: userData.id || userData._id,
-                        name: userData.name,
-                        email: userData.email,
-                        role: userRole,
-                        organizationId: data.organization?.id
-                    }));
-                } else {
-                    // Employee/Admin login — API may send Mongo id as `id` (employee) or `_id`; normalize for Redux consumers.
-                    const docId = userData._id ?? userData.id;
-                    const normalizedUser =
-                        docId != null && userData._id == null
-                            ? { ...userData, _id: docId }
-                            : userData;
-                    dispatch(setUser(normalizedUser));
-                    dispatch(setEmployeeProfile(normalizedUser));
-                    if (data.timezoneContext) {
-                        dispatch(setTimezoneContext(data.timezoneContext));
-                    } else if (data.timezone) {
-                        dispatch(setTimezoneContext({ timezone: data.timezone }));
-                    }
-                }
-                
-                // SECURITY FIX: Tokens are stored in httpOnly cookies only (not localStorage)
-                // Cookies are set by the server automatically via generateToken()
-                // Only store UI-related data in localStorage (non-sensitive)
-                localStorage.setItem('role', userRole);
-                localStorage.setItem('email', form.email);
-                if (isOrganizationLogin && data.organization?.id) {
-                    localStorage.setItem('organizationId', data.organization.id);
-                }
+            const userRole = data.sessionRole || data.user?.role || 'employee';
+            const isOrganizationLogin = !!data.isOrganizationLogin;
 
-                // If employee must reset password, show popup and pause navigation
-                if (userRole === 'employee' && userData?.mustResetPassword) {
-                    toast.info('Please reset your password to continue.');
-                    setShowReset(true);
-                    return;
-                }
-
-                toast.success('Login successful!');
-                
-                // Use dashboardRoute from login response (automatic redirection)
-                const dashboardRoute = data.dashboardRoute || (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
-                
-                // Redirect to the dashboard route provided by backend
-                setTimeout(() => {
-                    navigate(dashboardRoute, { replace: true });
-                }, 500);
+            const orgId =
+                data.organization?.id ||
+                data.employee?.organizationId ||
+                data.user?.organizationId;
+            if (orgId) {
+                localStorage.setItem('organizationId', String(orgId));
+            }
+            if (isOrganizationLogin) {
+                localStorage.setItem('isOrganizationLogin', 'true');
             } else {
-                toast.error(response?.data?.message || 'Login failed. Please try again.');
+                localStorage.removeItem('isOrganizationLogin');
             }
+
+            if (data.user) {
+                const u = data.user;
+                dispatch(setUser({
+                    ...u,
+                    _id: u._id ?? u.id,
+                    role: userRole,
+                    organizationId: u.organizationId ?? data.employee?.organizationId ?? orgId,
+                    platformRoles: data.platformRoles || u.roles || [],
+                    availablePortals: data.availablePortals || [],
+                }));
+            } else if (data.employee) {
+                const e = data.employee;
+                const doc = {
+                    ...e,
+                    _id: e._id ?? e.id,
+                    role: 'employee',
+                    organizationId: e.organizationId ?? orgId,
+                    name: e.name,
+                };
+                dispatch(setUser(doc));
+            }
+
+            if (data.employee) {
+                dispatch(setEmployeeProfile(data.employee));
+                if (data.employee.id || data.employee._id) {
+                    localStorage.setItem(
+                        'employeeProfileId',
+                        String(data.employee.id || data.employee._id)
+                    );
+                }
+            } else {
+                dispatch(clearEmployeeDetails());
+                localStorage.removeItem('employeeProfileId');
+            }
+
+            if (data.timezoneContext) {
+                dispatch(setTimezoneContext(data.timezoneContext));
+            } else if (data.timezone) {
+                dispatch(setTimezoneContext({ timezone: data.timezone }));
+            }
+
+            if (data.permissions) {
+                dispatch(setAuthPermissions({
+                    permissions: data.permissions,
+                    roleBuckets: data.roleBuckets,
+                    permissionFlags: data.permissionFlags,
+                    dataScope: data.dataScope,
+                }));
+            }
+
+            localStorage.setItem('role', userRole);
+            localStorage.setItem('email', form.email);
+            if (Array.isArray(data.availablePortals)) {
+                localStorage.setItem('availablePortals', JSON.stringify(data.availablePortals));
+            }
+            if (data.employeeDashboardRoute) {
+                localStorage.setItem('employeeDashboardRoute', data.employeeDashboardRoute);
+            }
+
+            const mustReset =
+                data.employee?.mustResetPassword &&
+                userRole === 'employee' &&
+                !data.user;
+            if (mustReset) {
+                toast.info('Please reset your password to continue.');
+                setShowReset(true);
+                return;
+            }
+
+            toast.success('Login successful!');
+            const dashboardRoute =
+                data.dashboardRoute ||
+                (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
+
+            setTimeout(() => {
+                navigate(dashboardRoute, { replace: true });
+            }, 500);
         } catch (err) {
             
             // Handle different types of errors

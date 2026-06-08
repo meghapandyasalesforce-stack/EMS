@@ -12,6 +12,7 @@ import { Fragment } from 'react';
 import { persistor } from '../context/store';
 import NotificationDropdown from '../components/NotificationDropdown';
 import { getNavigationItems } from '../utils/navigationConfig';
+import RoleBucketBadges from '../components/RoleBucketBadges';
 
 const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -23,6 +24,8 @@ const Header = () => {
 
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
+    const permissions = useSelector((state) => state.auth.permissions) || [];
+    const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
     const { username, email } = useMemo(() => {
         return user ? { username: user.name || user.username, email: user.email } : { username: null, email: null };
     }, [user]);
@@ -84,8 +87,8 @@ const Header = () => {
     const closeLogoutModal = () => setLogoutModalOpen(false);
 
     const navItems = useMemo(() => {
-        return getNavigationItems(user, employee);
-    }, [user, employee]);
+        return getNavigationItems(user, employee, permissions, permissionFlags);
+    }, [user, employee, permissions, permissionFlags]);
 
     const isAdminUser = useMemo(
         () => (user?.role || employee?.role || '').toLowerCase() === 'admin',
@@ -152,6 +155,7 @@ const Header = () => {
                                         <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
                                             <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>
+                                            <RoleBucketBadges className="mt-2" />
                                         </div>
                                         <button
                                             className="flex items-center w-full px-4 py-3 text-sm text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"

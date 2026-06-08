@@ -23,23 +23,26 @@ const isAuthenticated = async (req, res, next) => {
             return handleAuthError(error, res);
         }
 
-        // Restrict access to employees ONLY (Admins blocked)
-        if (decoded.role !== "employee") {
-            return res.status(403).json({ 
+        const employeeIdForLoad =
+            decoded.role === 'employee'
+                ? decoded.userId
+                : decoded.employeeProfileId || null;
+
+        if (!employeeIdForLoad) {
+            return res.status(403).json({
                 success: false,
-                message: "Access restricted to employees only",
-                code: 'EMPLOYEE_ONLY'
+                message: 'Access restricted to employees only',
+                code: 'EMPLOYEE_ONLY',
             });
         }
 
-        // Load full employee record from database
         try {
-            const employee = await Employee.findById(decoded.userId)
+            const employee = await Employee.findById(employeeIdForLoad)
                 .select('-password -__v')
                 .lean();
 
             if (!employee) {
-                logger.warn('Employee not found in isAuthenticated', { userId: decoded.userId });
+                logger.warn('Employee not found in isAuthenticated', { employeeId: employeeIdForLoad });
                 return res.status(404).json({ 
                     success: false,
                     message: "Employee not found",
@@ -64,8 +67,17 @@ const isAuthenticated = async (req, res, next) => {
             }
 
             // SECURITY: Check if password was changed after token was issued
-            if (!verifyPasswordNotChanged(decoded, employee.passwordChangedAt)) {
-                logger.warn('Token invalidated due to password change', { userId: decoded.userId });
+            let passwordChangedAt = employee.passwordChangedAt;
+            if (decoded.role === 'admin' && employee.userId) {
+                const User = (await import('../models/user.model.js')).default;
+                const linkedUser = await User.findById(employee.userId).select('passwordChangedAt createdAt').lean();
+                if (linkedUser) {
+                    passwordChangedAt = linkedUser.passwordChangedAt || linkedUser.createdAt;
+                }
+            }
+
+            if (!verifyPasswordNotChanged(decoded, passwordChangedAt)) {
+                logger.warn('Token invalidated due to password change', { employeeId: employeeIdForLoad });
                 return res.status(401).json({ 
                     success: false,
                     message: "Session expired due to password change. Please log in again.",
@@ -73,12 +85,23 @@ const isAuthenticated = async (req, res, next) => {
                 });
             }
 
-            // Attach employee to request
             req.employee = employee;
             req.organizationId = employee.organizationId || decoded.organizationId || null;
-            
-            // Also attach basic user info for compatibility
+
             attachUserToRequest(req, decoded);
+            if (decoded.role === 'admin') {
+                req.user = {
+                    ...(req.user || {}),
+                    _id: decoded.userId,
+                    role: 'admin',
+                    organizationId:
+                        employee.organizationId ||
+                        decoded.organizationId ||
+                        req.user?.organizationId ||
+                        null,
+                    platformRoles: decoded.platformRoles || req.user?.platformRoles || [],
+                };
+            }
             
             // Ensure req.employee has all necessary fields
             if (req.employee && !req.employee._id) {

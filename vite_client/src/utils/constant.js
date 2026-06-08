@@ -31,6 +31,7 @@ export const EMPLOYEE_LEAVE_ENDPOINT = `${BASE_URL}/employee/leave`
 
 
 //==================Both===================//
+export const UNIFIED_AUTH_ENDPOINT = `${BASE_URL}/both/auth`
 export const BOTH_PROFILE_ENDPOINT = `${BASE_URL}/both/profile-details`
 export const BOTH_NOTIFICATION_ENDPOINT = `${BASE_URL}/both/notification`
 export const BOTH_PUSH_SUBSCRIPTION_ENDPOINT = `${BASE_URL}/both/push-subscription`

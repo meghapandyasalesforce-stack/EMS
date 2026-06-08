@@ -20,10 +20,13 @@ import {
 } from "../../controllers/admin/payrollController.js";
 import { exportPayrollPDF } from "../../controllers/admin/pdfExportController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
-import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
-import isAdminOrHRAuthenticated from "../../middlewares/isAdminOrHRAuthenticated.js";
-import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
 import isCEOAuthenticated from "../../middlewares/isCEOAuthenticated.js";
+import {
+  composeMiddleware,
+  requireAnyPermission,
+  requirePayrollPublish,
+} from "../../middlewares/requirePermission.js";
+import { PERMISSIONS } from "../../config/permissions.constants.js";
 import { payrollLimiter, exportLimiter } from "../../middlewares/endpointRateLimiters.js";
 import { writeLimiter } from "../../middlewares/rateLimiter.js";
 import { payrollValidations, payrollValidationsExtended } from "../../middlewares/inputValidation.js";
@@ -31,26 +34,39 @@ import { cacheMiddleware } from "../../helpers/cache.js";
 
 const router = express.Router();
 
+const viewPayrollAll = composeMiddleware(
+  requireAnyPermission([PERMISSIONS.PAYROLL_VIEW_ALL])
+);
+const createPayrollMw = composeMiddleware(
+  requireAnyPermission([PERMISSIONS.PAYROLL_CREATE])
+);
+const editPayrollMw = composeMiddleware(
+  requireAnyPermission([PERMISSIONS.PAYROLL_EDIT])
+);
+const processPayrollMw = composeMiddleware(
+  requireAnyPermission([PERMISSIONS.PAYROLL_PROCESS])
+);
+
 // Get all payrolls (for dashboard - root endpoint) - strict rate limiting for sensitive data
 // Allow managers to view payrolls for their department (read-only)
 // Cache for 2 minutes (sensitive data, shorter cache)
 router.route("/")
-    .get(isAdminOrManagerOrHRAuthenticated, payrollLimiter, cacheMiddleware('payroll:all', 120), getAllPayrolls);
+    .get(viewPayrollAll, payrollLimiter, cacheMiddleware('payroll:all', 120), getAllPayrolls);
 
 router.route("/create-payroll")
-    .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, payrollValidations.create, createPayroll);
+    .post(createPayrollMw, writeLimiter, payrollValidations.create, createPayroll);
 router.route("/update-payroll/:id")
-    .put(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.update, updatePayroll);
+    .put(editPayrollMw, writeLimiter, payrollValidationsExtended.update, updatePayroll);
 router.route("/toggle-visibility/:id")
-    .patch(isAdminAuthenticated, writeLimiter, payrollValidationsExtended.toggleVisibility, togglePayrollVisibility);
+    .patch(requirePayrollPublish, writeLimiter, payrollValidationsExtended.toggleVisibility, togglePayrollVisibility);
 router.route("/generate-bulk")
-    .post(isAdminOrManagerOrHRAuthenticated, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
+    .post(createPayrollMw, exportLimiter, payrollValidationsExtended.generateBulk, generatePayrollsForMonthYear);
 router.route("/process/:id")
-    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.processById, processPayrollEntry);
+    .post(processPayrollMw, writeLimiter, payrollValidationsExtended.processById, processPayrollEntry);
 router.route("/void/:id")
-    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.voidById, voidPayrollEntry);
+    .post(processPayrollMw, writeLimiter, payrollValidationsExtended.voidById, voidPayrollEntry);
 router.route("/supersede-base")
-    .post(isAdminOrHRAuthenticated, writeLimiter, payrollValidationsExtended.supersedeBase, supersedeMonthlyBase);
+    .post(processPayrollMw, writeLimiter, payrollValidationsExtended.supersedeBase, supersedeMonthlyBase);
 
 // Disburse salaries to employees' bank accounts (mock provider) - CEO only
 router.route("/disburse-preview")
@@ -62,22 +78,22 @@ router.route("/disburse")
 // Allow managers to view payrolls for employees in their department (read-only)
 // Cache for 2 minutes
 router.route("/admin-employee-payroll/:employeeId")
-    .get(isAdminOrManagerOrHRAuthenticated, payrollValidationsExtended.getByEmployee, cacheMiddleware('payroll:employee', 120), getEmployeePayrollForAdmin);
+    .get(viewPayrollAll, payrollValidationsExtended.getByEmployee, cacheMiddleware('payroll:employee', 120), getEmployeePayrollForAdmin);
 router.route("/admin-current-payroll/:employeeId")
-    .get(isAdminOrManagerOrHRAuthenticated, payrollValidationsExtended.getByEmployee, cacheMiddleware('payroll:current', 120), getCurrentMonthPayrollForAdmin);
+    .get(viewPayrollAll, payrollValidationsExtended.getByEmployee, cacheMiddleware('payroll:current', 120), getCurrentMonthPayrollForAdmin);
 router.route("/admin-payroll/:employeeId/:month/:year")
-    .get(isAdminOrManagerOrHRAuthenticated, payrollValidationsExtended.getByMonthYear, cacheMiddleware('payroll:monthyear', 120), getPayrollByEmployeeMonthYear);
+    .get(viewPayrollAll, payrollValidationsExtended.getByMonthYear, cacheMiddleware('payroll:monthyear', 120), getPayrollByEmployeeMonthYear);
 
 router.route("/details/:id")
-    .get(isAdminOrManagerOrHRAuthenticated, payrollLimiter, getPayrollById);
+    .get(viewPayrollAll, payrollLimiter, getPayrollById);
  
 router.route("/get-employee-payroll").get(isAuthenticated, cacheMiddleware('payroll:my', 120), getEmployeePayroll)
 router.route("/get-all-payroll").get(isAuthenticated, cacheMiddleware('payroll:all', 120), getAllPayrolls)
 // Allow managers to view all employee payrolls in their department
-router.route("/get-all-employee-payroll").get(isAdminOrManagerOrHRAuthenticated, cacheMiddleware('payroll:all-employees', 120), getAllEmployeesPayroll)
+router.route("/get-all-employee-payroll").get(viewPayrollAll, cacheMiddleware('payroll:all-employees', 120), getAllEmployeesPayroll)
 
 // PDF Export routes
 router.route("/:id/export-pdf")
-    .get(isAdminOrManagerOrHRAuthenticated, exportLimiter, exportPayrollPDF);
+    .get(viewPayrollAll, exportLimiter, exportPayrollPDF);
 
 export default router;

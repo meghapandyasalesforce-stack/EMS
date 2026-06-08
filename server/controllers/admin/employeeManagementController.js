@@ -13,7 +13,7 @@ import { addOrganizationFilter, getOrganizationId } from '../../helpers/organiza
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { buildManagerMatchQuery, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
-import { shouldApplyLineManagerScope } from '../../helpers/projectManagerHelper.js';
+import { getDataScope } from '../../helpers/permissionService.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 
 /**    
@@ -110,13 +110,9 @@ export const getAllEmployees = async (req, res) => {
         const query = addOrganizationFilter(req, {});
         const organizationId = getOrganizationId(req);
 
-        // HR can see all employees.
-        // If not HR but manager, show only employees under that manager.
-        const roles = Array.isArray(req.employee?.functionalRoles) ? req.employee.functionalRoles : [];
-        const isHR = roles.includes('hr') || req.employee?.isHR === true;
-        const isManager = roles.includes('manager') || req.employee?.isManager === true;
-        const shouldApplyManagerFilter = shouldApplyLineManagerScope(req) && isManager;
-        if (shouldApplyManagerFilter && req.employee) {
+        const scope = req.authContext ? getDataScope(req.authContext) : 'organization';
+        const shouldApplyManagerFilter = scope === 'team' && req.employee;
+        if (shouldApplyManagerFilter) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
                 query.$or = managerQuery.$or;
