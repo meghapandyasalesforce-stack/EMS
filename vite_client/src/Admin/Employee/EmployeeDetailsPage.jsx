@@ -53,6 +53,13 @@ import {
   getAttendanceRate,
   getFullName,
 } from './employeeDetails/utils';
+import SuggestRoleUpdateModal from '../../components/SuggestRoleUpdateModal';
+import {
+  assignEmployeeSystemRole,
+  fetchEmployeeAccess,
+  fetchSuggestedSystemRole,
+} from '../../utils/systemRoleApi';
+import { getRoleLabel } from '../../utils/systemRoleHelpers';
 
 const EmployeeDetailsPage = () => {
   const { employeeId } = useParams();
@@ -88,6 +95,8 @@ const EmployeeDetailsPage = () => {
   const [jobTitleOptions, setJobTitleOptions] = useState([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   const [managerPreview, setManagerPreview] = useState(null);
+  const [roleUpdatePrompt, setRoleUpdatePrompt] = useState(null);
+  const [updatingSystemRole, setUpdatingSystemRole] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -282,6 +291,50 @@ const EmployeeDetailsPage = () => {
     setEditWorkForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
+  const checkRoleUpdateAfterWorkSave = async (workData) => {
+    if (!canManageAccess) return;
+
+    try {
+      const [suggested, access] = await Promise.all([
+        fetchSuggestedSystemRole({
+          department: workData.department,
+          jobTitle: workData.jobTitle,
+          position: workData.position,
+        }),
+        fetchEmployeeAccess(employeeId),
+      ]);
+
+      if (suggested.systemRoleId !== access.systemRoleId) {
+        const catalog = access.catalog || [];
+        setRoleUpdatePrompt({
+          suggested,
+          currentRoleId: access.systemRoleId,
+          currentRoleLabel: access.systemRoleLabel || getRoleLabel(access.systemRoleId, catalog),
+          suggestedRoleLabel: suggested.label || getRoleLabel(suggested.systemRoleId, catalog),
+        });
+      }
+    } catch {
+      // Non-fatal — work info was still saved
+    }
+  };
+
+  const handleApplyRoleUpdate = async () => {
+    if (!roleUpdatePrompt) return;
+
+    setUpdatingSystemRole(true);
+    try {
+      await assignEmployeeSystemRole(employeeId, roleUpdatePrompt.suggested.systemRoleId);
+      toast.success(
+        `System access updated to ${roleUpdatePrompt.suggestedRoleLabel}. Ask them to log out and back in.`
+      );
+      setRoleUpdatePrompt(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update system access');
+    } finally {
+      setUpdatingSystemRole(false);
+    }
+  };
+
   const handleSaveWorkInfo = async () => {
     const salaryValue =
       editWorkForm.salary === '' || editWorkForm.salary == null
@@ -291,24 +344,28 @@ const EmployeeDetailsPage = () => {
       setSnackbar({ open: true, message: 'Enter a valid salary.', severity: 'error' });
       return;
     }
+
+    const workData = {
+      jobTitle: editWorkForm.jobTitle,
+      department: editWorkForm.department,
+      position: editWorkForm.position,
+      manager: editWorkForm.manager,
+      salary: salaryValue,
+      joiningDate: editWorkForm.joiningDate
+        ? new Date(editWorkForm.joiningDate).toISOString()
+        : null,
+    };
+
     const resultAction = await dispatch(
       updateEmployeeWorkInfo({
         employeeId,
-        workData: {
-          jobTitle: editWorkForm.jobTitle,
-          department: editWorkForm.department,
-          position: editWorkForm.position,
-          manager: editWorkForm.manager,
-          salary: salaryValue,
-          joiningDate: editWorkForm.joiningDate
-            ? new Date(editWorkForm.joiningDate).toISOString()
-            : null,
-        },
+        workData,
       })
     );
     if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
       setSnackbar({ open: true, message: 'Work information updated.', severity: 'success' });
       setOpenEditWorkDialog(false);
+      await checkRoleUpdateAfterWorkSave(workData);
     } else {
       setSnackbar({
         open: true,
@@ -383,6 +440,7 @@ const EmployeeDetailsPage = () => {
         return (
           <AccessTab
             employeeId={employee._id}
+            employee={employee}
             canEdit={canManageAccess && !isManagerReadOnly}
           />
         );
@@ -770,6 +828,18 @@ const EmployeeDetailsPage = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <SuggestRoleUpdateModal
+        open={Boolean(roleUpdatePrompt)}
+        employeeName={employee ? getFullName(employee) : ''}
+        currentRoleLabel={roleUpdatePrompt?.currentRoleLabel}
+        suggestedRoleLabel={roleUpdatePrompt?.suggestedRoleLabel}
+        suggestedRoleId={roleUpdatePrompt?.suggested?.systemRoleId}
+        reason={roleUpdatePrompt?.suggested?.reason}
+        saving={updatingSystemRole}
+        onApply={handleApplyRoleUpdate}
+        onDismiss={() => setRoleUpdatePrompt(null)}
+      />
     </div>
   );
 };

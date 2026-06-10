@@ -3,6 +3,7 @@ import {
   updateUserPlatformRoles,
   updateEmployeeFunctionalRoles,
   getSystemRoleCatalog,
+  getSuggestedSystemRole,
   getUsersRolesRoster,
   getEmployeeAccess,
   assignEmployeeSystemRole,
@@ -24,6 +25,15 @@ const viewCatalog = composeMiddleware(
   ])
 );
 
+const suggestRole = composeMiddleware(
+  requireAnyPermission([
+    PERMISSIONS.EMPLOYEE_CREATE,
+    PERMISSIONS.EMPLOYEE_EDIT,
+    PERMISSIONS.ORG_SETTINGS_MANAGE,
+    PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE,
+  ])
+);
+
 const viewAccess = composeMiddleware(
   requireAnyPermission([
     PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE,
@@ -32,6 +42,7 @@ const viewAccess = composeMiddleware(
 );
 
 router.get('/catalog', viewCatalog, getSystemRoleCatalog);
+router.get('/suggest', suggestRole, getSuggestedSystemRole);
 router.get('/roster', manageRoles, getUsersRolesRoster);
 router.get('/employees/:employeeId/access', viewAccess, getEmployeeAccess);
 router.patch('/employees/:employeeId/system-role', viewAccess, assignEmployeeSystemRole);

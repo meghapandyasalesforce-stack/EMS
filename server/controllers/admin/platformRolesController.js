@@ -11,6 +11,7 @@ import {
   resolveSystemRoleFromRecords,
 } from '../../helpers/systemRoleService.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
 import logger from '../../helpers/logger.js';
 
 const VALID_FUNCTIONAL = new Set([
@@ -102,6 +103,25 @@ export const updateEmployeeFunctionalRoles = asyncHandler(async (req, res) => {
 /** GET SaaS system role catalog for Add Employee / Users & Roles UI */
 export const getSystemRoleCatalog = asyncHandler(async (_req, res) => {
   return sendSuccess(res, { catalog: buildRoleCatalog() });
+});
+
+/** GET ?department=&jobTitle=&position= — suggest system role from job details */
+export const getSuggestedSystemRole = asyncHandler(async (req, res) => {
+  const { department = '', jobTitle = '', position = '' } = req.query;
+  const { systemRoleId, reason } = inferSystemRoleFromWorkInfo({
+    department,
+    jobTitle,
+    position,
+  });
+  const def = getSystemRoleDefinition(systemRoleId);
+
+  return sendSuccess(res, {
+    systemRoleId,
+    reason,
+    label: def.label,
+    shortLabel: def.shortLabel || def.label,
+    description: def.description,
+  });
 });
 
 /** GET org roster with resolved system roles + linked User platform roles */

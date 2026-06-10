@@ -151,7 +151,7 @@ export const createWorker = (queueName, processor) => {
         const worker = new Worker(
             queueName,
             async (job) => {
-                logger.info('Processing job', { 
+                logger.info('Processing job', {
                     queueName, 
                     jobId: job.id, 
                     jobName: job.name,

@@ -26,6 +26,7 @@ import {
     applySystemRoleToEmployee,
     syncLinkedUserForSystemRole,
 } from '../../helpers/systemRoleService.js';
+import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
 
 // Generate token with employeeId instead of email
 
@@ -147,7 +148,10 @@ export const registerEmployee = async (req, res) => {
             systemRole: systemRoleInput,
         } = req.body;
 
-        const systemRole = systemRoleInput || 'employee';
+        let systemRole = systemRoleInput;
+        if (!systemRole || !ALL_SYSTEM_ROLE_IDS.includes(systemRole)) {
+            systemRole = inferSystemRoleFromWorkInfo({ department, jobTitle, position }).systemRoleId;
+        }
         if (!ALL_SYSTEM_ROLE_IDS.includes(systemRole)) {
             return sendValidationError(res, {
                 systemRole: `Invalid system role. Allowed: ${ALL_SYSTEM_ROLE_IDS.join(', ')}`,
