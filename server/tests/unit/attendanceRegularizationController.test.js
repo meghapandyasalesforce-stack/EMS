@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, afterEach, jest } from '@jest/globals';
 import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
 import Employee from '../../models/employee.model.js';
 import {

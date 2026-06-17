@@ -371,6 +371,48 @@ export const updateFinancialDetails = createAsyncThunk(
   }
 );
 
+export const fetchTaxDeclaration = createAsyncThunk(
+  'employeeDetails/fetchTaxDeclaration',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${BOTH_PROFILE_ENDPOINT}/tax-declaration`, {
+        withCredentials: true
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch tax declaration');
+    }
+  }
+);
+
+export const updateTaxDeclaration = createAsyncThunk(
+  'employeeDetails/updateTaxDeclaration',
+  async (declarationData, { rejectWithValue, getState }) => {
+    try {
+      const { employee } = getState().employeeDetails;
+      const response = await axios.put(
+        `${BOTH_PROFILE_ENDPOINT}/tax-declaration`,
+        declarationData,
+        { withCredentials: true }
+      );
+      return {
+        employee: {
+          ...employee,
+          financialDetails: response.data.financialDetails
+        },
+        taxDeclaration: {
+          financialYear: response.data.financialDetails?.taxDeclaration?.financialYear,
+          taxRegime: response.data.financialDetails?.taxRegime,
+          taxDeclaration: response.data.financialDetails?.taxDeclaration,
+          metroCity: response.data.financialDetails?.metroCity
+        }
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update tax declaration');
+    }
+  }
+);
+
 //Asyn thunk for fetching employee's own info
 export const fetchEmployeeOwnInfo = createAsyncThunk(
   'employeeDetails/fetchEmployeeOwnInfo',
@@ -407,7 +449,10 @@ const employeeDetailsSlice = createSlice({
     addingNextOfKin: false,
     addingFamilyDetail: false,
     updatingFamilyDetail: false,
-    updatingFinancialDetails: false
+    updatingFinancialDetails: false,
+    taxDeclaration: null,
+    loadingTaxDeclaration: false,
+    updatingTaxDeclaration: false
   },
   reducers: {
     clearEmployeeDetails: (state) => {
@@ -670,6 +715,31 @@ const employeeDetailsSlice = createSlice({
       })
       .addCase(updateFinancialDetails.rejected, (state, action) => {
         state.updatingFinancialDetails = false;
+        state.error = action.payload;
+      })
+
+      .addCase(fetchTaxDeclaration.pending, (state) => {
+        state.loadingTaxDeclaration = true;
+      })
+      .addCase(fetchTaxDeclaration.fulfilled, (state, action) => {
+        state.loadingTaxDeclaration = false;
+        state.taxDeclaration = action.payload;
+      })
+      .addCase(fetchTaxDeclaration.rejected, (state, action) => {
+        state.loadingTaxDeclaration = false;
+        state.error = action.payload;
+      })
+
+      .addCase(updateTaxDeclaration.pending, (state) => {
+        state.updatingTaxDeclaration = true;
+      })
+      .addCase(updateTaxDeclaration.fulfilled, (state, action) => {
+        state.updatingTaxDeclaration = false;
+        state.employee = action.payload.employee;
+        state.taxDeclaration = action.payload.taxDeclaration;
+      })
+      .addCase(updateTaxDeclaration.rejected, (state, action) => {
+        state.updatingTaxDeclaration = false;
         state.error = action.payload;
       });
   }

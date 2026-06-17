@@ -45,6 +45,10 @@ const AttendanceRules = () => {
             enabled: false,
             time: '20:00',
             action: 'auto_checkout'
+        },
+        regularizationRules: {
+            enabled: true,
+            allowedPerMonth: 5
         }
     });
 
@@ -95,6 +99,10 @@ const AttendanceRules = () => {
                         enabled: false,
                         time: '20:00',
                         action: 'auto_checkout'
+                    },
+                    regularizationRules: rule.regularizationRules || {
+                        enabled: true,
+                        allowedPerMonth: 5
                     }
                 };
                 
@@ -680,6 +688,46 @@ const AttendanceRules = () => {
                                             }`}
                                         />
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Attendance Regularization */}
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <h4 className="font-medium text-gray-900">Enable Attendance Regularization</h4>
+                                    <p className="text-sm text-gray-600">Allow employees to request attendance corrections</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleTimeChange('regularizationRules', 'enabled', !formData.regularizationRules.enabled)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                        formData.regularizationRules.enabled ? 'bg-theme-primary' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                            formData.regularizationRules.enabled ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {formData.regularizationRules.enabled && (
+                                <div className="ml-8 p-4 bg-theme-secondary/10 rounded-lg">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Max regularization requests per employee per month
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="31"
+                                        value={formData.regularizationRules.allowedPerMonth}
+                                        onChange={(e) => handleNumberChange('regularizationRules', 'allowedPerMonth', e.target.value)}
+                                        className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)]"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Set to 0 for unlimited. Pending and approved requests count toward the limit.
+                                    </p>
                                 </div>
                             )}
 

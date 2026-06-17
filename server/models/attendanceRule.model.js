@@ -109,6 +109,18 @@ const attendanceRuleSchema = new mongoose.Schema({
             default: 90 // days
         }
     },
+    // Attendance regularization settings
+    regularizationRules: {
+        enabled: {
+            type: Boolean,
+            default: true
+        },
+        allowedPerMonth: {
+            type: Number,
+            default: 5,
+            min: [0, 'Minimum allowed per month is 0 (unlimited)']
+        }
+    },
     isActive: {
         type: Boolean,
         default: true

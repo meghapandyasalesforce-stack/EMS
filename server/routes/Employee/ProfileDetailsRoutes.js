@@ -10,6 +10,9 @@ import {
     addFamilyDetail,
     updateFamilyDetail,
     updateFinancialDetails,
+    getTaxDeclaration,
+    updateTaxDeclaration,
+    getTaxDeclarationByAdmin,
     addGuarantorDetails,
     addNextOfKin,
     getEmployeeInfoByAdmin,
@@ -43,6 +46,9 @@ router.route("/update-family-detail").put(isAuthenticated, updateFamilyDetail);
 router.route("/add-guarantor-detail").post(isAuthenticated, addGuarantorDetails);
 router.route("/add-nok-detail").post(isAuthenticated, addNextOfKin);
 router.route("/update-financial-details").put(isAuthenticated, updateFinancialDetails);
+router.route("/tax-declaration").get(isAuthenticated, getTaxDeclaration);
+router.route("/tax-declaration").put(isAuthenticated, updateTaxDeclaration);
+router.route("/admin/tax-declaration/:employeeId").get(isAdminOrManagerOrHRAuthenticated, getTaxDeclarationByAdmin);
 router.route("/update-location-permission").put(isAuthenticated, updateLocationPermission);
 router.route("/upcoming-birthdays").get(isAuthenticated, getUpcomingBirthdays);
 router.route("/send-birthday-wish").post(isAdminOrHROrExecutiveAuthenticated, sendBirthdayWishes);

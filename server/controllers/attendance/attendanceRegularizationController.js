@@ -21,6 +21,7 @@ import {
     sendRegularizationActionError,
     isAdminUser,
 } from '../../helpers/regularizationWorkflowActionHelper.js';
+import { getRegularizationLimitSummary } from '../../helpers/regularizationLimitHelper.js';
 
 /** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
 function parseCalendarDayQuery(raw, boundary) {
@@ -96,19 +97,20 @@ export const createRegularizationRequest = async (req, res) => {
             });
         }
 
-        // Enforce monthly request cap (count only pending + approved)
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const monthlyRequestCount = await AttendanceRegularization.countDocuments({
-            organizationId,
-            employeeId,
-            attendanceDate: { $gte: monthStart, $lt: nextMonthStart },
-            status: { $in: ['pending', 'approved'] }
-        });
-        if (monthlyRequestCount >= 5) {
+        // Enforce monthly request cap from attendance rules (count only pending + approved)
+        const limitSummary = await getRegularizationLimitSummary(organizationId, employeeId);
+
+        if (!limitSummary.enabled) {
             return res.status(400).json({
                 success: false,
-                message: 'Monthly regularization limit reached (max 5 requests for pending/approved).'
+                message: 'Attendance regularization is disabled for your organization.'
+            });
+        }
+
+        if (!limitSummary.unlimited && limitSummary.usedThisMonth >= limitSummary.allowedPerMonth) {
+            return res.status(400).json({
+                success: false,
+                message: `Monthly regularization limit reached (max ${limitSummary.allowedPerMonth} requests for pending/approved).`
             });
         }
 
@@ -338,6 +340,36 @@ export const createRegularizationRequest = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to create regularization request',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+};
+
+/**
+ * Get employee's regularization limit summary for the current month
+ * GET /api/v1/attendance-regularization/limits
+ */
+export const getRegularizationLimits = async (req, res) => {
+    try {
+        const employeeId = req.employee._id;
+        const organizationId = getOrganizationId(req);
+
+        const summary = await getRegularizationLimitSummary(organizationId, employeeId, req.employee);
+
+        res.status(200).json({
+            success: true,
+            message: 'Regularization limits retrieved successfully',
+            data: summary
+        });
+    } catch (error) {
+        logger.error('Get Regularization Limits Error', {
+            error: error.message,
+            stack: error.stack,
+            employeeId: req.employee?._id
+        });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch regularization limits',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }

@@ -2,6 +2,7 @@ import express from 'express';
 import {
     createRegularizationRequest,
     getMyRegularizationRequests,
+    getRegularizationLimits,
     getRegularizationRequestsForManager,
     approveRegularization,
     rejectRegularization,
@@ -14,6 +15,9 @@ import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManage
 const router = express.Router();
 
 // Employee routes - create and view their own requests
+router.route("/limits")
+    .get(isAuthenticated, getRegularizationLimits);
+
 router.route("/request")
     .post(isAuthenticated, createRegularizationRequest)
     .get(isAuthenticated, getMyRegularizationRequests);

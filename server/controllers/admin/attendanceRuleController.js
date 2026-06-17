@@ -48,7 +48,7 @@ const detectFieldChanges = (oldRule, newRule) => {
     const fieldsToCheck = [
         'location', 'address', 'coordinates', 'maximumRadius',
         'enableCompOff', 'autoApprove', 'enableSimplePunches', 'enablePenaltyRules',
-        'penaltyRules', 'compOffRules', 'applicableDepartments',
+        'penaltyRules', 'compOffRules', 'regularizationRules', 'applicableDepartments',
         'timezone', 'officeHours', 'shifts', 'exceptions', 'security'
     ];
 
@@ -135,6 +135,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
             enablePenaltyRules,
             penaltyRules,
             compOffRules,
+            regularizationRules,
             applicableDepartments
         } = req.body;
 
@@ -265,6 +266,10 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 attendanceRule.compOffRules = compOffRules;
             }
 
+            if (regularizationRules) {
+                attendanceRule.regularizationRules = regularizationRules;
+            }
+
             if (applicableDepartments) {
                 attendanceRule.applicableDepartments = applicableDepartments;
             }
@@ -327,6 +332,10 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                     allowedPerMonth: 2,
                     maxAccumulation: 5,
                     validity: 90
+                },
+                regularizationRules: regularizationRules || {
+                    enabled: true,
+                    allowedPerMonth: 5
                 },
                 applicableDepartments: applicableDepartments || [],
                 createdBy: req.user?._id || req.employee?._id || null,
@@ -455,6 +464,7 @@ export const getAttendanceRule = async (req, res) => {
                     enablePenaltyRules: true,
                     penaltyRules: {},
                     compOffRules: { allowedPerMonth: 2, maxAccumulation: 5, validity: 90 },
+                    regularizationRules: { enabled: true, allowedPerMonth: 5 },
                     applicableDepartments: [],
                     officeHours: { startTime: '09:00', endTime: '17:00' },
                     checkInOutTimes: {

@@ -390,7 +390,37 @@ const employeeSchema = new mongoose.Schema({
         accountName: { type: String },
         panNumber: { type: String },
         epfUan: { type: String },
-        taxRegime: { type: String }
+        taxRegime: { type: String },
+        metroCity: { type: Boolean, default: false },
+        taxDeclaration: {
+            financialYear: { type: String },
+            section80C: {
+                ppf: { type: Number, default: 0 },
+                lic: { type: Number, default: 0 },
+                elss: { type: Number, default: 0 },
+                tuitionFees: { type: Number, default: 0 },
+                homeLoanPrincipal: { type: Number, default: 0 },
+                other: { type: Number, default: 0 }
+            },
+            section80D: {
+                selfFamilyPremium: { type: Number, default: 0 },
+                parentsPremium: { type: Number, default: 0 },
+                selfSeniorCitizen: { type: Boolean, default: false },
+                parentsSeniorCitizen: { type: Boolean, default: false }
+            },
+            section80E: {
+                educationLoanInterest: { type: Number, default: 0 }
+            },
+            section24b: {
+                homeLoanInterest: { type: Number, default: 0 }
+            },
+            hra: {
+                monthlyRent: { type: Number, default: 0 },
+                landlordPan: { type: String },
+                metroCity: { type: Boolean, default: false }
+            },
+            updatedAt: { type: Date }
+        }
     },
     mustResetPassword: {
         type: Boolean,

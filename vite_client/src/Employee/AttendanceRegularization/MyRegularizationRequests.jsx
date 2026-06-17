@@ -24,10 +24,23 @@ const MyRegularizationRequests = () => {
         reason: ''
     });
     const [submitting, setSubmitting] = useState(false);
+    const [limits, setLimits] = useState(null);
 
     useEffect(() => {
         fetchRequests();
+        fetchLimits();
     }, [filterStatus]);
+
+    const fetchLimits = async () => {
+        try {
+            const response = await axios.get('/v1/both/attendance-regularization/limits', {
+                withCredentials: true
+            });
+            setLimits(response.data?.data ?? null);
+        } catch {
+            setLimits(null);
+        }
+    };
 
     useEffect(() => {
         const prefill = location.state?.prefillRegularization;
@@ -112,6 +125,7 @@ const MyRegularizationRequests = () => {
             await axios.post('/v1/both/attendance-regularization/request', payload, { withCredentials: true });
             toast.success('Regularization request submitted successfully');
             setShowCreateModal(false);
+            fetchLimits();
             setFormData({
                 attendanceDate: '',
                 regularizationType: 'missing_clock_in',
@@ -179,10 +193,20 @@ const MyRegularizationRequests = () => {
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">My Attendance Regularization Requests</h1>
                             <p className="text-gray-600 mt-1">Request corrections for your attendance records</p>
+                            {limits && (
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {!limits.enabled
+                                        ? 'Regularization is currently disabled for your organization.'
+                                        : limits.unlimited
+                                            ? `${limits.usedThisMonth} request(s) submitted this month (no monthly limit).`
+                                            : `${limits.usedThisMonth} of ${limits.allowedPerMonth} monthly request(s) used (${limits.remaining} remaining).`}
+                                </p>
+                            )}
                         </div>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
+                            disabled={limits && !limits.canSubmit}
+                            className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <FaPlus />
                             New Request

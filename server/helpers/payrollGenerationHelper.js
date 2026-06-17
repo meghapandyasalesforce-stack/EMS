@@ -4,6 +4,7 @@ import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
+import { buildIncomeTaxParamsFromEmployee, computeMonthlyIncomeTax } from './incomeTaxCalculation.js';
 
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
@@ -47,6 +48,37 @@ function computeConfiguredComponent(config, baseAmount) {
     const isPercentage = cfg.isPercentage !== false;
     const raw = isPercentage ? (base * percentage) / 100 : fixedAmount;
     return Math.round(Math.max(0, raw));
+}
+
+function projectSalaryBreakdownForTax(emp, salaryStructure) {
+    const fullGross = Math.max(0, emp.salary || 0);
+    if (!salaryStructure) {
+        const formula = computeEarningsFromGross(fullGross);
+        return {
+            basicWage: formula.basicWage,
+            houseRentAllowance: formula.houseRentAllowance
+        };
+    }
+
+    return {
+        basicWage: computeConfiguredComponent(salaryStructure?.earnings?.basicWage, fullGross),
+        houseRentAllowance: computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, fullGross)
+    };
+}
+
+function computeRegimeIncomeTax(emp, salaryStructure, deductions) {
+    const breakdown = projectSalaryBreakdownForTax(emp, salaryStructure);
+    const annualGross = Math.round((emp.salary || 0) * 12);
+
+    const taxParams = buildIncomeTaxParamsFromEmployee(emp, {
+        annualGross,
+        annualBasic: breakdown.basicWage * 12,
+        annualHra: breakdown.houseRentAllowance * 12,
+        annualPfEmployee: (deductions.pfEmployee || 0) * 12,
+        annualProfessionalTax: (deductions.professionalTax || 0) * 12
+    });
+
+    return computeMonthlyIncomeTax(taxParams);
 }
 
 function bonusFromRule(rule, baseAmount) {
@@ -547,11 +579,12 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             pfEmployee: computeConfiguredComponent(salaryStructure?.deductions?.pfEmployee, pfWageBase),
             esiEmployee: computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary),
             professionalTax: computeConfiguredComponent(salaryStructure?.deductions?.professionalTax, effectiveGross),
-            incomeTax: computeConfiguredComponent(salaryStructure?.deductions?.incomeTax, basicSalary),
+            incomeTax: 0,
             advanceSalary: 0,
             loanDeduction: 0,
             otherDeductions: 0
         };
+        deductions.incomeTax = computeRegimeIncomeTax(emp, salaryStructure, deductions);
     } else {
         const formula = computeEarningsFromGross(effectiveGross);
         // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
@@ -585,11 +618,12 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             pfEmployee: employeePfFromBasicWage(basicSalary),
             esiEmployee: Math.round(basicSalary * 0.0075),
             professionalTax: 0,
-            incomeTax: Math.round(basicSalary * 0.1),
+            incomeTax: 0,
             advanceSalary: 0,
             loanDeduction: 0,
             otherDeductions: 0
         };
+        deductions.incomeTax = computeRegimeIncomeTax(emp, null, deductions);
     }
 
     deductions.total =
@@ -639,7 +673,7 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
     const empId = payroll.employeeId?._id || payroll.employeeId;
     if (!empId) return base;
     const emp = await Employee.findById(empId)
-        .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate')
+        .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
         .lean();
     if (!emp) return base;
     const orgId = organizationId || emp.organizationId;

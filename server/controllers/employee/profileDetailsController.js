@@ -5,6 +5,8 @@ import { validateAndNormalizeNationalId } from '../../helpers/nationalIdValidati
 import { mergeLegacyAndCanonicalEmployeeDocuments } from '../../helpers/employeeDocumentUploadHelper.js';
 import Notification from '../../models/notification.model.js';
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import { sanitizeTaxDeclarationInput } from '../../helpers/taxDeclarationHelper.js';
+import { getIndianFinancialYear } from '../../helpers/incomeTaxCalculation.js';
 
 // Employee updates their additional information
 // Employee updates their additional information
@@ -650,7 +652,7 @@ export const updateFamilyDetail = async (req, res) => {
 export const updateFinancialDetails = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
-        const { bankName, ifsc, accountNo, accountName, panNumber, epfUan, taxRegime } = req.body;
+        const { bankName, ifsc, accountNo, accountName, panNumber, epfUan, taxRegime, metroCity } = req.body;
 
         if (!bankName || !ifsc || !accountNo || !accountName) {
             return res.status(400).json({ message: 'Bank name, IFSC, account number and account name are required' });
@@ -665,14 +667,23 @@ export const updateFinancialDetails = async (req, res) => {
             return res.status(400).json({ message: 'Account number must be 9-18 digits' });
         }
 
+        const existing = await Employee.findById(employeeId).select('financialDetails').lean();
+        const prev = existing?.financialDetails || {};
+
+        const normalizedRegime = (taxRegime != null && String(taxRegime).trim())
+            ? String(taxRegime).trim()
+            : (prev.taxRegime || 'New');
+
         const financialDetails = {
+            ...prev,
             bankName,
             ifsc,
             accountNo,
             accountName,
             panNumber: (panNumber != null && String(panNumber).trim()) ? String(panNumber).trim() : '',
             epfUan: (epfUan != null && String(epfUan).trim()) ? String(epfUan).trim() : '',
-            taxRegime: (taxRegime != null && String(taxRegime).trim()) ? String(taxRegime).trim() : ''
+            taxRegime: normalizedRegime,
+            metroCity: metroCity === true || metroCity === 'true' || metroCity === 1 || metroCity === '1'
         };
 
         const updatedEmployee = await Employee.findByIdAndUpdate(
@@ -692,6 +703,91 @@ export const updateFinancialDetails = async (req, res) => {
             message: 'Failed to update financial details',
             error: error.message
         });
+    }
+};
+
+export const getTaxDeclaration = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const financialYear = req.query.financialYear || getIndianFinancialYear();
+
+        const employee = await Employee.findById(employeeId).select('financialDetails').lean();
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const fin = employee.financialDetails || {};
+        const declaration = fin.taxDeclaration || {};
+        const matchesYear = declaration.financialYear === financialYear;
+
+        res.status(200).json({
+            financialYear,
+            taxRegime: fin.taxRegime || 'New',
+            taxDeclaration: matchesYear ? declaration : null,
+            metroCity: fin.metroCity || false
+        });
+    } catch (error) {
+        logger.error('Error fetching tax declaration', { error: error.message, stack: error.stack });
+        res.status(500).json({ message: 'Failed to fetch tax declaration', error: error.message });
+    }
+};
+
+export const updateTaxDeclaration = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        const taxDeclaration = sanitizeTaxDeclarationInput(req.body);
+
+        const employee = await Employee.findById(employeeId).select('financialDetails').lean();
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const fin = employee.financialDetails || {};
+        const financialDetails = {
+            ...fin,
+            metroCity: taxDeclaration.hra.metroCity || fin.metroCity || false,
+            taxDeclaration
+        };
+
+        const updatedEmployee = await Employee.findByIdAndUpdate(
+            employeeId,
+            { financialDetails },
+            { new: true }
+        ).select('financialDetails');
+
+        res.status(200).json({
+            message: 'Tax declaration saved successfully',
+            financialDetails: updatedEmployee.financialDetails
+        });
+    } catch (error) {
+        logger.error('Error updating tax declaration', { error: error.message, stack: error.stack });
+        res.status(500).json({ message: 'Failed to update tax declaration', error: error.message });
+    }
+};
+
+export const getTaxDeclarationByAdmin = async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        const financialYear = req.query.financialYear || getIndianFinancialYear();
+
+        const employee = await Employee.findById(employeeId).select('financialDetails organizationId').lean();
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const fin = employee.financialDetails || {};
+        const declaration = fin.taxDeclaration || {};
+        const matchesYear = declaration.financialYear === financialYear;
+
+        res.status(200).json({
+            financialYear,
+            taxRegime: fin.taxRegime || 'New',
+            taxDeclaration: matchesYear ? declaration : null,
+            metroCity: fin.metroCity || false
+        });
+    } catch (error) {
+        logger.error('Error fetching employee tax declaration (admin)', { error: error.message, stack: error.stack });
+        res.status(500).json({ message: 'Failed to fetch tax declaration', error: error.message });
     }
 };
 

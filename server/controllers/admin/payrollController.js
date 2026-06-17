@@ -292,7 +292,7 @@ export const updatePayroll = async (req, res) => {
 
             if (targetEmployeeId && targetMonth && !Number.isNaN(targetYear)) {
                 const payrollEmployee = await Employee.findById(targetEmployeeId)
-                    .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate')
+                    .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
                     .lean();
 
                 if (payrollEmployee) {
@@ -521,7 +521,7 @@ export const createPayroll = async (req, res) => {
         // If employeeId is provided, verify it belongs to the same organization
         if (payrollData.employeeId) {
             payrollEmployee = await Employee.findById(payrollData.employeeId)
-                .select('organizationId salary joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate')
+                .select('organizationId salary joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
                 .lean();
             if (!payrollEmployee) {
                 return res.status(404).json({ 
@@ -1346,7 +1346,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
                     ]
                 }
             ]
-        }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate');
+        }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails');
 
         let created = 0;
         let updated = 0;
