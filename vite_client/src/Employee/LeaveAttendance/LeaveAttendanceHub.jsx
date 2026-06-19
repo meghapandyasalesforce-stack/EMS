@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
+import { toast } from 'react-toastify';
 import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
@@ -170,7 +171,23 @@ const LeaveAttendanceHub = () => {
   const [panelTab, setPanelTab] = useState('attendance-log');
   const [selectedMobileDateKey, setSelectedMobileDateKey] = useState(null);
   const [regularizationRequestsAll, setRegularizationRequestsAll] = useState([]);
+  const [regularizationLimits, setRegularizationLimits] = useState(null);
   const [currentLogPage, setCurrentLogPage] = useState(1);
+
+  const canRegularize = regularizationLimits?.canSubmit === true;
+
+  const getRegularizationBlockMessage = () => {
+    if (!regularizationLimits) {
+      return 'Unable to verify regularization limits. Please try again from the regularization page.';
+    }
+    if (!regularizationLimits.enabled) {
+      return 'Regularization is currently disabled for your organization.';
+    }
+    if (!regularizationLimits.unlimited && regularizationLimits.remaining === 0) {
+      return `Monthly regularization limit reached (max ${regularizationLimits.allowedPerMonth} requests).`;
+    }
+    return 'You cannot submit a regularization request right now.';
+  };
 
   useEffect(() => {
     const monthStart = startOfMonthDate(calendarCursor);
@@ -243,6 +260,21 @@ const LeaveAttendanceHub = () => {
     };
 
     fetchAllRegularizationRequests();
+  }, []);
+
+  useEffect(() => {
+    const fetchRegularizationLimits = async () => {
+      try {
+        const res = await axios.get('/v1/both/attendance-regularization/limits', {
+          withCredentials: true
+        });
+        setRegularizationLimits(res.data?.data ?? null);
+      } catch {
+        setRegularizationLimits(null);
+      }
+    };
+
+    fetchRegularizationLimits();
   }, []);
 
   const regularizationStatusByDate = useMemo(() => {
@@ -385,6 +417,11 @@ const LeaveAttendanceHub = () => {
   }, [regularizationRequestsAll, calendarCursor]);
 
   const navigateToRegularizationWithRow = (row) => {
+    if (!canRegularize) {
+      toast.warning(getRegularizationBlockMessage());
+      return;
+    }
+
     navigate('/my-attendance-regularization', {
       state: {
         prefillRegularization: {
@@ -414,6 +451,17 @@ const LeaveAttendanceHub = () => {
     const requestStatus = requestMeta?.status;
 
     if (!requestStatus || requestStatus === 'cancelled') {
+      if (!canRegularize) {
+        return (
+          <span
+            className={`text-xs ${compact ? 'text-[#94A3B8]' : 'text-[#94A3B8]'}`}
+            title={getRegularizationBlockMessage()}
+          >
+            {compact ? 'Unavailable' : 'Regularization unavailable'}
+          </span>
+        );
+      }
+
       return (
         <button
           onClick={() => navigateToRegularizationWithRow(row)}

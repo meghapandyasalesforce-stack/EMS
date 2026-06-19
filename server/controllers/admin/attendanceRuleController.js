@@ -6,6 +6,7 @@ import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternal
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { geocodeAddress, isGeocodingAvailable } from '../../helpers/geocodingService.js';
 import { isValidTimezone } from '../../constants/timezoneOptions.js';
+import { invalidateActiveAttendanceRuleCache } from '../../helpers/attendanceSecurityHelper.js';
 
 // Helper to get client IP
 const getClientIP = (req) => {
@@ -279,6 +280,8 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
 
             await attendanceRule.save();
 
+            await invalidateActiveAttendanceRuleCache(organizationId);
+
             // Create audit log
             const newState = attendanceRule.toObject();
             const fieldChanges = detectFieldChanges(previousState, newState);
@@ -375,6 +378,8 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 },
                 priority: req.body.priority || 1
             });
+
+            await invalidateActiveAttendanceRuleCache(organizationId);
 
             // Create audit log for creation
             const changedBy = req.user?._id || req.employee?._id;

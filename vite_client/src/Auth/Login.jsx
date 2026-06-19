@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { setLoading, setUser, setAuthPermissions } from '../context/Auth/authSlice';
+import { setLoading, setUser, setAuthPermissions, checkAuthSession } from '../context/Auth/authSlice';
 import { setEmployeeProfile, clearEmployeeDetails } from '../context/employeeDetailsSlice';
 import { setTimezoneContext } from '../context/timezoneSlice';
 import { toast } from 'react-toastify';
@@ -121,11 +121,17 @@ function Login() {
 
             if (data.user) {
                 const u = data.user;
+                const emp = data.employee;
                 dispatch(setUser({
                     ...u,
                     _id: u._id ?? u.id,
                     role: userRole,
-                    organizationId: u.organizationId ?? data.employee?.organizationId ?? orgId,
+                    name: emp?.name || u.name,
+                    lastName: emp?.lastName || u.lastName,
+                    jobTitle: emp?.jobTitle || u.jobTitle,
+                    department: emp?.department || u.department,
+                    position: emp?.position || u.position,
+                    organizationId: u.organizationId ?? emp?.organizationId ?? orgId,
                     platformRoles: data.platformRoles || u.roles || [],
                     availablePortals: data.availablePortals || [],
                 }));
@@ -193,9 +199,19 @@ function Login() {
                 data.dashboardRoute ||
                 (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
 
-            setTimeout(() => {
-                navigate(dashboardRoute, { replace: true });
-            }, 500);
+            // Hydrate full profile (name, jobTitle, etc.) before dashboard renders
+            try {
+                const session = await dispatch(checkAuthSession()).unwrap();
+                if (session?.timezoneContext) {
+                    dispatch(setTimezoneContext(session.timezoneContext));
+                } else if (session?.timezone) {
+                    dispatch(setTimezoneContext({ timezone: session.timezone }));
+                }
+            } catch {
+                // Login cookies are set; proceed with partial profile from login response
+            }
+
+            navigate(dashboardRoute, { replace: true });
         } catch (err) {
             
             // Handle different types of errors

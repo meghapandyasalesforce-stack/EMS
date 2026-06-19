@@ -25,13 +25,29 @@ const MyRegularizationRequests = () => {
     });
     const [submitting, setSubmitting] = useState(false);
     const [limits, setLimits] = useState(null);
+    const [limitsLoading, setLimitsLoading] = useState(true);
+
+    const canCreateRequest = !limitsLoading && limits?.canSubmit === true;
+
+    const getLimitBlockMessage = () => {
+        if (!limits) return 'Unable to verify regularization limits. Please try again later.';
+        if (!limits.enabled) return 'Regularization is currently disabled for your organization.';
+        if (!limits.unlimited && limits.remaining === 0) {
+            return `Monthly regularization limit reached (max ${limits.allowedPerMonth} requests).`;
+        }
+        return 'You cannot submit a regularization request right now.';
+    };
 
     useEffect(() => {
         fetchRequests();
-        fetchLimits();
     }, [filterStatus]);
 
+    useEffect(() => {
+        fetchLimits();
+    }, []);
+
     const fetchLimits = async () => {
+        setLimitsLoading(true);
         try {
             const response = await axios.get('/v1/both/attendance-regularization/limits', {
                 withCredentials: true
@@ -39,12 +55,21 @@ const MyRegularizationRequests = () => {
             setLimits(response.data?.data ?? null);
         } catch {
             setLimits(null);
+        } finally {
+            setLimitsLoading(false);
         }
     };
 
     useEffect(() => {
         const prefill = location.state?.prefillRegularization;
-        if (!prefill) return;
+        if (!prefill || limitsLoading) return;
+
+        navigate(location.pathname, { replace: true, state: null });
+
+        if (!canCreateRequest) {
+            toast.warning(getLimitBlockMessage());
+            return;
+        }
 
         setFormData({
             attendanceDate: prefill.attendanceDate || '',
@@ -55,10 +80,7 @@ const MyRegularizationRequests = () => {
             reason: prefill.reason || ''
         });
         setShowCreateModal(true);
-
-        // Clear route state so refreshes/re-renders don't reopen the modal.
-        navigate(location.pathname, { replace: true, state: null });
-    }, [location.pathname, location.state, navigate]);
+    }, [location.pathname, location.state, navigate, limitsLoading, canCreateRequest]);
 
     const fetchRequests = async () => {
         try {
@@ -77,6 +99,11 @@ const MyRegularizationRequests = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!canCreateRequest) {
+            toast.warning(getLimitBlockMessage());
+            return;
+        }
         
         if (!formData.attendanceDate || !formData.reason) {
             toast.warning('Please fill in all required fields');
@@ -155,6 +182,7 @@ const MyRegularizationRequests = () => {
             );
             toast.success('Request cancelled successfully');
             fetchRequests();
+            fetchLimits();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to cancel request');
         }
@@ -193,7 +221,9 @@ const MyRegularizationRequests = () => {
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">My Attendance Regularization Requests</h1>
                             <p className="text-gray-600 mt-1">Request corrections for your attendance records</p>
-                            {limits && (
+                            {limitsLoading ? (
+                                <p className="text-sm text-gray-500 mt-1">Loading monthly regularization limit...</p>
+                            ) : limits ? (
                                 <p className="text-sm text-gray-500 mt-1">
                                     {!limits.enabled
                                         ? 'Regularization is currently disabled for your organization.'
@@ -201,11 +231,21 @@ const MyRegularizationRequests = () => {
                                             ? `${limits.usedThisMonth} request(s) submitted this month (no monthly limit).`
                                             : `${limits.usedThisMonth} of ${limits.allowedPerMonth} monthly request(s) used (${limits.remaining} remaining).`}
                                 </p>
+                            ) : (
+                                <p className="text-sm text-amber-600 mt-1">
+                                    Could not load regularization limits. New requests are temporarily unavailable.
+                                </p>
                             )}
                         </div>
                         <button
-                            onClick={() => setShowCreateModal(true)}
-                            disabled={limits && !limits.canSubmit}
+                            onClick={() => {
+                                if (!canCreateRequest) {
+                                    toast.warning(getLimitBlockMessage());
+                                    return;
+                                }
+                                setShowCreateModal(true);
+                            }}
+                            disabled={!canCreateRequest}
                             className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <FaPlus />
@@ -424,7 +464,7 @@ const MyRegularizationRequests = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={submitting}
+                                    disabled={submitting || !canCreateRequest}
                                     className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     {submitting ? (

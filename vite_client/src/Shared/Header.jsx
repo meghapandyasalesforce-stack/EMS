@@ -13,6 +13,7 @@ import { persistor } from '../context/store';
 import NotificationDropdown from '../components/NotificationDropdown';
 import { getNavigationItems } from '../utils/navigationConfig';
 import RoleBucketBadges from '../components/RoleBucketBadges';
+import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
 
 const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -26,9 +27,13 @@ const Header = () => {
     const employee = useSelector((state) => state.employeeDetails.employee);
     const permissions = useSelector((state) => state.auth.permissions) || [];
     const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+    const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
     const { username, email } = useMemo(() => {
-        return user ? { username: user.name || user.username, email: user.email } : { username: null, email: null };
-    }, [user]);
+        const name = getProfileDisplayName(profile, user, employee);
+        return user || employee
+            ? { username: name || null, email: (user?.email || employee?.email) ?? null }
+            : { username: null, email: null };
+    }, [profile, user, employee]);
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 

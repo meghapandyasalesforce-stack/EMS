@@ -66,6 +66,24 @@ export const getActiveAttendanceRule = async (organizationId, employee = null) =
 };
 
 /**
+ * Clear cached active attendance rule (call after rule create/update)
+ * @param {string} organizationId - Organization ID
+ */
+export const invalidateActiveAttendanceRuleCache = async (organizationId) => {
+    if (!organizationId) return;
+    try {
+        const cacheKey = `attendance_rule:${organizationId}:active`;
+        const { deleteCache } = await import('./cache.js');
+        await deleteCache(cacheKey);
+    } catch (error) {
+        logger.warn('Failed to invalidate active attendance rule cache', {
+            error: error.message,
+            organizationId
+        });
+    }
+};
+
+/**
  * Check if employee is exempt from attendance rules
  * @param {Object} employee - Employee object
  * @param {Object} rule - Attendance rule

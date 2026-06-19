@@ -32,7 +32,7 @@ import NotificationFeed from './NotificationFeed';
 import PasswordResetPopup from '../PasswordResetPopup';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
-import { mergeSessionProfile } from '../../utils/profileUtils';
+import { mergeSessionProfile, getProfileDisplayName } from '../../utils/profileUtils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from 'date-fns';
 import axios from '../../utils/axios';
 
@@ -141,6 +141,11 @@ function DashboardEmployee() {
     const profile = useMemo(
         () => mergeSessionProfile(user, employee),
         [user, employee]
+    );
+
+    const displayName = useMemo(
+        () => getProfileDisplayName(profile, user, employee),
+        [profile, user, employee]
     );
 
     const departmentLabel = useMemo(() => {
@@ -456,7 +461,7 @@ function DashboardEmployee() {
                                 <ProfilePicture user={profile || user} size="lg" />
                                 <div className="min-w-0">
                                     <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
-                                        Welcome back, {profile?.name || 'User'}!
+                                        Welcome back{displayName ? `, ${displayName}` : ''}!
                                     </h1>
                                     <p className="mt-0.5 text-sm text-slate-600">
                                         {[profile?.jobTitle || 'Employee', departmentLabel].filter(Boolean).join(' · ')}
