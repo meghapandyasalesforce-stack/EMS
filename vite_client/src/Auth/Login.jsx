@@ -177,6 +177,9 @@ function Login() {
 
             localStorage.setItem('role', userRole);
             localStorage.setItem('email', form.email);
+            if (data.csrfToken) {
+                localStorage.setItem('csrfToken', data.csrfToken);
+            }
             if (Array.isArray(data.availablePortals)) {
                 localStorage.setItem('availablePortals', JSON.stringify(data.availablePortals));
             }
@@ -220,7 +223,11 @@ function Login() {
             } else if (err.response?.status === 401) {
                 toast.error('Invalid credentials. Please check your email and password.');
             } else if (err.response?.status === 403) {
-                toast.error('Account inactive. Please contact HR or Admin.');
+                const serverMessage = err.response?.data?.message;
+                toast.error(
+                    serverMessage ||
+                        'Access denied. If your account should be active, try clearing site cookies and signing in again.'
+                );
             } else if (err.response?.status >= 500) {
                 toast.error('Server error. Please try again later.');
             } else {

@@ -2,21 +2,50 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../../utils/axios';
 import { ADMIN_AUTH_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from './../../utils/constant';
 
+const resolveSessionUser = (payload, existingUser) => {
+  if (payload?.employee) {
+    return { ...payload.employee, role: payload.employee.role || 'employee' };
+  }
+  if (payload?.user) {
+    return { ...payload.user, role: payload.user.role || 'admin' };
+  }
+  return existingUser || null;
+};
+
 export const checkAuthSession = createAsyncThunk(
   'auth/checkAuthSession',
   async (_, { rejectWithValue }) => {
     try {
-      // Lightweight session verification used on app bootstrap.
-      // If this fails (401/404), caller should treat session as invalid.
-      const [profileRes, permRes] = await Promise.all([
-        axios.get('/v1/both/profile-details/get-my-details', { withCredentials: true }),
-        axios.get(`${UNIFIED_AUTH_ENDPOINT}/permissions`, { withCredentials: true }).catch(() => null),
-      ]);
+      const permRes = await axios.get(`${UNIFIED_AUTH_ENDPOINT}/permissions`, {
+        withCredentials: true,
+      });
       const permData = permRes?.data?.data || permRes?.data || {};
+
+      let employee = null;
+      let user = null;
+      let timezoneContext = null;
+      let timezone = null;
+
+      try {
+        const profileRes = await axios.get('/v1/both/profile-details/get-my-details', {
+          withCredentials: true,
+        });
+        employee = profileRes.data?.employee || null;
+        user = profileRes.data?.user || null;
+        timezoneContext = profileRes.data?.timezoneContext || null;
+        timezone = profileRes.data?.timezone || null;
+      } catch (profileError) {
+        const role = localStorage.getItem('role');
+        if (role === 'employee') {
+          throw profileError;
+        }
+      }
+
       return {
-        employee: profileRes.data?.employee || null,
-        timezoneContext: profileRes.data?.timezoneContext || null,
-        timezone: profileRes.data?.timezone || null,
+        employee,
+        user,
+        timezoneContext,
+        timezone,
         permissions: permData.permissions || [],
         roleBuckets: permData.roleBuckets || [],
         permissionFlags: permData.permissionFlags || permData.flags || {},
@@ -96,7 +125,10 @@ const authSlice = createSlice({
       })
       .addCase(checkAuthSession.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload?.employee ?? action.payload;
+        const resolvedUser = resolveSessionUser(action.payload, state.user);
+        if (resolvedUser) {
+          state.user = resolvedUser;
+        }
         state.permissions = action.payload?.permissions || [];
         state.roleBuckets = action.payload?.roleBuckets || [];
         state.permissionFlags = action.payload?.permissionFlags || {};

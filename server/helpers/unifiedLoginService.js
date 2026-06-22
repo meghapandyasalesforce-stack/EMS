@@ -1,7 +1,6 @@
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
 import Organization from '../models/organization.model.js';
-import logger from './logger.js';
 import { normalizeEmail } from './authHelpers.js';
 import {
   isOrgAdminUser,
@@ -13,46 +12,49 @@ import { getDashboardRouteForUser } from './dashboardRouteHelper.js';
 import { getCachedTimezoneContext } from './orgContextCache.js';
 import { resolveAuthContext, getDataScope } from './permissionService.js';
 
+/** Public inbox domains — many orgs can share these; never use as org domain key. */
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'yahoo.co.in',
+  'hotmail.com',
+  'outlook.com',
+  'live.com',
+  'icloud.com',
+  'proton.me',
+  'protonmail.com',
+]);
+
 export const resolveOrganizationFromEmail = async (normalizedEmail, requestId = null) => {
-  const emailDomain = normalizedEmail.split('@')[1];
+  const emailParts = normalizedEmail.split('@');
+  if (emailParts.length !== 2 || !emailParts[1]) {
+    return null;
+  }
+  const emailDomain = emailParts[1].toLowerCase();
+
+  // 1. Exact organization email (required for Gmail / personal-email org registrations)
   let organization = await Organization.findOne({
+    email: normalizedEmail,
+    isActive: true,
+  }).select('_id name email domain');
+
+  if (organization) {
+    return organization;
+  }
+
+  // 2. Shared public domains cannot identify a single tenant
+  if (PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+    return null;
+  }
+
+  // 3. Corporate domain match
+  organization = await Organization.findOne({
     domain: emailDomain,
     isActive: true,
   }).select('_id name email domain');
 
-  if (!organization) {
-    const organizations = await Organization.find({
-      email: {
-        $regex: new RegExp(
-          `@${emailDomain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
-          'i'
-        ),
-      },
-      isActive: true,
-    })
-      .select('_id name email domain')
-      .limit(1);
-
-    if (organizations.length > 0) {
-      organization = organizations[0];
-      if (!organization.domain) {
-        try {
-          await Organization.updateOne(
-            { _id: organization._id },
-            { $set: { domain: emailDomain.toLowerCase() } }
-          );
-          organization.domain = emailDomain.toLowerCase();
-        } catch (e) {
-          logger.warn('Failed to auto-populate organization domain', {
-            requestId,
-            error: e.message,
-          });
-        }
-      }
-    }
-  }
-
-  return organization;
+  return organization || null;
 };
 
 const findUserAndEmployee = async (normalizedEmail, organizationId) => {
@@ -64,10 +66,10 @@ const findUserAndEmployee = async (normalizedEmail, organizationId) => {
     Employee.findOne(emailFilter).select('+password userId'),
   ]);
 
-  if (!user && !organizationId) {
+  if (!user) {
     user = await User.findOne({ email: normalizedEmail }).select('+password');
   }
-  if (!employee && !organizationId) {
+  if (!employee) {
     employee = await Employee.findOne({ email: normalizedEmail }).select(
       '+password userId'
     );
@@ -165,13 +167,25 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
     return { ok: false, status: 400, code: 'VALIDATION', message: 'Invalid email format' };
   }
 
-  const organization = await resolveOrganizationFromEmail(normalizedEmail, requestId);
-  const organizationId = organization?._id || null;
+  let organization = await resolveOrganizationFromEmail(normalizedEmail, requestId);
 
   const { user, employee } = await findUserAndEmployee(
     normalizedEmail,
-    organizationId
+    organization?._id || null
   );
+
+  const organizationId =
+    user?.organizationId || employee?.organizationId || organization?._id || null;
+
+  if (
+    organizationId &&
+    (!organization || String(organization._id) !== String(organizationId))
+  ) {
+    organization = await Organization.findOne({
+      _id: organizationId,
+      isActive: true,
+    }).select('_id name email domain');
+  }
 
   if (!user && !employee) {
     return {
@@ -257,12 +271,11 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
 
   await resetLoginAttempts(session.authRecord);
 
-  const orgId =
-    organizationId || user?.organizationId || employee?.organizationId || null;
+  const orgId = organizationId;
 
   if (organization && employee && orgId && employee.organizationId) {
     const empOrgId = String(employee.organizationId);
-    const resolvedOrgId = String(organization._id);
+    const resolvedOrgId = String(orgId);
     if (empOrgId !== resolvedOrgId) {
       return {
         ok: false,

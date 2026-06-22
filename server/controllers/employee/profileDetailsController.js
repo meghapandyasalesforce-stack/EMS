@@ -1,4 +1,5 @@
 import Employee from '../../models/employee.model.js';
+import User from '../../models/user.model.js';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { validateAndNormalizeNationalId } from '../../helpers/nationalIdValidation.js';
@@ -865,8 +866,49 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
         const employeeId = req.employee?._id;
 
         if (!employeeId) {
-            return res.status(401).json({ 
-                message: 'Unauthorized. Please log in.' 
+            const adminUserId = req.user?._id || req.user?.id;
+            if (adminUserId) {
+                const userDoc = await User.findById(adminUserId)
+                    .select('name email phone title position role organizationId roles')
+                    .lean();
+
+                if (!userDoc) {
+                    return res.status(401).json({
+                        message: 'Unauthorized. Please log in.',
+                    });
+                }
+
+                let timezoneContext = null;
+                const organizationId = userDoc.organizationId || req.organizationId;
+                if (organizationId) {
+                    const { getTimezoneContext } = await import('../../helpers/organizationTimezoneService.js');
+                    timezoneContext = await getTimezoneContext(
+                        organizationId.toString?.() ? organizationId : organizationId
+                    );
+                }
+
+                return res.status(200).json({
+                    message: 'Your information has been retrieved successfully.',
+                    employee: null,
+                    user: {
+                        _id: userDoc._id,
+                        id: userDoc._id,
+                        name: userDoc.name,
+                        email: userDoc.email,
+                        phone: userDoc.phone,
+                        title: userDoc.title,
+                        position: userDoc.position,
+                        role: userDoc.role || 'admin',
+                        organizationId: userDoc.organizationId,
+                        platformRoles: userDoc.roles || [],
+                    },
+                    timezone: timezoneContext?.timezone || 'UTC',
+                    timezoneContext,
+                });
+            }
+
+            return res.status(401).json({
+                message: 'Unauthorized. Please log in.',
             });
         }
 

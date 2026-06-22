@@ -18,6 +18,7 @@ export default async function csrfProtection(req, res, next) {
     const allowlisted = [
         '/api/v1/employee/auth/login',
         '/api/v1/admin/auth/login',
+        '/api/v1/both/auth/login', // Unified login (must work even when stale session cookies exist)
         '/api/v1/employee/auth/register',
         '/api/v1/admin/auth/register',
         '/api/v1/organization/auth/register',
