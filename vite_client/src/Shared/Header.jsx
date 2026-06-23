@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
-import { logoutUser } from "../context/Auth/authSlice";
+import { logoutUser, setAvailablePortals, setActivePortal, clearPortals } from "../context/Auth/authSlice";
 import { clearEmployeeDetails } from "../context/employeeDetailsSlice";
 import { clearTimezoneContext } from "../context/timezoneSlice";
 import { resetAttendance } from "../context/attendanceSlice";
@@ -12,6 +12,8 @@ import { Fragment } from 'react';
 import { persistor } from '../context/store';
 import NotificationDropdown from '../components/NotificationDropdown';
 import { getNavigationItems } from '../utils/navigationConfig';
+import { deriveAvailablePortals, resolveInitialPortal } from '../utils/portalConfig';
+import PortalSwitcher from '../components/PortalSwitcher';
 import RoleBucketBadges from '../components/RoleBucketBadges';
 import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
 
@@ -27,6 +29,10 @@ const Header = () => {
     const employee = useSelector((state) => state.employeeDetails.employee);
     const permissions = useSelector((state) => state.auth.permissions) || [];
     const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+    const roleBuckets = useSelector((state) => state.auth.roleBuckets) || [];
+    const activePortal = useSelector((state) => state.auth.activePortal);
+    const availablePortals = useSelector((state) => state.auth.availablePortals) || [];
+    const authChecked = useSelector((state) => state.auth.authChecked);
     const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
     const { username, email } = useMemo(() => {
         const name = getProfileDisplayName(profile, user, employee);
@@ -48,11 +54,45 @@ const Header = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    useEffect(() => {
+        if (!authChecked || (!user && !employee)) return;
+
+        const portals = deriveAvailablePortals({
+            user,
+            employee,
+            roleBuckets,
+            permissionFlags,
+        });
+        const portalsKey = portals.map((p) => p.id).join(',');
+        const currentKey = availablePortals.map((p) => p.id).join(',');
+
+        if (portalsKey !== currentKey) {
+            dispatch(setAvailablePortals(portals));
+        }
+
+        if (!activePortal || !portals.some((p) => p.id === activePortal)) {
+            dispatch(
+                setActivePortal(resolveInitialPortal(portals, location.pathname))
+            );
+        }
+    }, [
+        authChecked,
+        user,
+        employee,
+        roleBuckets,
+        permissionFlags,
+        activePortal,
+        availablePortals,
+        location.pathname,
+        dispatch,
+    ]);
+
     const handleLogout = async () => {
         try {
             dispatch(resetAttendance());
             dispatch(clearEmployeeDetails());
             dispatch(clearTimezoneContext());
+            dispatch(clearPortals());
 
             await dispatch(logoutUser(email)).unwrap();
 
@@ -64,6 +104,9 @@ const Header = () => {
             localStorage.removeItem('organizationId');
             localStorage.removeItem('userId');
             localStorage.removeItem('isOrganizationLogin');
+            localStorage.removeItem('activePortal');
+            localStorage.removeItem('availablePortals');
+            localStorage.removeItem('employeeDashboardRoute');
             toast.success('Logged out successfully');
             navigate('/login');
         } catch (error) {
@@ -72,6 +115,7 @@ const Header = () => {
             dispatch(resetAttendance());
             dispatch(clearEmployeeDetails());
             dispatch(clearTimezoneContext());
+            dispatch(clearPortals());
             await persistor.purge();
 
             localStorage.removeItem('csrfToken');
@@ -80,6 +124,9 @@ const Header = () => {
             localStorage.removeItem('organizationId');
             localStorage.removeItem('userId');
             localStorage.removeItem('isOrganizationLogin');
+            localStorage.removeItem('activePortal');
+            localStorage.removeItem('availablePortals');
+            localStorage.removeItem('employeeDashboardRoute');
             navigate('/login');
         } finally {
             setLogoutModalOpen(false);
@@ -92,14 +139,22 @@ const Header = () => {
     const closeLogoutModal = () => setLogoutModalOpen(false);
 
     const navItems = useMemo(() => {
-        return getNavigationItems(user, employee, permissions, permissionFlags);
-    }, [user, employee, permissions, permissionFlags]);
+        return getNavigationItems(
+            user,
+            employee,
+            permissions,
+            permissionFlags,
+            activePortal
+        );
+    }, [user, employee, permissions, permissionFlags, activePortal]);
 
     const isAdminUser = useMemo(
         () => (user?.role || employee?.role || '').toLowerCase() === 'admin',
         [user, employee]
     );
-    const useLightEmployeeNav = !isAdminUser;
+    const useLightEmployeeNav = activePortal
+        ? activePortal === 'employee'
+        : !isAdminUser;
 
     // Highlight active route — exact match for '/', startsWith for all others
     const isActive = useCallback(
@@ -211,6 +266,7 @@ const Header = () => {
                                     <FaTimes className="text-xl" />
                                 </button>
                             </div>
+                            <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
                             <nav className="flex flex-col py-2">
                                 {navItems.map((item, index) => (
                                     <Link
@@ -269,6 +325,8 @@ const Header = () => {
                             <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>v</span>
                         </h3>
                     </div>
+
+                    <PortalSwitcher lightTheme={useLightEmployeeNav} />
 
                     {/* Nav links */}
                     <nav

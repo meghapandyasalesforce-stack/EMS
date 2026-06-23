@@ -46,17 +46,66 @@ const resolveNavFromRbac = (permissionFlags, role, position) => {
     return null;
 };
 
+const getNavigationForPortal = (portalId, { position, department, jobTitle, profile, permissions }) => {
+    switch (portalId) {
+        case 'admin':
+            return filterNavByPermissions(getAdminNavigation(), permissions);
+        case 'executive':
+            return filterNavByPermissions(getExecutiveNavigation(position), permissions);
+        case 'hr_manager':
+            return filterNavByPermissions(getHRNavigation(), permissions);
+        case 'payroll_admin':
+            return filterNavByPermissions(getFinanceNavigation(), permissions);
+        case 'line_manager':
+            return filterNavByPermissions(getManagerNavigation(), permissions);
+        case 'employee':
+            return filterNavByPermissions(getEmployeeNavigation(), permissions);
+        default:
+            break;
+    }
+
+    if (isExecutive(position)) {
+        return filterNavByPermissions(getExecutiveNavigation(position), permissions);
+    }
+    const isHRRole = isHR(department, jobTitle, position);
+    const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
+    if (isHRRole) {
+        return filterNavByPermissions(getHRNavigation(), permissions);
+    }
+    if (isManagerRole) {
+        return filterNavByPermissions(getManagerNavigation(), permissions);
+    }
+    if (isFinance(department)) {
+        return filterNavByPermissions(getFinanceNavigation(), permissions);
+    }
+    if (isTech(department)) {
+        return filterNavByPermissions(getTechNavigation(), permissions);
+    }
+    return filterNavByPermissions(getEmployeeNavigation(), permissions);
+};
+
 export const getNavigationItems = (
     user,
     employee,
     permissions = [],
-    permissionFlags = {}
+    permissionFlags = {},
+    activePortal = null
 ) => {
     const profile = mergeSessionProfile(user, employee);
     const role = profile?.role || 'employee';
     const department = (profile?.department || '').toLowerCase().trim();
     const position = (profile?.position || '').toLowerCase().trim();
     const jobTitle = (profile?.jobTitle || '').toLowerCase().trim();
+
+    if (activePortal) {
+        return getNavigationForPortal(activePortal, {
+            position,
+            department,
+            jobTitle,
+            profile,
+            permissions,
+        });
+    }
 
     let items =
         resolveNavFromRbac(permissionFlags, role, position) ||
@@ -237,6 +286,7 @@ const getHRNavigation = () => [
     { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_TEAM] },
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
+    { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
     { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard />, permissions: [PERMISSIONS.ID_CARD_MANAGE] },
     { path: "/admin/reports", name: "HR Reports", icon: <FaFileAlt /> },

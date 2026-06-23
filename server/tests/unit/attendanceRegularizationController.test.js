@@ -82,7 +82,7 @@ describe('Attendance Regularization Controller', () => {
         expect(res.json).toHaveBeenCalledWith(
             expect.objectContaining({
                 success: false,
-                message: 'You can only reject regularization requests for employees linked to you.'
+                message: 'You can only reject regularization requests for employees linked to you or assigned to you.'
             })
         );
     });

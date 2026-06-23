@@ -3,7 +3,7 @@ import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, sendPaginatedResponse, createPaginationMeta } from '../../helpers/paginationHelper.js';
-import { getManagerEmployeeIds, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerRegularizationScopeFilter, canLineManagerAccessRegularization, isAssignedRegularizationApprover } from '../../helpers/managerHelper.js';
 import { harmonizeRegularizationRequestedTimes } from '../../helpers/attendanceRegularizationTimeHelper.js';
 import { ApprovalInstance } from '../../models/approvalWorkflow.model.js';
 import { initiateApproval } from '../../services/approvalWorkflowService.js';
@@ -449,13 +449,13 @@ export const getRegularizationRequestsForManager = async (req, res) => {
             // Example: Manager "Arun Kumar" sees requests for employees with manager="Arun Kumar" or "Arun"
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
 
-            // Team scope: any direct/indirect report may regularize (workflow assigns step approvers)
-            query.employeeId = { $in: managerEmployeeIds };
+            Object.assign(query, buildManagerRegularizationScopeFilter(req.employee, managerEmployeeIds));
 
             logger.info('Manager filtering regularization requests by team', {
                 managerId: managerId,
                 managerName: managerName,
-                employeeCount: managerEmployeeIds.length
+                employeeCount: managerEmployeeIds.length,
+                includesAssignedToManager: true
             });
         } else if (req.user) {
             // Admin can see all requests
@@ -572,9 +572,10 @@ export const approveRegularization = async (req, res) => {
                 });
             }
             
-            employeeLinked = isEmployeeLinkedToManager(employee, req.employee);
-            
-            if (!employeeLinked) {
+            employeeLinked = isEmployeeLinkedToManager(employee, req.employee)
+                || isAssignedRegularizationApprover(regularizationRequest, req.employee);
+
+            if (!canLineManagerAccessRegularization(req, regularizationRequest, employee)) {
                 const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
                 logger.warn('Manager trying to approve regularization for unlinked employee', {
                     managerId: req.employee._id,
@@ -584,7 +585,7 @@ export const approveRegularization = async (req, res) => {
                 });
                 return res.status(403).json({
                     success: false,
-                    message: 'You can only approve regularization requests for employees linked to you.'
+                    message: 'You can only approve regularization requests for employees linked to you or assigned to you.'
                 });
             }
         }
@@ -718,8 +719,10 @@ export const rejectRegularization = async (req, res) => {
                 });
             }
 
-            employeeLinked = isEmployeeLinkedToManager(employee, req.employee);
-            if (!employeeLinked) {
+            employeeLinked = isEmployeeLinkedToManager(employee, req.employee)
+                || isAssignedRegularizationApprover(regularizationRequest, req.employee);
+
+            if (!canLineManagerAccessRegularization(req, regularizationRequest, employee)) {
                 const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
                 logger.warn('Manager trying to reject regularization for unlinked employee', {
                     managerId: req.employee._id,
@@ -729,7 +732,7 @@ export const rejectRegularization = async (req, res) => {
                 });
                 return res.status(403).json({
                     success: false,
-                    message: 'You can only reject regularization requests for employees linked to you.'
+                    message: 'You can only reject regularization requests for employees linked to you or assigned to you.'
                 });
             }
         }

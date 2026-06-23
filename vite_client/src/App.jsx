@@ -6,7 +6,7 @@ import InstallPrompt from './components/InstallPrompt';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import { checkAuthSession } from './context/Auth/authSlice';
-import { clearEmployeeDetails } from './context/employeeDetailsSlice';
+import { clearEmployeeDetails, setEmployeeProfile } from './context/employeeDetailsSlice';
 import { fetchOrganizationTimezone, setTimezoneContext, clearTimezoneContext } from './context/timezoneSlice';
 import {
   authRoutes,
@@ -53,6 +53,11 @@ function App() {
                         dispatch(setTimezoneContext(ctx));
                     } else if (result.payload?.employee) {
                         dispatch(fetchOrganizationTimezone());
+                    }
+                    if (result.payload?.employee) {
+                        dispatch(setEmployeeProfile(result.payload.employee));
+                    } else if (!result.payload?.user) {
+                        dispatch(clearEmployeeDetails());
                     }
                 }
                 if (checkAuthSession.rejected.match(result)) {

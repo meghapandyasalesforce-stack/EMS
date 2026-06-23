@@ -93,6 +93,8 @@ const authSlice = createSlice({
     roleBuckets: [],
     permissionFlags: {},
     dataScope: 'self',
+    activePortal: null,
+    availablePortals: [],
     error: null,
     authChecked: false,
   },
@@ -115,6 +117,31 @@ const authSlice = createSlice({
       state.roleBuckets = [];
       state.permissionFlags = {};
       state.dataScope = 'self';
+    },
+    setActivePortal: (state, action) => {
+      state.activePortal = action.payload;
+      if (action.payload) {
+        localStorage.setItem('activePortal', action.payload);
+      } else {
+        localStorage.removeItem('activePortal');
+      }
+    },
+    setAvailablePortals: (state, action) => {
+      state.availablePortals = action.payload || [];
+    },
+    initializePortals: (state, action) => {
+      const { portals = [], activePortal = null } = action.payload || {};
+      state.availablePortals = portals;
+      state.activePortal = activePortal;
+      if (activePortal) {
+        localStorage.setItem('activePortal', activePortal);
+      }
+    },
+    clearPortals: (state) => {
+      state.activePortal = null;
+      state.availablePortals = [];
+      localStorage.removeItem('activePortal');
+      localStorage.removeItem('availablePortals');
     },
   },
   extraReducers: (builder) => {
@@ -143,6 +170,8 @@ const authSlice = createSlice({
         state.roleBuckets = [];
         state.permissionFlags = {};
         state.dataScope = 'self';
+        state.activePortal = null;
+        state.availablePortals = [];
         state.error = action.payload || null;
         state.authChecked = true;
       })
@@ -157,6 +186,8 @@ const authSlice = createSlice({
         state.roleBuckets = [];
         state.permissionFlags = {};
         state.dataScope = 'self';
+        state.activePortal = null;
+        state.availablePortals = [];
         state.error = null;
         state.authChecked = true;
         // Attendance will be cleared by redux-persist purge in logout handler
@@ -170,5 +201,14 @@ const authSlice = createSlice({
   },
 });
 
-export const { setLoading, setUser, setAuthPermissions, clearAuthPermissions } = authSlice.actions;
+export const {
+  setLoading,
+  setUser,
+  setAuthPermissions,
+  clearAuthPermissions,
+  setActivePortal,
+  setAvailablePortals,
+  initializePortals,
+  clearPortals,
+} = authSlice.actions;
 export default authSlice.reducer;

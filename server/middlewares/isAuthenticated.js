@@ -1,6 +1,7 @@
 import logger from "../helpers/logger.js";
 import { extractToken, verifyToken, handleAuthError, attachUserToRequest, verifyPasswordNotChanged } from "./authHelpers.js";
 import Employee from "../models/employee.model.js";
+import { enrichEmployeeRoleFlags } from "../helpers/functionalRolesHelper.js";
 
 const isAuthenticated = async (req, res, next) => {
     try {
@@ -85,7 +86,7 @@ const isAuthenticated = async (req, res, next) => {
                 });
             }
 
-            req.employee = employee;
+            req.employee = enrichEmployeeRoleFlags(employee);
             req.organizationId = employee.organizationId || decoded.organizationId || null;
 
             attachUserToRequest(req, decoded);

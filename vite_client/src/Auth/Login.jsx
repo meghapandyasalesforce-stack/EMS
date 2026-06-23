@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { setLoading, setUser, setAuthPermissions, checkAuthSession } from '../context/Auth/authSlice';
+import { setLoading, setUser, setAuthPermissions, checkAuthSession, initializePortals } from '../context/Auth/authSlice';
 import { setEmployeeProfile, clearEmployeeDetails } from '../context/employeeDetailsSlice';
 import { setTimezoneContext } from '../context/timezoneSlice';
 import { toast } from 'react-toastify';
@@ -9,6 +9,7 @@ import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { ORGANIZATION_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from '../utils/constant';
+import { deriveAvailablePortals, resolveInitialPortal } from '../utils/portalConfig';
 import logger from '../utils/logger';
 
 function Login() {
@@ -175,17 +176,39 @@ function Login() {
                 }));
             }
 
-            localStorage.setItem('role', userRole);
-            localStorage.setItem('email', form.email);
             if (data.csrfToken) {
                 localStorage.setItem('csrfToken', data.csrfToken);
-            }
-            if (Array.isArray(data.availablePortals)) {
-                localStorage.setItem('availablePortals', JSON.stringify(data.availablePortals));
             }
             if (data.employeeDashboardRoute) {
                 localStorage.setItem('employeeDashboardRoute', data.employeeDashboardRoute);
             }
+
+            const loginUser = data.user
+                ? {
+                    ...data.user,
+                    _id: data.user._id ?? data.user.id,
+                    role: userRole,
+                    position: data.employee?.position || data.user.position,
+                }
+                : data.employee
+                    ? { ...data.employee, role: 'employee' }
+                    : null;
+
+            const portals = deriveAvailablePortals({
+                user: loginUser,
+                employee: data.employee || null,
+                roleBuckets: data.roleBuckets || [],
+                permissionFlags: data.permissionFlags || {},
+            });
+            const dashboardRoute =
+                data.dashboardRoute ||
+                (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
+            const activePortal = resolveInitialPortal(portals, dashboardRoute);
+            dispatch(initializePortals({ portals, activePortal }));
+            localStorage.setItem('availablePortals', JSON.stringify(portals.map((p) => p.id)));
+
+            localStorage.setItem('role', userRole);
+            localStorage.setItem('email', form.email);
 
             const mustReset =
                 data.employee?.mustResetPassword &&
@@ -198,9 +221,8 @@ function Login() {
             }
 
             toast.success('Login successful!');
-            const dashboardRoute =
-                data.dashboardRoute ||
-                (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
+            const homeRoute =
+                portals.find((p) => p.id === activePortal)?.home || dashboardRoute;
 
             // Hydrate full profile (name, jobTitle, etc.) before dashboard renders
             try {
@@ -214,7 +236,7 @@ function Login() {
                 // Login cookies are set; proceed with partial profile from login response
             }
 
-            navigate(dashboardRoute, { replace: true });
+            navigate(homeRoute, { replace: true });
         } catch (err) {
             
             // Handle different types of errors

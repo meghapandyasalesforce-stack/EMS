@@ -108,6 +108,55 @@ export const isEmployeeLinkedToManager = (employee, managerEmployee) => {
  * @param {Object} managerEmployee - Manager's employee record
  * @returns {Promise<Array>} - Array of employee IDs
  */
+/**
+ * Whether this regularization request is assigned to the given manager (request.managerId).
+ */
+export const isAssignedRegularizationApprover = (regularizationRequest, managerEmployee) => {
+    if (!regularizationRequest?.managerId || !managerEmployee?._id) {
+        return false;
+    }
+    const assignedId = regularizationRequest.managerId?._id || regularizationRequest.managerId;
+    return String(assignedId) === String(managerEmployee._id);
+};
+
+/**
+ * Mongo filter: team reports OR requests explicitly assigned to this manager.
+ */
+export const buildManagerRegularizationScopeFilter = (managerEmployee, managerEmployeeIds = []) => {
+    const managerId = managerEmployee._id;
+    const orClauses = [{ managerId }];
+
+    if (managerEmployeeIds.length > 0) {
+        orClauses.unshift({ employeeId: { $in: managerEmployeeIds } });
+    }
+
+    return { $or: orClauses };
+};
+
+/**
+ * Line manager may act when the employee reports to them or the request is assigned to them.
+ */
+export const canLineManagerAccessRegularization = (
+    req,
+    regularizationRequest,
+    employee = null
+) => {
+    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    if (!isManager || !req.employee) {
+        return true;
+    }
+
+    if (isAssignedRegularizationApprover(regularizationRequest, req.employee)) {
+        return true;
+    }
+
+    if (employee && isEmployeeLinkedToManager(employee, req.employee)) {
+        return true;
+    }
+
+    return false;
+};
+
 export const getManagerEmployeeIds = async (EmployeeModel, organizationId, managerEmployee) => {
     if (!managerEmployee || !managerEmployee._id) {
         return [];

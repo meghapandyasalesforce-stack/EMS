@@ -76,3 +76,26 @@ export const getEffectiveFunctionalRoles = (employee) => {
   const roles = Array.isArray(employee?.functionalRoles) ? employee.functionalRoles : [];
   return roles.length > 0 ? roles : deriveFunctionalRolesFromLegacy(employee);
 };
+
+const EXECUTIVE_ROLE_KEYS = new Set(['executive', 'ceo', 'cto', 'cfo', 'vp']);
+
+/**
+ * Attach legacy controller flags (isManager, isHR, etc.) from functional roles.
+ */
+export const enrichEmployeeRoleFlags = (employee) => {
+  if (!employee) return employee;
+
+  const effectiveRoles = getEffectiveFunctionalRoles(employee);
+  const jobTitle = (employee.jobTitle || '').toLowerCase().trim();
+  const isProjectManager =
+    effectiveRoles.includes('project_manager') || jobTitle === 'project manager';
+
+  return {
+    ...employee,
+    functionalRoles: effectiveRoles,
+    isHR: effectiveRoles.includes('hr'),
+    isManager: effectiveRoles.includes('manager'),
+    isProjectManager,
+    isExecutive: effectiveRoles.some((role) => EXECUTIVE_ROLE_KEYS.has(role)),
+  };
+};

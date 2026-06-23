@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import logger from "../helpers/logger.js";
+import { enrichEmployeeRoleFlags } from "../helpers/functionalRolesHelper.js";
 
 /**
  * Extract JWT token from request (cookie or Authorization header)
@@ -192,17 +193,17 @@ export const hydrateRequestIdentity = async (req, decoded, authContext) => {
             .select('-password -__v')
             .lean();
         if (fullEmployee) {
-            req.employee = {
+            req.employee = enrichEmployeeRoleFlags({
                 ...fullEmployee,
                 role: 'employee',
                 platformRoles,
-            };
+            });
         } else if (authContext.employee) {
-            req.employee = {
+            req.employee = enrichEmployeeRoleFlags({
                 ...authContext.employee,
                 role: 'employee',
                 platformRoles,
-            };
+            });
         }
     }
 
