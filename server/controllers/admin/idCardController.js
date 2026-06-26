@@ -477,6 +477,19 @@ export const downloadIdCard = async (req, res) => {
             return res.status(404).json({ message: 'ID card not found' });
         }
 
+        const requesterEmployeeId = req.employee?._id;
+        const cardEmployeeId = idCard.employeeId?._id || idCard.employeeId;
+        const isOwnCard = requesterEmployeeId && cardEmployeeId
+            && String(cardEmployeeId) === String(requesterEmployeeId);
+
+        if (requesterEmployeeId && !isOwnCard) {
+            const { loadRequesterHrStaff } = await import('../../helpers/functionalRolesHelper.js');
+            const isHrStaff = await loadRequesterHrStaff(req);
+            if (!isHrStaff) {
+                return res.status(403).json({ message: 'You can only download your own ID card' });
+            }
+        }
+
         if (!idCard.employeeId) {
             logger.warn('Cannot generate ID card PDF because employee reference is missing', {
                 idCardId: idCard._id

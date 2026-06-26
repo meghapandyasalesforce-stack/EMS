@@ -61,6 +61,7 @@ export const ROUTE_PERMISSIONS = {
   salaryStructure: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE],
   adminSettings: [PERMISSIONS.ORG_SETTINGS_MANAGE],
   roleHierarchy: [PERMISSIONS.ORG_SETTINGS_MANAGE],
+  hrDocuments: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE],
 };
 
 export const hasPermission = (permissions, key) => {

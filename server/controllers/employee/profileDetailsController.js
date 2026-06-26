@@ -4,12 +4,20 @@ import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { validateAndNormalizeNationalId } from '../../helpers/nationalIdValidation.js';
 import { mergeLegacyAndCanonicalEmployeeDocuments } from '../../helpers/employeeDocumentUploadHelper.js';
-import Notification from '../../models/notification.model.js';
+import { getEffectiveFunctionalRoles } from '../../helpers/functionalRolesHelper.js';
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { sanitizeTaxDeclarationInput } from '../../helpers/taxDeclarationHelper.js';
 import { getIndianFinancialYear } from '../../helpers/incomeTaxCalculation.js';
 
-// Employee updates their additional information
+/** Only HR staff may view another employee's uploaded documents (not admin/manager). */
+const isRequesterHrStaff = async (req) => {
+  if (!req.employee?._id) return false;
+  const requester = await Employee.findById(req.employee._id)
+    .select('functionalRoles department position jobTitle')
+    .lean();
+  return !!(requester && getEffectiveFunctionalRoles(requester).includes('hr'));
+};
+
 // Employee updates their additional information
 export const updateEmployeeInfo = async (req, res) => {
     try {
@@ -848,10 +856,14 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
       logger.info('Admin fetched employee', { employeeId, salary: employee.salary });
     }
 
-    await mergeLegacyAndCanonicalEmployeeDocuments(employee);
+    const requesterIsHr = await isRequesterHrStaff(req);
+    if (requesterIsHr) {
+      await mergeLegacyAndCanonicalEmployeeDocuments(employee);
+    } else {
+      delete employee.documents;
+    }
 
     res.status(200).json({ employee });
-
   } catch (error) {
     logger.error('Error fetching employee info', { error: error.message, stack: error.stack });
     res.status(500).json({ 

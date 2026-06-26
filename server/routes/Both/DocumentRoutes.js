@@ -1,6 +1,7 @@
 import express from 'express';
 import {
     getDocuments,
+    downloadDocumentById,
     requestDocument,
     getDocumentRequests,
     uploadEmployeeDocument,
@@ -17,6 +18,10 @@ const router = express.Router();
 // Documents (route is already mounted at /api/v1/both/documents, so use / here)
 router.route('/')
     .get(isAuthenticatedBoth, readLimiter, getDocuments);
+
+// Authenticated file download (works when nginx only proxies /api, not /uploads)
+router.route('/:id/download')
+    .get(isAuthenticatedBoth, readLimiter, downloadDocumentById);
 
 // Get shared documents (for employees)
 router.route('/shared')

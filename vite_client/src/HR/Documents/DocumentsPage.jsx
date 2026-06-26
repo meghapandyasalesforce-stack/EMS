@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import {
     FaFileAlt,
     FaDownload,
@@ -13,10 +13,11 @@ import {
     FaShareAlt,
     FaPlus,
     FaFilePdf,
-    FaFileWord
+    FaFileWord,
+    FaTimes,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import axios, { getUploadUrl } from '../../utils/axios';
+import axios, { fetchDocumentWithFallback, getDocumentDownloadUrl, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import logger from '../../utils/logger';
 import { isHR } from '../../utils/managerHelper';
@@ -58,6 +59,50 @@ function formatEmployeeFullName(person) {
     const email = String(person.email || '').trim();
     if (email) return email;
     return 'Unknown';
+}
+
+/** Which employee this document belongs to (for HR list). */
+function resolveDocumentEmployee(doc) {
+    const isPopulatedPerson = (value) =>
+        value && typeof value === 'object' && (value.name || value.lastName || value.email);
+
+    const uploader = isPopulatedPerson(doc.uploadedBy) ? doc.uploadedBy : null;
+    const related =
+        doc.relatedTo === 'Employee' && isPopulatedPerson(doc.relatedId) ? doc.relatedId : null;
+    const person = uploader || related;
+
+    const orgCategories = new Set(['Company', 'Policy', 'Training', 'Compliance']);
+    if (person) {
+        return {
+            person,
+            name: formatEmployeeFullName(person),
+            code: person.employeeId || null,
+            department: person.department || null,
+            isOrganizationDoc: false,
+        };
+    }
+
+    if (orgCategories.has(doc.category) || doc.relatedTo === 'Policy') {
+        return {
+            person: null,
+            name: 'Organization',
+            code: null,
+            department: null,
+            isOrganizationDoc: true,
+        };
+    }
+
+    return {
+        person: null,
+        name: 'Unknown employee',
+        code: null,
+        department: null,
+        isOrganizationDoc: false,
+    };
+}
+
+function documentDisplayTitle(doc) {
+    return doc.name || doc.fileName || 'Untitled document';
 }
 
 function initialsFromPerson(person) {
@@ -116,8 +161,6 @@ const DocumentsPage = () => {
     const employee = useSelector((state) => state.employeeDetails.employee);
 
     const isHRUser = useMemo(() => {
-        const userRole = user?.role || employee?.role;
-        if (userRole === 'admin') return true;
         const userObj = user || employee;
         return isHR(userObj);
     }, [user, employee]);
@@ -135,6 +178,15 @@ const DocumentsPage = () => {
     const debouncedSearch = useDebouncedValue(searchInput, 350);
     const [pendingNotes, setPendingNotes] = useState({});
     const [rejectingDoc, setRejectingDoc] = useState(null);
+    const [docActionLoading, setDocActionLoading] = useState({});
+    const [previewDoc, setPreviewDoc] = useState(null);
+
+    const closePreview = useCallback(() => {
+        setPreviewDoc((current) => {
+            if (current?.url) URL.revokeObjectURL(current.url);
+            return null;
+        });
+    }, []);
 
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploadFile, setUploadFile] = useState(null);
@@ -143,7 +195,7 @@ const DocumentsPage = () => {
     const [uploadDescription, setUploadDescription] = useState('');
     const [uploading, setUploading] = useState(false);
 
-    const PAGE_SIZE = 10;
+    const PAGE_SIZE = 50;
 
     const accessBucketsParam = useMemo(() => {
         const buckets = [];
@@ -304,13 +356,75 @@ const DocumentsPage = () => {
     };
 
     const copyShareLink = async (doc) => {
-        const path = getUploadUrl(doc.fileUrl);
-        const full = path?.startsWith('http') ? path : `${window.location.origin}${path || ''}`;
+        const full = getDocumentDownloadUrl(doc._id);
+        if (!full) {
+            toast.error('Could not copy link');
+            return;
+        }
         try {
-            await navigator.clipboard.writeText(full);
+            await navigator.clipboard.writeText(
+                full.startsWith('http') ? full : `${window.location.origin}${full}`
+            );
             toast.success('Link copied to clipboard');
         } catch {
             toast.error('Could not copy link');
+        }
+    };
+
+    const handlePreviewDocument = async (doc) => {
+        const docId = doc?._id;
+        if (!docId) {
+            toast.error('Document id missing');
+            return;
+        }
+        const employeeId = doc.uploadedBy?._id || doc.uploadedBy;
+        setDocActionLoading((prev) => ({ ...prev, [docId]: 'preview' }));
+        try {
+            const blob = await fetchDocumentWithFallback(docId, {
+                scope: 'admin',
+                fileUrl: doc.fileUrl,
+                employeeId,
+                inline: true,
+            });
+            const mimeType =
+                blob.type && !blob.type.includes('json') && blob.type !== 'application/octet-stream'
+                    ? blob.type
+                    : doc.mimeType || 'application/pdf';
+            const viewBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+            const url = URL.createObjectURL(viewBlob);
+            setPreviewDoc({
+                url,
+                title: doc.fileName || doc.name || 'Document',
+                mimeType,
+            });
+        } catch (error) {
+            logger.error('Error previewing document:', error);
+            toast.error(error?.message || 'Could not open document preview');
+        } finally {
+            setDocActionLoading((prev) => ({ ...prev, [docId]: null }));
+        }
+    };
+
+    const handleDownloadDocument = async (doc) => {
+        const docId = doc?._id;
+        if (!docId) {
+            toast.error('Document id missing');
+            return;
+        }
+        const employeeId = doc.uploadedBy?._id || doc.uploadedBy;
+        setDocActionLoading((prev) => ({ ...prev, [docId]: 'download' }));
+        try {
+            await saveDocumentDownload(docId, doc.fileName || doc.name || 'document', {
+                scope: 'admin',
+                fileUrl: doc.fileUrl,
+                employeeId,
+            });
+            toast.success('Download started');
+        } catch (error) {
+            logger.error('Error downloading document:', error);
+            toast.error(error?.message || 'Failed to download document');
+        } finally {
+            setDocActionLoading((prev) => ({ ...prev, [docId]: null }));
         }
     };
 
@@ -321,6 +435,10 @@ const DocumentsPage = () => {
 
     if (!listFetchEverCompleted.current && loading) {
         return <LoadingSpinner message="Loading documents..." />;
+    }
+
+    if (!isHRUser) {
+        return <Navigate to="/employee/documents-id" replace />;
     }
 
     return (
@@ -469,15 +587,53 @@ const DocumentsPage = () => {
                                                     <DocumentFileIcon doc={doc} className="w-8 h-8 text-theme-secondary" />
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <div className="font-semibold text-gray-900 truncate">{doc.fileName || doc.name}</div>
-                                                    <p className="text-sm text-gray-500 mt-0.5">
-                                                        Requested by{' '}
-                                                        <span className="text-gray-700 font-medium">
-                                                            {formatEmployeeFullName(doc.uploadedBy)}
-                                                        </span>
-                                                        <span className="text-gray-400"> • </span>
-                                                        {formatRelativeTime(doc.createdAt)}
-                                                    </p>
+                                                    {(() => {
+                                                        const owner = resolveDocumentEmployee(doc);
+                                                        return (
+                                                            <>
+                                                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                                                    <span className="font-semibold text-gray-900">
+                                                                        {owner.name}
+                                                                    </span>
+                                                                    {owner.code ? (
+                                                                        <span className="text-xs font-medium text-gray-500">
+                                                                            {owner.code}
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+                                                                <div className="mt-1 flex items-center gap-2 min-w-0">
+                                                                    <DocumentFileIcon doc={doc} className="w-4 h-4 text-theme-secondary shrink-0" />
+                                                                    <span className="text-sm text-gray-700 truncate">
+                                                                        {documentDisplayTitle(doc)}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                    Submitted {formatRelativeTime(doc.createdAt)}
+                                                                    {owner.isOrganizationDoc ? ' · Company document' : ''}
+                                                                </p>
+                                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handlePreviewDocument(doc)}
+                                                                        disabled={!!docActionLoading[doc._id]}
+                                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-theme-secondary transition disabled:opacity-50"
+                                                                    >
+                                                                        <FaEye className="w-3.5 h-3.5" />
+                                                                        {docActionLoading[doc._id] === 'preview' ? 'Opening…' : 'Preview'}
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDownloadDocument(doc)}
+                                                                        disabled={!!docActionLoading[doc._id]}
+                                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-theme-secondary transition disabled:opacity-50"
+                                                                    >
+                                                                        <FaDownload className="w-3.5 h-3.5" />
+                                                                        {docActionLoading[doc._id] === 'download' ? 'Downloading…' : 'Download'}
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                             <div className="flex flex-col gap-2 xl:w-[340px] shrink-0">
@@ -527,9 +683,9 @@ const DocumentsPage = () => {
                             <table className="min-w-full text-sm">
                                 <thead>
                                     <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50/80">
-                                        <th className="px-5 py-3">Document Name</th>
+                                        <th className="px-5 py-3">Employee</th>
+                                        <th className="px-5 py-3">Document</th>
                                         <th className="px-5 py-3">Category</th>
-                                        <th className="px-5 py-3">Uploaded By</th>
                                         <th className="px-5 py-3">Version</th>
                                         <th className="px-5 py-3">Status</th>
                                         <th className="px-5 py-3">Last Modified</th>
@@ -540,14 +696,32 @@ const DocumentsPage = () => {
                                     {documents.map((doc) => {
                                         const st = statusPill(doc);
                                         const Icon = fileIcon(doc);
+                                        const owner = resolveDocumentEmployee(doc);
                                         return (
                                             <tr key={doc._id} className="hover:bg-gray-50/80 transition-colors">
+                                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2 min-w-0 max-w-[220px]">
+                                                        <span className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold flex items-center justify-center shrink-0">
+                                                            {owner.isOrganizationDoc ? 'ORG' : initialsFromPerson(owner.person)}
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <div className="font-semibold text-gray-900 truncate">
+                                                                {owner.name}
+                                                            </div>
+                                                            {owner.code ? (
+                                                                <div className="text-xs text-gray-500 truncate">{owner.code}</div>
+                                                            ) : owner.department ? (
+                                                                <div className="text-xs text-gray-500 truncate">{owner.department}</div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                </td>
                                                 <td className="px-5 py-3.5">
                                                     <div className="flex items-center gap-2 min-w-0 max-w-xs sm:max-w-md">
                                                         <span className="shrink-0 p-2 rounded-lg bg-theme-secondary/10 text-theme-secondary">
                                                             <Icon className="w-4 h-4" />
                                                         </span>
-                                                        <span className="font-medium text-gray-900 truncate">{doc.name}</span>
+                                                        <span className="font-medium text-gray-900 truncate">{documentDisplayTitle(doc)}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-3.5 whitespace-nowrap">
@@ -556,16 +730,6 @@ const DocumentsPage = () => {
                                                     >
                                                         {doc.category || 'Other'}
                                                     </span>
-                                                </td>
-                                                <td className="px-5 py-3.5 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold flex items-center justify-center">
-                                                            {initialsFromPerson(doc.uploadedBy)}
-                                                        </span>
-                                                        <span className="text-gray-800 font-medium truncate max-w-[200px]">
-                                                            {formatEmployeeFullName(doc.uploadedBy)}
-                                                        </span>
-                                                    </div>
                                                 </td>
                                                 <td className="px-5 py-3.5 whitespace-nowrap text-gray-700">
                                                     v{doc.version ?? 1}
@@ -582,25 +746,22 @@ const DocumentsPage = () => {
                                                 </td>
                                                 <td className="px-5 py-3.5 text-right whitespace-nowrap">
                                                     <div className="inline-flex items-center gap-1 justify-end">
-                                                        <a
-                                                            href={getUploadUrl(doc.fileUrl) || '#'}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handlePreviewDocument(doc)}
                                                             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
                                                             title="View"
                                                         >
                                                             <FaEye className="w-4 h-4" />
-                                                        </a>
-                                                        <a
-                                                            href={getUploadUrl(doc.fileUrl) || '#'}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            download
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownloadDocument(doc)}
                                                             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-theme-secondary transition"
                                                             title="Download"
                                                         >
                                                             <FaDownload className="w-4 h-4" />
-                                                        </a>
+                                                        </button>
                                                         {isHRUser && (
                                                             <button
                                                                 type="button"
@@ -815,6 +976,40 @@ const DocumentsPage = () => {
                                 Reject
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* In-page document preview (same tab) */}
+            {previewDoc && (
+                <div className="fixed inset-0 z-[110] flex flex-col bg-slate-900/90">
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 bg-white border-b border-gray-200 shrink-0">
+                        <h3 className="font-semibold text-gray-800 truncate">{previewDoc.title}</h3>
+                        <button
+                            type="button"
+                            onClick={closePreview}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                        >
+                            <FaTimes className="w-3.5 h-3.5" />
+                            Close
+                        </button>
+                    </div>
+                    <div className="flex-1 min-h-0 bg-gray-100">
+                        {previewDoc.mimeType?.startsWith('image/') ? (
+                            <div className="flex items-center justify-center w-full h-full p-4">
+                                <img
+                                    src={previewDoc.url}
+                                    alt={previewDoc.title}
+                                    className="max-w-full max-h-full object-contain shadow-lg"
+                                />
+                            </div>
+                        ) : (
+                            <iframe
+                                src={previewDoc.url}
+                                title={previewDoc.title}
+                                className="w-full h-full border-0 bg-white"
+                            />
+                        )}
                     </div>
                 </div>
             )}

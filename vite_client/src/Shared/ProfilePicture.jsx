@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiCamera } from 'react-icons/fi';
-import { getUploadUrl } from '../utils/axios';
+import { getUploadUrl, getProfilePhotoUrl } from '../utils/axios';
 import logger from '../utils/logger';
 
 const ProfilePicture = ({ 
@@ -8,14 +8,24 @@ const ProfilePicture = ({
   size = 'md', 
   showEditButton = false, 
   onEditClick,
-  className = '' 
+  className = '',
+  /** @deprecated — avatars always use normalized square photos from server */
+  fit = 'cover',
 }) => {
   const sizeClasses = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-12 h-12 text-sm',
-    lg: 'w-16 h-16 text-lg',
-    xl: 'w-24 h-24 text-2xl',
-    '2xl': 'w-32 h-32 text-4xl'
+    sm: 'w-8 h-8',
+    md: 'w-12 h-12',
+    lg: 'w-16 h-16',
+    xl: 'w-24 h-24',
+    '2xl': 'w-32 h-32',
+  };
+
+  const textSizeClasses = {
+    sm: 'text-xs',
+    md: 'text-sm',
+    lg: 'text-lg',
+    xl: 'text-2xl',
+    '2xl': 'text-4xl',
   };
 
   const iconSizes = {
@@ -26,24 +36,8 @@ const ProfilePicture = ({
     '2xl': 'w-16 h-16'
   };
 
-  // Get the profile photo URL and convert relative paths to full URLs
-  // Handle both object format {url: "...", filename: "..."} and string format
-  let rawImageUrl = null;
-  if (user?.profilePhoto) {
-    if (typeof user.profilePhoto === 'string') {
-      rawImageUrl = user.profilePhoto;
-    } else if (user.profilePhoto.url) {
-      // Prefer url property if available (contains full path)
-      rawImageUrl = user.profilePhoto.url;
-    } else if (user.profilePhoto.filename) {
-      // If only filename is available, pass the whole object to getUploadUrl
-      // so it can construct the correct path
-      rawImageUrl = user.profilePhoto;
-    }
-  } else if (user?.profilePicture) {
-    rawImageUrl = typeof user.profilePicture === 'string' ? user.profilePicture : user.profilePicture.url;
-  }
-  const imageUrl = rawImageUrl ? getUploadUrl(rawImageUrl) : null;
+  // Get the profile photo URL (works on localhost via Vite proxy and in production via VITE_BACKEND_URL)
+  const imageUrl = getProfilePhotoUrl(user?.profilePhoto || user?.profilePicture);
   
   // Get initial for avatar
   const getInitials = () => {
@@ -64,50 +58,40 @@ const ProfilePicture = ({
   }, [user?.profilePhoto?.url, user?.profilePhoto?.filename, imageUrl]);
 
   return (
-    <div className={`relative ${className}`}>
-      <div className={`${sizeClasses[size]} rounded-full bg-gray-200 overflow-hidden flex items-center justify-center border-2 border-gray-300`}>
+    <div className={`relative inline-flex shrink-0 ${className}`}>
+      <div
+        className={`${sizeClasses[size]} relative aspect-square overflow-hidden rounded-full border-2 border-gray-200 bg-gray-100`}
+      >
         {imageUrl && !imageError ? (
-          <img
-            src={imageUrl}
-            alt="Profile Picture"
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={(e) => {
-              // Log error for debugging (both dev and prod to help diagnose Render issues)
-              logger.error('Failed to load profile image', {
-                imageUrl,
-                rawImageUrl,
-                profilePhoto: user?.profilePhoto,
-                error: e.type || 'unknown',
-                timestamp: new Date().toISOString()
-              });
-              
-              // Set error state to show fallback
-              setImageError(true);
-              
-              // Try to fetch the image directly to get more error details
-              if (imageUrl && typeof fetch !== 'undefined') {
-                fetch(imageUrl, { method: 'HEAD', mode: 'no-cors' })
-                  .catch((fetchError) => {
-                    logger.error('Image fetch error details', {
-                      url: imageUrl,
-                      error: fetchError.message,
-                      type: fetchError.name
-                    });
-                  });
-              }
-            }}
-            onLoad={() => {
-              // Image loaded successfully - reset error state and log in development
-              setImageError(false);
-              if (import.meta.env.DEV) {
-                logger.debug('Profile image loaded successfully', { imageUrl });
-              }
-            }}
-          />
+          <>
+            <div
+              role="img"
+              aria-label="Profile Picture"
+              className="absolute inset-0 scale-[1.12] bg-cover bg-no-repeat"
+              style={{
+                backgroundImage: `url("${imageUrl}")`,
+                backgroundPosition: 'center 22%',
+              }}
+            />
+            <img
+              src={imageUrl}
+              alt=""
+              aria-hidden="true"
+              className="hidden"
+              onError={() => {
+                logger.error('Failed to load profile image', {
+                  imageUrl,
+                  profilePhoto: user?.profilePhoto,
+                  timestamp: new Date().toISOString(),
+                });
+                setImageError(true);
+              }}
+              onLoad={() => setImageError(false)}
+            />
+          </>
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-secondary)] to-[var(--color-accent)] flex items-center justify-center shadow-inner">
-            <span className={`text-white font-bold ${sizeClasses[size].replace('w-', '')}`}>
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[var(--color-primary)] via-[var(--color-secondary)] to-[var(--color-accent)] shadow-inner">
+            <span className={`font-bold text-white ${textSizeClasses[size]}`}>
               {getInitials()}
             </span>
           </div>

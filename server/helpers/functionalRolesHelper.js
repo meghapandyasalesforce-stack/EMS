@@ -77,6 +77,20 @@ export const getEffectiveFunctionalRoles = (employee) => {
   return roles.length > 0 ? roles : deriveFunctionalRolesFromLegacy(employee);
 };
 
+/** True when employee record resolves to HR functional role (platform admin role ignored). */
+export const isHrStaffEmployee = (employee) =>
+  !!employee && getEffectiveFunctionalRoles(employee).includes('hr');
+
+/** Load requester's employee profile and check HR staff (not org admin alone). */
+export const loadRequesterHrStaff = async (req) => {
+  if (!req.employee?._id) return false;
+  const Employee = (await import('../models/employee.model.js')).default;
+  const employee = await Employee.findById(req.employee._id)
+    .select('functionalRoles department position jobTitle')
+    .lean();
+  return isHrStaffEmployee(employee);
+};
+
 const EXECUTIVE_ROLE_KEYS = new Set(['executive', 'ceo', 'cto', 'cfo', 'vp']);
 
 /**

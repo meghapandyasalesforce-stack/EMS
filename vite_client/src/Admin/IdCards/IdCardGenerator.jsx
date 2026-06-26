@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { isHR } from '../../utils/managerHelper';
 import {
   FiCreditCard,
   FiPlus,
@@ -134,16 +137,16 @@ const IdCardMiniPreview = ({ card, themeKey = 'mint' }) => {
     >
       <div className="relative h-20 px-3 pt-3" style={{ background: theme.headerGradient }}>
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2">
-          <div className="h-12 w-12 overflow-hidden rounded-full border-[3px] border-white shadow-md bg-white">
+          <div className="relative h-12 w-12 overflow-hidden rounded-full border-[3px] border-white shadow-md bg-white">
             {employee.profilePhoto ? (
               <img
                 src={getUploadUrl(employee.profilePhoto?.url || employee.profilePhoto)}
                 alt=""
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover object-center"
                 crossOrigin="anonymous"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-slate-100">
+              <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-slate-100">
                 <FiUser className="h-5 w-5 text-slate-400" />
               </div>
             )}
@@ -167,6 +170,10 @@ const IdCardMiniPreview = ({ card, themeKey = 'mint' }) => {
 };
 
 const IdCardGenerator = () => {
+  const user = useSelector((state) => state.auth.user);
+  const employee = useSelector((state) => state.employeeDetails.employee);
+  const isHrUser = isHR(user || employee);
+
   const [idCards, setIdCards] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -412,6 +419,10 @@ const IdCardGenerator = () => {
       accessZones: [],
     });
   };
+
+  if (!isHrUser) {
+    return <Navigate to="/employee/documents-id" replace />;
+  }
 
   if (loading) {
     return (
@@ -824,16 +835,16 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
               <div className="relative h-28" style={{ background: theme.headerGradient }}>
                 <p className="pt-3 text-center text-xs font-bold uppercase tracking-widest text-white/90">Paarsiv</p>
                 <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
-                  <div className="h-16 w-16 overflow-hidden rounded-full border-4 border-white shadow-lg bg-white">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full border-4 border-white shadow-lg bg-white">
                     {emp.profilePhoto ? (
                       <img
                         src={getUploadUrl(emp.profilePhoto?.url || emp.profilePhoto)}
                         alt=""
-                        className="h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover object-center"
                         crossOrigin="anonymous"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-slate-100">
+                      <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-slate-100">
                         <FiUser className="h-8 w-8 text-slate-400" />
                       </div>
                     )}

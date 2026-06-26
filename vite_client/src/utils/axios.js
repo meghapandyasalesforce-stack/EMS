@@ -86,13 +86,18 @@ export const getBackendBaseURL = () => {
   // Priority 3: Production - require explicit environment variable
   const isProduction = import.meta.env.PROD || import.meta.env.MODE === 'production';
   if (isProduction) {
-    // Use environment variable if set
     const prodUrl = import.meta.env.VITE_PRODUCTION_BACKEND_URL || import.meta.env.VITE_PRODUCTION_API_URL;
     if (prodUrl) {
       return prodUrl.replace(/\/api\/?$/, '');
     }
-    // Fallback to relative path (may work if frontend and backend are on same domain)
-    return ''; // Empty string means relative path
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+    }
+    // Same-origin production (nginx proxies /uploads and /api)
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return window.location.origin;
+    }
+    return '';
   }
   
   // Priority 4: Development default (matches backend default port)
@@ -111,8 +116,10 @@ export const getUploadUrl = (relativePath) => {
     if (relativePath && typeof relativePath === 'object' && relativePath.url) {
       path = relativePath.url;
     } else if (relativePath && typeof relativePath === 'object' && relativePath.filename) {
-      // If it has filename, construct path
-      path = `/uploads/${relativePath.filename}`;
+      const fn = relativePath.filename;
+      path = fn.includes('profile-') || fn.startsWith('profile-')
+        ? `/uploads/profile-photos/${fn}`
+        : `/uploads/${fn}`;
     } else {
       // Try to convert to string
       path = String(relativePath);
@@ -129,8 +136,6 @@ export const getUploadUrl = (relativePath) => {
     return path;
   }
   
-  // If it's a relative path starting with /uploads, prepend backend origin.
-  // Files are served by the API node's /uploads, not the SPA shell—do not rely on naked relative paths when the SPA is hosted separately.
   if (path.startsWith('/uploads')) {
     const base = getBackendBaseURL();
     if (base) {
@@ -149,6 +154,54 @@ export const getUploadUrl = (relativePath) => {
   
   // Default: assume it's a relative path
   return `${getBackendBaseURL()}/uploads/${path}`;
+};
+
+/** Resolve profile photo to a full URL (localhost proxy + production backend). */
+export const getProfilePhotoUrl = (profilePhoto) => {
+  if (!profilePhoto) return null;
+
+  const withVersion = (base) => {
+    if (!base) return null;
+    const uploadedAt = typeof profilePhoto === 'object' ? profilePhoto.uploadedAt : null;
+    const version = uploadedAt ? new Date(uploadedAt).getTime() : null;
+    return version ? `${base}${base.includes('?') ? '&' : '?'}v=${version}` : base;
+  };
+
+  if (typeof profilePhoto === 'string') {
+    const path = profilePhoto.startsWith('/') ? profilePhoto : `/uploads/profile-photos/${profilePhoto}`;
+    return withVersion(getUploadUrl(path));
+  }
+
+  if (profilePhoto.url) {
+    return withVersion(getUploadUrl(profilePhoto.url));
+  }
+
+  if (profilePhoto.filename) {
+    return withVersion(getUploadUrl(`/uploads/profile-photos/${profilePhoto.filename}`));
+  }
+
+  return withVersion(getUploadUrl(profilePhoto));
+};
+
+/** Authenticated document download URL (use instead of raw /uploads links in production). */
+export const getDocumentDownloadUrl = (documentId, { scope = 'both', version } = {}) => {
+  if (!documentId) return null;
+  const base = (getBaseURL() || '/api').replace(/\/$/, '');
+  const segment = scope === 'admin' ? 'admin' : 'both';
+  const params = new URLSearchParams();
+  if (version != null) params.set('version', String(version));
+  const qs = params.toString();
+  return `${base}/v1/${segment}/documents/${documentId}/download${qs ? `?${qs}` : ''}`;
+};
+
+/** Authenticated inline preview URL — opens in browser (PDF/images). */
+export const getDocumentPreviewUrl = (documentId, { scope = 'both', version } = {}) => {
+  if (!documentId) return null;
+  const base = (getBaseURL() || '/api').replace(/\/$/, '');
+  const segment = scope === 'admin' ? 'admin' : 'both';
+  const params = new URLSearchParams({ inline: '1' });
+  if (version != null) params.set('version', String(version));
+  return `${base}/v1/${segment}/documents/${documentId}/download?${params.toString()}`;
 };
 
 // Debug logging (development only - removed from production for security)
@@ -506,3 +559,173 @@ instance.interceptors.response.use(
 );
 
 export default instance;
+
+async function parseBlobErrorMessage(blob, fallback = 'Failed to load document') {
+  if (!(blob instanceof Blob)) return fallback;
+  try {
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+    return parsed.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Fetch document bytes with session auth (works for old + new uploads). */
+export async function fetchDocumentBlob(documentId, { version, inline = false, scope = 'both' } = {}) {
+  if (!documentId) {
+    throw new Error('Document id is required');
+  }
+  const params = {};
+  if (version != null) params.version = version;
+  if (inline) params.inline = '1';
+
+  const paths =
+    scope === 'admin'
+      ? [`/v1/admin/documents/${documentId}/download`, `/v1/both/documents/${documentId}/download`]
+      : [`/v1/both/documents/${documentId}/download`, `/v1/admin/documents/${documentId}/download`];
+
+  let lastError = null;
+
+  for (const url of paths) {
+    try {
+      const response = await instance.get(url, {
+        params,
+        responseType: 'blob',
+        withCredentials: true,
+      });
+
+      const blob = response.data;
+      const contentType = response.headers?.['content-type'] || '';
+
+      if (blob?.type === 'application/json' || contentType.includes('application/json')) {
+        throw new Error(await parseBlobErrorMessage(blob));
+      }
+
+      return blob;
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      const data = error.response?.data;
+
+      if (data instanceof Blob) {
+        const message = await parseBlobErrorMessage(
+          data,
+          status === 404 ? 'Document or file not found' : 'Failed to load document'
+        );
+        lastError = new Error(message);
+      } else if (error.response?.data?.message) {
+        lastError = new Error(error.response.data.message);
+      }
+
+      // Try fallback path only for route-level 404
+      if (status !== 404 || url === paths[paths.length - 1]) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('Failed to load document');
+}
+
+/** Fetch document bytes — API first, then employee upload route, then direct /uploads. */
+export async function fetchDocumentWithFallback(documentId, options = {}) {
+  const { fileUrl, employeeId, ...fetchOptions } = options;
+  const params = {};
+  if (fetchOptions.version != null) params.version = fetchOptions.version;
+  if (fetchOptions.inline) params.inline = '1';
+
+  const tryBlob = async (url) => {
+    const response = await instance.get(url, {
+      params,
+      responseType: 'blob',
+      withCredentials: true,
+    });
+    const blob = response.data;
+    const contentType = response.headers?.['content-type'] || '';
+    if (blob?.type === 'application/json' || contentType.includes('application/json')) {
+      throw new Error(await parseBlobErrorMessage(blob));
+    }
+    return blob;
+  };
+
+  try {
+    return await fetchDocumentBlob(documentId, fetchOptions);
+  } catch (apiError) {
+    if (employeeId) {
+      try {
+        return await tryBlob(`/v1/upload/${employeeId}/documents/${documentId}/download`);
+      } catch {
+        /* try next */
+      }
+    }
+    if (fileUrl) {
+      const direct = getUploadUrl(fileUrl);
+      if (direct) {
+        try {
+          const response = await fetch(direct, { credentials: 'include' });
+          if (response.ok) {
+            return await response.blob();
+          }
+        } catch {
+          /* try next */
+        }
+      }
+    }
+    throw apiError;
+  }
+}
+
+function blobForPreview(blob, mimeHint) {
+  const mimeType =
+    blob?.type && !blob.type.includes('json') && blob.type !== 'application/octet-stream'
+      ? blob.type
+      : mimeHint || 'application/pdf';
+  if (blob?.type === mimeType) return blob;
+  return new Blob([blob], { type: mimeType });
+}
+
+/** Open document preview in a new tab using fetched bytes (not raw API URL). */
+export async function openDocumentPreview(documentId, options = {}) {
+  const { fileUrl, fileName, mimeType: mimeHint, ...fetchOptions } = options;
+  const blob = await fetchDocumentWithFallback(documentId, {
+    fileUrl,
+    ...fetchOptions,
+    inline: true,
+  });
+  const viewBlob = blobForPreview(blob, mimeHint);
+  const objectUrl = URL.createObjectURL(viewBlob);
+
+  const previewTab = window.open('about:blank', '_blank');
+  if (!previewTab) {
+    URL.revokeObjectURL(objectUrl);
+    throw new Error('Could not open preview. Allow popups for this site.');
+  }
+
+  const title = fileName || 'Document';
+  if (viewBlob.type.startsWith('image/')) {
+    previewTab.document.write(
+      `<!DOCTYPE html><html><head><title>${title}</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1e293b"><img src="${objectUrl}" alt="" style="max-width:100%;max-height:100vh;object-fit:contain" /></body></html>`
+    );
+  } else {
+    previewTab.document.write(
+      `<!DOCTYPE html><html><head><title>${title}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="${objectUrl}" title="${title}"></iframe></body></html>`
+    );
+  }
+  previewTab.document.close();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+}
+
+/** Trigger browser download for a document. */
+export async function saveDocumentDownload(documentId, fileName, options = {}) {
+  const { fileUrl, ...fetchOptions } = options;
+  const blob = await fetchDocumentWithFallback(documentId, fetchOptions);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName || 'document';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

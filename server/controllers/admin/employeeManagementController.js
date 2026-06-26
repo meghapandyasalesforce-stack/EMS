@@ -460,6 +460,7 @@ export const getOrganizationJobTitles = async (req, res) => {
             'Backend Developer',
             'DevOps Engineer',
             'HR Manager',
+            'HR Executive',
             'Financial Analyst',
             'Marketing Executive',
             'Sales Representative',

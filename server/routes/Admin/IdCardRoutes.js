@@ -9,7 +9,7 @@ import {
     downloadIdCard,
     testDatabaseConnection
 } from '../../controllers/admin/idCardController.js';
-import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { requireHrIdCardAccess } from '../../middlewares/requirePermission.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 
 const router = express.Router();
@@ -105,7 +105,7 @@ router.route('/card/:id/download').get(isAuthenticated, downloadIdCard);
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.route('/generate').post(isAdminOrHROrExecutiveAuthenticated, generateIdCard);
+router.route('/generate').post(requireHrIdCardAccess, generateIdCard);
 
 /**
  * @swagger
@@ -120,7 +120,7 @@ router.route('/generate').post(isAdminOrHROrExecutiveAuthenticated, generateIdCa
  *       200:
  *         description: List of ID cards
  */
-router.route('/').get(isAdminOrHROrExecutiveAuthenticated, getAllIdCards);
+router.route('/').get(requireHrIdCardAccess, getAllIdCards);
 
 router.route('/test-db').get(testDatabaseConnection);
 
@@ -145,7 +145,7 @@ router.route('/test-db').get(testDatabaseConnection);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.route('/:employeeId').get(isAdminOrHROrExecutiveAuthenticated, getIdCardByEmployeeId);
+router.route('/:employeeId').get(requireHrIdCardAccess, getIdCardByEmployeeId);
 
 /**
  * @swagger
@@ -182,7 +182,7 @@ router.route('/:employeeId').get(isAdminOrHROrExecutiveAuthenticated, getIdCardB
  *         description: ID card revoked successfully
  */
 router.route('/card/:id')
-    .put(isAdminOrHROrExecutiveAuthenticated, updateIdCard)
-    .delete(isAdminOrHROrExecutiveAuthenticated, revokeIdCard);
+    .put(requireHrIdCardAccess, updateIdCard)
+    .delete(requireHrIdCardAccess, revokeIdCard);
 
 export default router;

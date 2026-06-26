@@ -39,3 +39,12 @@ export const assignEmployeeSystemRole = async (employeeId, systemRole) => {
   );
   return res.data?.data || res.data;
 };
+
+export const promoteEmployeeToHrManager = async (employeeId) => {
+  const res = await axios.post(
+    `/v1/admin/employee/${employeeId}/promote-hr-manager`,
+    {},
+    { withCredentials: true }
+  );
+  return res.data?.data || res.data;
+};

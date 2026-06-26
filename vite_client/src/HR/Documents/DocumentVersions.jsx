@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaHistory, FaDownload, FaArrowLeft, FaClock } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import axios from '../../utils/axios';
+import axios, { openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import logger from '../../utils/logger';
 
@@ -28,6 +28,38 @@ const DocumentVersions = () => {
             toast.error('Failed to load document versions');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleVersionDownload = async (version) => {
+        try {
+            const fileName = version.fileName || document?.name || 'document';
+            await saveDocumentDownload(
+                id,
+                fileName,
+                {
+                    ...(version.isCurrent ? {} : { version: version.version }),
+                    scope: 'admin',
+                }
+            );
+        } catch (error) {
+            logger.error('Error downloading version:', error);
+            toast.error('Failed to download document version');
+        }
+    };
+
+    const handleVersionPreview = async (version) => {
+        try {
+            await openDocumentPreview(
+                id,
+                {
+                    ...(version.isCurrent ? {} : { version: version.version }),
+                    scope: 'admin',
+                }
+            );
+        } catch (error) {
+            logger.error('Error previewing version:', error);
+            toast.error('Failed to open document preview');
         }
     };
 
@@ -99,15 +131,23 @@ const DocumentVersions = () => {
                                             </p>
                                         )}
                                     </div>
-                                    <a
-                                        href={version.fileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
-                                    >
-                                        <FaDownload className="w-4 h-4" />
-                                        Download
-                                    </a>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleVersionPreview(version)}
+                                            className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+                                        >
+                                            Preview
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleVersionDownload(version)}
+                                            className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition flex items-center gap-2"
+                                        >
+                                            <FaDownload className="w-4 h-4" />
+                                            Download
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
