@@ -11,6 +11,12 @@ const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
 
   if (availablePortals.length <= 1) return null;
 
+  // Only show the portal switcher for users who have an elevated admin-level portal.
+  // A pure manager with only 'line_manager' + 'employee' should not see tabs.
+  const ADMIN_LEVEL_PORTALS = new Set(['admin', 'executive', 'hr_manager', 'payroll_admin']);
+  const hasAdminPortal = availablePortals.some((p) => ADMIN_LEVEL_PORTALS.has(p.id));
+  if (!hasAdminPortal) return null;
+
   const handleSelect = (portal) => {
     if (portal.id === activePortal) return;
     dispatch(setActivePortal(portal.id));

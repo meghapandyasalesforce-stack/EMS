@@ -123,6 +123,19 @@ export const fetchEmployees = createAsyncThunk(
         if (useAdminEndpoint) {
           return await fetchFromAdmin(pageNum, pageLimit);
         }
+        // For non-admin users fetching all pages (e.g. project manager in AddProject),
+        // try the admin endpoint first — it returns the full org roster.
+        // Fall back to the employee endpoint only if access is denied.
+        if (fetchAllPages) {
+          try {
+            return await fetchFromAdmin(pageNum, pageLimit);
+          } catch (adminError) {
+            if (adminError.response?.status === 403 || adminError.response?.status === 401) {
+              return await fetchFromEmployee(pageNum, pageLimit);
+            }
+            throw adminError;
+          }
+        }
         if (role) {
           return await fetchFromEmployee(pageNum, pageLimit);
         }

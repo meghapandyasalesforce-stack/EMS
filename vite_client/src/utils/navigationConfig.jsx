@@ -256,7 +256,7 @@ const getExecutiveNavigation = (position) => {
 const getManagerNavigation = () => [
     { path: "/dashboard-manager", name: "Dashboard", icon: <FaUserTie /> },
     { path: "/employees", name: "My Team", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
-    { path: "/projects", name: "All Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW] },
+    { path: "/projects", name: "Projects", icon: <FaProjectDiagram /> },
     { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_TEAM, PERMISSIONS.LEAVE_VIEW_ALL] },
     { path: "/employee/leave-attendance", name: "Leave & Attendance", icon: <FaChartLine /> },
     { path: "/all-attendance-history", name: "Team Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_TEAM, PERMISSIONS.ATTENDANCE_VIEW_ALL] },

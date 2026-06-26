@@ -106,6 +106,7 @@ export const deriveAvailablePortals = ({
 
 /**
  * Pick initial portal from saved preference, route hint, or first available tab.
+ * A saved 'employee' portal is only honoured if no higher-priority portal exists.
  */
 export const resolveInitialPortal = (portals, routeHint = '') => {
   if (!portals?.length) return null;
@@ -114,7 +115,15 @@ export const resolveInitialPortal = (portals, routeHint = '') => {
     typeof localStorage !== 'undefined'
       ? localStorage.getItem('activePortal')
       : null;
-  if (saved && portals.some((p) => p.id === saved)) return saved;
+
+  const hasHigherPortal = portals.some((p) => p.id !== 'employee');
+
+  // Only restore saved 'employee' portal when there is no higher-priority portal
+  if (saved && portals.some((p) => p.id === saved)) {
+    if (saved !== 'employee' || !hasHigherPortal) {
+      return saved;
+    }
+  }
 
   const hint = (routeHint || '').split('?')[0];
   for (const [prefix, portalId] of ROUTE_TO_PORTAL) {

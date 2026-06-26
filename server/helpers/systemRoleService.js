@@ -153,20 +153,21 @@ export const assignSystemRoleToEmployee = async ({
   applySystemRoleToEmployee(employee, systemRoleId);
   await employee.save();
 
+  // Only sync platform roles on an already-linked User account.
+  // Never create a new User from an Employee — functionalRoles on the
+  // Employee document is sufficient for the permissions system.
   let user = null;
   if (employee.userId) {
     user = await User.findById(employee.userId);
-  } else if (employee.email) {
-    user = await User.findOne({ email: employee.email, organizationId });
+    if (user) {
+      user = await syncLinkedUserForSystemRole({
+        employee,
+        systemRoleId,
+        organizationId,
+        existingUser: user,
+      });
+    }
   }
-
-  user = await syncLinkedUserForSystemRole({
-    employee,
-    systemRoleId,
-    plaintextPassword,
-    organizationId,
-    existingUser: user,
-  });
 
   return {
     employee,

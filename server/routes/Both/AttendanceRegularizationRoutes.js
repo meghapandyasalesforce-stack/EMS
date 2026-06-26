@@ -10,7 +10,18 @@ import {
 } from '../../controllers/attendance/attendanceRegularizationController.js';
 
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
-import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
+import { requireAnyPermission } from '../../middlewares/requirePermission.js';
+import { PERMISSIONS } from '../../config/permissions.constants.js';
+
+const requireRegularizationApprover = requireAnyPermission(
+    [
+        PERMISSIONS.ATTENDANCE_REGULARIZATION_APPROVE,
+        PERMISSIONS.ATTENDANCE_VIEW_TEAM,
+        PERMISSIONS.ATTENDANCE_VIEW_ALL,
+        PERMISSIONS.EMPLOYEE_VIEW_ALL,
+    ],
+    { message: 'Access restricted to managers, HR, and admins only' }
+);
 
 const router = express.Router();
 
@@ -28,14 +39,14 @@ router.route("/request/:id/cancel")
 
 // Manager routes - view and manage team requests
 router.route("/manager/requests")
-    .get(isAdminOrManagerOrHRAuthenticated, getRegularizationRequestsForManager);
+    .get(requireRegularizationApprover, getRegularizationRequestsForManager);
 
 // Manager approve/reject routes
 router.route("/manager/approve/:id")
-    .patch(isAdminOrManagerOrHRAuthenticated, approveRegularization);
+    .patch(requireRegularizationApprover, approveRegularization);
 
 router.route("/manager/reject/:id")
-    .patch(isAdminOrManagerOrHRAuthenticated, rejectRegularization);
+    .patch(requireRegularizationApprover, rejectRegularization);
 
 export default router;
 
