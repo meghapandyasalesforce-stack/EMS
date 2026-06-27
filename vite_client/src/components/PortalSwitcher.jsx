@@ -1,25 +1,23 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { setActivePortal } from '../context/Auth/authSlice';
+import { switchPortal } from '../context/Auth/authSlice';
+import { canSwitchPortals } from '../utils/portalConfig';
 
 const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const user = useSelector((state) => state.auth.user);
+  const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
   const availablePortals = useSelector((state) => state.auth.availablePortals) || [];
   const activePortal = useSelector((state) => state.auth.activePortal);
 
+  if (!canSwitchPortals(user, permissionFlags)) return null;
   if (availablePortals.length <= 1) return null;
-
-  // Only show the portal switcher for users who have an elevated admin-level portal.
-  // A pure manager with only 'line_manager' + 'employee' should not see tabs.
-  const ADMIN_LEVEL_PORTALS = new Set(['admin', 'executive', 'hr_manager', 'payroll_admin']);
-  const hasAdminPortal = availablePortals.some((p) => ADMIN_LEVEL_PORTALS.has(p.id));
-  if (!hasAdminPortal) return null;
 
   const handleSelect = (portal) => {
     if (portal.id === activePortal) return;
-    dispatch(setActivePortal(portal.id));
+    dispatch(switchPortal(portal.id));
     navigate(portal.home);
   };
 

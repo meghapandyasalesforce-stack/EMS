@@ -9,7 +9,7 @@ import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { ORGANIZATION_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from '../utils/constant';
-import { deriveAvailablePortals, resolveInitialPortal } from '../utils/portalConfig';
+import { syncPortalsForSession } from '../utils/portalConfig';
 import logger from '../utils/logger';
 
 function Login() {
@@ -194,16 +194,17 @@ function Login() {
                     ? { ...data.employee, role: 'employee' }
                     : null;
 
-            const portals = deriveAvailablePortals({
+            const dashboardRoute =
+                data.dashboardRoute ||
+                (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
+
+            const { portals, activePortal } = syncPortalsForSession({
                 user: loginUser,
                 employee: data.employee || null,
                 roleBuckets: data.roleBuckets || [],
                 permissionFlags: data.permissionFlags || {},
+                routeHint: dashboardRoute,
             });
-            const dashboardRoute =
-                data.dashboardRoute ||
-                (isOrganizationLogin ? '/organization/dashboard' : '/dashboard');
-            const activePortal = resolveInitialPortal(portals, dashboardRoute);
             dispatch(initializePortals({ portals, activePortal }));
             localStorage.setItem('availablePortals', JSON.stringify(portals.map((p) => p.id)));
 

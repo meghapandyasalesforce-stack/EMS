@@ -1,5 +1,6 @@
 import { isExecutive } from './navigationConfig';
 
+/** Canonical portal tab order (highest privilege first). */
 export const PORTAL_ORDER = [
   'admin',
   'executive',
@@ -38,9 +39,18 @@ const executiveLabel = (position) => {
 };
 
 /**
- * Build the list of portal tabs the user may switch between.
+ * SaaS policy: only organization administrators may switch between portal tabs.
+ * Delegated roles (HR, manager, finance, employee) are locked to one portal.
  */
-export const deriveAvailablePortals = ({
+export const canSwitchPortals = (user = null, permissionFlags = {}) => {
+  const role = (user?.role || '').toLowerCase();
+  return role === 'admin' || Boolean(permissionFlags.isOrgOwner);
+};
+
+/**
+ * All portal IDs the principal is entitled to based on RBAC (before switch policy).
+ */
+export const deriveEntitledPortalIds = ({
   user = null,
   employee = null,
   roleBuckets = [],
@@ -90,6 +100,26 @@ export const deriveAvailablePortals = ({
     ids.add('admin');
   }
 
+  return ids;
+};
+
+/**
+ * Locked portal for non-admin users: highest operational portal they hold.
+ */
+export const resolvePrimaryPortalId = (entitledIds) => {
+  const ids = entitledIds instanceof Set ? entitledIds : new Set(entitledIds || []);
+  if (ids.size === 0) return 'employee';
+
+  for (const id of PORTAL_ORDER) {
+    if (id === 'admin') continue;
+    if (ids.has(id)) return id;
+  }
+
+  if (ids.has('admin')) return 'admin';
+  return 'employee';
+};
+
+const buildPortalObjects = (ids, position) => {
   const employeeHome =
     typeof localStorage !== 'undefined'
       ? localStorage.getItem('employeeDashboardRoute')
@@ -98,27 +128,95 @@ export const deriveAvailablePortals = ({
   return PORTAL_ORDER.filter((id) => ids.has(id)).map((id) => ({
     id,
     label: id === 'executive' ? executiveLabel(position) : PORTAL_META[id].label,
-    home:
-      id === 'employee' && employeeHome ? employeeHome : PORTAL_META[id].home,
+    home: id === 'employee' && employeeHome ? employeeHome : PORTAL_META[id].home,
     theme: PORTAL_META[id].theme,
   }));
 };
 
 /**
- * Pick initial portal from saved preference, route hint, or first available tab.
- * A saved 'employee' portal is only honoured if no higher-priority portal exists.
+ * Portals exposed in UI / Redux.
+ * Admins: all entitled portals (tab switcher).
+ * Everyone else: exactly one locked portal.
  */
-export const resolveInitialPortal = (portals, routeHint = '') => {
+export const deriveAvailablePortals = (ctx = {}) => {
+  const { user = null, employee = null, permissionFlags = {} } = ctx;
+  const position = (employee?.position || user?.position || '').toLowerCase().trim();
+  const entitledIds = deriveEntitledPortalIds(ctx);
+  const allPortals = buildPortalObjects(entitledIds, position);
+
+  if (canSwitchPortals(user, permissionFlags)) {
+    return allPortals;
+  }
+
+  const primaryId = resolvePrimaryPortalId(entitledIds);
+  const primary = allPortals.find((p) => p.id === primaryId);
+  return primary ? [primary] : allPortals.slice(0, 1);
+};
+
+/**
+ * Active portal for navigation — ignores tampered localStorage for non-admins.
+ */
+export const getEffectiveActivePortal = ({
+  user = null,
+  permissionFlags = {},
+  availablePortals = [],
+  activePortal = null,
+  routeHint = '',
+} = {}) => {
+  if (!availablePortals?.length) return null;
+
+  if (!canSwitchPortals(user, permissionFlags)) {
+    return availablePortals[0].id;
+  }
+
+  if (activePortal && availablePortals.some((p) => p.id === activePortal)) {
+    return activePortal;
+  }
+
+  return resolveInitialPortal(availablePortals, routeHint, { allowSavedPreference: true });
+};
+
+/**
+ * Sync portals + active tab after login, session refresh, or role change.
+ */
+export const syncPortalsForSession = ({
+  user = null,
+  employee = null,
+  roleBuckets = [],
+  permissionFlags = {},
+  routeHint = '',
+  currentActivePortal = null,
+} = {}) => {
+  const portals = deriveAvailablePortals({
+    user,
+    employee,
+    roleBuckets,
+    permissionFlags,
+  });
+  const activePortal = getEffectiveActivePortal({
+    user,
+    permissionFlags,
+    availablePortals: portals,
+    activePortal: currentActivePortal,
+    routeHint,
+  });
+  return { portals, activePortal };
+};
+
+/**
+ * Pick initial portal for org admins (saved preference, route hint, or first tab).
+ */
+export const resolveInitialPortal = (portals, routeHint = '', options = {}) => {
+  const { allowSavedPreference = true } = options;
   if (!portals?.length) return null;
 
   const saved =
-    typeof localStorage !== 'undefined'
+    allowSavedPreference && typeof localStorage !== 'undefined'
       ? localStorage.getItem('activePortal')
       : null;
 
   const hasHigherPortal = portals.some((p) => p.id !== 'employee');
 
-  // Only restore saved 'employee' portal when there is no higher-priority portal
   if (saved && portals.some((p) => p.id === saved)) {
     if (saved !== 'employee' || !hasHigherPortal) {
       return saved;
@@ -136,3 +234,11 @@ export const resolveInitialPortal = (portals, routeHint = '') => {
 };
 
 export const isEmployeePortalTheme = (portalId) => portalId === 'employee';
+
+export const isPortalSwitchAllowed = (
+  portalId,
+  { user = null, permissionFlags = {}, availablePortals = [] } = {}
+) => {
+  if (!canSwitchPortals(user, permissionFlags)) return false;
+  return availablePortals.some((p) => p.id === portalId);
+};
