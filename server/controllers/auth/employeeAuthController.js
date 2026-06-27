@@ -77,7 +77,7 @@ import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWo
  *                 description: Password (optional - will be auto-generated if not provided)
  *               position:
  *                 type: string
- *                 enum: [Intern, Junior, Mid-Level, Senior, Lead, Supervisor, Manager, Director, VP, CTO, CFO, CEO, Developer]
+ *                 enum: [Intern, Junior, Mid-Level, Senior, Lead, Supervisor, Manager, Director, Executive, VP, CTO, CFO, CEO, Developer]
  *                 example: Senior
  *                 description: Employee position
  *               department:
@@ -91,7 +91,7 @@ import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWo
  *                 description: Manager name or ID
  *               jobTitle:
  *                 type: string
- *                 enum: [Software Engineer, Frontend Developer, Backend Developer, DevOps Engineer, HR Manager, Financial Analyst, Marketing Executive, Sales Representative, Product Manager, QA Tester, Customer Support Specialist, UX/UI Designer, Project Manager, Legal Advisor, Operations Coordinator, Full Stack Developer]
+ *                 enum: [Software Engineer, Frontend Developer, Backend Developer, DevOps Engineer, HR Manager, HR Executive, Financial Analyst, Marketing Executive, Sales Representative, Product Manager, QA Tester, Customer Support Specialist, UX/UI Designer, Project Manager, Legal Advisor, Operations Coordinator, Full Stack Developer]
  *                 example: Software Engineer
  *                 description: Job title
  *               jobCategory:
@@ -230,7 +230,7 @@ export const registerEmployee = async (req, res) => {
         }
 
         // Validate position value
-        const validPositions = ["Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager", "Director", "VP", "CTO", "CFO", "CEO", "Developer"];
+        const validPositions = ["Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager", "Director", "Executive", "VP", "CTO", "CFO", "CEO", "Developer"];
         if (!validPositions.includes(position)) {
             return sendValidationError(res, { position: `Invalid position. Must be one of: ${validPositions.join(', ')}` });
         }

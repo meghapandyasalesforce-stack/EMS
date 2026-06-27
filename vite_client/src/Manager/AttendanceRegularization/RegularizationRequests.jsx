@@ -112,6 +112,21 @@ function requestNeedsEarlyConfirm(req, isHrUser) {
   return Boolean(type && type !== 'HR');
 }
 
+/**
+ * Returns true if the current viewer is the natural actor for the pending workflow step.
+ * Admin always gets full actions. No workflow = always actionable.
+ */
+function isMyTurn(req, { isAdmin, isHr, isExecutive, isManager }) {
+  if (isAdmin) return true;
+  const summary = req?.workflowSummary;
+  if (!summary?.hasWorkflow || !summary?.pendingStep) return true;
+  const type = summary.pendingStep.approverType;
+  if (type === 'HR') return isHr;
+  if (type === 'Executive') return isExecutive;
+  if (type === 'Manager') return isManager;
+  return true;
+}
+
 function WorkflowStepPill({ req }) {
   const label = getWorkflowWaitingLabel(req);
   if (!label || req.status !== 'pending') return null;
@@ -163,6 +178,11 @@ const RegularizationRequests = () => {
       roles.some((r) => String(r).toLowerCase() === 'hr')
     );
   }, [userObj]);
+  const isExecutive = useMemo(() => {
+    const roles = Array.isArray(userObj?.functionalRoles) ? userObj.functionalRoles : [];
+    return roles.some((r) => ['executive', 'ceo', 'cto', 'cfo', 'vp'].includes(String(r).toLowerCase()));
+  }, [userObj]);
+  const isManager = !isAdmin && !isHr && !isExecutive;
 
   const { start: defaultStart, end: defaultEnd } = useMemo(() => currentMonthBounds(), []);
   const [requests, setRequests] = useState([]);
@@ -285,7 +305,9 @@ const RegularizationRequests = () => {
   }, [requests]);
 
   const toggleSelectAllPending = () => {
-    const pendingIds = filteredRequests.filter((r) => r.status === 'pending').map((r) => String(r._id));
+    const pendingIds = filteredRequests
+      .filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager }))
+      .map((r) => String(r._id));
     if (!pendingIds.length) return;
     const allChosen = pendingIds.every((id) => selectedIds.has(id));
     if (allChosen) {
@@ -299,8 +321,9 @@ const RegularizationRequests = () => {
     }
   };
 
-  const toggleRow = (id, status) => {
+  const toggleRow = (id, status, req) => {
     if (status !== 'pending') return;
+    if (!isMyTurn(req, { isAdmin, isHr, isExecutive, isManager })) return;
     const sid = String(id);
     const next = new Set(selectedIds);
     if (next.has(sid)) next.delete(sid);
@@ -447,9 +470,9 @@ const RegularizationRequests = () => {
   };
 
   const allPendingSelected =
-    filteredRequests.filter((r) => r.status === 'pending').length > 0 &&
+    filteredRequests.filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager })).length > 0 &&
     filteredRequests
-      .filter((r) => r.status === 'pending')
+      .filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager }))
       .every((r) => selectedIds.has(String(r._id)));
 
   if (loading && !requests.length) {
@@ -653,6 +676,7 @@ const RegularizationRequests = () => {
                   const name = [emp?.name, emp?.lastName].filter(Boolean).join(' ').trim() || 'Unknown';
                   const dept = emp?.department || '—';
                   const isPending = req.status === 'pending';
+                  const canAct = isPending && isMyTurn(req, { isAdmin, isHr, isExecutive, isManager });
                   const inFmt = req.requestedClockIn
                     ? format(new Date(req.requestedClockIn), 'hh:mm a')
                     : null;
@@ -666,9 +690,9 @@ const RegularizationRequests = () => {
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-[#0a8f6c]"
-                          disabled={!isPending}
+                          disabled={!isPending || !isMyTurn(req, { isAdmin, isHr, isExecutive, isManager })}
                           checked={selectedIds.has(String(req._id))}
-                          onChange={() => toggleRow(req._id, req.status)}
+                          onChange={() => toggleRow(req._id, req.status, req)}
                         />
                       </td>
                       <td className="px-4 py-4">
@@ -712,13 +736,15 @@ const RegularizationRequests = () => {
                             <>
                               <button
                                 type="button"
-                                title={isAdmin ? 'Approve and complete all steps' : 'Approve current step'}
-                                disabled={!!actionBusy}
-                                onClick={() =>
-                                  handleApproveIds([req._id], { adminBypass: isAdmin })
+                                title={
+                                  !canAct
+                                    ? `Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}`
+                                    : isAdmin ? 'Approve and complete all steps' : 'Approve current step'
                                 }
+                                disabled={!!actionBusy || !canAct}
+                                onClick={() => canAct && handleApproveIds([req._id], { adminBypass: isAdmin })}
                                 className="rounded-lg p-2 text-white disabled:opacity-40"
-                                style={{ background: TEAL }}
+                                style={{ background: canAct ? TEAL : '#94a3b8' }}
                               >
                                 {actionBusy === `${req._id}` ? (
                                   <FiLoader className="h-4 w-4 animate-spin" />
@@ -728,10 +754,14 @@ const RegularizationRequests = () => {
                               </button>
                               <button
                                 type="button"
-                                title="Reject"
-                                disabled={!!actionBusy}
-                                onClick={() => openRejectModal([req._id])}
-                                className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-600 disabled:opacity-40"
+                                title={!canAct ? `Waiting for ${req.workflowSummary?.pendingStep?.approverType || 'next approver'}` : 'Reject'}
+                                disabled={!!actionBusy || !canAct}
+                                onClick={() => canAct && openRejectModal([req._id])}
+                                className={`rounded-lg border p-2 disabled:opacity-40 ${
+                                  canAct
+                                    ? 'border-red-200 bg-red-50 text-red-600'
+                                    : 'border-slate-200 bg-slate-100 text-slate-400'
+                                }`}
                               >
                                 <FiX className="h-4 w-4" />
                               </button>
@@ -897,29 +927,40 @@ const RegularizationRequests = () => {
                 </section>
               ) : null}
 
-              {drawerReq.status === 'pending' ? (
-                <div className="mt-6 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={!!actionBusy}
-                    onClick={() =>
-                      handleApproveIds([drawerReq._id], { adminBypass: isAdmin })
-                    }
-                    className="flex-1 rounded-xl py-3 text-sm font-semibold text-white shadow"
-                    style={{ background: TEAL }}
-                  >
-                    {isAdmin ? 'Approve & finalize' : 'Approve'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!!actionBusy}
-                    onClick={() => openRejectModal([drawerReq._id])}
-                    className="flex-1 rounded-xl border-2 border-red-400 py-3 text-sm font-semibold text-red-600"
-                  >
-                    Reject
-                  </button>
-                </div>
-              ) : null}
+              {drawerReq.status === 'pending' ? (() => {
+                const drawerCanAct = isMyTurn(drawerReq, { isAdmin, isHr, isExecutive, isManager });
+                const waitingFor = drawerReq.workflowSummary?.pendingStep?.approverType;
+                return (
+                  <div className="mt-6">
+                    {!drawerCanAct && waitingFor && (
+                      <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                        Waiting for {waitingFor} to act on this step.
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={!!actionBusy || !drawerCanAct}
+                        onClick={() => drawerCanAct && handleApproveIds([drawerReq._id], { adminBypass: isAdmin })}
+                        className="flex-1 rounded-xl py-3 text-sm font-semibold text-white shadow disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ background: drawerCanAct ? TEAL : '#94a3b8' }}
+                      >
+                        {isAdmin ? 'Approve & finalize' : 'Approve'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!!actionBusy || !drawerCanAct}
+                        onClick={() => drawerCanAct && openRejectModal([drawerReq._id])}
+                        className={`flex-1 rounded-xl border-2 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                          drawerCanAct ? 'border-red-400 text-red-600' : 'border-slate-300 text-slate-400'
+                        }`}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                );
+              })() : null}
             </div>
           </aside>
         </div>

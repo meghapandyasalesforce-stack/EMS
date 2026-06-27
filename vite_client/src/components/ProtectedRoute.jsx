@@ -68,6 +68,20 @@ const ProtectedRoute = ({
     effectiveRoles,
   });
 
+  const isHrOnlyRoute =
+    allowedRoles.length === 1 &&
+    allowedRoles[0] === 'hr' &&
+    requiredPermissions.length === 0;
+
+  if (hasAccess && isHrOnlyRoute && isAdmin && !userIsHR) {
+    return (
+      <Navigate
+        to={redirectTo || '/employee/documents-id'}
+        replace
+      />
+    );
+  }
+
   if (!hasAccess) {
     const targetRedirect =
       redirectTo != null && redirectTo !== '' && redirectTo !== '/dashboard'

@@ -6,7 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendInternalError } from '../../helpers/responseHelper.js';
-import { processProfilePhoto } from '../../helpers/imageOptimizer.js';
+import { processProfilePhoto, normalizeProfilePhotoForAvatar } from '../../helpers/imageOptimizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +42,56 @@ export const upload = multer({
     fileFilter: fileFilter
 });
 
+async function finalizeProfilePhotoUpload(uploadDir, originalFilename) {
+    let storedFilename = originalFilename;
+    let currentPath = path.join(uploadDir, originalFilename);
+    let optimizationResult = null;
+    let thumbnailUrl = null;
+
+    try {
+        const processResult = await processProfilePhoto(currentPath, originalFilename);
+        if (processResult.success) {
+            optimizationResult = processResult.optimized;
+            thumbnailUrl = processResult.thumbnailUrl;
+            storedFilename = processResult.filename || originalFilename;
+            currentPath = path.join(uploadDir, storedFilename);
+        }
+    } catch (optimizationError) {
+        logger.warn('Profile photo processing failed, attempting fallback normalize', {
+            error: optimizationError.message,
+            filename: originalFilename,
+        });
+        try {
+            const fallback = await normalizeProfilePhotoForAvatar(currentPath, 800);
+            storedFilename = fallback.filename;
+            currentPath = fallback.path;
+            optimizationResult = { optimizedSize: fallback.size };
+        } catch (fallbackError) {
+            logger.warn('Fallback normalize failed, using original upload', {
+                error: fallbackError.message,
+            });
+        }
+    }
+
+    const fileStats = fs.existsSync(currentPath) ? fs.statSync(currentPath) : null;
+    return { storedFilename, currentPath, optimizationResult, thumbnailUrl, fileStats };
+}
+
+function buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResult) {
+    return {
+        url: `/uploads/profile-photos/${storedFilename}`,
+        thumbnailUrl: thumbnailUrl || `/uploads/profile-photos/${storedFilename}`,
+        filename: storedFilename,
+        uploadedAt: new Date(),
+        optimized: !!optimizationResult,
+        ...(optimizationResult && {
+            originalSize: optimizationResult.originalSize,
+            optimizedSize: optimizationResult.optimizedSize,
+            compressionRatio: optimizationResult.compressionRatio,
+        }),
+    };
+}
+
 // Upload profile photo for employee
 export const uploadEmployeePhoto = async (req, res) => {
     try {
@@ -64,58 +114,30 @@ export const uploadEmployeePhoto = async (req, res) => {
             }
         }
 
-        // Verify file was actually saved
-        const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
-        if (!fs.existsSync(savedFilePath)) {
-            logger.error('File was not saved', { savedFilePath });
+        const uploadDir = path.join(__dirname, '../../uploads/profile-photos');
+        const initialPath = path.join(uploadDir, req.file.filename);
+        if (!fs.existsSync(initialPath)) {
+            logger.error('File was not saved', { savedFilePath: initialPath });
             return sendInternalError(res, 'File upload failed - file not found on disk');
         }
 
-        // Optimize image using Sharp
-        let optimizationResult = null;
-        let thumbnailUrl = null;
-        try {
-            const processResult = await processProfilePhoto(savedFilePath, req.file.filename);
-            if (processResult.success) {
-                optimizationResult = processResult.optimized;
-                thumbnailUrl = processResult.thumbnailUrl;
-                logger.info('Image optimized successfully', {
-                    originalSize: optimizationResult.originalSize,
-                    optimizedSize: optimizationResult.optimizedSize,
-                    compressionRatio: `${optimizationResult.compressionRatio}%`
-                });
-            }
-        } catch (optimizationError) {
-            logger.warn('Image optimization failed, using original', {
-                error: optimizationError.message,
-                filename: req.file.filename
-            });
-            // Continue with original file if optimization fails
-        }
+        const {
+            storedFilename,
+            currentPath,
+            optimizationResult,
+            thumbnailUrl,
+            fileStats,
+        } = await finalizeProfilePhotoUpload(uploadDir, req.file.filename);
 
-        // Log successful upload with file details
-        const fileStats = fs.existsSync(savedFilePath) ? fs.statSync(savedFilePath) : null;
         logger.info('Profile photo uploaded successfully', {
-            filename: req.file.filename,
-            path: savedFilePath,
+            filename: storedFilename,
+            path: currentPath,
             size: fileStats?.size || 'unknown',
             optimized: !!optimizationResult,
-            employeeId: employeeId.toString()
+            employeeId: employeeId.toString(),
         });
 
-        // Update employee profile photo
-        employee.profilePhoto = {
-            url: `/uploads/profile-photos/${req.file.filename}`,
-            thumbnailUrl: thumbnailUrl || `/uploads/profile-photos/${req.file.filename}`,
-            filename: req.file.filename,
-            uploadedAt: new Date(),
-            optimized: !!optimizationResult,
-            ...(optimizationResult && {
-                originalSize: optimizationResult.originalSize,
-                optimizedSize: optimizationResult.optimizedSize,
-                compressionRatio: optimizationResult.compressionRatio
-            })
-        };
+        employee.profilePhoto = buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResult);
 
         await employee.save();
 
@@ -151,58 +173,30 @@ export const uploadAdminPhoto = async (req, res) => {
             }
         }
 
-        // Verify file was actually saved
-        const savedFilePath = path.join(__dirname, '../../uploads/profile-photos', req.file.filename);
-        if (!fs.existsSync(savedFilePath)) {
-            logger.error('File was not saved', { savedFilePath });
+        const uploadDir = path.join(__dirname, '../../uploads/profile-photos');
+        const initialPath = path.join(uploadDir, req.file.filename);
+        if (!fs.existsSync(initialPath)) {
+            logger.error('File was not saved', { savedFilePath: initialPath });
             return sendInternalError(res, 'File upload failed - file not found on disk');
         }
 
-        // Optimize image using Sharp
-        let optimizationResult = null;
-        let thumbnailUrl = null;
-        try {
-            const processResult = await processProfilePhoto(savedFilePath, req.file.filename);
-            if (processResult.success) {
-                optimizationResult = processResult.optimized;
-                thumbnailUrl = processResult.thumbnailUrl;
-                logger.info('Image optimized successfully', {
-                    originalSize: optimizationResult.originalSize,
-                    optimizedSize: optimizationResult.optimizedSize,
-                    compressionRatio: `${optimizationResult.compressionRatio}%`
-                });
-            }
-        } catch (optimizationError) {
-            logger.warn('Image optimization failed, using original', {
-                error: optimizationError.message,
-                filename: req.file.filename
-            });
-            // Continue with original file if optimization fails
-        }
+        const {
+            storedFilename,
+            currentPath,
+            optimizationResult,
+            thumbnailUrl,
+            fileStats,
+        } = await finalizeProfilePhotoUpload(uploadDir, req.file.filename);
 
-        // Log successful upload with file details
-        const fileStats = fs.existsSync(savedFilePath) ? fs.statSync(savedFilePath) : null;
         logger.info('Profile photo uploaded successfully', {
-            filename: req.file.filename,
-            path: savedFilePath,
+            filename: storedFilename,
+            path: currentPath,
             size: fileStats?.size || 'unknown',
             optimized: !!optimizationResult,
-            userId: userId.toString()
+            userId: userId.toString(),
         });
 
-        // Update user profile photo
-        user.profilePhoto = {
-            url: `/uploads/profile-photos/${req.file.filename}`,
-            thumbnailUrl: thumbnailUrl || `/uploads/profile-photos/${req.file.filename}`,
-            filename: req.file.filename,
-            uploadedAt: new Date(),
-            optimized: !!optimizationResult,
-            ...(optimizationResult && {
-                originalSize: optimizationResult.originalSize,
-                optimizedSize: optimizationResult.optimizedSize,
-                compressionRatio: optimizationResult.compressionRatio
-            })
-        };
+        user.profilePhoto = buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResult);
 
         await user.save();
 

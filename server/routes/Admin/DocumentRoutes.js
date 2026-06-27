@@ -6,9 +6,10 @@ import {
     getPendingDocuments,
     uploadDocumentVersion,
     getDocumentVersions,
-    shareDocument
+    shareDocument,
+    downloadDocumentById,
 } from '../../controllers/document/documentController.js';
-import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { requireHrDocumentAccess } from '../../middlewares/requirePermission.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { upload } from '../../controllers/fileUpload/uploadConfigController.js';
 
@@ -17,7 +18,7 @@ const router = express.Router();
 // Upload Document (multipart field name: "document")
 router.route('/upload')
     .post(
-        isAdminOrHROrExecutiveAuthenticated,
+        requireHrDocumentAccess,
         (req, res, next) => {
             upload(req, res, (err) => {
                 if (err) {
@@ -32,23 +33,27 @@ router.route('/upload')
 
 // Get pending documents for approval
 router.route('/pending')
-    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getPendingDocuments);
+    .get(requireHrDocumentAccess, readLimiter, getPendingDocuments);
+
+// HR download (preview / save) — same handler as /both/documents/:id/download
+router.route('/:id/download')
+    .get(requireHrDocumentAccess, readLimiter, downloadDocumentById);
 
 // Approve/Reject documents
 router.route('/:id/approve')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, approveDocument);
+    .post(requireHrDocumentAccess, writeLimiter, approveDocument);
 
 router.route('/:id/reject')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, rejectDocument);
+    .post(requireHrDocumentAccess, writeLimiter, rejectDocument);
 
 // Share document
 router.route('/:id/share')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, shareDocument);
+    .post(requireHrDocumentAccess, writeLimiter, shareDocument);
 
 // Document version control
 router.route('/:id/versions')
-    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getDocumentVersions)
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, uploadDocumentVersion);
+    .get(requireHrDocumentAccess, readLimiter, getDocumentVersions)
+    .post(requireHrDocumentAccess, writeLimiter, uploadDocumentVersion);
 
 export default router;
 

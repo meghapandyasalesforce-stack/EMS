@@ -2,7 +2,8 @@ import express from 'express';
 import {
   updateEmployeeWorkInfo,
   getEmployeeWorkInfo,
-  calculateEmployeeStats
+  calculateEmployeeStats,
+  promoteEmployeeToHrManager,
 } from '../../controllers/admin/employeeController.js';
 import { getManagers, getAllEmployees, getOrganizationJobTitles } from '../../controllers/admin/employeeManagementController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
@@ -28,6 +29,10 @@ router.route('/managers')
 // Get organization-specific job titles for dropdowns
 router.route('/job-titles')
   .get(isAdminOrHROrExecutiveAuthenticated, employeeListLimiter, getOrganizationJobTitles);
+
+// Manually promote employee to HR Manager (job profile + access; login unchanged)
+router.route('/:employeeId/promote-hr-manager')
+  .post(isAdminAuthenticated, generalWriteLimiter, promoteEmployeeToHrManager);
 
 // Update employee work information - write operations have stricter limits
 router.route('/:employeeId/work-info')

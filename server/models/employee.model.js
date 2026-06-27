@@ -267,7 +267,7 @@ const employeeSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
-            "Software Engineer", "Frontend Developer", "Backend Developer", "DevOps Engineer", "HR Manager",
+            "Software Engineer", "Frontend Developer", "Backend Developer", "DevOps Engineer", "HR Manager", "HR Executive",
             "Financial Analyst", "Marketing Executive", "Sales Representative", "Product Manager",
             "QA Tester", "Customer Support Specialist", "UX/UI Designer", "Project Manager",
             "Legal Advisor", "Operations Coordinator", "Full Stack Developer"
@@ -279,7 +279,7 @@ const employeeSchema = new mongoose.Schema({
         required: true,
         enum: [
             "Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager",
-            "Director", "VP", "CTO", "CFO", "CEO", "Developer"
+            "Director", "Executive", "VP", "CTO", "CFO", "CEO", "Developer"
         ]
     },
 

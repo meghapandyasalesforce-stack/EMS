@@ -2,8 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { FiCamera, FiUpload, FiX, FiUser } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import axios from '../../utils/axios';
-import { getUploadUrl } from '../../utils/axios';
+import axios, { getProfilePhotoUrl } from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
 
 const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) => {
@@ -178,18 +177,20 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       {/* Current Photo Display */}
       <div className="flex flex-col items-center mb-6">
         <div className="relative">
-          <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+          <div className="w-32 h-32 relative aspect-square rounded-full overflow-hidden bg-white border border-gray-200">
             {preview ? (
               <img
                 src={preview}
                 alt="Preview"
-                className="w-full h-full object-cover"
+                className="absolute inset-0 block h-full w-full min-h-full min-w-full scale-[1.15] object-cover object-[center_22%]"
+                style={{ objectFit: 'cover', objectPosition: 'center 22%' }}
               />
             ) : user?.profilePhoto ? (
               <img
-                src={getUploadUrl(typeof user.profilePhoto === 'string' ? user.profilePhoto : (user.profilePhoto.url || user.profilePhoto.filename))}
+                src={getProfilePhotoUrl(user.profilePhoto)}
                 alt="Current Profile"
-                className="w-full h-full object-cover"
+                className="absolute inset-0 block h-full w-full min-h-full min-w-full scale-[1.15] object-cover object-[center_22%]"
+                style={{ objectFit: 'cover', objectPosition: 'center 22%' }}
                 crossOrigin="anonymous"
                 onError={(e) => {
                   // Fallback if image fails to load
@@ -198,7 +199,9 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
                 }}
               />
             ) : (
-              <FiUser className="w-16 h-16 text-gray-400" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FiUser className="w-16 h-16 text-gray-400" />
+              </div>
             )}
           </div>
           {preview && (

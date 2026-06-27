@@ -126,6 +126,38 @@ export const requireOrgOwnerOrHrManager = gate(
   'Access restricted to organization owners and HR managers'
 );
 
+/** HR-only document management — HR staff only (admin without HR role is blocked). */
+export const requireHrDocumentAccess = composeMiddleware([
+  attachAuthContext,
+  async (req, res, next) => {
+    const { loadRequesterHrStaff } = await import('../helpers/functionalRolesHelper.js');
+    if (!(await loadRequesterHrStaff(req))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only HR can access all employee documents',
+        code: 'HR_ONLY',
+      });
+    }
+    return next();
+  },
+]);
+
+/** HR-only ID card management — HR staff only (admin without HR role is blocked). */
+export const requireHrIdCardAccess = composeMiddleware([
+  attachAuthContext,
+  async (req, res, next) => {
+    const { loadRequesterHrStaff } = await import('../helpers/functionalRolesHelper.js');
+    if (!(await loadRequesterHrStaff(req))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only HR can manage employee ID cards',
+        code: 'HR_ONLY',
+      });
+    }
+    return next();
+  },
+]);
+
 /** Former isAdminOrHR */
 export const requireHrStaff = composeMiddleware(
   requireAnyPermission([

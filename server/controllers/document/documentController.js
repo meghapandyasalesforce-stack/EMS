@@ -1,21 +1,242 @@
 import fs from 'fs';
+import path from 'path';
 import { Document, DocumentRequest } from '../../models/document.model.js';
 import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
 import { createEmployeeJobOrGenericDocument, mimeToDocumentTypeEnum } from '../../helpers/employeeDocumentUploadHelper.js';
-import { getEffectiveFunctionalRoles } from '../../middlewares/createAuthMiddleware.js';
+import { isHrStaffEmployee, loadRequesterHrStaff } from '../../helpers/functionalRolesHelper.js';
+import { resolveDocumentFilePath, relativeDocumentFileUrl } from '../../helpers/documentFilePathHelper.js';
+import {
+    requireUploadFileBuffer,
+    resolveDocumentFileContent,
+    sendDocumentFile,
+    backfillDocumentBinaryFromDisk,
+} from '../../helpers/documentFileStorageHelper.js';
 
 const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certificate',
   'Training', 'Compliance', 'Financial', 'Legal', 'Other'];
+
+const loadEmployeeDocumentContext = async (req) => {
+    if (!req.employee?._id) {
+        return { isHr: false, employeeId: null, employee: null };
+    }
+
+    const employee = await Employee.findById(req.employee._id)
+        .select('department assignedRole functionalRoles position jobTitle')
+        .populate('assignedRole', '_id')
+        .lean();
+
+    if (!employee) {
+        return { isHr: false, employeeId: req.employee._id, employee: null };
+    }
+
+    return {
+        isHr: isHrStaffEmployee(employee),
+        employeeId: req.employee._id,
+        employee,
+    };
+};
+
+const HR_POLICY_CATEGORIES = ['Policy', 'Company', 'Training', 'Compliance'];
+
+/** Documents an employee may list and download (own uploads + HR/org shared). */
+const buildEmployeeDocumentQuery = (employeeId, employee) => ({
+    $or: [
+        { uploadedBy: employeeId },
+        {
+            uploadedBy: { $ne: employeeId },
+            requiresApproval: false,
+            approvalStatus: { $in: ['Approved', null] },
+        },
+        {
+            uploadedBy: { $ne: employeeId },
+            accessLevel: 'Public',
+            approvalStatus: 'Approved',
+            category: { $in: HR_POLICY_CATEGORIES },
+        },
+        {
+            accessLevel: 'Department',
+            allowedDepartments: { $in: [employee.department] },
+            approvalStatus: { $in: ['Approved', null] },
+        },
+        {
+            accessLevel: 'Role',
+            allowedRoles: employee.assignedRole?._id || { $exists: false },
+            approvalStatus: { $in: ['Approved', null] },
+        },
+        {
+            accessLevel: 'Specific',
+            allowedEmployees: employeeId,
+            approvalStatus: { $in: ['Approved', null] },
+        },
+    ],
+});
+
+/** Employee can download own uploads (any status/active) + active shared org docs. */
+const buildEmployeeDownloadQuery = (employeeId, employee) => ({
+    $or: [
+        { uploadedBy: employeeId },
+        {
+            uploadedBy: { $ne: employeeId },
+            isActive: { $ne: false },
+            requiresApproval: false,
+            approvalStatus: { $in: ['Approved', null] },
+        },
+        {
+            uploadedBy: { $ne: employeeId },
+            isActive: { $ne: false },
+            accessLevel: 'Public',
+            approvalStatus: 'Approved',
+            category: { $in: HR_POLICY_CATEGORIES },
+        },
+        {
+            isActive: { $ne: false },
+            accessLevel: 'Department',
+            allowedDepartments: { $in: [employee.department] },
+            approvalStatus: { $in: ['Approved', null] },
+        },
+        {
+            isActive: { $ne: false },
+            accessLevel: 'Role',
+            allowedRoles: employee.assignedRole?._id || { $exists: false },
+            approvalStatus: { $in: ['Approved', null] },
+        },
+        {
+            isActive: { $ne: false },
+            accessLevel: 'Specific',
+            allowedEmployees: employeeId,
+            approvalStatus: { $in: ['Approved', null] },
+        },
+    ],
+});
+
+const assertHrDocumentAccess = async (req, res) => {
+    const ctx = await loadEmployeeDocumentContext(req);
+    if (!ctx.isHr) {
+        res.status(403).json({
+            success: false,
+            message: 'Only HR can access all employee documents',
+            code: 'HR_ONLY',
+        });
+        return false;
+    }
+    return true;
+};
+
+async function findLegacyEmbeddedDocument(req, documentId, { employeeIdOnly = null } = {}) {
+    const orgFilter = addOrganizationFilter(req, {});
+    const query = {
+        ...orgFilter,
+        'documents._id': documentId,
+    };
+    if (employeeIdOnly) {
+        query._id = employeeIdOnly;
+    }
+
+    const employee = await Employee.findOne(query)
+        .select('name lastName email employeeId department documents')
+        .lean();
+
+    if (!employee) return null;
+
+    const embedded = (employee.documents || []).find(
+        (d) => d._id && String(d._id) === String(documentId)
+    );
+    if (!embedded) return null;
+
+    return {
+        fileUrl: embedded.filePath,
+        fileName: embedded.fileName || embedded.originalName || 'document',
+        mimeType: null,
+        _legacyEmbedded: true,
+        uploadedBy: employee,
+    };
+}
+
+function assertUploadedFileExists(file, fileUrl) {
+    const diskPath = file?.path || resolveDocumentFilePath(fileUrl);
+    if (!diskPath || !fs.existsSync(diskPath)) {
+        throw new Error('Uploaded file was not saved on the server. Please try uploading again.');
+    }
+    return diskPath;
+}
+
+async function loadLegacyEmployeeDocumentsForHr(req, { searchTrim, category }) {
+    if (category && category !== 'Employee') return [];
+
+    const orgFilter = addOrganizationFilter(req, {});
+    const employees = await Employee.find({
+        ...orgFilter,
+        'documents.0': { $exists: true },
+    })
+        .select('name lastName email employeeId department documents')
+        .lean();
+
+    if (!employees.length) return [];
+
+    const employeeIds = employees.map((e) => e._id);
+    const canonicalJobDocs = await Document.find({
+        ...orgFilter,
+        uploadedBy: { $in: employeeIds },
+        employeeJobDocumentType: { $exists: true, $ne: null },
+        isActive: { $ne: false },
+    })
+        .select('uploadedBy employeeJobDocumentType')
+        .lean();
+
+    const canonicalKeys = new Set(
+        canonicalJobDocs.map((d) => `${d.uploadedBy}_${d.employeeJobDocumentType}`)
+    );
+
+    const rows = [];
+    for (const emp of employees) {
+        for (const doc of emp.documents || []) {
+            if (!doc?.filePath && !doc?.fileName) continue;
+            const typeKey = doc.documentType ? `${emp._id}_${doc.documentType}` : null;
+            if (typeKey && canonicalKeys.has(typeKey)) continue;
+
+            const title = doc.fileName || doc.originalName || doc.documentType || 'Document';
+            if (searchTrim && !title.toLowerCase().includes(searchTrim.toLowerCase())) continue;
+
+            rows.push({
+                _id: doc._id,
+                _legacyEmbedded: true,
+                name: title,
+                fileName: doc.fileName || doc.originalName || 'document',
+                fileUrl: doc.filePath,
+                fileSize: doc.size || doc.fileSize || 0,
+                category: 'Employee',
+                type: 'Other',
+                uploadedBy: emp,
+                relatedId: emp,
+                relatedTo: 'Employee',
+                createdAt: doc.uploadedAt || new Date(0),
+                updatedAt: doc.uploadedAt || new Date(0),
+                approvalStatus: 'Approved',
+                requiresApproval: false,
+                isActive: true,
+                version: 1,
+                accessLevel: 'Private',
+            });
+        }
+    }
+    return rows;
+}
+
+async function loadDocumentBinary(documentId) {
+    return Document.findById(documentId).select('+fileBinary').lean();
+}
 
 /**
  * Upload document (Admin/HR - auto-approved)
  */
 export const uploadDocument = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const organizationId = getOrganizationId(req);
-    const uploadedBy = req.employee?._id || req.user?._id;
+    const uploadedBy = req.employee?._id;
 
     const file = req.file || req.files?.[0];
     if (!file) {
@@ -28,7 +249,7 @@ export const uploadDocument = asyncHandler(async (req, res) => {
     if (!uploadedBy) {
         return res.status(401).json({
             success: false,
-            message: 'Authentication required'
+            message: 'HR employee profile required to upload documents'
         });
     }
 
@@ -41,6 +262,9 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         : mimeToDocumentTypeEnum(file.mimetype);
 
     const relFileUrl = `/uploads/documents/${file.filename}`;
+    assertUploadedFileExists(file, relFileUrl);
+    const fileBinary = requireUploadFileBuffer(file);
+
     const accessLevel = req.body.accessLevel && ['Public', 'Department', 'Role', 'Specific', 'Private'].includes(req.body.accessLevel)
         ? req.body.accessLevel
         : 'Public';
@@ -56,6 +280,7 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         fileName: file.originalname || file.name || name,
         fileSize: file.size,
         mimeType: file.mimetype,
+        fileBinary,
         relatedTo: req.body.relatedTo && ['Employee', 'Department', 'Project', 'Policy', 'Course', 'General'].includes(req.body.relatedTo)
             ? req.body.relatedTo
             : 'General',
@@ -132,78 +357,33 @@ export const getDocuments = asyncHandler(async (req, res) => {
 
     const query = addOrganizationFilter(req, {});
 
-    // Platform admin: org-wide. Employee JWT: restricted unless HR (same visibility as /admin/documents/pending).
-    const isPlatformAdmin = !!req.user?._id;
+    const docCtx = await loadEmployeeDocumentContext(req);
 
-    if (isPlatformAdmin) {
+    if (docCtx.isHr) {
+        // HR staff — all employee documents
         if (approvalStatus) {
             query.approvalStatus = approvalStatus;
         }
-    } else if (req.employee?._id) {
-        const employeeId = req.employee._id;
-
-        const employee = await Employee.findById(employeeId)
-            .select('department assignedRole functionalRoles position jobTitle')
-            .populate('assignedRole', '_id')
-            .lean();
-
-        if (!employee) {
-            return res.status(404).json({
-                success: false,
-                message: 'Employee not found',
-            });
-        }
-
-        const isHR = getEffectiveFunctionalRoles(employee).includes('hr');
-
-        if (isHR) {
-            if (approvalStatus) {
-                query.approvalStatus = approvalStatus;
-            }
-        } else {
-            const accessQuery = {
-                $or: [
-                    { uploadedBy: employeeId },
-                    { accessLevel: 'Public' },
-                    {
-                        accessLevel: 'Department',
-                        allowedDepartments: { $in: [employee.department] },
-                    },
-                    {
-                        accessLevel: 'Role',
-                        allowedRoles: employee.assignedRole?._id || { $exists: false },
-                    },
-                    {
-                        accessLevel: 'Specific',
-                        allowedEmployees: employeeId,
-                    },
-                ],
-            };
-
-            query.$and = [
-                {
-                    $or: [
-                        { approvalStatus: 'Approved' },
-                        { approvalStatus: { $exists: false } },
-                        { uploadedBy: employeeId },
-                    ],
-                },
-                accessQuery,
-            ];
-        }
+    } else if (docCtx.employeeId && docCtx.employee) {
+        // Employee — own docs + HR policies only
+        query.$and = [buildEmployeeDocumentQuery(docCtx.employeeId, docCtx.employee)];
     } else {
-        if (approvalStatus) {
-            query.approvalStatus = approvalStatus;
-        }
+        return res.status(403).json({
+            success: false,
+            message: 'Only HR can view all employee documents',
+            code: 'HR_ONLY',
+        });
     }
 
     if (category) query.category = category;
     if (relatedTo) query.relatedTo = relatedTo;
     if (relatedId) query.relatedId = relatedId;
 
-    // Only show active documents (unless HR is viewing pending)
-    if (!approvalStatus || approvalStatus !== 'Pending') {
-        query.isActive = true;
+    // Employees: hide inactive unless HR. HR sees everything (pending, approved, rejected, superseded).
+    if (!docCtx.isHr) {
+        if (!approvalStatus || approvalStatus !== 'Pending') {
+            query.isActive = { $ne: false };
+        }
     }
 
     const searchTrim = typeof search === 'string' ? search.trim() : '';
@@ -233,16 +413,49 @@ export const getDocuments = asyncHandler(async (req, res) => {
 
     const skip = (pageNum - 1) * limitNum;
 
-    const documents = await Document.find(query)
-        .populate('uploadedBy', 'name lastName email employeeId department')
-        .populate('approvedBy', 'name email')
-        .populate('allowedEmployees', 'name email employeeId')
-        .populate('allowedRoles', 'name')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum);
+    let documents;
+    let total;
 
-    const total = await Document.countDocuments(query);
+    if (docCtx.isHr) {
+        const documentsFromDb = await Document.find(query)
+            .populate('uploadedBy', 'name lastName email employeeId department')
+            .populate({
+                path: 'relatedId',
+                select: 'name lastName email employeeId department',
+            })
+            .populate('approvedBy', 'name email')
+            .populate('allowedEmployees', 'name email employeeId')
+            .populate('allowedRoles', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const legacyRows = await loadLegacyEmployeeDocumentsForHr(req, {
+            searchTrim,
+            category,
+        });
+
+        const combined = [...documentsFromDb, ...legacyRows].sort(
+            (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+        );
+
+        total = combined.length;
+        documents = combined.slice(skip, skip + limitNum);
+    } else {
+        documents = await Document.find(query)
+            .populate('uploadedBy', 'name lastName email employeeId department')
+            .populate({
+                path: 'relatedId',
+                select: 'name lastName email employeeId department',
+            })
+            .populate('approvedBy', 'name email')
+            .populate('allowedEmployees', 'name email employeeId')
+            .populate('allowedRoles', 'name')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limitNum);
+
+        total = await Document.countDocuments(query);
+    }
 
     res.json({
         success: true,
@@ -253,6 +466,135 @@ export const getDocuments = asyncHandler(async (req, res) => {
             total,
             pages: Math.ceil(total / limitNum) || 0
         }
+    });
+});
+
+/**
+ * Download a document file (authenticated — avoids direct /uploads URLs that nginx may not proxy).
+ */
+export const downloadDocumentById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const docCtx = await loadEmployeeDocumentContext(req);
+    const isHr = docCtx.isHr || (await loadRequesterHrStaff(req));
+    const versionParam = req.query.version != null ? parseInt(String(req.query.version), 10) : null;
+    const inline = req.query.inline === '1' || req.query.inline === 'true';
+
+    const baseQuery = addOrganizationFilter(req, { _id: id });
+
+    let document;
+    let legacyDoc = null;
+
+    if (isHr) {
+        document = await Document.findOne(baseQuery).lean();
+        if (!document) {
+            document = await Document.findOne({ _id: id }).lean();
+            if (
+                document?.organizationId &&
+                organizationId &&
+                String(document.organizationId) !== String(organizationId)
+            ) {
+                document = null;
+            }
+        }
+        if (!document) {
+            legacyDoc = await findLegacyEmbeddedDocument(req, id);
+        }
+    } else if (docCtx.employeeId && docCtx.employee) {
+        document = await Document.findOne({
+            ...baseQuery,
+            ...buildEmployeeDownloadQuery(docCtx.employeeId, docCtx.employee),
+        }).lean();
+        if (!document) {
+            legacyDoc = await findLegacyEmbeddedDocument(req, id, {
+                employeeIdOnly: docCtx.employeeId,
+            });
+        }
+    } else {
+        return res.status(403).json({
+            success: false,
+            message: 'You do not have permission to download this document',
+            code: 'FORBIDDEN',
+        });
+    }
+
+    if (!document && !legacyDoc) {
+        return res.status(404).json({
+            success: false,
+            message: 'Document not found',
+        });
+    }
+
+    let fileUrl = document?.fileUrl || legacyDoc?.fileUrl;
+    let downloadName = document?.fileName || legacyDoc?.fileName || 'document';
+    let mimeType = document?.mimeType || legacyDoc?.mimeType || null;
+
+    if (document && versionParam != null && !Number.isNaN(versionParam)) {
+        if (versionParam === document.version) {
+            fileUrl = document.fileUrl;
+            downloadName = document.fileName || downloadName;
+        } else {
+            const previous = (document.previousVersions || []).find((v) => v.version === versionParam);
+            if (!previous) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Document version not found',
+                });
+            }
+            fileUrl = previous.fileUrl;
+            downloadName = previous.fileName || downloadName;
+        }
+    }
+
+    if (!mimeType && downloadName?.toLowerCase().endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+    }
+    if (!mimeType && fileUrl?.toLowerCase().includes('.pdf')) {
+        mimeType = 'application/pdf';
+    }
+
+    const resolved = await resolveDocumentFileContent({
+        document,
+        legacyDoc,
+        fileUrl,
+        loadBinary: loadDocumentBinary,
+    });
+
+    let fileBuffer = resolved?.buffer;
+    if (!resolved && document?._id && fileUrl) {
+        fileBuffer = await backfillDocumentBinaryFromDisk(document._id, fileUrl);
+    }
+
+    if (!resolved && !fileBuffer) {
+        logger.warn('Document file missing on disk', {
+            documentId: id,
+            fileUrl,
+            organizationId,
+            version: versionParam,
+            legacy: !!legacyDoc,
+        });
+        return res.status(404).json({
+            success: false,
+            message: 'File not found',
+            fileUrl,
+        });
+    }
+
+    if (resolved?.filePath && document?._id) {
+        fs.readFile(resolved.filePath, (err, buf) => {
+            if (!err && buf?.length) {
+                Document.findByIdAndUpdate(document._id, { fileBinary: buf }).catch(() => {});
+            }
+        });
+    }
+
+    downloadName = downloadName || path.basename(fileUrl || resolved?.filePath || 'document');
+    sendDocumentFile(res, {
+        filePath: resolved?.filePath,
+        buffer: fileBuffer || resolved?.buffer,
+        downloadName,
+        mimeType,
+        inline,
     });
 });
 
@@ -318,6 +660,8 @@ export const getDocumentRequests = asyncHandler(async (req, res) => {
  * Approve document (HR only)
  */
 export const approveDocument = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const approvedBy = req.user?._id || req.employee?._id;
@@ -352,6 +696,8 @@ export const approveDocument = asyncHandler(async (req, res) => {
  * Reject document (HR only)
  */
 export const rejectDocument = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const { rejectionReason } = req.body;
@@ -388,18 +734,25 @@ export const rejectDocument = asyncHandler(async (req, res) => {
  * Get documents pending approval
  */
 export const getPendingDocuments = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const organizationId = getOrganizationId(req);
     const { page = 1, limit = 20 } = req.query;
 
     const query = addOrganizationFilter(req, {
         approvalStatus: 'Pending',
-        requiresApproval: true
+        requiresApproval: true,
+        isActive: { $ne: false },
     });
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const documents = await Document.find(query)
         .populate('uploadedBy', 'name lastName email employeeId department')
+        .populate({
+            path: 'relatedId',
+            select: 'name lastName email employeeId department',
+        })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -422,6 +775,8 @@ export const getPendingDocuments = asyncHandler(async (req, res) => {
  * Upload new version of document
  */
 export const uploadDocumentVersion = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const uploadedBy = req.user?._id || req.employee?._id;
@@ -460,10 +815,11 @@ export const uploadDocumentVersion = asyncHandler(async (req, res) => {
     });
 
     // Update document with new version
-    document.fileUrl = file.path || file.location || file.url || `/uploads/${file.filename}`;
+    document.fileUrl = relativeDocumentFileUrl(file.filename);
     document.fileName = file.originalname || file.name;
     document.fileSize = file.size;
     document.mimeType = file.mimetype;
+    document.fileBinary = requireUploadFileBuffer(file);
     document.version = (document.version || 1) + 1;
     document.uploadedBy = uploadedBy;
 
@@ -480,6 +836,8 @@ export const uploadDocumentVersion = asyncHandler(async (req, res) => {
  * Get document version history
  */
 export const getDocumentVersions = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
 
@@ -528,6 +886,8 @@ export const getDocumentVersions = asyncHandler(async (req, res) => {
  * Share document with employees, departments, or roles
  */
 export const shareDocument = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const { 
@@ -558,12 +918,11 @@ export const shareDocument = asyncHandler(async (req, res) => {
         });
     }
 
-    // Check if user has permission to share (must be uploader or admin/HR)
+    // HR-only route (middleware + assertHrDocumentAccess)
     const userId = req.user?._id || req.employee?._id;
     const isUploader = document.uploadedBy?.toString() === userId?.toString();
-    const isAdmin = req.user?._id && req.user.role === 'admin';
 
-    if (!isUploader && !isAdmin) {
+    if (!isUploader) {
         return res.status(403).json({
             success: false,
             message: 'You do not have permission to share this document'
@@ -655,26 +1014,23 @@ export const getSharedDocuments = asyncHandler(async (req, res) => {
         organizationId,
         isActive: true,
         approvalStatus: { $in: ['Approved', null] },
-        uploadedBy: { $ne: employeeId }, // Exclude own documents
+        uploadedBy: { $ne: employeeId },
         $or: [
-            // Public documents
+            { requiresApproval: false, approvalStatus: { $in: ['Approved', null] } },
             { accessLevel: 'Public' },
-            // Department-specific documents
             {
                 accessLevel: 'Department',
-                allowedDepartments: { $in: [employee.department] }
+                allowedDepartments: { $in: [employee.department] },
             },
-            // Role-specific documents
             {
                 accessLevel: 'Role',
-                allowedRoles: employee.assignedRole?._id || { $exists: false }
+                allowedRoles: employee.assignedRole?._id || { $exists: false },
             },
-            // Specific employee documents
             {
                 accessLevel: 'Specific',
-                allowedEmployees: employeeId
-            }
-        ]
+                allowedEmployees: employeeId,
+            },
+        ],
     };
 
     if (category) query.category = category;

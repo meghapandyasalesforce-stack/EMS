@@ -218,15 +218,20 @@ function ProfileDetails() {
               <div className="rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-sm">
                 <div className="mb-4 flex justify-center">
                   <ProfilePicture
-                    key={user?.profilePhoto?.url || user?.profilePhoto?.filename || user?.id}
-                    user={user}
+                    key={
+                      profileSource?.profilePhoto?.url
+                      || profileSource?.profilePhoto?.filename
+                      || profileSource?.id
+                      || user?.id
+                    }
+                    user={profileSource}
                     size="2xl"
                     showEditButton={true}
                     onEditClick={() => setShowPhotoUpload(true)}
                   />
                 </div>
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{user?.name || 'Employee'}</h2>
-                <p className="mt-1 text-sm font-semibold text-[#0a8f6c]">{user?.jobTitle || 'Team Member'}</p>
+                <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{profileSource?.name || user?.name || 'Employee'}</h2>
+                <p className="mt-1 text-sm font-semibold text-[#0a8f6c]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
                 <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-left text-sm">
                   <div className="flex items-center justify-between">
@@ -436,6 +441,9 @@ function ProfileDetails() {
                 onPhotoUpdate={(photoData) => {
                   const profilePhoto = photoData?.profilePhoto || photoData;
                   dispatch(setEmployeeProfile({ ...employeeDetails, profilePhoto }));
+                  if (user) {
+                    dispatch(setUser({ ...user, profilePhoto }));
+                  }
                   setShowPhotoUpload(false);
                 }}
               />

@@ -125,6 +125,11 @@ export const isLineManager = (user) => isManager(user) && !isProjectManager(user
  */
 export const isHR = (user) => {
     if (!user) return false;
+
+    const functionalRoles = Array.isArray(user?.functionalRoles) ? user.functionalRoles : [];
+    if (functionalRoles.some((role) => String(role || '').toLowerCase().trim() === 'hr')) {
+        return true;
+    }
     
     const department = (user.department || '').toLowerCase().trim();
     const position = (user.position || '').toLowerCase().trim();

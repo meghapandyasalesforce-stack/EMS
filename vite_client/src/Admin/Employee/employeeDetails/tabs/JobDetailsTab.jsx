@@ -1,16 +1,25 @@
 import React from 'react';
-import { FiBriefcase, FiEdit } from 'react-icons/fi';
+import { FiBriefcase, FiEdit, FiUserCheck } from 'react-icons/fi';
 import SectionCard from '../SectionCard';
 import EmployeeFieldGrid from '../EmployeeFieldGrid';
 import { formatDate, formatDateTime, formatSalary, getStatusLabel } from '../utils';
 
-const JobDetailsTab = ({ employee, isManagerReadOnly, onEditWork }) => {
+const JobDetailsTab = ({
+  employee,
+  isManagerReadOnly,
+  onEditWork,
+  canPromoteToHr = false,
+  onPromoteToHr,
+  promotingToHr = false,
+  isHrManagerProfile = false,
+  hidePayrollFields = false,
+}) => {
   const workFields = [
     { label: 'Job Title', value: employee.jobTitle },
     { label: 'Department', value: employee.department },
     { label: 'Position', value: employee.position },
     { label: 'Manager', value: employee.manager },
-    { label: 'Salary', value: formatSalary(employee.salary) },
+    ...(hidePayrollFields ? [] : [{ label: 'Salary', value: formatSalary(employee.salary) }]),
     { label: 'Joining Date', value: formatDate(employee.joiningDate) },
     { label: 'Created At', value: formatDateTime(employee.createdAt) },
     { label: 'Status', value: getStatusLabel(employee) },
@@ -39,21 +48,34 @@ const JobDetailsTab = ({ employee, isManagerReadOnly, onEditWork }) => {
         icon={FiBriefcase}
         action={
           !isManagerReadOnly ? (
-            <button
-              type="button"
-              onClick={onEditWork}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              <FiEdit className="h-4 w-4" />
-              Edit
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {canPromoteToHr && !isHrManagerProfile && onPromoteToHr ? (
+                <button
+                  type="button"
+                  onClick={onPromoteToHr}
+                  disabled={promotingToHr}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  <FiUserCheck className="h-4 w-4" />
+                  {promotingToHr ? 'Updating…' : 'Make HR Manager'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={onEditWork}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <FiEdit className="h-4 w-4" />
+                Edit
+              </button>
+            </div>
           ) : null
         }
       >
         <EmployeeFieldGrid fields={workFields} />
       </SectionCard>
 
-      {financialFields.length > 0 && (
+      {financialFields.length > 0 && !hidePayrollFields && (
         <SectionCard title="Financial Details (Payroll)">
           <EmployeeFieldGrid fields={financialFields} />
         </SectionCard>

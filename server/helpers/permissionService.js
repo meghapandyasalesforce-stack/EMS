@@ -172,6 +172,10 @@ export const getDataScope = (authContext) => {
     return 'organization';
   }
   if (authContext?.isLineManager) {
+    // Project managers need org-wide scope to manage project membership
+    if (hasPermission(authContext, PERMISSIONS.PROJECT_ADMIN_VIEW)) {
+      return 'organization';
+    }
     return 'team';
   }
   return 'self';
