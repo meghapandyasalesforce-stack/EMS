@@ -99,6 +99,8 @@ attendanceRegularizationSchema.index({ organizationId: 1, status: 1 });
 // Compound index for manager dashboard queries
 attendanceRegularizationSchema.index({ managerId: 1, status: 1, createdAt: -1 });
 
+attendanceRegularizationSchema.index({ organizationId: 1, employeeId: 1, attendanceDate: 1, status: 1 });
+
 const AttendanceRegularization = mongoose.model("AttendanceRegularization", attendanceRegularizationSchema);
 export default AttendanceRegularization;
 

@@ -91,6 +91,20 @@ export const loadRequesterHrStaff = async (req) => {
   return isHrStaffEmployee(employee);
 };
 
+/** Org owner / platform admin (may lack a linked employee profile). */
+export const isOrgAdminRequest = (req) => {
+  const role = (req.user?.role || req.decoded?.role || '').toLowerCase();
+  if (role === 'admin') return true;
+  return Boolean(req.authContext?.isOrgOwner);
+};
+
+/** HR document & ID-card management — HR staff or org admin / HR portal delegates. */
+export const canAccessHrDocumentManagement = async (req) => {
+  if (isOrgAdminRequest(req)) return true;
+  if (req.authContext?.isHrManager || req.authContext?.isHrExecutive) return true;
+  return loadRequesterHrStaff(req);
+};
+
 const EXECUTIVE_ROLE_KEYS = new Set(['executive', 'ceo', 'cto', 'cfo', 'vp']);
 
 /**

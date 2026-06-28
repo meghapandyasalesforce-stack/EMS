@@ -146,6 +146,21 @@ export const isHR = (user) => {
 };
 
 /**
+ * HR document / ID-card management (org admin, HR portal delegates, or HR staff).
+ */
+export const canAccessHrDocuments = (
+    user,
+    employee = null,
+    { isHrManager = false, isHrExecutive = false, isOrgOwner = false } = {}
+) => {
+    if (isOrgOwner || isHrManager || isHrExecutive) return true;
+    const userObj = user || employee;
+    if (!userObj) return false;
+    if ((userObj.role || '').toLowerCase() === 'admin') return true;
+    return isHR(userObj);
+};
+
+/**
  * Check if user can add employees (Admin or HR)
  * @param {Object} user - User object
  * @returns {boolean} - True if user can add employees

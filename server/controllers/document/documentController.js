@@ -19,7 +19,14 @@ const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certi
   'Training', 'Compliance', 'Financial', 'Legal', 'Other'];
 
 const loadEmployeeDocumentContext = async (req) => {
+    const isAdminUser =
+        (req.user?.role || '').toLowerCase() === 'admin' ||
+        (req.decoded?.role || '').toLowerCase() === 'admin';
+
     if (!req.employee?._id) {
+        if (isAdminUser) {
+            return { isHr: true, employeeId: null, employee: null };
+        }
         return { isHr: false, employeeId: null, employee: null };
     }
 
@@ -29,11 +36,14 @@ const loadEmployeeDocumentContext = async (req) => {
         .lean();
 
     if (!employee) {
+        if (isAdminUser) {
+            return { isHr: true, employeeId: req.employee._id, employee: null };
+        }
         return { isHr: false, employeeId: req.employee._id, employee: null };
     }
 
     return {
-        isHr: isHrStaffEmployee(employee),
+        isHr: isAdminUser || isHrStaffEmployee(employee),
         employeeId: req.employee._id,
         employee,
     };

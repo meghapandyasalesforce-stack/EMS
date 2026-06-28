@@ -20,7 +20,7 @@ import { toast } from 'react-toastify';
 import axios, { fetchDocumentWithFallback, getDocumentDownloadUrl, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import logger from '../../utils/logger';
-import { isHR } from '../../utils/managerHelper';
+import { canAccessHrDocuments } from '../../utils/managerHelper';
 import { ADMIN_DOCUMENTS_ENDPOINT } from '../../utils/constant';
 
 const DOCUMENT_CATEGORY_OPTIONS = [
@@ -159,11 +159,11 @@ const DocumentsPage = () => {
     const navigate = useNavigate();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
+    const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
 
     const isHRUser = useMemo(() => {
-        const userObj = user || employee;
-        return isHR(userObj);
-    }, [user, employee]);
+        return canAccessHrDocuments(user, employee, permissionFlags);
+    }, [user, employee, permissionFlags]);
 
     const [documents, setDocuments] = useState([]);
     const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });

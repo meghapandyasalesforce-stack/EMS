@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { isHR } from '../../utils/managerHelper';
+import { canAccessHrDocuments } from '../../utils/managerHelper';
 import {
   FiCreditCard,
   FiPlus,
@@ -172,7 +172,8 @@ const IdCardMiniPreview = ({ card, themeKey = 'mint' }) => {
 const IdCardGenerator = () => {
   const user = useSelector((state) => state.auth.user);
   const employee = useSelector((state) => state.employeeDetails.employee);
-  const isHrUser = isHR(user || employee);
+  const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+  const isHrUser = canAccessHrDocuments(user, employee, permissionFlags);
 
   const [idCards, setIdCards] = useState([]);
   const [employees, setEmployees] = useState([]);

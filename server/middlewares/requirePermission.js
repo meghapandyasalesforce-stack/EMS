@@ -126,12 +126,12 @@ export const requireOrgOwnerOrHrManager = gate(
   'Access restricted to organization owners and HR managers'
 );
 
-/** HR-only document management — HR staff only (admin without HR role is blocked). */
+/** HR document management — HR staff, org admin, or delegated HR managers. */
 export const requireHrDocumentAccess = composeMiddleware([
   attachAuthContext,
   async (req, res, next) => {
-    const { loadRequesterHrStaff } = await import('../helpers/functionalRolesHelper.js');
-    if (!(await loadRequesterHrStaff(req))) {
+    const { canAccessHrDocumentManagement } = await import('../helpers/functionalRolesHelper.js');
+    if (!(await canAccessHrDocumentManagement(req))) {
       return res.status(403).json({
         success: false,
         message: 'Only HR can access all employee documents',
@@ -142,12 +142,12 @@ export const requireHrDocumentAccess = composeMiddleware([
   },
 ]);
 
-/** HR-only ID card management — HR staff only (admin without HR role is blocked). */
+/** HR ID card management — HR staff, org admin, or delegated HR managers. */
 export const requireHrIdCardAccess = composeMiddleware([
   attachAuthContext,
   async (req, res, next) => {
-    const { loadRequesterHrStaff } = await import('../helpers/functionalRolesHelper.js');
-    if (!(await loadRequesterHrStaff(req))) {
+    const { canAccessHrDocumentManagement } = await import('../helpers/functionalRolesHelper.js');
+    if (!(await canAccessHrDocumentManagement(req))) {
       return res.status(403).json({
         success: false,
         message: 'Only HR can manage employee ID cards',

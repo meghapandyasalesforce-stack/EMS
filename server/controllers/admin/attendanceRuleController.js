@@ -7,6 +7,13 @@ import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { geocodeAddress, isGeocodingAvailable } from '../../helpers/geocodingService.js';
 import { isValidTimezone } from '../../constants/timezoneOptions.js';
 import { invalidateActiveAttendanceRuleCache } from '../../helpers/attendanceSecurityHelper.js';
+import { invalidateOrgContextCache } from '../../helpers/organizationTimezoneService.js';
+import { normalizeRegularizationRulesInput } from '../../helpers/regularizationLimitHelper.js';
+
+const invalidateAttendanceRuleCaches = async (organizationId) => {
+    await invalidateActiveAttendanceRuleCache(organizationId);
+    invalidateOrgContextCache(organizationId);
+};
 
 // Helper to get client IP
 const getClientIP = (req) => {
@@ -219,6 +226,15 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
             return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
         }
 
+        let normalizedRegularizationRules;
+        if (regularizationRules !== undefined) {
+            try {
+                normalizedRegularizationRules = normalizeRegularizationRulesInput(regularizationRules);
+            } catch (err) {
+                return sendValidationError(res, err.message);
+            }
+        }
+
         // Check if a rule already exists
         const query = addOrganizationFilter(req, { isActive: true });
         let attendanceRule = await AttendanceRule.findOne(query);
@@ -267,8 +283,8 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 attendanceRule.compOffRules = compOffRules;
             }
 
-            if (regularizationRules) {
-                attendanceRule.regularizationRules = regularizationRules;
+            if (normalizedRegularizationRules) {
+                attendanceRule.regularizationRules = normalizedRegularizationRules;
             }
 
             if (applicableDepartments) {
@@ -280,7 +296,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
 
             await attendanceRule.save();
 
-            await invalidateActiveAttendanceRuleCache(organizationId);
+            await invalidateAttendanceRuleCaches(organizationId);
 
             // Create audit log
             const newState = attendanceRule.toObject();
@@ -336,7 +352,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                     maxAccumulation: 5,
                     validity: 90
                 },
-                regularizationRules: regularizationRules || {
+                regularizationRules: normalizedRegularizationRules || {
                     enabled: true,
                     allowedPerMonth: 5
                 },
@@ -379,7 +395,7 @@ export const createOrUpdateAttendanceRule = async (req, res) => {
                 priority: req.body.priority || 1
             });
 
-            await invalidateActiveAttendanceRuleCache(organizationId);
+            await invalidateAttendanceRuleCaches(organizationId);
 
             // Create audit log for creation
             const changedBy = req.user?._id || req.employee?._id;
@@ -553,6 +569,8 @@ export const deactivateAttendanceRule = async (req, res) => {
         // Deactivate
         attendanceRule.isActive = false;
         await attendanceRule.save();
+
+        await invalidateAttendanceRuleCaches(organizationId);
 
         // Create audit log
         const changedBy = req.user?._id || req.employee?._id;

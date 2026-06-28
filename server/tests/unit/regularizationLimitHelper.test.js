@@ -1,8 +1,14 @@
 import { describe, it, expect } from '@jest/globals';
 import {
     resolveRegularizationRules,
-    getMonthBounds
+    getMonthBounds,
+    normalizeRegularizationRulesInput,
+    MAX_REGULARIZATION_PER_MONTH
 } from '../../helpers/regularizationLimitHelper.js';
+import {
+    getMonthBoundsInTimezone,
+    isSameCalendarMonthInTimezone
+} from '../../helpers/timezoneHelper.js';
 
 describe('regularizationLimitHelper', () => {
     it('resolveRegularizationRules uses defaults when rule is missing', () => {
@@ -37,5 +43,42 @@ describe('regularizationLimitHelper', () => {
 
         expect(monthStart).toEqual(new Date(2026, 5, 1));
         expect(nextMonthStart).toEqual(new Date(2026, 6, 1));
+    });
+
+    it('normalizeRegularizationRulesInput accepts valid config', () => {
+        expect(
+            normalizeRegularizationRulesInput({ enabled: true, allowedPerMonth: 10 })
+        ).toEqual({ enabled: true, allowedPerMonth: 10 });
+        expect(
+            normalizeRegularizationRulesInput({ enabled: false, allowedPerMonth: 0 })
+        ).toEqual({ enabled: false, allowedPerMonth: 0 });
+    });
+
+    it('normalizeRegularizationRulesInput rejects out-of-range values', () => {
+        expect(() =>
+            normalizeRegularizationRulesInput({ enabled: true, allowedPerMonth: 32 })
+        ).toThrow(`allowedPerMonth must be an integer from 0 to ${MAX_REGULARIZATION_PER_MONTH}`);
+
+        expect(() =>
+            normalizeRegularizationRulesInput({ enabled: true, allowedPerMonth: -1 })
+        ).toThrow(`allowedPerMonth must be an integer from 0 to ${MAX_REGULARIZATION_PER_MONTH}`);
+    });
+});
+
+describe('timezoneHelper month boundaries', () => {
+    it('getMonthBoundsInTimezone uses org timezone calendar month', () => {
+        const reference = new Date('2026-06-17T12:00:00.000Z');
+        const { monthStart, nextMonthStart } = getMonthBoundsInTimezone(reference, 'Asia/Kolkata');
+
+        expect(monthStart.toISOString()).toBe('2026-05-31T18:30:00.000Z');
+        expect(nextMonthStart.toISOString()).toBe('2026-06-30T18:30:00.000Z');
+    });
+
+    it('isSameCalendarMonthInTimezone compares months in timezone', () => {
+        const earlyUtc = new Date('2026-03-31T20:00:00.000Z');
+        const lateUtc = new Date('2026-04-01T04:00:00.000Z');
+
+        expect(isSameCalendarMonthInTimezone(earlyUtc, lateUtc, 'UTC')).toBe(false);
+        expect(isSameCalendarMonthInTimezone(earlyUtc, lateUtc, 'Asia/Kolkata')).toBe(true);
     });
 });
