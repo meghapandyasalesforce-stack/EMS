@@ -114,6 +114,13 @@ const employeeSchema = new mongoose.Schema({
      * @min 0
      */
     salary: { type: Number, required: true, min: 0 },
+    /** CTC revision history for cumulative TDS projection */
+    salaryRevisions: [{
+        salary: { type: Number, required: true, min: 0 },
+        effectiveFrom: { type: Date, required: true },
+        note: { type: String, trim: true },
+        createdAt: { type: Date, default: Date.now }
+    }],
     salaryStructure: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'SalaryStructure',

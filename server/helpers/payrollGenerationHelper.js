@@ -4,7 +4,7 @@ import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
-import { buildIncomeTaxParamsFromEmployee, computeMonthlyIncomeTax } from './incomeTaxCalculation.js';
+import { computeRegimeIncomeTaxCumulative } from './tdsCumulativeHelper.js';
 
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
@@ -50,35 +50,16 @@ function computeConfiguredComponent(config, baseAmount) {
     return Math.round(Math.max(0, raw));
 }
 
-function projectSalaryBreakdownForTax(emp, salaryStructure) {
-    const fullGross = Math.max(0, emp.salary || 0);
-    if (!salaryStructure) {
-        const formula = computeEarningsFromGross(fullGross);
-        return {
-            basicWage: formula.basicWage,
-            houseRentAllowance: formula.houseRentAllowance
-        };
-    }
-
-    return {
-        basicWage: computeConfiguredComponent(salaryStructure?.earnings?.basicWage, fullGross),
-        houseRentAllowance: computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, fullGross)
-    };
-}
-
-function computeRegimeIncomeTax(emp, salaryStructure, deductions) {
-    const breakdown = projectSalaryBreakdownForTax(emp, salaryStructure);
-    const annualGross = Math.round((emp.salary || 0) * 12);
-
-    const taxParams = buildIncomeTaxParamsFromEmployee(emp, {
-        annualGross,
-        annualBasic: breakdown.basicWage * 12,
-        annualHra: breakdown.houseRentAllowance * 12,
-        annualPfEmployee: (deductions.pfEmployee || 0) * 12,
-        annualProfessionalTax: (deductions.professionalTax || 0) * 12
+async function computeRegimeIncomeTax(emp, salaryStructure, deductions, earnings, month, year, organizationId) {
+    return computeRegimeIncomeTaxCumulative({
+        emp,
+        salaryStructure,
+        deductions,
+        earnings,
+        month,
+        year,
+        organizationId
     });
-
-    return computeMonthlyIncomeTax(taxParams);
 }
 
 function bonusFromRule(rule, baseAmount) {
@@ -584,7 +565,15 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             loanDeduction: 0,
             otherDeductions: 0
         };
-        deductions.incomeTax = computeRegimeIncomeTax(emp, salaryStructure, deductions);
+        deductions.incomeTax = await computeRegimeIncomeTax(
+            emp,
+            salaryStructure,
+            deductions,
+            earnings,
+            month,
+            yearNum,
+            orgId
+        );
     } else {
         const formula = computeEarningsFromGross(effectiveGross);
         // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
@@ -623,7 +612,15 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             loanDeduction: 0,
             otherDeductions: 0
         };
-        deductions.incomeTax = computeRegimeIncomeTax(emp, null, deductions);
+        deductions.incomeTax = await computeRegimeIncomeTax(
+            emp,
+            null,
+            deductions,
+            earnings,
+            month,
+            yearNum,
+            orgId
+        );
     }
 
     deductions.total =
@@ -673,7 +670,7 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
     const empId = payroll.employeeId?._id || payroll.employeeId;
     if (!empId) return base;
     const emp = await Employee.findById(empId)
-        .select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
+        .select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
         .lean();
     if (!emp) return base;
     const orgId = organizationId || emp.organizationId;

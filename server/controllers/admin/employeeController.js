@@ -8,6 +8,7 @@ import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { assignSystemRoleToEmployee } from '../../helpers/systemRoleService.js';
 import { SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
+import { buildSalaryRevisionEntries } from '../../helpers/salaryRevisionHelper.js';
 
 async function resolveManagerReference(organizationId, managerInput) {
   const raw = String(managerInput || '').trim();
@@ -50,7 +51,7 @@ async function resolveManagerReference(organizationId, managerInput) {
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore } = req.body;
+    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote } = req.body;
 
     // Validate employee ID
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
@@ -98,7 +99,44 @@ export const updateEmployeeWorkInfo = async (req, res) => {
       updateData.manager = resolvedManager.manager;
       updateData.managerId = resolvedManager.managerId;
     }
-    if (salary !== undefined) updateData.salary = salary;
+    if (salary !== undefined) {
+      const nextSalary = Math.max(0, Number(salary) || 0);
+      const previousSalary = Math.max(0, Number(employee.salary) || 0);
+
+      if (nextSalary !== previousSalary) {
+        updateData.salary = nextSalary;
+
+        const effectiveFrom = salaryEffectiveFrom
+          ? new Date(salaryEffectiveFrom)
+          : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+        if (Number.isNaN(effectiveFrom.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid salaryEffectiveFrom date'
+          });
+        }
+
+        const existingRevisions = Array.isArray(employee.salaryRevisions) ? employee.salaryRevisions : [];
+        const revisionEntries = existingRevisions.length > 0
+          ? [{
+              salary: nextSalary,
+              effectiveFrom,
+              note: salaryRevisionNote ? String(salaryRevisionNote).trim() : 'Salary revision'
+            }]
+          : buildSalaryRevisionEntries({
+              previousSalary,
+              newSalary: nextSalary,
+              joiningDate: employee.joiningDate,
+              effectiveFrom,
+              note: salaryRevisionNote
+            });
+
+        updateData.$push = {
+          salaryRevisions: { $each: revisionEntries }
+        };
+      }
+    }
     if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
 

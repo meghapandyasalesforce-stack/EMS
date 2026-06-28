@@ -34,7 +34,7 @@ async function runPreviewForOrg({ organizationId, month, year, asOf }) {
                 ]
             }
         ]
-    }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails');
+    }).select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails');
 
     for (const emp of employees) {
         const orgId = emp.organizationId || organizationId;
@@ -115,7 +115,7 @@ async function runFinalForOrg({ organizationId, month, year, now }) {
                 ]
             }
         ]
-    }).select('salary organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails');
+    }).select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails');
 
     for (const emp of employees) {
         const orgId = emp.organizationId || organizationId;
