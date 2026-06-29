@@ -4,6 +4,10 @@ import Leave from '../models/leave.model.js';
 import Employee from '../models/employee.model.js';
 import logger from '../helpers/logger.js';
 import { getLeaveTypeVariantsForBalance } from '../helpers/leaveTypeHelper.js';
+import {
+    getMonthlyEntitlementAmount,
+    getYearlyAccrualCap
+} from '../helpers/leavePolicyAccrualHelper.js';
 
 class LeaveBalanceEngine {
     /**
@@ -135,7 +139,7 @@ class LeaveBalanceEngine {
 
         // Calculate carried forward balance
         const joiningYear = employee.joiningDate ? new Date(employee.joiningDate).getFullYear() : year;
-        if (leaveTypeConfig.carryForward.enabled && year > joiningYear) {
+        if (leaveTypeConfig.carryForward?.enabled && year > joiningYear) {
             const carriedForward = await this.calculateCarryForward(
                 employee._id,
                 leaveType,
@@ -147,7 +151,7 @@ class LeaveBalanceEngine {
         }
 
         // Calculate expired balance
-        if (leaveTypeConfig.carryForward.expiresIfNotUsed) {
+        if (leaveTypeConfig.carryForward?.expiresIfNotUsed) {
             const expired = await this.calculateExpiredBalance(
                 employee._id,
                 leaveType,
@@ -190,13 +194,16 @@ class LeaveBalanceEngine {
                 }
                 return 0;
 
-            case 'monthly':
-                // Monthly accrual
+            case 'monthly': {
                 const monthsWorked = this.calculateMonthsWorked(joiningDate, year, now);
-                return Math.min(
-                    monthsWorked * accrual.amount,
-                    accrual.maxAccrual || Infinity
-                );
+                const monthlyAmount =
+                    getMonthlyEntitlementAmount(leaveTypeConfig) ??
+                    (Number(accrual.amount) || 0);
+                const yearlyCap =
+                    getYearlyAccrualCap(leaveTypeConfig) ??
+                    (Number.isFinite(Number(accrual.maxAccrual)) ? Number(accrual.maxAccrual) : Infinity);
+                return Math.min(monthsWorked * monthlyAmount, yearlyCap);
+            }
 
             case 'proportional':
                 // Proportional to months of service

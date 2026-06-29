@@ -27,7 +27,7 @@ export const updateLeave = createAsyncThunk(
       const response = await axios.put(`${ADMIN_LEAVE_ENDPOINT}/update-leave-status/${id}`, updatedData ,{
   withCredentials: true
 });
-      return response.data.leaves;
+      return response.data;
     } catch (err) {
       return rejectWithValue(err.response.data || err.message);
     }

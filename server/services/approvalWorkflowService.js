@@ -827,3 +827,45 @@ export const getPendingApprovals = async (employeeId, organizationId) => {
     }
 };
 
+/**
+ * Cancel an in-progress approval instance (e.g. when requester withdraws leave).
+ */
+export const cancelApprovalInstance = async ({
+    approvalInstanceId,
+    cancelledBy = null,
+    reason = 'Cancelled by requester'
+}) => {
+    const instance = await ApprovalInstance.findById(approvalInstanceId);
+    if (!instance) {
+        return { cancelled: false, reason: 'not_found' };
+    }
+
+    if (['Approved', 'Rejected', 'Cancelled', 'Expired'].includes(instance.status)) {
+        return { cancelled: false, reason: 'already_terminal', status: instance.status };
+    }
+
+    instance.status = 'Cancelled';
+    instance.rejectionReason = reason;
+    instance.rejectedAt = new Date();
+    if (cancelledBy) {
+        instance.rejectedBy = cancelledBy;
+    }
+
+    for (const step of instance.steps) {
+        if (step.status === 'Pending') {
+            step.status = 'Skipped';
+        }
+    }
+
+    await instance.save();
+
+    logger.info('Approval instance cancelled', {
+        approvalInstanceId: instance._id,
+        entityType: instance.entityType,
+        entityId: instance.entityId,
+        cancelledBy
+    });
+
+    return { cancelled: true, instance };
+};
+

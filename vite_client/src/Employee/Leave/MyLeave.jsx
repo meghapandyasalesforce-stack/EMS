@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { getEmployeeLeaves } from '../../context/employeeLeaveSlice'; 
+import { getEmployeeLeaves, cancelEmployeeLeave } from '../../context/employeeLeaveSlice'; 
 import { PieChart, Pie, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { FaCalendarAlt, FaUmbrellaBeach, FaChartPie, FaChartBar } from 'react-icons/fa';
 import { MdSick } from 'react-icons/md';
 import { BsCalendarCheck } from 'react-icons/bs';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
-import { getAuthEmployeeId } from '../../utils/authUser';
+import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
+import { toast } from 'react-toastify';
 
 const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
@@ -19,8 +20,7 @@ const MyLeavePage = () => {
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const employee = useSelector(state => state.auth.employee || state.auth.user);
-  const employeeDocId = getAuthEmployeeId(employee);
+  const cancelLoading = useSelector(state => state.employeeLeave.cancelLoading);
 
   useEffect(() => {
     const handleResize = () => {
@@ -36,30 +36,37 @@ const MyLeavePage = () => {
     dispatch(getEmployeeLeaves());
   }, [dispatch]);
 
-  // Fetch leave balance from LeavePolicyManagement
+  // Fetch leave balance from employee leave API
   useEffect(() => {
-    if (employeeDocId) {
-      fetchLeaveBalance();
-    }
-  }, [employeeDocId, selectedYear]);
+    fetchLeaveBalance();
+  }, [selectedYear]);
 
   const fetchLeaveBalance = async () => {
     setBalanceLoading(true);
     try {
-      const res = await axios.get(
-        `/v1/admin/leave-policy/balance/${employeeDocId}`,
-        { params: { year: selectedYear } }
-      );
+      const res = await axios.get(`${EMPLOYEE_LEAVE_ENDPOINT}/balance`, {
+        params: { year: selectedYear },
+        withCredentials: true,
+      });
       setLeaveBalance(res.data.balance);
     } catch (error) {
-      // Set to null explicitly so we can show a message
       setLeaveBalance(null);
-      // Only show error if it's not a 404 (no policy configured)
-      if (error.response?.status !== 404) {
-        // Silently fail - don't show toast for missing policy
-      }
     } finally {
       setBalanceLoading(false);
+    }
+  };
+
+  const handleCancelLeave = async (leaveId) => {
+    if (!window.confirm('Cancel this pending leave request?')) {
+      return;
+    }
+    try {
+      await dispatch(cancelEmployeeLeave(leaveId)).unwrap();
+      toast.success('Leave request cancelled');
+      dispatch(getEmployeeLeaves());
+      fetchLeaveBalance();
+    } catch (error) {
+      toast.error(typeof error === 'string' ? error : error?.message || 'Failed to cancel leave');
     }
   };
 
@@ -82,7 +89,7 @@ const MyLeavePage = () => {
       });
       return maxLeaves;
     }
-    return { sick: 12, annual: 12, casual: 12 };
+    return { sick: 0, annual: 0, casual: 0 };
   };
 
   const MAX_LEAVES = getMaxLeaves();
@@ -93,6 +100,18 @@ const MyLeavePage = () => {
   // Safely derive stats even if backend statistics are missing or still loading.
   // This prevents crashes when navigating here right after submitting a leave.
   const safeLeavesByType = statsData?.leavesByType || {};
+  const statsBalanceByType = statsData?.balanceByType || {};
+
+  const getTypeRemaining = (type, takenKey) => {
+    if (leaveBalance?.balances) {
+      return Math.max(0, (MAX_LEAVES[type] || 0) - (safeLeavesByType[takenKey] || 0));
+    }
+    if (statsData?.hasBalanceData && statsBalanceByType[type]) {
+      return statsBalanceByType[type].available;
+    }
+    return null;
+  };
+
   const calculatedStats = {
     totalLeaves: leaveBalance?.balances 
       ? leaveBalance.balances.reduce((sum, b) => sum + (b.accrued + b.carriedForward), 0)
@@ -102,15 +121,15 @@ const MyLeavePage = () => {
       : (statsData?.remainingLeaves || 0),
     sickLeaves: {
       taken: safeLeavesByType.sick || 0,
-      remaining: MAX_LEAVES.sick - (safeLeavesByType.sick || 0)
+      remaining: getTypeRemaining('sick', 'sick')
     },
     annualLeaves: {
       taken: safeLeavesByType.annual || 0,
-      remaining: MAX_LEAVES.annual - (safeLeavesByType.annual || 0)
+      remaining: getTypeRemaining('annual', 'annual')
     },
     casualLeaves: {
       taken: safeLeavesByType.casual || 0,
-      remaining: MAX_LEAVES.casual - (safeLeavesByType.casual || 0)
+      remaining: getTypeRemaining('casual', 'casual')
     }
   };
 
@@ -170,6 +189,7 @@ const MyLeavePage = () => {
 
       return {
         id: leave._id,
+        rawStatus: leave.status,
         type: leave.leaveType
           ? leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)
           : 'Unknown',
@@ -206,19 +226,21 @@ const MyLeavePage = () => {
     {
       name: 'Sick',
       taken: calculatedStats.sickLeaves.taken,
-      remaining: calculatedStats.sickLeaves.remaining
+      remaining: calculatedStats.sickLeaves.remaining ?? 0
     },
     {
       name: 'Annual',
       taken: calculatedStats.annualLeaves.taken,
-      remaining: calculatedStats.annualLeaves.remaining
+      remaining: calculatedStats.annualLeaves.remaining ?? 0
     },
     {
       name: 'Casual',
       taken: calculatedStats.casualLeaves.taken,
-      remaining: calculatedStats.casualLeaves.remaining
+      remaining: calculatedStats.casualLeaves.remaining ?? 0
     }
   ];
+
+  const formatRemaining = (value) => (value == null ? '—' : value);
 
   return (
     <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
@@ -329,6 +351,29 @@ const MyLeavePage = () => {
               </p>
             </div>
           )}
+
+          {statsData?.monthlyLeaveCaps?.types?.length > 0 && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-2">
+                This month ({statsData.monthlyLeaveCaps.monthLabel})
+              </h3>
+              <ul className="space-y-2">
+                {statsData.monthlyLeaveCaps.types.map((t) => (
+                  <li
+                    key={t.leaveType}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium capitalize">{t.displayName || t.leaveType}</span>
+                    <span className="text-gray-600">
+                      <span className="font-semibold text-theme-primary">{t.availableBalance ?? 0}</span> available ·{' '}
+                      <span className="font-semibold text-theme-primary">{t.appliableThisMonth ?? 0}</span> can apply
+                      (max {t.maxDaysPerMonth}/month)
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Monthly Leave Usage */}
@@ -433,6 +478,7 @@ const MyLeavePage = () => {
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -453,9 +499,22 @@ const MyLeavePage = () => {
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                             ${leave.status === 'Approved' ? 'bg-theme-primary/10 text-theme-primary' :
                               leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                              leave.status === 'Cancelled' ? 'bg-gray-100 text-gray-600' :
                                 'bg-red-100 text-red-800'}`}>
                             {leave.status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs md:text-sm">
+                          {leave.rawStatus === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => handleCancelLeave(leave.id)}
+                              disabled={cancelLoading}
+                              className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -521,7 +580,7 @@ const MyLeavePage = () => {
                   </h3>
                   <div className="space-y-2">
                     <p className="text-xs md:text-sm text-gray-600">Taken: {calculatedStats.sickLeaves.taken}</p>
-                    <p className="text-xs md:text-sm text-gray-600">Remaining: {calculatedStats.sickLeaves.remaining}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Remaining: {formatRemaining(calculatedStats.sickLeaves.remaining)}</p>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className="bg-red-500 h-2.5 rounded-full"
@@ -537,7 +596,7 @@ const MyLeavePage = () => {
                   </h3>
                   <div className="space-y-2">
                     <p className="text-xs md:text-sm text-gray-600">Taken: {calculatedStats.annualLeaves.taken}</p>
-                    <p className="text-xs md:text-sm text-gray-600">Remaining: {calculatedStats.annualLeaves.remaining}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Remaining: {formatRemaining(calculatedStats.annualLeaves.remaining)}</p>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className="bg-yellow-500 h-2.5 rounded-full"
@@ -553,7 +612,7 @@ const MyLeavePage = () => {
                   </h3>
                   <div className="space-y-2">
                     <p className="text-xs md:text-sm text-gray-600">Taken: {calculatedStats.casualLeaves.taken}</p>
-                    <p className="text-xs md:text-sm text-gray-600">Remaining: {calculatedStats.casualLeaves.remaining}</p>
+                    <p className="text-xs md:text-sm text-gray-600">Remaining: {formatRemaining(calculatedStats.casualLeaves.remaining)}</p>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className="bg-theme-primary h-2.5 rounded-full"

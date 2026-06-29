@@ -1,12 +1,24 @@
 import LeavePolicy from '../../models/leavePolicy.model.js';
 import LeaveBalance from '../../models/leaveBalance.model.js';
-import Leave from '../../models/leave.model.js';
 import Employee from '../../models/employee.model.js';
 import leaveBalanceEngine from '../../services/leaveBalanceEngine.js';
 import logger from '../../helpers/logger.js';
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
-import { getLeaveTypeVariantsForBalance } from '../../helpers/leaveTypeHelper.js';
+import { buildEmployeeLeaveBalanceResponse } from '../../helpers/leaveBalanceResponseHelper.js';
+import { normalizePolicyLeaveTypes } from '../../helpers/leavePolicyAccrualHelper.js';
+
+async function recalculateOrgLeaveBalances(organizationId) {
+    if (!organizationId) return;
+    try {
+        await leaveBalanceEngine.recalculateBalances(organizationId, new Date().getFullYear());
+    } catch (error) {
+        logger.warn('Leave balance recalculation after policy change failed', {
+            organizationId,
+            error: error.message
+        });
+    }
+}
 
 /**
  * Create a new leave policy
@@ -28,8 +40,16 @@ export const createLeavePolicy = async (req, res) => {
             createdBy: req.user?._id || req.employee?._id
         };
 
+        if (policyData.leaveTypes) {
+            policyData.leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes);
+        }
+
         const policy = new LeavePolicy(policyData);
         await policy.save();
+
+        if (policyData.leaveTypes?.length) {
+            await recalculateOrgLeaveBalances(organizationId);
+        }
 
         res.status(201).json({
             success: true,
@@ -135,9 +155,18 @@ export const updateLeavePolicy = async (req, res) => {
             });
         }
 
-        Object.assign(policy, req.body);
+        const updateBody = { ...req.body };
+        if (updateBody.leaveTypes) {
+            updateBody.leaveTypes = normalizePolicyLeaveTypes(updateBody.leaveTypes);
+        }
+
+        Object.assign(policy, updateBody);
         policy.lastModifiedBy = req.user?._id || req.employee?._id;
         await policy.save();
+
+        if (updateBody.leaveTypes?.length) {
+            await recalculateOrgLeaveBalances(organizationId);
+        }
 
         res.json({
             success: true,
@@ -224,39 +253,18 @@ export const getEmployeeLeaveBalance = async (req, res) => {
         }
 
         // Calculate/refresh balance
-        const balance = await leaveBalanceEngine.calculateBalance(
+        const balanceObj = await buildEmployeeLeaveBalanceResponse(
             targetEmployeeId,
             targetYear,
             organizationId
         );
 
-        if (!balance) {
+        if (!balanceObj) {
             return res.status(404).json({
                 success: false,
                 message: 'Leave balance not found. No applicable policy for this employee.'
             });
         }
-
-        await balance.populate('policy', 'policyName leaveTypes');
-
-        // Calculate usedThisMonth for each leave type
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-        const balanceObj = balance.toObject();
-        balanceObj.balances = await Promise.all(balanceObj.balances.map(async (b) => {
-            const types = getLeaveTypeVariantsForBalance(b.leaveType);
-            const monthLeaves = await Leave.find({
-                organizationId,
-                employee: targetEmployeeId,
-                leaveType: { $in: types },
-                startDate: { $gte: monthStart, $lte: monthEnd },
-                status: { $in: ['approved', 'pending'] }
-            });
-            b.usedThisMonth = monthLeaves.reduce((sum, l) => sum + (l.duration || 0), 0);
-            return b;
-        }));
 
         res.json({
             success: true,

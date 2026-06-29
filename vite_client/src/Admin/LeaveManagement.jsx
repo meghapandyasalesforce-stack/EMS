@@ -10,6 +10,7 @@ import {
   FiCalendar,
   FiClock,
   FiUser,
+  FiPaperclip,
 } from 'react-icons/fi';
 import { getAllLeaves, updateLeave } from '../context/leaveSlice';
 import { toast } from 'react-toastify';
@@ -101,6 +102,14 @@ function profilePhotoSrc(leave) {
     return getUploadUrl(photoRef.startsWith('/') ? photoRef : `/uploads/${photoRef}`);
   }
   return getUploadUrl(photoRef.url || photoRef);
+}
+
+function leaveDocumentUrl(documentPath) {
+  if (!documentPath || typeof documentPath !== 'string') return null;
+  const normalized = documentPath.startsWith('/')
+    ? documentPath
+    : `/uploads/${documentPath.replace(/^uploads\//, '')}`;
+  return getUploadUrl(normalized);
 }
 
 function RowAvatar({ leave, sizeClass = 'h-10 w-10 text-xs', roundedClass = 'rounded-full' }) {
@@ -230,12 +239,22 @@ const LeaveManagement = () => {
 
   const handleApprove = async (id) => {
     try {
-      await dispatch(updateLeave({ id, updatedData: { status: 'approved' } })).unwrap();
-      toast.success('Leave approved successfully!');
+      const result = await dispatch(updateLeave({ id, updatedData: { status: 'approved' } })).unwrap();
+      const workflowStillInProgress = Boolean(result?.workflowStillInProgress);
+      const updatedLeave = result?.leave;
+
+      if (workflowStillInProgress) {
+        toast.info(result?.message || 'Leave approved at current step. Pending further approvals.');
+      } else {
+        toast.success(result?.message || 'Leave approved successfully!');
+      }
+
       reload();
-      setSummaryLeaves((prev) =>
-        prev.map((l) => (String(l._id) === String(id) ? { ...l, status: 'approved' } : l))
-      );
+      if (updatedLeave?._id) {
+        setSummaryLeaves((prev) =>
+          prev.map((l) => (String(l._id) === String(id) ? { ...l, ...updatedLeave } : l))
+        );
+      }
       setRejectReason('');
     } catch (err) {
       const msg =
@@ -710,6 +729,24 @@ const LeaveManagement = () => {
                     {selectedLeave.reason || '—'}
                   </div>
                 </div>
+
+                {selectedLeave.document && leaveDocumentUrl(selectedLeave.document) && (
+                  <div className="mt-5">
+                    <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      <FiPaperclip className="h-3.5 w-3.5" />
+                      Supporting document
+                    </p>
+                    <a
+                      href={leaveDocumentUrl(selectedLeave.document)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50/50 px-4 py-2.5 text-sm font-semibold text-[#0a8f6c] hover:bg-teal-50"
+                    >
+                      <FiPaperclip className="h-4 w-4" />
+                      View attached document
+                    </a>
+                  </div>
+                )}
 
                 {selectedLeave.status === 'rejected' && selectedLeave.rejectionReason && (
                   <div className="mt-5">

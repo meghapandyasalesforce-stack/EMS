@@ -94,8 +94,10 @@ const LeaveTab = ({ employeeId }) => {
                       </div>
                       {policyType?.maxDaysPerMonth > 0 && (
                         <div className="flex justify-between border-t border-slate-100 pt-2">
-                          <dt className="text-slate-500">Monthly limit</dt>
-                          <dd className="text-slate-600">{policyType.maxDaysPerMonth} days/month</dd>
+                          <dt className="text-slate-500">Monthly entitlement</dt>
+                          <dd className="text-slate-600">
+                            {policyType.maxDaysPerMonth} days/month ({policyType.maxDaysPerMonth * 12}/year max)
+                          </dd>
                         </div>
                       )}
                     </dl>

@@ -7,6 +7,7 @@ import { parsePagination, parseSort, sendPaginatedResponse } from "../../helpers
 import { addOrganizationFilter } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { logApprove, logReject, logUpdate } from "../../helpers/auditLogger.js";
+import { shouldApplyDirectLeaveStatusUpdate } from "../../helpers/leaveStatusHelper.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -205,7 +206,9 @@ export const updateLeaveStatus = async (req, res) => {
 
         // ✅ SYNC WITH APPROVAL WORKFLOW
         const approverId = req.user?._id || req.employee?._id;
-        
+        let workflowProcessed = false;
+        let workflowStillInProgress = false;
+
         // If leave has an approval instance, process through workflow
         if (leave.approvalInstanceId) {
             try {
@@ -230,6 +233,8 @@ export const updateLeaveStatus = async (req, res) => {
                             }
                         });
                         
+                        workflowProcessed = true;
+
                         // Reload approval instance to get updated status
                         const updatedInstance = await ApprovalInstance.findById(leave.approvalInstanceId);
                         
@@ -243,6 +248,8 @@ export const updateLeaveStatus = async (req, res) => {
                             leave.rejectedBy = approverId;
                             leave.rejectedAt = new Date();
                             leave.rejectionReason = rejectionReason || updatedInstance.rejectionReason;
+                        } else if (updatedInstance && updatedInstance.status === 'In Progress') {
+                            workflowStillInProgress = true;
                         }
                     }
                 }
@@ -256,8 +263,12 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
         
-        // Direct status update (if no workflow or workflow processing failed)
-        if (!leave.approvalInstanceId || leave.status === 'pending') {
+        // Direct status update only when no workflow, workflow failed, or workflow already finished
+        if (shouldApplyDirectLeaveStatusUpdate({
+            hasApprovalInstance: Boolean(leave.approvalInstanceId),
+            workflowProcessed,
+            workflowStillInProgress
+        })) {
             leave.status = status;
             
             if (status === 'approved') {
@@ -275,15 +286,15 @@ export const updateLeaveStatus = async (req, res) => {
                 leave.approvedBy = undefined;
                 leave.approvedAt = undefined;
             } else if (status === 'cancelled') {
-                // Employee can cancel their own leave
                 leave.status = 'cancelled';
             }
         }
 
         await leave.save();
         
-        // Log audit trail for leave status change
-        if (status === 'approved') {
+        // Log audit trail based on resolved leave status (not requested status)
+        const resolvedStatus = leave.status;
+        if (resolvedStatus === 'approved') {
             await logApprove({
                 entityType: 'Leave',
                 entityId: leave._id,
@@ -299,7 +310,7 @@ export const updateLeaveStatus = async (req, res) => {
                     approverId: approverId.toString()
                 }
             });
-        } else if (status === 'rejected') {
+        } else if (resolvedStatus === 'rejected') {
             await logReject({
                 entityType: 'Leave',
                 entityId: leave._id,
@@ -327,14 +338,19 @@ export const updateLeaveStatus = async (req, res) => {
                 metadata: {
                     statusChange: true,
                     previousStatus: leaveBefore.status,
-                    newStatus: leave.status
+                    newStatus: leave.status,
+                    requestedStatus: status,
+                    workflowStillInProgress,
+                    ...(workflowStillInProgress && status === 'approved'
+                        ? { workflowStepApproved: true }
+                        : {})
                 }
             });
         }
         
         // Recalculate leave balance when status changes (approved: deduct used; rejected/cancelled: release pending)
         const employeeId = leave.employee?._id || leave.employee;
-        if (employeeId && (leave.status === 'approved' || leave.status === 'rejected')) {
+        if (employeeId && (leave.status === 'approved' || leave.status === 'rejected' || leave.status === 'cancelled')) {
             try {
                 const leaveBalanceEngine = (await import('../../services/leaveBalanceEngine.js')).default;
                 const year = new Date(leave.startDate).getFullYear();
@@ -356,10 +372,11 @@ export const updateLeaveStatus = async (req, res) => {
             try {
                 const { notifyLeaveApproved, notifyLeaveRejected } = await import('../../helpers/pushNotificationTriggers.js');
                 const employeeId = leave.employee._id || leave.employee;
+                const resolvedStatus = leave.status;
                 
-                if (status === 'approved') {
+                if (resolvedStatus === 'approved') {
                     await notifyLeaveApproved(employeeId, leave);
-                } else if (status === 'rejected') {
+                } else if (resolvedStatus === 'rejected') {
                     await notifyLeaveRejected(employeeId, leave);
                 }
             } catch (notifError) {
@@ -372,7 +389,11 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
 
-        res.json({ message: 'Leave status updated successfully', leave });
+        const responseMessage = workflowStillInProgress && status === 'approved'
+            ? 'Leave approved at current step. Pending further approvals.'
+            : 'Leave status updated successfully';
+
+        res.json({ message: responseMessage, leave, workflowStillInProgress });
     } catch (error) {
         logger.error('Update Leave Status Error', { error: error.message, stack: error.stack, leaveId: req.params.id });
         res.status(500).json({ message: 'Error updating leave status', error: error.message });
