@@ -298,7 +298,7 @@ const OrganizationRegister = () => {
                     email: response.data.user?.email,
                     role: response.data.user?.role || 'admin',
                     organizationId: response.data.organization?.id
-                });
+                }));
 
                 saveOrgAdminCredentials(
                     response.data.user?.email || formData.email,

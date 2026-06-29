@@ -585,7 +585,6 @@ export const registerEmployee = async (req, res) => {
         
         let emailSent = false;
         let emailQueued = false;
-        let emailErrorMessage = null;
         try {
             if (linkedToExistingUser) {
                 logger.info('Skipped welcome email with password — account uses existing admin/login credentials', {
@@ -593,14 +592,21 @@ export const registerEmployee = async (req, res) => {
                     employeeId: employee._id
                 });
             } else {
-                await queueWelcomeEmail(normalizedEmail, `${name} ${lastName}`, employeePassword);
-                emailQueued = true;
-                emailSent = true;
-                logger.info('Welcome email queued', {
-                    email: normalizedEmail,
-                    employeeId: employee._id,
-                    employeeName: `${name} ${lastName}`
-                });
+                const queued = await queueWelcomeEmail(normalizedEmail, `${name} ${lastName}`, employeePassword);
+                if (queued) {
+                    emailQueued = true;
+                    emailSent = true;
+                    logger.info('Welcome email queued', {
+                        email: normalizedEmail,
+                        employeeId: employee._id,
+                        employeeName: `${name} ${lastName}`
+                    });
+                } else {
+                    logger.warn('Welcome email skipped — queue unavailable', {
+                        email: normalizedEmail,
+                        employeeId: employee._id,
+                    });
+                }
             }
         } catch (emailError) {
             logger.error('Failed to queue welcome email', { 
@@ -609,7 +615,7 @@ export const registerEmployee = async (req, res) => {
                 employeeName: `${name} ${lastName}`,
                 error: emailError.message,
             });
-            emailErrorMessage = emailError.message || 'Email service unavailable';
+            // Do not surface email failures to the client — employee was created successfully
         }
         
         // SECURITY FIX: Do NOT generate tokens when admin/HR creates employee.
@@ -634,10 +640,6 @@ export const registerEmployee = async (req, res) => {
         const response = {
             emailSent,
             emailQueued,
-            ...(emailErrorMessage && { 
-                emailWarning: `Welcome email could not be sent: ${emailErrorMessage}`,
-                emailError: emailErrorMessage 
-            }),
             employee: {
                 _id: employee._id,
                 name: employee.name,

@@ -23,7 +23,12 @@ export const queueWelcomeEmail = async (email, name, password = null, resetUrl =
             priority: 1, // High priority for welcome emails
             removeOnComplete: true
         });
-        
+
+        if (!job) {
+            logger.warn('Welcome email not queued — job queue unavailable', { email });
+            return null;
+        }
+
         logger.info('Welcome email queued', { email, jobId: job.id });
         return job;
     } catch (error) {
