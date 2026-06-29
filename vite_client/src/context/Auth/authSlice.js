@@ -118,7 +118,11 @@ const authSlice = createSlice({
         return;
       }
 
-      const maySwitch = canSwitchPortals(state.user, state.permissionFlags);
+      const maySwitch = canSwitchPortals(
+        state.user,
+        state.permissionFlags,
+        state.roleBuckets
+      );
       const isListed = state.availablePortals.some((p) => p.id === portalId);
 
       if (maySwitch) {
@@ -142,6 +146,7 @@ const authSlice = createSlice({
         !isPortalSwitchAllowed(portalId, {
           user: state.user,
           permissionFlags: state.permissionFlags,
+          roleBuckets: state.roleBuckets,
           availablePortals: state.availablePortals,
         })
       ) {

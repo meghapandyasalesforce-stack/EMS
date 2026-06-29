@@ -1,7 +1,8 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { switchPortal } from '../context/Auth/authSlice';
+import { switchPortal, checkAuthSession } from '../context/Auth/authSlice';
+import { fetchEmployeeOwnInfo } from '../context/employeeDetailsSlice';
 import { canSwitchPortals } from '../utils/portalConfig';
 
 const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
@@ -9,16 +10,21 @@ const PortalSwitcher = ({ compact = false, lightTheme = false }) => {
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
   const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+  const roleBuckets = useSelector((state) => state.auth.roleBuckets) || [];
   const availablePortals = useSelector((state) => state.auth.availablePortals) || [];
   const activePortal = useSelector((state) => state.auth.activePortal);
 
-  if (!canSwitchPortals(user, permissionFlags)) return null;
+  if (!canSwitchPortals(user, permissionFlags, roleBuckets)) return null;
   if (availablePortals.length <= 1) return null;
 
   const handleSelect = (portal) => {
     if (portal.id === activePortal) return;
     dispatch(switchPortal(portal.id));
     navigate(portal.home);
+    if (portal.id === 'employee') {
+      dispatch(checkAuthSession());
+      dispatch(fetchEmployeeOwnInfo());
+    }
   };
 
   return (

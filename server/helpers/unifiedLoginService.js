@@ -3,7 +3,7 @@ import Employee from '../models/employee.model.js';
 import Organization from '../models/organization.model.js';
 import { normalizeEmail } from './authHelpers.js';
 import {
-  isOrgAdminUser,
+  isOrgOwnerUser,
   verifyEmployeeLoginPassword,
   getEmployeeLoginAuthRecord,
 } from './identityService.js';
@@ -97,7 +97,7 @@ const findUserAndEmployee = async (normalizedEmail, organizationId) => {
 
 const buildPlatformRoles = (user, employee) => {
   const roles = new Set(Array.isArray(user?.roles) ? user.roles : []);
-  if (user && isOrgAdminUser(user)) {
+  if (user && isOrgOwnerUser(user)) {
     roles.add(PLATFORM_ROLES.ORG_OWNER);
     roles.add(PLATFORM_ROLES.HR_ADMIN);
   }
@@ -109,15 +109,15 @@ const buildPlatformRoles = (user, employee) => {
 
 const buildAvailablePortals = (user, employee) => {
   const portals = [];
-  if (user && isOrgAdminUser(user)) portals.push('admin');
+  if (user && isOrgOwnerUser(user)) portals.push('admin');
   if (employee) portals.push('employee');
-  if (portals.length === 0 && user) portals.push('admin');
+  if (portals.length === 0 && user && isOrgOwnerUser(user)) portals.push('admin');
   if (portals.length === 0 && employee) portals.push('employee');
   return [...new Set(portals)];
 };
 
 const resolveSession = (user, employee) => {
-  if (user && isOrgAdminUser(user)) {
+  if (user && isOrgOwnerUser(user)) {
     const profileId = employee?._id || user.employeeProfileId || null;
     return {
       jwtRole: 'admin',
@@ -128,21 +128,11 @@ const resolveSession = (user, employee) => {
     };
   }
 
-  if (user && employee) {
-    return {
-      jwtRole: 'admin',
-      jwtUserId: user._id,
-      employeeProfileId: employee._id,
-      authRecord: user,
-      authRecordType: 'user',
-    };
-  }
-
   if (employee) {
     return {
       jwtRole: 'employee',
       jwtUserId: employee._id,
-      employeeProfileId: null,
+      employeeProfileId: employee._id,
       authRecord: employee,
       authRecordType: 'employee',
     };
@@ -152,7 +142,7 @@ const resolveSession = (user, employee) => {
     return {
       jwtRole: user.role === 'employee' ? 'employee' : 'admin',
       jwtUserId: user._id,
-      employeeProfileId: null,
+      employeeProfileId: user.employeeProfileId || null,
       authRecord: user,
       authRecordType: 'user',
     };
@@ -397,6 +387,7 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
       isPayrollAdmin: authContext.isPayrollAdmin,
       isLineManager: authContext.isLineManager,
       isExecutive: authContext.isExecutive,
+      jwtRole: session.jwtRole,
     },
     dataScope: getDataScope(authContext),
     session: {
@@ -416,7 +407,7 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
     timezoneContext,
     isOrganizationLogin: !!(
       user &&
-      isOrgAdminUser(user) &&
+      isOrgOwnerUser(user) &&
       organizationPayload &&
       (organizationPayload.email?.toLowerCase() === normalizedEmail ||
         normalizedEmail.endsWith('@gmail.com'))

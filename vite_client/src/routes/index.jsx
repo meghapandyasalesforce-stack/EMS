@@ -30,6 +30,7 @@ const createProtectedLazyRoute = (route) => {
     allowedRoles = [],
     requiredPermissions = [],
     redirectTo,
+    orgOwnerOnly = false,
   } = route;
   return (
     <Route
@@ -40,6 +41,7 @@ const createProtectedLazyRoute = (route) => {
           allowedRoles={allowedRoles}
           requiredPermissions={requiredPermissions}
           redirectTo={redirectTo}
+          orgOwnerOnly={orgOwnerOnly}
         >
           <RouteErrorBoundary>
             <Suspense fallback={<LoadingSpinner message={message} />}>
@@ -114,8 +116,8 @@ export const dashboardRoutes = [
 
 // Employee management routes
 export const employeeRoutes = [
-  { path: '/add', component: lazy(() => import('../Admin/Employee/AddEmployee')), message: 'Loading...', allowedRoles: ['admin', 'hr'], requiredPermissions: ROUTE_PERMISSIONS.addEmployee },
-  { path: '/add-employee', component: lazy(() => import('../Admin/Employee/AddEmployee')), message: 'Loading...', allowedRoles: ['admin', 'hr'], requiredPermissions: ROUTE_PERMISSIONS.addEmployee },
+  { path: '/add', component: lazy(() => import('../Admin/Employee/AddEmployee')), message: 'Loading...', allowedRoles: ['admin'], orgOwnerOnly: true },
+  { path: '/add-employee', component: lazy(() => import('../Admin/Employee/AddEmployee')), message: 'Loading...', allowedRoles: ['admin'], orgOwnerOnly: true },
   { path: '/employees', component: lazy(() => import('../Admin/Employee/EmployeesPage')), message: 'Loading employees...', allowedRoles: ['admin', 'hr', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.employees },
   { path: '/employees/:employeeId', component: lazy(() => import('../Admin/Employee/EmployeeDetailsPage')), message: 'Loading employee details...', allowedRoles: ['admin', 'hr', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.employeeDetails },
   { path: '/view-profile', component: lazy(() => import('../Employee/Profile details/ViewProfile')), message: 'Loading profile...', allowedRoles: [] }

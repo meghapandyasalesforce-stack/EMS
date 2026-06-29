@@ -16,6 +16,7 @@ const ProtectedRoute = ({
   allowedRoles = [],
   requiredPermissions = [],
   redirectTo,
+  orgOwnerOnly = false,
 }) => {
   const user = useSelector((state) => state.auth.user);
   const authChecked = useSelector((state) => state.auth.authChecked);
@@ -29,6 +30,15 @@ const ProtectedRoute = ({
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (orgOwnerOnly && !permissionFlags.isOrgOwner) {
+    return (
+      <Navigate
+        to={redirectTo || getDefaultDashboardRoute(user, employee)}
+        replace
+      />
+    );
   }
 
   const userRole = user?.role || employee?.role || 'employee';

@@ -6,8 +6,12 @@
 export function shouldApplyDirectLeaveStatusUpdate({
     hasApprovalInstance,
     workflowProcessed,
-    workflowStillInProgress
+    workflowStillInProgress,
+    workflowError = false,
 }) {
+    if (workflowError) {
+        return false;
+    }
     if (!hasApprovalInstance) {
         return true;
     }

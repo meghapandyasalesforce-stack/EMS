@@ -8,18 +8,28 @@ export const createEmployee = createAsyncThunk(
   'employees/createEmployee',
   async (employeeData, thunkAPI) => {
     try {
-      const response = await axios.post(`${EMPLOYEE_AUTH_ENDPOINT}/register`, employeeData);
-      // Return both employee data and email status
+      const payload = { ...employeeData };
+      if (!payload.password || !String(payload.password).trim()) {
+        delete payload.password;
+      }
+
+      const response = await axios.post(`${EMPLOYEE_AUTH_ENDPOINT}/register`, payload);
       return {
         employee: response.data.employee,
         emailSent: response.data.emailSent || false,
         emailWarning: response.data.emailWarning || null,
         emailError: response.data.emailError || null,
         linkedToExistingUser: response.data.linkedToExistingUser || false,
+        updatedExistingProfile: response.data.updatedExistingProfile || false,
         linkMessage: response.data.message || null,
       };
     } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || 'Failed to create employee');
+      const data = err.response?.data || {};
+      return thunkAPI.rejectWithValue({
+        message: data.message || 'Failed to create employee',
+        code: data.code || null,
+        existingProfile: data.details?.existingProfile || null,
+      });
     }
   }
 );

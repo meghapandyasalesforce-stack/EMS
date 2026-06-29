@@ -19,6 +19,38 @@ export const PORTAL_META = {
   employee: { label: 'Me', home: '/dashboard-employee', theme: 'employee' },
 };
 
+/** Org owner sidebar tabs: Admin workspace, HR workspace, personal employee profile. */
+export const ORG_OWNER_PORTAL_TABS = ['admin', 'hr_manager', 'employee'];
+
+/** Delegated HR staff — single locked HR workspace (no portal switcher). */
+export const HR_PORTAL_TABS = ['hr_manager'];
+
+const ME_PROFILE_ROUTES = [
+  '/profile-details',
+  '/contact-details',
+  '/next-of-kin-details',
+  '/education-qualifications',
+  '/guarantor-details',
+  '/family-details',
+  '/job-details',
+  '/financial-details',
+  '/employee/id-card',
+];
+
+/** Standard employee workspace routes (not org-owner Me profile sections). */
+const EMPLOYEE_WORKSPACE_ROUTES = [
+  '/dashboard-employee',
+  '/employee/leave-attendance',
+  '/my-attendance-regularization',
+  '/employee/projects',
+  '/one-on-one',
+  '/employee/benefits-learning',
+  '/employee/documents-id',
+  '/employee/calendar',
+  '/employee-payroll',
+  '/notifications',
+];
+
 const ROUTE_TO_PORTAL = [
   ['/organization/dashboard', 'admin'],
   ['/dashboard-admin', 'admin'],
@@ -26,7 +58,8 @@ const ROUTE_TO_PORTAL = [
   ['/dashboard-hr', 'hr_manager'],
   ['/dashboard-finance', 'payroll_admin'],
   ['/dashboard-manager', 'line_manager'],
-  ['/dashboard-employee', 'employee'],
+  ...EMPLOYEE_WORKSPACE_ROUTES.map((path) => [path, 'employee']),
+  ...ME_PROFILE_ROUTES.map((path) => [path, 'employee']),
 ];
 
 const executiveLabel = (position) => {
@@ -38,13 +71,39 @@ const executiveLabel = (position) => {
   return PORTAL_META.executive.label;
 };
 
+/** Delegated HR staff (not org owner). */
+export const isHrPortalUser = (permissionFlags = {}) =>
+  Boolean(
+    (permissionFlags.isHrManager || permissionFlags.isHrExecutive) &&
+    !permissionFlags.isOrgOwner
+  );
+
+/** Session role from JWT / Redux / localStorage (employee vs admin login). */
+export const resolveSessionRole = (user = null, permissionFlags = {}) => {
+  const jwtRole = permissionFlags?.jwtRole;
+  if (jwtRole) return String(jwtRole).toLowerCase();
+  if (user?.role) return String(user.role).toLowerCase();
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem('role');
+    if (stored) return stored.toLowerCase();
+  }
+  return 'employee';
+};
+
 /**
- * SaaS policy: only organization administrators may switch between portal tabs.
- * Delegated roles (HR, manager, finance, employee) are locked to one portal.
+ * Portal tabs only for org owners logged in with an admin session.
+ * HR and employee logins always get a single locked workspace.
  */
-export const canSwitchPortals = (user = null, permissionFlags = {}) => {
-  const role = (user?.role || '').toLowerCase();
-  return role === 'admin' || Boolean(permissionFlags.isOrgOwner);
+export const canSwitchPortals = (
+  user = null,
+  permissionFlags = {},
+  roleBuckets = []
+) => {
+  const sessionRole = resolveSessionRole(user, permissionFlags);
+  if (sessionRole !== 'admin') return false;
+  if (Boolean(permissionFlags.isOrgOwner)) return true;
+  if (Array.isArray(roleBuckets) && roleBuckets.includes('org_owner')) return true;
+  return false;
 };
 
 /**
@@ -88,7 +147,7 @@ export const deriveEntitledPortalIds = ({
     ids.add('line_manager');
   }
 
-  if (employee?._id || employee?.id) {
+  if (employee?._id || employee?.id || user?.employeeProfileId) {
     ids.add('employee');
   }
 
@@ -103,8 +162,17 @@ export const deriveEntitledPortalIds = ({
   return ids;
 };
 
+/** HR / manager / finance staff — used for session and login routing (not portal tabs). */
+export const isDelegatedStaff = (permissionFlags = {}) =>
+  Boolean(
+    permissionFlags.isHrManager ||
+    permissionFlags.isHrExecutive ||
+    permissionFlags.isLineManager ||
+    permissionFlags.isPayrollAdmin
+  );
+
 /**
- * Locked portal for non-admin users: highest operational portal they hold.
+ * Locked portal for non-tab users: highest operational portal they hold.
  */
 export const resolvePrimaryPortalId = (entitledIds) => {
   const ids = entitledIds instanceof Set ? entitledIds : new Set(entitledIds || []);
@@ -133,19 +201,68 @@ const buildPortalObjects = (ids, position) => {
   }));
 };
 
+const buildOrgOwnerPortalTabs = (allPortals, position) => {
+  const byId = Object.fromEntries(allPortals.map((p) => [p.id, p]));
+
+  return ORG_OWNER_PORTAL_TABS.map((id) => {
+    if (id === 'employee') {
+      const base = byId[id] || {
+        id: 'employee',
+        label: PORTAL_META.employee.label,
+        home: PORTAL_META.employee.home,
+        theme: PORTAL_META.employee.theme,
+      };
+      return { ...base, home: '/profile-details' };
+    }
+    if (byId[id]) return byId[id];
+    return {
+      id,
+      label: PORTAL_META[id].label,
+      home: PORTAL_META[id].home,
+      theme: PORTAL_META[id].theme,
+    };
+  });
+};
+
 /**
  * Portals exposed in UI / Redux.
- * Admins: all entitled portals (tab switcher).
- * Everyone else: exactly one locked portal.
+ * Org owner admin session: Admin + HR + Me.
+ * HR / employee / manager sessions: one locked portal only.
  */
 export const deriveAvailablePortals = (ctx = {}) => {
-  const { user = null, employee = null, permissionFlags = {} } = ctx;
+  const { user = null, employee = null, permissionFlags = {}, roleBuckets = [] } = ctx;
   const position = (employee?.position || user?.position || '').toLowerCase().trim();
   const entitledIds = deriveEntitledPortalIds(ctx);
   const allPortals = buildPortalObjects(entitledIds, position);
 
-  if (canSwitchPortals(user, permissionFlags)) {
-    return allPortals;
+  if (canSwitchPortals(user, permissionFlags, roleBuckets)) {
+    return buildOrgOwnerPortalTabs(allPortals, position);
+  }
+
+  if (isHrPortalUser(permissionFlags)) {
+    const hrPortal =
+      allPortals.find((p) => p.id === 'hr_manager') ||
+      {
+        id: 'hr_manager',
+        label: PORTAL_META.hr_manager.label,
+        home: PORTAL_META.hr_manager.home,
+        theme: PORTAL_META.hr_manager.theme,
+      };
+    return [hrPortal];
+  }
+
+  const sessionRole = resolveSessionRole(user, permissionFlags);
+  if (sessionRole === 'employee') {
+    const primaryId = resolvePrimaryPortalId(entitledIds);
+    const primary =
+      allPortals.find((p) => p.id === primaryId) ||
+      {
+        id: 'employee',
+        label: PORTAL_META.employee.label,
+        home: PORTAL_META.employee.home,
+        theme: PORTAL_META.employee.theme,
+      };
+    return [primary];
   }
 
   const primaryId = resolvePrimaryPortalId(entitledIds);
@@ -159,13 +276,14 @@ export const deriveAvailablePortals = (ctx = {}) => {
 export const getEffectiveActivePortal = ({
   user = null,
   permissionFlags = {},
+  roleBuckets = [],
   availablePortals = [],
   activePortal = null,
   routeHint = '',
 } = {}) => {
   if (!availablePortals?.length) return null;
 
-  if (!canSwitchPortals(user, permissionFlags)) {
+  if (!canSwitchPortals(user, permissionFlags, roleBuckets)) {
     return availablePortals[0].id;
   }
 
@@ -196,6 +314,7 @@ export const syncPortalsForSession = ({
   const activePortal = getEffectiveActivePortal({
     user,
     permissionFlags,
+    roleBuckets,
     availablePortals: portals,
     activePortal: currentActivePortal,
     routeHint,
@@ -237,8 +356,8 @@ export const isEmployeePortalTheme = (portalId) => portalId === 'employee';
 
 export const isPortalSwitchAllowed = (
   portalId,
-  { user = null, permissionFlags = {}, availablePortals = [] } = {}
+  { user = null, permissionFlags = {}, roleBuckets = [], availablePortals = [] } = {}
 ) => {
-  if (!canSwitchPortals(user, permissionFlags)) return false;
+  if (!canSwitchPortals(user, permissionFlags, roleBuckets)) return false;
   return availablePortals.some((p) => p.id === portalId);
 };

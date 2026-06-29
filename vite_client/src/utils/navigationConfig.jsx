@@ -46,6 +46,14 @@ const resolveNavFromRbac = (permissionFlags, role, position, profile) => {
     return null;
 };
 
+/** Org owner / HR use profile-section sidebar on the Me tab; employees get the full workspace nav. */
+export const usesMeProfileSidebar = (permissionFlags = {}) =>
+    Boolean(
+        permissionFlags.isOrgOwner ||
+        permissionFlags.isHrManager ||
+        permissionFlags.isHrExecutive
+    );
+
 const getNavigationForPortal = (portalId, { position, department, jobTitle, profile, permissions, permissionFlags = {} }) => {
     switch (portalId) {
         case 'admin':
@@ -59,6 +67,9 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
         case 'line_manager':
             return filterNavByPermissions(getManagerNavigation(profile), permissions);
         case 'employee':
+            if (usesMeProfileSidebar(permissionFlags)) {
+                return filterNavByPermissions(getMeProfileNavigation(), permissions);
+            }
             return filterNavByPermissions(getEmployeeNavigation(), permissions);
         default:
             break;
@@ -354,6 +365,21 @@ const getTechNavigation = () => [
 ];
 
 /**
+ * Org owner "Me" portal — profile sections (same routes as ProfileDetails).
+ */
+const getMeProfileNavigation = () => [
+    { path: '/profile-details', name: 'Personal Details', icon: <CgProfile /> },
+    { path: '/contact-details', name: 'Contact Details', icon: <FaEnvelope /> },
+    { path: '/next-of-kin-details', name: 'Next of kin Details', icon: <FaUserCheck /> },
+    { path: '/education-qualifications', name: 'Education Qualifications', icon: <FaGraduationCap /> },
+    { path: '/guarantor-details', name: 'Guarantor Details', icon: <FaHandshake /> },
+    { path: '/family-details', name: 'Family Details', icon: <FaUsers /> },
+    { path: '/job-details', name: 'Job Details', icon: <FaUserTie /> },
+    { path: '/financial-details', name: 'Financial Details', icon: <FaDollarSign /> },
+    { path: '/employee/id-card', name: 'ID Card', icon: <FaIdCard /> },
+];
+
+/**
  * Employee Navigation Items (Default)
  */
 const getEmployeeNavigation = () => [
@@ -366,6 +392,7 @@ const getEmployeeNavigation = () => [
     { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
+    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
+    { path: "/notifications", name: "Notifications", icon: <FaBell /> },
 ];
 

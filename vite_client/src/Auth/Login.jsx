@@ -9,7 +9,9 @@ import axios from '../utils/axios';
 import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { ORGANIZATION_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from '../utils/constant';
-import { syncPortalsForSession } from '../utils/portalConfig';
+import { syncPortalsForSession, canSwitchPortals } from '../utils/portalConfig';
+import { resolveLoginSessionRole } from '../utils/authSessionUtils';
+import { saveOrgAdminCredentials } from '../utils/orgAdminCredentials';
 import logger from '../utils/logger';
 
 function Login() {
@@ -104,7 +106,13 @@ function Login() {
                 return;
             }
 
-            const userRole = data.sessionRole || data.user?.role || 'employee';
+            const sessionRole = data.sessionRole || data.user?.role || 'employee';
+            const permissionFlags = data.permissionFlags || {};
+            const userRole = resolveLoginSessionRole(
+                sessionRole,
+                permissionFlags,
+                !!data.employee
+            );
             const isOrganizationLogin = !!data.isOrganizationLogin;
 
             const orgId =
@@ -120,7 +128,20 @@ function Login() {
                 localStorage.removeItem('isOrganizationLogin');
             }
 
-            if (data.user) {
+            if (data.employee && userRole === 'employee') {
+                const e = data.employee;
+                dispatch(setUser({
+                    ...e,
+                    _id: e._id ?? e.id,
+                    role: 'employee',
+                    organizationId: e.organizationId ?? orgId,
+                    name: e.name,
+                    lastName: e.lastName,
+                    jobTitle: e.jobTitle,
+                    department: e.department,
+                    position: e.position,
+                }));
+            } else if (data.user) {
                 const u = data.user;
                 const emp = data.employee;
                 dispatch(setUser({
@@ -133,19 +154,9 @@ function Login() {
                     department: emp?.department || u.department,
                     position: emp?.position || u.position,
                     organizationId: u.organizationId ?? emp?.organizationId ?? orgId,
+                    employeeProfileId: u.employeeProfileId ?? emp?._id ?? emp?.id,
                     platformRoles: data.platformRoles || u.roles || [],
-                    availablePortals: data.availablePortals || [],
                 }));
-            } else if (data.employee) {
-                const e = data.employee;
-                const doc = {
-                    ...e,
-                    _id: e._id ?? e.id,
-                    role: 'employee',
-                    organizationId: e.organizationId ?? orgId,
-                    name: e.name,
-                };
-                dispatch(setUser(doc));
             }
 
             if (data.employee) {
@@ -171,7 +182,7 @@ function Login() {
                 dispatch(setAuthPermissions({
                     permissions: data.permissions,
                     roleBuckets: data.roleBuckets,
-                    permissionFlags: data.permissionFlags,
+                    permissionFlags,
                     dataScope: data.dataScope,
                 }));
             }
@@ -202,7 +213,7 @@ function Login() {
                 user: loginUser,
                 employee: data.employee || null,
                 roleBuckets: data.roleBuckets || [],
-                permissionFlags: data.permissionFlags || {},
+                permissionFlags,
                 routeHint: dashboardRoute,
             });
             dispatch(initializePortals({ portals, activePortal }));
@@ -210,6 +221,14 @@ function Login() {
 
             localStorage.setItem('role', userRole);
             localStorage.setItem('email', form.email);
+
+            if (!canSwitchPortals(loginUser, permissionFlags, data.roleBuckets || [])) {
+                localStorage.removeItem('activePortal');
+            }
+
+            if (userRole === 'admin' || isOrganizationLogin) {
+                saveOrgAdminCredentials(form.email, form.password);
+            }
 
             const mustReset =
                 data.employee?.mustResetPassword &&

@@ -15,6 +15,12 @@ import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { buildManagerMatchQuery, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { getDataScope } from '../../helpers/permissionService.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
+import {
+  isOrgOwnerUser,
+  linkOrgOwnerMeProfile,
+  resolveOrgOwnerUser,
+} from '../../helpers/identityService.js';
+import User from '../../models/user.model.js';
 
 /**    
  * @swagger
@@ -488,6 +494,77 @@ export const getOrganizationJobTitles = async (req, res) => {
     } catch (error) {
         logger.error('Error fetching organization job titles', { error: error.message, stack: error.stack });
         return sendInternalError(res, 'Failed to fetch job titles', error);
+    }
+};
+
+/**
+ * Link an existing employee as the org owner's Me-tab profile.
+ * POST /api/v1/admin/employee/:employeeId/link-as-me-profile
+ */
+export const linkEmployeeAsOrgOwnerMeProfile = async (req, res) => {
+    try {
+        if (!req.authContext?.isOrgOwner) {
+            return sendForbidden(res, 'Only organization owners can link a Me profile.');
+        }
+
+        const { employeeId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+            return sendValidationError(res, { employeeId: 'Invalid employee ID format' });
+        }
+
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required.', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const orgOwner =
+            req.user?._id && isOrgOwnerUser(req.user)
+                ? req.user
+                : await resolveOrgOwnerUser(organizationId);
+
+        if (!orgOwner) {
+            return sendForbidden(res, 'Organization owner account not found.');
+        }
+
+        const result = await linkOrgOwnerMeProfile(orgOwner, employeeId, organizationId);
+        if (!result.ok) {
+            if (result.code === 'NOT_FOUND') {
+                return sendNotFound(res, 'Employee');
+            }
+            return sendError(res, result.message || 'Failed to link profile.', 400, result.code || 'LINK_FAILED');
+        }
+
+        await invalidateEmployeesCache(organizationId);
+
+        const employeeObj = result.employee.toObject ? result.employee.toObject() : result.employee;
+
+        logger.info('Linked employee as org owner Me profile', {
+            organizationId,
+            orgOwnerId: orgOwner._id,
+            employeeId: employeeObj._id,
+        });
+
+        return sendSuccess(
+            res,
+            {
+                employee: {
+                    _id: employeeObj._id,
+                    name: employeeObj.name,
+                    lastName: employeeObj.lastName,
+                    email: employeeObj.email,
+                    employeeId: employeeObj.employeeId,
+                    jobTitle: employeeObj.jobTitle,
+                    department: employeeObj.department,
+                    position: employeeObj.position,
+                },
+                employeeProfileId: employeeObj._id,
+            },
+            'Employee linked as your Me profile. Open the Me tab to view it.',
+            200
+        );
+    } catch (error) {
+        logger.error('Error linking org owner Me profile', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to link Me profile', error);
     }
 };
 

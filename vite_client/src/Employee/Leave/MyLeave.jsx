@@ -198,6 +198,7 @@ const MyLeavePage = () => {
         status: leave.status
           ? leave.status.charAt(0).toUpperCase() + leave.status.slice(1)
           : 'Unknown',
+        approvalStage: leave.approvalStage || (leave.status === 'pending' ? 'Pending' : leave.status),
         days: leave.duration ?? 0
       };
     })
@@ -501,7 +502,9 @@ const MyLeavePage = () => {
                               leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                               leave.status === 'Cancelled' ? 'bg-gray-100 text-gray-600' :
                                 'bg-red-100 text-red-800'}`}>
-                            {leave.status}
+                            {leave.rawStatus === 'pending' && leave.approvalStage
+                              ? leave.approvalStage
+                              : leave.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs md:text-sm">

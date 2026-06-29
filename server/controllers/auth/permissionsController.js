@@ -39,6 +39,7 @@ export const getMyPermissions = asyncHandler(async (req, res) => {
       isPayrollAdmin: authContext.isPayrollAdmin,
       isLineManager: authContext.isLineManager,
       isExecutive: authContext.isExecutive,
+      jwtRole: authContext.jwtRole || decoded?.role || null,
     },
   });
 });

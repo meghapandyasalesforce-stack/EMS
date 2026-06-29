@@ -16,6 +16,7 @@ import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portal
 import PortalSwitcher from '../components/PortalSwitcher';
 import RoleBucketBadges from '../components/RoleBucketBadges';
 import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
+import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
 
 const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -93,11 +94,12 @@ const Header = () => {
             getEffectiveActivePortal({
                 user,
                 permissionFlags,
+                roleBuckets,
                 availablePortals,
                 activePortal,
                 routeHint: location.pathname,
             }),
-        [user, permissionFlags, availablePortals, activePortal, location.pathname]
+        [user, permissionFlags, roleBuckets, availablePortals, activePortal, location.pathname]
     );
 
     const navItems = useMemo(() => {
@@ -130,6 +132,7 @@ const Header = () => {
             localStorage.removeItem('activePortal');
             localStorage.removeItem('availablePortals');
             localStorage.removeItem('employeeDashboardRoute');
+            clearOrgAdminCredentials();
             toast.success('Logged out successfully');
             navigate('/login');
         } catch (error) {
@@ -150,6 +153,7 @@ const Header = () => {
             localStorage.removeItem('activePortal');
             localStorage.removeItem('availablePortals');
             localStorage.removeItem('employeeDashboardRoute');
+            clearOrgAdminCredentials();
             navigate('/login');
         } finally {
             setLogoutModalOpen(false);

@@ -192,6 +192,12 @@ export const requireEmployeeCreate = composeMiddleware(
   requireAnyPermission([PERMISSIONS.EMPLOYEE_CREATE])
 );
 
+/** Only the organization owner may register / create employees. */
+export const requireOrgOwnerOnly = gate(
+  (ctx) => Boolean(ctx?.isOrgOwner),
+  'Only organization owners can create employees'
+);
+
 export const requireEmployeeDelete = composeMiddleware(
   requireAnyPermission([PERMISSIONS.EMPLOYEE_DELETE])
 );

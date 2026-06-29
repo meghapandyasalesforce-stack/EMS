@@ -1,14 +1,24 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createEmployee } from '../../context/employeeSlice';
+import { checkAuthSession } from '../../context/Auth/authSlice';
+import { fetchEmployeeOwnInfo, setEmployeeProfile } from '../../context/employeeDetailsSlice';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import SystemRolePicker from '../../components/SystemRolePicker';
 import ElevatedRoleConfirmModal from '../../components/ElevatedRoleConfirmModal';
+import ReplaceProfileConfirmModal from '../../components/ReplaceProfileConfirmModal';
 import { DEFAULT_SYSTEM_ROLE } from '../../utils/systemRoles';
 import useSuggestedSystemRole from '../../Hooks/useSuggestedSystemRole';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import {
+    getCredentialsForAdminEmail,
+    isOrgAdminEmail,
+    normalizeEmail,
+    resolveOrgAdminEmail,
+} from '../../utils/orgAdminCredentials';
 import {
     getRoleLabel,
     getRoleMismatch,
@@ -49,6 +59,9 @@ function AddEmployee() {
     const [elevatedConfirmedForRole, setElevatedConfirmedForRole] = useState(null);
     const [showElevatedModal, setShowElevatedModal] = useState(false);
     const [pendingStepAdvance, setPendingStepAdvance] = useState(null);
+    const [showReplaceModal, setShowReplaceModal] = useState(false);
+    const [existingProfileToReplace, setExistingProfileToReplace] = useState(null);
+    const [linkAsMyProfile, setLinkAsMyProfile] = useState(false);
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -59,6 +72,20 @@ function AddEmployee() {
     const employeeError = useSelector(state => state.employees.error);
     const user = useSelector((state) => state.auth?.user);
     const employee = useSelector((state) => state.employeeDetails?.employee);
+    const { isOrgOwner } = useAuthPermissions();
+    const permissionFlags = useMemo(() => ({ isOrgOwner }), [isOrgOwner]);
+
+    const adminEmail = useMemo(
+        () => resolveOrgAdminEmail(user, permissionFlags),
+        [user, permissionFlags]
+    );
+    const usingAdminEmail = isOrgAdminEmail(form.email, user, permissionFlags);
+
+    useEffect(() => {
+        if (usingAdminEmail) {
+            setLinkAsMyProfile(true);
+        }
+    }, [usingAdminEmail]);
 
     const getDashboardRoute = useMemo(() => {
         const userRole = user?.role || employee?.role || localStorage.getItem('role');
@@ -200,7 +227,39 @@ function AddEmployee() {
     }, [fetchManagers]);
 
     const handleChange = (e) => {
-        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+
+        if (name === 'email') {
+            setForm((prev) => {
+                const next = { ...prev, email: value };
+                const { password } = getCredentialsForAdminEmail(value, user, permissionFlags);
+                if (isOrgAdminEmail(value, user, permissionFlags) && password) {
+                    next.password = password;
+                } else if (
+                    !isOrgAdminEmail(value, user, permissionFlags) &&
+                    isOrgAdminEmail(prev.email, user, permissionFlags)
+                ) {
+                    next.password = '';
+                }
+                return next;
+            });
+            return;
+        }
+
+        setForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const fillAdminCredentials = () => {
+        if (!adminEmail) {
+            toast.info('Admin email is not available in this session.');
+            return;
+        }
+        const { email, password } = getCredentialsForAdminEmail(adminEmail, user, permissionFlags);
+        setForm((prev) => ({
+            ...prev,
+            email,
+            ...(password ? { password } : {}),
+        }));
     };
 
     const handleApplySuggestedRole = () => {
@@ -288,7 +347,7 @@ function AddEmployee() {
         setStep((prev) => Math.max(prev - 1, 0));
     };
 
-    const submitEmployee = async (skipElevatedCheck = false) => {
+    const submitEmployee = async (skipElevatedCheck = false, confirmReplace = false) => {
         setError('');
 
         if (!validateStep(0) || !validateStep(1) || !validateStep(2)) {
@@ -297,18 +356,24 @@ function AddEmployee() {
         }
 
         if (!skipElevatedCheck && needsElevatedConfirm()) {
-            requestElevatedConfirm(() => submitEmployee(true));
+            requestElevatedConfirm(() => submitEmployee(true, confirmReplace));
             return;
         }
 
-        const resultAction = await dispatch(createEmployee(form));
+        const linkAsOrgOwnerMe = usingAdminEmail || linkAsMyProfile;
+        const resultAction = await dispatch(createEmployee({ ...form, confirmReplace, linkAsOrgOwnerMe }));
 
         if (createEmployee.fulfilled.match(resultAction)) {
             queryClient.invalidateQueries({ queryKey: ['employees'] });
-            const { emailSent, emailWarning, emailError, linkedToExistingUser, linkMessage } = resultAction.payload;
+            const { emailSent, emailWarning, emailError, linkedToExistingUser, updatedExistingProfile, linkMessage } = resultAction.payload;
             const roleMsg = `System access: ${selectedRoleLabel}.`;
 
-            if (linkedToExistingUser) {
+            if (updatedExistingProfile) {
+                toast.success(
+                    `${linkMessage || 'Employee profile updated and linked to your admin login.'} ${roleMsg}`,
+                    { autoClose: 6000 }
+                );
+            } else if (linkedToExistingUser) {
                 toast.success(
                     `${linkMessage || 'Employee linked to existing login.'} ${roleMsg}`,
                     { autoClose: 6000 }
@@ -331,12 +396,43 @@ function AddEmployee() {
                 });
             }
 
+            if (linkedToExistingUser || updatedExistingProfile || linkAsOrgOwnerMe) {
+                await dispatch(checkAuthSession());
+                await dispatch(fetchEmployeeOwnInfo());
+            }
+
+            if (resultAction.payload?.employee) {
+                dispatch(setEmployeeProfile(resultAction.payload.employee));
+            }
+
+            setExistingProfileToReplace(null);
             navigate(getDashboardRoute);
         } else {
-            const errorMsg = resultAction.payload || 'Failed to create employee';
+            const errPayload = resultAction.payload;
+            const errorMsg =
+                typeof errPayload === 'string'
+                    ? errPayload
+                    : errPayload?.message || 'Failed to create employee';
+
+            if (errPayload?.code === 'PROFILE_EXISTS_REQUIRES_CONFIRMATION') {
+                setExistingProfileToReplace(errPayload.existingProfile || null);
+                setShowReplaceModal(true);
+                return;
+            }
+
             setError(errorMsg);
             toast.error(errorMsg, { autoClose: 5000 });
         }
+    };
+
+    const handleReplaceConfirm = () => {
+        setShowReplaceModal(false);
+        submitEmployee(true, true);
+    };
+
+    const handleReplaceCancel = () => {
+        setShowReplaceModal(false);
+        setExistingProfileToReplace(null);
     };
 
     const renderStepIndicator = () => (
@@ -409,9 +505,39 @@ function AddEmployee() {
                     onChange={handleChange}
                 />
             </div>
-            <p className="text-xs text-slate-500">
-                Leave password empty to auto-generate and email credentials to the new hire.
-            </p>
+            {adminEmail ? (
+                <button
+                    type="button"
+                    onClick={fillAdminCredentials}
+                    className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                >
+                    Use my admin email ({adminEmail})
+                </button>
+            ) : null}
+            {usingAdminEmail ? (
+                <p className="text-xs text-emerald-700">
+                    Only your organization admin email can share login. One employee profile will link to your admin account (same email and password).
+                </p>
+            ) : (
+                <p className="text-xs text-slate-500">
+                    Use a unique email for each employee. Leave password empty to auto-generate and email credentials to the new hire.
+                </p>
+            )}
+            {isOrgOwner ? (
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={usingAdminEmail || linkAsMyProfile}
+                        disabled={usingAdminEmail}
+                        onChange={(event) => setLinkAsMyProfile(event.target.checked)}
+                    />
+                    <span>
+                        Show this employee on my Me tab
+                        {usingAdminEmail ? ' (always on when using your admin email)' : ''}
+                    </span>
+                </label>
+            ) : null}
         </div>
     );
 
@@ -615,6 +741,10 @@ function AddEmployee() {
         );
     };
 
+    if (!isOrgOwner) {
+        return <Navigate to="/dashboard-admin" replace />;
+    }
+
     return (
         <div className="min-h-screen bg-[#F5F7FB]">
             <div className="p-4 sm:p-6 lg:p-8">
@@ -628,7 +758,10 @@ function AddEmployee() {
 
                     {(error || employeeError) && (
                         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                            {error || employeeError}
+                            {error ||
+                                (typeof employeeError === 'string'
+                                    ? employeeError
+                                    : employeeError?.message || 'Failed to create employee')}
                         </p>
                     )}
 
@@ -675,6 +808,12 @@ function AddEmployee() {
                 roleLabel={selectedRoleLabel}
                 onConfirm={handleElevatedConfirm}
                 onCancel={handleElevatedCancel}
+            />
+            <ReplaceProfileConfirmModal
+                open={showReplaceModal}
+                existingProfile={existingProfileToReplace}
+                onConfirm={handleReplaceConfirm}
+                onCancel={handleReplaceCancel}
             />
         </div>
     );

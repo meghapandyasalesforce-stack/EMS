@@ -8,6 +8,11 @@ import Calendar from "../../models/calendar.model.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
 import { normalizeLeaveTypeForPolicy } from "../../helpers/leaveTypeHelper.js";
 import { buildEmployeeLeaveBalanceResponse } from "../../helpers/leaveBalanceResponseHelper.js";
+import {
+    ensureDefaultLeaveWorkflow,
+    attachWorkflowSummariesToLeaves,
+    getLeaveApprovalStageLabel,
+} from "../../helpers/leaveWorkflowHelper.js";
 import path from "path";
 import { upload as leaveDocumentUpload } from "../fileUpload/uploadConfigController.js";
 
@@ -228,8 +233,10 @@ export const createLeave = async (req, res) => {
             }
         });
         
-        // ✅ INTEGRATE APPROVAL WORKFLOW
+        // ✅ INTEGRATE APPROVAL WORKFLOW (Manager → HR)
         try {
+            await ensureDefaultLeaveWorkflow(organizationId);
+
             const { initiateApproval } = await import('../../services/approvalWorkflowService.js');
             const approvalResult = await initiateApproval({
                 organizationId,
@@ -252,7 +259,7 @@ export const createLeave = async (req, res) => {
                 await leave.save();
             }
 
-            // If auto-approved, update leave status
+            // If auto-approved (should not happen with default workflow), update leave status
             if (approvalResult.autoApproved && approvalResult.status === 'Approved') {
                 leave.status = 'approved';
                 leave.approvedBy = employeeId; // Auto-approved
@@ -293,7 +300,7 @@ export const createLeave = async (req, res) => {
             { leave, warnings: validation.warnings }, 
             validation.warnings && validation.warnings.length > 0 
                 ? `Leave application submitted successfully. Note: ${validation.warnings.join('; ')}`
-                : "Leave application submitted successfully", 
+                : "Leave application submitted successfully. It will be sent to your manager first, then HR for final approval.",
             201
         );
 
@@ -313,7 +320,12 @@ export const getMyLeaves = async (req, res) => {
         if (organizationId) {
             leaveQuery.organizationId = organizationId;
         }
-        const leaves = await Leave.find(leaveQuery).sort({ createdAt: -1 });
+        const leavesRaw = await Leave.find(leaveQuery).sort({ createdAt: -1 }).lean();
+        const leavesWithWorkflow = await attachWorkflowSummariesToLeaves(leavesRaw);
+        const leaves = leavesWithWorkflow.map((leave) => ({
+            ...leave,
+            approvalStage: getLeaveApprovalStageLabel(leave),
+        }));
 
         const currentYearLeaves = leaves.filter(leave =>
             new Date(leave.startDate).getFullYear() === year &&

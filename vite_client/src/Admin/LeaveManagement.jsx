@@ -244,7 +244,7 @@ const LeaveManagement = () => {
       const updatedLeave = result?.leave;
 
       if (workflowStillInProgress) {
-        toast.info(result?.message || 'Leave approved at current step. Pending further approvals.');
+        toast.info(result?.message || 'Leave approved at current step. Pending HR verification.');
       } else {
         toast.success(result?.message || 'Leave approved successfully!');
       }
@@ -530,7 +530,9 @@ const LeaveManagement = () => {
                                 className={`inline-flex items-center gap-1.5 font-semibold capitalize ${statusBg}`}
                               >
                                 <span className={`h-2 w-2 rounded-full ${statusDot}`} />
-                                {leave.status || '—'}
+                                {st === 'pending' && leave.approvalStage
+                                  ? leave.approvalStage
+                                  : leave.status || '—'}
                               </span>
                             </td>
                             <td className="px-3 py-3 text-right">

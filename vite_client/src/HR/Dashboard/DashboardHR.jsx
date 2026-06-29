@@ -360,7 +360,13 @@ const DashboardHR = () => {
                 const result = await dispatch(fetchEmployeeOwnInfo());
 
                 if (fetchEmployeeOwnInfo.rejected.match(result)) {
-                    setError(result.payload || 'Failed to load employee information');
+                    const needsPersonalProfile =
+                        !permissionFlags.isOrgOwner &&
+                        !permissionFlags.isHrManager &&
+                        !permissionFlags.isHrExecutive;
+                    if (needsPersonalProfile) {
+                        setError(result.payload || 'Failed to load employee information');
+                    }
                 }
             } catch (err) {
                 const status = err?.response?.status;
@@ -368,7 +374,11 @@ const DashboardHR = () => {
                     setTimeout(() => {
                         window.location.href = '/login';
                     }, 1500);
-                } else {
+                } else if (
+                    !permissionFlags.isOrgOwner &&
+                    !permissionFlags.isHrManager &&
+                    !permissionFlags.isHrExecutive
+                ) {
                     setError('An unexpected error occurred');
                 }
             } finally {
@@ -377,7 +387,7 @@ const DashboardHR = () => {
         };
 
         fetchData();
-    }, [dispatch, hasFetched]);
+    }, [dispatch, hasFetched, permissionFlags.isOrgOwner, permissionFlags.isHrManager, permissionFlags.isHrExecutive]);
 
     useEffect(() => {
         const fetchAllEmployees = async () => {
@@ -609,7 +619,7 @@ const DashboardHR = () => {
     }, [orgEmployees, searchQuery]);
 
     const quickActions = [
-        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts) && {
+        permissionFlags.isOrgOwner && {
             label: 'Add Employee',
             subtitle: 'Create a profile',
             icon: <FiUserPlus className="h-5 w-5" />,
