@@ -253,6 +253,7 @@ export const hrRoutes = [
   { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/employee/documents-id', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },
+  { path: '/employee/my-documents', component: lazy(() => import('../Employee/Documents/MyDocumentsPage')), message: 'Loading my documents...', allowedRoles: [] },
   { path: '/documents/:id/versions', component: lazy(() => import('../HR/Documents/DocumentVersions')), message: 'Loading document versions...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/benefits', component: lazy(() => import('../components/BenefitsRouteWrapper')), message: 'Loading benefits...', allowedRoles: [] },
   { path: '/benefits/:id', component: lazy(() => import('../HR/Benefits/BenefitDetailPage')), message: 'Loading benefit plan details...', allowedRoles: [] },

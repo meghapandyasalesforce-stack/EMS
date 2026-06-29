@@ -35,13 +35,13 @@ const DocumentsTab = ({ employee, onDownload, onView }) => {
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  onClick={() => onDownload(doc._id, doc.fileName || doc.originalName)}
+                  onClick={() => onDownload(doc)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   <FiDownload className="h-4 w-4" />
                   Download
                 </button>
-                {doc.filePath ? (
+                {doc._id ? (
                   <button
                     type="button"
                     onClick={() => onView(doc)}

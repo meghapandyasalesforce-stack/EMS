@@ -117,6 +117,36 @@ export async function resolveDocumentFileContent({ document, legacyDoc, fileUrl,
     return null;
 }
 
+/** Ensure MongoDB has fileBinary after upload (disk + DB stay in sync). */
+export async function persistDocumentBinary(documentId, fileOrBuffer) {
+    if (!documentId) return null;
+
+    let buffer = null;
+    if (Buffer.isBuffer(fileOrBuffer) && fileOrBuffer.length) {
+        buffer = fileOrBuffer;
+    } else if (fileOrBuffer?.path && fs.existsSync(fileOrBuffer.path)) {
+        try {
+            buffer = fs.readFileSync(fileOrBuffer.path);
+        } catch {
+            buffer = null;
+        }
+    } else if (typeof fileOrBuffer === 'string') {
+        const filePath = resolveDocumentFilePath(fileOrBuffer);
+        if (filePath) {
+            try {
+                buffer = fs.readFileSync(filePath);
+            } catch {
+                buffer = null;
+            }
+        }
+    }
+
+    if (!buffer?.length) return null;
+
+    await Document.findByIdAndUpdate(documentId, { fileBinary: buffer });
+    return buffer;
+}
+
 /** If file exists on disk but DB backup is missing, read and persist (one-time repair). */
 export async function backfillDocumentBinaryFromDisk(documentId, fileUrl) {
     if (!documentId || !fileUrl) return null;

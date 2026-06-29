@@ -15,6 +15,8 @@ import {
     ensureDocumentsUploadDirs,
     resolveDocumentFileContent,
     sendDocumentFile,
+    backfillDocumentBinaryFromDisk,
+    persistDocumentBinary,
 } from '../../helpers/documentFileStorageHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -185,23 +187,38 @@ export const downloadDocument = async (req, res) => {
         }
 
         const loadBinary = (id) => Document.findById(id).select('+fileBinary').lean();
-        const resolved = await resolveDocumentFileContent({
+        let resolved = await resolveDocumentFileContent({
             document,
             legacyDoc,
             fileUrl,
             loadBinary,
         });
 
-        if (!resolved) {
+        let fileBuffer = resolved?.buffer;
+        if (!fileBuffer?.length && document?._id && fileUrl) {
+            fileBuffer = await backfillDocumentBinaryFromDisk(document._id, fileUrl);
+            if (fileBuffer?.length) {
+                resolved = { buffer: fileBuffer, source: 'database-repair' };
+            }
+        }
+        if (!fileBuffer?.length && document?._id && fileUrl) {
+            fileBuffer = await persistDocumentBinary(document._id, fileUrl);
+            if (fileBuffer?.length) {
+                resolved = { buffer: fileBuffer, source: 'disk-repair' };
+            }
+        }
+
+        if (!resolved && !fileBuffer) {
             return res.status(404).json({
+                success: false,
                 message: 'File not found',
-                path: fileUrl,
+                fileUrl,
             });
         }
 
         sendDocumentFile(res, {
-            filePath: resolved.filePath,
-            buffer: resolved.buffer,
+            filePath: resolved?.filePath,
+            buffer: fileBuffer || resolved?.buffer,
             downloadName,
             mimeType,
             inline,

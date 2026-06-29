@@ -30,8 +30,8 @@ import {
   clearEmployeeDetails,
 } from '../../context/employeeDetailsSlice';
 import { deleteEmployee } from '../../context/employeeSlice';
-import { BOTH_DOCUMENT_ENDPOINT, BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
-import axiosInstance, { getBackendBaseURL } from '../../utils/axios';
+import { BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
+import axiosInstance, { openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import { DETAIL_TABS } from './employeeDetails/constants';
 import EmployeeDetailsHeader from './employeeDetails/EmployeeDetailsHeader';
 import PersonalTab from './employeeDetails/tabs/PersonalTab';
@@ -217,29 +217,42 @@ const EmployeeDetailsPage = () => {
     if (employee) fetchEmployeeStats();
   }, [employee, fetchEmployeeStats]);
 
-  const handleDownloadDocument = async (documentId, fileName) => {
+  const handleDownloadDocument = async (doc) => {
+    const documentId = doc?._id || doc;
+    const fileName = typeof doc === 'object'
+      ? (doc.fileName || doc.originalName || 'document')
+      : 'document';
+    if (!documentId) {
+      alert('Document id missing.');
+      return;
+    }
     try {
-      const base = BOTH_DOCUMENT_ENDPOINT.startsWith('http') ? '' : '/api';
-      const downloadUrl = `${base}${BOTH_DOCUMENT_ENDPOINT}/${employeeId}/documents/${documentId}/download`;
-      const response = await fetch(downloadUrl, { method: 'GET', credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to download');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', fileName || 'document');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch {
-      alert('Failed to download document. Please try again.');
+      await saveDocumentDownload(documentId, fileName, {
+        scope: 'both',
+        employeeId,
+        fileUrl: typeof doc === 'object' ? (doc.filePath || doc.fileUrl) : undefined,
+      });
+    } catch (error) {
+      alert(error?.message || 'Failed to download document. Please try again.');
     }
   };
 
-  const handleViewDocument = (doc) => {
-    const backendUrl = getBackendBaseURL();
-    window.open(`${backendUrl}${doc.filePath}`, '_blank');
+  const handleViewDocument = async (doc) => {
+    if (!doc?._id) {
+      alert('Document id missing.');
+      return;
+    }
+    try {
+      await openDocumentPreview(doc._id, {
+        scope: 'both',
+        employeeId,
+        fileUrl: doc.filePath || doc.fileUrl,
+        fileName: doc.fileName || doc.originalName,
+        mimeType: doc.mimeType,
+      });
+    } catch (error) {
+      alert(error?.message || 'Failed to preview document. Please try again.');
+    }
   };
 
   const handleConfirmStatusChange = () => {

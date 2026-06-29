@@ -4,12 +4,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     FiActivity,
     FiArrowUpRight,
+    FiBook,
     FiBriefcase,
     FiCalendar,
     FiCheckCircle,
     FiClock,
     FiFileText,
     FiGrid,
+    FiSettings,
     FiMoreHorizontal,
     FiSearch,
     FiTrendingDown,
@@ -636,6 +638,18 @@ const DashboardHR = () => {
             subtitle: `${pendingLeaves} pending`,
             icon: <FiCalendar className="h-5 w-5" />,
             onClick: () => navigate('/leave-management'),
+        },
+        (permissionFlags.isHrManager || permissionFlags.isHrExecutive) && {
+            label: 'Attendance Rules',
+            subtitle: 'Punch & office rules',
+            icon: <FiSettings className="h-5 w-5" />,
+            onClick: () => navigate('/attendance-rules'),
+        },
+        (permissionFlags.isHrManager || permissionFlags.isHrExecutive) && {
+            label: 'Leave Policy',
+            subtitle: 'Configure leave types',
+            icon: <FiBook className="h-5 w-5" />,
+            onClick: () => navigate('/admin/leave-policy'),
         },
         hasAnyPermission(permissions, [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM], rbacOpts) && {
             label: 'Approvals',

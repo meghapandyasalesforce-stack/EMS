@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Document } from '../models/document.model.js';
-import { requireUploadFileBuffer } from './documentFileStorageHelper.js';
+import { persistDocumentBinary, requireUploadFileBuffer } from './documentFileStorageHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,7 +122,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         });
         await doc.save();
         await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id);
-        await Document.findByIdAndUpdate(doc._id, { fileBinary });
+        await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
         return doc;
     }
 
@@ -153,7 +153,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         isActive: true,
     });
     await doc.save();
-    await Document.findByIdAndUpdate(doc._id, { fileBinary });
+    await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
     return doc;
 }
 

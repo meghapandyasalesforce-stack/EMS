@@ -140,7 +140,12 @@ const DocumentsAndIdPage = () => {
 
   const handlePreviewDocument = async (doc) => {
     try {
-      await openDocumentPreview(doc._id, { scope: 'both' });
+      await openDocumentPreview(doc._id, {
+        scope: 'both',
+        fileUrl: doc.fileUrl,
+        fileName: doc.fileName || doc.name,
+        mimeType: doc.mimeType,
+      });
     } catch (error) {
       toast.error(error?.message || 'Could not open document preview');
     }
@@ -148,7 +153,10 @@ const DocumentsAndIdPage = () => {
 
   const handleDownloadDocument = async (doc) => {
     try {
-      await saveDocumentDownload(doc._id, doc.fileName || doc.name || 'document', { scope: 'both' });
+      await saveDocumentDownload(doc._id, doc.fileName || doc.name || 'document', {
+        scope: 'both',
+        fileUrl: doc.fileUrl,
+      });
     } catch (error) {
       toast.error(error?.message || 'Failed to download document');
     }

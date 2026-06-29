@@ -183,6 +183,16 @@ export const getProfilePhotoUrl = (profilePhoto) => {
   return withVersion(getUploadUrl(profilePhoto));
 };
 
+/** Employee-specific download (legacy embedded docs + job uploads). */
+export const getEmployeeDocumentDownloadUrl = (employeeId, documentId, { inline = false } = {}) => {
+  if (!employeeId || !documentId) return null;
+  const base = (getBaseURL() || '/api').replace(/\/$/, '');
+  const params = new URLSearchParams();
+  if (inline) params.set('inline', '1');
+  const qs = params.toString();
+  return `${base}/v1/both/document/${employeeId}/documents/${documentId}/download${qs ? `?${qs}` : ''}`;
+};
+
 /** Authenticated document download URL (use instead of raw /uploads links in production). */
 export const getDocumentDownloadUrl = (documentId, { scope = 'both', version } = {}) => {
   if (!documentId) return null;
@@ -654,9 +664,13 @@ export async function fetchDocumentWithFallback(documentId, options = {}) {
   } catch (apiError) {
     if (employeeId) {
       try {
-        return await tryBlob(`/v1/upload/${employeeId}/documents/${documentId}/download`);
+        return await tryBlob(`/v1/both/document/${employeeId}/documents/${documentId}/download`);
       } catch {
-        /* try next */
+        try {
+          return await tryBlob(`/v1/upload/${employeeId}/documents/${documentId}/download`);
+        } catch {
+          /* try next */
+        }
       }
     }
     if (fileUrl) {

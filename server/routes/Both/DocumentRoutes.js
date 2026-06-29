@@ -6,7 +6,11 @@ import {
     getDocumentRequests,
     uploadEmployeeDocument,
     getSharedDocuments,
-    shareDocument
+    shareDocument,
+    getMyDocuments,
+    updateMyDocument,
+    replaceMyDocumentFile,
+    deleteMyDocument,
 } from '../../controllers/document/documentController.js';
 import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
@@ -18,6 +22,10 @@ const router = express.Router();
 // Documents (route is already mounted at /api/v1/both/documents, so use / here)
 router.route('/')
     .get(isAuthenticatedBoth, readLimiter, getDocuments);
+
+// Employee — own uploads only
+router.route('/mine')
+    .get(isAuthenticated, readLimiter, getMyDocuments);
 
 // Authenticated file download (works when nginx only proxies /api, not /uploads)
 router.route('/:id/download')
@@ -37,6 +45,22 @@ router.route('/upload')
             next();
         });
     }, writeLimiter, uploadEmployeeDocument);
+
+// Employee — replace file on own document
+router.route('/:id/replace')
+    .put(isAuthenticated, (req, res, next) => {
+        upload(req, res, (err) => {
+            if (err) {
+                return res.status(400).json({ success: false, message: err.message });
+            }
+            next();
+        });
+    }, writeLimiter, replaceMyDocumentFile);
+
+// Employee — update metadata or delete own document
+router.route('/:id')
+    .patch(isAuthenticated, writeLimiter, updateMyDocument)
+    .delete(isAuthenticated, writeLimiter, deleteMyDocument);
 
 // Share document (employees can share their own documents)
 router.route('/:id/share')

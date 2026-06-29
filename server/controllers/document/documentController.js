@@ -13,6 +13,7 @@ import {
     resolveDocumentFileContent,
     sendDocumentFile,
     backfillDocumentBinaryFromDisk,
+    persistDocumentBinary,
 } from '../../helpers/documentFileStorageHelper.js';
 
 const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certificate',
@@ -134,6 +135,37 @@ const assertHrDocumentAccess = async (req, res) => {
     }
     return true;
 };
+
+const findOwnDocument = async (req, res, documentId) => {
+    const employeeId = req.employee?._id;
+    if (!employeeId) {
+        res.status(401).json({
+            success: false,
+            message: 'Employee authentication required',
+        });
+        return null;
+    }
+
+    const document = await Document.findOne(
+        addOrganizationFilter(req, {
+            _id: documentId,
+            uploadedBy: employeeId,
+            isActive: { $ne: false },
+        })
+    );
+
+    if (!document) {
+        res.status(404).json({
+            success: false,
+            message: 'Document not found or you do not have access',
+        });
+        return null;
+    }
+
+    return document;
+};
+
+const EMPLOYEE_UPLOAD_CATEGORIES = ['Employee', 'Certificate', 'Contract', 'Legal', 'Other'];
 
 async function findLegacyEmbeddedDocument(req, documentId, { employeeIdOnly = null } = {}) {
     const orgFilter = addOrganizationFilter(req, {});
@@ -301,6 +333,7 @@ export const uploadDocument = asyncHandler(async (req, res) => {
     });
 
     await document.save();
+    await persistDocumentBinary(document._id, fileBinary?.length ? fileBinary : file);
 
     res.status(201).json({
         success: true,
@@ -571,8 +604,11 @@ export const downloadDocumentById = asyncHandler(async (req, res) => {
     });
 
     let fileBuffer = resolved?.buffer;
-    if (!resolved && document?._id && fileUrl) {
+    if (!fileBuffer?.length && document?._id && fileUrl) {
         fileBuffer = await backfillDocumentBinaryFromDisk(document._id, fileUrl);
+    }
+    if (!fileBuffer?.length && document?._id && fileUrl) {
+        fileBuffer = await persistDocumentBinary(document._id, fileUrl);
     }
 
     if (!resolved && !fileBuffer) {
@@ -1066,6 +1102,149 @@ export const getSharedDocuments = asyncHandler(async (req, res) => {
             total,
             pages: Math.ceil(total / parseInt(limit))
         }
+    });
+});
+
+/**
+ * Employee — list only documents uploaded by the current user.
+ */
+export const getMyDocuments = asyncHandler(async (req, res) => {
+    const employeeId = req.employee?._id;
+    if (!employeeId) {
+        return res.status(401).json({
+            success: false,
+            message: 'Employee authentication required',
+        });
+    }
+
+    const { page = 1, limit = 50, search } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = addOrganizationFilter(req, {
+        uploadedBy: employeeId,
+        isActive: { $ne: false },
+    });
+
+    const searchTrim = typeof search === 'string' ? search.trim() : '';
+    if (searchTrim) {
+        query.$or = [
+            { name: { $regex: searchTrim, $options: 'i' } },
+            { fileName: { $regex: searchTrim, $options: 'i' } },
+            { description: { $regex: searchTrim, $options: 'i' } },
+        ];
+    }
+
+    const documents = await Document.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean();
+
+    const total = await Document.countDocuments(query);
+
+    res.json({
+        success: true,
+        data: documents,
+        pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            pages: Math.ceil(total / limitNum) || 0,
+        },
+    });
+});
+
+/**
+ * Employee — update own document metadata (name, description, category).
+ */
+export const updateMyDocument = asyncHandler(async (req, res) => {
+    const document = await findOwnDocument(req, res, req.params.id);
+    if (!document) return;
+
+    const { name, description, category } = req.body;
+
+    if (name != null && String(name).trim()) {
+        document.name = String(name).trim();
+    }
+    if (description !== undefined) {
+        document.description = String(description);
+    }
+    if (category && EMPLOYEE_UPLOAD_CATEGORIES.includes(category)) {
+        document.category = category;
+    }
+
+    await document.save();
+
+    res.json({
+        success: true,
+        message: 'Document updated successfully',
+        data: document,
+    });
+});
+
+/**
+ * Employee — replace file on an own document (re-submits for HR approval when required).
+ */
+export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
+    const document = await findOwnDocument(req, res, req.params.id);
+    if (!document) return;
+
+    const file = req.file || req.files?.[0];
+    if (!file) {
+        return res.status(400).json({
+            success: false,
+            message: 'No file uploaded',
+        });
+    }
+
+    const relFileUrl = `/uploads/documents/${file.filename}`;
+    assertUploadedFileExists(file, relFileUrl);
+    const fileBinary = requireUploadFileBuffer(file);
+
+    document.fileUrl = relFileUrl;
+    document.fileName = file.originalname || file.name || document.fileName;
+    document.fileSize = file.size;
+    document.mimeType = file.mimetype;
+    document.type = mimeToDocumentTypeEnum(file.mimetype);
+
+    if (document.requiresApproval) {
+        document.approvalStatus = 'Pending';
+        document.approvedBy = undefined;
+        document.approvedAt = undefined;
+        document.rejectionReason = undefined;
+    }
+
+    await document.save();
+    await persistDocumentBinary(document._id, fileBinary);
+
+    res.json({
+        success: true,
+        message: document.requiresApproval
+            ? 'Document updated and sent for HR approval'
+            : 'Document file updated successfully',
+        data: document,
+    });
+});
+
+/**
+ * Employee — soft-delete own document (hidden from employee; HR audit trail retained).
+ */
+export const deleteMyDocument = asyncHandler(async (req, res) => {
+    const document = await findOwnDocument(req, res, req.params.id);
+    if (!document) return;
+
+    document.isActive = false;
+    if (document.requiresApproval) {
+        document.approvalStatus = 'Rejected';
+        document.rejectionReason = document.rejectionReason || 'Removed by employee';
+    }
+    await document.save();
+
+    res.json({
+        success: true,
+        message: 'Document deleted successfully',
     });
 });
 

@@ -46,6 +46,7 @@ const EMPLOYEE_WORKSPACE_ROUTES = [
   '/one-on-one',
   '/employee/benefits-learning',
   '/employee/documents-id',
+  '/employee/my-documents',
   '/employee/calendar',
   '/employee-payroll',
   '/notifications',
