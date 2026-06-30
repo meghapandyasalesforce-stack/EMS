@@ -40,7 +40,8 @@ const LeaveBalancesWidget = ({ employeeId, compact = false }) => {
   useEffect(() => {
     if (!employeeId) return;
     let cancelled = false;
-    (async () => {
+
+    const fetchBalance = async () => {
       try {
         setLoading(true);
         const res = await axios.get(`/v1/admin/leave-policy/balance/${employeeId}`, {
@@ -52,8 +53,21 @@ const LeaveBalancesWidget = ({ employeeId, compact = false }) => {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    fetchBalance();
+
+    const onUpdated = (event) => {
+      if (event.detail?.employeeId === employeeId) {
+        fetchBalance();
+      }
+    };
+    window.addEventListener('leave-balance-updated', onUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('leave-balance-updated', onUpdated);
+    };
   }, [employeeId]);
 
   const items = balance?.balances || [];

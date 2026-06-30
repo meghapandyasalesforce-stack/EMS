@@ -30,7 +30,7 @@ import {
   InputAdornment,
   Autocomplete
 } from '@mui/material';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { FiEdit2, FiTrash2, FiSave, FiX, FiChevronLeft, FiRefreshCw, FiMessageSquare, FiCalendar, FiUser, FiTrendingUp, FiPlus } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -52,6 +52,7 @@ import { isExecutive } from '../../utils/navigationConfig';
 const ProjectDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -327,6 +328,13 @@ const ProjectDetailPage = () => {
     
     dispatch(fetchEmployees({ fetchAllPages: true }));
   }, [project, dispatch, mapStatusToFrontend, loadWorkPlan]);
+
+  useEffect(() => {
+    if (location.state?.startEditing && project) {
+      setIsEditing(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state?.startEditing, location.pathname, navigate, project]);
 
   const handleWorkItemStatusChange = useCallback(
     async (workItemId, status) => {

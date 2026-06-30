@@ -6,9 +6,11 @@ import {
     updateLeavePolicy,
     deleteLeavePolicy,
     getEmployeeLeaveBalance,
+    adjustEmployeeLeaveBalance,
     recalculateBalances
 } from '../../controllers/leave/leavePolicyController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import isAuthenticatedBoth from '../../middlewares/isAuthenticatedBoth.js';
 
 const router = express.Router();
 
@@ -17,7 +19,10 @@ router.route('/balance/recalculate')
     .post(isAdminOrHROrExecutiveAuthenticated, recalculateBalances);
 
 router.route('/balance/:employeeId')
-    .get(isAdminOrHROrExecutiveAuthenticated, getEmployeeLeaveBalance);
+    .get(isAuthenticatedBoth, getEmployeeLeaveBalance);
+
+router.route('/balance/:employeeId/adjust')
+    .patch(isAuthenticatedBoth, adjustEmployeeLeaveBalance);
 
 // Policy management routes (HR/Admin only)
 router.route('/')

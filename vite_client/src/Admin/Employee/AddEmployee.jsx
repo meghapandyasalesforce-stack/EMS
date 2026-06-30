@@ -12,6 +12,8 @@ import ElevatedRoleConfirmModal from '../../components/ElevatedRoleConfirmModal'
 import { DEFAULT_SYSTEM_ROLE } from '../../utils/systemRoles';
 import useSuggestedSystemRole from '../../Hooks/useSuggestedSystemRole';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { PERMISSIONS } from '../../utils/permissions';
+import { getDefaultDashboardRoute } from '../../utils/dashboardRedirect';
 import {
     getCredentialsForAdminEmail,
     isOrgAdminEmail,
@@ -68,20 +70,26 @@ function AddEmployee() {
     const employeeError = useSelector(state => state.employees.error);
     const user = useSelector((state) => state.auth?.user);
     const employee = useSelector((state) => state.employeeDetails?.employee);
-    const { isOrgOwner } = useAuthPermissions();
+    const { isOrgOwner, isHrManager, isHrExecutive, hasPermission } = useAuthPermissions();
+    const canAddEmployee =
+        isOrgOwner ||
+        isHrManager ||
+        isHrExecutive ||
+        hasPermission(PERMISSIONS.EMPLOYEE_CREATE);
     const permissionFlags = useMemo(() => ({ isOrgOwner }), [isOrgOwner]);
 
     const adminEmail = useMemo(
-        () => resolveOrgAdminEmail(user, permissionFlags),
-        [user, permissionFlags]
+        () => (isOrgOwner ? resolveOrgAdminEmail(user, permissionFlags) : ''),
+        [user, permissionFlags, isOrgOwner]
     );
-    const usingAdminEmail = isOrgAdminEmail(form.email, user, permissionFlags);
+    const usingAdminEmail =
+        isOrgOwner && isOrgAdminEmail(form.email, user, permissionFlags);
 
     useEffect(() => {
-        if (usingAdminEmail) {
+        if (isOrgOwner && usingAdminEmail) {
             setLinkAsMyProfile(true);
         }
-    }, [usingAdminEmail]);
+    }, [isOrgOwner, usingAdminEmail]);
 
     const getDashboardRoute = useMemo(() => {
         const userRole = user?.role || employee?.role || localStorage.getItem('role');
@@ -355,7 +363,7 @@ function AddEmployee() {
             return;
         }
 
-        const linkAsOrgOwnerMe = usingAdminEmail || linkAsMyProfile;
+        const linkAsOrgOwnerMe = isOrgOwner && (usingAdminEmail || linkAsMyProfile);
         const resultAction = await dispatch(
             createEmployee({ ...form, systemRole, confirmReplace, linkAsOrgOwnerMe })
         );
@@ -490,7 +498,7 @@ function AddEmployee() {
                     onChange={handleChange}
                 />
             </div>
-            {adminEmail ? (
+            {isOrgOwner && adminEmail ? (
                 <button
                     type="button"
                     onClick={fillAdminCredentials}
@@ -499,7 +507,7 @@ function AddEmployee() {
                     Use my admin email ({adminEmail})
                 </button>
             ) : null}
-            {usingAdminEmail ? (
+            {isOrgOwner && usingAdminEmail ? (
                 <p className="text-xs text-emerald-700">
                     Only your organization admin email can share login. One employee profile will link to your admin account (same email and password).
                 </p>
@@ -680,8 +688,8 @@ function AddEmployee() {
         );
     };
 
-    if (!isOrgOwner) {
-        return <Navigate to="/dashboard-admin" replace />;
+    if (!canAddEmployee) {
+        return <Navigate to={getDefaultDashboardRoute(user, employee)} replace />;
     }
 
     return (

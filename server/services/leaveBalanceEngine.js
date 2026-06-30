@@ -162,6 +162,20 @@ class LeaveBalanceEngine {
             typeBalance.expired = expired;
         }
 
+        // Preserve manual corrections from admin / HR / manager
+        if (typeBalance.manualOverride?.active) {
+            const mo = typeBalance.manualOverride;
+            if (mo.accrued != null && !Number.isNaN(Number(mo.accrued))) {
+                typeBalance.accrued = Number(mo.accrued);
+            }
+            if (mo.used != null && !Number.isNaN(Number(mo.used))) {
+                typeBalance.used = Number(mo.used);
+            }
+            if (mo.carriedForward != null && !Number.isNaN(Number(mo.carriedForward))) {
+                typeBalance.carriedForward = Number(mo.carriedForward);
+            }
+        }
+
         // Calculate available balance
         typeBalance.available = Math.max(0, 
             typeBalance.accrued + 

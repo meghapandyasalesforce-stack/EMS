@@ -3,7 +3,7 @@ import { loginEmployee, logoutEmployee, registerEmployee, resetEmployeePassword 
 import { deleteEmployee, getAllEmployees } from "../../controllers/admin/employeeManagementController.js";
 import { refreshToken } from "../../controllers/auth/refreshTokenController.js";
 import {
-  requireOrgOwnerOnly,
+  requireEmployeeCreate,
   requireEmployeeDelete,
   requireEmployeeList,
 } from '../../middlewares/requirePermission.js';
@@ -18,7 +18,7 @@ const router = express.Router();
 // Employee registration uses employeeValidations.create which validates all required employee fields
 // Password is optional (will be auto-generated if not provided)
 router.route("/register").post(
-    requireOrgOwnerOnly,
+    requireEmployeeCreate,
     loginLimiter,
     employeeValidations.create,
     registerEmployee

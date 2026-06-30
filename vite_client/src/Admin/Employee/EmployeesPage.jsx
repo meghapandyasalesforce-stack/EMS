@@ -27,8 +27,12 @@ const EmployeesPage = () => {
   const [linkingMeId, setLinkingMeId] = useState(null);
   const pageSize = 20;
 
-  const { hasPermission, isOrgOwner } = useAuthPermissions();
-  const canAddEmployee = isOrgOwner;
+  const { hasPermission, isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
+  const canAddEmployee =
+    isOrgOwner ||
+    isHrManager ||
+    isHrExecutive ||
+    hasPermission(PERMISSIONS.EMPLOYEE_CREATE);
 
   useEffect(() => {
     dispatch(fetchEmployees({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }));

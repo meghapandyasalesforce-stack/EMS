@@ -621,7 +621,10 @@ const DashboardHR = () => {
     }, [orgEmployees, searchQuery]);
 
     const quickActions = [
-        permissionFlags.isOrgOwner && {
+        (permissionFlags.isOrgOwner ||
+            permissionFlags.isHrManager ||
+            permissionFlags.isHrExecutive ||
+            hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts)) && {
             label: 'Add Employee',
             subtitle: 'Create a profile',
             icon: <FiUserPlus className="h-5 w-5" />,
