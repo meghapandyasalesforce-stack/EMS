@@ -5,8 +5,16 @@ import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalErr
 import leaveBalanceEngine from "../../services/leaveBalanceEngine.js";
 import leaveValidationService from "../../services/leaveValidationService.js";
 import Calendar from "../../models/calendar.model.js";
-import { logCreate } from "../../helpers/auditLogger.js";
+import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
 import { normalizeLeaveTypeForPolicy } from "../../helpers/leaveTypeHelper.js";
+import { buildEmployeeLeaveBalanceResponse } from "../../helpers/leaveBalanceResponseHelper.js";
+import {
+    ensureDefaultLeaveWorkflow,
+    attachWorkflowSummariesToLeaves,
+    getLeaveApprovalStageLabel,
+} from "../../helpers/leaveWorkflowHelper.js";
+import path from "path";
+import { upload as leaveDocumentUpload } from "../fileUpload/uploadConfigController.js";
 
 
 /**
@@ -225,8 +233,10 @@ export const createLeave = async (req, res) => {
             }
         });
         
-        // ✅ INTEGRATE APPROVAL WORKFLOW
+        // ✅ INTEGRATE APPROVAL WORKFLOW (Manager → HR)
         try {
+            await ensureDefaultLeaveWorkflow(organizationId);
+
             const { initiateApproval } = await import('../../services/approvalWorkflowService.js');
             const approvalResult = await initiateApproval({
                 organizationId,
@@ -249,7 +259,7 @@ export const createLeave = async (req, res) => {
                 await leave.save();
             }
 
-            // If auto-approved, update leave status
+            // If auto-approved (should not happen with default workflow), update leave status
             if (approvalResult.autoApproved && approvalResult.status === 'Approved') {
                 leave.status = 'approved';
                 leave.approvedBy = employeeId; // Auto-approved
@@ -290,7 +300,7 @@ export const createLeave = async (req, res) => {
             { leave, warnings: validation.warnings }, 
             validation.warnings && validation.warnings.length > 0 
                 ? `Leave application submitted successfully. Note: ${validation.warnings.join('; ')}`
-                : "Leave application submitted successfully", 
+                : "Leave application submitted successfully. It will be sent to your manager first, then HR for final approval.",
             201
         );
 
@@ -310,7 +320,12 @@ export const getMyLeaves = async (req, res) => {
         if (organizationId) {
             leaveQuery.organizationId = organizationId;
         }
-        const leaves = await Leave.find(leaveQuery).sort({ createdAt: -1 });
+        const leavesRaw = await Leave.find(leaveQuery).sort({ createdAt: -1 }).lean();
+        const leavesWithWorkflow = await attachWorkflowSummariesToLeaves(leavesRaw);
+        const leaves = leavesWithWorkflow.map((leave) => ({
+            ...leave,
+            approvalStage: getLeaveApprovalStageLabel(leave),
+        }));
 
         const currentYearLeaves = leaves.filter(leave =>
             new Date(leave.startDate).getFullYear() === year &&
@@ -327,12 +342,29 @@ export const getMyLeaves = async (req, res) => {
 
         let totalLeaves = 0;
         let remainingLeaves = 0;
+        let balanceByType = null;
         if (organizationId) {
             try {
                 const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
                 if (balance && balance.balances && balance.balances.length) {
+                    balanceByType = {
+                        sick: { accrued: 0, available: 0, used: 0, pending: 0 },
+                        annual: { accrued: 0, available: 0, used: 0, pending: 0 },
+                        casual: { accrued: 0, available: 0, used: 0, pending: 0 }
+                    };
                     totalLeaves = balance.balances.reduce((sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0), 0);
                     remainingLeaves = balance.balances.reduce((sum, b) => sum + (b.available || 0), 0);
+
+                    for (const b of balance.balances) {
+                        const typeKey = b.leaveType === 'paid' ? 'annual' : b.leaveType;
+                        if (!balanceByType[typeKey]) continue;
+                        balanceByType[typeKey] = {
+                            accrued: (b.accrued || 0) + (b.carriedForward || 0),
+                            available: b.available || 0,
+                            used: b.used || 0,
+                            pending: b.pending || 0
+                        };
+                    }
                 }
             } catch (e) {
                 logger.warn('Get My Leaves: balance fetch failed', { employeeId, error: e.message });
@@ -359,6 +391,8 @@ export const getMyLeaves = async (req, res) => {
             leavesTaken,
             remainingLeaves: totalLeaves > 0 ? remainingLeaves : Math.max(0, totalLeaves - leavesTaken),
             leavesByType,
+            balanceByType,
+            hasBalanceData: Boolean(balanceByType),
             monthlyLeaveCaps
         };
 
@@ -368,4 +402,136 @@ export const getMyLeaves = async (req, res) => {
         res.status(500).json({ message: 'Error fetching your leaves', error: error.message });
     }
 };
+
+export const getMyLeaveBalance = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        if (!employeeId) {
+            return sendUnauthorized(res, "Unauthorized: Employee data missing");
+        }
+
+        const organizationId = req.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required. Please ensure you are authenticated.', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+        const balance = await buildEmployeeLeaveBalanceResponse(employeeId, year, organizationId);
+
+        if (!balance) {
+            return sendNotFound(res, 'Leave balance. No applicable policy for this employee.');
+        }
+
+        return sendSuccess(res, { balance }, 'Leave balance fetched successfully');
+    } catch (error) {
+        logger.error('Get My Leave Balance Error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Error fetching leave balance', error);
+    }
+};
+
+export const uploadLeaveDocument = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        if (!employeeId) {
+            return sendUnauthorized(res, "Unauthorized: Employee data missing");
+        }
+
+        if (!req.file) {
+            return sendError(res, 'Document file is required', 400, 'MISSING_DOCUMENT');
+        }
+
+        const documentPath = `/uploads/documents/${path.basename(req.file.path)}`;
+        return sendSuccess(
+            res,
+            {
+                document: documentPath,
+                fileName: req.file.originalname,
+                mimeType: req.file.mimetype
+            },
+            'Leave document uploaded successfully',
+            201
+        );
+    } catch (error) {
+        logger.error('Upload Leave Document Error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Error uploading leave document', error);
+    }
+};
+
+export const cancelLeave = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        if (!employeeId) {
+            return sendUnauthorized(res, "Unauthorized: Employee data missing");
+        }
+
+        const { id } = req.params;
+        const organizationId = req.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return sendError(res, 'Organization ID is required. Please ensure you are authenticated.', 400, 'MISSING_ORGANIZATION_ID');
+        }
+
+        const leave = await Leave.findOne({ _id: id, employee: employeeId, organizationId });
+        if (!leave) {
+            return sendNotFound(res, 'Leave application');
+        }
+
+        if (leave.status !== 'pending') {
+            return sendError(res, 'Only pending leave requests can be cancelled', 400, 'LEAVE_NOT_CANCELLABLE');
+        }
+
+        const leaveBefore = leave.toObject();
+
+        if (leave.approvalInstanceId) {
+            try {
+                const { cancelApprovalInstance } = await import('../../services/approvalWorkflowService.js');
+                await cancelApprovalInstance({
+                    approvalInstanceId: leave.approvalInstanceId,
+                    cancelledBy: employeeId,
+                    reason: 'Cancelled by employee'
+                });
+            } catch (workflowError) {
+                logger.warn('Error cancelling approval workflow for leave', {
+                    error: workflowError.message,
+                    leaveId: leave._id,
+                    approvalInstanceId: leave.approvalInstanceId
+                });
+            }
+        }
+
+        leave.status = 'cancelled';
+        await leave.save();
+
+        await logUpdate({
+            entityType: 'Leave',
+            entityId: leave._id,
+            entityName: `${leave.leaveType} leave for ${leave.employeeName || 'Employee'}`,
+            req,
+            before: leaveBefore,
+            after: leave.toObject(),
+            metadata: {
+                statusChange: true,
+                previousStatus: leaveBefore.status,
+                newStatus: leave.status,
+                cancelledByEmployee: true
+            }
+        });
+
+        try {
+            const year = new Date(leave.startDate).getFullYear();
+            await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+        } catch (balanceError) {
+            logger.warn('Error updating leave balance after cancellation', {
+                error: balanceError.message,
+                leaveId: leave._id
+            });
+        }
+
+        return sendSuccess(res, { leave }, 'Leave request cancelled successfully');
+    } catch (error) {
+        logger.error('Cancel Leave Error', { error: error.message, stack: error.stack, leaveId: req.params.id });
+        return sendInternalError(res, 'Error cancelling leave request', error);
+    }
+};
+
+export { leaveDocumentUpload };
 

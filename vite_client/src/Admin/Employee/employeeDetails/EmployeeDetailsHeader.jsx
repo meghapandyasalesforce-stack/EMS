@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiActivity, FiClock, FiTrash2, FiMoreHorizontal } from 'react-icons/fi';
+import { FiActivity, FiClock, FiTrash2 } from 'react-icons/fi';
 import ProfilePicture from '../../../Shared/ProfilePicture';
 import { formatDate, getFullName, getStatusLabel } from './utils';
 
@@ -101,13 +101,6 @@ const EmployeeDetailsHeader = ({
               </button>
             </>
           )}
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-            aria-label="More actions"
-          >
-            <FiMoreHorizontal className="h-5 w-5" />
-          </button>
         </div>
       </div>
     </header>

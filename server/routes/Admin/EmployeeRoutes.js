@@ -2,10 +2,17 @@ import express from 'express';
 import {
   updateEmployeeWorkInfo,
   getEmployeeWorkInfo,
-  calculateEmployeeStats
+  calculateEmployeeStats,
+  promoteEmployeeToHrManager,
 } from '../../controllers/admin/employeeController.js';
-import { getManagers, getAllEmployees, getOrganizationJobTitles } from '../../controllers/admin/employeeManagementController.js';
+import {
+  getManagers,
+  getAllEmployees,
+  getOrganizationJobTitles,
+  linkEmployeeAsOrgOwnerMeProfile,
+} from '../../controllers/admin/employeeManagementController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
+import { requireOrgOwnerOnly } from '../../middlewares/requirePermission.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 import { employeeListLimiter } from '../../middlewares/endpointRateLimiters.js';
@@ -28,6 +35,14 @@ router.route('/managers')
 // Get organization-specific job titles for dropdowns
 router.route('/job-titles')
   .get(isAdminOrHROrExecutiveAuthenticated, employeeListLimiter, getOrganizationJobTitles);
+
+// Manually promote employee to HR Manager (job profile + access; login unchanged)
+router.route('/:employeeId/promote-hr-manager')
+  .post(isAdminAuthenticated, generalWriteLimiter, promoteEmployeeToHrManager);
+
+// Org owner: link an existing employee as their Me-tab profile
+router.route('/:employeeId/link-as-me-profile')
+  .post(requireOrgOwnerOnly, generalWriteLimiter, linkEmployeeAsOrgOwnerMeProfile);
 
 // Update employee work information - write operations have stricter limits
 router.route('/:employeeId/work-info')

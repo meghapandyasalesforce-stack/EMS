@@ -12,10 +12,11 @@ import { Fragment } from 'react';
 import { persistor } from '../context/store';
 import NotificationDropdown from '../components/NotificationDropdown';
 import { getNavigationItems } from '../utils/navigationConfig';
-import { deriveAvailablePortals, resolveInitialPortal } from '../utils/portalConfig';
+import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portalConfig';
 import PortalSwitcher from '../components/PortalSwitcher';
 import RoleBucketBadges from '../components/RoleBucketBadges';
 import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
+import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
 
 const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -57,12 +58,15 @@ const Header = () => {
     useEffect(() => {
         if (!authChecked || (!user && !employee)) return;
 
-        const portals = deriveAvailablePortals({
+        const { portals, activePortal: nextPortal } = syncPortalsForSession({
             user,
             employee,
             roleBuckets,
             permissionFlags,
+            routeHint: location.pathname,
+            currentActivePortal: activePortal,
         });
+
         const portalsKey = portals.map((p) => p.id).join(',');
         const currentKey = availablePortals.map((p) => p.id).join(',');
 
@@ -70,10 +74,8 @@ const Header = () => {
             dispatch(setAvailablePortals(portals));
         }
 
-        if (!activePortal || !portals.some((p) => p.id === activePortal)) {
-            dispatch(
-                setActivePortal(resolveInitialPortal(portals, location.pathname))
-            );
+        if (nextPortal && nextPortal !== activePortal) {
+            dispatch(setActivePortal(nextPortal));
         }
     }, [
         authChecked,
@@ -86,6 +88,29 @@ const Header = () => {
         location.pathname,
         dispatch,
     ]);
+
+    const effectivePortal = useMemo(
+        () =>
+            getEffectiveActivePortal({
+                user,
+                permissionFlags,
+                roleBuckets,
+                availablePortals,
+                activePortal,
+                routeHint: location.pathname,
+            }),
+        [user, permissionFlags, roleBuckets, availablePortals, activePortal, location.pathname]
+    );
+
+    const navItems = useMemo(() => {
+        return getNavigationItems(
+            user,
+            employee,
+            permissions,
+            permissionFlags,
+            effectivePortal
+        );
+    }, [user, employee, permissions, permissionFlags, effectivePortal]);
 
     const handleLogout = async () => {
         try {
@@ -107,6 +132,7 @@ const Header = () => {
             localStorage.removeItem('activePortal');
             localStorage.removeItem('availablePortals');
             localStorage.removeItem('employeeDashboardRoute');
+            clearOrgAdminCredentials();
             toast.success('Logged out successfully');
             navigate('/login');
         } catch (error) {
@@ -127,6 +153,7 @@ const Header = () => {
             localStorage.removeItem('activePortal');
             localStorage.removeItem('availablePortals');
             localStorage.removeItem('employeeDashboardRoute');
+            clearOrgAdminCredentials();
             navigate('/login');
         } finally {
             setLogoutModalOpen(false);
@@ -138,22 +165,12 @@ const Header = () => {
     const openLogoutModal = () => setLogoutModalOpen(true);
     const closeLogoutModal = () => setLogoutModalOpen(false);
 
-    const navItems = useMemo(() => {
-        return getNavigationItems(
-            user,
-            employee,
-            permissions,
-            permissionFlags,
-            activePortal
-        );
-    }, [user, employee, permissions, permissionFlags, activePortal]);
-
     const isAdminUser = useMemo(
         () => (user?.role || employee?.role || '').toLowerCase() === 'admin',
         [user, employee]
     );
-    const useLightEmployeeNav = activePortal
-        ? activePortal === 'employee'
+    const useLightEmployeeNav = effectivePortal
+        ? effectivePortal === 'employee'
         : !isAdminUser;
 
     // Highlight active route — exact match for '/', startsWith for all others

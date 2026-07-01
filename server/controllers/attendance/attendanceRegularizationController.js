@@ -21,7 +21,7 @@ import {
     sendRegularizationActionError,
     isAdminUser,
 } from '../../helpers/regularizationWorkflowActionHelper.js';
-import { getRegularizationLimitSummary } from '../../helpers/regularizationLimitHelper.js';
+import { getRegularizationLimitSummary, isRegularizationInCurrentMonth } from '../../helpers/regularizationLimitHelper.js';
 
 /** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
 function parseCalendarDayQuery(raw, boundary) {
@@ -50,6 +50,13 @@ export const createRegularizationRequest = async (req, res) => {
     try {
         const employeeId = req.employee._id;
         const organizationId = getOrganizationId(req);
+
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required'
+            });
+        }
         
         const {
             attendanceDate,
@@ -86,10 +93,7 @@ export const createRegularizationRequest = async (req, res) => {
                 message: 'Invalid attendance date'
             });
         }
-        const now = new Date();
-        const isCurrentMonth =
-            requestedDate.getFullYear() === now.getFullYear() &&
-            requestedDate.getMonth() === now.getMonth();
+        const isCurrentMonth = await isRegularizationInCurrentMonth(organizationId, requestedDate);
         if (!isCurrentMonth) {
             return res.status(400).json({
                 success: false,

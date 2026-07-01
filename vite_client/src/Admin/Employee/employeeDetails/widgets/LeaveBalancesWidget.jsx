@@ -40,7 +40,8 @@ const LeaveBalancesWidget = ({ employeeId, compact = false }) => {
   useEffect(() => {
     if (!employeeId) return;
     let cancelled = false;
-    (async () => {
+
+    const fetchBalance = async () => {
       try {
         setLoading(true);
         const res = await axios.get(`/v1/admin/leave-policy/balance/${employeeId}`, {
@@ -52,8 +53,21 @@ const LeaveBalancesWidget = ({ employeeId, compact = false }) => {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    fetchBalance();
+
+    const onUpdated = (event) => {
+      if (event.detail?.employeeId === employeeId) {
+        fetchBalance();
+      }
+    };
+    window.addEventListener('leave-balance-updated', onUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('leave-balance-updated', onUpdated);
+    };
   }, [employeeId]);
 
   const items = balance?.balances || [];
@@ -72,21 +86,26 @@ const LeaveBalancesWidget = ({ employeeId, compact = false }) => {
           {items.map((b) => {
             const policyType = balance?.policy?.leaveTypes?.find((lt) => lt.type === b.leaveType);
             const label = policyType?.displayName || b.leaveType;
-            const hasMonthlyLimit = policyType?.maxDaysPerMonth > 0;
-            const used = hasMonthlyLimit
-              ? (b.usedThisMonth ?? 0)
-              : (b.used || 0) + (b.pending || 0);
-            const total = hasMonthlyLimit
-              ? policyType.maxDaysPerMonth
-              : (b.accrued || 0) + (b.carriedForward || 0);
+            const monthlyEntitlement = Number(policyType?.maxDaysPerMonth) || 0;
+            const totalEntitlement = (b.accrued || 0) + (b.carriedForward || 0);
+            const used = (b.used || 0) + (b.pending || 0);
             return (
-              <LeaveRing
-                key={b.leaveType}
-                label={label}
-                used={used}
-                total={total}
-                monthlyMode={hasMonthlyLimit}
-              />
+              <div key={b.leaveType} className="flex flex-col items-center">
+                <LeaveRing
+                  label={label}
+                  used={used}
+                  total={Math.max(totalEntitlement, 1)}
+                  monthlyMode={false}
+                />
+                <p className="mt-1 text-[10px] font-semibold text-[#0d9488]">
+                  {b.available ?? 0} available
+                </p>
+                {monthlyEntitlement > 0 && (
+                  <p className="text-[9px] text-slate-500">
+                    {monthlyEntitlement}/mo · max {monthlyEntitlement * 12}/yr
+                  </p>
+                )}
+              </div>
             );
           })}
         </div>

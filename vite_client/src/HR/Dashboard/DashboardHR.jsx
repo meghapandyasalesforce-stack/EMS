@@ -4,12 +4,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     FiActivity,
     FiArrowUpRight,
+    FiBook,
     FiBriefcase,
     FiCalendar,
     FiCheckCircle,
     FiClock,
     FiFileText,
     FiGrid,
+    FiSettings,
     FiMoreHorizontal,
     FiSearch,
     FiTrendingDown,
@@ -360,7 +362,13 @@ const DashboardHR = () => {
                 const result = await dispatch(fetchEmployeeOwnInfo());
 
                 if (fetchEmployeeOwnInfo.rejected.match(result)) {
-                    setError(result.payload || 'Failed to load employee information');
+                    const needsPersonalProfile =
+                        !permissionFlags.isOrgOwner &&
+                        !permissionFlags.isHrManager &&
+                        !permissionFlags.isHrExecutive;
+                    if (needsPersonalProfile) {
+                        setError(result.payload || 'Failed to load employee information');
+                    }
                 }
             } catch (err) {
                 const status = err?.response?.status;
@@ -368,7 +376,11 @@ const DashboardHR = () => {
                     setTimeout(() => {
                         window.location.href = '/login';
                     }, 1500);
-                } else {
+                } else if (
+                    !permissionFlags.isOrgOwner &&
+                    !permissionFlags.isHrManager &&
+                    !permissionFlags.isHrExecutive
+                ) {
                     setError('An unexpected error occurred');
                 }
             } finally {
@@ -377,7 +389,7 @@ const DashboardHR = () => {
         };
 
         fetchData();
-    }, [dispatch, hasFetched]);
+    }, [dispatch, hasFetched, permissionFlags.isOrgOwner, permissionFlags.isHrManager, permissionFlags.isHrExecutive]);
 
     useEffect(() => {
         const fetchAllEmployees = async () => {
@@ -609,7 +621,10 @@ const DashboardHR = () => {
     }, [orgEmployees, searchQuery]);
 
     const quickActions = [
-        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts) && {
+        (permissionFlags.isOrgOwner ||
+            permissionFlags.isHrManager ||
+            permissionFlags.isHrExecutive ||
+            hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts)) && {
             label: 'Add Employee',
             subtitle: 'Create a profile',
             icon: <FiUserPlus className="h-5 w-5" />,
@@ -626,6 +641,18 @@ const DashboardHR = () => {
             subtitle: `${pendingLeaves} pending`,
             icon: <FiCalendar className="h-5 w-5" />,
             onClick: () => navigate('/leave-management'),
+        },
+        (permissionFlags.isHrManager || permissionFlags.isHrExecutive) && {
+            label: 'Attendance Rules',
+            subtitle: 'Punch & office rules',
+            icon: <FiSettings className="h-5 w-5" />,
+            onClick: () => navigate('/attendance-rules'),
+        },
+        (permissionFlags.isHrManager || permissionFlags.isHrExecutive) && {
+            label: 'Leave Policy',
+            subtitle: 'Configure leave types',
+            icon: <FiBook className="h-5 w-5" />,
+            onClick: () => navigate('/admin/leave-policy'),
         },
         hasAnyPermission(permissions, [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM], rbacOpts) && {
             label: 'Approvals',

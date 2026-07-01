@@ -24,7 +24,7 @@ import { PERMISSIONS, filterNavByPermissions } from './permissions';
  * @param {Object} employee - Employee object from Redux
  * @returns {Array} Array of navigation items
  */
-const resolveNavFromRbac = (permissionFlags, role, position) => {
+const resolveNavFromRbac = (permissionFlags, role, position, profile) => {
     if (!permissionFlags || !Object.keys(permissionFlags).length) {
         return null;
     }
@@ -35,30 +35,41 @@ const resolveNavFromRbac = (permissionFlags, role, position) => {
         return getExecutiveNavigation(position);
     }
     if (permissionFlags.isHrManager || permissionFlags.isHrExecutive) {
-        return getHRNavigation();
+        return getHrPortalNavigation(permissionFlags);
     }
     if (permissionFlags.isPayrollAdmin) {
         return getFinanceNavigation();
     }
     if (permissionFlags.isLineManager) {
-        return getManagerNavigation();
+        return getManagerNavigation(profile);
     }
     return null;
 };
 
-const getNavigationForPortal = (portalId, { position, department, jobTitle, profile, permissions }) => {
+/** Org owner / HR use profile-section sidebar on the Me tab; employees get the full workspace nav. */
+export const usesMeProfileSidebar = (permissionFlags = {}) =>
+    Boolean(
+        permissionFlags.isOrgOwner ||
+        permissionFlags.isHrManager ||
+        permissionFlags.isHrExecutive
+    );
+
+const getNavigationForPortal = (portalId, { position, department, jobTitle, profile, permissions, permissionFlags = {} }) => {
     switch (portalId) {
         case 'admin':
             return filterNavByPermissions(getAdminNavigation(), permissions);
         case 'executive':
             return filterNavByPermissions(getExecutiveNavigation(position), permissions);
         case 'hr_manager':
-            return filterNavByPermissions(getHRNavigation(), permissions);
+            return filterNavByPermissions(getHrPortalNavigation(permissionFlags), permissions);
         case 'payroll_admin':
             return filterNavByPermissions(getFinanceNavigation(), permissions);
         case 'line_manager':
-            return filterNavByPermissions(getManagerNavigation(), permissions);
+            return filterNavByPermissions(getManagerNavigation(profile), permissions);
         case 'employee':
+            if (usesMeProfileSidebar(permissionFlags)) {
+                return filterNavByPermissions(getMeProfileNavigation(), permissions);
+            }
             return filterNavByPermissions(getEmployeeNavigation(), permissions);
         default:
             break;
@@ -70,10 +81,10 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
     const isHRRole = isHR(department, jobTitle, position);
     const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
     if (isHRRole) {
-        return filterNavByPermissions(getHRNavigation(), permissions);
+        return filterNavByPermissions(getHrPortalNavigation(permissionFlags), permissions);
     }
     if (isManagerRole) {
-        return filterNavByPermissions(getManagerNavigation(), permissions);
+        return filterNavByPermissions(getManagerNavigation(profile), permissions);
     }
     if (isFinance(department)) {
         return filterNavByPermissions(getFinanceNavigation(), permissions);
@@ -104,11 +115,12 @@ export const getNavigationItems = (
             jobTitle,
             profile,
             permissions,
+            permissionFlags,
         });
     }
 
     let items =
-        resolveNavFromRbac(permissionFlags, role, position) ||
+        resolveNavFromRbac(permissionFlags, role, position, profile) ||
         (role === 'admin' ? getAdminNavigation() : null);
 
     if (!items) {
@@ -118,9 +130,9 @@ export const getNavigationItems = (
             const isHRRole = isHR(department, jobTitle, position);
             const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
             if (isHRRole) {
-                items = getHRNavigation();
+                items = getHrPortalNavigation(permissionFlags);
             } else if (isManagerRole) {
-                items = getManagerNavigation();
+                items = getManagerNavigation(profile);
             } else if (isFinance(department)) {
                 items = getFinanceNavigation();
             } else if (isTech(department)) {
@@ -210,7 +222,6 @@ const getAdminNavigation = () => [
     { path: "/admin/approval-workflows", name: "Approval Workflows", icon: <FaTasks />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock />, permissions: [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM] },
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
-    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard />, permissions: [PERMISSIONS.ID_CARD_MANAGE] },
     { path: "/salary-structure", name: "Salary Structure", icon: <FaDollarSign />, permissions: [PERMISSIONS.PAYROLL_EDIT, PERMISSIONS.PAYROLL_CREATE] },
     { path: "/admin-settings", name: "Settings", icon: <FaCog />, permissions: [PERMISSIONS.ORG_SETTINGS_MANAGE] },
 ];
@@ -251,9 +262,11 @@ const getExecutiveNavigation = (position) => {
 
 /**
  * Manager Navigation Items
- * Comprehensive list of all manager functions and features
+ * Comprehensive list of all manager functions and features.
+ * Project Managers do not get "My Team" — they manage via Projects, not direct reports.
  */
-const getManagerNavigation = () => [
+const getManagerNavigation = (profile) => {
+    const items = [
     { path: "/dashboard-manager", name: "Dashboard", icon: <FaUserTie /> },
     { path: "/employees", name: "My Team", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram /> },
@@ -263,16 +276,25 @@ const getManagerNavigation = () => [
     { path: "/manager/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/team-learning", name: "Team Learning", icon: <FaGraduationCap /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
+    { path: "/employee/my-documents", name: "My Documents", icon: <FaFileAlt /> },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill /> },
     { path: "/employee/id-card", name: "ID Card", icon: <FaCreditCard /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
-];
+    ];
+    
+
+    if (isProjectManager(profile)) {
+        return items.filter((item) => item.path !== '/employees');
+    }
+    return items;
+};
+
 
 /**
- * HR Navigation Items
+ * Full HR sidebar items (shared base).
  */
-const getHRNavigation = () => [
+const HR_NAV_ITEMS = [
     { path: "/dashboard-hr", name: "Dashboard", icon: <FaUsers /> },
     { path: "/employees", name: "Employees", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.EMPLOYEE_VIEW_TEAM] },
     { path: "/recruitment", name: "Recruitment", icon: <FaHandshake />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_ALL] },
@@ -287,11 +309,32 @@ const getHRNavigation = () => [
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
     { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
+    { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
-    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard />, permissions: [PERMISSIONS.ID_CARD_MANAGE] },
+    { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR Reports", icon: <FaFileAlt /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
+    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
 ];
+
+/** HR Manager — all HR options except Projects */
+const getHRManagerNavigation = () =>
+    HR_NAV_ITEMS.filter((item) => item.path !== '/projects');
+
+/** HR Executive — no Projects or Payroll */
+const getHRExecutiveNavigation = () =>
+    HR_NAV_ITEMS.filter(
+        (item) => item.path !== '/projects' && item.path !== '/admin-payroll'
+    );
+
+const getHrPortalNavigation = (permissionFlags = {}) => {
+    if (permissionFlags.isHrExecutive && !permissionFlags.isHrManager) {
+        return getHRExecutiveNavigation();
+    }
+    return getHRManagerNavigation();
+};
+
+/** @deprecated Use getHrPortalNavigation — kept for imports */
+const getHRNavigation = () => getHRManagerNavigation();
 
 
 /**
@@ -323,6 +366,21 @@ const getTechNavigation = () => [
 ];
 
 /**
+ * Org owner "Me" portal — profile sections (same routes as ProfileDetails).
+ */
+const getMeProfileNavigation = () => [
+    { path: '/profile-details', name: 'Personal Details', icon: <CgProfile /> },
+    { path: '/contact-details', name: 'Contact Details', icon: <FaEnvelope /> },
+    { path: '/next-of-kin-details', name: 'Next of kin Details', icon: <FaUserCheck /> },
+    { path: '/education-qualifications', name: 'Education Qualifications', icon: <FaGraduationCap /> },
+    { path: '/guarantor-details', name: 'Guarantor Details', icon: <FaHandshake /> },
+    { path: '/family-details', name: 'Family Details', icon: <FaUsers /> },
+    { path: '/job-details', name: 'Job Details', icon: <FaUserTie /> },
+    { path: '/financial-details', name: 'Financial Details', icon: <FaDollarSign /> },
+    { path: '/employee/id-card', name: 'ID Card', icon: <FaIdCard /> },
+];
+
+/**
  * Employee Navigation Items (Default)
  */
 const getEmployeeNavigation = () => [
@@ -332,9 +390,11 @@ const getEmployeeNavigation = () => [
     { path: "/employee/projects", name: "Projects", icon: <VscProject /> },
     { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
     { path: "/employee/benefits-learning", name: "Benefits & Learning", icon: <FaGift /> },
+    { path: "/employee/my-documents", name: "My Documents", icon: <FaFileAlt /> },
     { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
-    { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
+    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
+    { path: "/notifications", name: "Notifications", icon: <FaBell /> },
 ];
 

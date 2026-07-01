@@ -198,11 +198,28 @@ const LeavePolicyManagement = () => {
     const updateLeaveType = (index, field, value) => {
         const updated = [...formData.leaveTypes];
         if (field.includes('.')) {
-            const [parent, child] = field.split('.');
-            updated[index][parent][child] = value;
+            const parts = field.split('.');
+            let target = updated[index];
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (!target[parts[i]]) target[parts[i]] = {};
+                target = target[parts[i]];
+            }
+            target[parts[parts.length - 1]] = value;
         } else {
             updated[index][field] = value;
         }
+
+        const monthlyCap = Number(updated[index].maxDaysPerMonth);
+        if (Number.isFinite(monthlyCap) && monthlyCap > 0) {
+            updated[index].accrual = {
+                ...(updated[index].accrual || {}),
+                method: 'monthly',
+                amount: monthlyCap,
+                frequency: 'monthly',
+                maxAccrual: monthlyCap * 12
+            };
+        }
+
         setFormData({ ...formData, leaveTypes: updated });
     };
 
@@ -433,7 +450,7 @@ const LeavePolicyManagement = () => {
                                         </label>
                                         <div>
                                             <label className="block text-xs font-medium text-gray-700 mb-1">
-                                                Max Days/Month
+                                                Monthly entitlement (days/month)
                                             </label>
                                             <input
                                                 type="number"
@@ -442,11 +459,19 @@ const LeavePolicyManagement = () => {
                                                     const v = e.target.value;
                                                     updateLeaveType(index, 'maxDaysPerMonth', v === '' ? null : parseFloat(v));
                                                 }}
-                                                placeholder="e.g. 2"
+                                                placeholder="e.g. 2 → 24/year in balance"
                                                 className="w-full border rounded px-3 py-2"
                                                 min="0"
                                                 step="0.5"
                                             />
+                                            {Number(leaveType.maxDaysPerMonth) > 0 && (
+                                                <p className="mt-1 text-[11px] text-gray-500">
+                                                    Accrues {leaveType.maxDaysPerMonth} day(s)/month (max{' '}
+                                                    {Number(leaveType.maxDaysPerMonth) * 12}/year in balance).
+                                                    Unused months roll into available balance. Same value limits
+                                                    max days taken per calendar month.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

@@ -276,8 +276,15 @@ const MyRegularizationRequests = () => {
                             <FaClock className="mx-auto text-gray-400 text-4xl mb-4" />
                             <p className="text-gray-600 mb-4">No regularization requests found</p>
                             <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition"
+                                onClick={() => {
+                                    if (!canCreateRequest) {
+                                        toast.warning(getLimitBlockMessage());
+                                        return;
+                                    }
+                                    setShowCreateModal(true);
+                                }}
+                                disabled={!canCreateRequest}
+                                className="px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Create Your First Request
                             </button>

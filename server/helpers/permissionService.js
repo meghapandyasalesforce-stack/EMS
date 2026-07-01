@@ -1,5 +1,6 @@
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
+import { isOrgOwnerUser } from './identityService.js';
 import { PLATFORM_ROLES } from '../config/identity.constants.js';
 import {
   PERMISSIONS,
@@ -32,8 +33,10 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
       user.roles.forEach((r) => platformRoles.add(r));
     }
     if (user?.role === 'admin' && platformRoles.size === 0) {
-      platformRoles.add(PLATFORM_ROLES.ORG_OWNER);
-      platformRoles.add(PLATFORM_ROLES.HR_ADMIN);
+      if (isOrgOwnerUser(user)) {
+        platformRoles.add(PLATFORM_ROLES.ORG_OWNER);
+        platformRoles.add(PLATFORM_ROLES.HR_ADMIN);
+      }
     }
     if (platformRoles.has(PLATFORM_ROLES.ORG_OWNER)) {
       buckets.add(ROLE_BUCKETS.ORG_OWNER);

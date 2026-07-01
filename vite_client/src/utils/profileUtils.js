@@ -31,8 +31,27 @@ export function mergeSessionProfile(authUser, persistedEmployee) {
 
   const uid = getProfileDocumentId(authUser);
   const eid = getProfileDocumentId(persistedEmployee);
+  const linkedProfileId = authUser.employeeProfileId
+    ? String(authUser.employeeProfileId)
+    : '';
 
   if (uid && eid && uid !== eid) {
+    const isLinkedAdminProfile =
+      authUser.role === 'admin' &&
+      linkedProfileId &&
+      (linkedProfileId === eid || Boolean(persistedEmployee.employeeId));
+
+    if (isLinkedAdminProfile) {
+      const merged = { ...persistedEmployee, ...authUser };
+      for (const field of DISPLAY_FIELDS) {
+        merged[field] = pickDisplayField(persistedEmployee[field], authUser[field]);
+      }
+      merged._id = eid;
+      merged.employeeProfileId = eid;
+      merged.role = authUser.role;
+      return merged;
+    }
+
     return authUser;
   }
 

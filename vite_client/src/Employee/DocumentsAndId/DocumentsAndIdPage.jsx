@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   FaSearch,
   FaDownload,
@@ -14,7 +15,7 @@ import {
   FaUpload
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import axios, { getUploadUrl } from '../../utils/axios';
+import axios, { getUploadUrl, openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const formatBytes = (bytes) => {
@@ -25,57 +26,141 @@ const formatBytes = (bytes) => {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const mergeDocumentsById = (lists) => {
+  const map = new Map();
+  lists.flat().forEach((doc) => {
+    if (doc?._id) map.set(String(doc._id), doc);
+  });
+  return Array.from(map.values());
+};
+
 const DocumentsAndIdPage = () => {
   const navigate = useNavigate();
+  const user = useSelector((state) => state.auth.user);
+  const employee = useSelector((state) => state.employeeDetails.employee);
+  const myEmployeeId = String(employee?._id || employee?.id || user?._id || user?.id || '');
+
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [idCard, setIdCard] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const uploadInputRef = useRef(null);
+  const companyDocsRef = useRef(null);
+
+  const loadPageData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [documentsResp, sharedResp, idCardResp] = await Promise.allSettled([
+        axios.get('/v1/both/documents', { withCredentials: true, params: { limit: 100 } }),
+        axios.get('/v1/both/documents/shared', { withCredentials: true, params: { limit: 100 } }),
+        axios.get('/v1/admin/id-cards/employee/my-card', { withCredentials: true })
+      ]);
+
+      const ownDocs = documentsResp.status === 'fulfilled'
+        ? (documentsResp.value?.data?.data || [])
+        : [];
+      const sharedDocs = sharedResp.status === 'fulfilled'
+        ? (sharedResp.value?.data?.data || [])
+        : [];
+
+      if (documentsResp.status === 'rejected' && sharedResp.status === 'rejected') {
+        toast.error('Failed to load documents');
+      }
+
+      setDocuments(mergeDocumentsById([ownDocs, sharedDocs]));
+
+      if (idCardResp.status === 'fulfilled') {
+        setIdCard(idCardResp.value?.data?.idCard || null);
+      } else {
+        setIdCard(null);
+      }
+    } catch {
+      toast.error('Failed to load documents and ID card');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadPageData = async () => {
-      try {
-        setLoading(true);
-        const [documentsResp, idCardResp] = await Promise.allSettled([
-          axios.get('/v1/both/documents', { withCredentials: true }),
-          axios.get('/v1/admin/id-cards/employee/my-card', { withCredentials: true })
-        ]);
-
-        if (documentsResp.status === 'fulfilled') {
-          setDocuments(documentsResp.value?.data?.data || []);
-        }
-
-        if (idCardResp.status === 'fulfilled') {
-          setIdCard(idCardResp.value?.data?.idCard || null);
-        } else {
-          setIdCard(null);
-        }
-      } catch {
-        toast.error('Failed to load documents and ID card');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadPageData();
-  }, []);
+  }, [loadPageData]);
+
+  const isOwnDocument = useCallback((doc) => {
+    const uploaderId = String(doc?.uploadedBy?._id || doc?.uploadedBy || '');
+    return myEmployeeId && uploaderId === myEmployeeId;
+  }, [myEmployeeId]);
+
+  const isHrSharedDocument = useCallback((doc) => {
+    if (isOwnDocument(doc)) return false;
+    if (doc.requiresApproval === false) {
+      return doc.approvalStatus === 'Approved' || doc.approvalStatus == null;
+    }
+    return ['Policy', 'Company', 'Training', 'Compliance'].includes(doc?.category)
+      && (doc.approvalStatus === 'Approved' || !doc.requiresApproval);
+  }, [isOwnDocument]);
+
+  const isHrPolicyDocument = isHrSharedDocument;
+
+  const myUploadedDocs = useMemo(() => {
+    return (documents || [])
+      .filter((doc) => isOwnDocument(doc))
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+  }, [documents, isOwnDocument]);
 
   const policyDocs = useMemo(() => {
     return (documents || [])
-      .filter((doc) => ['Policy', 'Company'].includes(doc?.category))
-      .slice(0, 4);
-  }, [documents]);
+      .filter((doc) => isHrSharedDocument(doc))
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+  }, [documents, isHrSharedDocument]);
 
   const contractDocs = useMemo(() => {
-    return (documents || [])
+    return myUploadedDocs
       .filter((doc) => ['Employee', 'Contract', 'Legal'].includes(doc?.category))
       .slice(0, 6);
-  }, [documents]);
+  }, [myUploadedDocs]);
 
   const recentlyUpdatedDocs = useMemo(() => {
-    return [...(documents || [])]
+    return [...myUploadedDocs, ...policyDocs]
       .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
       .slice(0, 4);
-  }, [documents]);
+  }, [myUploadedDocs, policyDocs]);
+
+  const statusLabel = (doc) => {
+    if (doc.approvalStatus === 'Rejected') return 'Rejected';
+    if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'Pending HR approval';
+    if (doc.approvalStatus === 'Approved') return 'Approved';
+    return doc.approvalStatus || 'Active';
+  };
+
+  const statusClass = (doc) => {
+    if (doc.approvalStatus === 'Rejected') return 'bg-red-100 text-red-700';
+    if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'bg-yellow-100 text-yellow-700';
+    return 'bg-[#20C997]/15 text-[#0a8f6c]';
+  };
+
+  const handlePreviewDocument = async (doc) => {
+    try {
+      await openDocumentPreview(doc._id, {
+        scope: 'both',
+        fileUrl: doc.fileUrl,
+        fileName: doc.fileName || doc.name,
+        mimeType: doc.mimeType,
+      });
+    } catch (error) {
+      toast.error(error?.message || 'Could not open document preview');
+    }
+  };
+
+  const handleDownloadDocument = async (doc) => {
+    try {
+      await saveDocumentDownload(doc._id, doc.fileName || doc.name || 'document', {
+        scope: 'both',
+        fileUrl: doc.fileUrl,
+      });
+    } catch (error) {
+      toast.error(error?.message || 'Failed to download document');
+    }
+  };
 
   const handleDownloadIdCard = async () => {
     if (!idCard?._id) {
@@ -99,6 +184,28 @@ const DocumentsAndIdPage = () => {
       toast.success('ID card PDF downloaded');
     } catch {
       toast.error('Failed to download ID card PDF');
+    }
+  };
+
+  const handleEmployeeUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('name', file.name);
+    formData.append('category', 'Employee');
+
+    try {
+      setUploading(true);
+      await axios.post('/v1/both/documents/upload', formData, { withCredentials: true });
+      toast.success('Document uploaded. HR will review and approve it.');
+      await loadPageData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to upload document');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -187,10 +294,10 @@ const DocumentsAndIdPage = () => {
                   <h2 className="text-2xl font-semibold text-slate-900">Recently Updated</h2>
                   <button
                     type="button"
-                    onClick={() => navigate('/documents')}
+                    onClick={() => companyDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                     className="text-sm font-semibold text-[#0a8f6c] hover:text-[#086d56]"
                   >
-                    View All Documents
+                    View Company Docs
                   </button>
                 </div>
                 {recentlyUpdatedDocs.length === 0 ? (
@@ -204,22 +311,20 @@ const DocumentsAndIdPage = () => {
                           {formatBytes(doc.fileSize)} • Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()}
                         </p>
                         <div className="mt-3 grid grid-cols-2 gap-2">
-                          <a
-                            href={getUploadUrl(doc.fileUrl) || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewDocument(doc)}
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
                           >
                             <FaEye className="text-xs" /> Preview
-                          </a>
-                          <a
-                            href={getUploadUrl(doc.fileUrl) || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadDocument(doc)}
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
                           >
                             <FaDownload className="text-xs" /> Download
-                          </a>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -234,27 +339,29 @@ const DocumentsAndIdPage = () => {
               </div>
               <h3 className="text-xl font-semibold text-slate-900">Upload New Document</h3>
               <p className="mt-1 text-sm text-slate-500">Drag & drop or click to browse (PDF, PNG, JPG up to 10MB)</p>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                className="hidden"
+                onChange={handleEmployeeUpload}
+              />
               <button
                 type="button"
-                onClick={() => navigate('/documents')}
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-4 py-2 text-sm font-semibold text-white"
+                disabled={uploading}
+                onClick={() => uploadInputRef.current?.click()}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#20C997] to-[#0a8f6c] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
-                Upload Document
+                {uploading ? 'Uploading...' : 'Upload Document'}
               </button>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <div ref={companyDocsRef} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-900">Company Docs</h2>
-                <button
-                  onClick={() => navigate('/documents')}
-                  className="text-sm font-semibold text-[#0a8f6c] hover:text-[#086d56]"
-                >
-                  View All
-                </button>
+                <h2 className="text-xl font-semibold text-slate-900">HR Policies & Company Docs</h2>
               </div>
               {policyDocs.length === 0 ? (
-                <p className="text-sm text-slate-500">No policy documents available.</p>
+                <p className="text-sm text-slate-500">No HR policy documents available yet.</p>
               ) : (
                 <div className="space-y-3">
                   {policyDocs.map((doc) => (
@@ -264,16 +371,67 @@ const DocumentsAndIdPage = () => {
                         <p className="mt-1 text-xs text-slate-500">
                           Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()} • {formatBytes(doc.fileSize)}
                         </p>
+                        <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                          {statusLabel(doc)}
+                        </span>
                       </div>
-                      <a
-                        href={getUploadUrl(doc.fileUrl) || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-slate-500 hover:text-[#0a8f6c]"
-                        title="Open document"
-                      >
-                        <FaDownload />
-                      </a>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewDocument(doc)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          title="Preview"
+                        >
+                          <FaEye /> Preview
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          title="Download"
+                        >
+                          <FaDownload /> Download
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-xl font-semibold text-slate-900">My Uploaded Documents</h2>
+              {myUploadedDocs.length === 0 ? (
+                <p className="text-sm text-slate-500">You have not uploaded any documents yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {myUploadedDocs.map((doc) => (
+                    <div key={doc._id} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-800">{doc.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {formatBytes(doc.fileSize)} • Uploaded {new Date(doc.createdAt).toLocaleDateString()}
+                        </p>
+                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                          {statusLabel(doc)}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewDocument(doc)}
+                          className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
+                        >
+                          <FaEye className="text-xs" /> Preview
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
+                        >
+                          <FaDownload className="text-xs" /> Download
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -301,27 +459,27 @@ const DocumentsAndIdPage = () => {
                           <td className="py-3 pr-3 text-slate-800">{doc.name}</td>
                           <td className="py-3 pr-3 text-slate-600">{new Date(doc.createdAt).toLocaleDateString()}</td>
                           <td className="py-3 pr-3">
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-xs ${
-                                doc.approvalStatus === 'Rejected'
-                                  ? 'bg-red-100 text-red-700'
-                                  : doc.approvalStatus === 'Pending'
-                                  ? 'bg-yellow-100 text-yellow-700'
-                                  : 'bg-[#20C997]/15 text-[#0a8f6c]'
-                              }`}
-                            >
-                              {doc.approvalStatus || 'Active'}
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                              {statusLabel(doc)}
                             </span>
                           </td>
                           <td className="py-3 text-right">
-                            <a
-                              href={getUploadUrl(doc.fileUrl) || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
-                            >
-                              <FaEye className="text-xs" /> View
-                            </a>
+                            <div className="inline-flex items-center gap-3 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handlePreviewDocument(doc)}
+                                className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
+                              >
+                                <FaEye className="text-xs" /> Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadDocument(doc)}
+                                className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
+                              >
+                                <FaDownload className="text-xs" /> Download
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -128,6 +128,8 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/push-subscription", pushSubscriptionRouter);
   app.use("/api/v1/both/profile-details", profileDetailsRouter);
   app.use("/api/v1/both/document", uploadRouter);
+  // Alias for legacy clients expecting /api/v1/upload/... download paths
+  app.use("/api/v1/upload", uploadRouter);
   app.use("/api/v1/both/password", forgotPasswordRouter);
   app.use("/api/v1/both/auth", unifiedAuthRouter);
   app.use("/api/v1/both/project-task", taskRouter);

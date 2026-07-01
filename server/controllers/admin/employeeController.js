@@ -6,34 +6,9 @@ import logger from '../../helpers/logger.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
-import { isProjectManagerJobTitle } from '../../helpers/projectManagerHelper.js';
-
-function deriveRoleFlagsFromWorkInfo({ department, position, jobTitle }) {
-  const dept = (department || '').toLowerCase().trim();
-  const pos = (position || '').toLowerCase().trim();
-  const title = (jobTitle || '').toLowerCase().trim();
-
-  const isHR =
-    dept === 'hr' ||
-    dept.includes('hr') ||
-    dept.includes('human resource') ||
-    title.includes('hr manager') ||
-    title.includes('human resource') ||
-    title.includes('hr') ||
-    (pos.includes('hr') && pos.includes('manager'));
-
-  const isProjectManager = isProjectManagerJobTitle(jobTitle);
-
-  const isManager = !isProjectManager &&
-    (pos === 'manager' ||
-    pos === 'director' ||
-    pos.includes('manager') ||
-    pos.includes('director') ||
-    title.includes('manager') ||
-    title.includes('director'));
-
-  return { isHR, isManager, isProjectManager };
-}
+import { assignSystemRoleToEmployee } from '../../helpers/systemRoleService.js';
+import { SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
+import { buildSalaryRevisionEntries } from '../../helpers/salaryRevisionHelper.js';
 
 async function resolveManagerReference(organizationId, managerInput) {
   const raw = String(managerInput || '').trim();
@@ -76,7 +51,7 @@ async function resolveManagerReference(organizationId, managerInput) {
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore } = req.body;
+    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote } = req.body;
 
     // Validate employee ID
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
@@ -124,30 +99,48 @@ export const updateEmployeeWorkInfo = async (req, res) => {
       updateData.manager = resolvedManager.manager;
       updateData.managerId = resolvedManager.managerId;
     }
-    if (salary !== undefined) updateData.salary = salary;
+    if (salary !== undefined) {
+      const nextSalary = Math.max(0, Number(salary) || 0);
+      const previousSalary = Math.max(0, Number(employee.salary) || 0);
+
+      if (nextSalary !== previousSalary) {
+        updateData.salary = nextSalary;
+
+        const effectiveFrom = salaryEffectiveFrom
+          ? new Date(salaryEffectiveFrom)
+          : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+        if (Number.isNaN(effectiveFrom.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid salaryEffectiveFrom date'
+          });
+        }
+
+        const existingRevisions = Array.isArray(employee.salaryRevisions) ? employee.salaryRevisions : [];
+        const revisionEntries = existingRevisions.length > 0
+          ? [{
+              salary: nextSalary,
+              effectiveFrom,
+              note: salaryRevisionNote ? String(salaryRevisionNote).trim() : 'Salary revision'
+            }]
+          : buildSalaryRevisionEntries({
+              previousSalary,
+              newSalary: nextSalary,
+              joiningDate: employee.joiningDate,
+              effectiveFrom,
+              note: salaryRevisionNote
+            });
+
+        updateData.$push = {
+          salaryRevisions: { $each: revisionEntries }
+        };
+      }
+    }
     if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
 
-    // Keep functionalRoles in sync with work info edits:
-    // - HR can see all employees.
-    // - Manager (without HR) sees only their team.
-    const effectiveDepartment = updateData.department ?? employee.department;
-    const effectivePosition = updateData.position ?? employee.position;
-    const effectiveJobTitle = updateData.jobTitle ?? employee.jobTitle;
-    const { isHR, isManager, isProjectManager } = deriveRoleFlagsFromWorkInfo({
-      department: effectiveDepartment,
-      position: effectivePosition,
-      jobTitle: effectiveJobTitle
-    });
-
-    const nextRoles = new Set(Array.isArray(employee.functionalRoles) ? employee.functionalRoles : []);
-    if (isHR) nextRoles.add('hr');
-    else nextRoles.delete('hr');
-    if (isProjectManager) nextRoles.add('project_manager');
-    else nextRoles.delete('project_manager');
-    if (isManager) nextRoles.add('manager');
-    else nextRoles.delete('manager');
-    updateData.functionalRoles = Array.from(nextRoles);
+    // Work-info edits do not auto-change HR/manager functional roles — use "Make HR Manager" or Access tab.
 
     // Update employee work information
     // Explicitly include salary field in the response
@@ -184,6 +177,83 @@ export const updateEmployeeWorkInfo = async (req, res) => {
       success: false,
       message: 'Failed to update employee work information',
       error: error.message
+    });
+  }
+};
+
+/**
+ * Manually promote an employee to HR Manager: updates job profile + HR system access.
+ * Email and password are never changed.
+ */
+export const promoteEmployeeToHrManager = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid employee ID',
+      });
+    }
+
+    const organizationId = getOrganizationId(req);
+    const employee = await Employee.findOne({ _id: employeeId, organizationId });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found',
+      });
+    }
+
+    const preservedEmail = employee.email;
+
+    employee.jobTitle = 'HR Manager';
+    employee.department = 'HR';
+    if (!employee.position || String(employee.position).trim() === '') {
+      employee.position = 'Manager';
+    }
+    employee._skipFunctionalRoleInference = true;
+    await employee.save();
+
+    const result = await assignSystemRoleToEmployee({
+      employeeId,
+      systemRoleId: SYSTEM_ROLE_IDS.HR_MANAGER,
+      organizationId,
+    });
+
+    if (result.employee.email !== preservedEmail) {
+      result.employee.email = preservedEmail;
+      await result.employee.save();
+    }
+
+    if (result.employee?.organizationId) {
+      try {
+        await invalidateEmployeesCache(result.employee.organizationId);
+      } catch (e) {
+        logger.warn('Failed to invalidate employees cache after HR promotion', { error: e.message });
+      }
+    }
+
+    const updated = await Employee.findById(employeeId)
+      .select('-password')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Employee promoted to HR Manager. Job title and department updated. Email and password unchanged — ask them to log out and back in.',
+      employee: updated,
+      systemRoleId: result.systemRoleId,
+      functionalRoles: result.functionalRoles,
+    });
+  } catch (error) {
+    logger.error('Error promoting employee to HR Manager', {
+      error: error.message,
+      stack: error.stack,
+    });
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to promote employee to HR Manager',
     });
   }
 };

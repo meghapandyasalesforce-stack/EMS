@@ -49,7 +49,7 @@ export const refreshToken = async (req, res) => {
         // Find user (check both Employee and User collections)
         let user = await Employee.findById(decoded.userId);
         let userType = 'employee';
-        
+
         if (!user) {
             user = await User.findById(decoded.userId);
             userType = 'admin';
@@ -57,6 +57,18 @@ export const refreshToken = async (req, res) => {
 
         if (!user) {
             return sendUnauthorized(res, 'User not found');
+        }
+
+        const extraClaims = {};
+        if (decoded.employeeProfileId) {
+            extraClaims.employeeProfileId = decoded.employeeProfileId;
+        } else if (userType === 'admin' && user.employeeProfileId) {
+            extraClaims.employeeProfileId = String(user.employeeProfileId);
+        }
+        if (decoded.platformRoles) {
+            extraClaims.platformRoles = decoded.platformRoles;
+        } else if (Array.isArray(user.roles) && user.roles.length) {
+            extraClaims.platformRoles = user.roles;
         }
 
         // Check if user is active
@@ -74,13 +86,6 @@ export const refreshToken = async (req, res) => {
         const role = decoded.role || userType;
         const organizationId = decoded.organizationId || user.organizationId;
         const passwordChangedAt = user.passwordChangedAt || user.createdAt;
-        const extraClaims = {};
-        if (decoded.employeeProfileId) {
-            extraClaims.employeeProfileId = decoded.employeeProfileId;
-        }
-        if (decoded.platformRoles) {
-            extraClaims.platformRoles = decoded.platformRoles;
-        }
         const tokenResult = generateToken(
             user._id,
             role,

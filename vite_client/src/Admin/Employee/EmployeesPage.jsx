@@ -2,12 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchEmployees } from '../../context/employeeSlice';
-import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye, FaUserPlus, FaEllipsisV, FaChevronLeft, FaChevronRight, FaPlus } from 'react-icons/fa';
+import { checkAuthSession } from '../../context/Auth/authSlice';
+import { fetchEmployeeOwnInfo, setEmployeeProfile } from '../../context/employeeDetailsSlice';
+import { FaSearch, FaTimes, FaEdit, FaTrash, FaEye, FaUserPlus, FaEllipsisV, FaChevronLeft, FaChevronRight, FaPlus, FaUserCheck } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import RoleBadge from '../../components/RoleBadge';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
+import { toast } from 'react-toastify';
 
 const EmployeesPage = () => {
   const dispatch = useDispatch();
@@ -21,10 +24,15 @@ const EmployeesPage = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [todayStatusMap, setTodayStatusMap] = useState({});
   const [onLeaveTodayMap, setOnLeaveTodayMap] = useState({});
+  const [linkingMeId, setLinkingMeId] = useState(null);
   const pageSize = 20;
 
-  const { hasPermission, isOrgOwner } = useAuthPermissions();
-  const canAddEmployee = isOrgOwner || hasPermission(PERMISSIONS.EMPLOYEE_CREATE);
+  const { hasPermission, isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
+  const canAddEmployee =
+    isOrgOwner ||
+    isHrManager ||
+    isHrExecutive ||
+    hasPermission(PERMISSIONS.EMPLOYEE_CREATE);
 
   useEffect(() => {
     dispatch(fetchEmployees({ page: currentPage, limit: pageSize, search: debouncedSearchTerm }));
@@ -100,6 +108,35 @@ const EmployeesPage = () => {
 
   const handleRowClick = (employeeId) => {
     navigate(`/employees/${employeeId}`);
+  };
+
+  const linkedMeProfileId = String(user?.employeeProfileId || employee?._id || '');
+
+  const handleLinkAsMeProfile = async (event, row) => {
+    event.stopPropagation();
+    if (!row?._id) return;
+
+    setLinkingMeId(String(row._id));
+    try {
+      const response = await axios.post(
+        `/v1/admin/employee/${row._id}/link-as-me-profile`,
+        {},
+        { withCredentials: true }
+      );
+      const linkedEmployee = response.data?.employee;
+      toast.success(response.data?.message || 'Linked as your Me profile.');
+
+      if (linkedEmployee) {
+        dispatch(setEmployeeProfile(linkedEmployee));
+      }
+
+      await dispatch(checkAuthSession());
+      await dispatch(fetchEmployeeOwnInfo());
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to link Me profile.');
+    } finally {
+      setLinkingMeId(null);
+    }
   };
 
   // Check if user is HR
@@ -286,9 +323,27 @@ const EmployeesPage = () => {
                         {statusPill}
                       </span>
                     </div>
-                    <div className="col-span-1 flex items-center justify-end gap-3 text-sm text-slate-600">
+                    <div className="col-span-1 flex items-center justify-end gap-2 text-sm text-slate-600">
                       <span>{todayValue}</span>
-                      {/* <FaEllipsisV className="text-slate-400" /> */}
+                      {isOrgOwner ? (
+                        <button
+                          type="button"
+                          title={
+                            linkedMeProfileId === empId
+                              ? 'Your Me profile'
+                              : 'Set as my Me profile'
+                          }
+                          disabled={linkingMeId === empId}
+                          onClick={(event) => handleLinkAsMeProfile(event, row)}
+                          className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+                            linkedMeProfileId === empId
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          } disabled:opacity-50`}
+                        >
+                          {linkingMeId === empId ? '…' : linkedMeProfileId === empId ? 'Me ✓' : 'Me'}
+                        </button>
+                      ) : null}
                     </div>
                   </button>
                 );

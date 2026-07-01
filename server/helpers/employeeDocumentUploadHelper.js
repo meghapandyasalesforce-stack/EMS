@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Document } from '../models/document.model.js';
+import { persistDocumentBinary, requireUploadFileBuffer } from './documentFileStorageHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,10 +59,6 @@ export async function deactivatePreviousJobDocumentsExcept(organizationId, emplo
         _id: { $ne: keepId },
     }).lean();
 
-    for (const d of olds) {
-        deleteFileIfExists(d.fileUrl);
-    }
-
     await Document.updateMany(
         {
             organizationId,
@@ -92,7 +89,13 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
 
     const relFileUrl = `/uploads/documents/${file.filename}`;
 
+    if (!file.path || !fs.existsSync(file.path)) {
+        throw new Error('Uploaded file was not saved on the server. Please try uploading again.');
+    }
+
     const isJobType = documentType && Object.values(JOB_DOCUMENT_TYPES).includes(documentType);
+
+    const fileBinary = requireUploadFileBuffer(file);
 
     if (isJobType) {
         const doc = new Document({
@@ -106,6 +109,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             fileName: file.originalname,
             fileSize: file.size,
             mimeType: file.mimetype,
+            fileBinary,
             relatedTo: 'Employee',
             relatedId: employeeId,
             relatedToModel: 'Employee',
@@ -118,6 +122,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         });
         await doc.save();
         await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id);
+        await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
         return doc;
     }
 
@@ -138,6 +143,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         fileName: file.originalname,
         fileSize: file.size,
         mimeType: file.mimetype,
+        fileBinary,
         relatedTo: 'Employee',
         relatedId: employeeId,
         relatedToModel: 'Employee',
@@ -147,6 +153,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         isActive: true,
     });
     await doc.save();
+    await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
     return doc;
 }
 

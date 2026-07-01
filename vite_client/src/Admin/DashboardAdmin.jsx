@@ -184,7 +184,7 @@ function DashboardAdmin() {
           icon: <FiFileText />,
           action: () => navigate("/leave-management"),
         },
-        hasAnyPermission(permissions, [PERMISSIONS.EMPLOYEE_CREATE], rbacOpts) && {
+        permissionFlags.isOrgOwner && {
           label: "Add Employee",
           icon: <FiUserPlus />,
           action: () => navigate("/add-employee"),
@@ -287,7 +287,7 @@ function DashboardAdmin() {
                 Run Payroll
               </button>
             </PermissionGate>
-            <PermissionGate permissions={[PERMISSIONS.EMPLOYEE_CREATE]}>
+            {permissionFlags.isOrgOwner ? (
               <button
                 onClick={() => navigate("/add-employee")}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-theme-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
@@ -296,7 +296,7 @@ function DashboardAdmin() {
                 <FiPlus className="h-4 w-4" />
                 Add Employee
               </button>
-            </PermissionGate>
+            ) : null}
           </div>
         </div>
 

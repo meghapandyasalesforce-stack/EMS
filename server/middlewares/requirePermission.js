@@ -126,6 +126,38 @@ export const requireOrgOwnerOrHrManager = gate(
   'Access restricted to organization owners and HR managers'
 );
 
+/** HR document management — HR staff, org admin, or delegated HR managers. */
+export const requireHrDocumentAccess = composeMiddleware([
+  attachAuthContext,
+  async (req, res, next) => {
+    const { canAccessHrDocumentManagement } = await import('../helpers/functionalRolesHelper.js');
+    if (!(await canAccessHrDocumentManagement(req))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only HR can access all employee documents',
+        code: 'HR_ONLY',
+      });
+    }
+    return next();
+  },
+]);
+
+/** HR ID card management — HR staff, org admin, or delegated HR managers. */
+export const requireHrIdCardAccess = composeMiddleware([
+  attachAuthContext,
+  async (req, res, next) => {
+    const { canAccessHrDocumentManagement } = await import('../helpers/functionalRolesHelper.js');
+    if (!(await canAccessHrDocumentManagement(req))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only HR can manage employee ID cards',
+        code: 'HR_ONLY',
+      });
+    }
+    return next();
+  },
+]);
+
 /** Former isAdminOrHR */
 export const requireHrStaff = composeMiddleware(
   requireAnyPermission([
@@ -158,6 +190,12 @@ export const requirePayrollPublish = composeMiddleware(
 
 export const requireEmployeeCreate = composeMiddleware(
   requireAnyPermission([PERMISSIONS.EMPLOYEE_CREATE])
+);
+
+/** Only the organization owner may register / create employees. */
+export const requireOrgOwnerOnly = gate(
+  (ctx) => Boolean(ctx?.isOrgOwner),
+  'Only organization owners can create employees'
 );
 
 export const requireEmployeeDelete = composeMiddleware(

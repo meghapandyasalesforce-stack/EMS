@@ -189,11 +189,17 @@ export const employeeValidations = {
             .normalizeEmail()
             .isLength({ max: 255 }).withMessage('Email must be less than 255 characters'),
         body('password')
-            .optional() // Password is optional - will be auto-generated if not provided
+            .optional({ values: 'falsy' })
             .isLength({ min: 8 }).withMessage('Password must be at least 8 characters if provided'),
+        body('confirmReplace')
+            .optional()
+            .isBoolean().withMessage('confirmReplace must be a boolean'),
+        body('linkAsOrgOwnerMe')
+            .optional()
+            .isBoolean().withMessage('linkAsOrgOwnerMe must be a boolean'),
         body('position')
             .notEmpty().withMessage('Position is required')
-            .isIn(['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'VP', 'CTO', 'CFO', 'CEO', 'Developer'])
+            .isIn(['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO', 'Developer'])
             .withMessage('Invalid position'),
         body('department')
             .notEmpty().withMessage('Department is required')
@@ -204,7 +210,7 @@ export const employeeValidations = {
             .trim(),
         body('jobTitle')
             .notEmpty().withMessage('Job title is required')
-            .isIn(['Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer'])
+            .isIn(['Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'HR Executive', 'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer'])
             .withMessage('Invalid job title'),
         body('jobCategory')
             .notEmpty().withMessage('Job category is required')

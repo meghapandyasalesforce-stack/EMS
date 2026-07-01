@@ -8,6 +8,7 @@ import { FiEye, FiEyeOff, FiMail, FiLock, FiPhone, FiMapPin, FiCheck, FiX, FiUse
 import { FaBuilding, FaCheckCircle } from 'react-icons/fa';
 import { ORGANIZATION_AUTH_ENDPOINT, ORGANIZATION_SUBSCRIPTION_ENDPOINT } from '../utils/constant';
 import logger from '../utils/logger';
+import { saveOrgAdminCredentials } from '../utils/orgAdminCredentials';
 
 const OrganizationRegister = () => {
     const [currentStep, setCurrentStep] = useState(1);
@@ -298,6 +299,11 @@ const OrganizationRegister = () => {
                     role: response.data.user?.role || 'admin',
                     organizationId: response.data.organization?.id
                 }));
+
+                saveOrgAdminCredentials(
+                    response.data.user?.email || formData.email,
+                    formData.password
+                );
 
                 toast.success('Organization registered successfully!');
                 

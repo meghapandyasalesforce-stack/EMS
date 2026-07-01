@@ -1,16 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from '../../utils/axios';
 import { ADMIN_AUTH_ENDPOINT, EMPLOYEE_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from './../../utils/constant';
-
-const resolveSessionUser = (payload, existingUser) => {
-  if (payload?.employee) {
-    return { ...payload.employee, role: payload.employee.role || 'employee' };
-  }
-  if (payload?.user) {
-    return { ...payload.user, role: payload.user.role || 'admin' };
-  }
-  return existingUser || null;
-};
+import { isPortalSwitchAllowed, syncPortalsForSession, canSwitchPortals } from '../../utils/portalConfig';
+import { resolveSessionAuthUser } from '../../utils/authSessionUtils';
 
 export const checkAuthSession = createAsyncThunk(
   'auth/checkAuthSession',
@@ -119,12 +111,49 @@ const authSlice = createSlice({
       state.dataScope = 'self';
     },
     setActivePortal: (state, action) => {
-      state.activePortal = action.payload;
-      if (action.payload) {
-        localStorage.setItem('activePortal', action.payload);
-      } else {
+      const portalId = action.payload;
+      if (!portalId) {
+        state.activePortal = null;
         localStorage.removeItem('activePortal');
+        return;
       }
+
+      const maySwitch = canSwitchPortals(
+        state.user,
+        state.permissionFlags,
+        state.roleBuckets
+      );
+      const isListed = state.availablePortals.some((p) => p.id === portalId);
+
+      if (maySwitch) {
+        if (isListed) {
+          state.activePortal = portalId;
+          localStorage.setItem('activePortal', portalId);
+        }
+        return;
+      }
+
+      const lockedPortal = state.availablePortals[0]?.id;
+      if (lockedPortal && portalId === lockedPortal) {
+        state.activePortal = portalId;
+        localStorage.setItem('activePortal', portalId);
+      }
+    },
+    /** Org-admin only — rejects switches for delegated roles (HR, manager, employee). */
+    switchPortal: (state, action) => {
+      const portalId = action.payload;
+      if (
+        !isPortalSwitchAllowed(portalId, {
+          user: state.user,
+          permissionFlags: state.permissionFlags,
+          roleBuckets: state.roleBuckets,
+          availablePortals: state.availablePortals,
+        })
+      ) {
+        return;
+      }
+      state.activePortal = portalId;
+      localStorage.setItem('activePortal', portalId);
     },
     setAvailablePortals: (state, action) => {
       state.availablePortals = action.payload || [];
@@ -152,16 +181,34 @@ const authSlice = createSlice({
       })
       .addCase(checkAuthSession.fulfilled, (state, action) => {
         state.loading = false;
-        const resolvedUser = resolveSessionUser(action.payload, state.user);
+        const permissionFlags = action.payload?.permissionFlags || {};
+        const resolvedUser = resolveSessionAuthUser(
+          action.payload,
+          state.user,
+          permissionFlags
+        );
         if (resolvedUser) {
           state.user = resolvedUser;
         }
         state.permissions = action.payload?.permissions || [];
         state.roleBuckets = action.payload?.roleBuckets || [];
-        state.permissionFlags = action.payload?.permissionFlags || {};
+        state.permissionFlags = permissionFlags;
         state.dataScope = action.payload?.dataScope || 'self';
         state.error = null;
         state.authChecked = true;
+
+        const { portals, activePortal } = syncPortalsForSession({
+          user: state.user,
+          employee: action.payload?.employee || null,
+          roleBuckets: state.roleBuckets,
+          permissionFlags: state.permissionFlags,
+          currentActivePortal: state.activePortal,
+        });
+        state.availablePortals = portals;
+        state.activePortal = activePortal;
+        if (activePortal) {
+          localStorage.setItem('activePortal', activePortal);
+        }
       })
       .addCase(checkAuthSession.rejected, (state, action) => {
         state.loading = false;
@@ -207,6 +254,7 @@ export const {
   setAuthPermissions,
   clearAuthPermissions,
   setActivePortal,
+  switchPortal,
   setAvailablePortals,
   initializePortals,
   clearPortals,

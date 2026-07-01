@@ -504,8 +504,7 @@ const employeeDetailsSlice = createSlice({
       })
 
       .addCase(checkAuthSession.fulfilled, (state, action) => {
-        const employee = action.payload?.employee ?? action.payload;
-        state.employee = employee || null;
+        state.employee = action.payload?.employee || null;
       })
       .addCase(checkAuthSession.rejected, (state) => {
         state.employee = null;

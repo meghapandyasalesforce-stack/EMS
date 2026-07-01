@@ -32,6 +32,8 @@ function ProfileDetails() {
   });
   const user = useSelector((state) => state.auth.user);
   const employeeDetails = useSelector((state) => state.employeeDetails.employee);
+  const profileLoading = useSelector((state) => state.employeeDetails.loading);
+  const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -196,6 +198,42 @@ function ProfileDetails() {
     }
   };
 
+  if (profileLoading && !employeeDetails && !user?.employeeProfileId && !profileSource?.employeeId) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-8 text-slate-600">
+        Loading your profile…
+      </div>
+    );
+  }
+
+  const hasLinkedProfile = Boolean(
+    employeeDetails?._id ||
+    employeeDetails?.employeeId ||
+    user?.employeeProfileId ||
+    profileSource?.employeeId
+  );
+
+  if (profileLoading && hasLinkedProfile && !employeeDetails) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-8 text-slate-600">
+        Loading your profile…
+      </div>
+    );
+  }
+
+  if (!hasLinkedProfile) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">No employee profile linked yet</h2>
+        <p className="text-sm text-slate-600">
+          {permissionFlags.isOrgOwner
+            ? 'Open Admin → Employees, find your profile row, and click the Me button to link it to your Me tab. Or add a new employee and check “Show on my Me tab”.'
+            : 'Your personal employee profile is not set up yet. Please contact your organization administrator.'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F4F7F5] p-4 transition-all duration-300 md:p-6">
       <div className="mx-auto max-w-[1280px] space-y-5">
@@ -218,15 +256,20 @@ function ProfileDetails() {
               <div className="rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-sm">
                 <div className="mb-4 flex justify-center">
                   <ProfilePicture
-                    key={user?.profilePhoto?.url || user?.profilePhoto?.filename || user?.id}
-                    user={user}
+                    key={
+                      profileSource?.profilePhoto?.url
+                      || profileSource?.profilePhoto?.filename
+                      || profileSource?.id
+                      || user?.id
+                    }
+                    user={profileSource}
                     size="2xl"
                     showEditButton={true}
                     onEditClick={() => setShowPhotoUpload(true)}
                   />
                 </div>
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{user?.name || 'Employee'}</h2>
-                <p className="mt-1 text-sm font-semibold text-[#0a8f6c]">{user?.jobTitle || 'Team Member'}</p>
+                <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{profileSource?.name || user?.name || 'Employee'}</h2>
+                <p className="mt-1 text-sm font-semibold text-[#0a8f6c]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
                 <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-left text-sm">
                   <div className="flex items-center justify-between">
@@ -436,6 +479,9 @@ function ProfileDetails() {
                 onPhotoUpdate={(photoData) => {
                   const profilePhoto = photoData?.profilePhoto || photoData;
                   dispatch(setEmployeeProfile({ ...employeeDetails, profilePhoto }));
+                  if (user) {
+                    dispatch(setUser({ ...user, profilePhoto }));
+                  }
                   setShowPhotoUpload(false);
                 }}
               />

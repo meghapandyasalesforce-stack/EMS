@@ -5,7 +5,7 @@ import {
     upload
 } from '../../controllers/fileUpload/uploadConfigController.js';
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
-import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { requireHrDocumentAccess } from '../../middlewares/requirePermission.js';
 
 const router = express.Router();
 
@@ -24,10 +24,10 @@ router.post(
     addDocument // This controller should use req.employee._id instead of req.params.employeeId
 );
 
-// Admin or HR downloads employee document (uses employeeId from URL)
+// HR-only download of another employee's document
 router.get(
     '/:employeeId/documents/:documentId/download',
-    isAdminOrHROrExecutiveAuthenticated,
+    requireHrDocumentAccess,
     downloadDocument
 );
 

@@ -150,10 +150,27 @@ export function computeSection80D(section80D = {}) {
     return self + parents;
 }
 
-export function resolveTaxDeclaration(emp) {
+export function resolveTaxDeclaration(emp, { month, year } = {}) {
     const fin = emp?.financialDetails || {};
     const declaration = fin.taxDeclaration || {};
     const hra = declaration.hra || {};
+
+    const payrollFy = month != null && year != null
+        ? getIndianFinancialYear(new Date(`${month} 1, ${year}`))
+        : getIndianFinancialYear();
+    const declarationFy = declaration.financialYear ? String(declaration.financialYear).trim() : '';
+    const useDeclaration = Boolean(declarationFy && declarationFy === payrollFy);
+
+    if (!useDeclaration) {
+        return {
+            section80C: {},
+            section80D: {},
+            section80E: 0,
+            section24b: 0,
+            monthlyRent: 0,
+            metroCity: Boolean(fin.metroCity)
+        };
+    }
 
     return {
         section80C: declaration.section80C || {},
@@ -231,8 +248,8 @@ export function resolveEmployeeTaxRegime(emp) {
     return emp?.financialDetails?.taxRegime || emp?.taxRegime || '';
 }
 
-export function buildIncomeTaxParamsFromEmployee(emp, { annualGross, annualBasic, annualHra, annualPfEmployee, annualProfessionalTax }) {
-    const declaration = resolveTaxDeclaration(emp);
+export function buildIncomeTaxParamsFromEmployee(emp, { annualGross, annualBasic, annualHra, annualPfEmployee, annualProfessionalTax, month, year }) {
+    const declaration = resolveTaxDeclaration(emp, { month, year });
 
     return {
         taxRegime: resolveEmployeeTaxRegime(emp),

@@ -66,6 +66,16 @@ const leaveBalanceSchema = new mongoose.Schema({
             type: Number,
             default: 0,
             min: 0
+        },
+        /** Manual correction by admin / HR / line manager — preserved across recalculation */
+        manualOverride: {
+            active: { type: Boolean, default: false },
+            accrued: Number,
+            used: Number,
+            carriedForward: Number,
+            reason: String,
+            adjustedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            adjustedAt: Date
         }
     }],
     

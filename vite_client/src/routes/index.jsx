@@ -30,6 +30,7 @@ const createProtectedLazyRoute = (route) => {
     allowedRoles = [],
     requiredPermissions = [],
     redirectTo,
+    orgOwnerOnly = false,
   } = route;
   return (
     <Route
@@ -40,6 +41,7 @@ const createProtectedLazyRoute = (route) => {
           allowedRoles={allowedRoles}
           requiredPermissions={requiredPermissions}
           redirectTo={redirectTo}
+          orgOwnerOnly={orgOwnerOnly}
         >
           <RouteErrorBoundary>
             <Suspense fallback={<LoadingSpinner message={message} />}>
@@ -220,7 +222,7 @@ export const adminRoutes = [
   { path: '/role-hierarchy', component: lazy(() => import('../Admin/RoleManagement/RoleHierarchy')), message: 'Loading role hierarchy...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.roleHierarchy },
   { path: '/admin/platform-roles', component: lazy(() => import('../Admin/RoleManagement/UsersRolesPage')), message: 'Loading users & roles...', allowedRoles: ['admin', 'hr'], requiredPermissions: ROUTE_PERMISSIONS.platformRoles },
   { path: '/calendar-management', component: lazy(() => import('../Admin/Calendar/CalendarManagement')), message: 'Loading calendar management...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.leavePolicy },
-  { path: '/id-card-generator', component: lazy(() => import('../Admin/IdCards/IdCardGenerator')), message: 'Loading ID card generator...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.idCards },
+  { path: '/id-card-generator', component: lazy(() => import('../Admin/IdCards/IdCardGenerator')), message: 'Loading ID card generator...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/employee/id-card', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },
   { path: '/salary-structure', component: lazy(() => import('../Admin/SalaryStructure/SalaryStructureManager')), message: 'Loading salary structure...', allowedRoles: ['admin', 'hr', 'finance', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.salaryStructure },
   { path: '/attendance-rules', component: lazy(() => import('../Admin/Attendance/AttendanceRules')), message: 'Loading attendance rules...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.attendanceRules },
@@ -249,8 +251,9 @@ export const hrRoutes = [
   { path: '/engagement', component: lazy(() => import('../HR/Engagement/EngagementPage')), message: 'Loading employee engagement...', allowedRoles: [] },
   { path: '/engagement/surveys/:surveyId', component: lazy(() => import('../HR/Engagement/SurveyDetailPage')), message: 'Loading survey...', allowedRoles: [] },
   { path: '/engagement/create-survey', component: lazy(() => import('../HR/Engagement/CreateSurvey')), message: 'Loading survey builder...', allowedRoles: ['admin', 'hr', 'executive'] },
-  { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: [] },
+  { path: '/documents', component: lazy(() => import('../HR/Documents/DocumentsPage')), message: 'Loading documents...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/employee/documents-id', component: lazy(() => import('../Employee/DocumentsAndId/DocumentsAndIdPage')), message: 'Loading documents & ID card...', allowedRoles: [] },
+  { path: '/employee/my-documents', component: lazy(() => import('../Employee/Documents/MyDocumentsPage')), message: 'Loading my documents...', allowedRoles: [] },
   { path: '/documents/:id/versions', component: lazy(() => import('../HR/Documents/DocumentVersions')), message: 'Loading document versions...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/benefits', component: lazy(() => import('../components/BenefitsRouteWrapper')), message: 'Loading benefits...', allowedRoles: [] },
   { path: '/benefits/:id', component: lazy(() => import('../HR/Benefits/BenefitDetailPage')), message: 'Loading benefit plan details...', allowedRoles: [] },

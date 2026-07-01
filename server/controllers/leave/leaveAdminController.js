@@ -7,6 +7,14 @@ import { parsePagination, parseSort, sendPaginatedResponse } from "../../helpers
 import { addOrganizationFilter } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { logApprove, logReject, logUpdate } from "../../helpers/auditLogger.js";
+import { shouldApplyDirectLeaveStatusUpdate } from "../../helpers/leaveStatusHelper.js";
+import {
+    attachWorkflowSummariesToLeaves,
+    executeLeaveWorkflowAction,
+    getCurrentPendingStep,
+    getLeaveApprovalStageLabel,
+    sendLeaveActionError,
+} from "../../helpers/leaveWorkflowHelper.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -56,7 +64,7 @@ export const getAllLeaves = async (req, res) => {
         }
 
         // Execute optimized query with pagination
-        const [leaves, total] = await Promise.all([
+        const [leavesRaw, total] = await Promise.all([
             Leave.find(query)
                 .select('-__v')
                 .populate('employee', 'name lastName email department jobTitle designation position profilePhoto')
@@ -66,6 +74,12 @@ export const getAllLeaves = async (req, res) => {
                 .lean(),
             Leave.countDocuments(query)
         ]);
+
+        const leavesWithWorkflow = await attachWorkflowSummariesToLeaves(leavesRaw);
+        const leaves = leavesWithWorkflow.map((leave) => ({
+            ...leave,
+            approvalStage: getLeaveApprovalStageLabel(leave),
+        }));
 
         // Calculate statistics efficiently using aggregation (only for approved leaves)
         const statsQuery = { ...query, status: 'approved' };
@@ -176,6 +190,7 @@ export const updateLeaveStatus = async (req, res) => {
         // If user is a manager (not admin or HR), verify the leave belongs to an employee linked to them
         // Example: Manager "Arun Kumar" can only approve/reject leaves for employees with manager="Arun Kumar" or "Arun"
         const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        let employeeLinkedForWorkflow = true;
         if (isManager && req.employee) {
             const leaveEmployee = await Employee.findById(leave.employee?._id || leave.employee).select('manager managerId').lean();
             if (!leaveEmployee) {
@@ -185,10 +200,9 @@ export const updateLeaveStatus = async (req, res) => {
                 });
             }
             
-            // Check if employee's manager field matches this manager
-            const isLinked = isEmployeeLinkedToManager(leaveEmployee, req.employee);
+            employeeLinkedForWorkflow = isEmployeeLinkedToManager(leaveEmployee, req.employee);
             
-            if (!isLinked) {
+            if (!employeeLinkedForWorkflow) {
                 const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
                 logger.warn('Manager trying to update leave for unlinked employee', {
                     managerId: req.employee._id,
@@ -203,37 +217,35 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
 
-        // ✅ SYNC WITH APPROVAL WORKFLOW
+        // ✅ SYNC WITH APPROVAL WORKFLOW (Manager → HR)
         const approverId = req.user?._id || req.employee?._id;
-        
+        let workflowProcessed = false;
+        let workflowStillInProgress = false;
+        let workflowError = false;
+
         // If leave has an approval instance, process through workflow
         if (leave.approvalInstanceId) {
             try {
-                const { processApprovalAction } = await import('../../services/approvalWorkflowService.js');
                 const { ApprovalInstance } = await import('../../models/approvalWorkflow.model.js');
                 
                 const approvalInstance = await ApprovalInstance.findById(leave.approvalInstanceId);
                 if (approvalInstance && approvalInstance.status === 'In Progress') {
-                    // Find current step
-                    const currentStep = approvalInstance.steps.find(s => s.status === 'Pending');
+                    const currentStep = getCurrentPendingStep(approvalInstance);
                     if (currentStep) {
-                        await processApprovalAction({
-                            approvalInstanceId: leave.approvalInstanceId,
-                            stepNumber: currentStep.stepNumber,
-                            approverId,
+                        await executeLeaveWorkflowAction({
+                            req,
+                            approvalInstance,
+                            currentStep,
                             action: status === 'approved' ? 'Approve' : 'Reject',
                             comments: rejectionReason || '',
-                            metadata: {
-                                leaveId: leave._id,
-                                leaveType: leave.leaveType,
-                                duration: leave.duration
-                            }
+                            leave,
+                            employeeLinked: employeeLinkedForWorkflow,
                         });
                         
-                        // Reload approval instance to get updated status
+                        workflowProcessed = true;
+
                         const updatedInstance = await ApprovalInstance.findById(leave.approvalInstanceId);
                         
-                        // If workflow is complete, update leave status
                         if (updatedInstance && updatedInstance.status === 'Approved') {
                             leave.status = 'approved';
                             leave.approvedBy = approverId;
@@ -243,21 +255,33 @@ export const updateLeaveStatus = async (req, res) => {
                             leave.rejectedBy = approverId;
                             leave.rejectedAt = new Date();
                             leave.rejectionReason = rejectionReason || updatedInstance.rejectionReason;
+                        } else if (updatedInstance && updatedInstance.status === 'In Progress') {
+                            workflowStillInProgress = true;
                         }
                     }
                 }
-            } catch (workflowError) {
+            } catch (workflowErr) {
+                workflowError = true;
                 logger.error('Error processing approval workflow', {
-                    error: workflowError.message,
+                    error: workflowErr.message,
                     leaveId: leave._id,
-                    stack: workflowError.stack
+                    stack: workflowErr.stack
                 });
-                // Fall through to direct status update if workflow fails
+                return sendLeaveActionError(
+                    res,
+                    workflowErr,
+                    'Error processing leave approval workflow'
+                );
             }
         }
         
-        // Direct status update (if no workflow or workflow processing failed)
-        if (!leave.approvalInstanceId || leave.status === 'pending') {
+        // Direct status update only when no workflow, or workflow already finished
+        if (shouldApplyDirectLeaveStatusUpdate({
+            hasApprovalInstance: Boolean(leave.approvalInstanceId),
+            workflowProcessed,
+            workflowStillInProgress,
+            workflowError,
+        })) {
             leave.status = status;
             
             if (status === 'approved') {
@@ -275,15 +299,15 @@ export const updateLeaveStatus = async (req, res) => {
                 leave.approvedBy = undefined;
                 leave.approvedAt = undefined;
             } else if (status === 'cancelled') {
-                // Employee can cancel their own leave
                 leave.status = 'cancelled';
             }
         }
 
         await leave.save();
         
-        // Log audit trail for leave status change
-        if (status === 'approved') {
+        // Log audit trail based on resolved leave status (not requested status)
+        const resolvedStatus = leave.status;
+        if (resolvedStatus === 'approved') {
             await logApprove({
                 entityType: 'Leave',
                 entityId: leave._id,
@@ -299,7 +323,7 @@ export const updateLeaveStatus = async (req, res) => {
                     approverId: approverId.toString()
                 }
             });
-        } else if (status === 'rejected') {
+        } else if (resolvedStatus === 'rejected') {
             await logReject({
                 entityType: 'Leave',
                 entityId: leave._id,
@@ -327,14 +351,19 @@ export const updateLeaveStatus = async (req, res) => {
                 metadata: {
                     statusChange: true,
                     previousStatus: leaveBefore.status,
-                    newStatus: leave.status
+                    newStatus: leave.status,
+                    requestedStatus: status,
+                    workflowStillInProgress,
+                    ...(workflowStillInProgress && status === 'approved'
+                        ? { workflowStepApproved: true }
+                        : {})
                 }
             });
         }
         
         // Recalculate leave balance when status changes (approved: deduct used; rejected/cancelled: release pending)
         const employeeId = leave.employee?._id || leave.employee;
-        if (employeeId && (leave.status === 'approved' || leave.status === 'rejected')) {
+        if (employeeId && (leave.status === 'approved' || leave.status === 'rejected' || leave.status === 'cancelled')) {
             try {
                 const leaveBalanceEngine = (await import('../../services/leaveBalanceEngine.js')).default;
                 const year = new Date(leave.startDate).getFullYear();
@@ -356,10 +385,11 @@ export const updateLeaveStatus = async (req, res) => {
             try {
                 const { notifyLeaveApproved, notifyLeaveRejected } = await import('../../helpers/pushNotificationTriggers.js');
                 const employeeId = leave.employee._id || leave.employee;
+                const resolvedStatus = leave.status;
                 
-                if (status === 'approved') {
+                if (resolvedStatus === 'approved') {
                     await notifyLeaveApproved(employeeId, leave);
-                } else if (status === 'rejected') {
+                } else if (resolvedStatus === 'rejected') {
                     await notifyLeaveRejected(employeeId, leave);
                 }
             } catch (notifError) {
@@ -372,7 +402,11 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
 
-        res.json({ message: 'Leave status updated successfully', leave });
+        const responseMessage = workflowStillInProgress && status === 'approved'
+            ? 'Leave approved at current step. Pending HR verification.'
+            : 'Leave status updated successfully';
+
+        res.json({ success: true, message: responseMessage, leave, workflowStillInProgress });
     } catch (error) {
         logger.error('Update Leave Status Error', { error: error.message, stack: error.stack, leaveId: req.params.id });
         res.status(500).json({ message: 'Error updating leave status', error: error.message });

@@ -1,15 +1,29 @@
 import Employee from '../../models/employee.model.js';
 import User from '../../models/user.model.js';
+import {
+  findOrgOwnerEmployeeProfile,
+  linkUserToEmployeeProfile,
+  resolveOrgOwnerMeProfile,
+  resolveOrgOwnerUser,
+} from '../../helpers/identityService.js';
 import mongoose from 'mongoose';
 import logger from '../../helpers/logger.js';
 import { validateAndNormalizeNationalId } from '../../helpers/nationalIdValidation.js';
 import { mergeLegacyAndCanonicalEmployeeDocuments } from '../../helpers/employeeDocumentUploadHelper.js';
-import Notification from '../../models/notification.model.js';
+import { getEffectiveFunctionalRoles } from '../../helpers/functionalRolesHelper.js';
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { sanitizeTaxDeclarationInput } from '../../helpers/taxDeclarationHelper.js';
 import { getIndianFinancialYear } from '../../helpers/incomeTaxCalculation.js';
 
-// Employee updates their additional information
+/** Only HR staff may view another employee's uploaded documents (not admin/manager). */
+const isRequesterHrStaff = async (req) => {
+  if (!req.employee?._id) return false;
+  const requester = await Employee.findById(req.employee._id)
+    .select('functionalRoles department position jobTitle')
+    .lean();
+  return !!(requester && getEffectiveFunctionalRoles(requester).includes('hr'));
+};
+
 // Employee updates their additional information
 export const updateEmployeeInfo = async (req, res) => {
     try {
@@ -848,10 +862,14 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
       logger.info('Admin fetched employee', { employeeId, salary: employee.salary });
     }
 
-    await mergeLegacyAndCanonicalEmployeeDocuments(employee);
+    const requesterIsHr = await isRequesterHrStaff(req);
+    if (requesterIsHr) {
+      await mergeLegacyAndCanonicalEmployeeDocuments(employee);
+    } else {
+      delete employee.documents;
+    }
 
     res.status(200).json({ employee });
-
   } catch (error) {
     logger.error('Error fetching employee info', { error: error.message, stack: error.stack });
     res.status(500).json({ 
@@ -863,13 +881,13 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
 
 export const getEmployeeInfoByEmployee = async (req, res) => {
     try {
-        const employeeId = req.employee?._id;
+        let employeeId = req.employee?._id;
 
         if (!employeeId) {
             const adminUserId = req.user?._id || req.user?.id;
             if (adminUserId) {
                 const userDoc = await User.findById(adminUserId)
-                    .select('name email phone title position role organizationId roles')
+                    .select('name email phone title position role organizationId roles employeeProfileId')
                     .lean();
 
                 if (!userDoc) {
@@ -878,42 +896,83 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
                     });
                 }
 
-                let timezoneContext = null;
-                const organizationId = userDoc.organizationId || req.organizationId;
-                if (organizationId) {
-                    const { getTimezoneContext } = await import('../../helpers/organizationTimezoneService.js');
-                    timezoneContext = await getTimezoneContext(
-                        organizationId.toString?.() ? organizationId : organizationId
-                    );
+                if (userDoc.employeeProfileId) {
+                    const linkedByProfile = await Employee.findById(userDoc.employeeProfileId)
+                        .select('_id')
+                        .lean();
+                    if (linkedByProfile?._id) {
+                        employeeId = linkedByProfile._id;
+                    }
                 }
 
-                return res.status(200).json({
-                    message: 'Your information has been retrieved successfully.',
-                    employee: null,
-                    user: {
-                        _id: userDoc._id,
-                        id: userDoc._id,
-                        name: userDoc.name,
-                        email: userDoc.email,
-                        phone: userDoc.phone,
-                        title: userDoc.title,
-                        position: userDoc.position,
-                        role: userDoc.role || 'admin',
+                if (!employeeId && userDoc.organizationId) {
+                    const linkedEmployee = await Employee.findOne({
+                        userId: userDoc._id,
                         organizationId: userDoc.organizationId,
-                        platformRoles: userDoc.roles || [],
-                    },
-                    timezone: timezoneContext?.timezone || 'UTC',
-                    timezoneContext,
+                    })
+                        .select('_id')
+                        .lean();
+                    if (linkedEmployee?._id) {
+                        employeeId = linkedEmployee._id;
+                    }
+                }
+
+                if (!employeeId) {
+                    const orgOwner = await resolveOrgOwnerUser(userDoc.organizationId);
+                    if (orgOwner && String(orgOwner._id) === String(userDoc._id)) {
+                        const ownerProfile = await resolveOrgOwnerMeProfile(
+                            orgOwner,
+                            userDoc.organizationId
+                        );
+                        if (ownerProfile?._id) {
+                            employeeId = ownerProfile._id;
+                            const ownerUserDoc = await User.findById(orgOwner._id);
+                            if (ownerUserDoc && String(ownerUserDoc.employeeProfileId || '') !== String(ownerProfile._id)) {
+                                await linkUserToEmployeeProfile(ownerUserDoc, ownerProfile);
+                            }
+                        }
+                    }
+                }
+
+                if (!employeeId) {
+                    let timezoneContext = null;
+                    const organizationId = userDoc.organizationId || req.organizationId;
+                    if (organizationId) {
+                        const { getTimezoneContext } = await import('../../helpers/organizationTimezoneService.js');
+                        timezoneContext = await getTimezoneContext(
+                            organizationId.toString?.() ? organizationId : organizationId
+                        );
+                    }
+
+                    return res.status(200).json({
+                        message: 'Your information has been retrieved successfully.',
+                        employee: null,
+                        user: {
+                            _id: userDoc._id,
+                            id: userDoc._id,
+                            name: userDoc.name,
+                            email: userDoc.email,
+                            phone: userDoc.phone,
+                            title: userDoc.title,
+                            position: userDoc.position,
+                            role: userDoc.role || 'admin',
+                            organizationId: userDoc.organizationId,
+                            platformRoles: userDoc.roles || [],
+                            employeeProfileId: userDoc.employeeProfileId || null,
+                        },
+                        timezone: timezoneContext?.timezone || 'UTC',
+                        timezoneContext,
+                    });
+                }
+            } else {
+                return res.status(401).json({
+                    message: 'Unauthorized. Please log in.',
                 });
             }
-
-            return res.status(401).json({
-                message: 'Unauthorized. Please log in.',
-            });
         }
 
         const requestedId = req.params.employeeId;
-        if (requestedId && requestedId !== employeeId.toString()) {
+        if (requestedId && employeeId && requestedId !== employeeId.toString()) {
             return res.status(403).json({ 
                 message: 'Forbidden. You can only access your own data.' 
             });
@@ -928,6 +987,12 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
             });
         }
 
+        const adminUserId = req.user?._id || req.user?.id;
+        if (adminUserId && !employee.userId) {
+            await Employee.updateOne({ _id: employee._id }, { userId: adminUserId });
+            await User.updateOne({ _id: adminUserId }, { employeeProfileId: employee._id });
+        }
+
         const employeeObj = employee.toObject ? employee.toObject() : employee;
         await mergeLegacyAndCanonicalEmployeeDocuments(employeeObj);
 
@@ -939,9 +1004,32 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
             timezoneContext = await getTimezoneContext(organizationId.toString?.() ? organizationId : organizationId);
         }
 
+        let userPayload = null;
+        if (req.user?._id) {
+            const userDoc = await User.findById(req.user._id)
+                .select('name email phone title position role organizationId roles employeeProfileId')
+                .lean();
+            if (userDoc) {
+                userPayload = {
+                    _id: userDoc._id,
+                    id: userDoc._id,
+                    name: userDoc.name,
+                    email: userDoc.email,
+                    phone: userDoc.phone,
+                    title: userDoc.title,
+                    position: userDoc.position,
+                    role: userDoc.role || 'admin',
+                    organizationId: userDoc.organizationId,
+                    platformRoles: userDoc.roles || [],
+                    employeeProfileId: userDoc.employeeProfileId || employeeObj._id,
+                };
+            }
+        }
+
         res.status(200).json({
             message: 'Your information has been retrieved successfully.',
             employee: employeeObj,
+            ...(userPayload ? { user: userPayload } : {}),
             timezone: timezoneContext?.timezone || 'UTC',
             timezoneContext,
         });

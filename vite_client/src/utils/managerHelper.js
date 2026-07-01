@@ -125,6 +125,11 @@ export const isLineManager = (user) => isManager(user) && !isProjectManager(user
  */
 export const isHR = (user) => {
     if (!user) return false;
+
+    const functionalRoles = Array.isArray(user?.functionalRoles) ? user.functionalRoles : [];
+    if (functionalRoles.some((role) => String(role || '').toLowerCase().trim() === 'hr')) {
+        return true;
+    }
     
     const department = (user.department || '').toLowerCase().trim();
     const position = (user.position || '').toLowerCase().trim();
@@ -138,6 +143,21 @@ export const isHR = (user) => {
            jobTitle.includes('hr') ||
            position.includes('hr manager') ||
            (position.includes('hr') && position.includes('manager'));
+};
+
+/**
+ * HR document / ID-card management (org admin, HR portal delegates, or HR staff).
+ */
+export const canAccessHrDocuments = (
+    user,
+    employee = null,
+    { isHrManager = false, isHrExecutive = false, isOrgOwner = false } = {}
+) => {
+    if (isOrgOwner || isHrManager || isHrExecutive) return true;
+    const userObj = user || employee;
+    if (!userObj) return false;
+    if ((userObj.role || '').toLowerCase() === 'admin') return true;
+    return isHR(userObj);
 };
 
 /**

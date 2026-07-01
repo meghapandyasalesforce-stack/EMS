@@ -110,3 +110,102 @@ export const linkUserToEmployeeProfile = async (user, employee) => {
 /** Find org User for employee registration (same email, same org). */
 export const findOrgUserForEmployeeEmail = async (normalizedEmail, organizationId) =>
   User.findOne({ email: normalizedEmail, organizationId });
+
+/** True only for the organization owner account (not HR admin / delegated users). */
+export const isOrgOwnerUser = (user) => {
+  if (!user) return false;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  if (roles.includes(PLATFORM_ROLES.ORG_OWNER)) return true;
+  // Legacy org registrants: role admin with no delegated-only roles
+  if (user.role === 'admin' && roles.length === 0) return true;
+  return false;
+};
+
+/** Resolve the organization owner login for this tenant. */
+export const resolveOrgOwnerUser = async (organizationId) => {
+  if (!organizationId) return null;
+
+  const withOwnerRole = await User.findOne({
+    organizationId,
+    roles: PLATFORM_ROLES.ORG_OWNER,
+  });
+  if (withOwnerRole) return withOwnerRole;
+
+  return User.findOne({ organizationId, role: 'admin' }).sort({ createdAt: 1 });
+};
+
+/**
+ * Org owner may share login with exactly one employee profile.
+ * Returns the User only when email matches the org owner account in this org.
+ */
+export const findOrgOwnerUserForEmployeeEmail = async (normalizedEmail, organizationId) => {
+  const orgOwner = await resolveOrgOwnerUser(organizationId);
+  if (!orgOwner) return null;
+  const ownerEmail = String(orgOwner.email || '').toLowerCase().trim();
+  if (ownerEmail !== String(normalizedEmail || '').toLowerCase().trim()) return null;
+  return orgOwner;
+};
+
+/** Existing workforce profile linked to org owner (at most one). */
+export const findOrgOwnerEmployeeProfile = async (orgOwnerUser, organizationId, normalizedEmail) => {
+  if (!orgOwnerUser || !organizationId) return null;
+
+  const email = String(normalizedEmail || '').toLowerCase().trim();
+
+  if (orgOwnerUser.employeeProfileId) {
+    const byLink = await Employee.findOne({
+      _id: orgOwnerUser.employeeProfileId,
+      organizationId,
+    });
+    if (byLink) return byLink;
+  }
+
+  return Employee.findOne({
+    organizationId,
+    $or: [{ userId: orgOwnerUser._id }, ...(email ? [{ email }] : [])],
+  }).sort({ createdAt: 1 });
+};
+
+/** Resolve org owner's Me-tab workforce profile (read-only). */
+export const resolveOrgOwnerMeProfile = async (orgOwnerUser, organizationId) => {
+  if (!orgOwnerUser || !organizationId) return null;
+  const ownerEmail = String(orgOwnerUser.email || '').toLowerCase().trim();
+  return findOrgOwnerEmployeeProfile(orgOwnerUser, organizationId, ownerEmail);
+};
+
+/**
+ * Link one employee as the org owner's Me profile.
+ * Clears prior links so only one profile shares the org owner login.
+ */
+export const linkOrgOwnerMeProfile = async (orgOwnerUser, employeeId, organizationId) => {
+  if (!orgOwnerUser?._id || !employeeId || !organizationId) {
+    return { ok: false, code: 'INVALID_INPUT', message: 'Missing org owner, employee, or organization.' };
+  }
+
+  const employee = await Employee.findOne({ _id: employeeId, organizationId });
+  if (!employee) {
+    return { ok: false, code: 'NOT_FOUND', message: 'Employee not found in this organization.' };
+  }
+
+  const userDoc = await User.findById(orgOwnerUser._id);
+  if (!userDoc) {
+    return { ok: false, code: 'NOT_FOUND', message: 'Organization owner account not found.' };
+  }
+
+  const previousProfileId = userDoc.employeeProfileId;
+  if (previousProfileId && String(previousProfileId) !== String(employeeId)) {
+    await Employee.updateOne(
+      { _id: previousProfileId, organizationId },
+      { $unset: { userId: '' } }
+    );
+  }
+
+  await Employee.updateMany(
+    { organizationId, userId: userDoc._id, _id: { $ne: employeeId } },
+    { $unset: { userId: '' } }
+  );
+
+  await linkUserToEmployeeProfile(userDoc, employee);
+
+  return { ok: true, employee, user: userDoc };
+};

@@ -30,8 +30,8 @@ import {
   clearEmployeeDetails,
 } from '../../context/employeeDetailsSlice';
 import { deleteEmployee } from '../../context/employeeSlice';
-import { BOTH_DOCUMENT_ENDPOINT, BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
-import axiosInstance, { getBackendBaseURL } from '../../utils/axios';
+import { BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
+import axiosInstance, { openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import { DETAIL_TABS } from './employeeDetails/constants';
 import EmployeeDetailsHeader from './employeeDetails/EmployeeDetailsHeader';
 import PersonalTab from './employeeDetails/tabs/PersonalTab';
@@ -58,6 +58,7 @@ import {
   assignEmployeeSystemRole,
   fetchEmployeeAccess,
   fetchSuggestedSystemRole,
+  promoteEmployeeToHrManager,
 } from '../../utils/systemRoleApi';
 import { getRoleLabel } from '../../utils/systemRoleHelpers';
 
@@ -97,6 +98,7 @@ const EmployeeDetailsPage = () => {
   const [managerPreview, setManagerPreview] = useState(null);
   const [roleUpdatePrompt, setRoleUpdatePrompt] = useState(null);
   const [updatingSystemRole, setUpdatingSystemRole] = useState(false);
+  const [promotingToHr, setPromotingToHr] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -114,14 +116,34 @@ const EmployeeDetailsPage = () => {
     workInfoError,
   } = useSelector((state) => state.employeeDetails);
   const currentUser = useSelector((state) => state.auth?.user);
-  const { hasAnyPermission, isOrgOwner } = useAuthPermissions();
+  const sessionEmployee = useSelector((state) => state.employeeDetails?.employee);
+  const { hasAnyPermission, isOrgOwner, isHrExecutive, isHrManager } = useAuthPermissions();
+  const userIsHr = isHR(currentUser || sessionEmployee);
+  const hidePayrollForHrExecutive = userIsHr && isHrExecutive && !isHrManager;
   const canManageAccess =
     isOrgOwner ||
     hasAnyPermission([PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE]);
   const visibleTabs = DETAIL_TABS.filter(
-    (tab) => !tab.permissionGated || canManageAccess
+    (tab) =>
+      (!tab.permissionGated || canManageAccess) &&
+      (!tab.hrOnly || userIsHr) &&
+      !(hidePayrollForHrExecutive && tab.hideForHrExecutive)
   );
   const isManagerReadOnly = isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
+  const isAdminUser = currentUser?.role === 'admin';
+  const isHrManagerProfile =
+    Boolean(employee?.functionalRoles?.includes('hr')) &&
+    String(employee?.jobTitle || '').toLowerCase().includes('hr manager') &&
+    String(employee?.department || '').toLowerCase() === 'hr';
+
+  useEffect(() => {
+    if (activeTab === 'documents' && !userIsHr) {
+      setActiveTab('personal');
+    }
+    if (activeTab === 'payroll' && hidePayrollForHrExecutive) {
+      setActiveTab('personal');
+    }
+  }, [activeTab, userIsHr, hidePayrollForHrExecutive]);
 
   useEffect(() => {
     dispatch(fetchEmployeeDetails(employeeId));
@@ -195,29 +217,42 @@ const EmployeeDetailsPage = () => {
     if (employee) fetchEmployeeStats();
   }, [employee, fetchEmployeeStats]);
 
-  const handleDownloadDocument = async (documentId, fileName) => {
+  const handleDownloadDocument = async (doc) => {
+    const documentId = doc?._id || doc;
+    const fileName = typeof doc === 'object'
+      ? (doc.fileName || doc.originalName || 'document')
+      : 'document';
+    if (!documentId) {
+      alert('Document id missing.');
+      return;
+    }
     try {
-      const base = BOTH_DOCUMENT_ENDPOINT.startsWith('http') ? '' : '/api';
-      const downloadUrl = `${base}${BOTH_DOCUMENT_ENDPOINT}/${employeeId}/documents/${documentId}/download`;
-      const response = await fetch(downloadUrl, { method: 'GET', credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to download');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', fileName || 'document');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch {
-      alert('Failed to download document. Please try again.');
+      await saveDocumentDownload(documentId, fileName, {
+        scope: 'both',
+        employeeId,
+        fileUrl: typeof doc === 'object' ? (doc.filePath || doc.fileUrl) : undefined,
+      });
+    } catch (error) {
+      alert(error?.message || 'Failed to download document. Please try again.');
     }
   };
 
-  const handleViewDocument = (doc) => {
-    const backendUrl = getBackendBaseURL();
-    window.open(`${backendUrl}${doc.filePath}`, '_blank');
+  const handleViewDocument = async (doc) => {
+    if (!doc?._id) {
+      alert('Document id missing.');
+      return;
+    }
+    try {
+      await openDocumentPreview(doc._id, {
+        scope: 'both',
+        employeeId,
+        fileUrl: doc.filePath || doc.fileUrl,
+        fileName: doc.fileName || doc.originalName,
+        mimeType: doc.mimeType,
+      });
+    } catch (error) {
+      alert(error?.message || 'Failed to preview document. Please try again.');
+    }
   };
 
   const handleConfirmStatusChange = () => {
@@ -335,14 +370,36 @@ const EmployeeDetailsPage = () => {
     }
   };
 
-  const handleSaveWorkInfo = async () => {
-    const salaryValue =
-      editWorkForm.salary === '' || editWorkForm.salary == null
-        ? 0
-        : parseFloat(editWorkForm.salary);
-    if (Number.isNaN(salaryValue) || salaryValue < 0) {
-      setSnackbar({ open: true, message: 'Enter a valid salary.', severity: 'error' });
+  const handlePromoteToHrManager = async () => {
+    if (!employeeId || !window.confirm(
+      `Make ${getFullName(employee)} an HR Manager?\n\nJob title → HR Manager\nDepartment → HR\nEmail and password will stay the same.`
+    )) {
       return;
+    }
+
+    setPromotingToHr(true);
+    try {
+      await promoteEmployeeToHrManager(employeeId);
+      toast.success('Employee is now HR Manager. Ask them to log out and log in again.');
+      dispatch(fetchEmployeeDetails(employeeId));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to promote to HR Manager');
+    } finally {
+      setPromotingToHr(false);
+    }
+  };
+
+  const handleSaveWorkInfo = async () => {
+    let salaryValue = employee?.salary ?? 0;
+    if (!hidePayrollForHrExecutive) {
+      salaryValue =
+        editWorkForm.salary === '' || editWorkForm.salary == null
+          ? 0
+          : parseFloat(editWorkForm.salary);
+      if (Number.isNaN(salaryValue) || salaryValue < 0) {
+        setSnackbar({ open: true, message: 'Enter a valid salary.', severity: 'error' });
+        return;
+      }
     }
 
     const workData = {
@@ -410,9 +467,15 @@ const EmployeeDetailsPage = () => {
             employee={employee}
             isManagerReadOnly={isManagerReadOnly}
             onEditWork={handleEditWorkClick}
+            canPromoteToHr={isAdminUser || canManageAccess}
+            onPromoteToHr={handlePromoteToHrManager}
+            promotingToHr={promotingToHr}
+            isHrManagerProfile={isHrManagerProfile}
+            hidePayrollFields={hidePayrollForHrExecutive}
           />
         );
       case 'documents':
+        if (!userIsHr) return null;
         return (
           <DocumentsTab
             employee={employee}
@@ -554,7 +617,7 @@ const EmployeeDetailsPage = () => {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">{renderTabContent()}</div>
           <aside className="space-y-4 xl:col-span-1">
-            <PayrollHighlightWidget employee={employee} />
+            {!hidePayrollForHrExecutive && <PayrollHighlightWidget employee={employee} />}
             <LeaveBalancesWidget employeeId={employee._id} compact />
             <CareerTimelineWidget employee={employee} />
             <ReportingHierarchyWidget employee={employee} managerPreview={managerPreview} />
@@ -720,7 +783,7 @@ const EmployeeDetailsPage = () => {
                   onChange={handleEditWorkFormChange('position')}
                   label="Position"
                 >
-                  {['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'VP', 'CTO', 'CFO', 'CEO'].map((p) => (
+                  {['Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager', 'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO'].map((p) => (
                     <MenuItem key={p} value={p}>{p}</MenuItem>
                   ))}
                 </Select>
@@ -747,6 +810,7 @@ const EmployeeDetailsPage = () => {
                 </Select>
               </FormControl>
             </Grid>
+            {!hidePayrollForHrExecutive && (
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -758,6 +822,7 @@ const EmployeeDetailsPage = () => {
                 InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>₹</Typography> }}
               />
             </Grid>
+            )}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth

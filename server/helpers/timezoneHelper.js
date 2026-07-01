@@ -43,3 +43,21 @@ export function combineDateAndTimeInTimezone(date, timeStr, timezone = DEFAULT_T
 export function nowInTimezone(timezone = DEFAULT_TIMEZONE) {
   return DateTime.now().setZone(normalizeTimezone(timezone));
 }
+
+/** Start of calendar month and start of next month in the given timezone (UTC instants). */
+export function getMonthBoundsInTimezone(date = new Date(), timezone = DEFAULT_TIMEZONE) {
+  const tz = normalizeTimezone(timezone);
+  const dt = DateTime.fromJSDate(date, { zone: tz });
+  return {
+    monthStart: dt.startOf('month').toJSDate(),
+    nextMonthStart: dt.plus({ months: 1 }).startOf('month').toJSDate(),
+  };
+}
+
+/** Whether two dates fall in the same calendar month in the given timezone. */
+export function isSameCalendarMonthInTimezone(dateA, dateB, timezone = DEFAULT_TIMEZONE) {
+  const tz = normalizeTimezone(timezone);
+  const a = DateTime.fromJSDate(dateA, { zone: tz });
+  const b = DateTime.fromJSDate(dateB, { zone: tz });
+  return a.year === b.year && a.month === b.month;
+}

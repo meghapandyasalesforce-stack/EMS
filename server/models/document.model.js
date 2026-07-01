@@ -37,6 +37,11 @@ const documentSchema = new mongoose.Schema({
         required: true
     },
     mimeType: String,
+    /** Binary backup — preview/download works even if disk file is missing */
+    fileBinary: {
+        type: Buffer,
+        select: false,
+    },
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',

@@ -741,23 +741,34 @@ function DashboardEmployee() {
                                         {dashboardStats.monthlyCapSummary.types.map((t) => (
                                             <li
                                                 key={t.leaveType}
-                                                className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
+                                                className="rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
                                             >
-                                                <span className="font-medium text-slate-800">{t.displayName}</span>
-                                                <span className="shrink-0 text-right text-slate-700">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <span className="font-medium text-slate-800">{t.displayName}</span>
+                                                    <span className="shrink-0 text-right text-slate-700">
+                                                        <span className="font-semibold text-[#006D4E]">
+                                                            {t.availableBalance ?? 0}
+                                                        </span>
+                                                        <span className="text-slate-500"> days available</span>
+                                                    </span>
+                                                </div>
+                                                <p className="mt-1 text-xs text-slate-500">
+                                                    Can apply this month:{' '}
                                                     <span className="font-semibold text-[#006D4E]">
-                                                        {t.remainingThisMonth}
+                                                        {t.appliableThisMonth ?? t.remainingThisMonth ?? 0}
                                                     </span>
-                                                    <span className="text-slate-500">
-                                                        {' '}
-                                                        / {t.maxDaysPerMonth} this month
-                                                    </span>
-                                                </span>
+                                                    {' '}
+                                                    / {t.maxDaysPerMonth} max per month
+                                                    {t.monthlyEntitlement ? (
+                                                        <> · earns {t.monthlyEntitlement}/month</>
+                                                    ) : null}
+                                                </p>
                                             </li>
                                         ))}
                                     </ul>
                                     <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                                        Used this month is counted from pending and approved requests.
+                                        Unused monthly entitlement stays in your year-to-date balance. The per-month
+                                        limit is the maximum you can take in one calendar month.
                                     </p>
                                     <p className="mt-2 text-xs text-slate-500">
                                         Annual days available:{' '}

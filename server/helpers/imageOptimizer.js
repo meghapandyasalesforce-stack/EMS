@@ -83,7 +83,7 @@ export const generateThumbnail = async (inputPath, outputPath, size = 200) => {
         await sharp(inputPath)
             .resize(size, size, {
                 fit: 'cover',
-                position: 'center'
+                position: 'attention',
             })
             .jpeg({ quality: 80 })
             .toFile(outputPath);
@@ -113,56 +113,94 @@ export const generateThumbnail = async (inputPath, outputPath, size = 200) => {
 };
 
 /**
+ * Normalize profile photo: trim empty/black borders, square cover crop, face-aware.
+ * Output fills circular avatars edge-to-edge (localhost + production).
+ */
+export const normalizeProfilePhotoForAvatar = async (filePath, size = 800) => {
+    const fileDir = path.dirname(filePath);
+    const baseName = path.basename(filePath, path.extname(filePath));
+    const outputPath = path.join(fileDir, `${baseName}.jpg`);
+    const tempPath = path.join(fileDir, `${baseName}_norm_${Date.now()}.jpg`);
+    const trimmedPath = path.join(fileDir, `${baseName}_trim_${Date.now()}.jpg`);
+
+    let sourcePath = filePath;
+    try {
+        await sharp(filePath)
+            .rotate()
+            .trim({ threshold: 15 })
+            .jpeg({ quality: 95 })
+            .toFile(trimmedPath);
+        sourcePath = trimmedPath;
+    } catch (trimError) {
+        logger.debug('Profile photo trim skipped', { error: trimError.message });
+    }
+
+    await sharp(sourcePath)
+        .resize(size, size, {
+            fit: 'cover',
+            position: 'attention',
+        })
+        .jpeg({ quality: 88, mozjpeg: true })
+        .toFile(tempPath);
+
+    if (sourcePath !== filePath && fs.existsSync(sourcePath)) {
+        fs.unlinkSync(sourcePath);
+    }
+    if (path.resolve(filePath) !== path.resolve(outputPath) && fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+    }
+    if (fs.existsSync(outputPath) && path.resolve(outputPath) !== path.resolve(tempPath)) {
+        fs.unlinkSync(outputPath);
+    }
+    fs.renameSync(tempPath, outputPath);
+
+    const stats = fs.statSync(outputPath);
+    return {
+        size: stats.size,
+        path: outputPath,
+        filename: path.basename(outputPath),
+    };
+};
+
+/** @deprecated Use normalizeProfilePhotoForAvatar */
+export const cropProfilePhotoSquare = normalizeProfilePhotoForAvatar;
+
+/**
  * Process profile photo: optimize and generate thumbnail
  * @param {string} filePath - Path to uploaded file
  * @param {string} filename - Original filename
  * @returns {Promise<Object>} Processing result
  */
 export const processProfilePhoto = async (filePath, filename) => {
-    let tempPath = null;
     try {
         const fileDir = path.dirname(filePath);
         const fileExt = path.extname(filename);
         const fileBase = path.basename(filename, fileExt);
 
-        // Create temporary file for optimization (Sharp cannot use same file for input/output)
-        tempPath = path.join(fileDir, `${fileBase}_temp${fileExt}`);
-        
-        // Optimize to temporary file
-        const optimizationResult = await optimizeImage(filePath, tempPath, {
-            maxWidth: 800,
-            maxHeight: 800,
-            quality: 85
-        });
+        const normalized = await normalizeProfilePhotoForAvatar(filePath, 800);
+        filePath = normalized.path;
+        const outputFilename = normalized.filename;
 
-        // Replace original with optimized version
-        fs.renameSync(tempPath, filePath);
-        tempPath = null; // Clear temp path since we've moved it
+        const optimizationResult = {
+            success: true,
+            originalSize: normalized.size,
+            optimizedSize: normalized.size,
+            compressionRatio: 0,
+            outputPath: filePath,
+        };
 
-        // Generate thumbnail from optimized image
-        const thumbnailFilename = `${fileBase}_thumb${fileExt}`;
+        const thumbnailFilename = `${fileBase}_thumb.jpg`;
         const thumbnailPath = path.join(fileDir, thumbnailFilename);
         const thumbnailResult = await generateThumbnail(filePath, thumbnailPath, 200);
 
         return {
             success: true,
+            filename: outputFilename,
             optimized: optimizationResult,
             thumbnail: thumbnailResult,
-            thumbnailUrl: `/uploads/profile-photos/${thumbnailFilename}`
+            thumbnailUrl: `/uploads/profile-photos/${thumbnailFilename}`,
         };
     } catch (error) {
-        // Clean up temporary file if it exists
-        if (tempPath && fs.existsSync(tempPath)) {
-            try {
-                fs.unlinkSync(tempPath);
-            } catch (cleanupError) {
-                logger.warn('Failed to cleanup temporary file', {
-                    tempPath,
-                    error: cleanupError.message
-                });
-            }
-        }
-        
         logger.error('Profile photo processing failed', {
             filePath,
             filename,
@@ -180,6 +218,8 @@ export const processProfilePhoto = async (filePath, filename) => {
 export default {
     optimizeImage,
     generateThumbnail,
+    normalizeProfilePhotoForAvatar,
+    cropProfilePhotoSquare,
     processProfilePhoto
 };
 

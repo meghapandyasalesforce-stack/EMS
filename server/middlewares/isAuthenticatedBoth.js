@@ -35,7 +35,8 @@ const isAuthenticatedBoth = async (req, res, next) => {
 
     const ctx = await loadEmployeeContext(req, decoded);
 
-    if (ctx.notFound) {
+    // Only workforce-only sessions hard-fail when profile is missing
+    if (ctx.notFound && decoded.role === 'employee') {
       return res.status(404).json({
         success: false,
         message: 'Employee not found',

@@ -1,24 +1,33 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { createEmployee } from '../../context/employeeSlice';
+import { checkAuthSession } from '../../context/Auth/authSlice';
+import { fetchEmployeeOwnInfo, setEmployeeProfile } from '../../context/employeeDetailsSlice';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
-import SystemRolePicker from '../../components/SystemRolePicker';
+import ReplaceProfileConfirmModal from '../../components/ReplaceProfileConfirmModal';
 import ElevatedRoleConfirmModal from '../../components/ElevatedRoleConfirmModal';
 import { DEFAULT_SYSTEM_ROLE } from '../../utils/systemRoles';
 import useSuggestedSystemRole from '../../Hooks/useSuggestedSystemRole';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { PERMISSIONS } from '../../utils/permissions';
+import { getDefaultDashboardRoute } from '../../utils/dashboardRedirect';
+import {
+    getCredentialsForAdminEmail,
+    isOrgAdminEmail,
+    resolveOrgAdminEmail,
+} from '../../utils/orgAdminCredentials';
 import {
     getRoleLabel,
     getRoleMismatch,
     isElevatedSystemRole,
 } from '../../utils/systemRoleHelpers';
 
-const STEPS = [
+const VISIBLE_STEPS = [
     { id: 'personal', label: 'Personal' },
     { id: 'job', label: 'Job details' },
-    { id: 'access', label: 'System access' },
     { id: 'review', label: 'Review' },
 ];
 
@@ -44,11 +53,13 @@ function AddEmployee() {
     });
     const [roleCatalog, setRoleCatalog] = useState([]);
     const [loadingRoles, setLoadingRoles] = useState(true);
-    const [roleManuallyOverridden, setRoleManuallyOverridden] = useState(false);
     const [roleSuggestionReason, setRoleSuggestionReason] = useState(null);
     const [elevatedConfirmedForRole, setElevatedConfirmedForRole] = useState(null);
     const [showElevatedModal, setShowElevatedModal] = useState(false);
     const [pendingStepAdvance, setPendingStepAdvance] = useState(null);
+    const [showReplaceModal, setShowReplaceModal] = useState(false);
+    const [existingProfileToReplace, setExistingProfileToReplace] = useState(null);
+    const [linkAsMyProfile, setLinkAsMyProfile] = useState(false);
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -59,6 +70,26 @@ function AddEmployee() {
     const employeeError = useSelector(state => state.employees.error);
     const user = useSelector((state) => state.auth?.user);
     const employee = useSelector((state) => state.employeeDetails?.employee);
+    const { isOrgOwner, isHrManager, isHrExecutive, hasPermission } = useAuthPermissions();
+    const canAddEmployee =
+        isOrgOwner ||
+        isHrManager ||
+        isHrExecutive ||
+        hasPermission(PERMISSIONS.EMPLOYEE_CREATE);
+    const permissionFlags = useMemo(() => ({ isOrgOwner }), [isOrgOwner]);
+
+    const adminEmail = useMemo(
+        () => (isOrgOwner ? resolveOrgAdminEmail(user, permissionFlags) : ''),
+        [user, permissionFlags, isOrgOwner]
+    );
+    const usingAdminEmail =
+        isOrgOwner && isOrgAdminEmail(form.email, user, permissionFlags);
+
+    useEffect(() => {
+        if (isOrgOwner && usingAdminEmail) {
+            setLinkAsMyProfile(true);
+        }
+    }, [isOrgOwner, usingAdminEmail]);
 
     const getDashboardRoute = useMemo(() => {
         const userRole = user?.role || employee?.role || localStorage.getItem('role');
@@ -88,7 +119,7 @@ function AddEmployee() {
     ];
 
     const jobTitles = [
-        'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager',
+        'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'HR Executive',
         'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager',
         'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager',
         'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer',
@@ -102,7 +133,7 @@ function AddEmployee() {
 
     const positions = [
         'Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager',
-        'Director', 'VP', 'CTO', 'CFO', 'CEO',
+        'Director', 'Executive', 'VP', 'CTO', 'CFO', 'CEO',
     ];
 
     const fetchManagers = useCallback(async () => {
@@ -135,11 +166,11 @@ function AddEmployee() {
             jobTitle: form.jobTitle,
             position: form.position,
         },
-        { enabled: step >= 1 }
+        { enabled: Boolean(form.department && form.jobTitle && form.position) }
     );
 
     useEffect(() => {
-        if (roleManuallyOverridden || suggestionLoading) return;
+        if (suggestionLoading || !form.department || !form.jobTitle || !form.position) return;
 
         setRoleSuggestionReason(suggestedRole.reason);
         setForm((prev) =>
@@ -147,7 +178,12 @@ function AddEmployee() {
                 ? prev
                 : { ...prev, systemRole: suggestedRole.systemRoleId }
         );
-    }, [suggestedRole, roleManuallyOverridden, suggestionLoading]);
+    }, [suggestedRole, suggestionLoading, form.department, form.jobTitle, form.position]);
+
+    const resolveSystemRole = useCallback(
+        () => form.systemRole || suggestedRole.systemRoleId || DEFAULT_SYSTEM_ROLE,
+        [form.systemRole, suggestedRole.systemRoleId]
+    );
 
     const roleMismatch = useMemo(
         () =>
@@ -162,7 +198,6 @@ function AddEmployee() {
         [form.department, form.jobTitle, form.position, form.systemRole, suggestedRole]
     );
 
-    const suggestedRoleLabel = getRoleLabel(suggestedRole.systemRoleId, roleCatalog);
     const selectedRoleLabel = getRoleLabel(form.systemRole, roleCatalog);
 
     const managerLabel = useMemo(() => {
@@ -200,20 +235,39 @@ function AddEmployee() {
     }, [fetchManagers]);
 
     const handleChange = (e) => {
-        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+
+        if (name === 'email') {
+            setForm((prev) => {
+                const next = { ...prev, email: value };
+                const { password } = getCredentialsForAdminEmail(value, user, permissionFlags);
+                if (isOrgAdminEmail(value, user, permissionFlags) && password) {
+                    next.password = password;
+                } else if (
+                    !isOrgAdminEmail(value, user, permissionFlags) &&
+                    isOrgAdminEmail(prev.email, user, permissionFlags)
+                ) {
+                    next.password = '';
+                }
+                return next;
+            });
+            return;
+        }
+
+        setForm((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleApplySuggestedRole = () => {
-        setRoleManuallyOverridden(false);
-        setElevatedConfirmedForRole(null);
-        setRoleSuggestionReason(suggestedRole.reason);
-        setForm((prev) => ({ ...prev, systemRole: suggestedRole.systemRoleId }));
-    };
-
-    const handleSystemRoleChange = (systemRole) => {
-        setRoleManuallyOverridden(true);
-        setElevatedConfirmedForRole(null);
-        setForm((prev) => ({ ...prev, systemRole }));
+    const fillAdminCredentials = () => {
+        if (!adminEmail) {
+            toast.info('Admin email is not available in this session.');
+            return;
+        }
+        const { email, password } = getCredentialsForAdminEmail(adminEmail, user, permissionFlags);
+        setForm((prev) => ({
+            ...prev,
+            email,
+            ...(password ? { password } : {}),
+        }));
     };
 
     const validateStep = (stepIndex) => {
@@ -241,19 +295,11 @@ function AddEmployee() {
             return true;
         }
 
-        if (stepIndex === 2) {
-            if (!form.systemRole) {
-                toast.error('Please select a system access role.');
-                return false;
-            }
-            return true;
-        }
-
         return true;
     };
 
-    const needsElevatedConfirm = () =>
-        isElevatedSystemRole(form.systemRole) && elevatedConfirmedForRole !== form.systemRole;
+    const needsElevatedConfirm = (roleId = resolveSystemRole()) =>
+        isElevatedSystemRole(roleId) && elevatedConfirmedForRole !== roleId;
 
     const requestElevatedConfirm = (onConfirmed) => {
         setPendingStepAdvance(() => onConfirmed);
@@ -261,7 +307,7 @@ function AddEmployee() {
     };
 
     const handleElevatedConfirm = () => {
-        setElevatedConfirmedForRole(form.systemRole);
+        setElevatedConfirmedForRole(resolveSystemRole());
         setShowElevatedModal(false);
         pendingStepAdvance?.();
         setPendingStepAdvance(null);
@@ -275,12 +321,22 @@ function AddEmployee() {
     const goNext = () => {
         if (!validateStep(step)) return;
 
-        if (step === 2 && needsElevatedConfirm()) {
-            requestElevatedConfirm(() => setStep(3));
-            return;
+        if (step === 1) {
+            const roleToUse = resolveSystemRole();
+            if (!roleToUse) {
+                toast.error('Unable to determine system access from job details.');
+                return;
+            }
+            if (form.systemRole !== roleToUse) {
+                setForm((prev) => ({ ...prev, systemRole: roleToUse }));
+            }
+            if (needsElevatedConfirm(roleToUse)) {
+                requestElevatedConfirm(() => setStep(2));
+                return;
+            }
         }
 
-        setStep((prev) => Math.min(prev + 1, STEPS.length - 1));
+        setStep((prev) => Math.min(prev + 1, VISIBLE_STEPS.length - 1));
     };
 
     const goBack = () => {
@@ -288,60 +344,93 @@ function AddEmployee() {
         setStep((prev) => Math.max(prev - 1, 0));
     };
 
-    const submitEmployee = async (skipElevatedCheck = false) => {
+    const submitEmployee = async (skipElevatedCheck = false, confirmReplace = false) => {
         setError('');
 
-        if (!validateStep(0) || !validateStep(1) || !validateStep(2)) {
+        if (!validateStep(0) || !validateStep(1)) {
             toast.error('Please complete all required steps.');
             return;
         }
 
-        if (!skipElevatedCheck && needsElevatedConfirm()) {
-            requestElevatedConfirm(() => submitEmployee(true));
+        const systemRole = resolveSystemRole();
+        if (!systemRole) {
+            toast.error('Unable to determine system access from job details.');
             return;
         }
 
-        const resultAction = await dispatch(createEmployee(form));
+        if (!skipElevatedCheck && needsElevatedConfirm(systemRole)) {
+            requestElevatedConfirm(() => submitEmployee(true, confirmReplace));
+            return;
+        }
+
+        const linkAsOrgOwnerMe = isOrgOwner && (usingAdminEmail || linkAsMyProfile);
+        const resultAction = await dispatch(
+            createEmployee({ ...form, systemRole, confirmReplace, linkAsOrgOwnerMe })
+        );
 
         if (createEmployee.fulfilled.match(resultAction)) {
             queryClient.invalidateQueries({ queryKey: ['employees'] });
-            const { emailSent, emailWarning, emailError, linkedToExistingUser, linkMessage } = resultAction.payload;
+            const { linkedToExistingUser, updatedExistingProfile, linkMessage } = resultAction.payload;
             const roleMsg = `System access: ${selectedRoleLabel}.`;
 
-            if (linkedToExistingUser) {
+            if (updatedExistingProfile) {
+                toast.success(
+                    `${linkMessage || 'Employee profile updated and linked to your admin login.'} ${roleMsg}`,
+                    { autoClose: 6000 }
+                );
+            } else if (linkedToExistingUser) {
                 toast.success(
                     `${linkMessage || 'Employee linked to existing login.'} ${roleMsg}`,
                     { autoClose: 6000 }
                 );
-            } else if (emailSent) {
-                toast.success(`Employee created as ${selectedRoleLabel}. Welcome email sent.`, {
-                    autoClose: 4000,
-                });
-            } else if (emailWarning || emailError) {
-                toast.warning(`Employee created as ${selectedRoleLabel}, but welcome email failed!`, {
-                    autoClose: 5000,
-                });
-                setTimeout(() => {
-                    const errorMsg = emailWarning || emailError || 'Email service unavailable';
-                    toast.error(errorMsg, { autoClose: 10000 });
-                }, 500);
             } else {
                 toast.success(`Employee created successfully as ${selectedRoleLabel}.`, {
                     autoClose: 4000,
                 });
             }
 
+            if (linkedToExistingUser || updatedExistingProfile || linkAsOrgOwnerMe) {
+                await dispatch(checkAuthSession());
+                await dispatch(fetchEmployeeOwnInfo());
+            }
+
+            if (resultAction.payload?.employee) {
+                dispatch(setEmployeeProfile(resultAction.payload.employee));
+            }
+
+            setExistingProfileToReplace(null);
             navigate(getDashboardRoute);
         } else {
-            const errorMsg = resultAction.payload || 'Failed to create employee';
+            const errPayload = resultAction.payload;
+            const errorMsg =
+                typeof errPayload === 'string'
+                    ? errPayload
+                    : errPayload?.message || 'Failed to create employee';
+
+            if (errPayload?.code === 'PROFILE_EXISTS_REQUIRES_CONFIRMATION') {
+                setExistingProfileToReplace(errPayload.existingProfile || null);
+                setShowReplaceModal(true);
+                return;
+            }
+
             setError(errorMsg);
             toast.error(errorMsg, { autoClose: 5000 });
         }
     };
 
+    const handleReplaceConfirm = () => {
+        setShowReplaceModal(false);
+        submitEmployee(true, true);
+    };
+
+    const handleReplaceCancel = () => {
+        setShowReplaceModal(false);
+        setExistingProfileToReplace(null);
+    };
+
     const renderStepIndicator = () => (
         <ol className="mb-8 flex flex-wrap gap-2 sm:gap-4">
-            {STEPS.map((item, index) => {
+            {VISIBLE_STEPS.map((item, index) => {
                 const isActive = index === step;
                 const isDone = index < step;
                 return (
@@ -360,7 +449,7 @@ function AddEmployee() {
                         <span className={`text-sm font-medium ${isActive ? 'text-slate-900' : 'text-slate-500'}`}>
                             {item.label}
                         </span>
-                        {index < STEPS.length - 1 ? (
+                        {index < VISIBLE_STEPS.length - 1 ? (
                             <span className="hidden text-slate-300 sm:inline">›</span>
                         ) : null}
                     </li>
@@ -409,9 +498,39 @@ function AddEmployee() {
                     onChange={handleChange}
                 />
             </div>
-            <p className="text-xs text-slate-500">
-                Leave password empty to auto-generate and email credentials to the new hire.
-            </p>
+            {isOrgOwner && adminEmail ? (
+                <button
+                    type="button"
+                    onClick={fillAdminCredentials}
+                    className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                >
+                    Use my admin email ({adminEmail})
+                </button>
+            ) : null}
+            {isOrgOwner && usingAdminEmail ? (
+                <p className="text-xs text-emerald-700">
+                    Only your organization admin email can share login. One employee profile will link to your admin account (same email and password).
+                </p>
+            ) : (
+                <p className="text-xs text-slate-500">
+                    Use a unique email for each employee. Leave password empty to auto-generate and email credentials to the new hire.
+                </p>
+            )}
+            {isOrgOwner ? (
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={usingAdminEmail || linkAsMyProfile}
+                        disabled={usingAdminEmail}
+                        onChange={(event) => setLinkAsMyProfile(event.target.checked)}
+                    />
+                    <span>
+                        Show this employee on my Me tab
+                        {usingAdminEmail ? ' (always on when using your admin email)' : ''}
+                    </span>
+                </label>
+            ) : null}
         </div>
     );
 
@@ -506,59 +625,6 @@ function AddEmployee() {
         </div>
     );
 
-    const renderAccessStep = () => (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            {suggestionLoading ? (
-                <p className="mb-3 text-xs text-slate-500">Checking recommended access…</p>
-            ) : null}
-
-            {!loadingRoles && !suggestionLoading && roleSuggestionReason && !roleManuallyOverridden ? (
-                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-                    <span className="font-medium">Suggested: {suggestedRoleLabel}</span>
-                    <span className="text-emerald-800"> — {roleSuggestionReason}</span>
-                </div>
-            ) : null}
-
-            {!loadingRoles && roleManuallyOverridden && suggestedRole.reason ? (
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    <span>
-                        Suggested <span className="font-medium">{suggestedRoleLabel}</span>
-                        {roleSuggestionReason ? ` (${roleSuggestionReason})` : ''}
-                    </span>
-                    <button
-                        type="button"
-                        onClick={handleApplySuggestedRole}
-                        className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-200"
-                    >
-                        Use suggestion
-                    </button>
-                </div>
-            ) : null}
-
-            {!loadingRoles && roleMismatch.mismatch ? (
-                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    Job details suggest <span className="font-medium">{getRoleLabel(roleMismatch.suggestedRoleId, roleCatalog)}</span>
-                    {roleMismatch.suggestedReason ? ` (${roleMismatch.suggestedReason})` : ''}, but you selected{' '}
-                    <span className="font-medium">{selectedRoleLabel}</span>.
-                </div>
-            ) : null}
-
-            {loadingRoles ? (
-                <p className="text-sm text-slate-500">Loading roles…</p>
-            ) : (
-                <SystemRolePicker
-                    catalog={roleCatalog}
-                    value={form.systemRole}
-                    onChange={handleSystemRoleChange}
-                    label="What can this person do in the app?"
-                />
-            )}
-            <p className="mt-2 text-xs text-slate-500">
-                Auto-suggested from department, job title, and position. Override only when needed.
-            </p>
-        </div>
-    );
-
     const renderReviewStep = () => {
         const selected = roleCatalog.find((r) => r.id === form.systemRole);
 
@@ -593,7 +659,14 @@ function AddEmployee() {
                         </div>
                         <div>
                             <dt className="text-slate-500">System access</dt>
-                            <dd className="font-semibold text-emerald-700">{selectedRoleLabel}</dd>
+                            <dd className="font-semibold text-emerald-700">
+                                {selectedRoleLabel}
+                                {roleSuggestionReason ? (
+                                    <span className="ml-1 text-xs font-normal text-slate-500">
+                                        (auto-assigned)
+                                    </span>
+                                ) : null}
+                            </dd>
                         </div>
                         <div>
                             <dt className="text-slate-500">Salary</dt>
@@ -607,13 +680,17 @@ function AddEmployee() {
 
                 {roleMismatch.mismatch ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                        Note: job details suggest {getRoleLabel(roleMismatch.suggestedRoleId, roleCatalog)}, but you assigned{' '}
-                        {selectedRoleLabel}. Confirm this is intentional before creating the employee.
+                        Job details suggest {getRoleLabel(roleMismatch.suggestedRoleId, roleCatalog)}. System access was auto-assigned as{' '}
+                        {selectedRoleLabel}.
                     </div>
                 ) : null}
             </div>
         );
     };
+
+    if (!canAddEmployee) {
+        return <Navigate to={getDefaultDashboardRoute(user, employee)} replace />;
+    }
 
     return (
         <div className="min-h-screen bg-[#F5F7FB]">
@@ -621,28 +698,30 @@ function AddEmployee() {
                 <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
                     <h1 className="mb-2 text-xl font-semibold text-slate-900 sm:text-2xl">Add employee</h1>
                     <p className="mb-6 text-sm text-slate-500">
-                        Create a profile, assign job details, and set system access in a few steps.
+                        Create a profile and assign job details. System access is assigned automatically from the role.
                     </p>
 
                     {renderStepIndicator()}
 
                     {(error || employeeError) && (
                         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                            {error || employeeError}
+                            {error ||
+                                (typeof employeeError === 'string'
+                                    ? employeeError
+                                    : employeeError?.message || 'Failed to create employee')}
                         </p>
                     )}
 
                     <form
                         onSubmit={(e) => {
                             e.preventDefault();
-                            if (step < STEPS.length - 1) goNext();
+                            if (step < VISIBLE_STEPS.length - 1) goNext();
                             else submitEmployee();
                         }}
                     >
                         {step === 0 && renderPersonalStep()}
                         {step === 1 && renderJobStep()}
-                        {step === 2 && renderAccessStep()}
-                        {step === 3 && renderReviewStep()}
+                        {step === 2 && renderReviewStep()}
 
                         <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
                             <button
@@ -660,7 +739,7 @@ function AddEmployee() {
                             >
                                 {employeeStatus === 'loading'
                                     ? 'Creating…'
-                                    : step < STEPS.length - 1
+                                    : step < VISIBLE_STEPS.length - 1
                                       ? 'Continue'
                                       : 'Create employee'}
                             </button>
@@ -671,10 +750,16 @@ function AddEmployee() {
 
             <ElevatedRoleConfirmModal
                 open={showElevatedModal}
-                roleId={form.systemRole}
+                roleId={resolveSystemRole()}
                 roleLabel={selectedRoleLabel}
                 onConfirm={handleElevatedConfirm}
                 onCancel={handleElevatedCancel}
+            />
+            <ReplaceProfileConfirmModal
+                open={showReplaceModal}
+                existingProfile={existingProfileToReplace}
+                onConfirm={handleReplaceConfirm}
+                onCancel={handleReplaceCancel}
             />
         </div>
     );

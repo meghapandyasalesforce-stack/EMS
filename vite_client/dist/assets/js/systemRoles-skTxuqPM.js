@@ -1,0 +1,1 @@
+const a={EMPLOYEE:"employee",HR_EXECUTIVE:"hr_executive",HR_MANAGER:"hr_manager",PAYROLL_ADMIN:"payroll_admin",LINE_MANAGER:"line_manager",EXECUTIVE:"executive"},_=a.EMPLOYEE,r=e=>e.replace(/_/g," ").toLowerCase().replace(/\b\w/g,E=>E.toUpperCase());export{_ as D,a as S,r as f};

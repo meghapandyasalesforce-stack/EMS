@@ -1,12 +1,25 @@
 import LeavePolicy from '../../models/leavePolicy.model.js';
 import LeaveBalance from '../../models/leaveBalance.model.js';
-import Leave from '../../models/leave.model.js';
 import Employee from '../../models/employee.model.js';
 import leaveBalanceEngine from '../../services/leaveBalanceEngine.js';
 import logger from '../../helpers/logger.js';
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
-import { getLeaveTypeVariantsForBalance } from '../../helpers/leaveTypeHelper.js';
+import { buildEmployeeLeaveBalanceResponse } from '../../helpers/leaveBalanceResponseHelper.js';
+import { normalizePolicyLeaveTypes } from '../../helpers/leavePolicyAccrualHelper.js';
+import { resolveEmployeeLeaveBalanceAccess } from '../../helpers/leaveBalanceAccessHelper.js';
+
+async function recalculateOrgLeaveBalances(organizationId) {
+    if (!organizationId) return;
+    try {
+        await leaveBalanceEngine.recalculateBalances(organizationId, new Date().getFullYear());
+    } catch (error) {
+        logger.warn('Leave balance recalculation after policy change failed', {
+            organizationId,
+            error: error.message
+        });
+    }
+}
 
 /**
  * Create a new leave policy
@@ -28,8 +41,16 @@ export const createLeavePolicy = async (req, res) => {
             createdBy: req.user?._id || req.employee?._id
         };
 
+        if (policyData.leaveTypes) {
+            policyData.leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes);
+        }
+
         const policy = new LeavePolicy(policyData);
         await policy.save();
+
+        if (policyData.leaveTypes?.length) {
+            await recalculateOrgLeaveBalances(organizationId);
+        }
 
         res.status(201).json({
             success: true,
@@ -135,9 +156,18 @@ export const updateLeavePolicy = async (req, res) => {
             });
         }
 
-        Object.assign(policy, req.body);
+        const updateBody = { ...req.body };
+        if (updateBody.leaveTypes) {
+            updateBody.leaveTypes = normalizePolicyLeaveTypes(updateBody.leaveTypes);
+        }
+
+        Object.assign(policy, updateBody);
         policy.lastModifiedBy = req.user?._id || req.employee?._id;
         await policy.save();
+
+        if (updateBody.leaveTypes?.length) {
+            await recalculateOrgLeaveBalances(organizationId);
+        }
 
         res.json({
             success: true,
@@ -211,56 +241,31 @@ export const getEmployeeLeaveBalance = async (req, res) => {
         const targetYear = year ? parseInt(year) : new Date().getFullYear();
         const targetEmployeeId = employeeId || req.employee?._id || req.user?._id;
 
-        // Check if user has permission to view this balance
-        const isAdmin = req.user?.role === 'admin';
-        const isHR = req.employee?.isHR || (req.employee?.department || '').toLowerCase().includes('hr');
-        const isOwnBalance = targetEmployeeId.toString() === (req.employee?._id?.toString() || req.user?._id?.toString());
-
-        if (!isOwnBalance && !isAdmin && !isHR) {
-            return res.status(403).json({
+        const access = await resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, { forAdjust: false });
+        if (!access.ok) {
+            return res.status(access.status || 403).json({
                 success: false,
-                message: 'Access denied. You can only view your own leave balance.'
+                message: access.message,
             });
         }
 
-        // Calculate/refresh balance
-        const balance = await leaveBalanceEngine.calculateBalance(
+        const balanceObj = await buildEmployeeLeaveBalanceResponse(
             targetEmployeeId,
             targetYear,
             organizationId
         );
 
-        if (!balance) {
+        if (!balanceObj) {
             return res.status(404).json({
                 success: false,
                 message: 'Leave balance not found. No applicable policy for this employee.'
             });
         }
 
-        await balance.populate('policy', 'policyName leaveTypes');
-
-        // Calculate usedThisMonth for each leave type
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-        const balanceObj = balance.toObject();
-        balanceObj.balances = await Promise.all(balanceObj.balances.map(async (b) => {
-            const types = getLeaveTypeVariantsForBalance(b.leaveType);
-            const monthLeaves = await Leave.find({
-                organizationId,
-                employee: targetEmployeeId,
-                leaveType: { $in: types },
-                startDate: { $gte: monthStart, $lte: monthEnd },
-                status: { $in: ['approved', 'pending'] }
-            });
-            b.usedThisMonth = monthLeaves.reduce((sum, l) => sum + (l.duration || 0), 0);
-            return b;
-        }));
-
         res.json({
             success: true,
-            balance: balanceObj
+            balance: balanceObj,
+            canAdjust: access.canAdjust,
         });
     } catch (error) {
         logger.error('Get Employee Leave Balance Error', { error: error.message });
@@ -268,6 +273,146 @@ export const getEmployeeLeaveBalance = async (req, res) => {
             success: false,
             message: 'Error fetching leave balance',
             error: error.message
+        });
+    }
+};
+
+/**
+ * Manually adjust leave balance for an employee (admin / HR / direct manager).
+ */
+export const adjustEmployeeLeaveBalance = async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        const { year, leaveType, accrued, used, carriedForward, reason } = req.body;
+
+        const access = await resolveEmployeeLeaveBalanceAccess(req, employeeId, { forAdjust: true });
+        if (!access.ok) {
+            return res.status(access.status || 403).json({
+                success: false,
+                message: access.message,
+            });
+        }
+
+        if (!leaveType || typeof leaveType !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: 'leaveType is required',
+            });
+        }
+
+        const targetYear = year ? parseInt(year, 10) : new Date().getFullYear();
+        if (Number.isNaN(targetYear)) {
+            return res.status(400).json({ success: false, message: 'Invalid year' });
+        }
+
+        const normalizedType = leaveType.toLowerCase().trim();
+        const numericFields = { accrued, used, carriedForward };
+        const hasAnyField = Object.values(numericFields).some((v) => v !== undefined && v !== null && v !== '');
+        if (!hasAnyField) {
+            return res.status(400).json({
+                success: false,
+                message: 'Provide at least one of accrued, used, or carriedForward to update',
+            });
+        }
+
+        let balance = await leaveBalanceEngine.calculateBalance(employeeId, targetYear, organizationId);
+        if (!balance) {
+            return res.status(404).json({
+                success: false,
+                message: 'Leave balance not found. Assign a leave policy to this employee first.',
+            });
+        }
+
+        let typeBalance = balance.balances.find((b) => b.leaveType === normalizedType);
+        if (!typeBalance) {
+            return res.status(404).json({
+                success: false,
+                message: `Leave type "${normalizedType}" not found in this employee's balance`,
+            });
+        }
+
+        const parseNonNegative = (val, label) => {
+            if (val === undefined || val === null || val === '') return undefined;
+            const num = Number(val);
+            if (Number.isNaN(num) || num < 0) {
+                throw new Error(`${label} must be a non-negative number`);
+            }
+            return num;
+        };
+
+        try {
+            const nextAccrued = parseNonNegative(accrued, 'accrued');
+            const nextUsed = parseNonNegative(used, 'used');
+            const nextCarried = parseNonNegative(carriedForward, 'carriedForward');
+
+            if (nextAccrued !== undefined) typeBalance.accrued = nextAccrued;
+            if (nextUsed !== undefined) typeBalance.used = nextUsed;
+            if (nextCarried !== undefined) typeBalance.carriedForward = nextCarried;
+
+            typeBalance.manualOverride = {
+                active: true,
+                accrued: typeBalance.accrued,
+                used: typeBalance.used,
+                carriedForward: typeBalance.carriedForward,
+                reason: reason ? String(reason).trim().slice(0, 500) : '',
+                adjustedBy: req.employee?._id || req.user?._id,
+                adjustedAt: new Date(),
+            };
+
+            typeBalance.available = Math.max(
+                0,
+                (typeBalance.accrued || 0) +
+                    (typeBalance.carriedForward || 0) -
+                    (typeBalance.used || 0) -
+                    (typeBalance.expired || 0) -
+                    (typeBalance.pending || 0)
+            );
+
+            balance.accrualHistory = balance.accrualHistory || [];
+            balance.accrualHistory.push({
+                date: new Date(),
+                leaveType: normalizedType,
+                amount: typeBalance.available,
+                method: 'manual',
+                notes: `[${access.role}] ${reason || 'Manual balance adjustment'}`,
+            });
+
+            balance.markModified('balances');
+            await balance.save();
+        } catch (validationError) {
+            return res.status(400).json({
+                success: false,
+                message: validationError.message,
+            });
+        }
+
+        const balanceObj = await buildEmployeeLeaveBalanceResponse(
+            employeeId,
+            targetYear,
+            organizationId
+        );
+
+        logger.info('Leave balance manually adjusted', {
+            employeeId,
+            leaveType: normalizedType,
+            year: targetYear,
+            adjustedBy: req.employee?._id || req.user?._id,
+            role: access.role,
+        });
+
+        res.json({
+            success: true,
+            message: 'Leave balance updated successfully',
+            balance: balanceObj,
+            canAdjust: true,
+        });
+    } catch (error) {
+        logger.error('Adjust Employee Leave Balance Error', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            success: false,
+            message: 'Error adjusting leave balance',
+            error: error.message,
         });
     }
 };

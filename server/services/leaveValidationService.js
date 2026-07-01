@@ -5,6 +5,14 @@ import Leave from '../models/leave.model.js';
 import logger from '../helpers/logger.js';
 import { getLeaveTypeVariantsForBalance, normalizeLeaveTypeForPolicy } from '../helpers/leaveTypeHelper.js';
 import leaveBalanceEngine from './leaveBalanceEngine.js';
+import {
+    getAppliableDaysThisMonth,
+    getMonthlyEntitlementAmount,
+    getRemainingMonthlyTakeCap,
+    getYearlyAccrualCap,
+    hasMonthlyEntitlement,
+    roundDays
+} from '../helpers/leavePolicyAccrualHelper.js';
 
 class LeaveValidationService {
     /**
@@ -104,9 +112,13 @@ class LeaveValidationService {
                 errors.push(`Maximum ${leaveTypeConfig.maxDaysPerRequest} days allowed for ${leaveTypeConfig.displayName}`);
             }
 
-            // 8. Check maximum days allowed per calendar month (monthly cap for same leave type)
-            if (leaveTypeConfig.maxDaysPerMonth && Number.isFinite(leaveTypeConfig.maxDaysPerMonth)) {
-                const maxDaysPerMonth = Number(leaveTypeConfig.maxDaysPerMonth);
+            // 8. Check maximum days allowed per calendar month (monthly take cap for same leave type)
+            const monthlyTakeCap = Number(leaveTypeConfig.maxDaysPerMonth) > 0
+                ? Number(leaveTypeConfig.maxDaysPerMonth)
+                : getMonthlyEntitlementAmount(leaveTypeConfig);
+
+            if (monthlyTakeCap && Number.isFinite(monthlyTakeCap) && monthlyTakeCap > 0) {
+                const maxDaysPerMonth = monthlyTakeCap;
                 const firstMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
                 const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999);
 
@@ -510,8 +522,8 @@ class LeaveValidationService {
     }
 
     /**
-     * Per leave type: monthly cap, used this month, remaining this month.
-     * Only includes types with maxDaysPerMonth set on the active policy.
+     * Per leave type: monthly entitlement, YTD balance, and appliable days this month.
+     * Includes types with maxDaysPerMonth or monthly accrual on the active policy.
      */
     async getMonthlyLeaveCapSummary(employeeId, organizationId, year, month) {
         const employee = await Employee.findById(employeeId);
@@ -527,10 +539,26 @@ class LeaveValidationService {
         const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
         const monthLabel = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
+        let balanceRecord = null;
+        try {
+            balanceRecord = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+        } catch (e) {
+            logger.warn('getMonthlyLeaveCapSummary: balance fetch failed', {
+                employeeId,
+                error: e.message
+            });
+        }
+
         const types = [];
         for (const lt of policy.leaveTypes || []) {
-            const cap = Number(lt.maxDaysPerMonth);
-            if (!Number.isFinite(cap) || cap <= 0) continue;
+            if (!hasMonthlyEntitlement(lt)) {
+                continue;
+            }
+
+            const monthlyEntitlement = getMonthlyEntitlementAmount(lt);
+            const monthlyTakeCap = Number(lt.maxDaysPerMonth) > 0
+                ? Number(lt.maxDaysPerMonth)
+                : monthlyEntitlement;
 
             const usedThisMonth = await this.countMonthlyUsageForLeaveType(
                 employeeId,
@@ -540,13 +568,28 @@ class LeaveValidationService {
                 monthStart,
                 monthEnd
             );
-            const remainingThisMonth = Math.max(0, cap - usedThisMonth);
+
+            const typeBalance = balanceRecord?.balances?.find((b) => b.leaveType === lt.type);
+            const availableBalance = typeBalance?.available ?? 0;
+            const accruedYtd = typeBalance?.accrued ?? 0;
+            const remainingTakeCap = getRemainingMonthlyTakeCap(monthlyTakeCap, usedThisMonth);
+            const appliableThisMonth = getAppliableDaysThisMonth({
+                availableBalance,
+                maxDaysPerMonth: monthlyTakeCap,
+                usedThisMonth
+            });
+
             types.push({
                 leaveType: lt.type,
                 displayName: lt.displayName || lt.type,
-                maxDaysPerMonth: cap,
-                usedThisMonth: Math.round(usedThisMonth * 1000) / 1000,
-                remainingThisMonth: Math.round(remainingThisMonth * 1000) / 1000
+                monthlyEntitlement,
+                yearlyEntitlementCap: getYearlyAccrualCap(lt),
+                maxDaysPerMonth: monthlyTakeCap,
+                usedThisMonth: roundDays(usedThisMonth),
+                remainingThisMonth: remainingTakeCap ?? appliableThisMonth,
+                availableBalance: roundDays(availableBalance),
+                accruedYtd: roundDays(accruedYtd),
+                appliableThisMonth
             });
         }
 

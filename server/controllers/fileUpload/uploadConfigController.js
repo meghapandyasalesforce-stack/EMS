@@ -10,12 +10,21 @@ import {
     createEmployeeJobOrGenericDocument,
     JOB_DOCUMENT_TYPES,
 } from '../../helpers/employeeDocumentUploadHelper.js';
+import { DOCUMENTS_UPLOAD_DIR } from '../../helpers/documentFilePathHelper.js';
+import {
+    ensureDocumentsUploadDirs,
+    resolveDocumentFileContent,
+    sendDocumentFile,
+    backfillDocumentBinaryFromDisk,
+    persistDocumentBinary,
+} from '../../helpers/documentFileStorageHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Store under server/uploads/documents so static middleware (server/uploads) can serve /uploads/documents/...
-const UPLOADS_DOCUMENTS_DIR = path.join(__dirname, '..', '..', 'uploads', 'documents');
+// Store under server/uploads/documents (also mirrored in MongoDB fileBinary)
+const UPLOADS_DOCUMENTS_DIR = DOCUMENTS_UPLOAD_DIR;
+ensureDocumentsUploadDirs();
 
 // Configure multer storage
 const storage = multer.diskStorage({
@@ -118,16 +127,11 @@ export const addDocument = async (req, res) => {
     }
 };
 
-// Admin or HR downloads employee document (same org as requester)
+// HR-only download of employee document files
 export const downloadDocument = async (req, res) => {
     try {
         const { employeeId, documentId } = req.params;
-
-        const isAdmin = req.user?.role === 'admin';
-        const isHr = !!req.employee?._id;
-        if (!isAdmin && !isHr) {
-            return res.status(403).json({ message: 'Access denied. Admin or HR only.' });
-        }
+        const inline = req.query.inline === '1' || req.query.inline === 'true';
 
         const employee = await Employee.findById(employeeId).select('organizationId documents');
         if (!employee) {
@@ -145,11 +149,18 @@ export const downloadDocument = async (req, res) => {
 
         let fileUrl;
         let downloadName;
+        let mimeType = null;
+        let document = null;
+        let legacyDoc = null;
 
         const embedded = employee.documents?.id?.(documentId);
         if (embedded) {
-            fileUrl = embedded.filePath;
-            downloadName = embedded.originalName || embedded.fileName || path.basename(embedded.filePath || '');
+            legacyDoc = {
+                fileUrl: embedded.filePath,
+                fileName: embedded.originalName || embedded.fileName || 'document',
+            };
+            fileUrl = legacyDoc.fileUrl;
+            downloadName = legacyDoc.fileName;
         } else {
             const canonQuery = {
                 _id: documentId,
@@ -158,39 +169,69 @@ export const downloadDocument = async (req, res) => {
             if (employee.organizationId) {
                 canonQuery.organizationId = employee.organizationId;
             }
-            const canon = await Document.findOne(canonQuery).lean();
-            if (!canon) {
+            document = await Document.findOne(canonQuery).lean();
+            if (!document) {
                 return res.status(404).json({ message: 'Document not found' });
             }
-            fileUrl = canon.fileUrl;
-            downloadName = canon.fileName || path.basename(canon.fileUrl || '');
+            fileUrl = document.fileUrl;
+            downloadName = document.fileName || path.basename(document.fileUrl || '');
+            mimeType = document.mimeType || null;
         }
 
         if (!fileUrl) {
             return res.status(404).json({ message: 'File path not found for document' });
         }
 
-        const basename = path.basename(fileUrl);
-        let filePath = path.join(__dirname, '..', '..', 'uploads', 'documents', basename);
-        if (!fs.existsSync(filePath)) {
-            const legacyPath = path.join(process.cwd(), 'public', fileUrl);
-            if (fs.existsSync(legacyPath)) filePath = legacyPath;
+        if (!mimeType && downloadName?.toLowerCase().endsWith('.pdf')) {
+            mimeType = 'application/pdf';
         }
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'File not found on server', path: fileUrl });
-        }
-        res.download(filePath, downloadName, (err) => {
-            if (err) {
-                logger.error('Error downloading file', { error: err.message, stack: err.stack, filePath });
-                res.status(500).json({ message: 'Error downloading file' });
-            }
+
+        const loadBinary = (id) => Document.findById(id).select('+fileBinary').lean();
+        let resolved = await resolveDocumentFileContent({
+            document,
+            legacyDoc,
+            fileUrl,
+            loadBinary,
         });
 
+        let fileBuffer = resolved?.buffer;
+        if (!fileBuffer?.length && document?._id && fileUrl) {
+            fileBuffer = await backfillDocumentBinaryFromDisk(document._id, fileUrl);
+            if (fileBuffer?.length) {
+                resolved = { buffer: fileBuffer, source: 'database-repair' };
+            }
+        }
+        if (!fileBuffer?.length && document?._id && fileUrl) {
+            fileBuffer = await persistDocumentBinary(document._id, fileUrl);
+            if (fileBuffer?.length) {
+                resolved = { buffer: fileBuffer, source: 'disk-repair' };
+            }
+        }
+
+        if (!resolved && !fileBuffer) {
+            return res.status(404).json({
+                success: false,
+                message: 'File not found',
+                fileUrl,
+            });
+        }
+
+        sendDocumentFile(res, {
+            filePath: resolved?.filePath,
+            buffer: fileBuffer || resolved?.buffer,
+            downloadName,
+            mimeType,
+            inline,
+        });
     } catch (error) {
-        logger.error('Error downloading document', { error: error.message, stack: error.stack, documentId: req.params.documentId });
-        res.status(500).json({ 
+        logger.error('Error downloading document', {
+            error: error.message,
+            stack: error.stack,
+            documentId: req.params.documentId,
+        });
+        res.status(500).json({
             message: 'Failed to download document',
-            error: error.message
+            error: error.message,
         });
     }
 };
