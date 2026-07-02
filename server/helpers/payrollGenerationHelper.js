@@ -5,6 +5,11 @@ import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
 import { computeRegimeIncomeTaxCumulative } from './tdsCumulativeHelper.js';
+import { getCachedEffectiveTimezone } from './orgContextCache.js';
+import { getDateKeyInTimezone } from './timezoneHelper.js';
+
+/** Default overtime multiplier when salary structure does not specify a rate. */
+export const DEFAULT_OVERTIME_RATE = 1.5;
 
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
@@ -147,12 +152,11 @@ function getDayName(date) {
     return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][date.getDay()];
 }
 
-function dateKey(date) {
-    // Stable day key independent of time (local timezone).
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+function createDayKeyFn(timezone) {
+    return (date) => getDateKeyInTimezone(date, timezone);
 }
 
-function buildIsWorkingDayFn(calendar) {
+export function buildIsWorkingDayFn(calendar, dayKey) {
     if (!calendar) return null;
 
     const holidayDates = new Set(
@@ -160,7 +164,7 @@ function buildIsWorkingDayFn(calendar) {
             .filter((h) => h && h.isActive !== false)
             .map((h) => {
                 const hd = new Date(h.date);
-                return Number.isNaN(hd.getTime()) ? null : dateKey(hd);
+                return Number.isNaN(hd.getTime()) ? null : dayKey(hd);
             })
             .filter(Boolean)
     );
@@ -173,7 +177,7 @@ function buildIsWorkingDayFn(calendar) {
                 : date.getDay() !== 0 && date.getDay() !== 6; // fallback: Mon–Fri
 
         if (!isWorkingByWeek) return false;
-        return !holidayDates.has(dateKey(date));
+        return !holidayDates.has(dayKey(date));
     };
 }
 
@@ -234,7 +238,7 @@ function attendanceHoursWorked(record) {
  * Paid-day credit (0–1) from one attendance row using worked hours.
  * present/loggedOut with 0 effective and 0 gross hours → 0 (treat as no paid time).
  */
-function attendanceDayCredit(record) {
+export function attendanceDayCredit(record) {
     const status = (record.status || '').toLowerCase();
     const h = attendanceHoursWorked(record);
     if (h <= 0) return 0;
@@ -253,7 +257,7 @@ function isWorkingDayForPayroll(day, isWorkingDayFn) {
  * Map dateKey → paid leave credit (0–1) for approved non–loss-of-pay leaves overlapping [effStart, effEnd].
  * Half-day leave: 0.5 on the first overlapping working day only.
  */
-function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn) {
+export function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn, dayKey) {
     const paidLeaveByDay = new Map();
     const rangeStart = startOfDay(new Date(effStart));
     const rangeEnd = startOfDay(new Date(effEnd));
@@ -273,7 +277,7 @@ function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn
             for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
                 const day = new Date(d);
                 if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
-                const key = dateKey(day);
+                const key = dayKey(day);
                 paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 0.5));
                 break;
             }
@@ -283,7 +287,7 @@ function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn
         for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
             const day = new Date(d);
             if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
-            const key = dateKey(day);
+            const key = dayKey(day);
             paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 1));
         }
     }
@@ -292,7 +296,7 @@ function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn
 }
 
 /** Sum daily credits over working days in [walkStart, walkEnd]: each day min(1, attendance + paid leave). */
-function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, isWorkingDayFn) {
+export function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, isWorkingDayFn, dayKey) {
     let total = 0;
     const a = startOfDay(new Date(walkStart));
     const b = startOfDay(new Date(walkEnd));
@@ -300,12 +304,29 @@ function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, i
     for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
         const day = new Date(d);
         if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
-        const key = dateKey(day);
+        const key = dayKey(day);
         const att = attByDay.get(key) || 0;
         const lev = paidLeaveByDay.get(key) || 0;
         total += Math.min(1, att + lev);
     }
     return total;
+}
+
+/** Pure proration math used by payroll generation (exported for unit tests). */
+export function computePayrollProration({
+    fullGross,
+    fullMonthCalDays,
+    serviceWindowCalDays,
+    attendanceWorkingDays,
+    effectivePresent
+}) {
+    const unpaidWorkingDays = Math.max(0, attendanceWorkingDays - effectivePresent);
+    const paidPayrollDays = Math.max(0, serviceWindowCalDays - unpaidWorkingDays);
+    const effectiveGross =
+        fullMonthCalDays > 0
+            ? Math.round((fullGross * paidPayrollDays) / fullMonthCalDays)
+            : 0;
+    return { unpaidWorkingDays, paidPayrollDays, effectiveGross };
 }
 
 /**
@@ -407,6 +428,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     }
 
     const orgId = emp.organizationId || organizationId;
+    const orgTimezone = await getCachedEffectiveTimezone(orgId);
+    const dayKey = createDayKeyFn(orgTimezone);
+
     const calendarKey = `${String(orgId)}-${String(yearNum)}`;
     let calendar = calendarCache.get(calendarKey);
     if (!calendar) {
@@ -414,7 +438,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         // Cache null too (so we don't keep querying if calendar doesn't exist).
         calendarCache.set(calendarKey, calendar || null);
     }
-    const isWorkingDayFn = buildIsWorkingDayFn(calendar);
+    const isWorkingDayFn = buildIsWorkingDayFn(calendar, dayKey);
 
     // Working-day metric for attendance dashboards/reports (excludes weekends/holidays).
     const attendanceWorkingDays = Math.max(0, countWorkingDaysInclusive(effStart, effEnd, isWorkingDayFn));
@@ -446,7 +470,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     for (const r of attendanceRecordsForCounting) {
         const d = r?.date ? new Date(r.date) : null;
         if (!d || Number.isNaN(d.getTime())) continue;
-        const key = dateKey(d);
+        const key = r.attendanceDateKey || dayKey(d);
         const c = attendanceDayCredit(r);
         attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
     }
@@ -469,13 +493,10 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             const overlapWorkingDays = leaveWorkingDaysInRange(lv, effStart, effEnd, isWorkingDayFn);
             if (!overlapWorkingDays) return null;
 
-            // Half-day leave: the leave document marks it with `isHalfDay` and `duration: 0.5`.
-            // `leaveWorkingDaysInRange()` counts whole working days, so we convert it to 0.5 here.
+            // Half-day leave: single 0.5-day event on the first overlapping working day (matches pay credit).
             let days = overlapWorkingDays;
             if (lv?.isHalfDay === true || Number(lv?.duration) === 0.5) {
-                // `leaveWorkingDaysInRange()` counts whole working days (1 per day).
-                // Half-day leaves should contribute half of a day per overlapped working day.
-                days = overlapWorkingDays * 0.5;
+                days = 0.5;
             }
             const isLossOfPay = (lv.leaveType || '').toString().toLowerCase() === 'loss_of_pay';
             return {
@@ -487,18 +508,19 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         })
         .filter(Boolean);
 
-    const paidLeaveByDay = buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn);
+    const paidLeaveByDay = buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn, dayKey);
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
-    const effectivePresent = sumEffectivePresentDays(effStart, effEnd, attByDay, paidLeaveByDay, isWorkingDayFn);
+    const effectivePresent = sumEffectivePresentDays(effStart, effEnd, attByDay, paidLeaveByDay, isWorkingDayFn, dayKey);
     const fullGross = emp.salary || 0;
     // Weekend/holiday days are paid by default under calendar-day proration.
     // Only missing paid credit on working days reduces monthly payout.
-    const unpaidWorkingDays = Math.max(0, attendanceWorkingDays - effectivePresent);
-    const paidPayrollDays = Math.max(0, serviceWindowCalDays - unpaidWorkingDays);
-    const effectiveGross =
-        fullMonthCalDays > 0
-            ? Math.round((fullGross * paidPayrollDays) / fullMonthCalDays)
-            : 0;
+    const { unpaidWorkingDays, paidPayrollDays, effectiveGross } = computePayrollProration({
+        fullGross,
+        fullMonthCalDays,
+        serviceWindowCalDays,
+        attendanceWorkingDays,
+        effectivePresent
+    });
     const salaryStructure = await resolveSalaryStructureForEmployee(emp, orgId);
     // Overtime / "one day" value: always monthly gross ÷ full month calendar days, not ÷ (join→term) window.
     const perDayRate = fullGross / fullMonthCalDays;
@@ -517,7 +539,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
                 asNumber(overtimeRules.maxHoursPerMonth, asNumber(totalOvertimeHours, 0))
             ))
             : 0;
-        const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, 1.5);
+        const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, DEFAULT_OVERTIME_RATE);
         const overtimePay = overtimeEnabled ? Math.round(cappedOvertimeHours * overtimeRatePerHour) : 0;
 
         const basicWage = computeConfiguredComponent(salaryStructure?.earnings?.basicWage, effectiveGross);
@@ -578,7 +600,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         const formula = computeEarningsFromGross(effectiveGross);
         // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
         basicSalary = formula.basicWage;
-        const overtimeRatePerHour = perDayRate / 8;
+        const overtimeRatePerHour = (perDayRate / 8) * DEFAULT_OVERTIME_RATE;
         const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
 
         earnings = {
