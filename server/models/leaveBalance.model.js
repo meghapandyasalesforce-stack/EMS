@@ -129,6 +129,17 @@ const leaveBalanceSchema = new mongoose.Schema({
 
     /** Employee-level leave wallet (shared pool) — not tied to any leave type */
     employeeLeaveSummary: {
+        /** Migrated opening balance — permanent historical starting point (first manual correction) */
+        openingLeaveBalance: {
+            active: { type: Boolean, default: false },
+            balance: Number,
+            openingYear: Number,
+            openingMonth: Number,
+            reason: String,
+            setBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            setAt: Date,
+        },
+        /** Running correction anchor — adjusts balance from a month forward without replacing opening */
         manualOverride: {
             active: { type: Boolean, default: false },
             available: Number,

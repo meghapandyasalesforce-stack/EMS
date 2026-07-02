@@ -10,7 +10,7 @@ import {
     buildGeneratedPayrollPayload,
     isFinalGenerationAllowedForPeriod
 } from "../../helpers/payrollGenerationHelper.js";
-import { aggregatePayrollPeriod } from "../../helpers/payrollAggregationHelper.js";
+import { aggregatePayrollPeriod, attachPayrollRecordIds, isValidMongoObjectId } from "../../helpers/payrollAggregationHelper.js";
 
 const MONTH_ORDER = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
@@ -82,13 +82,13 @@ function normalizePayrollForDisplay(payroll) {
     earnings.totalEarnings = earningsFields.reduce((sum, key) => sum + (Number(earnings[key]) || 0), 0);
     deductions.total = deductionFields.reduce((sum, key) => sum + (Number(deductions[key]) || 0), 0);
 
-    return {
+    return attachPayrollRecordIds({
         ...payroll,
         earnings,
         deductions,
         ctc: earnings.totalEarnings,
         inHandSalary: earnings.totalEarnings - deductions.total
-    };
+    });
 }
 
 function pickAllowedCreateFields(payload = {}) {
@@ -884,6 +884,10 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
 export const getPayrollById = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!isValidMongoObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid payroll ID' });
+        }
+
         const { addOrganizationFilter } = await import('../../helpers/organizationHelper.js');
 
         const query = addOrganizationFilter(req, { _id: id });

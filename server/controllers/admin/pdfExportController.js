@@ -5,6 +5,7 @@
 
 import { generatePayrollPDF, generateAttendancePDF, generateReportPDF } from '../../helpers/pdfGenerator.js';
 import { enrichAttendanceMetricsForPayslip } from '../../helpers/payrollGenerationHelper.js';
+import { aggregatePayrollPeriod, isValidMongoObjectId } from '../../helpers/payrollAggregationHelper.js';
 import Payroll from '../../models/payroll.model.js';
 import Employee from '../../models/employee.model.js';
 import Attendance from '../../models/attendance.model.js';
@@ -28,6 +29,10 @@ const __dirname = path.dirname(__filename);
 export const exportPayrollPDF = asyncHandler(async (req, res) => {
     try {
         const { id } = req.params;
+        if (!isValidMongoObjectId(id)) {
+            return sendError(res, 'Invalid payroll ID', 400, 'INVALID_PAYROLL_ID');
+        }
+
         const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
         const payroll = await Payroll.findOne({ _id: id, ...(organizationId && { organizationId }) })
@@ -81,9 +86,9 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
         }
 
         const employeeData = {
-            name: emp.name,
+            name: emp.name || 'Employee',
             lastName: emp.lastName || '',
-            employeeId: emp.employeeId,
+            employeeId: emp.employeeId || emp._id?.toString?.() || 'N/A',
             email: emp.email,
             jobTitle: emp.jobTitle,
             department: emp.department,
@@ -99,14 +104,28 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             taxRegime: fin.taxRegime || emp.taxRegime || ''
         };
 
+        const payrollObj = payroll.toObject ? payroll.toObject() : payroll;
+        const adjustmentsQuery = {
+            employeeId: emp._id,
+            month: payroll.month,
+            year: payroll.year,
+            type: 'off_cycle',
+            isVisible: true,
+            status: { $in: ['Processed', 'Paid'] },
+        };
+        if (organizationId) adjustmentsQuery.organizationId = organizationId;
+
+        const adjustmentDocs = await Payroll.find(adjustmentsQuery).lean();
+        const aggregated = aggregatePayrollPeriod([payrollObj, ...adjustmentDocs]);
+
         const payrollData = {
             month: payroll.month,
             year: payroll.year,
             basicSalary: payroll.basicSalary,
-            earnings: payroll.earnings,
-            deductions: payroll.deductions,
-            ctc: payroll.ctc,
-            inHandSalary: payroll.inHandSalary,
+            earnings: payrollObj.earnings || {},
+            deductions: payrollObj.deductions || {},
+            ctc: aggregated.final.earningsTotal,
+            inHandSalary: aggregated.final.net,
             status: payroll.status,
             processedDate: payroll.processedDate,
             paidDate: payroll.paidDate,
@@ -116,8 +135,10 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             presentDays: payroll.presentDays,
             unpaidLeave: payroll.unpaidLeave,
             cumulativeEarnings: payroll.cumulativeEarnings,
-            cumulativeDeductions: payroll.cumulativeDeductions
+            cumulativeDeductions: payroll.cumulativeDeductions,
         };
+        payrollData.earnings = { ...(payrollData.earnings || {}), totalEarnings: aggregated.final.earningsTotal };
+        payrollData.deductions = { ...(payrollData.deductions || {}), total: aggregated.final.deductionsTotal };
 
         const attendanceMetrics = await enrichAttendanceMetricsForPayslip(payroll, organizationId);
         payrollData.workingDays = attendanceMetrics.workingDays ?? payrollData.workingDays;
@@ -135,7 +156,13 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             stack: error.stack,
             payrollId: req.params.id
         });
-        return sendError(res, 'Failed to generate payroll PDF', 500, 'PDF_GENERATION_ERROR');
+        return sendError(
+            res,
+            error.message || 'Failed to generate payroll PDF',
+            500,
+            'PDF_GENERATION_ERROR',
+            process.env.NODE_ENV === 'development' ? error.message : undefined
+        );
     }
 });
 

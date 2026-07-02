@@ -2,7 +2,7 @@ import Payroll from "../../models/payroll.model.js";
 import logger from "../../helpers/logger.js";
 import { generatePayrollPDF } from "../../helpers/pdfGenerator.js";
 import { pickDisplayPayroll, enrichAttendanceMetricsForPayslip } from "../../helpers/payrollGenerationHelper.js";
-import { aggregatePayrollPeriod } from "../../helpers/payrollAggregationHelper.js";
+import { aggregatePayrollPeriod, attachPayrollRecordIds, isValidMongoObjectId } from "../../helpers/payrollAggregationHelper.js";
 import { employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
 import fs from 'fs';
 import path from 'path';
@@ -35,31 +35,30 @@ function isPreviousPayrollPeriod(payroll) {
     return getPayrollPeriodRank(payroll?.month, payroll?.year) < currentRank;
 }
 
-function canEmployeeViewPayroll(payroll) {
+function isEmployeeMonthlyPayroll(payroll) {
     if (!payroll) return false;
-    if (payroll.isVisible !== true) return false;
+    if (payroll.isVisible === false) return false;
     if (payroll.type && payroll.type !== 'monthly') return false;
-    if (payroll.isProvisional === true || payroll.generationType === 'preview') return false;
     return true;
 }
 
 function canEmployeeDownloadPayslip(payroll) {
-    if (!payroll) return false;
+    if (!isEmployeeMonthlyPayroll(payroll)) return false;
 
-    // Paid payrolls — allow download when published (matches employee UI).
-    if (payroll.status === 'Paid' && payroll.isVisible !== false) {
-        return true;
+    // Paid published payrolls — any month (matches employee UI).
+    if (payroll.status === 'Paid') return true;
+
+    // Provisional / preview rows are visible for estimates but not downloadable.
+    if (payroll.isProvisional === true || payroll.generationType === 'preview') {
+        return false;
     }
 
-    // Allow previous month(s) once payroll is finalized and published.
-    const isFinalMonthly =
-        (!payroll.type || payroll.type === 'monthly') &&
-        payroll.isProvisional !== true &&
-        payroll.generationType !== 'preview' &&
-        payroll.isVisible === true &&
-        (payroll.status === 'Processed' || payroll.status === 'Paid');
+    // Finalized previous months (Processed or Paid).
+    if (payroll.status === 'Processed' || payroll.status === 'Paid') {
+        return isPreviousPayrollPeriod(payroll);
+    }
 
-    return isFinalMonthly && isPreviousPayrollPeriod(payroll);
+    return false;
 }
 
 function normalizePayrollForDisplay(payroll) {
@@ -110,13 +109,13 @@ function normalizePayrollForDisplay(payroll) {
     earnings.totalEarnings = earningsFields.reduce((sum, key) => sum + (Number(earnings[key]) || 0), 0);
     deductions.total = deductionFields.reduce((sum, key) => sum + (Number(deductions[key]) || 0), 0);
 
-    return {
+    return attachPayrollRecordIds({
         ...payroll,
         earnings,
         deductions,
         ctc: earnings.totalEarnings,
         inHandSalary: earnings.totalEarnings - deductions.total
-    };
+    });
 }
 
 // Get employee's payroll history (1 year = 12 months, sorted Jan→Dec within year, newest first)
@@ -193,6 +192,10 @@ export const getPayrollDetails = async (req, res) => {
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
         const { payrollId } = req.params;
 
+        if (!isValidMongoObjectId(payrollId)) {
+            return res.status(400).json({ message: 'Invalid payroll ID' });
+        }
+
         const query = { _id: payrollId, employeeId, isVisible: true };
         if (organizationId) query.organizationId = organizationId;
 
@@ -204,7 +207,7 @@ export const getPayrollDetails = async (req, res) => {
             return res.status(404).json({ message: 'Payroll not found' });
         }
 
-        if (!canEmployeeViewPayroll(payroll)) {
+        if (!isEmployeeMonthlyPayroll(payroll)) {
             return res.status(403).json({
                 message: 'Payroll details are not available for this record.',
             });
@@ -221,7 +224,11 @@ export const getPayrollDetails = async (req, res) => {
         if (organizationId) adjustmentsQuery.organizationId = organizationId;
 
         const adjustmentDocs = await Payroll.find(adjustmentsQuery).lean();
-        const aggregated = aggregatePayrollPeriod([payroll.toObject(), ...adjustmentDocs]);
+        const aggregated =
+            aggregatePayrollPeriod([payroll.toObject(), ...adjustmentDocs]) || {
+                final: { earningsTotal: 0, deductionsTotal: 0, net: 0 },
+                adjustments: [],
+            };
 
         const normalizedPayroll = normalizePayrollForDisplay(payroll.toObject());
         normalizedPayroll.earnings.totalEarnings = aggregated.final.earningsTotal;
@@ -243,6 +250,10 @@ export const downloadPayslip = async (req, res) => {
         const employeeId = req.employee._id;
         const { payrollId } = req.params;
 
+        if (!isValidMongoObjectId(payrollId)) {
+            return res.status(400).json({ message: 'Invalid payroll ID' });
+        }
+
         const organizationId = req.employee?.organizationId || req.organizationId || req.user?.organizationId;
         const query = { _id: payrollId, employeeId, isVisible: true };
         if (organizationId) query.organizationId = organizationId;
@@ -257,11 +268,14 @@ export const downloadPayslip = async (req, res) => {
 
         if (!canEmployeeDownloadPayslip(payroll)) {
             return res.status(403).json({
-                message: 'Payslip download is available for paid payrolls or finalized previous months.'
+                message: 'Payslip download is available for paid payrolls or finalized previous months.',
             });
         }
 
         const emp = payroll.employeeId;
+        if (!emp) {
+            return res.status(404).json({ message: 'Employee record not found for this payroll' });
+        }
         const fin = emp.financialDetails || {};
 
         // Organization data for header: logo (left), full company name + email (right)
@@ -307,9 +321,9 @@ export const downloadPayslip = async (req, res) => {
 
         // Employee data including bank details and optional Mindstix-style fields (PAN, EPF UAN, Gender, Tax Regime)
         const employeeData = {
-            name: emp.name,
+            name: emp.name || 'Employee',
             lastName: emp.lastName || '',
-            employeeId: emp.employeeId,
+            employeeId: emp.employeeId || emp._id?.toString?.() || 'N/A',
             email: emp.email,
             jobTitle: emp.jobTitle,
             department: emp.department,
@@ -337,14 +351,19 @@ export const downloadPayslip = async (req, res) => {
         if (organizationId) adjustmentsQuery.organizationId = organizationId;
 
         const adjustmentDocs = await Payroll.find(adjustmentsQuery).lean();
-        const aggregated = aggregatePayrollPeriod([payroll.toObject(), ...adjustmentDocs]);
+        const aggregated =
+            aggregatePayrollPeriod([payroll.toObject(), ...adjustmentDocs]) || {
+                final: { earningsTotal: 0, deductionsTotal: 0, net: 0 },
+                adjustments: [],
+            };
 
+        const payrollObj = payroll.toObject ? payroll.toObject() : payroll;
         const payrollData = {
             month: payroll.month,
             year: payroll.year,
             basicSalary: payroll.basicSalary,
-            earnings: payroll.earnings,
-            deductions: payroll.deductions,
+            earnings: payrollObj.earnings || {},
+            deductions: payrollObj.deductions || {},
             ctc: aggregated.final.earningsTotal,
             inHandSalary: aggregated.final.net,
             status: payroll.status,

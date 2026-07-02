@@ -280,23 +280,42 @@ const drawTableRow = (doc, x, y, width, label, value, isBold = false, drawLine =
  *   }
  * );
  */
-export const generatePayrollPDF = async (payrollData, employeeData, orgData = {}) => {
+export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgData = {}) => {
     const startTime = Date.now();
     const companyName = orgData?.name || 'Paarsiv';
 
     try {
         // Input validation
-        if (!payrollData || typeof payrollData !== 'object') {
+        if (!rawPayrollData || typeof rawPayrollData !== 'object') {
             throw new Error('Invalid payrollData: must be an object');
         }
 
-        if (!employeeData || typeof employeeData !== 'object') {
+        if (!rawEmployeeData || typeof rawEmployeeData !== 'object') {
             throw new Error('Invalid employeeData: must be an object');
         }
 
-        if (!employeeData.name || !employeeData.employeeId) {
-            throw new Error('Invalid employeeData: name and employeeId are required');
-        }
+        const employeeData = {
+            ...rawEmployeeData,
+            name: rawEmployeeData.name || rawEmployeeData.lastName || 'Employee',
+            lastName: rawEmployeeData.lastName || '',
+            employeeId:
+                rawEmployeeData.employeeId ||
+                rawEmployeeData._id?.toString?.() ||
+                rawEmployeeData.id?.toString?.() ||
+                'N/A',
+        };
+
+        const payrollData = {
+            ...rawPayrollData,
+            earnings:
+                rawPayrollData.earnings && typeof rawPayrollData.earnings === 'object'
+                    ? rawPayrollData.earnings.toObject?.() || { ...rawPayrollData.earnings }
+                    : {},
+            deductions:
+                rawPayrollData.deductions && typeof rawPayrollData.deductions === 'object'
+                    ? rawPayrollData.deductions.toObject?.() || { ...rawPayrollData.deductions }
+                    : {},
+        };
 
         // Initialize PDF document
         const doc = new jsPDF({

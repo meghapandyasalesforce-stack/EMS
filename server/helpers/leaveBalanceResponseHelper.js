@@ -112,13 +112,24 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         defaultYearlyEntitlement: DEFAULT_LEAVE_ENTITLEMENT_DAYS,
     };
 
+    const periodOpeningBalance = await leaveBalanceEngine.resolveEmployeeOpeningBalance(
+        employeeId,
+        resolvedOrganizationId
+    );
+
     const pooledAvailable =
         balance.$locals?.pooledAvailable ||
         (await leaveBalanceEngine.computePooledAvailableLeave(
             employee || { joiningDate: bounds.joiningDate, _id: employeeId },
             balanceObj.policy,
             resolvedOrganizationId,
-            asOfDate
+            asOfDate,
+            await leaveBalanceEngine.resolveEmployeeBalanceAnchor(
+                employeeId,
+                resolvedOrganizationId,
+                periodOpeningBalance
+            ),
+            periodOpeningBalance
         ));
 
     const pooledTypeSet = new Set(
@@ -256,6 +267,11 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         .filter((row) => pooledTypeSet.has(row.leaveType))
         .reduce((sum, row) => sum + (Number(row.usedDays ?? row.used) || 0), 0);
 
+    const isOpeningMonthView =
+        periodOpeningBalance?.active &&
+        viewYear === periodOpeningBalance.openingYear &&
+        viewMonth === Number(periodOpeningBalance.openingMonth);
+
     balanceObj.leaveSummary = {
         totalAvailableLeave: balanceObj.totalAvailableLeave,
         totalAccrued: roundLeaveDays(
@@ -267,7 +283,13 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         totalUsed: roundLeaveDays(
             viewPooledRow?.cumulativeUsed ?? pooledAvailable.lifetimeUsed ?? totalPooledUsed
         ),
-        totalCarriedForward: roundLeaveDays(pooledAvailable.yearOpeningBalance ?? 0),
+        totalCarriedForward: roundLeaveDays(
+            isOpeningMonthView
+                ? balanceObj.totalAvailableLeave
+                : viewPooledRow?.previousBalance > 0
+                  ? viewPooledRow.previousBalance
+                  : pooledAvailable.yearOpeningBalance ?? 0
+        ),
         totalPending: totalPendingPooled,
         earnedThisMonth: viewPooledRow?.credit ?? 0,
     };

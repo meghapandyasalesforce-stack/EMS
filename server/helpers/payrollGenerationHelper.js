@@ -3,6 +3,7 @@ import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
+import logger from './logger.js';
 import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
 import { computeRegimeIncomeTaxCumulative } from './tdsCumulativeHelper.js';
 
@@ -667,28 +668,36 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
     ) {
         return base;
     }
-    const empId = payroll.employeeId?._id || payroll.employeeId;
-    if (!empId) return base;
-    const emp = await Employee.findById(empId)
-        .select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
-        .lean();
-    if (!emp) return base;
-    const orgId = organizationId || emp.organizationId;
-    const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
-    const monthIndex = new Date(`${payroll.month} 1, ${yearNum}`).getMonth();
-    const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
-    endOfMonth.setHours(23, 59, 59, 999);
-    const payload = await buildGeneratedPayrollPayload({
-        emp,
-        month: payroll.month,
-        year: yearNum,
-        organizationId: orgId,
-        mode: 'final',
-        asOf: endOfMonth
-    });
-    return {
-        workingDays: payload.workingDays ?? base.workingDays,
-        presentDays: payload.presentDays ?? base.presentDays,
-        unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
-    };
+    try {
+        const empId = payroll.employeeId?._id || payroll.employeeId;
+        if (!empId) return base;
+        const emp = await Employee.findById(empId)
+            .select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
+            .lean();
+        if (!emp) return base;
+        const orgId = organizationId || emp.organizationId;
+        const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
+        const monthIndex = new Date(`${payroll.month} 1, ${yearNum}`).getMonth();
+        const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+        const payload = await buildGeneratedPayrollPayload({
+            emp,
+            month: payroll.month,
+            year: yearNum,
+            organizationId: orgId,
+            mode: 'final',
+            asOf: endOfMonth
+        });
+        return {
+            workingDays: payload.workingDays ?? base.workingDays,
+            presentDays: payload.presentDays ?? base.presentDays,
+            unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
+        };
+    } catch (error) {
+        logger.warn('Payslip attendance enrichment failed; using stored payroll metrics', {
+            error: error.message,
+            payrollId: payroll?._id,
+        });
+        return base;
+    }
 }
