@@ -12,6 +12,8 @@
   "INTERNAL_ERROR": "Internal server error",
   "MISSING_ORGANIZATION_ID": "Organization ID is required",
   "FILE_TOO_LARGE": "File size exceeds the maximum allowed limit",
-  "INVALID_ID": "Invalid ID format"
+  "INVALID_ID": "Invalid ID format",
+  "INVALID_PAYROLL_ID": "Invalid payroll ID",
+  "PDF_GENERATION_ERROR": "Failed to generate payroll PDF"
 }
 

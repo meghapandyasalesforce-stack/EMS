@@ -95,12 +95,21 @@ class LeaveBalanceEngine {
                 policy._id
             );
 
+            const periodOpeningBalance = await this.resolveEmployeeOpeningBalance(
+                employeeId,
+                organizationId
+            );
             let pooledAvailable = await this.computePooledAvailableLeave(
                 employee,
                 policy,
                 organizationId,
                 asOfDate,
-                await this.resolveEmployeeBalanceAnchor(employeeId, organizationId)
+                await this.resolveEmployeeBalanceAnchor(
+                    employeeId,
+                    organizationId,
+                    periodOpeningBalance
+                ),
+                periodOpeningBalance
             );
 
             // Calculate balances for each enabled leave type
@@ -376,11 +385,31 @@ class LeaveBalanceEngine {
         policy,
         organizationId,
         asOfDate = new Date(),
-        balanceAnchor = null
+        balanceAnchor = null,
+        periodOpeningBalance = null
     ) {
         const joiningDate = getEffectiveJoiningDate(employee);
         const employeeId = employee._id;
-        const fromDate = new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
+
+        let accrualStartYear = joiningDate.getFullYear();
+        let accrualStartMonthIndex = joiningDate.getMonth();
+        if (periodOpeningBalance?.active) {
+            accrualStartYear = periodOpeningBalance.openingYear;
+            accrualStartMonthIndex = Number(periodOpeningBalance.openingMonth) - 1;
+        }
+
+        logger.info('[OpeningLeaveBalance] computePooledAvailableLeave', {
+            employeeId: String(employeeId),
+            organizationId: organizationId ? String(organizationId) : null,
+            periodOpeningBalance: periodOpeningBalance?.active ? periodOpeningBalance : null,
+            accrualStartYear,
+            accrualStartMonth: accrualStartMonthIndex + 1,
+            endYear: asOfDate.getFullYear(),
+            endMonth: asOfDate.getMonth() + 1,
+            employeeJoiningDate: joiningDate.toISOString(),
+        });
+
+        const fromDate = new Date(accrualStartYear, accrualStartMonthIndex, 1);
         const toDate = this.endOfMonthDate(asOfDate.getFullYear(), asOfDate.getMonth());
         const pooledTypes = this.getPooledLeaveTypeConfigs(policy);
 
@@ -401,22 +430,179 @@ class LeaveBalanceEngine {
             }
         }
 
-        return rollLeaveBalanceThroughPeriod({
-            joinYear: joiningDate.getFullYear(),
-            joinMonthIndex: joiningDate.getMonth(),
+        const rolled = rollLeaveBalanceThroughPeriod({
+            joinYear: accrualStartYear,
+            joinMonthIndex: accrualStartMonthIndex,
             endYear: asOfDate.getFullYear(),
             endMonthIndex: asOfDate.getMonth(),
             monthlyRate: DEFAULT_MONTHLY_LEAVE_DAYS,
             getUsedForMonth: (year, monthIndex) =>
                 combinedUsedByMonth.get(`${year}-${monthIndex}`) || 0,
             balanceAnchor,
+            periodOpeningBalance: periodOpeningBalance?.active ? periodOpeningBalance : null,
         });
+
+        const firstMonthLedger =
+            rolled.ledgerByYear?.[accrualStartYear]?.find(
+                (row) => row.month === accrualStartMonthIndex + 1
+            ) ?? rolled.ledgerByYear?.[accrualStartYear]?.[0];
+
+        logger.info('[OpeningLeaveBalance] computePooledAvailableLeave result', {
+            employeeId: String(employeeId),
+            calculationStartYear: accrualStartYear,
+            calculationStartMonth: accrualStartMonthIndex + 1,
+            firstMonthClosingBalance: firstMonthLedger?.available ?? null,
+            finalAvailableBalance: rolled.available,
+        });
+
+        return rolled;
     }
 
     /**
-     * Active manual balance anchor — rolling accrual continues from this month/year forward.
+     * Migrated opening leave balance — permanent historical starting point for rolled accrual.
+     * Falls back to earliest stored manual correction when opening was not yet persisted (legacy data).
      */
-    async resolveEmployeeBalanceAnchor(employeeId, organizationId) {
+    async resolveEmployeeOpeningBalance(employeeId, organizationId) {
+        const docs = await LeaveBalance.find({
+            organizationId,
+            employee: employeeId,
+            'employeeLeaveSummary.openingLeaveBalance.active': true,
+        })
+            .select('_id year organizationId employeeLeaveSummary')
+            .lean();
+
+        let bestPersisted = null;
+        for (const doc of docs) {
+            const opening = doc.employeeLeaveSummary?.openingLeaveBalance;
+            if (!opening?.active) continue;
+
+            const balance =
+                opening.balance != null && !Number.isNaN(Number(opening.balance))
+                    ? roundLeaveDays(Number(opening.balance))
+                    : null;
+            if (balance == null) continue;
+
+            const openingYear = Number(opening.openingYear ?? doc.year);
+            const openingMonth = Number(opening.openingMonth ?? 1);
+            if (!Number.isInteger(openingYear) || !Number.isInteger(openingMonth)) continue;
+
+            const sortKey = openingYear * 12 + (openingMonth - 1);
+            if (
+                !bestPersisted ||
+                sortKey < bestPersisted.sortKey ||
+                (sortKey === bestPersisted.sortKey &&
+                    String(doc._id) < String(bestPersisted.documentId))
+            ) {
+                bestPersisted = {
+                    active: true,
+                    balance,
+                    openingYear,
+                    openingMonth,
+                    documentId: doc._id,
+                    source: 'openingLeaveBalance',
+                    sortKey,
+                };
+            }
+        }
+
+        if (bestPersisted) {
+            const { sortKey, ...resolved } = bestPersisted;
+
+            logger.info('[OpeningLeaveBalance] loaded', {
+                employeeId: String(employeeId),
+                organizationId: organizationId ? String(organizationId) : null,
+                source: resolved.source,
+                documentId: String(resolved.documentId),
+                openingLeaveBalance: {
+                    active: resolved.active,
+                    balance: resolved.balance,
+                    openingYear: resolved.openingYear,
+                    openingMonth: resolved.openingMonth,
+                },
+            });
+
+            return resolved;
+        }
+
+        const legacyDocs = await LeaveBalance.find({
+            organizationId,
+            employee: employeeId,
+        })
+            .select('_id year employeeLeaveSummary')
+            .lean();
+
+        let legacyChoice = null;
+        for (const doc of legacyDocs) {
+            const mo = doc.employeeLeaveSummary?.manualOverride;
+            if (mo?.available == null || Number.isNaN(Number(mo.available))) continue;
+
+            const openingYear = Number(mo.anchorYear ?? doc.year);
+            const openingMonth = Number(mo.anchorMonth ?? 1);
+            if (!Number.isInteger(openingYear) || !Number.isInteger(openingMonth)) continue;
+
+            const sortKey = openingYear * 12 + (openingMonth - 1);
+            if (
+                !legacyChoice ||
+                sortKey < legacyChoice.sortKey ||
+                (sortKey === legacyChoice.sortKey &&
+                    (mo.adjustedAt ? new Date(mo.adjustedAt).getTime() : 0) <
+                        legacyChoice.adjustedAt)
+            ) {
+                legacyChoice = {
+                    active: true,
+                    balance: roundLeaveDays(Number(mo.available)),
+                    openingYear,
+                    openingMonth,
+                    documentId: doc._id,
+                    sortKey,
+                    adjustedAt: mo.adjustedAt ? new Date(mo.adjustedAt).getTime() : 0,
+                    source: 'legacyManualOverride',
+                };
+            }
+        }
+
+        if (!legacyChoice) {
+            logger.info('[OpeningLeaveBalance] loaded', {
+                employeeId: String(employeeId),
+                organizationId: organizationId ? String(organizationId) : null,
+                source: null,
+                openingLeaveBalance: null,
+            });
+            return null;
+        }
+
+        const { sortKey, adjustedAt, ...opening } = legacyChoice;
+
+        logger.info('[OpeningLeaveBalance] loaded', {
+            employeeId: String(employeeId),
+            organizationId: organizationId ? String(organizationId) : null,
+            source: opening.source,
+            documentId: String(opening.documentId),
+            openingLeaveBalance: {
+                active: opening.active,
+                balance: opening.balance,
+                openingYear: opening.openingYear,
+                openingMonth: opening.openingMonth,
+            },
+        });
+
+        return opening;
+    }
+
+    /**
+     * Active manual balance anchor — snaps rolling accrual at a correction month after the opening.
+     * When an Opening Leave Balance exists, anchors at or before the opening month are ignored so
+     * re-editing the opening month does not replace later adjustment anchors (e.g. July 2026).
+     */
+    async resolveEmployeeBalanceAnchor(employeeId, organizationId, periodOpeningBalance = null) {
+        const opening =
+            periodOpeningBalance ??
+            (await this.resolveEmployeeOpeningBalance(employeeId, organizationId));
+        const openingSortKey =
+            opening?.active && opening.openingYear != null && opening.openingMonth != null
+                ? opening.openingYear * 12 + (Number(opening.openingMonth) - 1)
+                : null;
+
         const docs = await LeaveBalance.find({
             organizationId,
             employee: employeeId,
@@ -428,6 +614,7 @@ class LeaveBalanceEngine {
         logger.info('resolveEmployeeBalanceAnchor query', {
             employeeId: String(employeeId),
             organizationId: organizationId ? String(organizationId) : null,
+            openingSortKey,
             matchedDocuments: docs.map((doc) => ({
                 documentId: String(doc._id),
                 year: doc.year,
@@ -451,9 +638,18 @@ class LeaveBalanceEngine {
             const anchorMonth = Number(mo.anchorMonth ?? 1);
             if (!Number.isInteger(anchorYear) || !Number.isInteger(anchorMonth)) continue;
 
+            const anchorSortKey = anchorYear * 12 + (anchorMonth - 1);
+            if (openingSortKey != null && anchorSortKey <= openingSortKey) {
+                continue;
+            }
+
             const adjustedAt = mo.adjustedAt ? new Date(mo.adjustedAt).getTime() : 0;
-            if (!chosen || adjustedAt >= chosen.adjustedAt) {
-                chosen = { anchorYear, anchorMonth, anchorBalance, adjustedAt };
+            if (
+                !chosen ||
+                anchorSortKey > chosen.anchorSortKey ||
+                (anchorSortKey === chosen.anchorSortKey && adjustedAt >= chosen.adjustedAt)
+            ) {
+                chosen = { anchorYear, anchorMonth, anchorBalance, adjustedAt, anchorSortKey };
                 chosenDocumentId = doc._id;
             }
         }
@@ -781,13 +977,22 @@ class LeaveBalanceEngine {
         const asOfDec31 = new Date(year, 11, 31, 23, 59, 59, 999);
 
         if (this.usesStandardMonthlyBalanceRules(effectiveConfig)) {
-            const balanceAnchor = await this.resolveEmployeeBalanceAnchor(employeeId, organizationId);
+            const periodOpeningBalance = await this.resolveEmployeeOpeningBalance(
+                employeeId,
+                organizationId
+            );
+            const balanceAnchor = await this.resolveEmployeeBalanceAnchor(
+                employeeId,
+                organizationId,
+                periodOpeningBalance
+            );
             const pooled = await this.computePooledAvailableLeave(
                 employee,
                 policy,
                 organizationId,
                 asOfDec31,
-                balanceAnchor
+                balanceAnchor,
+                periodOpeningBalance
             );
             const closing = Math.max(0, roundLeaveDays(pooled.available ?? 0));
             cache.set(cacheKey, closing);

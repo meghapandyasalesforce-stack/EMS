@@ -196,8 +196,13 @@ export function applyMonthlyLeaveBalanceRules({
 }
 
 /**
- * Roll leave balance from join month through end month (cross-year, no reset).
+ * Roll leave balance from accrual start month through end month (cross-year, no reset).
  * Closing = Previous closing + monthlyRate − used (approved leave only).
+ *
+ * @param {object} [params.periodOpeningBalance] - Migrated opening balance at openingYear/openingMonth
+ * @param {number} params.periodOpeningBalance.openingYear
+ * @param {number} params.periodOpeningBalance.openingMonth - 1-12
+ * @param {number} params.periodOpeningBalance.balance
  */
 export function rollLeaveBalanceThroughPeriod({
     joinYear,
@@ -208,6 +213,7 @@ export function rollLeaveBalanceThroughPeriod({
     getUsedForMonth = () => 0,
     shouldCreditMonth = null,
     balanceAnchor = null,
+    periodOpeningBalance = null,
 }) {
     if (
         endYear < joinYear ||
@@ -261,8 +267,27 @@ export function rollLeaveBalanceThroughPeriod({
                   )
                 : null;
 
+        const openingPosition =
+            periodOpeningBalance?.openingYear != null && periodOpeningBalance?.openingMonth != null
+                ? compareCalendarMonth(
+                      cursorYear,
+                      cursorMonth,
+                      periodOpeningBalance.openingYear,
+                      periodOpeningBalance.openingMonth
+                  )
+                : null;
+
         let monthUpdate;
-        if (anchorPosition === 0) {
+        if (openingPosition === 0) {
+            const closing = roundLeaveDays(periodOpeningBalance.balance);
+            monthUpdate = {
+                previousBalance: roundLeaveDays(previousBalance),
+                credit: 0,
+                used: 0,
+                balanceAfterAccrual: closing,
+                closingBalance: closing,
+            };
+        } else if (anchorPosition === 0) {
             const closing = roundLeaveDays(balanceAnchor.anchorBalance);
             monthUpdate = {
                 previousBalance: roundLeaveDays(previousBalance),

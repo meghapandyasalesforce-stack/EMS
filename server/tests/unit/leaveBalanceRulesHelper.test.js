@@ -543,4 +543,95 @@ describe('leaveBalanceRulesHelper', () => {
 
         expect(result.available).toBe(35);
     });
+
+    it('period opening balance Jan 2016 = 3 rolls forward through January 2026', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2016,
+            joinMonthIndex: 0,
+            endYear: 2026,
+            endMonthIndex: 0,
+            monthlyRate: 1.5,
+            periodOpeningBalance: { openingYear: 2016, openingMonth: 1, balance: 3 },
+        });
+
+        expect(result.ledgerByYear[2016][0].available).toBe(3);
+        expect(result.available).toBe(183);
+    });
+
+    it('period opening balance deducts approved leave after opening month', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2016,
+            joinMonthIndex: 0,
+            endYear: 2016,
+            endMonthIndex: 3,
+            monthlyRate: 1.5,
+            periodOpeningBalance: { openingYear: 2016, openingMonth: 1, balance: 3 },
+            getUsedForMonth: (_year, monthIndex) => (monthIndex === 2 ? 2 : 0),
+        });
+
+        expect(result.ledgerByYear[2016][2].available).toBe(4);
+        expect(result.ledgerByYear[2016][3].available).toBe(5.5);
+    });
+
+    it('adjustment anchor overrides opening at same month but opening persists for earlier roll', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2016,
+            joinMonthIndex: 0,
+            endYear: 2026,
+            endMonthIndex: 6,
+            monthlyRate: 1.5,
+            periodOpeningBalance: { openingYear: 2016, openingMonth: 1, balance: 3 },
+            balanceAnchor: { anchorYear: 2026, anchorMonth: 7, anchorBalance: 21 },
+        });
+
+        expect(result.ledgerByYear[2016][0].available).toBe(3);
+        expect(result.ledgerByYear[2026][6].available).toBe(21);
+    });
+
+    it('opening balance at month uses HR value and rolls forward (opening=10)', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2016,
+            joinMonthIndex: 0,
+            endYear: 2016,
+            endMonthIndex: 2,
+            monthlyRate: 1.5,
+            periodOpeningBalance: { openingYear: 2016, openingMonth: 1, balance: 10 },
+        });
+
+        expect(result.ledgerByYear[2016][0].available).toBe(10);
+        expect(result.ledgerByYear[2016][1].available).toBe(11.5);
+        expect(result.ledgerByYear[2016][2].available).toBe(13);
+    });
+
+    it('opening month takes precedence over adjustment anchor at the same month', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2016,
+            joinMonthIndex: 0,
+            endYear: 2016,
+            endMonthIndex: 1,
+            monthlyRate: 1.5,
+            periodOpeningBalance: { openingYear: 2016, openingMonth: 1, balance: 3 },
+            balanceAnchor: { anchorYear: 2016, anchorMonth: 1, anchorBalance: 99 },
+        });
+
+        expect(result.ledgerByYear[2016][0].available).toBe(3);
+        expect(result.ledgerByYear[2016][1].available).toBe(4.5);
+    });
+
+    it('opening Jan 2016 = 3 with July 2026 adjustment = 40 continues through August 2026', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2016,
+            joinMonthIndex: 0,
+            endYear: 2026,
+            endMonthIndex: 7,
+            monthlyRate: 1.5,
+            periodOpeningBalance: { openingYear: 2016, openingMonth: 1, balance: 3 },
+            balanceAnchor: { anchorYear: 2026, anchorMonth: 7, anchorBalance: 40 },
+        });
+
+        expect(result.ledgerByYear[2016][0].available).toBe(3);
+        expect(result.ledgerByYear[2026][5].available).toBe(3 + 125 * 1.5);
+        expect(result.ledgerByYear[2026][6].available).toBe(40);
+        expect(result.ledgerByYear[2026][7].available).toBe(41.5);
+    });
 });

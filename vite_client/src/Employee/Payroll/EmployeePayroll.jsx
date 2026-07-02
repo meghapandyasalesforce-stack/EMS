@@ -117,7 +117,9 @@ const EmployeePayroll = () => {
     const [viewYear, setViewYear] = useState(currentCalendarYear);
 
     const featured = useMemo(() => {
-        if (selectedMonthPayroll && selectedMonthPayroll._id) return selectedMonthPayroll;
+        if (selectedMonthPayroll && (selectedMonthPayroll._id || selectedMonthPayroll.payrollId)) {
+            return selectedMonthPayroll;
+        }
         return currentMonthPayroll;
     }, [selectedMonthPayroll, currentMonthPayroll]);
 
@@ -159,10 +161,14 @@ const EmployeePayroll = () => {
         }
     }, [error, dispatch]);
 
-    const handleViewDetails = async (payrollId) => {
-        await dispatch(fetchPayrollDetails(payrollId));
-        setShowPayrollDetails(true);
-    };
+  const handleViewDetails = async (payroll) => {
+    const result = await dispatch(fetchPayrollDetails(payroll));
+    if (fetchPayrollDetails.fulfilled.match(result)) {
+      setShowPayrollDetails(true);
+    } else {
+      toast.error(result.payload || 'Failed to fetch payroll details');
+    }
+  };
 
     const handleViewMonth = async () => {
         const result = await dispatch(fetchPayrollByMonth({ month: viewMonth, year: viewYear }));
@@ -175,9 +181,12 @@ const EmployeePayroll = () => {
     };
 
     const handleDownloadPayslip = async (payroll) => {
-        if (!payroll?._id) return;
+        if (!payroll?._id && !payroll?.payrollId) {
+            toast.error('Payroll record ID is missing. Refresh the page and try again.');
+            return;
+        }
         try {
-            const result = await dispatch(downloadPayslip(payroll._id));
+            const result = await dispatch(downloadPayslip(payroll));
             if (downloadPayslip.fulfilled.match(result)) {
                 const blob = new Blob([result.payload], { type: 'application/pdf' });
                 const url = window.URL.createObjectURL(blob);
@@ -334,7 +343,7 @@ const EmployeePayroll = () => {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => handleViewDetails(featured._id)}
+                                    onClick={() => handleViewDetails(featured)}
                                     className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-white/70 bg-transparent px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
                                 >
                                     <FiEye className="h-4 w-4" />
@@ -549,7 +558,7 @@ const EmployeePayroll = () => {
                                                     <div className="inline-flex items-center gap-1">
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleViewDetails(row._id)}
+                                                            onClick={() => handleViewDetails(row)}
                                                             className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                                                             title="View details"
                                                         >

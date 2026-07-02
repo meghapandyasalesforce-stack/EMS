@@ -60,14 +60,18 @@ const AdminEmployeePayroll = () => {
         }
     }, [dispatch, employeeId, currentPage]);
 
-    const handleViewDetails = async (payrollId) => {
-        await dispatch(fetchAdminPayrollDetails(payrollId));
-        setShowPayrollDetails(true);
+    const handleViewDetails = async (payroll) => {
+        const result = await dispatch(fetchAdminPayrollDetails(payroll));
+        if (fetchAdminPayrollDetails.fulfilled.match(result)) {
+            setShowPayrollDetails(true);
+        } else {
+            toast.error(result.payload || 'Failed to fetch payroll details');
+        }
     };
 
-    const handleDownloadPayslip = async (payrollId) => {
+    const handleDownloadPayslip = async (payroll) => {
         try {
-            const result = await dispatch(downloadAdminPayslip(payrollId));
+            const result = await dispatch(downloadAdminPayslip(payroll));
             
             if (downloadAdminPayslip.fulfilled.match(result)) {
                 // Create blob from the PDF data
@@ -306,14 +310,14 @@ const AdminEmployeePayroll = () => {
 
                         <div className="mt-6 flex space-x-4">
                             <button
-                                onClick={() => handleViewDetails(currentMonthPayroll._id)}
+                                onClick={() => handleViewDetails(currentMonthPayroll)}
                                 className="flex items-center space-x-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
                             >
                                 <FiEye className="w-4 h-4" />
                                 <span>View Details</span>
                             </button>
                             <button
-                                onClick={() => handleDownloadPayslip(currentMonthPayroll._id)}
+                                onClick={() => handleDownloadPayslip(currentMonthPayroll)}
                                 className="flex items-center space-x-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
                             >
                                 <FiDownload className="w-4 h-4" />
@@ -349,7 +353,7 @@ const AdminEmployeePayroll = () => {
                     ) : (
                         <div className="space-y-4">
                             {(Array.isArray(payrollHistory?.payrolls) ? payrollHistory.payrolls : []).map((payroll) => (
-                                <div key={payroll._id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+                                <div key={payroll._id || payroll.payrollId || `${payroll.month}-${payroll.year}`} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-4">
                                             <div className="w-12 h-12 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
@@ -371,7 +375,7 @@ const AdminEmployeePayroll = () => {
                                             </div>
                                             <div className="flex space-x-2">
                                                 <button
-                                                    onClick={() => handleViewDetails(payroll._id)}
+                                                    onClick={() => handleViewDetails(payroll)}
                                                     className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
                                                     title="View Details"
                                                 >
@@ -385,7 +389,7 @@ const AdminEmployeePayroll = () => {
                                                     <FiEdit className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDownloadPayslip(payroll._id)}
+                                                    onClick={() => handleDownloadPayslip(payroll)}
                                                     className="p-2 text-gray-600 hover:text-theme-primary hover:bg-theme-primary/10 rounded-lg transition-colors"
                                                     title="Download Payslip"
                                                 >

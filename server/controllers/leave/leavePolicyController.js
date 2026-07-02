@@ -433,12 +433,101 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                 const anchorMonth = targetMonth;
 
                 balance.employeeLeaveSummary = balance.employeeLeaveSummary || {};
+
+                const existingOpening = await leaveBalanceEngine.resolveEmployeeOpeningBalance(
+                    employeeId,
+                    organizationId
+                );
+
+                const isOpeningMonthTarget =
+                    !existingOpening ||
+                    (existingOpening.openingYear === targetYear &&
+                        existingOpening.openingMonth === anchorMonth);
+
+                let finalAvailable = nextAvailable;
+                if (isOpeningMonthTarget && finalAvailable === 0 && prevSnapshot.available > 0) {
+                    finalAvailable = roundLeaveDays(prevSnapshot.available);
+                    merged.carriedForward = Math.max(
+                        0,
+                        roundLeaveDays(finalAvailable - (merged.accrued || 0) + (merged.used || 0))
+                    );
+                }
+
+                const openingPayload = {
+                    active: true,
+                    balance: finalAvailable,
+                    openingYear: targetYear,
+                    openingMonth: anchorMonth,
+                    reason: reason ? String(reason).trim().slice(0, 500) : '',
+                    setBy: req.employee?._id || req.user?._id,
+                    setAt: new Date(),
+                };
+
+                const isFirstPersistedOpening =
+                    !existingOpening || existingOpening.source === 'legacyManualOverride';
+                const isOpeningMonthReCorrection =
+                    existingOpening?.source === 'openingLeaveBalance' &&
+                    existingOpening.openingYear === targetYear &&
+                    existingOpening.openingMonth === anchorMonth;
+
+                if (isFirstPersistedOpening || isOpeningMonthReCorrection) {
+                    const openingAtCorrectionMonth =
+                        isFirstPersistedOpening &&
+                        existingOpening?.source === 'legacyManualOverride' &&
+                        existingOpening.openingYear === targetYear &&
+                        existingOpening.openingMonth === anchorMonth;
+
+                    const openingData =
+                        !existingOpening || isOpeningMonthReCorrection
+                            ? openingPayload
+                            : {
+                                  active: true,
+                                  balance: openingAtCorrectionMonth
+                                      ? finalAvailable
+                                      : existingOpening.balance,
+                                  openingYear: existingOpening.openingYear,
+                                  openingMonth: existingOpening.openingMonth,
+                                  reason: openingAtCorrectionMonth
+                                      ? openingPayload.reason || 'Historical leave migration'
+                                      : 'Historical leave migration',
+                                  setBy: openingPayload.setBy,
+                                  setAt: openingPayload.setAt,
+                              };
+
+                    const persistDocId = existingOpening?.documentId ?? balance._id;
+
+                    if (String(persistDocId) === String(balance._id)) {
+                        balance.employeeLeaveSummary.openingLeaveBalance = openingData;
+                    } else {
+                        const openingDoc = await LeaveBalance.findById(persistDocId);
+                        if (openingDoc) {
+                            openingDoc.employeeLeaveSummary = openingDoc.employeeLeaveSummary || {};
+                            openingDoc.employeeLeaveSummary.openingLeaveBalance = openingData;
+                            openingDoc.markModified('employeeLeaveSummary');
+                            await openingDoc.save();
+                        }
+                    }
+
+                    logger.info('[OpeningLeaveBalance] saved', {
+                        employeeId: String(employeeId),
+                        organizationId: String(organizationId),
+                        balanceDocumentId: String(balance._id),
+                        persistDocumentId: String(persistDocId),
+                        trigger: isOpeningMonthReCorrection
+                            ? 'opening_month_correction'
+                            : isFirstPersistedOpening
+                              ? 'first_persist'
+                              : 'unknown',
+                        openingLeaveBalance: openingData,
+                    });
+                }
+
                 balance.employeeLeaveSummary.manualOverride = {
                     active: true,
                     accrued: merged.accrued,
                     used: merged.used,
                     carriedForward: merged.carriedForward,
-                    available: nextAvailable,
+                    available: finalAvailable,
                     anchorYear: targetYear,
                     anchorMonth,
                     reason: reason ? String(reason).trim().slice(0, 500) : '',
@@ -446,14 +535,16 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     adjustedAt: new Date(),
                 };
 
-                await LeaveBalance.updateMany(
-                    {
-                        organizationId,
-                        employee: employeeId,
-                        year: { $ne: targetYear },
-                    },
-                    { $set: { 'employeeLeaveSummary.manualOverride.active': false } }
-                );
+                if (!isOpeningMonthTarget) {
+                    await LeaveBalance.updateMany(
+                        {
+                            organizationId,
+                            employee: employeeId,
+                            year: { $ne: targetYear },
+                        },
+                        { $set: { 'employeeLeaveSummary.manualOverride.active': false } }
+                    );
+                }
 
                 for (const typeBalance of balance.balances) {
                     if (!pooledTypes.includes(typeBalance.leaveType)) continue;
@@ -466,7 +557,7 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                 balance.accrualHistory.push({
                     date: new Date(),
                     leaveType: 'employee',
-                    amount: nextAvailable,
+                    amount: finalAvailable,
                     method: 'manual',
                     notes: `[${access.role}] ${reason || 'Manual employee leave balance adjustment'}`,
                 });
@@ -481,6 +572,7 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     balanceDocumentId: String(balance._id),
                     balanceYear: balance.year,
                     manualOverride: balance.employeeLeaveSummary?.manualOverride,
+                    openingLeaveBalance: balance.employeeLeaveSummary?.openingLeaveBalance,
                 });
 
                 const employeeDoc = await Employee.findById(employeeId).select('name lastName').lean();
@@ -499,7 +591,7 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                         accrued: merged.accrued,
                         used: merged.used,
                         carriedForward: merged.carriedForward,
-                        available: nextAvailable,
+                        available: finalAvailable,
                     },
                     performedBy: req.employee?._id || req.user?._id,
                     notes: reason
