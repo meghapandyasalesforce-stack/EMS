@@ -377,6 +377,7 @@ const getMeProfileNavigation = () => [
     { path: '/family-details', name: 'Family Details', icon: <FaUsers /> },
     { path: '/job-details', name: 'Job Details', icon: <FaUserTie /> },
     { path: '/financial-details', name: 'Financial Details', icon: <FaDollarSign /> },
+    { path: '/employee-payroll', name: 'Payroll', icon: <FaMoneyBill /> },
     { path: '/employee/id-card', name: 'ID Card', icon: <FaIdCard /> },
 ];
 

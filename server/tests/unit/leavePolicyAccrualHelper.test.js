@@ -2,6 +2,8 @@ import { describe, it, expect } from '@jest/globals';
 import {
     MONTHS_PER_ACCRUAL_YEAR,
     getMonthlyEntitlementAmount,
+    getRollingAccrualMonthlyRate,
+    getDisplayYearlyAccrualCap,
     getYearlyAccrualCap,
     syncMonthlyEntitlementLeaveType,
     normalizePolicyLeaveTypes,
@@ -25,6 +27,16 @@ describe('leavePolicyAccrualHelper', () => {
             ).toBe(1.5);
         });
 
+        it('uses 1.5 rolling rate for standard leave regardless of legacy policy cap', () => {
+            expect(
+                getRollingAccrualMonthlyRate({ type: 'casual', maxDaysPerMonth: 1 })
+            ).toBe(1.5);
+            expect(getDisplayYearlyAccrualCap({ type: 'sick', maxDaysPerMonth: 0.5 })).toBe(18);
+            expect(
+                getRollingAccrualMonthlyRate({ type: 'loss_of_pay', maxDaysPerMonth: 2 })
+            ).toBe(2);
+        });
+
         it('syncs leave type to monthly accrual when maxDaysPerMonth set', () => {
             const synced = syncMonthlyEntitlementLeaveType({
                 type: 'casual',
@@ -42,8 +54,12 @@ describe('leavePolicyAccrualHelper', () => {
                 { type: 'sick', maxDaysPerMonth: null }
             ]);
             expect(normalized[0].accrual.method).toBe('monthly');
-            expect(normalized[0].accrual.maxAccrual).toBe(24);
-            expect(normalized[1].accrual?.method).toBeUndefined();
+            expect(normalized[0].accrual.amount).toBe(1.5);
+            expect(normalized[0].type).toBe('paid');
+            expect(normalized[1].accrual?.method).toBe('monthly');
+            expect(normalized[1].accrual?.amount).toBe(1.5);
+            expect(normalized[1].maxDaysPerMonth).toBe(1.5);
+            expect(normalized[1].carryForward?.enabled).toBe(true);
         });
     });
 

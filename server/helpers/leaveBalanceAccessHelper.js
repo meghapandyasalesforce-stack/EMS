@@ -4,16 +4,30 @@ import { PERMISSIONS } from '../config/permissions.constants.js';
 import { resolveAuthContext, hasAnyPermission } from './permissionService.js';
 
 /**
+ * Canonical organizationId for leave balance reads/writes.
+ * Always falls back to the target employee's organization when the request context omits it.
+ */
+export async function resolveLeaveBalanceOrganizationId(employeeId, organizationIdHint) {
+    const hint = organizationIdHint || null;
+    if (hint) return hint;
+    if (!employeeId) return null;
+    const targetEmployee = await Employee.findById(employeeId).select('organizationId').lean();
+    return targetEmployee?.organizationId || null;
+}
+
+/**
  * Who may view / manually adjust an employee's leave balance.
  * - View: self, org admin, HR, executive, or direct line manager
  * - Adjust: org admin, HR, executive, or direct line manager (not self)
  */
 export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, { forAdjust = false } = {}) {
-    const organizationId =
-        req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+    const organizationId = await resolveLeaveBalanceOrganizationId(
+        targetEmployeeId,
+        req.organizationId || req.user?.organizationId || req.employee?.organizationId
+    );
 
     if (!organizationId) {
-        return { ok: false, status: 400, message: 'Organization ID is required', canAdjust: false };
+        return { ok: false, status: 400, message: 'Organization ID is required', canAdjust: false, organizationId: null };
     }
 
     const targetId = String(targetEmployeeId || '');
@@ -21,7 +35,7 @@ export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, {
     const jwtRole = (req.decoded?.role || req.user?.role || '').toLowerCase();
 
     if (!targetId) {
-        return { ok: false, status: 400, message: 'Employee ID is required', canAdjust: false };
+        return { ok: false, status: 400, message: 'Employee ID is required', canAdjust: false, organizationId };
     }
 
     const ctx = req.authContext || (req.decoded ? await resolveAuthContext(req.decoded, req) : null);
@@ -39,7 +53,7 @@ export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, {
     const isSelf = viewerEmployeeId && viewerEmployeeId === targetId;
 
     if (isSelf && !forAdjust) {
-        return { ok: true, canAdjust: false, role: 'self' };
+        return { ok: true, canAdjust: false, role: 'self', organizationId };
     }
 
     if (forAdjust && isSelf) {
@@ -48,11 +62,17 @@ export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, {
             status: 403,
             message: 'You cannot manually adjust your own leave balance. Contact HR or your manager.',
             canAdjust: false,
+            organizationId,
         };
     }
 
     if (isOrgAdmin || isHrStaff || isExecutive) {
-        return { ok: true, canAdjust: true, role: isOrgAdmin ? 'admin' : isHrStaff ? 'hr' : 'executive' };
+        return {
+            ok: true,
+            canAdjust: true,
+            role: isOrgAdmin ? 'admin' : isHrStaff ? 'hr' : 'executive',
+            organizationId,
+        };
     }
 
     if (req.employee?._id) {
@@ -64,11 +84,11 @@ export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, {
             .lean();
 
         if (!target) {
-            return { ok: false, status: 404, message: 'Employee not found', canAdjust: false };
+            return { ok: false, status: 404, message: 'Employee not found', canAdjust: false, organizationId };
         }
 
         if (isEmployeeLinkedToManager(target, req.employee)) {
-            return { ok: true, canAdjust: true, role: 'manager' };
+            return { ok: true, canAdjust: true, role: 'manager', organizationId };
         }
     }
 
@@ -79,5 +99,6 @@ export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, {
             ? 'Only HR, admin, or this employee’s direct manager can adjust leave balances.'
             : 'Access denied. You can only view leave balances for your team or with HR/admin access.',
         canAdjust: false,
+        organizationId,
     };
 }

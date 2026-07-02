@@ -5,7 +5,7 @@ import { formatDate, getFullName, getStatusLabel } from './utils';
 
 const EmployeeDetailsHeader = ({
   employee,
-  isManagerReadOnly,
+  canManageEmployeeActions = false,
   updatingStatus,
   terminatingEmployee,
   onStatusClick,
@@ -67,7 +67,7 @@ const EmployeeDetailsHeader = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          {!isManagerReadOnly && (
+          {canManageEmployeeActions && (
             <>
               <button
                 type="button"

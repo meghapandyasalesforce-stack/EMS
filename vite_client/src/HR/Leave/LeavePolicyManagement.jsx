@@ -20,16 +20,19 @@ const LeavePolicyManagement = () => {
         applicableEmployees: [],
         leaveTypes: [
             {
+                enabled: true,
                 type: 'casual',
                 displayName: 'Casual Leave',
                 accrual: {
-                    method: 'fixed',
-                    amount: 12,
-                    frequency: 'yearly'
+                    method: 'monthly',
+                    amount: 1.5,
+                    frequency: 'monthly',
+                    maxAccrual: 18,
                 },
+                maxDaysPerMonth: 1.5,
                 carryForward: {
-                    enabled: false,
-                    maxDays: 0
+                    enabled: true,
+                    maxDays: 18
                 },
                 requiresApproval: true,
                 requiresDocument: false,
@@ -154,16 +157,19 @@ const LeavePolicyManagement = () => {
             leaveTypes: [
                 ...formData.leaveTypes,
                 {
+                    enabled: true,
                     type: 'casual',
                     displayName: '',
                     accrual: {
-                        method: 'fixed',
-                        amount: 0,
-                        frequency: 'yearly'
+                        method: 'monthly',
+                        amount: 1.5,
+                        frequency: 'monthly',
+                        maxAccrual: 18,
                     },
+                    maxDaysPerMonth: 1.5,
                     carryForward: {
-                        enabled: false,
-                        maxDays: 0
+                        enabled: true,
+                        maxDays: 18
                     },
                     requiresApproval: true,
                     requiresDocument: false,
@@ -433,11 +439,29 @@ const LeavePolicyManagement = () => {
                                         <label className="flex items-center">
                                             <input
                                                 type="checkbox"
+                                                checked={leaveType.enabled !== false}
+                                                onChange={(e) => updateLeaveType(index, 'enabled', e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            Enabled
+                                        </label>
+                                        <label className="flex items-center">
+                                            <input
+                                                type="checkbox"
                                                 checked={leaveType.requiresApproval}
                                                 onChange={(e) => updateLeaveType(index, 'requiresApproval', e.target.checked)}
                                                 className="mr-2"
                                             />
                                             Requires Approval
+                                        </label>
+                                        <label className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(leaveType.requiresDocument)}
+                                                onChange={(e) => updateLeaveType(index, 'requiresDocument', e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            Requires Document
                                         </label>
                                         <label className="flex items-center">
                                             <input

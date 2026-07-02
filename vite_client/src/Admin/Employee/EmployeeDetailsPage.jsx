@@ -44,7 +44,6 @@ import TimelineTab from './employeeDetails/tabs/TimelineTab';
 import AccessTab from './employeeDetails/tabs/AccessTab';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
-import LeaveBalancesWidget from './employeeDetails/widgets/LeaveBalancesWidget';
 import CareerTimelineWidget from './employeeDetails/widgets/CareerTimelineWidget';
 import ReportingHierarchyWidget from './employeeDetails/widgets/ReportingHierarchyWidget';
 import PayrollHighlightWidget from './employeeDetails/widgets/PayrollHighlightWidget';
@@ -120,16 +119,25 @@ const EmployeeDetailsPage = () => {
   const { hasAnyPermission, isOrgOwner, isHrExecutive, isHrManager } = useAuthPermissions();
   const userIsHr = isHR(currentUser || sessionEmployee);
   const hidePayrollForHrExecutive = userIsHr && isHrExecutive && !isHrManager;
+  const isManagerReadOnly =
+    isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
   const canManageAccess =
     isOrgOwner ||
     hasAnyPermission([PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE]);
+  const canManageEmployeeActions =
+    !isManagerReadOnly &&
+    (isOrgOwner ||
+      currentUser?.role === 'admin' ||
+      userIsHr ||
+      isHrManager ||
+      isHrExecutive ||
+      hasAnyPermission([PERMISSIONS.EMPLOYEE_EDIT, PERMISSIONS.EMPLOYEE_DELETE]));
   const visibleTabs = DETAIL_TABS.filter(
     (tab) =>
       (!tab.permissionGated || canManageAccess) &&
       (!tab.hrOnly || userIsHr) &&
       !(hidePayrollForHrExecutive && tab.hideForHrExecutive)
   );
-  const isManagerReadOnly = isManager(currentUser) && !isHR(currentUser) && currentUser?.role !== 'admin';
   const isAdminUser = currentUser?.role === 'admin';
   const isHrManagerProfile =
     Boolean(employee?.functionalRoles?.includes('hr')) &&
@@ -575,7 +583,7 @@ const EmployeeDetailsPage = () => {
 
         <EmployeeDetailsHeader
           employee={employee}
-          isManagerReadOnly={isManagerReadOnly}
+          canManageEmployeeActions={canManageEmployeeActions}
           updatingStatus={updatingStatus}
           terminatingEmployee={terminatingEmployee}
           onStatusClick={() => setOpenDialog(true)}
@@ -618,7 +626,6 @@ const EmployeeDetailsPage = () => {
           <div className="xl:col-span-2">{renderTabContent()}</div>
           <aside className="space-y-4 xl:col-span-1">
             {!hidePayrollForHrExecutive && <PayrollHighlightWidget employee={employee} />}
-            <LeaveBalancesWidget employeeId={employee._id} compact />
             <CareerTimelineWidget employee={employee} />
             <ReportingHierarchyWidget employee={employee} managerPreview={managerPreview} />
           </aside>

@@ -345,24 +345,40 @@ export const getMyLeaves = async (req, res) => {
         let balanceByType = null;
         if (organizationId) {
             try {
-                const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
-                if (balance && balance.balances && balance.balances.length) {
+                const balanceResponse = await buildEmployeeLeaveBalanceResponse(
+                    employeeId,
+                    year,
+                    organizationId
+                );
+                if (balanceResponse?.leaveSummary) {
+                    const summary = balanceResponse.leaveSummary;
+                    totalLeaves = (summary.totalAccrued || 0) + (summary.totalCarriedForward || 0);
+                    remainingLeaves = summary.totalAvailableLeave || 0;
+                    balanceByType = {
+                        sick: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
+                        annual: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
+                        casual: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
+                    };
+                } else if (balanceResponse?.balances?.length) {
+                    totalLeaves = balanceResponse.balances.reduce(
+                        (sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0),
+                        0
+                    );
+                    remainingLeaves = Number(balanceResponse.totalAvailableLeave) ||
+                        balanceResponse.balances.reduce((sum, b) => sum + (b.available || 0), 0);
                     balanceByType = {
                         sick: { accrued: 0, available: 0, used: 0, pending: 0 },
                         annual: { accrued: 0, available: 0, used: 0, pending: 0 },
-                        casual: { accrued: 0, available: 0, used: 0, pending: 0 }
+                        casual: { accrued: 0, available: 0, used: 0, pending: 0 },
                     };
-                    totalLeaves = balance.balances.reduce((sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0), 0);
-                    remainingLeaves = balance.balances.reduce((sum, b) => sum + (b.available || 0), 0);
-
-                    for (const b of balance.balances) {
+                    for (const b of balanceResponse.balances) {
                         const typeKey = b.leaveType === 'paid' ? 'annual' : b.leaveType;
                         if (!balanceByType[typeKey]) continue;
                         balanceByType[typeKey] = {
                             accrued: (b.accrued || 0) + (b.carriedForward || 0),
                             available: b.available || 0,
                             used: b.used || 0,
-                            pending: b.pending || 0
+                            pending: b.pending || 0,
                         };
                     }
                 }

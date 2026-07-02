@@ -229,6 +229,7 @@ export const adminRoutes = [
   { path: '/admin-settings', component: lazy(() => import('../Admin/Settings/AdminSettings')), message: 'Loading admin settings...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.adminSettings },
   { path: '/admin/leave-policy', component: lazy(() => import('../HR/Leave/LeavePolicyManagement')), message: 'Loading leave policy management...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.leavePolicy },
   { path: '/admin/leave-balance', component: lazy(() => import('../Admin/Leave/EmployeeLeaveBalanceViewer')), message: 'Loading employee leave balances...', allowedRoles: ['admin', 'hr', 'executive'] },
+  { path: '/admin/leave-reports', component: lazy(() => import('../Admin/Leave/LeaveReportsPage')), message: 'Loading leave reports...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.leavePolicy },
   { path: '/admin/policies/create', component: lazy(() => import('../Admin/PolicyManagement/CreatePolicy')), message: 'Loading create policy...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/admin/policies/:policyId/edit', component: lazy(() => import('../Admin/PolicyManagement/EditPolicy')), message: 'Loading edit policy...', allowedRoles: ['admin', 'hr', 'executive'] },
   { path: '/admin/policies/:policyId', component: lazy(() => import('../Admin/PolicyManagement/ViewPolicy')), message: 'Loading policy...', allowedRoles: ['admin', 'hr', 'executive'] },

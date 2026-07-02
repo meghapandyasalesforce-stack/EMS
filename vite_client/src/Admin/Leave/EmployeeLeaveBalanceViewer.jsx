@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
+import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
 
 const EmployeeLeaveBalanceViewer = () => {
     const [employees, setEmployees] = useState([]);
@@ -129,70 +130,52 @@ const EmployeeLeaveBalanceViewer = () => {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {balance.balances?.map((typeBalance) => {
-                            const policyType = balance.policy?.leaveTypes?.find(lt => lt.type === typeBalance.leaveType);
-                            return (
-                                <div key={typeBalance.leaveType} className="bg-gray-50 rounded-lg shadow p-6">
-                                    <h4 className="text-lg font-semibold mb-4 capitalize">
-                                        {policyType?.displayName || typeBalance.leaveType} Leave
-                                    </h4>
-                                    <div className="space-y-2">
+                    {(() => {
+                        const leaveSummary = getLeaveSummary(balance);
+                        return (
+                            <div className="max-w-md bg-gray-50 rounded-lg shadow p-6">
+                                <h4 className="text-lg font-semibold mb-4">Employee Leave Summary</h4>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Total Accrued:</span>
+                                        <span className="font-medium">{leaveSummary.totalAccrued} days</span>
+                                    </div>
+                                    {leaveSummary.totalCarriedForward > 0 && (
                                         <div className="flex justify-between">
-                                            <span className="text-gray-600">Accrued:</span>
-                                            <span className="font-medium">{typeBalance.accrued} days</span>
-                                        </div>
-                                        {typeBalance.carriedForward > 0 && (
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Carried Forward:</span>
-                                                <span className="font-medium text-theme-secondary">
-                                                    +{typeBalance.carriedForward} days
-                                                </span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Used:</span>
-                                            <span className="font-medium text-red-600">
-                                                -{typeBalance.used} days
+                                            <span className="text-gray-600">Carried Forward:</span>
+                                            <span className="font-medium text-theme-secondary">
+                                                +{leaveSummary.totalCarriedForward} days
                                             </span>
                                         </div>
-                                        {typeBalance.pending > 0 && (
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Pending:</span>
-                                                <span className="font-medium text-yellow-600">
-                                                    -{typeBalance.pending} days
-                                                </span>
-                                            </div>
-                                        )}
-                                        {typeBalance.expired > 0 && (
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Expired:</span>
-                                                <span className="font-medium text-gray-600">
-                                                    -{typeBalance.expired} days
-                                                </span>
-                                            </div>
-                                        )}
-                                        <div className="border-t pt-2 mt-2">
-                                            <div className="flex justify-between">
-                                                <span className="font-semibold">Available:</span>
-                                                <span className={`font-bold text-lg ${
-                                                    typeBalance.available > 0 ? 'text-theme-primary' : 'text-red-600'
-                                                }`}>
-                                                    {typeBalance.available} days
-                                                </span>
-                                            </div>
+                                    )}
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Total Used:</span>
+                                        <span className="font-medium text-red-600">
+                                            -{leaveSummary.totalUsed} days
+                                        </span>
+                                    </div>
+                                    {leaveSummary.totalPending > 0 && (
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Pending:</span>
+                                            <span className="font-medium text-yellow-600">
+                                                -{leaveSummary.totalPending} days
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="border-t pt-2 mt-2">
+                                        <div className="flex justify-between">
+                                            <span className="font-semibold">Available:</span>
+                                            <span className={`font-bold text-lg ${
+                                                leaveSummary.totalAvailableLeave > 0 ? 'text-theme-primary' : 'text-red-600'
+                                            }`}>
+                                                {leaveSummary.totalAvailableLeave} days
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
-
-                    {balance.balances?.length === 0 && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <p className="text-gray-600">No leave types configured for this policy.</p>
-                        </div>
-                    )}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 

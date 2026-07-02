@@ -53,7 +53,13 @@ export const updateEmployeeStatus = createAsyncThunk(
       );
       return response.data.employee;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      const data = error.response?.data;
+      return rejectWithValue(
+        data?.message ||
+          data?.errors?.status ||
+          data?.errors?.active ||
+          'Failed to update employee status'
+      );
     }
   }
 );

@@ -26,6 +26,7 @@ import isAuthenticatedBoth from "../../middlewares/isAuthenticatedBoth.js";
 import isAdminOrHROrExecutiveAuthenticated from './../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAdminOrManagerOrHRAuthenticated from './../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 import { terminateEmployee, updateEmployeeStatus } from "../../controllers/admin/employeeManagementController.js";
+import { requireEmployeeLifecycleManage } from "../../middlewares/requirePermission.js";
 
 
 
@@ -55,8 +56,8 @@ router.route("/upcoming-birthdays").get(isAuthenticated, getUpcomingBirthdays);
 router.route("/send-birthday-wish").post(isAdminOrHROrExecutiveAuthenticated, sendBirthdayWishes);
 
 // update status(active or inactive)
-router.route("/admin/update-status/:employeeId").patch(isAdminOrHROrExecutiveAuthenticated, updateEmployeeStatus);
-router.route("/admin/terminate/:employeeId").patch(isAdminOrHROrExecutiveAuthenticated, terminateEmployee);
+router.route("/admin/update-status/:employeeId").patch(requireEmployeeLifecycleManage, updateEmployeeStatus);
+router.route("/admin/terminate/:employeeId").patch(requireEmployeeLifecycleManage, terminateEmployee);
 
 
 

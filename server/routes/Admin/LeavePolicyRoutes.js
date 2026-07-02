@@ -7,8 +7,15 @@ import {
     deleteLeavePolicy,
     getEmployeeLeaveBalance,
     adjustEmployeeLeaveBalance,
-    recalculateBalances
+    recalculateBalances,
+    getLeavePolicyMeta,
+    getEmployeeLeaveHistory,
 } from '../../controllers/leave/leavePolicyController.js';
+import {
+    updateLeaveFromPeriod,
+    carryForwardLeave,
+    getLeaveBalanceAuditLog,
+} from '../../controllers/leave/leaveBalanceAutomationController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAuthenticatedBoth from '../../middlewares/isAuthenticatedBoth.js';
 
@@ -23,6 +30,21 @@ router.route('/balance/:employeeId')
 
 router.route('/balance/:employeeId/adjust')
     .patch(isAuthenticatedBoth, adjustEmployeeLeaveBalance);
+
+router.route('/balance/:employeeId/update-leave')
+    .post(isAuthenticatedBoth, updateLeaveFromPeriod);
+
+router.route('/balance/:employeeId/carry-forward')
+    .post(isAuthenticatedBoth, carryForwardLeave);
+
+router.route('/balance/:employeeId/audit')
+    .get(isAuthenticatedBoth, getLeaveBalanceAuditLog);
+
+router.route('/balance/:employeeId/history')
+    .get(isAuthenticatedBoth, getEmployeeLeaveHistory);
+
+router.route('/meta')
+    .get(isAuthenticatedBoth, getLeavePolicyMeta);
 
 // Policy management routes (HR/Admin only)
 router.route('/')

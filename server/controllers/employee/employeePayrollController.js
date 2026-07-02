@@ -35,17 +35,25 @@ function isPreviousPayrollPeriod(payroll) {
     return getPayrollPeriodRank(payroll?.month, payroll?.year) < currentRank;
 }
 
+function canEmployeeViewPayroll(payroll) {
+    if (!payroll) return false;
+    if (payroll.isVisible !== true) return false;
+    if (payroll.type && payroll.type !== 'monthly') return false;
+    if (payroll.isProvisional === true || payroll.generationType === 'preview') return false;
+    return true;
+}
+
 function canEmployeeDownloadPayslip(payroll) {
     if (!payroll) return false;
 
-    // Current behavior for finalized paid payrolls.
-    if (payroll.status === 'Paid' && payroll.payrollLocked === true) {
+    // Paid payrolls — allow download when published (matches employee UI).
+    if (payroll.status === 'Paid' && payroll.isVisible !== false) {
         return true;
     }
 
-    // Allow previous month(s) payroll download as long as it is published/final monthly payroll.
+    // Allow previous month(s) once payroll is finalized and published.
     const isFinalMonthly =
-        payroll.type === 'monthly' &&
+        (!payroll.type || payroll.type === 'monthly') &&
         payroll.isProvisional !== true &&
         payroll.generationType !== 'preview' &&
         payroll.isVisible === true &&
@@ -196,9 +204,9 @@ export const getPayrollDetails = async (req, res) => {
             return res.status(404).json({ message: 'Payroll not found' });
         }
 
-        if (!canEmployeeDownloadPayslip(payroll)) {
+        if (!canEmployeeViewPayroll(payroll)) {
             return res.status(403).json({
-                message: 'Payroll details are available for paid payrolls or finalized previous months.'
+                message: 'Payroll details are not available for this record.',
             });
         }
 

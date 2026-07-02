@@ -3,6 +3,7 @@ import axios from '../../utils/axios';
 import { getAuthEmployeeId } from '../../utils/authUser';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
+import { getLeaveSummary } from '../../constants/leaveConstants';
 
 const LeaveEncashment = () => {
     const employee = useSelector(state => state.auth.employee || state.auth.user);
@@ -38,10 +39,13 @@ const LeaveEncashment = () => {
             const res = await axios.get(`/v1/admin/leave-policy/balance/${employeeDocId}`, {
                 params: { year: new Date().getFullYear() }
             });
-            if (res.data.balance?.balances) {
+            if (res.data.balance) {
+                const summary = getLeaveSummary(res.data.balance);
                 const balances = {};
-                res.data.balance.balances.forEach(b => {
-                    balances[b.leaveType] = b.available;
+                (res.data.balance.balances || []).forEach((b) => {
+                    balances[b.leaveType] = b.isPooledCategory
+                        ? summary.totalAvailableLeave
+                        : (b.availableDays ?? b.available ?? 0);
                 });
                 setAvailableBalances(balances);
             }

@@ -12,6 +12,7 @@ import {
 } from '../helpers/permissionService.js';
 import { LEGACY_ACCESS, PERMISSIONS } from '../config/permissions.constants.js';
 import { hasPermission } from '../helpers/permissionService.js';
+import { canManageEmployeeLifecycle } from '../helpers/employeeLifecycleHelper.js';
 
 /**
  * Attach req.authContext { permissions, role buckets, scope } from JWT.
@@ -187,6 +188,21 @@ export const requireExecutiveAccess = composeMiddleware(
 export const requirePayrollPublish = composeMiddleware(
   requireAnyPermission([PERMISSIONS.PAYROLL_PUBLISH])
 );
+
+/** Deactivate, terminate, or delete employees — org admin or HR only. */
+export const requireEmployeeLifecycleManage = composeMiddleware([
+  attachAuthContext,
+  (req, res, next) => {
+    if (canManageEmployeeLifecycle(req)) {
+      return next();
+    }
+    return res.status(403).json({
+      success: false,
+      message: 'Only organization admin or HR can deactivate, terminate, or delete employees.',
+      code: 'INSUFFICIENT_PERMISSIONS',
+    });
+  },
+]);
 
 export const requireEmployeeCreate = composeMiddleware(
   requireAnyPermission([PERMISSIONS.EMPLOYEE_CREATE])

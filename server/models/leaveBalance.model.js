@@ -95,9 +95,55 @@ const leaveBalanceSchema = new mongoose.Schema({
         toYear: Number,
         leaveType: String,
         amount: Number,
-        date: Date
+        date: Date,
+        processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+        previousAvailable: Number,
     }],
+
+    /** Prevents duplicate carry-forward for the same year transition */
+    carryForwardProcessed: [{
+        fromYear: Number,
+        toYear: Number,
+        processedAt: Date,
+        processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+    }],
+
+    /** Last automated period recalculation marker */
+    lastAutomatedUpdate: {
+        fromYear: Number,
+        fromMonth: Number,
+        toYear: Number,
+        toMonth: Number,
+        updatedAt: Date,
+        updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+    },
     
+    /** Monthly allocation log — prevents duplicate monthly credits */
+    monthlyAllocationLog: [{
+        year: Number,
+        month: Number,
+        leaveType: String,
+        amount: Number,
+        allocatedAt: { type: Date, default: Date.now },
+    }],
+
+    /** Employee-level leave wallet (shared pool) — not tied to any leave type */
+    employeeLeaveSummary: {
+        manualOverride: {
+            active: { type: Boolean, default: false },
+            available: Number,
+            accrued: Number,
+            used: Number,
+            carriedForward: Number,
+            /** Month/year this manual balance anchors rolling accrual from */
+            anchorYear: Number,
+            anchorMonth: Number,
+            reason: String,
+            adjustedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            adjustedAt: Date,
+        },
+    },
+
     // Metadata
     isLocked: {
         type: Boolean,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { clockIn, clockOut, breakIn, breakOut, fetchLogs, fetchMyTodayStatus } from '../../context/attendanceSlice';
@@ -13,6 +13,8 @@ import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft 
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { isHR } from '../../utils/managerHelper';
 import { isLocationRequiredForPunch } from '../../utils/attendanceLocationUtils';
 
 /**
@@ -31,7 +33,25 @@ const AttendanceBox = ({ variant = 'default' }) => {
   } = useSelector((state) => state.attendance);
   
   const currentUser = useSelector((state) => state.auth.user);
+  const sessionEmployee = useSelector((state) => state.employeeDetails?.employee);
+  const { isHrManager, isHrExecutive } = useAuthPermissions();
   const orgTimezone = useSelector((state) => state.timezone.timezone);
+
+  /** HR portal uses workforce employee id for attendance rows, not admin user id. */
+  const isHrAttendanceUser =
+    isHrManager || isHrExecutive || isHR(currentUser || sessionEmployee);
+
+  const attendanceUserId = useMemo(() => {
+    if (isHrAttendanceUser) {
+      const hrEmployeeId =
+        sessionEmployee?._id ||
+        sessionEmployee?.id ||
+        currentUser?.employeeProfileId ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('employeeProfileId') : null);
+      if (hrEmployeeId) return String(hrEmployeeId);
+    }
+    return String(currentUser?.id || currentUser?._id || '');
+  }, [isHrAttendanceUser, sessionEmployee, currentUser]);
 
   const [currentSession, setCurrentSession] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -93,9 +113,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
     if (sessions && sessions.length > 0) {
       const todaySession = sessions.find((session) => {
         const sessionUserId = session.userId?._id || session.userId;
-        const currentUserId = currentUser?.id || currentUser?._id;
-        const belongsToUser =
-          sessionUserId?.toString() === currentUserId?.toString();
+        const belongsToUser = sessionUserId?.toString() === attendanceUserId;
         return belongsToUser && isSessionForToday(session, orgTimezone);
       });
 
@@ -116,7 +134,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
       setIsOnBreak(false);
       setBreakCount(0);
     }
-  }, [sessions, currentUser, orgTimezone]);
+  }, [sessions, attendanceUserId, orgTimezone]);
 
   // Update current time every second
   useEffect(() => {
@@ -277,8 +295,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
       const openSession = sessions.find(session => {
         if (session.clockOut) return false;
         const sessionUserId = session.userId?._id || session.userId;
-        const currentUserId = currentUser?.id || currentUser?._id;
-        const belongsToUser = sessionUserId?.toString() === currentUserId?.toString();
+        const belongsToUser = sessionUserId?.toString() === attendanceUserId;
         return belongsToUser && isSessionForToday(session, orgTimezone);
       });
 
@@ -323,6 +340,17 @@ const AttendanceBox = ({ variant = 'default' }) => {
         
         if (result?.warning) {
           toast.warning(result.warning);
+        }
+
+        if (isHrAttendanceUser) {
+          try {
+            const status = await dispatch(fetchMyTodayStatus()).unwrap();
+            if (status?.session) {
+              setCurrentSession(status.session);
+            }
+          } catch {
+            // session already merged via clockIn.fulfilled when ids match
+          }
         }
       } catch (err) {
         // Extract error message with better handling

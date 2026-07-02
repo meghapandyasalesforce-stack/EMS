@@ -4,7 +4,7 @@ import { deleteEmployee, getAllEmployees } from "../../controllers/admin/employe
 import { refreshToken } from "../../controllers/auth/refreshTokenController.js";
 import {
   requireEmployeeCreate,
-  requireEmployeeDelete,
+  requireEmployeeLifecycleManage,
   requireEmployeeList,
 } from '../../middlewares/requirePermission.js';
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
@@ -33,6 +33,6 @@ router.route("/refresh-token").post(refreshToken); // Refresh access token
 router.route("/reset-password").patch(loginLimiter, isAuthenticated, resetEmployeePassword); // Rate limited password reset
 // Allow managers to view employees in their department
 router.route("/get-all-employees").get(requireEmployeeList, getAllEmployees);
-router.route("/delete-employee/:employeeId").delete(requireEmployeeDelete, deleteEmployee);
+router.route("/delete-employee/:employeeId").delete(requireEmployeeLifecycleManage, deleteEmployee);
 
 export default router;
