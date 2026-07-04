@@ -366,19 +366,21 @@ const getTechNavigation = () => [
 ];
 
 /**
- * Org owner "Me" portal — profile sections (same routes as ProfileDetails).
+ * Org owner "Me" portal — employee navigation items
  */
 const getMeProfileNavigation = () => [
-    { path: '/profile-details', name: 'Personal Details', icon: <CgProfile /> },
-    { path: '/contact-details', name: 'Contact Details', icon: <FaEnvelope /> },
-    { path: '/next-of-kin-details', name: 'Next of kin Details', icon: <FaUserCheck /> },
-    { path: '/education-qualifications', name: 'Education Qualifications', icon: <FaGraduationCap /> },
-    { path: '/guarantor-details', name: 'Guarantor Details', icon: <FaHandshake /> },
-    { path: '/family-details', name: 'Family Details', icon: <FaUsers /> },
-    { path: '/job-details', name: 'Job Details', icon: <FaUserTie /> },
-    { path: '/financial-details', name: 'Financial Details', icon: <FaDollarSign /> },
-    { path: '/employee-payroll', name: 'Payroll', icon: <FaMoneyBill /> },
-    { path: '/employee/id-card', name: 'ID Card', icon: <FaIdCard /> },
+    { path: "/dashboard-employee", name: "Dashboard", icon: <FaHome /> },
+    { path: "/employee/leave-attendance", name: "Leave & Attendance", icon: <IoBookmarks /> },
+    { path: "/my-attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
+    { path: "/employee/projects", name: "Projects", icon: <VscProject /> },
+    { path: "/one-on-one", name: "One-on-One", icon: <FaUserCheck /> },
+    { path: "/employee/benefits-learning", name: "Benefits & Learning", icon: <FaGift /> },
+    { path: "/employee/my-documents", name: "My Documents", icon: <FaFileAlt /> },
+    { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
+    { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
+    { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
+    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
+    { path: "/notifications", name: "Notifications", icon: <FaBell /> },
 ];
 
 /**

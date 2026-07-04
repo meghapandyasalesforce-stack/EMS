@@ -129,7 +129,7 @@ const leaveBalanceSchema = new mongoose.Schema({
 
     /** Employee-level leave wallet (shared pool) — not tied to any leave type */
     employeeLeaveSummary: {
-        /** Migrated opening balance — permanent historical starting point (first manual correction) */
+        /** Current balance snap from Manual Correction — latest save is the accrual starting point */
         openingLeaveBalance: {
             active: { type: Boolean, default: false },
             balance: Number,
@@ -153,6 +153,15 @@ const leaveBalanceSchema = new mongoose.Schema({
             adjustedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
             adjustedAt: Date,
         },
+        /** HR-added manual carry forward entries with effective dates */
+        manualCarryForwards: [{
+            amount: Number,
+            effectiveYear: Number,
+            effectiveMonth: Number,
+            reason: String,
+            addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            addedAt: Date,
+        }],
     },
 
     // Metadata

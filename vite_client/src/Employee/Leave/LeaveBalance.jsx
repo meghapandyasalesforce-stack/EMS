@@ -81,23 +81,17 @@ const LeaveBalance = () => {
             )}
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600 mb-1">Total Accrued</p>
+                    <p className="text-sm text-gray-600 mb-1">This Month Leave</p>
                     <p className="text-2xl font-bold text-theme-secondary">
-                        {leaveSummary.totalAccrued} days
+                        {leaveSummary.earnedThisMonth} days
                     </p>
                 </div>
                 <div className="bg-white rounded-lg shadow p-4">
                     <p className="text-sm text-gray-600 mb-1">Total Used</p>
                     <p className="text-2xl font-bold text-red-600">
                         {leaveSummary.totalUsed} days
-                    </p>
-                </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600 mb-1">Pending</p>
-                    <p className="text-2xl font-bold text-yellow-600">
-                        {leaveSummary.totalPending} days
                     </p>
                 </div>
                 <div className="bg-white rounded-lg shadow p-4">
@@ -160,31 +154,15 @@ const LeaveBalance = () => {
                     <h3 className="text-lg font-semibold mb-4">Employee Leave Summary</h3>
                     <div className="space-y-2">
                         <div className="flex justify-between">
-                            <span className="text-gray-600">Total Accrued:</span>
-                            <span className="font-medium">{leaveSummary.totalAccrued} days</span>
+                            <span className="text-gray-600">This Month Leave:</span>
+                            <span className="font-medium">{leaveSummary.earnedThisMonth} days</span>
                         </div>
-                        {leaveSummary.totalCarriedForward > 0 && (
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Carried Forward:</span>
-                                <span className="font-medium text-theme-secondary">
-                                    +{leaveSummary.totalCarriedForward} days
-                                </span>
-                            </div>
-                        )}
                         <div className="flex justify-between">
                             <span className="text-gray-600">Total Used:</span>
                             <span className="font-medium text-red-600">
                                 -{leaveSummary.totalUsed} days
                             </span>
                         </div>
-                        {leaveSummary.totalPending > 0 && (
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Pending:</span>
-                                <span className="font-medium text-yellow-600">
-                                    -{leaveSummary.totalPending} days
-                                </span>
-                            </div>
-                        )}
                         <div className="border-t pt-2 mt-2">
                             <div className="flex justify-between mb-2">
                                 <span className="font-semibold">Available:</span>

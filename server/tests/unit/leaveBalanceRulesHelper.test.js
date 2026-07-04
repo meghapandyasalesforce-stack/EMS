@@ -10,6 +10,7 @@ import {
     isMonthlyAccrualMonth,
     roundLeaveDays,
     getEffectiveJoiningDate,
+    computeRemainingPreJoinCarryForward,
 } from '../../helpers/leaveBalanceRulesHelper.js';
 
 describe('leaveBalanceRulesHelper', () => {
@@ -633,5 +634,45 @@ describe('leaveBalanceRulesHelper', () => {
         expect(result.ledgerByYear[2026][5].available).toBe(3 + 125 * 1.5);
         expect(result.ledgerByYear[2026][6].available).toBe(40);
         expect(result.ledgerByYear[2026][7].available).toBe(41.5);
+    });
+
+    it('pre-join carry seed continues from join month (June 2026) with monthly accrual', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2026,
+            joinMonthIndex: 5,
+            endYear: 2026,
+            endMonthIndex: 7,
+            monthlyRate: 1.5,
+            initialBalance: 10,
+        });
+
+        expect(result.ledgerByYear[2026][0].previousBalance).toBe(10);
+        expect(result.ledgerByYear[2026][0].month).toBe(6);
+        expect(result.ledgerByYear[2026][0].available).toBe(11.5);
+        expect(result.ledgerByYear[2026][1].available).toBe(13);
+        expect(result.ledgerByYear[2026][2].available).toBe(14.5);
+    });
+
+    it('pre-join carry seed deducts approved leave after join month', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2026,
+            joinMonthIndex: 5,
+            endYear: 2026,
+            endMonthIndex: 6,
+            monthlyRate: 1.5,
+            initialBalance: 10,
+            getUsedForMonth: (year, monthIndex) =>
+                year === 2026 && monthIndex === 6 ? 3 : 0,
+        });
+
+        expect(result.ledgerByYear[2026][0].available).toBe(11.5);
+        expect(result.ledgerByYear[2026][1].available).toBe(10);
+    });
+
+    it('computeRemainingPreJoinCarryForward reduces carry as leave is used', () => {
+        expect(computeRemainingPreJoinCarryForward(10, 0)).toBe(10);
+        expect(computeRemainingPreJoinCarryForward(10, 3)).toBe(7);
+        expect(computeRemainingPreJoinCarryForward(10, 10)).toBe(0);
+        expect(computeRemainingPreJoinCarryForward(10, 15)).toBe(0);
     });
 });

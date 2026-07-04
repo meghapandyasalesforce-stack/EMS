@@ -855,12 +855,12 @@ const LeaveAttendanceHub = () => {
 
           {panelTab === 'leave-summary' && (
             <div className="space-y-5">
-              <div className="rounded-lg border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-3 text-sm text-[#0C4A6E]">
-                <p className="font-semibold">Leave approval flow</p>
+               {/* <div className="rounded-lg border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-3 text-sm text-[#0C4A6E]"> */}
+                {/* <p className="font-semibold">Leave approval flow</p>
                 <p className="mt-1 text-xs text-[#0369A1]">
                   Apply for leave → Manager approves → HR gives final approval. Balance updates only after HR approval.
-                </p>
-              </div>
+                // </p> */} 
+              {/* </div> */}
 
               <button
                 onClick={() => navigate('/leave')}

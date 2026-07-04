@@ -137,31 +137,15 @@ const EmployeeLeaveBalanceViewer = () => {
                                 <h4 className="text-lg font-semibold mb-4">Employee Leave Summary</h4>
                                 <div className="space-y-2">
                                     <div className="flex justify-between">
-                                        <span className="text-gray-600">Total Accrued:</span>
-                                        <span className="font-medium">{leaveSummary.totalAccrued} days</span>
+                                        <span className="text-gray-600">Current Month Accrual:</span>
+                                        <span className="font-medium">{leaveSummary.earnedThisMonth} days</span>
                                     </div>
-                                    {leaveSummary.totalCarriedForward > 0 && (
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Carried Forward:</span>
-                                            <span className="font-medium text-theme-secondary">
-                                                +{leaveSummary.totalCarriedForward} days
-                                            </span>
-                                        </div>
-                                    )}
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">Total Used:</span>
                                         <span className="font-medium text-red-600">
                                             -{leaveSummary.totalUsed} days
                                         </span>
                                     </div>
-                                    {leaveSummary.totalPending > 0 && (
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Pending:</span>
-                                            <span className="font-medium text-yellow-600">
-                                                -{leaveSummary.totalPending} days
-                                            </span>
-                                        </div>
-                                    )}
                                     <div className="border-t pt-2 mt-2">
                                         <div className="flex justify-between">
                                             <span className="font-semibold">Available:</span>
