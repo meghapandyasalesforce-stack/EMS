@@ -8,7 +8,7 @@ import { isRedisConnected } from '../config/redis.js';
 import processEmailJob from './emailJob.js';
 import processNotificationJob from './notificationJob.js';
 import { startCompOffExpiryWorker, scheduleCompOffExpiry } from './compOffExpiryJob.js';
-import { startAutoCheckOutWorker, scheduleAutoCheckOut } from './autoCheckOutJob.js';
+import { startAutoCheckOutWorker, scheduleAutoCheckOut, processAutoCheckOut, sendPreCheckOutNotifications } from './autoCheckOutJob.js';
 import { scheduleLeaveBalanceJobs } from './leaveBalanceJob.js';
 import { startApprovalTimeoutWorker, scheduleApprovalTimeout } from './approvalTimeoutJob.js';
 import logger from '../helpers/logger.js';
@@ -37,6 +37,22 @@ export const initializeWorkers = async () => {
                 logger.info('Payroll run jobs scheduled (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule payroll run jobs', { error: error.message });
+            }
+
+            // Auto check-out via direct cron (no Redis needed)
+            try {
+                const cron = await import('node-cron');
+                cron.default.schedule('* * * * *', async () => {
+                    try {
+                        await processAutoCheckOut();
+                        await sendPreCheckOutNotifications();
+                    } catch (e) {
+                        logger.error('Auto check-out cron error', { error: e.message });
+                    }
+                });
+                logger.info('Auto check-out cron scheduled (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule auto check-out cron', { error: error.message });
             }
 
             return;

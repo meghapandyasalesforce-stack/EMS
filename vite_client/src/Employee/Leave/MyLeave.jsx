@@ -229,7 +229,7 @@ const MyLeavePage = () => {
     return <div className="text-center py-10 text-red-500">Error: {state.error}</div>;
   }
 
-  if (!statsData && !leaveBalance) {
+  if (!statsData && !leaveBalance && leavesData.length === 0) {
     return <div className="text-center py-10 text-gray-500">No leave data available.</div>;
   }
 

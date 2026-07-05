@@ -57,7 +57,7 @@ const CheckInOut = () => {
   const [attendanceRule, setAttendanceRule] = useState(null);
   const [distanceFromOffice, setDistanceFromOffice] = useState(null);
   const [isWithinRadius, setIsWithinRadius] = useState(null);
-  const [locationWatchId, setLocationWatchId] = useState(null);
+  const locationWatchIdRef = useRef(null);
   
   // Permission management
   const {
@@ -274,56 +274,49 @@ const CheckInOut = () => {
 
   // Real-time location monitoring for distance calculation
   useEffect(() => {
-    if (!attendanceRule?.coordinates || !locationRequiredUI) {
+    // Clear any existing watcher before starting a new one
+    if (locationWatchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchIdRef.current);
+      locationWatchIdRef.current = null;
+    }
+
+    if (!attendanceRule?.coordinates || !locationRequiredUI || !isPermissionGranted('location')) {
       return;
     }
 
-    if (!isPermissionGranted('location')) {
-      return; // Don't monitor if location permission not granted
-    }
+    if (!navigator.geolocation) return;
 
-    // Start watching location for real-time distance updates
-    if (navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          const officeCoords = attendanceRule.coordinates;
-          
-          if (officeCoords && officeCoords.latitude && officeCoords.longitude) {
-            const result = checkLocationWithinRadius(
-              latitude,
-              longitude,
-              officeCoords.latitude,
-              officeCoords.longitude,
-              attendanceRule.maximumRadius
-            );
-            
-            if (result) {
-              setDistanceFromOffice(result.distance);
-              setIsWithinRadius(result.isWithinRadius);
-            }
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const officeCoords = attendanceRule.coordinates;
+        if (officeCoords?.latitude && officeCoords?.longitude) {
+          const result = checkLocationWithinRadius(
+            latitude,
+            longitude,
+            officeCoords.latitude,
+            officeCoords.longitude,
+            attendanceRule.maximumRadius
+          );
+          if (result) {
+            setDistanceFromOffice(result.distance);
+            setIsWithinRadius(result.isWithinRadius);
           }
-        },
-        (error) => {
-          // Silently handle location watch errors
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 5000 // Update every 5 seconds
         }
-      );
-      
-      setLocationWatchId(watchId);
-    }
+      },
+      () => { /* silently handle watch errors */ },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
 
-    // Cleanup: stop watching when component unmounts or rule changes
+    locationWatchIdRef.current = watchId;
+
     return () => {
-      if (locationWatchId !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(locationWatchId);
+      if (locationWatchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locationWatchIdRef.current);
+        locationWatchIdRef.current = null;
       }
     };
-  }, [attendanceRule, isPermissionGranted, locationWatchId, locationRequiredUI]);
+  }, [attendanceRule, isPermissionGranted, locationRequiredUI]);
 
   // Get network information
   const getNetworkInfo = () => {

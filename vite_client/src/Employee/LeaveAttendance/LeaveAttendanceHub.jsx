@@ -641,7 +641,7 @@ const LeaveAttendanceHub = () => {
                                 )}
                                 {notPunchedOut && (
                                   <span className="rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                                    Not out
+                                    Not Punch out
                                   </span>
                                 )}
                               </div>

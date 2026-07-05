@@ -12,6 +12,9 @@ import { getDateKeyInTimezone } from './timezoneHelper.js';
 /** Default overtime multiplier when salary structure does not specify a rate. */
 export const DEFAULT_OVERTIME_RATE = 1.5;
 
+/** ESI applies only when monthly gross is at or below this statutory limit (₹21,000). */
+export const ESI_GROSS_WAGE_LIMIT = 21000;
+
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
 const calendarCache = new Map();
@@ -565,7 +568,10 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         basicSalary = earnings.basicWage;
         const pfWageBase = pfWageFromBasicWage(basicSalary);
         earnings.pfEmployer = computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, pfWageBase);
-        earnings.esiEmployer = computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, basicSalary);
+        const esiEligible = effectiveGross <= ESI_GROSS_WAGE_LIMIT;
+        earnings.esiEmployer = esiEligible
+            ? computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, basicSalary)
+            : 0;
         earnings.totalEarnings =
             (earnings.basicWage || 0) +
             (earnings.houseRentAllowance || 0) +
@@ -581,7 +587,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
         deductions = {
             pfEmployee: computeConfiguredComponent(salaryStructure?.deductions?.pfEmployee, pfWageBase),
-            esiEmployee: computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary),
+            esiEmployee: esiEligible
+                ? computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary)
+                : 0,
             professionalTax: computeConfiguredComponent(salaryStructure?.deductions?.professionalTax, effectiveGross),
             incomeTax: 0,
             advanceSalary: 0,
@@ -604,6 +612,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         const overtimeRatePerHour = (perDayRate / 8) * DEFAULT_OVERTIME_RATE;
         const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
 
+        const esiEligibleFallback = effectiveGross <= ESI_GROSS_WAGE_LIMIT;
         earnings = {
             basicWage: formula.basicWage,
             houseRentAllowance: formula.houseRentAllowance,
@@ -614,9 +623,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             specialAllowance: formula.specialAllowance,
             performanceBonus: 0,
             projectBonus: 0,
-            attendanceBonus: unpaidDays === 0 ? 0 : 0,
+            attendanceBonus: 0,
             pfEmployer: employerPfFromBasicWage(basicSalary),
-            esiEmployer: Math.round(basicSalary * 0.0325)
+            esiEmployer: esiEligibleFallback ? Math.round(basicSalary * 0.0325) : 0
         };
         earnings.totalEarnings =
             formula.totalEarnings +
@@ -628,7 +637,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
         deductions = {
             pfEmployee: employeePfFromBasicWage(basicSalary),
-            esiEmployee: Math.round(basicSalary * 0.0075),
+            esiEmployee: esiEligibleFallback ? Math.round(basicSalary * 0.0075) : 0,
             professionalTax: 0,
             incomeTax: 0,
             advanceSalary: 0,

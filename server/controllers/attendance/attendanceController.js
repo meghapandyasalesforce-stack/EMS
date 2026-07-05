@@ -1520,7 +1520,9 @@ export const getTodayStatus = async (req, res) => {
     const organizationId = getOrganizationId(req);
     const dayContext = await getAttendanceDayContext(organizationId);
     // 1. Get all active employees for this organization
-    let employeeQuery = addOrganizationFilter(req, { active: true });
+    let employeeQuery = addOrganizationFilter(req, {
+      $or: [{ status: 'active' }, { active: true }]
+    });
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees attendance for employees with manager="Arun Kumar" or "Arun"
@@ -1698,7 +1700,9 @@ export const getEmployeeList = async (req, res) => {
   try {
     const { department, includeInactive } = req.query;
     
-    const query = addOrganizationFilter(req, { active: true }); // Default to only active employees
+    const query = addOrganizationFilter(req, {
+      $or: [{ status: 'active' }, { active: true }]
+    });
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees employees with manager="Arun Kumar" or "Arun"
@@ -1706,7 +1710,8 @@ export const getEmployeeList = async (req, res) => {
     if (isManager && req.employee) {
       const managerQuery = buildManagerMatchQuery(req.employee);
       if (managerQuery && managerQuery.$or) {
-        query.$or = managerQuery.$or;
+        query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
+        delete query.$or;
       }
       const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
       logger.info('Manager filtering employee list by manager field', {
@@ -2194,11 +2199,16 @@ export const getTeamAttendanceHistory = async (req, res) => {
       limit = '25'
     } = req.query;
 
-    const query = addOrganizationFilter(req, { active: true });
+    const query = addOrganizationFilter(req, {
+      $or: [{ status: 'active' }, { active: true }]
+    });
     const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
     if (isManager && req.employee) {
       const managerQuery = buildManagerMatchQuery(req.employee);
-      if (managerQuery?.$or) query.$or = managerQuery.$or;
+      if (managerQuery?.$or) {
+        query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
+        delete query.$or;
+      }
     } else if (department) {
       query.department = department;
     }

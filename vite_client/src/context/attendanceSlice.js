@@ -93,14 +93,13 @@ export const clockOut = createAsyncThunk(
           return undefined;
         }
         const num = Number(value);
-        if (isNaN(num) || num === 0) {
+        if (isNaN(num)) {
           return undefined;
         }
-        // Validate coordinate ranges
         if (isLatitude) {
-          if (num < -90 || num > 90) return undefined; // Invalid latitude
+          if (num < -90 || num > 90) return undefined;
         } else {
-          if (num < -180 || num > 180) return undefined; // Invalid longitude
+          if (num < -180 || num > 180) return undefined;
         }
         return num;
       };
