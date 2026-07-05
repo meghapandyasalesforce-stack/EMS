@@ -160,12 +160,6 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
                 daysClassName="text-red-500"
               />
             </div>
-            {carried > 0 && (
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-600">Carried forward:</dt>
-                <BalanceMetricValue value={carried} />
-              </div>
-            )}
             <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-3">
               <dt className="font-semibold text-slate-800">Available:</dt>
               <BalanceMetricValue
@@ -206,28 +200,27 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
     totalUsed: 0,
     totalCarriedForward: 0,
     totalPending: 0,
+    earnedThisMonth: 0,
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-[#20C997]/15 via-white to-slate-50 shadow-sm p-5">
+    <div className="overflow-hidden rounded-2xl border border-[#20C997]/20 bg-gradient-to-br from-[#20C997]/10 via-white to-[#F0FDF4] shadow-md p-6">
       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#0d9488]">
         Employee leave summary
       </p>
-      <h2 className="mt-1 text-2xl font-bold text-slate-900">
+      <h2 className="mt-2 text-3xl font-bold text-slate-900">
         {loading ? '…' : `${fmtDays(totals.totalAvailableLeave)} days available`}
       </h2>
-      {!loading && subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+      {!loading && subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
       {!loading && (
-        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
           {[
-            { label: 'Total accrued', value: totals.totalAccrued },
-            { label: 'Total used', value: totals.totalUsed, valueClassName: 'text-red-500' },
-            { label: 'Carried forward', value: totals.totalCarriedForward },
-            { label: 'Pending', value: totals.totalPending, valueClassName: 'text-amber-600' },
+            { label: 'Current Month Accrual', value: totals.earnedThisMonth },
+            { label: 'Total used', value: totals.totalUsed, valueClassName: 'text-red-600' },
           ].map(({ label, value, valueClassName = 'text-slate-900' }) => (
-            <div key={label} className="rounded-xl border border-slate-100 bg-white/80 px-3 py-2.5">
-              <dt className="text-xs text-slate-500">{label}</dt>
-              <dd className={`mt-1 text-lg font-semibold ${valueClassName}`}>{fmtDays(value)} days</dd>
+            <div key={label} className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover:shadow-md transition-shadow">
+              <dt className="text-xs font-medium text-slate-500 mb-2">{label}</dt>
+              <dd className={`text-2xl font-bold ${valueClassName}`}>{fmtDays(value)} <span className="text-sm font-normal text-slate-500">days</span></dd>
             </div>
           ))}
         </dl>

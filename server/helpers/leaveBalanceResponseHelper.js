@@ -1,4 +1,5 @@
 import Leave from '../models/leave.model.js';
+import LeaveBalance from '../models/leaveBalance.model.js';
 import Employee from '../models/employee.model.js';
 import leaveBalanceEngine from '../services/leaveBalanceEngine.js';
 import { getLeaveTypeVariantsForBalance } from './leaveTypeHelper.js';
@@ -17,9 +18,16 @@ import {
     clampLeaveViewPeriod,
     isLeaveYearAllowed,
 } from './leaveYearBoundsHelper.js';
-import { getAccrualMonthRange, roundLeaveDays } from './leaveBalanceRulesHelper.js';
+import {
+    calendarMonthSortKey,
+    computeRemainingPreJoinCarryForward,
+    getAccrualMonthRange,
+    manualAvailableFromOverride,
+    roundLeaveDays,
+} from './leaveBalanceRulesHelper.js';
 import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
 import { resolveLeaveBalanceOrganizationId } from './leaveBalanceAccessHelper.js';
+import logger from './logger.js';
 
 function buildYearSummaries(ledgerByYear = {}, monthlyRate = 1.5) {
     return Object.keys(ledgerByYear)
@@ -41,6 +49,68 @@ function buildYearSummaries(ledgerByYear = {}, monthlyRate = 1.5) {
                 fullYearCredit: roundLeaveDays(monthlyRate * 12),
             };
         });
+}
+
+export { manualAvailableFromOverride } from './leaveBalanceRulesHelper.js';
+
+/**
+ * Latest active manual override anchored at or before the view month (carry-forward safe).
+ */
+export function pickBestManualOverrideAtView(overrides, viewYear, viewMonth) {
+    const viewSortKey = calendarMonthSortKey(viewYear, viewMonth);
+    let best = null;
+
+    for (const entry of overrides) {
+        const { anchorYear, anchorMonth, adjustedAt = 0, ...fields } = entry;
+        const anchorSortKey = calendarMonthSortKey(anchorYear, anchorMonth);
+        if (anchorSortKey > viewSortKey) {
+            continue;
+        }
+        if (
+            !best ||
+            anchorSortKey > best.anchorSortKey ||
+            (anchorSortKey === best.anchorSortKey && adjustedAt >= best.adjustedAt)
+        ) {
+            best = { anchorYear, anchorMonth, anchorSortKey, adjustedAt, ...fields };
+        }
+    }
+
+    return best;
+}
+
+async function resolveApplicableManualOverrideAtView(employeeId, organizationId, viewYear, viewMonth) {
+    const docs = await LeaveBalance.find({
+        organizationId,
+        employee: employeeId,
+        'employeeLeaveSummary.manualOverride.active': true,
+    })
+        .select('year employeeLeaveSummary')
+        .lean();
+
+    const candidates = docs
+        .map((doc) => {
+            const mo = doc.employeeLeaveSummary?.manualOverride;
+            if (!mo?.active) {
+                return null;
+            }
+            const anchorYear = Number(mo.anchorYear ?? doc.year);
+            const anchorMonth = Number(mo.anchorMonth ?? 1);
+            if (!Number.isInteger(anchorYear) || !Number.isInteger(anchorMonth)) {
+                return null;
+            }
+            return {
+                anchorYear,
+                anchorMonth,
+                adjustedAt: mo.adjustedAt ? new Date(mo.adjustedAt).getTime() : 0,
+                accrued: mo.accrued,
+                used: mo.used,
+                carriedForward: mo.carriedForward,
+                available: mo.available,
+            };
+        })
+        .filter(Boolean);
+
+    return pickBestManualOverrideAtView(candidates, viewYear, viewMonth);
 }
 
 function sortLedgerByYear(ledgerByYear = {}) {
@@ -112,25 +182,63 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         defaultYearlyEntitlement: DEFAULT_LEAVE_ENTITLEMENT_DAYS,
     };
 
-    const periodOpeningBalance = await leaveBalanceEngine.resolveEmployeeOpeningBalance(
+    const persistedOpening = await leaveBalanceEngine.resolvePersistedOpeningLeaveBalance(
         employeeId,
         resolvedOrganizationId
     );
 
-    const pooledAvailable =
-        balance.$locals?.pooledAvailable ||
-        (await leaveBalanceEngine.computePooledAvailableLeave(
-            employee || { joiningDate: bounds.joiningDate, _id: employeeId },
-            balanceObj.policy,
+    logger.info('[OpeningLeaveBalance] buildEmployeeLeaveBalanceResponse', {
+        employeeId: String(employeeId),
+        viewYear,
+        viewMonth,
+        openingLeaveBalance: persistedOpening
+            ? {
+                  openingYear: persistedOpening.openingYear,
+                  openingMonth: persistedOpening.openingMonth,
+                  balance: persistedOpening.balance,
+              }
+            : null,
+    });
+
+    const pooledAvailable = await leaveBalanceEngine.computePooledAvailableLeave(
+        employee || { joiningDate: bounds.joiningDate, _id: employeeId },
+        balanceObj.policy,
+        resolvedOrganizationId,
+        asOfDate,
+        await leaveBalanceEngine.resolveEmployeeBalanceAnchor(
+            employeeId,
             resolvedOrganizationId,
-            asOfDate,
-            await leaveBalanceEngine.resolveEmployeeBalanceAnchor(
-                employeeId,
-                resolvedOrganizationId,
-                periodOpeningBalance
-            ),
-            periodOpeningBalance
-        ));
+            persistedOpening
+        ),
+        persistedOpening
+    );
+
+    logger.info('[OpeningLeaveBalance] buildEmployeeLeaveBalanceResponse result', {
+        employeeId: String(employeeId),
+        accrualStartYear: pooledAvailable.calculationStartYear,
+        accrualStartMonth: pooledAvailable.calculationStartMonth,
+        loopStartYear: pooledAvailable.loopStartYear,
+        loopStartMonth: pooledAvailable.loopStartMonth,
+        firstProcessedMonth: pooledAvailable.firstProcessedMonth,
+        lastProcessedMonth: pooledAvailable.lastProcessedMonth,
+        finalAvailableBalance: pooledAvailable.available,
+    });
+
+    const periodOpeningBalance = persistedOpening;
+
+    const accrualStartSortKey =
+        (pooledAvailable.calculationStartYear ?? bounds.joiningYear) * 12 +
+        ((pooledAvailable.calculationStartMonth ?? bounds.joiningMonth) - 1);
+    const viewSortKey = viewYear * 12 + (viewMonth - 1);
+    const isBeforeAccrualStart = viewSortKey < accrualStartSortKey;
+    const manualOverrideAtView = await resolveApplicableManualOverrideAtView(
+        employeeId,
+        resolvedOrganizationId,
+        viewYear,
+        viewMonth
+    );
+    const hasManualOverrideAtView = Boolean(manualOverrideAtView);
+    const zeroPreAccrualSummary = isBeforeAccrualStart && !hasManualOverrideAtView;
 
     const pooledTypeSet = new Set(
         leaveBalanceEngine
@@ -180,7 +288,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         const accrualRange = getAccrualMonthRange(
             employee || { joiningDate: bounds.joiningDate },
             viewYear,
-            asOfDate
+            asOfDate,
+            periodOpeningBalance
         );
         b.monthsCompleted = accrualRange.monthsCompleted;
         b.monthsWithCredit = accrualRange.monthsCompleted;
@@ -194,7 +303,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 effectiveConfig,
                 employee || { joiningDate: bounds.joiningDate, _id: employeeId },
                 resolvedOrganizationId,
-                asOfDate
+                asOfDate,
+                periodOpeningBalance
             );
 
             const historyEnd = now;
@@ -202,7 +312,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 effectiveConfig,
                 employee || { joiningDate: bounds.joiningDate, _id: employeeId },
                 resolvedOrganizationId,
-                historyEnd
+                historyEnd,
+                periodOpeningBalance
             );
 
             b.monthlyLedger = rollingAtView.ledger || [];
@@ -219,7 +330,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         if (isPooledType && viewPooledRow) {
             b.availableDays = 0;
             b.available = 0;
-            b.earnedThisMonth = viewPooledRow.credit ?? 0;
+            b.earnedThisMonth = monthlyRate;
             b.lifetimeEarned = viewPooledRow.cumulativeEarned ?? 0;
             b.lifetimeUsed = viewPooledRow.cumulativeUsed ?? b.usedDays;
         } else {
@@ -232,7 +343,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                     0,
                     roundLeaveDays(balanceAsOfView.available) - b.pendingDays
                 );
-                b.earnedThisMonth = balanceAsOfView.credit ?? 0;
+                b.earnedThisMonth = monthlyRate;
                 b.lifetimeEarned = balanceAsOfView.cumulativeEarned ?? b.earnedToDate;
                 b.lifetimeUsed = balanceAsOfView.cumulativeUsed ?? b.usedDays;
             } else {
@@ -258,9 +369,13 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         return b;
     }));
 
-    const pooledClosing = viewPooledRow
-        ? roundLeaveDays(viewPooledRow.available)
-        : roundLeaveDays(pooledAvailable.available ?? 0);
+    const pooledClosing = zeroPreAccrualSummary
+        ? 0
+        : isBeforeAccrualStart && hasManualOverrideAtView
+          ? manualAvailableFromOverride(manualOverrideAtView)
+          : viewPooledRow
+            ? roundLeaveDays(viewPooledRow.available)
+            : roundLeaveDays(pooledAvailable.available ?? 0);
     balanceObj.totalAvailableLeave = Math.max(0, roundLeaveDays(pooledClosing - totalPendingPooled));
 
     const totalPooledUsed = balanceObj.balances
@@ -272,34 +387,63 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         viewYear === periodOpeningBalance.openingYear &&
         viewMonth === Number(periodOpeningBalance.openingMonth);
 
+    const joinSortKey = calendarMonthSortKey(bounds.joiningYear, bounds.joiningMonth);
+    const preJoinCarriedForward = roundLeaveDays(pooledAvailable.preJoinCarriedForward ?? 0);
+    const hasPreJoinCarryIntoJoin =
+        preJoinCarriedForward > 0 && viewSortKey >= joinSortKey;
+
+    const rollBasedCarriedForward = roundLeaveDays(
+        isOpeningMonthView
+            ? periodOpeningBalance.balance
+            : viewPooledRow?.available != null
+              ? viewPooledRow.available
+              : pooledAvailable.yearOpeningBalance ?? 0
+    );
+
+    const manualCarriedForward =
+        manualOverrideAtView?.carriedForward != null &&
+        !Number.isNaN(Number(manualOverrideAtView.carriedForward))
+            ? roundLeaveDays(Number(manualOverrideAtView.carriedForward))
+            : null;
+
+    let totalCarriedForwardValue;
+    if (zeroPreAccrualSummary) {
+        totalCarriedForwardValue = 0;
+    } else if (hasManualOverrideAtView && manualCarriedForward != null) {
+        totalCarriedForwardValue = manualCarriedForward;
+    } else {
+        // Carry forward is always the previous month's closing balance
+        totalCarriedForwardValue = rollBasedCarriedForward;
+    }
+
     balanceObj.leaveSummary = {
         totalAvailableLeave: balanceObj.totalAvailableLeave,
-        totalAccrued: roundLeaveDays(
-            viewPooledRow?.cumulativeEarned ??
-                pooledAvailable.lifetimeEarned ??
-                pooledAvailable.totalEarned ??
-                0
-        ),
-        totalUsed: roundLeaveDays(
-            viewPooledRow?.cumulativeUsed ?? pooledAvailable.lifetimeUsed ?? totalPooledUsed
-        ),
-        totalCarriedForward: roundLeaveDays(
-            isOpeningMonthView
-                ? balanceObj.totalAvailableLeave
-                : viewPooledRow?.previousBalance > 0
-                  ? viewPooledRow.previousBalance
-                  : pooledAvailable.yearOpeningBalance ?? 0
-        ),
-        totalPending: totalPendingPooled,
-        earnedThisMonth: viewPooledRow?.credit ?? 0,
+        totalAccrued: zeroPreAccrualSummary
+            ? 0
+            : roundLeaveDays(
+                  viewPooledRow?.cumulativeEarned ??
+                      pooledAvailable.lifetimeEarned ??
+                      pooledAvailable.totalEarned ??
+                      0
+              ),
+        totalUsed: zeroPreAccrualSummary
+            ? 0
+            : isBeforeAccrualStart && hasManualOverrideAtView
+              ? roundLeaveDays(Number(manualOverrideAtView.used) || 0)
+              : roundLeaveDays(
+                    viewPooledRow?.cumulativeUsed ?? pooledAvailable.lifetimeUsed ?? totalPooledUsed
+                ),
+        totalCarriedForward: totalCarriedForwardValue,
+        totalPending: zeroPreAccrualSummary ? 0 : totalPendingPooled,
+        earnedThisMonth: zeroPreAccrualSummary ? 0 : DEFAULT_LEAVE_ENTITLEMENT_DAYS / 12,
     };
 
     balanceObj.balances = balanceObj.balances.map((row) => {
         if (!pooledTypeSet.has(row.leaveType)) {
             return row;
         }
-        row.carriedForward = 0;
-        row.carriedDays = 0;
+        row.carriedForward = totalCarriedForwardValue;
+        row.carriedDays = totalCarriedForwardValue;
         row.availableDays = 0;
         row.available = 0;
         return row;
