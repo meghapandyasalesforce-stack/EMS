@@ -1,0 +1,208 @@
+import { describe, it, expect } from '@jest/globals';
+import { getDateKeyInTimezone } from '../../helpers/timezoneHelper.js';
+import {
+    DEFAULT_OVERTIME_RATE,
+    countCalendarDaysInclusive,
+    countWorkingDaysInclusive,
+    leaveWorkingDaysInRange,
+    buildIsWorkingDayFn,
+    attendanceDayCredit,
+    buildPaidLeaveByDayMap,
+    sumEffectivePresentDays,
+    computePayrollProration
+} from '../../helpers/payrollGenerationHelper.js';
+
+const TZ = 'Asia/Kolkata';
+const dayKey = (date) => getDateKeyInTimezone(date, TZ);
+
+/** Mon–Fri working-day predicate (no calendar doc). */
+const monFriFn = (date) => {
+    const d = date.getDay();
+    return d !== 0 && d !== 6;
+};
+
+describe('payrollGenerationHelper', () => {
+    describe('countCalendarDaysInclusive', () => {
+        it('counts all days in June 2026', () => {
+            const start = new Date(2026, 5, 1);
+            const end = new Date(2026, 5, 30);
+            expect(countCalendarDaysInclusive(start, end)).toBe(30);
+        });
+
+        it('returns 0 for inverted range', () => {
+            expect(countCalendarDaysInclusive(new Date(2026, 5, 10), new Date(2026, 5, 1))).toBe(0);
+        });
+    });
+
+    describe('countWorkingDaysInclusive', () => {
+        it('counts Mon–Fri in a week', () => {
+            const start = new Date(2026, 5, 1); // Mon
+            const end = new Date(2026, 5, 7); // Sun
+            expect(countWorkingDaysInclusive(start, end, monFriFn)).toBe(5);
+        });
+
+        it('excludes holidays from org calendar', () => {
+            const calendar = {
+                workingDays: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                holidays: [{ date: new Date(2026, 5, 15), isActive: true }] // Mon Jun 15
+            };
+            const isWorkingDayFn = buildIsWorkingDayFn(calendar, dayKey);
+            const start = new Date(2026, 5, 1);
+            const end = new Date(2026, 5, 30);
+            const withHoliday = countWorkingDaysInclusive(start, end, isWorkingDayFn);
+            const withoutHoliday = countWorkingDaysInclusive(start, end, monFriFn);
+            expect(withHoliday).toBe(withoutHoliday - 1);
+        });
+    });
+
+    describe('leaveWorkingDaysInRange', () => {
+        it('counts only working days in leave span', () => {
+            const leave = {
+                startDate: new Date(2026, 5, 5), // Fri
+                endDate: new Date(2026, 5, 8) // Mon
+            };
+            expect(leaveWorkingDaysInRange(leave, new Date(2026, 5, 1), new Date(2026, 5, 30), monFriFn)).toBe(2);
+        });
+    });
+
+    describe('attendanceDayCredit', () => {
+        it('returns 0 when hours are zero', () => {
+            expect(attendanceDayCredit({ status: 'present', effectiveHours: 0, grossHours: 0 })).toBe(0);
+        });
+
+        it('returns fractional credit for partial hours', () => {
+            expect(attendanceDayCredit({ status: 'present', effectiveHours: 4 })).toBe(0.5);
+            expect(attendanceDayCredit({ status: 'present', effectiveHours: 8 })).toBe(1);
+        });
+
+        it('caps half-day status at 0.5', () => {
+            expect(attendanceDayCredit({ status: 'half-day', effectiveHours: 6 })).toBe(0.5);
+        });
+    });
+
+    describe('buildPaidLeaveByDayMap', () => {
+        const effStart = new Date(2026, 5, 1);
+        const effEnd = new Date(2026, 5, 30);
+
+        it('credits full paid leave on each overlapping working day', () => {
+            const leaves = [{
+                leaveType: 'sick',
+                startDate: new Date(2026, 5, 10),
+                endDate: new Date(2026, 5, 10)
+            }];
+            const map = buildPaidLeaveByDayMap(leaves, effStart, effEnd, monFriFn, dayKey);
+            expect(map.get(dayKey(new Date(2026, 5, 10)))).toBe(1);
+        });
+
+        it('credits 0.5 on first overlapping working day for half-day leave', () => {
+            const leaves = [{
+                leaveType: 'casual',
+                isHalfDay: true,
+                duration: 0.5,
+                startDate: new Date(2026, 5, 9),
+                endDate: new Date(2026, 5, 11)
+            }];
+            const map = buildPaidLeaveByDayMap(leaves, effStart, effEnd, monFriFn, dayKey);
+            expect(map.get(dayKey(new Date(2026, 5, 9)))).toBe(0.5);
+            expect(map.get(dayKey(new Date(2026, 5, 10)))).toBeUndefined();
+        });
+
+        it('skips loss_of_pay leaves', () => {
+            const leaves = [{
+                leaveType: 'loss_of_pay',
+                startDate: new Date(2026, 5, 10),
+                endDate: new Date(2026, 5, 10)
+            }];
+            const map = buildPaidLeaveByDayMap(leaves, effStart, effEnd, monFriFn, dayKey);
+            expect(map.size).toBe(0);
+        });
+    });
+
+    describe('sumEffectivePresentDays', () => {
+        const effStart = new Date(2026, 5, 1);
+        const effEnd = new Date(2026, 5, 7);
+
+        it('combines attendance and leave credits capped at 1 per day', () => {
+            const key = dayKey(new Date(2026, 5, 2)); // Tue
+            const attByDay = new Map([[key, 0.5]]);
+            const paidLeaveByDay = new Map([[key, 0.5]]);
+            const total = sumEffectivePresentDays(
+                effStart,
+                effEnd,
+                attByDay,
+                paidLeaveByDay,
+                monFriFn,
+                dayKey
+            );
+            expect(total).toBe(1);
+        });
+    });
+
+    describe('computePayrollProration', () => {
+        it('deducts one unpaid working day from full-month salary', () => {
+            const { effectiveGross, unpaidWorkingDays, paidPayrollDays } = computePayrollProration({
+                fullGross: 30000,
+                fullMonthCalDays: 30,
+                serviceWindowCalDays: 30,
+                attendanceWorkingDays: 22,
+                effectivePresent: 21
+            });
+            expect(unpaidWorkingDays).toBe(1);
+            expect(paidPayrollDays).toBe(29);
+            expect(effectiveGross).toBe(29000);
+        });
+
+        it('does not reduce pay when all working days are covered', () => {
+            const { effectiveGross, unpaidWorkingDays } = computePayrollProration({
+                fullGross: 30000,
+                fullMonthCalDays: 30,
+                serviceWindowCalDays: 30,
+                attendanceWorkingDays: 22,
+                effectivePresent: 22
+            });
+            expect(unpaidWorkingDays).toBe(0);
+            expect(effectiveGross).toBe(30000);
+        });
+    });
+
+    describe('attendance day key alignment', () => {
+        it('uses attendanceDateKey when bucketing attendance rows', () => {
+            const effStart = new Date(2026, 5, 1);
+            const effEnd = new Date(2026, 5, 7);
+            const attByDay = new Map();
+            const record = {
+                date: new Date('2026-06-02T18:30:00.000Z'),
+                attendanceDateKey: '2026-06-03',
+                status: 'present',
+                effectiveHours: 8
+            };
+            const key = record.attendanceDateKey || dayKey(new Date(record.date));
+            attByDay.set(key, Math.min(1, attendanceDayCredit(record)));
+            const paidLeaveByDay = new Map();
+            const total = sumEffectivePresentDays(
+                effStart,
+                effEnd,
+                attByDay,
+                paidLeaveByDay,
+                monFriFn,
+                dayKey
+            );
+            expect(attByDay.has('2026-06-03')).toBe(true);
+            expect(total).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    describe('DEFAULT_OVERTIME_RATE', () => {
+        it('is 1.5 to match salary structure default', () => {
+            expect(DEFAULT_OVERTIME_RATE).toBe(1.5);
+        });
+    });
+});

@@ -8,7 +8,7 @@ import {
     FaCog, FaShieldAlt, FaCreditCard, FaDollarSign, FaFileAlt,
     FaChartLine, FaBuilding, FaTasks, FaUserCheck, FaBell,
     FaGraduationCap, FaHandshake, FaFolderOpen, FaGift, FaUserTie,
-    FaChartBar, FaIdCard, FaClock, FaEnvelope
+    FaChartBar, FaClock
 } from 'react-icons/fa';
 import { FaCrown } from 'react-icons/fa6';
 import { IoBookmarks } from 'react-icons/io5';
@@ -17,6 +17,7 @@ import { VscProject } from 'react-icons/vsc';
 import { mergeSessionProfile } from './profileUtils';
 import { isProjectManager } from './projectManagerHelper';
 import { PERMISSIONS, filterNavByPermissions } from './permissions';
+import { SYSTEM_ROLE_IDS } from './systemRoles';
 
 /**
  * Get navigation items based on user role, department, and position
@@ -46,13 +47,83 @@ const resolveNavFromRbac = (permissionFlags, role, position, profile) => {
     return null;
 };
 
-/** Org owner / HR use profile-section sidebar on the Me tab; employees get the full workspace nav. */
-export const usesMeProfileSidebar = (permissionFlags = {}) =>
-    Boolean(
-        permissionFlags.isOrgOwner ||
-        permissionFlags.isHrManager ||
-        permissionFlags.isHrExecutive
+/**
+ * Me portal workspace role from admin-assigned employee functional roles.
+ * Ignores org-owner / HR platform elevation (those use Admin / HR portal tabs).
+ */
+export const resolveMePortalSystemRole = (profile = {}) => {
+    const functional = new Set(
+        (profile?.functionalRoles || []).map((role) => String(role).toLowerCase())
     );
+
+    if (
+        functional.has('executive') ||
+        functional.has('ceo') ||
+        functional.has('cto') ||
+        functional.has('cfo') ||
+        functional.has('vp')
+    ) {
+        return SYSTEM_ROLE_IDS.EXECUTIVE;
+    }
+    if (functional.has('finance')) {
+        return SYSTEM_ROLE_IDS.PAYROLL_ADMIN;
+    }
+    if (functional.has('hr')) {
+        return SYSTEM_ROLE_IDS.HR_EXECUTIVE;
+    }
+    if (functional.has('manager') || functional.has('project_manager')) {
+        return SYSTEM_ROLE_IDS.LINE_MANAGER;
+    }
+    if (profile?.systemRoleId) {
+        return profile.systemRoleId;
+    }
+    return SYSTEM_ROLE_IDS.EMPLOYEE;
+};
+
+/** Default route when opening the Me portal tab. */
+export const getMePortalHomePath = (profile = {}) => {
+    switch (resolveMePortalSystemRole(profile)) {
+        case SYSTEM_ROLE_IDS.LINE_MANAGER:
+            return '/dashboard-manager';
+        case SYSTEM_ROLE_IDS.PAYROLL_ADMIN:
+            return '/dashboard-finance';
+        case SYSTEM_ROLE_IDS.EXECUTIVE:
+            return '/dashboard-administration';
+        case SYSTEM_ROLE_IDS.HR_MANAGER:
+        case SYSTEM_ROLE_IDS.HR_EXECUTIVE:
+            return '/dashboard-hr';
+        default:
+            return '/dashboard-employee';
+    }
+};
+
+const getNavigationForMePortal = ({ profile, permissions, permissionFlags, position }) => {
+    const systemRoleId = resolveMePortalSystemRole(profile);
+    let items;
+
+    switch (systemRoleId) {
+        case SYSTEM_ROLE_IDS.LINE_MANAGER:
+            items = getManagerNavigation(profile);
+            break;
+        case SYSTEM_ROLE_IDS.PAYROLL_ADMIN:
+            items = getFinanceNavigation();
+            break;
+        case SYSTEM_ROLE_IDS.EXECUTIVE:
+            items = getExecutiveNavigation(position);
+            break;
+        case SYSTEM_ROLE_IDS.HR_MANAGER:
+            items = getHRManagerNavigation();
+            break;
+        case SYSTEM_ROLE_IDS.HR_EXECUTIVE:
+            items = getHRExecutiveNavigation();
+            break;
+        default:
+            items = getEmployeeNavigation();
+            break;
+    }
+
+    return filterNavByPermissions(items, permissions);
+};
 
 const getNavigationForPortal = (portalId, { position, department, jobTitle, profile, permissions, permissionFlags = {} }) => {
     switch (portalId) {
@@ -67,10 +138,7 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
         case 'line_manager':
             return filterNavByPermissions(getManagerNavigation(profile), permissions);
         case 'employee':
-            if (usesMeProfileSidebar(permissionFlags)) {
-                return filterNavByPermissions(getMeProfileNavigation(), permissions);
-            }
-            return filterNavByPermissions(getEmployeeNavigation(), permissions);
+            return getNavigationForMePortal({ profile, permissions, permissionFlags, position });
         default:
             break;
     }
@@ -363,22 +431,6 @@ const getTechNavigation = () => [
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> }
-];
-
-/**
- * Org owner "Me" portal — profile sections (same routes as ProfileDetails).
- */
-const getMeProfileNavigation = () => [
-    { path: '/profile-details', name: 'Personal Details', icon: <CgProfile /> },
-    { path: '/contact-details', name: 'Contact Details', icon: <FaEnvelope /> },
-    { path: '/next-of-kin-details', name: 'Next of kin Details', icon: <FaUserCheck /> },
-    { path: '/education-qualifications', name: 'Education Qualifications', icon: <FaGraduationCap /> },
-    { path: '/guarantor-details', name: 'Guarantor Details', icon: <FaHandshake /> },
-    { path: '/family-details', name: 'Family Details', icon: <FaUsers /> },
-    { path: '/job-details', name: 'Job Details', icon: <FaUserTie /> },
-    { path: '/financial-details', name: 'Financial Details', icon: <FaDollarSign /> },
-    { path: '/employee-payroll', name: 'Payroll', icon: <FaMoneyBill /> },
-    { path: '/employee/id-card', name: 'ID Card', icon: <FaIdCard /> },
 ];
 
 /**
