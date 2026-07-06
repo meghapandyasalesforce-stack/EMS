@@ -379,6 +379,7 @@ const HR_NAV_ITEMS = [
     { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
+    { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_SELF] },
     { path: "/id-card-generator", name: "ID Cards", icon: <FaCreditCard /> },
     { path: "/admin/reports", name: "HR Reports", icon: <FaFileAlt /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
@@ -388,7 +389,7 @@ const HR_NAV_ITEMS = [
 const getHRManagerNavigation = () =>
     HR_NAV_ITEMS.filter((item) => item.path !== '/projects');
 
-/** HR Executive — no Projects or Payroll */
+/** HR Executive — no Projects or admin Payroll; keeps My Payroll */
 const getHRExecutiveNavigation = () =>
     HR_NAV_ITEMS.filter(
         (item) => item.path !== '/projects' && item.path !== '/admin-payroll'
