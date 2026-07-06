@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import Header from './Shared/Header';
 import InstallPrompt from './components/InstallPrompt';
+import ReleaseNotesPopup from './components/ReleaseNotesPopup';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import { checkAuthSession } from './context/Auth/authSlice';
@@ -90,6 +91,7 @@ function App() {
         <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
             {!shouldHideLayout && <Header />}
             <InstallPrompt />
+            <ReleaseNotesPopup />
             {shouldHideLayout ? (
                 <Routes>
                     {renderRoutes(authRoutes)}

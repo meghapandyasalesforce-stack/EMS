@@ -206,8 +206,8 @@ const AttendanceRules = () => {
                 latitude: formData.coordinates.latitude || 0,
                 longitude: formData.coordinates.longitude || 0
             },
-            // Send null if rule timezone matches org timezone — avoids overriding org timezone unnecessarily
-            timezone: formData.timezone === orgTimezone ? null : formData.timezone,
+            // Omit timezone if it matches org timezone — avoids overriding org timezone unnecessarily
+            ...(formData.timezone !== orgTimezone && { timezone: formData.timezone }),
         };
 
         // Removed console.log statements for production

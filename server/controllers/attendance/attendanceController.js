@@ -356,23 +356,17 @@ export const clockIn = async (req, res) => {
       }
     }
 
-    // Apply grace period for late arrival if rule enabled
-    let effectiveStartTime = new Date(officeStartTime);
-    if (activeRule?.enablePenaltyRules && activeRule?.penaltyRules?.lateArrival?.enabled) {
-      // Use grace period from penalty rules or checkInOutTimes
+    // Determine late arrival: only flag when penalty rules are active
+    let isLateArrival = false;
+    if (activeRule?.enablePenaltyRules) {
       const graceMinutes = Number(
-        activeRule.penaltyRules.lateArrival.gracePeriod || 
-        activeRule.checkInOutTimes?.checkInGracePeriod || 
+        (activeRule.penaltyRules?.lateArrival?.enabled && activeRule.penaltyRules?.lateArrival?.gracePeriod) ||
+        activeRule.checkInOutTimes?.checkInGracePeriod ||
         0
       );
-      effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
-    } else if (activeRule?.checkInOutTimes?.checkInGracePeriod) {
-      // Apply grace period even if penalty rules are disabled
-      const graceMinutes = Number(activeRule.checkInOutTimes.checkInGracePeriod || 0);
-      effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
+      const effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
+      isLateArrival = clockInTime > effectiveStartTime;
     }
-    
-    const isLateArrival = clockInTime > effectiveStartTime;
 
     // Get real IP address
     const clientIP = getClientIP(req);
