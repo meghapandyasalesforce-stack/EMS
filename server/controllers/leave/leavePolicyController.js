@@ -427,11 +427,12 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                         (currentOverride.active ? currentOverride.used : prevSnapshot.used) ??
                         prevSnapshot.used,
                     carriedForward:
-                        nextCarried ??
-                        (currentOverride.active
-                            ? currentOverride.carriedForward
-                            : prevSnapshot.carriedForward) ??
-                        prevSnapshot.carriedForward,
+                        nextCarried !== undefined && nextCarried !== null && nextCarried !== ''
+                            ? prevSnapshot.carriedForward + nextCarried
+                            : (currentOverride.active
+                                ? currentOverride.carriedForward
+                                : prevSnapshot.carriedForward) ??
+                              prevSnapshot.carriedForward,
                 };
                 const nextAvailable = Math.max(
                     0,

@@ -1,13 +1,15 @@
 /**
  * EMS-Paarsiv Server
  * Main entry point for the Employee Management System backend
- * 
+ *
  * @module server
  * @description Express server with security middleware, route registration, and database connection
  */
 
-import express from "express";
 import dotenv from "dotenv";
+dotenv.config();
+
+import express from "express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import compression from "compression";
@@ -37,7 +39,8 @@ import logger from "./helpers/logger.js";
 
 const app = express();
 
-dotenv.config();
+import pushRouter from './routes/push.js';
+app.use('/api/push', pushRouter);
 
 // ✅ Validate environment variables
 const isValid = validateEnvironment();

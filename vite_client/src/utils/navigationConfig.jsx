@@ -448,6 +448,5 @@ const getEmployeeNavigation = () => [
     { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
     { path: "/employee-payroll", name: "Payroll", icon: <FaMoneyBill /> },
     { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
-    { path: "/notifications", name: "Notifications", icon: <FaBell /> },
 ];
 

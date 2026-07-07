@@ -15,6 +15,7 @@ import {
     getLeaveApprovalStageLabel,
     sendLeaveActionError,
 } from "../../helpers/leaveWorkflowHelper.js";
+import { sendLeaveApprovalNotification, sendLeaveRejectionNotification } from "../../helpers/leaveEmailHelper.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -305,6 +306,57 @@ export const updateLeaveStatus = async (req, res) => {
 
         await leave.save();
         
+        // Send email notification to employee (non-blocking)
+        const employeeId = leave.employee?._id || leave.employee;
+        if (employeeId) {
+            setImmediate(async () => {
+                try {
+                    if (leave.status === 'approved') {
+                        await sendLeaveApprovalNotification(
+                            {
+                                _id: leave._id,
+                                employeeName: leave.employeeName,
+                                leaveType: leave.leaveType,
+                                startDate: leave.startDate,
+                                endDate: leave.endDate,
+                                duration: leave.duration,
+                                reason: leave.reason,
+                                status: leave.status,
+                                approvedAt: leave.approvedAt,
+                                approvedBy: approverId
+                            },
+                            employeeId
+                        );
+                    } else if (leave.status === 'rejected') {
+                        await sendLeaveRejectionNotification(
+                            {
+                                _id: leave._id,
+                                employeeName: leave.employeeName,
+                                leaveType: leave.leaveType,
+                                startDate: leave.startDate,
+                                endDate: leave.endDate,
+                                duration: leave.duration,
+                                reason: leave.reason,
+                                status: leave.status,
+                                rejectionReason: leave.rejectionReason,
+                                rejectedAt: leave.rejectedAt,
+                                rejectedBy: approverId
+                            },
+                            employeeId
+                        );
+                    }
+                } catch (emailError) {
+                    logger.error('Failed to send leave status email notification', {
+                        leaveId: leave._id,
+                        employeeId,
+                        status: leave.status,
+                        error: emailError.message
+                    });
+                    // Email failure should not block the leave status update
+                }
+            });
+        }
+        
         // Log audit trail based on resolved leave status (not requested status)
         const resolvedStatus = leave.status;
         if (resolvedStatus === 'approved') {
@@ -362,7 +414,6 @@ export const updateLeaveStatus = async (req, res) => {
         }
         
         // Recalculate leave balance when status changes (approved: deduct used; rejected/cancelled: release pending)
-        const employeeId = leave.employee?._id || leave.employee;
         if (employeeId && (leave.status === 'approved' || leave.status === 'rejected' || leave.status === 'cancelled')) {
             try {
                 const leaveBalanceEngine = (await import('../../services/leaveBalanceEngine.js')).default;

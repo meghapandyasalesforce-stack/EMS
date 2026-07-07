@@ -309,4 +309,205 @@ export const sendNotificationEmail = async (email, subject, message, html) => {
   }
 };
 
-export default sendWelcomeEmail;
+/**
+ * Generate leave request email template
+ * @param {Object} data - Leave and employee data
+ * @returns {string} HTML email content
+ */
+const generateLeaveRequestEmailTemplate = (data) => {
+  const startDate = data.startDate ? new Date(data.startDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const endDate = data.endDate ? new Date(data.endDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const numberOfDays = data.duration || data.totalDays || 'N/A';
+  const managerName = data.managerName || 'Manager';
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leave Request</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    p {
+      margin: 0 0 15px 0;
+    }
+    strong {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <p>Dear ${managerName},</p>
+  
+  <p>I hope you are doing well.</p>
+  
+  <p>I would like to request leave from <strong>${startDate}</strong> to <strong>${endDate}</strong> (<strong>${numberOfDays} day(s)</strong>).</p>
+  
+  <p><strong>Reason for Leave:</strong></p>
+  <p>${data.reason || 'N/A'}</p>
+  
+  <p>I kindly request you to review and approve my leave request. Please let me know if any additional information is required.</p>
+  
+  <p>Thank you for your time and consideration.</p>
+  
+  <p>Regards,</p>
+  <p><strong>${data.employeeName || 'Employee'}</strong></p>
+  <p>${data.employeeId || 'N/A'}</p>
+  <p>${data.department || 'N/A'}</p>
+</body>
+</html>`;
+};
+
+/**
+ * Send leave request email to approver
+ * @param {Object} leaveData - Leave request data
+ * @param {string} approverEmail - Approver email address
+ * @param {Array} ccEmails - CC email addresses (HR, Admin)
+ * @param {string} employeeEmail - Employee email address (to appear as sender)
+ * @returns {Promise<void>}
+ */
+export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails = [], employeeEmail = null) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getEmailFrom();
+  const provider = detectEmailProvider(emailConfig);
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = Array.isArray(ccEmails) ? ccEmails.filter(email => email && email !== approverEmail) : [];
+
+  const mailOptions = {
+    from: emailFrom,
+    to: approverEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Leave Request - ${leaveData.employeeName || 'Employee'}`,
+    html: generateLeaveRequestEmailTemplate(leaveData)
+  };
+
+  // For transactional email services (SendGrid, Mailgun, SES, Brevo), set from to employee's email directly
+  // These services support custom sender addresses without exposing the system email
+  if (employeeEmail && provider.isTransactional) {
+    mailOptions.from = `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>`;
+    mailOptions.replyTo = employeeEmail;
+  } 
+  // For traditional SMTP (Gmail, Outlook), use sender field to minimize system email exposure
+  else if (employeeEmail) {
+    mailOptions.from = `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>`;
+    mailOptions.sender = emailFrom;
+    mailOptions.replyTo = employeeEmail;
+  }
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Leave request email sent', { 
+      from: employeeEmail ? `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>` : emailFrom,
+      sender: employeeEmail && !provider.isTransactional ? emailFrom : null,
+      replyTo: employeeEmail,
+      to: approverEmail, 
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending leave request email', { 
+      from: employeeEmail ? `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>` : emailFrom,
+      to: approverEmail, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send leave approval email to employee
+ * @param {Object} leaveData - Leave request data
+ * @param {string} employeeEmail - Employee email address
+ * @returns {Promise<void>}
+ */
+export const sendLeaveApprovalEmail = async (leaveData, employeeEmail) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    subject: `Leave Request Approved - ${leaveData.employeeName || 'Employee'}`,
+    html: generateLeaveEmailTemplate(leaveData, 'approved', 'employee')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Leave approval email sent', { 
+      to: employeeEmail, 
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending leave approval email', { 
+      to: employeeEmail, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send leave rejection email to employee
+ * @param {Object} leaveData - Leave request data
+ * @param {string} employeeEmail - Employee email address
+ * @returns {Promise<void>}
+ */
+export const sendLeaveRejectionEmail = async (leaveData, employeeEmail) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    subject: `Leave Request Rejected - ${leaveData.employeeName || 'Employee'}`,
+    html: generateLeaveEmailTemplate(leaveData, 'rejected', 'employee')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Leave rejection email sent', { 
+      to: employeeEmail, 
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending leave rejection email', { 
+      to: employeeEmail, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+export default {
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendNotificationEmail,
+  sendLeaveRequestEmail,
+  sendLeaveApprovalEmail,
+  sendLeaveRejectionEmail
+};
