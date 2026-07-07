@@ -10,7 +10,7 @@ const UPLOADS_DOCUMENTS_DIR = path.join(__dirname, '..', 'uploads', 'documents')
 
 export const JOB_DOCUMENT_TYPES = {
     OFFER_LETTER: 'OFFER_LETTER',
-    BIRTH_CERTIFICATE: 'BIRTH_CERTIFICATE',
+    AADHAR_CARD: 'AADHAR_CARD',
     GUARANTOR_FORM: 'GUARANTOR_FORM',
     DEGREE_CERTIFICATE: 'DEGREE_CERTIFICATE',
     OTHER: 'OTHER',
@@ -18,7 +18,7 @@ export const JOB_DOCUMENT_TYPES = {
 
 const JOB_TYPE_LABELS = {
     OFFER_LETTER: 'Offer Letter',
-    BIRTH_CERTIFICATE: 'Birth Certificate',
+    AADHAR_CARD: 'Aadhar Card',
     GUARANTOR_FORM: 'Guarantor Form',
     DEGREE_CERTIFICATE: 'Degree Certificate',
     OTHER: 'Other Document',

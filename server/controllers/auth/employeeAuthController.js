@@ -144,10 +144,10 @@ import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWo
 
 export const registerEmployee = async (req, res) => {
     try {
-        if (!req.authContext?.isOrgOwner) {
+        if (!req.authContext?.isOrgOwner && !req.authContext?.isHrManager && !req.authContext?.isHrExecutive) {
             return sendError(
                 res,
-                'Only organization owners can create employees',
+                'Only organization owners and HR staff can create employees',
                 403,
                 'ORG_OWNER_ONLY'
             );

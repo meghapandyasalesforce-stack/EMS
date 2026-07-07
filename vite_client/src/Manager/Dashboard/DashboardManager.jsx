@@ -167,8 +167,12 @@ const DashboardManager = () => {
 
     // Filter team members by manager field (employees linked to this manager)
     const teamMembers = useMemo(
-        () => managerName
+        () => userId
             ? employees.filter(emp => {
+                // Check managerId (ObjectId) first — most reliable
+                if (emp.managerId && String(emp.managerId) === String(userId)) return true;
+                // Fallback to manager string match
+                if (!managerName) return false;
                 const empManagerText = getManagerFieldText(emp.manager);
                 const empManagerNormalized = empManagerText.toLowerCase();
                 const managerNameNormalized = managerName.toLowerCase();
@@ -179,7 +183,7 @@ const DashboardManager = () => {
                     empManagerNormalized.startsWith(managerFirstNormalized);
             })
             : employees,
-        [employees, managerName, managerFirstName]
+        [employees, userId, managerName, managerFirstName]
     );
     
     // Filter projects by manager or team members

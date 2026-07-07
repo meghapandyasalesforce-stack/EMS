@@ -8,7 +8,7 @@ const JobDetails = () => {
     const [isLoading, setIsLoading] = useState(false);
 
     const offerLetterRef = useRef(null);
-    const birthCertificateRef = useRef(null);
+    const aadharCardRef = useRef(null);
     const guarantorFormRef = useRef(null);
     const degreeCertificateRef = useRef(null);
 
@@ -72,8 +72,8 @@ const JobDetails = () => {
                 case 'OFFER_LETTER':
                     offerLetterRef.current.value = '';
                     break;
-                case 'BIRTH_CERTIFICATE':
-                    birthCertificateRef.current.value = '';
+                case 'AADHAR_CARD':
+                    aadharCardRef.current.value = '';
                     break;
                 case 'GUARANTOR_FORM':
                     guarantorFormRef.current.value = '';
@@ -128,21 +128,32 @@ const JobDetails = () => {
                         </div>
                     </div>
 
-                    {/* Birth Certificate */}
+                    {/* Aadhar Card */}
                     <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Birth Certificate</h3>
+                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Aadhar Card</h3>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-2">
                                 <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
                                 <input 
                                     type="file" 
-                                    ref={birthCertificateRef} 
+                                    ref={aadharCardRef} 
                                     className="border p-2 rounded w-full text-sm"
                                     accept=".pdf,.jpg,.jpeg,.png"
                                 />
                             </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="font-medium text-gray-700 text-sm md:text-base">Aadhar Number</label>
+                                <input
+                                    type="text"
+                                    value={additionalInfo.AADHAR_CARD?.aadharNumber ?? ''}
+                                    onChange={(e) => handleAdditionalInfoChange('AADHAR_CARD', 'aadharNumber', e.target.value)}
+                                    className="border p-2 rounded text-sm"
+                                    placeholder="XXXX XXXX XXXX"
+                                    maxLength={14}
+                                />
+                            </div>
                             <button
-                                onClick={() => handleUpload(birthCertificateRef.current.files[0], 'BIRTH_CERTIFICATE')}
+                                onClick={() => handleUpload(aadharCardRef.current.files[0], 'AADHAR_CARD')}
                                 disabled={isLoading}
                                 className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >
