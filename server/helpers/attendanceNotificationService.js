@@ -1,10 +1,12 @@
 /**
  * Attendance Notification Service
  * Sends notifications for penalties, escalations, and attendance events
+ * Now uses centralized Notification Manager
  */
 
 import logger from './logger.js';
-import { sendNotification } from './notificationService.js';
+import { notify } from './notificationManager.js';
+import './notificationEventRegistry.js';
 import { sendWelcomeEmail } from './emailSender.js';
 
 /**
@@ -20,20 +22,17 @@ import { sendWelcomeEmail } from './emailSender.js';
 export const notifyLateArrival = async ({ employee, clockInTime, expectedTime, rule, lateMinutes }) => {
     try {
         const subject = `Late Arrival Alert - ${employee.name || 'Employee'}`;
-        const message = `You checked in ${lateMinutes} minutes late on ${clockInTime.toLocaleDateString()} at ${clockInTime.toLocaleTimeString()}. Expected time: ${expectedTime.toLocaleTimeString()}.`;
 
-        // Notify employee
-        await sendNotification({
-            userId: employee._id,
-            title: 'Late Arrival',
-            message: message,
-            type: 'attendance_penalty',
-            priority: 'medium',
-            metadata: {
-                penaltyType: 'late_arrival',
-                lateMinutes,
+        // Notify employee using centralized manager
+        await notify({
+            type: 'late_arrival',
+            organizationId: employee.organizationId,
+            data: {
+                employee,
                 clockInTime,
-                expectedTime
+                expectedTime,
+                rule,
+                lateMinutes
             }
         });
 
@@ -98,20 +97,17 @@ export const notifyLateArrival = async ({ employee, clockInTime, expectedTime, r
 export const notifyEarlyDeparture = async ({ employee, clockOutTime, expectedTime, rule, earlyMinutes }) => {
     try {
         const subject = `Early Departure Alert - ${employee.name || 'Employee'}`;
-        const message = `You checked out ${earlyMinutes} minutes early on ${clockOutTime.toLocaleDateString()} at ${clockOutTime.toLocaleTimeString()}. Expected time: ${expectedTime.toLocaleTimeString()}.`;
 
-        // Notify employee
-        await sendNotification({
-            userId: employee._id,
-            title: 'Early Departure',
-            message: message,
-            type: 'attendance_penalty',
-            priority: 'medium',
-            metadata: {
-                penaltyType: 'early_departure',
-                earlyMinutes,
+        // Notify employee using centralized manager
+        await notify({
+            type: 'early_departure',
+            organizationId: employee.organizationId,
+            data: {
+                employee,
                 clockOutTime,
-                expectedTime
+                expectedTime,
+                rule,
+                earlyMinutes
             }
         });
 
@@ -206,13 +202,15 @@ export const notifyGPSSpoofing = async ({ employee, gpsLocation, ipLocation, dis
  */
 export const notifyLocationValidationFailure = async ({ employee, reason, message }) => {
     try {
-        await sendNotification({
-            userId: employee._id,
+        await notify({
+            type: 'location_validation_failed',
+            organizationId: employee.organizationId,
+            recipients: [employee._id],
             title: 'Location Validation Failed',
-            message: message,
-            type: 'attendance_error',
+            message,
             priority: 'high',
-            metadata: {
+            data: {
+                employee,
                 reason,
                 timestamp: new Date()
             }

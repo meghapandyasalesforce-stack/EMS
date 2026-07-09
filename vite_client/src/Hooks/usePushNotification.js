@@ -24,12 +24,15 @@ export const usePushNotification = () => {
     return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
   };
 
-  // Helper: Convert ArrayBuffer to base64
+  // Helper: Convert ArrayBuffer to base64url (Web Push standard)
   const arrayBufferToBase64 = (buffer) => {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     bytes.forEach(byte => binary += String.fromCharCode(byte));
-    return window.btoa(binary);
+    return window.btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
   };
 
   // Initialize push notifications
@@ -120,8 +123,9 @@ export const usePushNotification = () => {
         setIsSubscribed(true);
       } catch (serverError) {
         logger.error('Failed to save subscription to server', serverError);
-        setError('Failed to save subscription');
-        // Don't set isSubscribed to false here, as the subscription exists locally
+        setError('Failed to save subscription to server. Please try again.');
+        setSubscription(sub);
+        setIsSubscribed(false);
       }
     } catch (error) {
       logger.error('Error initializing push notifications', error);
@@ -156,7 +160,6 @@ export const usePushNotification = () => {
     }
   }, [subscription]);
 
-  // Request notification permission
   const requestPermission = useCallback(async () => {
     if (!('Notification' in window)) {
       setError('This browser does not support notifications');
@@ -176,10 +179,64 @@ export const usePushNotification = () => {
     return permission === 'granted';
   }, []);
 
-  // Don't auto-initialize on mount - wait for user to enable in settings
-  // This prevents automatic permission requests on page load
-  useEffect(() => {
-    setIsLoading(false);
+  const sendTestNotification = useCallback(async () => {
+    try {
+      const { data } = await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/test-push`);
+      return data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to send test push';
+      throw new Error(message);
+    }
+  }, []);
+
+  // Detect browser support on mount without requesting permission
+   // Detect browser support and restore existing subscription on mount
+   useEffect(() => {
+    const init = async () => {
+      const supported =
+        'serviceWorker' in navigator &&
+        'PushManager' in window &&
+        'Notification' in window;
+
+      setIsSupported(supported);
+
+      if (!supported) {
+        setError('Push notifications are not supported in this browser or context.');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const existingSub = await registration.pushManager.getSubscription();
+
+        if (existingSub && Notification.permission === 'granted') {
+          setSubscription(existingSub);
+          setIsSubscribed(true);
+
+          // Re-sync subscription with backend after page reload
+          try {
+            await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscribe`, {
+              subscription: {
+                endpoint: existingSub.endpoint,
+                keys: {
+                  p256dh: arrayBufferToBase64(existingSub.getKey('p256dh')),
+                  auth: arrayBufferToBase64(existingSub.getKey('auth'))
+                }
+              }
+            });
+          } catch (syncError) {
+            logger.error('Failed to re-sync push subscription with server', syncError);
+          }
+        }
+      } catch (err) {
+        logger.error('Failed to restore push subscription', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    init();
   }, []);
 
   return {
@@ -190,7 +247,8 @@ export const usePushNotification = () => {
     error,
     subscribe: initializePush,
     unsubscribe,
-    requestPermission
+    requestPermission,
+    sendTestNotification,
   };
 };
 

@@ -8,6 +8,8 @@ import Calendar from "../../models/calendar.model.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
 import { normalizeLeaveTypeForPolicy } from "../../helpers/leaveTypeHelper.js";
 import { buildEmployeeLeaveBalanceResponse } from "../../helpers/leaveBalanceResponseHelper.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import {
     ensureDefaultLeaveWorkflow,
     attachWorkflowSummariesToLeaves,
@@ -261,6 +263,17 @@ export const createLeave = async (req, res) => {
                 });
                 // Email failure should not block the leave creation
             }
+        });
+
+        setImmediate(async () => {
+            await notify({
+                type: 'leave_applied',
+                organizationId,
+                data: {
+                    leave,
+                    employee
+                }
+            });
         });
         
         // ✅ INTEGRATE APPROVAL WORKFLOW (Manager → HR)

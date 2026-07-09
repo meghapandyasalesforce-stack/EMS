@@ -6,6 +6,8 @@
 import logger from '../helpers/logger.js';
 import { ApprovalWorkflow, ApprovalInstance } from '../models/approvalWorkflow.model.js';
 import Employee from '../models/employee.model.js';
+import { notify } from '../helpers/notificationManager.js';
+import '../helpers/notificationEventRegistry.js';
 import { sendNotification } from '../helpers/notificationService.js';
 import { calculateFunctionalRoles } from '../helpers/roleHelper.js';
 import {
@@ -30,7 +32,7 @@ const getEffectiveFunctionalRoles = (employee) => {
     return [...new Set(calculateFunctionalRoles(employee).map(normalizeText).filter(Boolean))];
 };
 
-const findFirstActiveEmployeeByRole = async (organizationId, roleMatcher) => {
+const findActiveEmployeesByRole = async (organizationId, roleMatcher) => {
     const activeEmployees = await Employee.find({
         organizationId,
         status: 'active'
@@ -38,7 +40,12 @@ const findFirstActiveEmployeeByRole = async (organizationId, roleMatcher) => {
         .select('name lastName functionalRoles department position jobTitle')
         .lean();
 
-    const match = activeEmployees.find((employee) => roleMatcher(getEffectiveFunctionalRoles(employee), employee));
+    return activeEmployees.filter((employee) => roleMatcher(getEffectiveFunctionalRoles(employee), employee));
+};
+
+const findFirstActiveEmployeeByRole = async (organizationId, roleMatcher) => {
+    const matches = await findActiveEmployeesByRole(organizationId, roleMatcher);
+    const match = matches[0];
     return match ? { id: match._id, name: formatEmployeeName(match) } : null;
 };
 
@@ -244,8 +251,9 @@ export const processApprovalAction = async ({
 
             await updateEntityStatus(instance);
 
-            // Notify requester
-            await notifyRequester(instance, 'rejected', comments);
+            if (instance.entityType !== 'Leave') {
+                await notifyRequester(instance, 'rejected', comments);
+            }
 
             return {
                 status: 'Rejected',
@@ -264,7 +272,9 @@ export const processApprovalAction = async ({
             // ✅ UPDATE ENTITY STATUS (Leave, Expense, etc.)
             await updateEntityStatus(instance);
 
-            await notifyRequester(instance, 'approved');
+            if (instance.entityType !== 'Leave') {
+                await notifyRequester(instance, 'approved');
+            }
 
             return {
                 status: 'Approved',
@@ -275,6 +285,31 @@ export const processApprovalAction = async ({
         // Move to next step
         instance.currentStep = stepNumber;
         await instance.save();
+
+        // Send intermediate approval notification for leave (e.g., manager approved, pending HR)
+        if (instance.entityType === 'Leave') {
+            try {
+                const Leave = (await import('../models/leave.model.js')).default;
+                const leave = await Leave.findById(instance.entityId);
+                if (leave) {
+                    const requesterEmployee = await Employee.findById(leave.employee)
+                        .select('_id name lastName managerId manager functionalRoles department position jobTitle')
+                        .lean();
+
+                    await notify({
+                        type: 'leave_manager_approved',
+                        organizationId: leave.organizationId,
+                        data: { leave, employee: requesterEmployee }
+                    });
+                }
+            } catch (notifError) {
+                logger.warn('Failed to send intermediate leave approval notification', {
+                    error: notifError.message,
+                    approvalInstanceId,
+                    stepNumber
+                });
+            }
+        }
 
         await processNextStep(approvalInstanceId);
 
@@ -331,7 +366,9 @@ export const adminBypassApprovalInstance = async ({
     await instance.save();
 
     await updateEntityStatus(instance);
-    await notifyRequester(instance, 'approved');
+    if (instance.entityType !== 'Leave') {
+        await notifyRequester(instance, 'approved');
+    }
 
     return {
         status: 'Approved',
@@ -488,18 +525,61 @@ const notifyApprover = async (instance, step, workflowStep) => {
 
         if (!approver) return;
 
+        const title = `Approval Required: ${instance.entityType}`;
+        const message = `${requester?.name || 'Someone'} has requested approval for ${instance.entityType}. Step: ${step.stepName}`;
+        const metadata = {
+            approvalInstanceId: instance._id,
+            entityType: instance.entityType,
+            entityId: instance.entityId,
+            stepNumber: step.stepNumber
+        };
+        const priority = instance.priority === 'Urgent' ? 'high' : 'medium';
+
+        if (workflowStep?.approverType === 'HR') {
+            const hrEmployees = await findActiveEmployeesByRole(
+                instance.organizationId,
+                (roles) => roles.includes('hr')
+            );
+            const recipientIds = [
+                ...new Set(
+                    (hrEmployees.length > 0 ? hrEmployees : [approver])
+                        .map((employee) => employee?._id?.toString())
+                        .filter(Boolean)
+                )
+            ];
+
+            const results = await Promise.allSettled(
+                recipientIds.map((recipientId) =>
+                    sendNotification({
+                        userId: recipientId,
+                        title,
+                        message,
+                        type: 'approval_request',
+                        priority,
+                        metadata
+                    })
+                )
+            );
+
+            const failedCount = results.filter((result) => result.status === 'rejected').length;
+            if (failedCount > 0) {
+                logger.warn('Some HR approver notifications failed', {
+                    approvalInstanceId: instance._id,
+                    stepNumber: step.stepNumber,
+                    failedCount,
+                    totalCount: results.length
+                });
+            }
+            return;
+        }
+
         await sendNotification({
             userId: approver._id,
-            title: `Approval Required: ${instance.entityType}`,
-            message: `${requester?.name || 'Someone'} has requested approval for ${instance.entityType}. Step: ${step.stepName}`,
+            title,
+            message,
             type: 'approval_request',
-            priority: instance.priority === 'Urgent' ? 'high' : 'medium',
-            metadata: {
-                approvalInstanceId: instance._id,
-                entityType: instance.entityType,
-                entityId: instance.entityId,
-                stepNumber: step.stepNumber
-            }
+            priority,
+            metadata
         });
     } catch (error) {
         logger.error('Error notifying approver', { error: error.message });
@@ -515,6 +595,9 @@ const updateEntityStatus = async (instance) => {
             const Leave = (await import('../models/leave.model.js')).default;
             const leave = await Leave.findById(instance.entityId);
             if (leave) {
+                const requesterEmployee = await Employee.findById(leave.employee)
+                    .select('_id name lastName managerId manager functionalRoles department position jobTitle')
+                    .lean();
                 if (instance.status === 'Approved') {
                     leave.status = 'approved';
                     leave.approvedBy = instance.steps[instance.steps.length - 1]?.approverId;
@@ -538,6 +621,20 @@ const updateEntityStatus = async (instance) => {
                     leave.rejectionReason = instance.rejectionReason;
                 }
                 await leave.save();
+
+                if (instance.status === 'Rejected') {
+                    await notify({
+                        type: 'leave_rejected',
+                        organizationId: leave.organizationId,
+                        data: { leave, employee: requesterEmployee }
+                    });
+                } else if (instance.status === 'Approved') {
+                    await notify({
+                        type: 'leave_approved',
+                        organizationId: leave.organizationId,
+                        data: { leave, employee: requesterEmployee }
+                    });
+                }
             }
         } else if (instance.entityType === 'Expense') {
             const Expense = (await import('../models/expense.model.js')).default;

@@ -98,30 +98,8 @@ export const getMePortalHomePath = (profile = {}) => {
 };
 
 const getNavigationForMePortal = ({ profile, permissions, permissionFlags, position }) => {
-    const systemRoleId = resolveMePortalSystemRole(profile);
-    let items;
-
-    switch (systemRoleId) {
-        case SYSTEM_ROLE_IDS.LINE_MANAGER:
-            items = getManagerNavigation(profile);
-            break;
-        case SYSTEM_ROLE_IDS.PAYROLL_ADMIN:
-            items = getFinanceNavigation();
-            break;
-        case SYSTEM_ROLE_IDS.EXECUTIVE:
-            items = getExecutiveNavigation(position);
-            break;
-        case SYSTEM_ROLE_IDS.HR_MANAGER:
-            items = getHRManagerNavigation();
-            break;
-        case SYSTEM_ROLE_IDS.HR_EXECUTIVE:
-            items = getHRExecutiveNavigation();
-            break;
-        default:
-            items = getEmployeeNavigation();
-            break;
-    }
-
+    // Always return standard employee navigation for all employees in the Me portal
+    const items = getEmployeeNavigation();
     return filterNavByPermissions(items, permissions);
 };
 
@@ -192,7 +170,10 @@ export const getNavigationItems = (
         (role === 'admin' ? getAdminNavigation() : null);
 
     if (!items) {
-        if (isExecutive(position)) {
+        // For employees, always return standard navigation regardless of department/position
+        if (role === 'employee') {
+            items = getEmployeeNavigation();
+        } else if (isExecutive(position)) {
             items = getExecutiveNavigation(position);
         } else {
             const isHRRole = isHR(department, jobTitle, position);

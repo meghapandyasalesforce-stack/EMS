@@ -320,15 +320,20 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
       throw new Error('OrganizationId is required to send notifications');
     }
     
-    const notification = await Notification.create({
+    const notificationData = {
       organizationId,
-      sender: sender._id,
-      senderType: senderType,
       message,
       type,
       isBroadcast: true,
       metadata
-    });
+    };
+
+    if (sender?._id) {
+      notificationData.sender = sender._id;
+      notificationData.senderType = senderType;
+    }
+
+    const notification = await Notification.create(notificationData);
     
     // Send broadcast notification via WebSocket
     try {
@@ -354,7 +359,7 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
         notificationId: notification._id
       });
       
-      await sendBroadcastPushNotification(pushPayload);
+      await sendBroadcastPushNotification(pushPayload, organizationId);
     } catch (pushError) {
       logger.error('Error sending broadcast push notification', {
         error: pushError.message,
@@ -435,34 +440,43 @@ export const getUnreadNotificationCount = async (userId, organizationId) => {
  * @param {Object} params.metadata - Additional metadata
  * @param {String} params.organizationId - Organization ID (optional, will try to get from user)
  */
-export const sendNotification = async ({ userId, title, message, type = 'general', priority = 'medium', metadata = {}, organizationId = null }) => {
+export const sendNotification = async ({
+  userId,
+  title,
+  message,
+  type = 'general',
+  priority = 'medium',
+  metadata = {},
+  organizationId = null,
+  senderId = null,
+  senderType = null
+}) => {
   try {
-    // Get user/employee to determine organizationId
+    // Resolve recipient model so notification records and push subscriptions use the
+    // correct target type even when organizationId is already provided by the caller.
     let userOrgId = organizationId;
     let recipientType = 'User';
-    
-    if (!userOrgId) {
-      try {
-        const UserModel = (await import('../models/user.model.js')).default;
-        const EmployeeModel = (await import('../models/employee.model.js')).default;
-        
-        let user = await UserModel.findById(userId).select('organizationId').lean();
-        if (user) {
-          userOrgId = user.organizationId;
-          recipientType = 'User';
-        } else {
-          const employee = await EmployeeModel.findById(userId).select('organizationId').lean();
-          if (employee) {
-            userOrgId = employee.organizationId;
-            recipientType = 'Employee';
-          }
+
+    try {
+      const UserModel = (await import('../models/user.model.js')).default;
+      const EmployeeModel = (await import('../models/employee.model.js')).default;
+
+      const user = await UserModel.findById(userId).select('organizationId').lean();
+      if (user) {
+        userOrgId = userOrgId || user.organizationId;
+        recipientType = 'User';
+      } else {
+        const employee = await EmployeeModel.findById(userId).select('organizationId').lean();
+        if (employee) {
+          userOrgId = userOrgId || employee.organizationId;
+          recipientType = 'Employee';
         }
-      } catch (error) {
-        logger.error('Error getting user/employee for notification', {
-          error: error.message,
-          userId
-        });
       }
+    } catch (error) {
+      logger.error('Error getting user/employee for notification', {
+        error: error.message,
+        userId
+      });
     }
     
     if (!userOrgId) {
@@ -473,8 +487,10 @@ export const sendNotification = async ({ userId, title, message, type = 'general
       throw new Error('OrganizationId is required to send notifications');
     }
     
-    // Create notification
-    const notification = await Notification.create({
+    const resolvedSenderId = senderId || metadata.senderId || null;
+    const resolvedSenderType = senderType || metadata.senderType || 'User';
+
+    const notificationData = {
       organizationId: userOrgId,
       recipient: userId,
       recipientType: recipientType,
@@ -485,7 +501,14 @@ export const sendNotification = async ({ userId, title, message, type = 'general
         ...metadata,
         title: title || message
       }
-    });
+    };
+
+    if (resolvedSenderId) {
+      notificationData.sender = resolvedSenderId;
+      notificationData.senderType = resolvedSenderType;
+    }
+
+    const notification = await Notification.create(notificationData);
     
     logger.info('Notification sent', {
       notificationId: notification._id,
@@ -540,7 +563,7 @@ export const sendNotification = async ({ userId, title, message, type = 'general
 };
 
 /**
- * Send break notification to all admins when employee goes on break
+ * Send break notification to HR, Admin, and CEO when employee goes on break
  * @param {Object} employee - Employee object who went on break
  */
 export const sendBreakNotification = async (employee) => {
@@ -558,21 +581,51 @@ export const sendBreakNotification = async (employee) => {
     // Get all admins for this organization
     const admins = await User.find({ role: 'admin', organizationId });
     
-    if (admins.length === 0) {
-      logger.warn('No admins found to notify about break', {
+    // Get HR employees
+    const hrEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { functionalRoles: { $in: ['hr', 'HR'] } },
+        { department: { $regex: /hr/i } },
+        { jobTitle: { $regex: /hr/i } },
+        { position: { $regex: /hr/i } }
+      ]
+    }).select('_id name lastName').lean();
+    
+    // Get CEO employees
+    const ceoEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { jobTitle: { $regex: /ceo/i } },
+        { position: { $regex: /ceo/i } },
+        { functionalRoles: { $in: ['ceo', 'CEO'] } }
+      ]
+    }).select('_id name lastName').lean();
+    
+    const recipientIds = new Set();
+    admins.forEach(admin => recipientIds.add(admin._id.toString()));
+    hrEmployees.forEach(hr => recipientIds.add(hr._id.toString()));
+    ceoEmployees.forEach(ceo => recipientIds.add(ceo._id.toString()));
+    
+    if (recipientIds.size === 0) {
+      logger.warn('No recipients found to notify about break', {
         employeeId: employee._id,
         organizationId
       });
       return;
     }
 
-    const message = `☕ ${employee.name} ${employee.lastName || ''} is now on break`;
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const message = `${employee.name} ${employee.lastName || ''} has started a break at ${time}.`;
+    const title = 'Employee Started Break';
     
-    // Create notifications for each admin
-    const notificationPromises = admins.map(admin => {
+    // Create notifications for each recipient
+    const notificationPromises = Array.from(recipientIds).map(recipientId => {
       return Notification.create({
         organizationId,
-        recipient: admin._id,
+        recipient: recipientId,
         recipientType: 'User',
         sender: employee._id,
         senderType: 'Employee',
@@ -606,22 +659,26 @@ export const sendBreakNotification = async (employee) => {
     }
 
     logger.info('Break notification sent', {
-      adminCount: admins.length,
+      recipientCount: recipientIds.size,
       employeeId: employee._id,
       employeeName: employee.name
     });
 
-    // Send push notifications to admins
+    // Send push notifications to all recipients
     try {
-      for (let i = 0; i < admins.length; i++) {
-        const admin = admins[i];
+      for (let i = 0; i < notifications.length; i++) {
         const notification = notifications[i];
+        const recipientId = notification.recipient.toString();
         
-        // Check admin's push notification settings
-        const settings = await NotificationSettings.findOne({ user: admin._id });
+        // Check recipient's push notification settings
+        const settings = await NotificationSettings.findOne({ user: recipientId });
         if (settings && settings.pushNotifications === false) {
-          continue; // Skip if admin disabled push notifications
+          continue; // Skip if recipient disabled push notifications
         }
+
+        // Determine recipient type
+        const isAdmin = admins.some(a => a._id.toString() === recipientId);
+        const recipientType = isAdmin ? 'User' : 'Employee';
 
         // Send push notification
         const pushPayload = createPushPayload(message, 'break', {
@@ -631,7 +688,7 @@ export const sendBreakNotification = async (employee) => {
           notificationId: notification._id
         });
         
-        await sendPushNotification(admin._id, 'User', pushPayload);
+        await sendPushNotification(recipientId, recipientType, pushPayload, organizationId);
       }
     } catch (pushError) {
       logger.error('Error sending break push notifications', {
@@ -643,6 +700,498 @@ export const sendBreakNotification = async (employee) => {
     }
   } catch (error) {
     logger.error('Error sending break notification', {
+      error: error.message,
+      stack: error.stack,
+      employeeId: employee._id
+    });
+  }
+};
+
+/**
+ * Send break ended notification to HR, Admin, and CEO when employee returns from break
+ * @param {Object} employee - Employee object who returned from break
+ */
+export const sendBreakEndedNotification = async (employee) => {
+  try {
+    logger.info('sendBreakEndedNotification called', {
+      employeeId: employee._id,
+      employeeName: employee.name,
+      organizationId: employee.organizationId
+    });
+
+    // Get organizationId from employee
+    const organizationId = employee.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending break ended notification', {
+        employeeId: employee._id
+      });
+      return; // Don't create notifications without organizationId
+    }
+    
+    // Get all admins for this organization
+    const admins = await User.find({ role: 'admin', organizationId });
+    logger.info('Found admins for break ended notification', {
+      adminCount: admins.length,
+      organizationId
+    });
+    
+    // Get HR employees
+    const hrEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { functionalRoles: { $in: ['hr', 'HR'] } },
+        { department: { $regex: /hr/i } },
+        { jobTitle: { $regex: /hr/i } },
+        { position: { $regex: /hr/i } }
+      ]
+    }).select('_id name lastName').lean();
+    logger.info('Found HR employees for break ended notification', {
+      hrCount: hrEmployees.length,
+      organizationId
+    });
+    
+    // Get CEO employees
+    const ceoEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { jobTitle: { $regex: /ceo/i } },
+        { position: { $regex: /ceo/i } },
+        { functionalRoles: { $in: ['ceo', 'CEO'] } }
+      ]
+    }).select('_id name lastName').lean();
+    logger.info('Found CEO employees for break ended notification', {
+      ceoCount: ceoEmployees.length,
+      organizationId
+    });
+    
+    const recipientIds = new Set();
+    admins.forEach(admin => recipientIds.add(admin._id.toString()));
+    hrEmployees.forEach(hr => recipientIds.add(hr._id.toString()));
+    ceoEmployees.forEach(ceo => recipientIds.add(ceo._id.toString()));
+    
+    logger.info('Total recipients for break ended notification', {
+      recipientCount: recipientIds.size,
+      organizationId
+    });
+    
+    if (recipientIds.size === 0) {
+      logger.warn('No recipients found to notify about break ended', {
+        employeeId: employee._id,
+        organizationId
+      });
+      return;
+    }
+
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const message = `${employee.name} ${employee.lastName || ''} has returned from break at ${time}.`;
+    const title = 'Employee Returned from Break';
+    
+    // Create notifications for each recipient
+    const notificationPromises = Array.from(recipientIds).map(recipientId => {
+      return Notification.create({
+        organizationId,
+        recipient: recipientId,
+        recipientType: 'User',
+        sender: employee._id,
+        senderType: 'Employee',
+        message,
+        type: 'break',
+        priority: 'medium',
+        metadata: {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          breakEndTime: new Date()
+        }
+      });
+    });
+
+    const notifications = await Promise.all(notificationPromises);
+    
+    // Send notifications via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        notifications.forEach(notification => {
+          const recipientId = notification.recipient.toString();
+          wsService.sendNotificationToUser(recipientId, notification.toObject ? notification.toObject() : notification);
+        });
+      }
+    } catch (wsError) {
+      logger.warn('Error sending break ended notifications via WebSocket', {
+        error: wsError.message,
+        employeeId: employee._id
+      });
+    }
+
+    logger.info('Break ended notification sent', {
+      recipientCount: recipientIds.size,
+      employeeId: employee._id,
+      employeeName: employee.name
+    });
+
+    // Send push notifications to all recipients
+    try {
+      for (let i = 0; i < notifications.length; i++) {
+        const notification = notifications[i];
+        const recipientId = notification.recipient.toString();
+        
+        // Check recipient's push notification settings
+        const settings = await NotificationSettings.findOne({ user: recipientId });
+        if (settings && settings.pushNotifications === false) {
+          continue; // Skip if recipient disabled push notifications
+        }
+
+        // Determine recipient type - check if it's a User (admin) or Employee (HR/CEO)
+        const isAdmin = admins.some(a => a._id.toString() === recipientId);
+        const recipientType = isAdmin ? 'User' : 'Employee';
+
+        // Send push notification
+        const pushPayload = createPushPayload(message, 'break', {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          breakEndTime: new Date(),
+          notificationId: notification._id
+        });
+        
+        await sendPushNotification(recipientId, recipientType, pushPayload, organizationId);
+      }
+    } catch (pushError) {
+      logger.error('Error sending break ended push notifications', {
+        error: pushError.message,
+        stack: pushError.stack,
+        employeeId: employee._id
+      });
+      // Don't fail the main notification if push fails
+    }
+  } catch (error) {
+    logger.error('Error sending break ended notification', {
+      error: error.message,
+      stack: error.stack,
+      employeeId: employee._id
+    });
+  }
+};
+
+/**
+ * Send punch out notification to HR, Admin, and CEO when employee clocks out
+ * @param {Object} employee - Employee object who clocked out
+ */
+export const sendPunchOutNotification = async (employee) => {
+  try {
+    logger.info('sendPunchOutNotification called', {
+      employeeId: employee._id,
+      employeeName: employee.name,
+      organizationId: employee.organizationId
+    });
+
+    // Get organizationId from employee
+    const organizationId = employee.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending punch out notification', {
+        employeeId: employee._id
+      });
+      return; // Don't create notifications without organizationId
+    }
+    
+    // Get all admins for this organization
+    const admins = await User.find({ role: 'admin', organizationId });
+    logger.info('Found admins for punch out notification', {
+      adminCount: admins.length,
+      organizationId
+    });
+    
+    // Get HR employees
+    const hrEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { functionalRoles: { $in: ['hr', 'HR'] } },
+        { department: { $regex: /hr/i } },
+        { jobTitle: { $regex: /hr/i } },
+        { position: { $regex: /hr/i } }
+      ]
+    }).select('_id name lastName').lean();
+    logger.info('Found HR employees for punch out notification', {
+      hrCount: hrEmployees.length,
+      organizationId
+    });
+    
+    // Get CEO employees
+    const ceoEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { jobTitle: { $regex: /ceo/i } },
+        { position: { $regex: /ceo/i } },
+        { functionalRoles: { $in: ['ceo', 'CEO'] } }
+      ]
+    }).select('_id name lastName').lean();
+    logger.info('Found CEO employees for punch out notification', {
+      ceoCount: ceoEmployees.length,
+      organizationId
+    });
+    
+    const recipientIds = new Set();
+    admins.forEach(admin => recipientIds.add(admin._id.toString()));
+    hrEmployees.forEach(hr => recipientIds.add(hr._id.toString()));
+    ceoEmployees.forEach(ceo => recipientIds.add(ceo._id.toString()));
+    
+    logger.info('Total recipients for punch out notification', {
+      recipientCount: recipientIds.size,
+      organizationId
+    });
+    
+    if (recipientIds.size === 0) {
+      logger.warn('No recipients found to notify about punch out', {
+        employeeId: employee._id,
+        organizationId
+      });
+      return;
+    }
+
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const message = `${employee.name} ${employee.lastName || ''} has punched out at ${time}.`;
+    const title = 'Employee Punched Out';
+    
+    // Create notifications for each recipient
+    const notificationPromises = Array.from(recipientIds).map(recipientId => {
+      return Notification.create({
+        organizationId,
+        recipient: recipientId,
+        recipientType: 'User',
+        sender: employee._id,
+        senderType: 'Employee',
+        message,
+        type: 'break',
+        priority: 'medium',
+        metadata: {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          punchOutTime: new Date()
+        }
+      });
+    });
+
+    const notifications = await Promise.all(notificationPromises);
+    
+    // Send notifications via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        notifications.forEach(notification => {
+          const recipientId = notification.recipient.toString();
+          wsService.sendNotificationToUser(recipientId, notification.toObject ? notification.toObject() : notification);
+        });
+      }
+    } catch (wsError) {
+      logger.warn('Error sending punch out notifications via WebSocket', {
+        error: wsError.message,
+        employeeId: employee._id
+      });
+    }
+
+    logger.info('Punch out notification sent', {
+      recipientCount: recipientIds.size,
+      employeeId: employee._id,
+      employeeName: employee.name
+    });
+
+    // Send push notifications to all recipients
+    try {
+      for (let i = 0; i < notifications.length; i++) {
+        const notification = notifications[i];
+        const recipientId = notification.recipient.toString();
+        
+        // Check recipient's push notification settings
+        const settings = await NotificationSettings.findOne({ user: recipientId });
+        if (settings && settings.pushNotifications === false) {
+          continue; // Skip if recipient disabled push notifications
+        }
+
+        // Determine recipient type - check if it's a User (admin) or Employee (HR/CEO)
+        const isAdmin = admins.some(a => a._id.toString() === recipientId);
+        const recipientType = isAdmin ? 'User' : 'Employee';
+
+        // Send push notification
+        const pushPayload = createPushPayload(message, 'punch_out', {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          punchOutTime: new Date(),
+          notificationId: notification._id
+        });
+        
+        await sendPushNotification(recipientId, recipientType, pushPayload, organizationId);
+      }
+    } catch (pushError) {
+      logger.error('Error sending punch out push notifications', {
+        error: pushError.message,
+        stack: pushError.stack,
+        employeeId: employee._id
+      });
+      // Don't fail the main notification if push fails
+    }
+  } catch (error) {
+    logger.error('Error sending punch out notification', {
+      error: error.message,
+      stack: error.stack,
+      employeeId: employee._id
+    });
+  }
+};
+
+/**
+ * Send new employee notification to HR, Admin, and CEO when a new employee is created
+ * @param {Object} employee - Employee object who was created
+ */
+export const sendNewEmployeeNotification = async (employee) => {
+  try {
+    logger.info('sendNewEmployeeNotification called', { employeeId: employee._id, organizationId: employee.organizationId });
+    
+    // Get organizationId from employee
+    const organizationId = employee.organizationId;
+    
+    if (!organizationId) {
+      logger.error('OrganizationId missing when sending new employee notification', {
+        employeeId: employee._id
+      });
+      return; // Don't create notifications without organizationId
+    }
+    
+    // Get all admins for this organization
+    const admins = await User.find({ role: 'admin', organizationId });
+    
+    // Get HR employees
+    const hrEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { functionalRoles: { $in: ['hr', 'HR'] } },
+        { department: { $regex: /hr/i } },
+        { jobTitle: { $regex: /hr/i } },
+        { position: { $regex: /hr/i } }
+      ]
+    }).select('_id name lastName').lean();
+    
+    // Get CEO employees
+    const ceoEmployees = await Employee.find({
+      organizationId,
+      status: 'active',
+      $or: [
+        { jobTitle: { $regex: /ceo/i } },
+        { position: { $regex: /ceo/i } },
+        { functionalRoles: { $in: ['ceo', 'CEO'] } }
+      ]
+    }).select('_id name lastName').lean();
+    
+    const recipientIds = new Set();
+    admins.forEach(admin => recipientIds.add(admin._id.toString()));
+    hrEmployees.forEach(hr => recipientIds.add(hr._id.toString()));
+    ceoEmployees.forEach(ceo => recipientIds.add(ceo._id.toString()));
+    
+    logger.info('New employee notification recipients', {
+      adminCount: admins.length,
+      hrCount: hrEmployees.length,
+      ceoCount: ceoEmployees.length,
+      totalRecipients: recipientIds.size
+    });
+    
+    if (recipientIds.size === 0) {
+      logger.warn('No recipients found to notify about new employee', {
+        employeeId: employee._id,
+        organizationId
+      });
+      return;
+    }
+
+    const message = `Welcome ${employee.name} ${employee.lastName || ''} to Paarsiv Technologies Private Limited. We wish you a successful and rewarding journey with us!`;
+    
+    // Create notifications for each recipient
+    const notificationPromises = Array.from(recipientIds).map(recipientId => {
+      return Notification.create({
+        organizationId,
+        recipient: recipientId,
+        recipientType: 'User',
+        sender: employee._id,
+        senderType: 'Employee',
+        message,
+        type: 'new_employee',
+        priority: 'medium',
+        metadata: {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          employeeEmail: employee.email
+        }
+      });
+    });
+
+    const notifications = await Promise.all(notificationPromises);
+    
+    // Send notifications via WebSocket
+    try {
+      const wsService = await getWebSocketService();
+      if (wsService) {
+        notifications.forEach(notification => {
+          const recipientId = notification.recipient.toString();
+          wsService.sendNotificationToUser(recipientId, notification.toObject ? notification.toObject() : notification);
+        });
+      }
+    } catch (wsError) {
+      logger.warn('Error sending new employee notifications via WebSocket', {
+        error: wsError.message,
+        employeeId: employee._id
+      });
+    }
+
+    // Send push notifications to all recipients
+    try {
+      logger.info('Starting push notification sending', { notificationCount: notifications.length });
+      
+      for (let i = 0; i < notifications.length; i++) {
+        const notification = notifications[i];
+        const recipientId = notification.recipient.toString();
+        
+        logger.info('Processing recipient for push', { recipientId, index: i });
+        
+        // Check recipient's push notification settings
+        const settings = await NotificationSettings.findOne({ user: recipientId });
+        if (settings && settings.pushNotifications === false) {
+          logger.info('Push disabled for recipient', { recipientId });
+          continue; // Skip if recipient disabled push notifications
+        }
+
+        // Determine recipient type
+        const isAdmin = admins.some(a => a._id.toString() === recipientId);
+        const recipientType = isAdmin ? 'User' : 'Employee';
+
+        logger.info('Sending push notification', { recipientId, recipientType, type: 'new_employee' });
+
+        // Send push notification
+        const pushPayload = createPushPayload(message, 'new_employee', {
+          employeeId: employee._id,
+          employeeName: `${employee.name} ${employee.lastName || ''}`,
+          employeeEmail: employee.email,
+          notificationId: notification._id
+        });
+        
+        const result = await sendPushNotification(recipientId, recipientType, pushPayload, organizationId);
+        logger.info('Push notification result', { recipientId, result });
+      }
+      
+      logger.info('Completed push notification sending');
+    } catch (pushError) {
+      logger.error('Error sending new employee push notifications', {
+        error: pushError.message,
+        stack: pushError.stack,
+        employeeId: employee._id
+      });
+      // Don't fail the main notification if push fails
+    }
+  } catch (error) {
+    logger.error('Error sending new employee notification', {
       error: error.message,
       stack: error.stack,
       employeeId: employee._id

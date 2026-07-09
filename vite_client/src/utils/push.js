@@ -3,10 +3,11 @@
  * Handles service worker registration and push notification subscription
  */
 
+import axios from './axios';
+import { BOTH_PUSH_SUBSCRIPTION_ENDPOINT } from './constant';
+
 /**
  * Convert base64 string to Uint8Array for VAPID key
- * @param {string} base64String - Base64 encoded string
- * @returns {Uint8Array} - Converted Uint8Array
  */
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -24,90 +25,63 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-/**
- * Subscribe user to push notifications
- * @param {string} userId - Current logged-in user ID
- * @returns {Promise<void>}
- */
-export async function subscribeUser(userId) {
-  if (!userId) {
-    console.error('User ID is required for push notification subscription');
-    return;
-  }
-
-  // Check if browser supports service worker and push manager
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.error('Push notifications are not supported in this browser');
-    return;
-  }
-
-  try {
-    // Get service worker registration
-    const registration = await navigator.serviceWorker.ready;
-    
-    // Request notification permission
-    const permission = await Notification.requestPermission();
-    
-    if (permission !== 'granted') {
-      console.log('Notification permission denied');
-      return;
-    }
-
-    // Get VAPID public key from environment variable
-    const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-    if (!vapidPublicKey || vapidPublicKey === 'YOUR_VAPID_PUBLIC_KEY_HERE') {
-      console.error('VAPID public key is not configured in .env file');
-      return;
-    }
-
-    // Convert VAPID key to Uint8Array
-    const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
-
-    // Subscribe to push notifications
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedVapidKey
-    });
-
-    // Send subscription to backend
-    const response = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        userId: userId,
-        subscription: subscription
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to send subscription to server');
-    }
-
-    const data = await response.json();
-    console.log('Push notification subscription successful:', data);
-    
-    return data;
-  } catch (error) {
-    console.error('Error subscribing to push notifications:', error);
-    throw error;
-  }
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return window.btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 /**
- * Check if user is already subscribed to push notifications
- * @returns {Promise<boolean>}
+ * Subscribe user to push notifications
  */
+export async function subscribeUser() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    throw new Error('Push notifications are not supported in this browser');
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    throw new Error('Notification permission denied');
+  }
+
+  const { data: keyData } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
+  if (!keyData.success || !keyData.publicKey) {
+    throw new Error('Push notifications not configured on server');
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+    });
+  }
+
+  await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscribe`, {
+    subscription: {
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
+        auth: arrayBufferToBase64(subscription.getKey('auth')),
+      },
+    },
+  });
+
+  return subscription;
+}
+
 export async function isPushNotificationSupported() {
   return 'serviceWorker' in navigator && 'PushManager' in window;
 }
 
-/**
- * Get current notification permission status
- * @returns {NotificationPermission}
- */
 export function getNotificationPermission() {
   if (!('Notification' in window)) {
     return 'unsupported';

@@ -89,7 +89,30 @@ export const getLeaveNotificationEmails = async (employee, organizationId) => {
         };
     }
 };
+/**
+ * Build CC list for approval/rejection: Manager + HR + Admin
+ * @param {Object} employee - Employee document
+ * @param {string} organizationId - Organization ID
+ * @returns {Promise<Array>} CC email addresses
+ */
+const getApprovalRejectionCcEmails = async (employee, organizationId) => {
+    const { managerEmail, ccEmails } = await getLeaveNotificationEmails(employee, organizationId);
+    const allCc = [];
 
+    if (managerEmail) {
+        allCc.push(managerEmail);
+    }
+
+    if (Array.isArray(ccEmails)) {
+        ccEmails.forEach(email => {
+            if (email && !allCc.includes(email)) {
+                allCc.push(email);
+            }
+        });
+    }
+
+    return allCc.filter(email => email !== employee.email);
+};
 /**
  * Send leave request notification with error handling
  * @param {Object} leaveData - Leave request data
@@ -150,26 +173,31 @@ export const sendLeaveRequestNotification = async (leaveData, employeeId, organi
  */
 export const sendLeaveApprovalNotification = async (leaveData, employeeId) => {
     try {
-        const employee = await Employee.findById(employeeId).select('email employeeId').lean();
+        const employee = await Employee.findById(employeeId).lean();
         if (!employee || !employee.email) {
             logger.warn('Employee email not found for leave approval notification', { employeeId });
             return;
         }
 
+        const organizationId = employee.organizationId;
+        const ccEmails = organizationId
+            ? await getApprovalRejectionCcEmails(employee, organizationId)
+            : [];
+
         const { sendLeaveApprovalEmail } = await import('./emailSender.js');
         
-        // Add employee ID to leave data
         const enhancedLeaveData = {
             ...leaveData,
             employeeId: employee.employeeId
         };
 
-        await sendLeaveApprovalEmail(enhancedLeaveData, employee.email);
+        await sendLeaveApprovalEmail(enhancedLeaveData, employee.email, ccEmails);
         
         logger.info('Leave approval notification sent successfully', {
             leaveId: leaveData._id || leaveData.id,
             employeeId,
-            employeeEmail: '***' + employee.email.split('@')[1]
+            employeeEmail: '***' + employee.email.split('@')[1],
+            ccCount: ccEmails.length
         });
     } catch (error) {
         logger.error('Failed to send leave approval notification', {
@@ -189,26 +217,31 @@ export const sendLeaveApprovalNotification = async (leaveData, employeeId) => {
  */
 export const sendLeaveRejectionNotification = async (leaveData, employeeId) => {
     try {
-        const employee = await Employee.findById(employeeId).select('email employeeId').lean();
+        const employee = await Employee.findById(employeeId).lean();
         if (!employee || !employee.email) {
             logger.warn('Employee email not found for leave rejection notification', { employeeId });
             return;
         }
 
+        const organizationId = employee.organizationId;
+        const ccEmails = organizationId
+            ? await getApprovalRejectionCcEmails(employee, organizationId)
+            : [];
+
         const { sendLeaveRejectionEmail } = await import('./emailSender.js');
         
-        // Add employee ID to leave data
         const enhancedLeaveData = {
             ...leaveData,
             employeeId: employee.employeeId
         };
 
-        await sendLeaveRejectionEmail(enhancedLeaveData, employee.email);
+        await sendLeaveRejectionEmail(enhancedLeaveData, employee.email, ccEmails);
         
         logger.info('Leave rejection notification sent successfully', {
             leaveId: leaveData._id || leaveData.id,
             employeeId,
-            employeeEmail: '***' + employee.email.split('@')[1]
+            employeeEmail: '***' + employee.email.split('@')[1],
+            ccCount: ccEmails.length
         });
     } catch (error) {
         logger.error('Failed to send leave rejection notification', {

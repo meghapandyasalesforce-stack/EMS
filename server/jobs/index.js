@@ -13,6 +13,7 @@ import { scheduleLeaveBalanceJobs } from './leaveBalanceJob.js';
 import { startApprovalTimeoutWorker, scheduleApprovalTimeout } from './approvalTimeoutJob.js';
 import logger from '../helpers/logger.js';
 import { schedulePayrollRunJobs } from './payrollRunJob.js';
+import { scheduleSpecialEventNotificationJobs } from './specialEventNotificationJob.js';
 
 /**
  * Initialize all job workers
@@ -37,6 +38,13 @@ export const initializeWorkers = async () => {
                 logger.info('Payroll run jobs scheduled (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule payroll run jobs', { error: error.message });
+            }
+
+            try {
+                scheduleSpecialEventNotificationJobs();
+                logger.info('Special event notification jobs scheduled (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule special event notification jobs', { error: error.message });
             }
 
             // Auto check-out via direct cron (no Redis needed)
@@ -118,6 +126,14 @@ export const initializeWorkers = async () => {
             logger.info('Payroll run jobs scheduled');
         } catch (error) {
             logger.error('Failed to schedule payroll run jobs', { error: error.message });
+        }
+
+        // Special event notification jobs (cron-based, no Redis required)
+        try {
+            scheduleSpecialEventNotificationJobs();
+            logger.info('Special event notification jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule special event notification jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {

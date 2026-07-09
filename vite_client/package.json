@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:deploy": "vite build && npm run copy-to-server",
+    "dev": "node scripts/patch-sw.mjs && vite",
+    "build": "vite build && node scripts/patch-sw.mjs",
+    "build:deploy": "npm run build && npm run copy-to-server",
     "copy-to-server": "node scripts/copy-to-server.mjs",
     "lint": "eslint .",
     "preview": "vite preview",

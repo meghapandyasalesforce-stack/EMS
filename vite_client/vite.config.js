@@ -2,6 +2,141 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const PUSH_HANDLER_MARKER = "self.addEventListener('push'"
+const pushHandlerSource = fs.readFileSync(
+  path.resolve(__dirname, 'public/push-handler.js'),
+  'utf-8'
+)
+
+const isServiceWorkerId = (id) => {
+  const normalized = id.replace(/\\/g, '/')
+  return (
+    normalized.includes('/sw.js') ||
+    normalized.includes('dev-sw.js') ||
+    normalized.includes('vite-plugin-pwa')
+  )
+}
+
+const isServiceWorkerRequest = (url) =>
+  typeof url === 'string' && (url.includes('dev-sw.js') || url.includes('/sw.js'))
+
+/** Prepend push handlers at the top of generated service workers (importScripts inside workbox is too late). */
+const prependPushHandlers = () => {
+  const devSwPath = path.resolve(__dirname, 'dev-dist/sw.js')
+
+  const prepend = (code) => (code.includes(PUSH_HANDLER_MARKER) ? code : `${pushHandlerSource}\n${code}`)
+
+  const patchDevSwFile = () => {
+    if (!fs.existsSync(devSwPath)) return
+    const code = fs.readFileSync(devSwPath, 'utf-8')
+    const next = prepend(code)
+    if (next !== code) {
+      fs.writeFileSync(devSwPath, next)
+    }
+  }
+
+  const createDevSwPatchMiddleware = () => (req, res, next) => {
+    if (!isServiceWorkerRequest(req.url)) {
+      return next()
+    }
+
+    const chunks = []
+    const originalWrite = res.write.bind(res)
+    const originalEnd = res.end.bind(res)
+    let ended = false
+
+    res.write = function (chunk, encoding, cb) {
+      if (chunk) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding))
+      }
+      return true
+    }
+
+    res.end = function (chunk, encoding, cb) {
+      if (ended) return false
+      ended = true
+      if (chunk) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding))
+      }
+
+      let body = Buffer.concat(chunks).toString('utf8')
+      body = prepend(body)
+
+      res.write = originalWrite
+      res.end = originalEnd
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      return originalEnd(body, typeof encoding === 'function' ? undefined : encoding, typeof encoding === 'function' ? encoding : cb)
+    }
+
+    next()
+  }
+
+  return {
+    name: 'prepend-push-handlers',
+    enforce: 'post',
+    configureServer(server) {
+      patchDevSwFile()
+      server.watcher.add(devSwPath)
+      server.watcher.on('change', (file) => {
+        if (file.replace(/\\/g, '/').endsWith('dev-dist/sw.js')) {
+          setTimeout(patchDevSwFile, 50)
+        }
+      })
+
+      // Must run before VitePWA dev-sw handler so we can patch the response body
+      return () => {
+        server.middlewares.stack.unshift({
+          route: '',
+          handle: createDevSwPatchMiddleware(),
+        })
+      }
+    },
+    transform(code, id) {
+      if (!isServiceWorkerId(id) || code.includes(PUSH_HANDLER_MARKER)) {
+        return null
+      }
+      return prepend(code)
+    },
+    generateBundle(_options, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        const fileName = chunk.fileName || ''
+        if (!fileName.includes('sw')) continue
+        if (chunk.type === 'chunk' && !chunk.code.includes(PUSH_HANDLER_MARKER)) {
+          chunk.code = prepend(chunk.code)
+        } else if (chunk.type === 'asset' && typeof chunk.source === 'string' && !chunk.source.includes(PUSH_HANDLER_MARKER)) {
+          chunk.source = prepend(chunk.source)
+        }
+      }
+    },
+    writeBundle(options) {
+      const outDir = options.dir || path.resolve(__dirname, 'dist')
+      const swPath = path.join(outDir, 'sw.js')
+      if (fs.existsSync(swPath)) {
+        const code = fs.readFileSync(swPath, 'utf-8')
+        const next = prepend(code)
+        if (next !== code) {
+          fs.writeFileSync(swPath, next)
+        }
+      }
+    },
+    closeBundle() {
+      const distSwPath = path.resolve(__dirname, 'dist/sw.js')
+      if (fs.existsSync(distSwPath)) {
+        const code = fs.readFileSync(distSwPath, 'utf-8')
+        const next = prepend(code)
+        if (next !== code) {
+          fs.writeFileSync(distSwPath, next)
+        }
+      }
+      patchDevSwFile()
+    },
+  }
+}
 
 // Custom plugin to handle proxy errors gracefully and suppress ECONNREFUSED logs
 const handleProxyErrors = () => {
@@ -91,7 +226,7 @@ export default defineConfig(({ mode }) => {
   logLevel: env.VITE_LOG_LEVEL || 'warn',
   clearScreen: false, // Don't clear screen on errors
   plugins: [
-    handleProxyErrors(), // Add this plugin to handle proxy errors gracefully
+    handleProxyErrors(),
     react({
       // Ensure production build uses production React
       jsxRuntime: 'automatic',
@@ -99,7 +234,7 @@ export default defineConfig(({ mode }) => {
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'logo192.png', 'logo512.png'],
+      includeAssets: ['favicon.ico', 'logo192.png', 'logo512.png', 'push-handler.js'],
       // Use manifest.webmanifest (default) instead of manifest.json
       manifestFilename: 'manifest.webmanifest',
       manifest: {
@@ -133,14 +268,10 @@ export default defineConfig(({ mode }) => {
         ]
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 5000000, // 5 MB limit
+        maximumFileSizeToCacheInBytes: 5000000,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        // Fix navigation routing for SPA
-        // Use index.html for all navigation requests (SPA routing)
-        // Must match the base path - use absolute path for web deployment
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/_/, /\/[^/?]+\.[^/]+$/],
-        // Ensure proper caching
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
@@ -152,7 +283,7 @@ export default defineConfig(({ mode }) => {
               cacheName: 'api-cache',
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                maxAgeSeconds: 60 * 60 * 24
               },
               networkTimeoutSeconds: 10
             }
@@ -164,7 +295,7 @@ export default defineConfig(({ mode }) => {
               cacheName: 'image-cache',
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
           }
@@ -174,7 +305,8 @@ export default defineConfig(({ mode }) => {
         enabled: true,
         type: 'module'
       }
-    })
+    }),
+    prependPushHandlers(),
   ],
   build: {
     outDir: 'dist',              // ⬅️ build frontend into dist folder

@@ -80,7 +80,7 @@ const FirstLoginPermissionRequest = ({ user, onComplete }) => {
 
     setIsSubscribing(true);
     try {
-      await subscribeUser(user._id);
+      await subscribeUser();
       toast.success('Notifications enabled successfully!');
       setShowPushNotification(false);
       

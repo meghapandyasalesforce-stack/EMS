@@ -21,7 +21,7 @@ const notificationSchema = new mongoose.Schema({
   sender: { 
     type: mongoose.Schema.Types.ObjectId, 
     refPath: 'senderType',
-    required: true 
+    required: false
   },
   senderType: {
     type: String,
@@ -34,7 +34,32 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['task_update', 'task_created', 'task_completed', 'general', 'system', 'break', 'announcement'],
+    enum: [
+      'task_update',
+      'task_created',
+      'task_completed',
+      'general',
+      'system',
+      'break',
+      'announcement',
+      'leave_request',
+      'leave_manager_approved',
+      'leave_approved',
+      'leave_rejected',
+      'leave',
+      'approval_request',
+      'approval_approved',
+      'approval_rejected',
+      'attendance',
+      'attendance_penalty',
+      'attendance_error',
+      'new_employee',
+      'special_event',
+      'payroll',
+      'holiday',
+      'birthday',
+      'anniversary'
+    ],
     default: 'general'
   },
   relatedEntity: {

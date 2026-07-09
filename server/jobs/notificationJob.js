@@ -16,7 +16,7 @@ export const processNotificationJob = async (job) => {
 
     try {
         const payload = createPushPayload(message, type, metadata);
-        const result = await sendPushNotification(userId, userType, payload);
+        const result = await sendPushNotification(userId, userType, payload, metadata?.organizationId);
 
         logger.info('Notification job processed successfully', { 
             jobId: job.id, 

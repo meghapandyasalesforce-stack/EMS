@@ -1135,8 +1135,16 @@ export const togglePayrollVisibility = async (req, res) => {
         // Send push notification when payroll is made visible
         if (isVisible && payroll.employeeId) {
             try {
-                const { notifyPayrollReleased } = await import('../../helpers/pushNotificationTriggers.js');
-                await notifyPayrollReleased(payroll.employeeId._id || payroll.employeeId, payroll);
+                const { notify } = await import('../../helpers/notificationManager.js');
+                await import('../../helpers/notificationEventRegistry.js');
+                await notify({
+                    type: 'payroll_released',
+                    organizationId: payroll.organizationId,
+                    data: {
+                        employee: payroll.employeeId,
+                        payrollData: payroll
+                    }
+                });
             } catch (notifError) {
                 logger.warn('Failed to send payroll release notification', {
                     error: notifError.message,
