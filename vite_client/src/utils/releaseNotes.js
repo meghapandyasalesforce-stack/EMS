@@ -7,9 +7,22 @@
  * 3. Deploy — users will see the popup once on next login/refresh
  */
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 export const RELEASE_NOTES = [
+    {
+        version: '1.1.0',
+        date: 'July 2026',
+        title: 'Notifications, Payroll & Attendance Updates',
+        changes: [
+            { type: 'new', text: 'Web push notifications with leave and attendance regularization email automation' },
+            { type: 'new', text: 'Dynamic payroll TDS calculation and organization TDS settings' },
+            { type: 'new', text: 'Auto check-out job for attendance' },
+            { type: 'improved', text: 'Push notification subscribe / test flow for browser alerts' },
+            { type: 'fixed', text: 'Attendance regularization notification crash (missing logger import)' },
+            { type: 'fixed', text: 'Test push notification failing with organizationId is not defined' },
+        ],
+    },
     {
         version: '1.0.0',
         date: 'June 2025',
