@@ -4,11 +4,15 @@ import {
     DEFAULT_OVERTIME_RATE,
     countCalendarDaysInclusive,
     countWorkingDaysInclusive,
+    countWorkingDaysInDateKeyRange,
     leaveWorkingDaysInRange,
     buildIsWorkingDayFn,
+    buildIsWorkingDayKeyFn,
     attendanceDayCredit,
+    buildAttendanceCreditByDay,
     buildPaidLeaveByDayMap,
     sumEffectivePresentDays,
+    sumEffectivePresentDaysByKeys,
     computePayrollProration
 } from '../../helpers/payrollGenerationHelper.js';
 
@@ -197,6 +201,62 @@ describe('payrollGenerationHelper', () => {
             );
             expect(attByDay.has('2026-06-03')).toBe(true);
             expect(total).toBeGreaterThanOrEqual(1);
+        });
+
+        it('credits IST Monday rows when date UTC instant falls on Sunday (SaaS timezone fix)', () => {
+            const calendar = {
+                workingDays: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                holidays: []
+            };
+            const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, TZ, dayKey);
+            const mondayRecord = {
+                attendanceDateKey: '2026-06-01',
+                date: new Date('2026-05-31T18:30:00.000Z'),
+                status: 'loggedOut',
+                effectiveHours: 9.26
+            };
+            const attByDay = buildAttendanceCreditByDay([mondayRecord], {
+                dayKey,
+                isWorkingDayKeyFn
+            });
+            expect(attByDay.get('2026-06-01')).toBe(1);
+
+            const present = sumEffectivePresentDaysByKeys(
+                '2026-06-01',
+                '2026-06-07',
+                attByDay,
+                new Map(),
+                TZ,
+                isWorkingDayKeyFn
+            );
+            expect(present).toBeGreaterThanOrEqual(1);
+        });
+
+        it('counts 22 working days in June 2026 using org date keys', () => {
+            const calendar = {
+                workingDays: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                holidays: []
+            };
+            const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, TZ, dayKey);
+            expect(
+                countWorkingDaysInDateKeyRange('2026-06-01', '2026-06-30', TZ, isWorkingDayKeyFn)
+            ).toBe(22);
         });
     });
 

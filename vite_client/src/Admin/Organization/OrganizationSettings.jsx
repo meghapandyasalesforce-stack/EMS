@@ -31,6 +31,7 @@ const OrganizationSettings = () => {
         employeeIdStartNumber: 1,
         employeeIdMinDigits: 3,
         timezone: DEFAULT_TIMEZONE,
+        tdsCalculationMode: 'cumulative',
     });
     const [subscription, setSubscription] = useState({
         subscriptionPlan: 'free',
@@ -53,6 +54,7 @@ const OrganizationSettings = () => {
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
                 employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
                 timezone: profile.timezone || DEFAULT_TIMEZONE,
+                tdsCalculationMode: profile.settings.tdsCalculationMode === 'independent' ? 'independent' : 'cumulative',
             });
         }
         if (profile) {
@@ -115,6 +117,7 @@ const OrganizationSettings = () => {
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
                     employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
                     timezone: updatedProfile.timezone || DEFAULT_TIMEZONE,
+                    tdsCalculationMode: updatedProfile.settings.tdsCalculationMode === 'independent' ? 'independent' : 'cumulative',
                 });
             }
             toast.success('Settings updated successfully');
@@ -232,6 +235,47 @@ const OrganizationSettings = () => {
                                 <FiToggleLeft className="w-12 h-6 text-gray-400" />
                             )}
                         </button>
+                    </div>
+
+                    {/* Payroll TDS calculation mode */}
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                        <h3 className="text-lg font-medium text-gray-800 flex items-center mb-1">
+                            <FiCreditCard className="mr-2" />
+                            Payroll TDS calculation
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Applies on the next payroll generate / regenerate. Existing payslips are not changed automatically.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setSettings((prev) => ({ ...prev, tdsCalculationMode: 'cumulative' }))}
+                                className={`text-left rounded-lg border p-4 transition ${
+                                    settings.tdsCalculationMode === 'cumulative'
+                                        ? 'border-theme-primary bg-theme-primary/5 ring-1 ring-theme-primary'
+                                        : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                <div className="font-semibold text-gray-900">Past TDS adjustment</div>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Cumulative: tax due through this FY month minus TDS already deducted. Catches up over/under cuts from earlier months.
+                                </p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSettings((prev) => ({ ...prev, tdsCalculationMode: 'independent' }))}
+                                className={`text-left rounded-lg border p-4 transition ${
+                                    settings.tdsCalculationMode === 'independent'
+                                        ? 'border-theme-primary bg-theme-primary/5 ring-1 ring-theme-primary'
+                                        : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                            >
+                                <div className="font-semibold text-gray-900">No past TDS adjustment</div>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Independent: this month uses present/earned days; future months assumed full. Does not adjust for past TDS deductions.
+                                </p>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="p-4 border border-gray-200 rounded-lg mb-6">

@@ -1,4 +1,4 @@
-import { computeEarningsFromGross, employeePfFromBasicWage } from './salaryCalculation.js';
+import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage } from './salaryCalculation.js';
 import {
     getCalendarYearForFyMonth,
     getFyMonthIndex,
@@ -98,7 +98,7 @@ export function sumProjectedRemainingPf(emp, month, year, monthsRemaining) {
     }, 0);
 }
 
-export function projectFullMonthBreakdownForMonth(emp, salaryStructure, month, year, computeConfiguredComponent) {
+export function projectFullMonthBreakdownForMonth(emp, salaryStructure, month, year) {
     const fullGross = getEffectiveSalaryForMonth(emp, month, year);
     if (!salaryStructure) {
         const formula = computeEarningsFromGross(fullGross);
@@ -109,9 +109,10 @@ export function projectFullMonthBreakdownForMonth(emp, salaryStructure, month, y
         };
     }
 
+    const core = computeSalaryStructureCoreEarnings(salaryStructure, fullGross);
     return {
-        basicWage: computeConfiguredComponent(salaryStructure?.earnings?.basicWage, fullGross),
-        houseRentAllowance: computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, fullGross),
+        basicWage: core.basicWage,
+        houseRentAllowance: core.houseRentAllowance,
         monthlySalary: fullGross
     };
 }
