@@ -202,6 +202,10 @@ export const sendTestPush = async (req, res) => {
   try {
     const userId = req.user?._id || req.employee?._id;
     const userType = req.user ? 'User' : 'Employee';
+    const organizationId =
+      req.user?.organizationId ||
+      req.employee?.organizationId ||
+      req.organizationId;
 
     if (!userId) {
       return res.status(401).json({
