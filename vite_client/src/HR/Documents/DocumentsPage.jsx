@@ -105,6 +105,48 @@ function documentDisplayTitle(doc) {
     return doc.name || doc.fileName || 'Untitled document';
 }
 
+/** PAN / Aadhar / other ID from job-details upload (new + legacy JSON description) */
+function documentDisplayNumber(doc) {
+    const fromMeta = doc?.metadata?.documentNumber;
+    if (fromMeta && String(fromMeta).trim()) return String(fromMeta).trim();
+
+    const info = doc?.metadata?.additionalInfo;
+    if (info && typeof info === 'object') {
+        const n = info.panNumber || info.aadharNumber || info.documentNumber || info.effectiveDate;
+        if (n && String(n).trim()) return String(n).trim();
+    }
+
+    const desc = doc?.description;
+    if (!desc || typeof desc !== 'string') return '';
+
+    // Human-readable: "PAN Number: ABCDE1234F"
+    const labelMatch = desc.match(/^(?:PAN Number|Aadhar Number|Effective Date):\s*(.+)$/i);
+    if (labelMatch?.[1]) return labelMatch[1].trim();
+
+    // Legacy JSON description
+    if (desc.trim().startsWith('{')) {
+        try {
+            const parsed = JSON.parse(desc);
+            const n = parsed.panNumber || parsed.aadharNumber || parsed.documentNumber || parsed.effectiveDate;
+            if (n) return String(n).trim();
+        } catch {
+            /* ignore */
+        }
+    }
+
+    return '';
+}
+
+function documentDisplaySubtitle(doc) {
+    const number = documentDisplayNumber(doc);
+    if (number) return number;
+    const desc = doc?.description;
+    if (desc && typeof desc === 'string' && !desc.trim().startsWith('{')) {
+        return desc;
+    }
+    return '';
+}
+
 function initialsFromPerson(person) {
     const first = String(person?.name || '').trim();
     const last = String(person?.lastName || '').trim();
@@ -139,6 +181,14 @@ function categoryPillClass(cat) {
 function statusPill(doc) {
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') {
         return { label: 'Pending approval', className: 'bg-amber-50 text-amber-800 border border-amber-200' };
+    }
+    // Employee delete (new status, or older rows saved as Rejected + this reason)
+    const removedByEmployee =
+        doc.approvalStatus === 'Withdrawn' ||
+        (doc.approvalStatus === 'Rejected' &&
+            String(doc.rejectionReason || '').toLowerCase().includes('removed by employee'));
+    if (removedByEmployee) {
+        return { label: 'Withdrawn by employee', className: 'bg-slate-100 text-slate-700 border border-slate-200' };
     }
     if (doc.approvalStatus === 'Rejected') {
         return { label: 'Rejected', className: 'bg-red-50 text-red-800 border border-red-100' };
@@ -603,9 +653,16 @@ const DocumentsPage = () => {
                                                                 </div>
                                                                 <div className="mt-1 flex items-center gap-2 min-w-0">
                                                                     <DocumentFileIcon doc={doc} className="w-4 h-4 text-theme-secondary shrink-0" />
-                                                                    <span className="text-sm text-gray-700 truncate">
-                                                                        {documentDisplayTitle(doc)}
-                                                                    </span>
+                                                                    <div className="min-w-0">
+                                                                        <span className="text-sm text-gray-700 block truncate">
+                                                                            {documentDisplayTitle(doc)}
+                                                                        </span>
+                                                                        {documentDisplaySubtitle(doc) ? (
+                                                                            <span className="text-xs font-medium text-gray-500 block truncate mt-0.5">
+                                                                                {documentDisplaySubtitle(doc)}
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </div>
                                                                 </div>
                                                                 <p className="text-xs text-gray-500 mt-1">
                                                                     Submitted {formatRelativeTime(doc.createdAt)}
@@ -721,7 +778,16 @@ const DocumentsPage = () => {
                                                         <span className="shrink-0 p-2 rounded-lg bg-theme-secondary/10 text-theme-secondary">
                                                             <Icon className="w-4 h-4" />
                                                         </span>
-                                                        <span className="font-medium text-gray-900 truncate">{documentDisplayTitle(doc)}</span>
+                                                        <div className="min-w-0">
+                                                            <span className="font-medium text-gray-900 block truncate">
+                                                                {documentDisplayTitle(doc)}
+                                                            </span>
+                                                            {documentDisplaySubtitle(doc) ? (
+                                                                <span className="text-xs text-gray-500 block truncate mt-0.5">
+                                                                    {documentDisplaySubtitle(doc)}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-3.5 whitespace-nowrap">
