@@ -7,7 +7,9 @@ import User from "../../models/user.model.js";
 import mongoose from 'mongoose';
 import { DateTime } from 'luxon';
 import logger from "../../helpers/logger.js";
-import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/notificationService.js";
+import { sendNotificationToUsers } from "../../helpers/notificationService.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
 import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
@@ -793,7 +795,13 @@ export const breakIn = async (req, res) => {
       const employee = await Employee.findById(req.employee._id).select(
         'name lastName email organizationId'
       );
-      if (employee) await sendBreakNotification(employee);
+      if (employee) {
+        await notify({
+          type: 'break_started',
+          organizationId: employee.organizationId,
+          data: { employee }
+        });
+      }
     });
 
     res.json(attendance);
@@ -839,6 +847,42 @@ export const breakOut = async (req, res) => {
 
     invalidateAttendanceCachesAsync();
     emitEmployeesOnBreakChangedAsync(organizationId);
+
+    logger.info('About to trigger break ended notification', {
+      employeeId: req.employee._id
+    });
+
+    runInBackground('break-out-notify-admins', async () => {
+      try {
+        logger.info('Break ended background task started', {
+          employeeId: req.employee._id
+        });
+        const employee = await Employee.findById(req.employee._id).select(
+          'name lastName email organizationId'
+        );
+        if (employee) {
+          logger.info('Employee found for break ended notification', {
+            employeeId: employee._id,
+            employeeName: employee.name
+          });
+          await notify({
+            type: 'break_ended',
+            organizationId: employee.organizationId,
+            data: { employee }
+          });
+        } else {
+          logger.warn('Employee not found for break ended notification', {
+            employeeId: req.employee._id
+          });
+        }
+      } catch (error) {
+        logger.error('Error in break ended background task', {
+          error: error.message,
+          stack: error.stack,
+          employeeId: req.employee._id
+        });
+      }
+    });
 
     res.json(attendance);
   } catch (error) {
@@ -1196,6 +1240,42 @@ export const clockOut = async (req, res) => {
 
     invalidateAttendanceCachesAsync();
     emitAttendanceTodayChangedAsync(organizationId);
+
+    logger.info('About to trigger punch out notification', {
+      employeeId: req.employee._id
+    });
+
+    runInBackground('clock-out-notify-admins', async () => {
+      try {
+        logger.info('Punch out background task started', {
+          employeeId: req.employee._id
+        });
+        const employee = await Employee.findById(req.employee._id).select(
+          'name lastName email organizationId'
+        );
+        if (employee) {
+          logger.info('Employee found for punch out notification', {
+            employeeId: employee._id,
+            employeeName: employee.name
+          });
+          await notify({
+            type: 'punch_out',
+            organizationId: employee.organizationId,
+            data: { employee }
+          });
+        } else {
+          logger.warn('Employee not found for punch out notification', {
+            employeeId: req.employee._id
+          });
+        }
+      } catch (error) {
+        logger.error('Error in punch out background task', {
+          error: error.message,
+          stack: error.stack,
+          employeeId: req.employee._id
+        });
+      }
+    });
 
     const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
     res.json({

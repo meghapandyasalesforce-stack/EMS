@@ -8,6 +8,8 @@ import Calendar from "../../models/calendar.model.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
 import { normalizeLeaveTypeForPolicy } from "../../helpers/leaveTypeHelper.js";
 import { buildEmployeeLeaveBalanceResponse } from "../../helpers/leaveBalanceResponseHelper.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import {
     ensureDefaultLeaveWorkflow,
     attachWorkflowSummariesToLeaves,
@@ -15,6 +17,7 @@ import {
 } from "../../helpers/leaveWorkflowHelper.js";
 import path from "path";
 import { upload as leaveDocumentUpload } from "../fileUpload/uploadConfigController.js";
+import { sendLeaveRequestNotification } from "../../helpers/leaveEmailHelper.js";
 
 
 /**
@@ -231,6 +234,46 @@ export const createLeave = async (req, res) => {
                 endDate,
                 isHalfDay: leave.isHalfDay
             }
+        });
+
+        // Send email notification to approver (non-blocking)
+        setImmediate(async () => {
+            try {
+                await sendLeaveRequestNotification(
+                    {
+                        _id: leave._id,
+                        employeeName: leave.employeeName,
+                        leaveType: leave.leaveType,
+                        startDate: leave.startDate,
+                        endDate: leave.endDate,
+                        duration: leave.duration,
+                        reason: leave.reason,
+                        status: leave.status,
+                        department: employee.department,
+                        designation: employee.jobTitle
+                    },
+                    employeeId,
+                    organizationId
+                );
+            } catch (emailError) {
+                logger.error('Failed to send leave request email notification', {
+                    leaveId: leave._id,
+                    employeeId,
+                    error: emailError.message
+                });
+                // Email failure should not block the leave creation
+            }
+        });
+
+        setImmediate(async () => {
+            await notify({
+                type: 'leave_applied',
+                organizationId,
+                data: {
+                    leave,
+                    employee
+                }
+            });
         });
         
         // ✅ INTEGRATE APPROVAL WORKFLOW (Manager → HR)

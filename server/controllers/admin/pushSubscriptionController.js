@@ -2,6 +2,7 @@ import PushSubscription from '../../models/pushSubscription.model.js';
 import User from '../../models/user.model.js';
 import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
+import { sendPushNotification, createPushPayload } from '../../helpers/pushNotificationService.js';
 
 /**
  * Get VAPID public key for client subscription
@@ -190,6 +191,80 @@ export const getSubscriptionStatus = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: error.message 
+    });
+  }
+};
+
+/**
+ * Send a test push notification to the current user
+ */
+export const sendTestPush = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.employee?._id;
+    const userType = req.user ? 'User' : 'Employee';
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated',
+      });
+    }
+
+    const payload = createPushPayload(
+      'Push notifications are working! You will receive alerts here.',
+      'announcement',
+      { test: true }
+    );
+
+    const result = await sendPushNotification(userId, userType, payload, organizationId);
+
+    if (result.reason === 'VAPID_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Push notifications not configured on server. Set VAPID keys and restart backend.',
+        sent: 0,
+        failed: 0,
+      });
+    }
+
+    if (result.reason === 'NO_SUBSCRIPTION') {
+      return res.status(404).json({
+        success: false,
+        message: 'No push subscription found. Enable push notifications first.',
+        sent: 0,
+        failed: 0,
+      });
+    }
+
+    if (result.sent === 0 && result.failed === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Push notification could not be sent.',
+        sent: 0,
+        failed: 0,
+      });
+    }
+
+    if (result.sent === 0) {
+      return res.status(502).json({
+        success: false,
+        message: 'Push delivery failed. Check server logs for details.',
+        sent: result.sent,
+        failed: result.failed,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Test push notification sent',
+      sent: result.sent,
+      failed: result.failed,
+    });
+  } catch (error) {
+    logger.error('Error sending test push', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };

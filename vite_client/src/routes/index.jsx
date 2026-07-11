@@ -179,7 +179,7 @@ export const leaveRoutes = [
   { path: '/leave', component: lazy(() => import('../Employee/Leave/LeaveApplication')), message: 'Loading leave application...', allowedRoles: [] },
   { path: '/my-leave', component: lazy(() => import('../Employee/LeaveAttendance/LeaveAttendanceHub')), message: 'Loading leave & attendance...', allowedRoles: [] },
   { path: '/employee/leave-attendance', component: lazy(() => import('../Employee/LeaveAttendance/LeaveAttendanceHub')), message: 'Loading leave & attendance...', allowedRoles: [] },
-  { path: '/leave-management', component: lazy(() => import('../Admin/LeaveManagement')), message: 'Loading leave management...', allowedRoles: ['admin', 'hr', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.leaveManagement }
+  { path: '/leave-management', component: lazy(() => import('../Admin/LeaveManagement')), message: 'Loading leave management...', allowedRoles: ['admin', 'hr', 'hr_executive', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.leaveManagement }
 ];
 
 // Payroll routes

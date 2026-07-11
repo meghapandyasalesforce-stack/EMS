@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { submitLeave, resetStatus } from '../../context/employeeLeaveSlice';
 import { toast } from 'react-toastify';
 import { useMediaQuery } from 'react-responsive';
-import { DEFAULT_LEAVE_TYPE, getAllLeaveTypeOptions, LEAVE_REASON_OPTIONS } from '../../constants/leaveConstants';
+import { DEFAULT_LEAVE_TYPE, getAllLeaveTypeOptions } from '../../constants/leaveConstants';
 
 const LeaveApplication = () => {
   const dispatch = useDispatch();
@@ -224,20 +224,15 @@ const LeaveApplication = () => {
           {/* Reason */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Reason</label>
-            <select
+            <textarea
               name="reason"
               value={leaveForm.reason}
               onChange={handleChange}
               disabled={submitting}
+              rows="3"
+              placeholder="Enter reason for leave"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
-            >
-              <option value="">Select a reason</option>
-              {LEAVE_REASON_OPTIONS.map((reason) => (
-                <option key={reason} value={reason}>
-                  {reason}
-                </option>
-              ))}
-            </select>
+            />
             {errors.reason && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.reason}</p>}
           </div>
 

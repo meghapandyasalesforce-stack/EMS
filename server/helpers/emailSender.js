@@ -1,6 +1,23 @@
 import logger from './logger.js';
 import { createEmailTransporter, getEmailFrom, detectEmailProvider, getEmailConfig } from '../config/email.config.js';
 
+const LEAVE_EMAIL_SENDER_NAME = 'Paarsiv Technologies Private Limited';
+const REGULARIZATION_EMAIL_SENDER = 'kunalpareekn@gmail.com';
+
+const getLeaveEmailFrom = () => {
+  const emailFrom = getEmailFrom();
+  if (!emailFrom) return null;
+  return `"${LEAVE_EMAIL_SENDER_NAME}" <${emailFrom}>`;
+};
+
+const getRegularizationEmailFrom = () => {
+  return REGULARIZATION_EMAIL_SENDER;
+};
+
+const buildLeaveCcList = (ccEmails = [], ...excludeEmails) => {
+  const exclude = new Set(excludeEmails.filter(Boolean));
+  return [...new Set(ccEmails.filter(email => email && !exclude.has(email)))];
+};
 /**
  * Send welcome email to new user
  * @param {string} email - Recipient email address
@@ -309,4 +326,595 @@ export const sendNotificationEmail = async (email, subject, message, html) => {
   }
 };
 
-export default sendWelcomeEmail;
+/**
+ * Generate attendance regularization request email template
+ * @param {Object} data - Regularization and employee data
+ * @returns {string} HTML email content
+ */
+const generateRegularizationRequestEmailTemplate = (data) => {
+  const attendanceDate = data.attendanceDate 
+    ? new Date(data.attendanceDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) 
+    : 'N/A';
+  const submittedAt = data.createdAt 
+    ? new Date(data.createdAt).toLocaleString('en-US', { 
+        weekday: 'short', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) 
+    : 'N/A';
+  
+  const regularizationTypeMap = {
+    'missing_clock_in': 'Missing Clock In',
+    'missing_clock_out': 'Missing Clock Out',
+    'both': 'Missing Clock In & Clock Out',
+    'incorrect_time': 'Incorrect Time',
+    'full_day': 'Full Day Regularization'
+  };
+  
+  const regularizationTypeText = regularizationTypeMap[data.regularizationType] || data.regularizationType || 'N/A';
+  
+  const requestedTimeText = data.regularizationType === 'full_day' 
+    ? 'Full day regularization (no specific times)'
+    : `${data.requestedClockIn ? new Date(data.requestedClockIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'} - ${data.requestedClockOut ? new Date(data.requestedClockOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Regularization Request</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    p {
+      margin: 0 0 15px 0;
+    }
+    strong {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Attendance Regularization Request</h2>
+  
+  <p>Dear Manager,</p>
+  
+  <p>${data.employeeName || 'An employee'} has applied for attendance regularization.</p>
+  
+  <p><strong>Employee Name:</strong> ${data.employeeName || 'N/A'}</p>
+  <p><strong>Employee ID:</strong> ${data.employeeId || 'N/A'}</p>
+  <p><strong>Department:</strong> ${data.department || 'N/A'}</p>
+  <p><strong>Attendance Date:</strong> ${attendanceDate}</p>
+  <p><strong>Regularization Type:</strong> ${regularizationTypeText}</p>
+  <p><strong>Requested Time:</strong> ${requestedTimeText}</p>
+  <p><strong>Reason:</strong></p>
+  <p>${data.reason || 'N/A'}</p>
+  <p><strong>Request Status:</strong> Pending</p>
+  <p><strong>Submitted Date & Time:</strong> ${submittedAt}</p>
+  
+  <p>Please review and approve or reject this request.</p>
+  
+  <p>Regards,</p>
+  <p><strong>Paarsiv Technologies Private Limited</strong></p>
+</body>
+</html>`;
+};
+
+/**
+ * Generate attendance regularization approval/rejection email template
+ * @param {Object} data - Regularization and employee data
+ * @param {string} status - 'approved' or 'rejected'
+ * @returns {string} HTML email content
+ */
+const generateRegularizationEmailTemplate = (data, status) => {
+  const attendanceDate = data.attendanceDate 
+    ? new Date(data.attendanceDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) 
+    : 'N/A';
+  
+  const regularizationTypeMap = {
+    'missing_clock_in': 'Missing Clock In',
+    'missing_clock_out': 'Missing Clock Out',
+    'both': 'Missing Clock In & Clock Out',
+    'incorrect_time': 'Incorrect Time',
+    'full_day': 'Full Day Regularization'
+  };
+  
+  const regularizationTypeText = regularizationTypeMap[data.regularizationType] || data.regularizationType || 'N/A';
+  const isApproved = status === 'approved';
+  const statusText = isApproved ? 'Approved' : 'Rejected';
+  const actionDate = isApproved 
+    ? (data.approvedAt ? new Date(data.approvedAt).toLocaleString('en-US', { 
+        weekday: 'short', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) : 'N/A')
+    : (data.rejectedAt ? new Date(data.rejectedAt).toLocaleString('en-US', { 
+        weekday: 'short', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) : 'N/A');
+  
+  const actionBy = isApproved 
+    ? (data.approvedByName || data.reviewedByName || 'Manager')
+    : (data.rejectedByName || data.reviewedByName || 'Manager');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Regularization ${statusText}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    p {
+      margin: 0 0 15px 0;
+    }
+    strong {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Attendance Regularization ${statusText}</h2>
+  
+  <p>Dear ${data.employeeName || 'Employee'},</p>
+  
+  <p>Your attendance regularization request has been <strong>${statusText}</strong>.</p>
+  
+  <p><strong>Attendance Date:</strong> ${attendanceDate}</p>
+  <p><strong>Regularization Type:</strong> ${regularizationTypeText}</p>
+  <p><strong>${isApproved ? 'Approved By' : 'Rejected By'}:</strong> ${actionBy}</p>
+  <p><strong>${isApproved ? 'Approval Date & Time' : 'Rejection Date & Time'}:</strong> ${actionDate}</p>
+  ${!isApproved ? `<p><strong>Rejection Reason:</strong></p><p>${data.rejectionReason || data.rejectionReason || 'N/A'}</p>` : ''}
+  <p><strong>Status:</strong> ${statusText}</p>
+  
+  <p>If you have any questions, please contact HR or your reporting manager.</p>
+  
+  <p>Regards,</p>
+  <p><strong>Paarsiv Technologies Private Limited</strong></p>
+</body>
+</html>`;
+};
+
+/**
+ * Generate leave request email template
+ * @param {Object} data - Leave and employee data
+ * @returns {string} HTML email content
+ */
+const generateLeaveRequestEmailTemplate = (data) => {
+  const startDate = data.startDate ? new Date(data.startDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const endDate = data.endDate ? new Date(data.endDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const numberOfDays = data.duration || data.totalDays || 'N/A';
+  const managerName = data.managerName || 'Manager';
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leave Request</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    p {
+      margin: 0 0 15px 0;
+    }
+    strong {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <p>Dear ${managerName},</p>
+  
+  <p>I hope you are doing well.</p>
+  
+  <p>I would like to request leave from <strong>${startDate}</strong> to <strong>${endDate}</strong> (<strong>${numberOfDays} day(s)</strong>).</p>
+  
+  <p><strong>Reason for Leave:</strong></p>
+  <p>${data.reason || 'N/A'}</p>
+  
+  <p>I kindly request you to review and approve my leave request. Please let me know if any additional information is required.</p>
+  
+  <p>Thank you for your time and consideration.</p>
+  
+  <p>Regards,</p>
+  <p><strong>${data.employeeName || 'Employee'}</strong></p>
+  <p>${data.employeeId || 'N/A'}</p>
+  <p>${data.department || 'N/A'}</p>
+</body>
+</html>`;
+};
+
+/**
+ * Send leave request email to approver
+ * @param {Object} leaveData - Leave request data
+ * @param {string} approverEmail - Approver email address
+ * @param {Array} ccEmails - CC email addresses (HR, Admin)
+ *@param {string} employeeEmail - Employee email address (used for reply-to)
+ * @returns {Promise<void>}
+ */
+export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails = [], employeeEmail = null) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getLeaveEmailFrom();
+
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, approverEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: approverEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Leave Request - ${leaveData.employeeName || 'Employee'}`,
+    html: generateLeaveRequestEmailTemplate(leaveData)
+  };
+
+  // // For transactional email services (SendGrid, Mailgun, SES, Brevo), set from to employee's email directly
+  // // These services support custom sender addresses without exposing the system email
+  // if (employeeEmail && provider.isTransactional) {
+  //   mailOptions.from = `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>`;
+  //   mailOptions.replyTo = employeeEmail;
+  // } 
+  // // For traditional SMTP (Gmail, Outlook), use sender field to minimize system email exposure
+  // else if (employeeEmail) {
+  //   mailOptions.from = `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>`;
+  //   mailOptions.sender = emailFrom;
+  //   mailOptions.replyTo = employeeEmail;
+  // }
+
+  // Always send from system SMTP account; allow manager to reply to the employee
+  if (employeeEmail) {
+    mailOptions.replyTo = employeeEmail;
+  }
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Leave request email sent', { 
+      from: emailFrom,
+      replyTo: employeeEmail,
+      to: approverEmail, 
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending leave request email', { 
+      from: emailFrom,
+      replyTo: employeeEmail,
+      to: approverEmail, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send leave approval email to employee
+ * @param {Object} leaveData - Leave request data
+ * @param {string} employeeEmail - Employee email address
+ * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
+ * @returns {Promise<void>}
+ */
+ const generateLeaveEmailTemplate = (data, status) => {
+  const startDate = data.startDate
+    ? new Date(data.startDate).toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    : 'N/A';
+
+  const endDate = data.endDate
+    ? new Date(data.endDate).toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    : 'N/A';
+
+  const numberOfDays = data.duration || data.totalDays || 'N/A';
+  const isApproved = status === 'approved';
+  const remarks = data.rejectionReason || data.remarks || data.reason || 'N/A';
+  const statusText = isApproved ? 'approved' : 'rejected';
+  const remarksLabel = isApproved ? 'Remarks' : 'Rejection Reason';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leave Request ${isApproved ? 'Approved' : 'Rejected'}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    p {
+      margin: 0 0 15px 0;
+    }
+    strong {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Paarsiv Technologies Private Limited</h2>
+  <p>Dear ${data.employeeName || 'Employee'},</p>
+
+  <p>Your leave request has been <strong>${statusText}</strong>.</p>
+
+  <p><strong>Leave Dates:</strong> ${startDate} to ${endDate}</p>
+  <p><strong>Number of Days:</strong> ${numberOfDays}</p>
+  <p><strong>${remarksLabel}:</strong></p>
+  <p>${remarks}</p>
+
+  <p>If you have any questions, please contact HR or your reporting manager.</p>
+
+  <p>Regards,</p>
+  <p><strong>Paarsiv Technologies Private Limited</strong></p>
+</body>
+</html>`;
+};
+export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails = []) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getLeaveEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Leave Request Approved - ${leaveData.employeeName || 'Employee'}`,
+    html: generateLeaveEmailTemplate(leaveData, 'approved', 'employee')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Leave approval email sent', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending leave approval email', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send leave rejection email to employee
+ * @param {Object} leaveData - Leave request data
+ * @param {string} employeeEmail - Employee email address
+ * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
+ * @returns {Promise<void>}
+ */
+export const sendLeaveRejectionEmail = async (leaveData, employeeEmail, ccEmails = []) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getLeaveEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Leave Request Rejected - ${leaveData.employeeName || 'Employee'}`,
+    html: generateLeaveEmailTemplate(leaveData, 'rejected', 'employee')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Leave rejection email sent', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending leave rejection email', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send attendance regularization request email to approver
+ * @param {Object} regularizationData - Regularization request data
+ * @param {string} approverEmail - Approver email address
+ * @param {Array} ccEmails - CC email addresses (HR, Admin)
+ * @returns {Promise<void>}
+ */
+export const sendRegularizationRequestEmail = async (regularizationData, approverEmail, ccEmails = []) => {
+  const emailConfig = getEmailConfig();
+  const transporter = createEmailTransporter();
+  const emailFrom = getRegularizationEmailFrom();
+
+  if (!emailFrom) {
+    throw new Error('Regularization email sender not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, approverEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: approverEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Attendance Regularization Request - ${regularizationData.employeeName || 'Employee'}`,
+    html: generateRegularizationRequestEmailTemplate(regularizationData)
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Attendance regularization request email sent', { 
+      from: emailFrom,
+      to: approverEmail, 
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending attendance regularization request email', { 
+      from: emailFrom,
+      to: approverEmail, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send attendance regularization approval email to employee
+ * @param {Object} regularizationData - Regularization request data
+ * @param {string} employeeEmail - Employee email address
+ * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
+ * @returns {Promise<void>}
+ */
+export const sendRegularizationApprovalEmail = async (regularizationData, employeeEmail, ccEmails = []) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getRegularizationEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('Regularization email sender not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: 'Attendance Regularization Approved',
+    html: generateRegularizationEmailTemplate(regularizationData, 'approved')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Attendance regularization approval email sent', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending attendance regularization approval email', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send attendance regularization rejection email to employee
+ * @param {Object} regularizationData - Regularization request data
+ * @param {string} employeeEmail - Employee email address
+ * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
+ * @returns {Promise<void>}
+ */
+export const sendRegularizationRejectionEmail = async (regularizationData, employeeEmail, ccEmails = []) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getRegularizationEmailFrom();
+  
+  if (!emailFrom) {
+    throw new Error('Regularization email sender not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: 'Attendance Regularization Rejected',
+    html: generateRegularizationEmailTemplate(regularizationData, 'rejected')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('Attendance regularization rejection email sent', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      messageId: info.messageId 
+    });
+  } catch (error) {
+    logger.error('Error sending attendance regularization rejection email', { 
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+export default {
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendNotificationEmail,
+  sendLeaveRequestEmail,
+  sendLeaveApprovalEmail,
+  sendLeaveRejectionEmail
+};

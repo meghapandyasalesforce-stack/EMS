@@ -3,45 +3,67 @@ import PushSubscription from '../models/pushSubscription.model.js';
 import logger from './logger.js';
 
 // Configure VAPID details
-const configureVAPID = () => {
+
+let vapidConfigured = false;
+
+const ensureVAPID = () => {
+  if (vapidConfigured) return true;
+
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+  const subject =
+    process.env.VAPID_SUBJECT ||
+    process.env.VAPID_EMAIL ||
+    'mailto:admin@example.com';
 
   if (!publicKey || !privateKey) {
-    // VAPID keys are optional - don't log warning here, it's handled in env validation
-    // This prevents duplicate warnings
     return false;
   }
 
   webpush.setVapidDetails(subject, publicKey, privateKey);
+  vapidConfigured = true;
   return true;
 };
 
-// Initialize VAPID configuration
-const vapidConfigured = configureVAPID();
-
+export const sendPushNotification = async (userId, userType, payload, organizationId) => {
+  if (!ensureVAPID()) {
+    logger.warn('VAPID not configured, skipping push notification');
+    return { sent: 0, failed: 0, reason: 'VAPID_NOT_CONFIGURED' };
+  }
 /**
  * Send push notification to a specific user
  * @param {String|ObjectId} userId - User ID
  * @param {String} userType - 'User' or 'Employee'
  * @param {Object} payload - Notification payload
+ * @param {String} organizationId - Organization ID to filter subscriptions
  * @returns {Promise<Object>} - { sent: number, failed: number }
  */
-export const sendPushNotification = async (userId, userType, payload) => {
-  if (!vapidConfigured) {
-    logger.warn('VAPID not configured, skipping push notification');
-    return { sent: 0, failed: 0 };
-  }
+
+  logger.info('sendPushNotification called', {
+    userId,
+    userType,
+    payloadType: payload.data?.type,
+    payloadTitle: payload.notification?.title,
+    organizationId
+  });
 
   try {
-    const subscriptions = await PushSubscription.find({ 
-      userId, 
-      userType 
+    // Query by userId and organizationId to ensure we find subscriptions for the correct organization
+    const query = { userId };
+    if (organizationId) {
+      query.organizationId = organizationId;
+    }
+    const subscriptions = await PushSubscription.find(query);
+
+    logger.info('Push subscriptions found for userId', {
+      userId,
+      subscriptionCount: subscriptions.length,
+      userTypes: subscriptions.map(s => s.userType)
     });
 
     if (subscriptions.length === 0) {
-      return { sent: 0, failed: 0 };
+      logger.warn('No push subscriptions found for user', { userId });
+      return { sent: 0, failed: 0, reason: 'NO_SUBSCRIPTION' };
     }
 
     const results = await Promise.allSettled(
@@ -64,16 +86,30 @@ export const sendPushNotification = async (userId, userType, payload) => {
     const sent = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
-    // Remove failed subscriptions (expired or invalid)
+    // Log failures and only remove expired/invalid subscriptions (410/404)
     if (failed > 0) {
-      const failedIndices = results
-        .map((r, i) => r.status === 'rejected' ? i : -1)
-        .filter(i => i !== -1);
-      
-      const failedSubscriptions = failedIndices.map(i => subscriptions[i]._id);
-      await PushSubscription.deleteMany({ _id: { $in: failedSubscriptions } });
-      
-      logger.info(`Removed ${failed} invalid push subscriptions`);
+      const failedIndices = [];
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const statusCode = result.reason?.statusCode;
+          logger.error('Push notification delivery failed', {
+            userId,
+            userType,
+            endpoint: subscriptions[index]?.endpoint,
+            statusCode,
+            error: result.reason?.message || String(result.reason),
+          });
+          if (statusCode === 404 || statusCode === 410) {
+            failedIndices.push(index);
+          }
+        }
+      });
+
+      if (failedIndices.length > 0) {
+        const failedSubscriptions = failedIndices.map(i => subscriptions[i]._id);
+        await PushSubscription.deleteMany({ _id: { $in: failedSubscriptions } });
+        logger.info(`Removed ${failedIndices.length} invalid push subscriptions`);
+      }
     }
 
     logger.info(`Push notification sent: ${sent} successful, ${failed} failed`);
@@ -87,18 +123,20 @@ export const sendPushNotification = async (userId, userType, payload) => {
 /**
  * Send broadcast push notification to all subscribers
  * @param {Object} payload - Notification payload
+ * @param {String} organizationId - Organization ID to filter subscriptions
  * @returns {Promise<Object>} - { sent: number, failed: number }
  */
-export const sendBroadcastPushNotification = async (payload) => {
-  if (!vapidConfigured) {
+export const sendBroadcastPushNotification = async (payload, organizationId) => {
+  if (!ensureVAPID()) {
     logger.warn('VAPID not configured, skipping broadcast push notification');
     return { sent: 0, failed: 0 };
   }
 
   try {
-    const subscriptions = await PushSubscription.find();
+    const subscriptions = await PushSubscription.find({ organizationId });
     
     if (subscriptions.length === 0) {
+      logger.warn('No push subscriptions found for organization', { organizationId });
       return { sent: 0, failed: 0 };
     }
 
@@ -122,16 +160,27 @@ export const sendBroadcastPushNotification = async (payload) => {
     const sent = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
-    // Remove failed subscriptions
     if (failed > 0) {
-      const failedIndices = results
-        .map((r, i) => r.status === 'rejected' ? i : -1)
-        .filter(i => i !== -1);
-      
-      const failedSubscriptions = failedIndices.map(i => subscriptions[i]._id);
-      await PushSubscription.deleteMany({ _id: { $in: failedSubscriptions } });
-      
-      logger.info(`Removed ${failed} invalid push subscriptions from broadcast`);
+      const failedIndices = [];
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const statusCode = result.reason?.statusCode;
+          logger.error('Broadcast push delivery failed', {
+            endpoint: subscriptions[index]?.endpoint,
+            statusCode,
+            error: result.reason?.message || String(result.reason),
+          });
+          if (statusCode === 404 || statusCode === 410) {
+            failedIndices.push(index);
+          }
+        }
+      });
+
+      if (failedIndices.length > 0) {
+        const failedSubscriptions = failedIndices.map(i => subscriptions[i]._id);
+        await PushSubscription.deleteMany({ _id: { $in: failedSubscriptions } });
+        logger.info(`Removed ${failedIndices.length} invalid push subscriptions from broadcast`);
+      }
     }
 
     logger.info(`Broadcast push notification sent: ${sent} successful, ${failed} failed`);
@@ -150,10 +199,22 @@ const getNotificationTitle = (type) => {
     'task_update': 'Task Updated',
     'task_created': 'New Task',
     'task_completed': 'Task Completed',
+    'task': 'New Task',
     'general': 'Notification',
     'system': 'System Notification',
     'break': 'Break Alert',
-    'announcement': 'Announcement'
+    'announcement': 'Announcement',
+    'leave': 'Leave Update',
+    'leave_request': 'New Leave Request',
+    'leave_approved': 'Leave Approved',
+    'leave_rejected': 'Leave Rejected',
+    'leave_manager_approved': 'Leave Approved by Manager',
+    'payroll': 'Payroll Update',
+    'new_employee': 'New Employee Joined 🎉',
+    'holiday': 'Holiday Notice',
+    'birthday': 'Birthday Celebration 🎂',
+    'anniversary': 'Work Anniversary 🎉',
+    'attendance': 'Attendance Update',
   };
   return titles[type] || 'Notification';
 };
@@ -173,6 +234,12 @@ const getNotificationUrl = (type, metadata) => {
       return `${baseUrl}/admin/dashboard`;
     case 'announcement':
       return `${baseUrl}/notifications`;
+    case 'leave':
+      return `${baseUrl}/employee/leave-attendance`;
+    case 'payroll':
+      return `${baseUrl}/employee/payroll`;
+    case 'new_employee':
+      return `${baseUrl}/admin/employees`;
     default:
       return `${baseUrl}/notifications`;
   }
@@ -183,10 +250,10 @@ const getNotificationUrl = (type, metadata) => {
  */
 export const createPushPayload = (message, type = 'general', metadata = {}) => {
   return {
-    title: getNotificationTitle(type),
+    title: metadata.title || getNotificationTitle(type),
     body: message,
-    icon: '/logo192.png',
-    badge: '/logo192.png',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
     data: {
       url: getNotificationUrl(type, metadata),
       notificationId: metadata.notificationId,

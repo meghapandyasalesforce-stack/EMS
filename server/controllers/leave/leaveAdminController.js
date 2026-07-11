@@ -7,6 +7,8 @@ import { parsePagination, parseSort, sendPaginatedResponse } from "../../helpers
 import { addOrganizationFilter } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { logApprove, logReject, logUpdate } from "../../helpers/auditLogger.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import { shouldApplyDirectLeaveStatusUpdate } from "../../helpers/leaveStatusHelper.js";
 import {
     attachWorkflowSummariesToLeaves,
@@ -15,6 +17,7 @@ import {
     getLeaveApprovalStageLabel,
     sendLeaveActionError,
 } from "../../helpers/leaveWorkflowHelper.js";
+import { sendLeaveApprovalNotification, sendLeaveRejectionNotification } from "../../helpers/leaveEmailHelper.js";
 
 export const getAllLeaves = async (req, res) => {
     try {
@@ -305,6 +308,57 @@ export const updateLeaveStatus = async (req, res) => {
 
         await leave.save();
         
+        // Send email notification to employee (non-blocking)
+        const employeeId = leave.employee?._id || leave.employee;
+        if (employeeId) {
+            setImmediate(async () => {
+                try {
+                    if (leave.status === 'approved') {
+                        await sendLeaveApprovalNotification(
+                            {
+                                _id: leave._id,
+                                employeeName: leave.employeeName,
+                                leaveType: leave.leaveType,
+                                startDate: leave.startDate,
+                                endDate: leave.endDate,
+                                duration: leave.duration,
+                                reason: leave.reason,
+                                status: leave.status,
+                                approvedAt: leave.approvedAt,
+                                approvedBy: approverId
+                            },
+                            employeeId
+                        );
+                    } else if (leave.status === 'rejected') {
+                        await sendLeaveRejectionNotification(
+                            {
+                                _id: leave._id,
+                                employeeName: leave.employeeName,
+                                leaveType: leave.leaveType,
+                                startDate: leave.startDate,
+                                endDate: leave.endDate,
+                                duration: leave.duration,
+                                reason: leave.reason,
+                                status: leave.status,
+                                rejectionReason: leave.rejectionReason,
+                                rejectedAt: leave.rejectedAt,
+                                rejectedBy: approverId
+                            },
+                            employeeId
+                        );
+                    }
+                } catch (emailError) {
+                    logger.error('Failed to send leave status email notification', {
+                        leaveId: leave._id,
+                        employeeId,
+                        status: leave.status,
+                        error: emailError.message
+                    });
+                    // Email failure should not block the leave status update
+                }
+            });
+        }
+        
         // Log audit trail based on resolved leave status (not requested status)
         const resolvedStatus = leave.status;
         if (resolvedStatus === 'approved') {
@@ -362,7 +416,6 @@ export const updateLeaveStatus = async (req, res) => {
         }
         
         // Recalculate leave balance when status changes (approved: deduct used; rejected/cancelled: release pending)
-        const employeeId = leave.employee?._id || leave.employee;
         if (employeeId && (leave.status === 'approved' || leave.status === 'rejected' || leave.status === 'cancelled')) {
             try {
                 const leaveBalanceEngine = (await import('../../services/leaveBalanceEngine.js')).default;
@@ -380,18 +433,40 @@ export const updateLeaveStatus = async (req, res) => {
             }
         }
 
-        // Send push notification based on status
-        if (leave.employee) {
+        // Only send a direct requester notification when this update bypassed the workflow
+        // notification pipeline. Workflow-driven final approvals/rejections already notify
+        // the employee from `approvalWorkflowService`.
+        if (leave.employee && !workflowProcessed) {
             try {
-                const { notifyLeaveApproved, notifyLeaveRejected } = await import('../../helpers/pushNotificationTriggers.js');
-                const employeeId = leave.employee._id || leave.employee;
-                const resolvedStatus = leave.status;
-                
+                const employeeRecord = await Employee.findById(employeeId)
+                    .select('_id name lastName managerId manager functionalRoles department position jobTitle')
+                    .lean();
+
+                // Determine approval stage based on workflow state
+                let approvalStage = null;
                 if (resolvedStatus === 'approved') {
-                    await notifyLeaveApproved(employeeId, leave);
-                } else if (resolvedStatus === 'rejected') {
-                    await notifyLeaveRejected(employeeId, leave);
+                    // If workflow was processed, check if it was final approval
+                    approvalStage = workflowStillInProgress ? 'manager' : 'final';
                 }
+
+                // Send notification using centralized manager
+                let eventType;
+                if (resolvedStatus === 'rejected') {
+                    eventType = 'leave_rejected';
+                } else if (approvalStage === 'manager') {
+                    eventType = 'leave_manager_approved';
+                } else {
+                    eventType = 'leave_approved';
+                }
+
+                await notify({
+                    type: eventType,
+                    organizationId,
+                    data: {
+                        leave,
+                        employee: employeeRecord
+                    }
+                });
             } catch (notifError) {
                 logger.warn('Failed to send leave status notification', {
                     error: notifError.message,

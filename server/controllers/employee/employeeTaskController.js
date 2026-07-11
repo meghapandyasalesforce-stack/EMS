@@ -4,7 +4,8 @@ import ProjectUpdate from "../../models/projectUpdate.model.js";
 import ProjectWorkItem from "../../models/projectWorkItem.model.js";
 import { computeWorkPlanProgress } from "../../helpers/projectWorkItemPermissionHelper.js";
 import Employee from "../../models/employee.model.js";
-import { sendTaskUpdateNotification } from "../../helpers/notificationService.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import { sendSuccess, sendError, sendForbidden, sendInternalError } from "../../helpers/responseHelper.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
@@ -189,7 +190,16 @@ export const createTodayTask = async (req, res) => {
         // Send notification for task creation
         const employee = await Employee.findById(employeeId);
         if (employee) {
-            await sendTaskUpdateNotification(populatedTask, employee, 'created');
+            const project = await Project.findById(populatedTask.project).select('name').lean();
+            await notify({
+                type: 'task_created',
+                organizationId: employee.organizationId,
+                data: {
+                    task: populatedTask,
+                    employee,
+                    project
+                }
+            });
         }
 
         return sendSuccess(res, { task: populatedTask }, 'Task created successfully', 201);
@@ -248,8 +258,18 @@ export const updateTask = async (req, res) => {
         // Send notification for task update
         const employee = await Employee.findById(employeeId);
         if (employee) {
-            const updateType = status === 'Completed' ? 'completed' : 'updated';
-            await sendTaskUpdateNotification(populatedTask, employee, updateType, oldTask);
+            const project = await Project.findById(populatedTask.project).select('name').lean();
+            const updateType = status === 'Completed' ? 'task_completed' : 'task_updated';
+            await notify({
+                type: updateType,
+                organizationId: employee.organizationId,
+                data: {
+                    task: populatedTask,
+                    employee,
+                    project,
+                    oldTask
+                }
+            });
         }
 
         return sendSuccess(res, { task: populatedTask }, 'Task updated successfully');

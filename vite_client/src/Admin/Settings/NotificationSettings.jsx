@@ -32,8 +32,24 @@ const NotificationSettings = () => {
         isLoading: pushLoading, 
         error: pushError,
         subscribe,
-        unsubscribe 
+        unsubscribe,
+        requestPermission,
+        sendTestNotification,
     } = usePushNotification();
+
+    const [testingPush, setTestingPush] = useState(false);
+
+    const handleTestPush = async () => {
+        setTestingPush(true);
+        try {
+            const result = await sendTestNotification();
+            toast.success(result.message || 'Test push sent! Check for a browser notification.');
+        } catch (err) {
+            toast.error(err.message || 'Failed to send test push');
+        } finally {
+            setTestingPush(false);
+        }
+    };
 
     useEffect(() => {
         fetchNotificationSettings();
@@ -420,6 +436,25 @@ const NotificationSettings = () => {
                                 </label>
                             </div>
                         </div>
+
+                        {isSubscribed && (
+                            <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
+                                <div>
+                                    <h4 className="font-medium text-gray-900">Test Push Notification</h4>
+                                    <p className="text-sm text-gray-600">
+                                        Send a test popup to this browser (minimize the window if you do not see it)
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleTestPush}
+                                    disabled={testingPush || pushLoading}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-theme-primary rounded-md hover:opacity-90 disabled:opacity-50"
+                                >
+                                    {testingPush ? 'Sending...' : 'Send Test'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
