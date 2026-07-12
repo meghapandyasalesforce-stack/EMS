@@ -22,12 +22,29 @@ export const PASSWORD_RESET_TOKEN_BYTES = 32;
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 export const MAX_FILE_SIZE_MB = 5;
 
-// Rate limiting defaults
+// Rate limiting defaults (overridable via RATE_LIMIT_WINDOW_MS / RATE_LIMIT_MAX_REQUESTS)
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-export const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 100;
+export const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 2000; // SPA-friendly; admin dashboards fire many GETs
 export const LOGIN_RATE_LIMIT_MAX = 5;
 export const PASSWORD_RESET_RATE_LIMIT_MAX = 3;
 export const PASSWORD_RESET_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+/** Resolved from env, falls back to DEFAULT_RATE_LIMIT_WINDOW_MS */
+export const getRateLimitWindowMs = () => {
+  const parsed = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10);
+  return Number.isFinite(parsed) && parsed >= 1000 ? parsed : DEFAULT_RATE_LIMIT_WINDOW_MS;
+};
+
+/** Resolved from env, falls back to DEFAULT_RATE_LIMIT_MAX_REQUESTS (or 10k in non-production) */
+export const getRateLimitMaxRequests = () => {
+  const parsed = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10);
+  if (Number.isFinite(parsed) && parsed >= 1) {
+    return parsed;
+  }
+  return process.env.NODE_ENV === 'production'
+    ? DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    : 10000;
+};
 
 // Database connection
 export const DEFAULT_MONGODB_MAX_POOL_SIZE = 10;
