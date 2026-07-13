@@ -9,6 +9,9 @@ import {
   sendBroadcastPushNotification,
   createPushPayload 
 } from './pushNotificationService.js';
+import { getCachedEffectiveTimezone } from './orgContextCache.js';
+import { formatTimeInTimezone } from './timezoneHelper.js';
+import { DEFAULT_TIMEZONE } from '../constants/timezoneOptions.js';
 
 // WebSocket notification service (lazy import to avoid circular dependencies)
 let wsNotificationService = null;
@@ -617,7 +620,8 @@ export const sendBreakNotification = async (employee) => {
       return;
     }
 
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const timezone = await getCachedEffectiveTimezone(organizationId);
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     const message = `${employee.name} ${employee.lastName || ''} has started a break at ${time}.`;
     const title = 'Employee Started Break';
     
@@ -785,7 +789,8 @@ export const sendBreakEndedNotification = async (employee) => {
       return;
     }
 
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const timezone = await getCachedEffectiveTimezone(organizationId);
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     const message = `${employee.name} ${employee.lastName || ''} has returned from break at ${time}.`;
     const title = 'Employee Returned from Break';
     
@@ -953,7 +958,8 @@ export const sendPunchOutNotification = async (employee) => {
       return;
     }
 
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const timezone = await getCachedEffectiveTimezone(organizationId);
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     const message = `${employee.name} ${employee.lastName || ''} has punched out at ${time}.`;
     const title = 'Employee Punched Out';
     
