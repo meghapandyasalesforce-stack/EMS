@@ -7,6 +7,7 @@
 import { registerEvent } from './notificationManager.js';
 import Employee from '../models/employee.model.js';
 import User from '../models/user.model.js';
+import logger from './logger.js';
 
 // Helper function to normalize role text
 const normalizeRoleText = (value) => String(value || '').trim().toLowerCase();

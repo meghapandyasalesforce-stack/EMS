@@ -1,13 +1,17 @@
+import { DateTime } from 'luxon';
 import Attendance from '../models/attendance.model.js';
 import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import logger from './logger.js';
-import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
-import { computeRegimeIncomeTaxCumulative } from './tdsCumulativeHelper.js';
+import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
+import { computeRegimeIncomeTaxCumulative, clearTdsCalculationModeCache } from './tdsCumulativeHelper.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
-import { getDateKeyInTimezone } from './timezoneHelper.js';
+import { getDateKeyInTimezone, getEndOfDayInTimezone } from './timezoneHelper.js';
+import { buildAttendancePeriodFilter, parseDateKeyInTimezone } from './attendanceDayHelper.js';
+
+const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 /** Default overtime multiplier when salary structure does not specify a rate. */
 export const DEFAULT_OVERTIME_RATE = 1.5;
@@ -22,6 +26,8 @@ const salaryStructureByIdCache = new Map();
 const salaryStructureByApplicabilityCache = new Map();
 
 export function clearPayrollGenerationCaches({ organizationId, structureId } = {}) {
+    clearTdsCalculationModeCache(organizationId);
+
     const orgKey = organizationId ? `${String(organizationId)}:` : null;
     const structureKey = structureId && organizationId ? `${String(organizationId)}:${String(structureId)}` : null;
 
@@ -156,15 +162,19 @@ function getDayName(date) {
     return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][date.getDay()];
 }
 
+/** Weekday name for yyyy-MM-dd in the org IANA timezone (SaaS-safe; no server TZ). */
+export function getDayNameFromDateKey(dateKey, timezone) {
+    const dt = parseDateKeyInTimezone(dateKey, timezone);
+    return WEEKDAY_NAMES[dt.weekday - 1];
+}
+
 function createDayKeyFn(timezone) {
     return (date) => getDateKeyInTimezone(date, timezone);
 }
 
-export function buildIsWorkingDayFn(calendar, dayKey) {
-    if (!calendar) return null;
-
-    const holidayDates = new Set(
-        (calendar.holidays || [])
+function buildHolidayDateKeySet(calendar, dayKey) {
+    return new Set(
+        (calendar?.holidays || [])
             .filter((h) => h && h.isActive !== false)
             .map((h) => {
                 const hd = new Date(h.date);
@@ -172,6 +182,82 @@ export function buildIsWorkingDayFn(calendar, dayKey) {
             })
             .filter(Boolean)
     );
+}
+
+/**
+ * Working-day predicate keyed by org calendar day (yyyy-MM-dd).
+ * Use this for attendance/payroll counting across any tenant timezone.
+ */
+export function buildIsWorkingDayKeyFn(calendar, timezone, dayKey) {
+    const holidayDates = buildHolidayDateKeySet(calendar, dayKey);
+
+    return (dateKey) => {
+        if (!dateKey) return false;
+        const dayName = getDayNameFromDateKey(dateKey, timezone);
+        const isWorkingByWeek =
+            calendar?.workingDays && typeof calendar.workingDays[dayName] === 'boolean'
+                ? calendar.workingDays[dayName]
+                : !['saturday', 'sunday'].includes(dayName);
+
+        if (!isWorkingByWeek) return false;
+        return !holidayDates.has(dateKey);
+    };
+}
+
+/** Resolve canonical attendance day key for payroll bucketing. */
+export function resolveAttendanceRecordDateKey(record, dayKey) {
+    if (record?.attendanceDateKey) {
+        return String(record.attendanceDateKey).slice(0, 10);
+    }
+    if (record?.date) {
+        const d = new Date(record.date);
+        if (!Number.isNaN(d.getTime())) {
+            return dayKey(d);
+        }
+    }
+    return null;
+}
+
+/** Walk inclusive yyyy-MM-dd range in org timezone. */
+export function eachDateKeyInInclusiveRange(startKey, endKey, timezone, visit) {
+    if (!startKey || !endKey || startKey > endKey) return;
+    let cursor = parseDateKeyInTimezone(startKey, timezone);
+    const end = parseDateKeyInTimezone(endKey, timezone);
+    while (cursor <= end) {
+        visit(cursor.toFormat('yyyy-MM-dd'));
+        cursor = cursor.plus({ days: 1 });
+    }
+}
+
+/** Count working days between two org date keys (inclusive). */
+export function countWorkingDaysInDateKeyRange(startKey, endKey, timezone, isWorkingDayKeyFn) {
+    let working = 0;
+    eachDateKeyInInclusiveRange(startKey, endKey, timezone, (key) => {
+        if (isWorkingDayKeyFn(key)) working += 1;
+    });
+    return working;
+}
+
+/**
+ * Build dateKey → attendance credit from raw rows using org date keys only.
+ */
+export function buildAttendanceCreditByDay(records, { dayKey, isWorkingDayKeyFn }) {
+    const attByDay = new Map();
+    for (const r of records) {
+        const key = resolveAttendanceRecordDateKey(r, dayKey);
+        if (!key || (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key))) {
+            continue;
+        }
+        const c = attendanceDayCredit(r);
+        attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
+    }
+    return attByDay;
+}
+
+export function buildIsWorkingDayFn(calendar, dayKey) {
+    if (!calendar) return null;
+
+    const holidayDates = buildHolidayDateKeySet(calendar, dayKey);
 
     return (date) => {
         const dayName = getDayName(date);
@@ -249,6 +335,91 @@ export function attendanceDayCredit(record) {
     if (status === 'half-day') return Math.min(0.5, h / STANDARD_FULL_DAY_HOURS);
     if (status === 'present' || status === 'loggedout') return Math.min(1, h / STANDARD_FULL_DAY_HOURS);
     return 0;
+}
+
+/** Sum paid-day credits over org date keys in [walkStartKey, walkEndKey]. */
+export function sumEffectivePresentDaysByKeys(
+    walkStartKey,
+    walkEndKey,
+    attByDay,
+    paidLeaveByDay,
+    timezone,
+    isWorkingDayKeyFn
+) {
+    let total = 0;
+    eachDateKeyInInclusiveRange(walkStartKey, walkEndKey, timezone, (key) => {
+        if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+            return;
+        }
+        const att = attByDay.get(key) || 0;
+        const lev = paidLeaveByDay.get(key) || 0;
+        total += Math.min(1, att + lev);
+    });
+    return total;
+}
+
+/**
+ * Map dateKey → paid leave credit using org calendar days (timezone-safe).
+ */
+export function buildPaidLeaveByDayMapForOrg(
+    approvedLeaves,
+    walkStartKey,
+    walkEndKey,
+    timezone,
+    isWorkingDayKeyFn
+) {
+    const paidLeaveByDay = new Map();
+
+    for (const lv of approvedLeaves) {
+        const isLop = (lv.leaveType || '').toString().toLowerCase() === 'loss_of_pay';
+        if (isLop) continue;
+
+        const isHalf = lv.isHalfDay === true || Number(lv.duration) === 0.5;
+        const leaveStartKey = getDateKeyInTimezone(new Date(lv.startDate), timezone);
+        const leaveEndKey = getDateKeyInTimezone(new Date(lv.endDate), timezone);
+        const overlapStartKey = leaveStartKey > walkStartKey ? leaveStartKey : walkStartKey;
+        const overlapEndKey = leaveEndKey < walkEndKey ? leaveEndKey : walkEndKey;
+        if (overlapStartKey > overlapEndKey) continue;
+
+        if (isHalf) {
+            let credited = false;
+            eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+                if (credited) return;
+                if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+                    return;
+                }
+                paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 0.5));
+                credited = true;
+            });
+            continue;
+        }
+
+        eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+            if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+                return;
+            }
+            paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 1));
+        });
+    }
+
+    return paidLeaveByDay;
+}
+
+/** Count leave working days overlapping a period using org date keys. */
+export function leaveWorkingDaysInDateKeyRange(lv, walkStartKey, walkEndKey, timezone, isWorkingDayKeyFn) {
+    const leaveStartKey = getDateKeyInTimezone(new Date(lv.startDate), timezone);
+    const leaveEndKey = getDateKeyInTimezone(new Date(lv.endDate), timezone);
+    const overlapStartKey = leaveStartKey > walkStartKey ? leaveStartKey : walkStartKey;
+    const overlapEndKey = leaveEndKey < walkEndKey ? leaveEndKey : walkEndKey;
+    if (overlapStartKey > overlapEndKey) return 0;
+
+    let working = 0;
+    eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+        if (typeof isWorkingDayKeyFn === 'function' ? isWorkingDayKeyFn(key) : true) {
+            working += 1;
+        }
+    });
+    return working;
 }
 
 function isWorkingDayForPayroll(day, isWorkingDayFn) {
@@ -435,6 +606,14 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     const orgTimezone = await getCachedEffectiveTimezone(orgId);
     const dayKey = createDayKeyFn(orgTimezone);
 
+    const monthStartDt = DateTime.fromObject(
+        { year: yearNum, month: monthIndex + 1, day: 1 },
+        { zone: orgTimezone }
+    );
+    const monthEndDt = monthStartDt.endOf('month');
+    const monthStartKey = monthStartDt.toFormat('yyyy-MM-dd');
+    const monthEndKey = monthEndDt.toFormat('yyyy-MM-dd');
+
     const calendarKey = `${String(orgId)}-${String(yearNum)}`;
     let calendar = calendarCache.get(calendarKey);
     if (!calendar) {
@@ -442,42 +621,42 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         // Cache null too (so we don't keep querying if calendar doesn't exist).
         calendarCache.set(calendarKey, calendar || null);
     }
-    const isWorkingDayFn = buildIsWorkingDayFn(calendar, dayKey);
+    const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, orgTimezone, dayKey);
+
+    const effStartKey = getDateKeyInTimezone(effStart, orgTimezone);
+    const effEndKey = getDateKeyInTimezone(effEnd, orgTimezone);
 
     // Working-day metric for attendance dashboards/reports (excludes weekends/holidays).
-    const attendanceWorkingDays = Math.max(0, countWorkingDaysInclusive(effStart, effEnd, isWorkingDayFn));
+    const attendanceWorkingDays = Math.max(
+        0,
+        countWorkingDaysInDateKeyRange(effStartKey, effEndKey, orgTimezone, isWorkingDayKeyFn)
+    );
     // Full calendar month length (e.g. April → 30) — used for a stable "one day" rate (G/D), including for terminated staff.
     const fullMonthCalDays = Math.max(1, countCalendarDaysInclusive(startOfMonth, endOfMonth));
     // Proration window: days employed in this month (join through last working/termination, capped at month end).
     const serviceWindowCalDays = Math.max(1, countCalendarDaysInclusive(effStart, effEnd));
+
+    const periodStart = monthStartDt.startOf('day').toJSDate();
+    const periodEnd = getEndOfDayInTimezone(monthEndDt.toJSDate(), orgTimezone);
 
     const attendanceRecords =
         effStart <= effEnd
             ? await Attendance.find({
                   userId: emp._id,
                   organizationId: orgId,
-                  date: { $gte: effStart, $lte: effEnd }
+                  ...buildAttendancePeriodFilter({
+                      startDateKey: monthStartKey,
+                      endDateKey: monthEndKey,
+                      periodStart,
+                      periodEnd
+                  })
               })
             : [];
 
-    // If a calendar exists, only count attendance on working days.
-    // This keeps the proration denominator and numerator consistent for holidays/weekends.
-    const attendanceRecordsForCounting =
-        typeof isWorkingDayFn === 'function'
-            ? attendanceRecords.filter((r) => {
-                  const d = r?.date ? new Date(r.date) : null;
-                  return d && !Number.isNaN(d.getTime()) ? isWorkingDayFn(d) : false;
-              })
-            : attendanceRecords;
-
-    const attByDay = new Map();
-    for (const r of attendanceRecordsForCounting) {
-        const d = r?.date ? new Date(r.date) : null;
-        if (!d || Number.isNaN(d.getTime())) continue;
-        const key = r.attendanceDateKey || dayKey(d);
-        const c = attendanceDayCredit(r);
-        attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
-    }
+    const attByDay = buildAttendanceCreditByDay(attendanceRecords, {
+        dayKey,
+        isWorkingDayKeyFn
+    });
 
     const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
 
@@ -494,7 +673,13 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
     const payrollLeaves = approvedLeaves
         .map((lv) => {
-            const overlapWorkingDays = leaveWorkingDaysInRange(lv, effStart, effEnd, isWorkingDayFn);
+            const overlapWorkingDays = leaveWorkingDaysInDateKeyRange(
+                lv,
+                effStartKey,
+                effEndKey,
+                orgTimezone,
+                isWorkingDayKeyFn
+            );
             if (!overlapWorkingDays) return null;
 
             // Half-day leave: single 0.5-day event on the first overlapping working day (matches pay credit).
@@ -512,9 +697,22 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         })
         .filter(Boolean);
 
-    const paidLeaveByDay = buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn, dayKey);
+    const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+        approvedLeaves,
+        effStartKey,
+        effEndKey,
+        orgTimezone,
+        isWorkingDayKeyFn
+    );
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
-    const effectivePresent = sumEffectivePresentDays(effStart, effEnd, attByDay, paidLeaveByDay, isWorkingDayFn, dayKey);
+    const effectivePresent = sumEffectivePresentDaysByKeys(
+        effStartKey,
+        effEndKey,
+        attByDay,
+        paidLeaveByDay,
+        orgTimezone,
+        isWorkingDayKeyFn
+    );
     const fullGross = emp.salary || 0;
     // Weekend/holiday days are paid by default under calendar-day proration.
     // Only missing paid credit on working days reduces monthly payout.
@@ -546,16 +744,14 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, DEFAULT_OVERTIME_RATE);
         const overtimePay = overtimeEnabled ? Math.round(cappedOvertimeHours * overtimeRatePerHour) : 0;
 
-        const basicWage = computeConfiguredComponent(salaryStructure?.earnings?.basicWage, effectiveGross);
-        const houseRentAllowance = computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, effectiveGross);
-        // SPA is always the residual balance, independent of configured SPA %/fixed values.
-        const specialAllowance = Math.max(0, Math.round(effectiveGross - basicWage - houseRentAllowance));
+        const coreEarnings = computeSalaryStructureCoreEarnings(salaryStructure, effectiveGross);
+        const { basicWage, houseRentAllowance, transportAllowance, medicalAllowance, specialAllowance } = coreEarnings;
 
         earnings = {
             basicWage,
             houseRentAllowance,
-            transportAllowance: computeConfiguredComponent(salaryStructure?.earnings?.transportAllowance, effectiveGross),
-            medicalAllowance: computeConfiguredComponent(salaryStructure?.earnings?.medicalAllowance, effectiveGross),
+            transportAllowance,
+            medicalAllowance,
             overtime: overtimePay,
             gratuity: 0,
             specialAllowance,

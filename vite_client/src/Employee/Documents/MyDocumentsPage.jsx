@@ -37,6 +37,7 @@ const formatDate = (value) => {
 };
 
 const statusLabel = (doc) => {
+  if (doc.approvalStatus === 'Withdrawn') return 'Withdrawn';
   if (doc.approvalStatus === 'Rejected') return 'Rejected';
   if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'Pending HR approval';
   if (doc.approvalStatus === 'Approved') return 'Approved';
@@ -44,6 +45,7 @@ const statusLabel = (doc) => {
 };
 
 const statusClass = (doc) => {
+  if (doc.approvalStatus === 'Withdrawn') return 'bg-slate-100 text-slate-700';
   if (doc.approvalStatus === 'Rejected') return 'bg-red-100 text-red-700';
   if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'bg-amber-100 text-amber-800';
   return 'bg-emerald-100 text-emerald-800';

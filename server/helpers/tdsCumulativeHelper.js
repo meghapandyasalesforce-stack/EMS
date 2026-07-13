@@ -1,4 +1,5 @@
 import Payroll from '../models/payroll.model.js';
+import Organization from '../models/organization.model.js';
 import {
     buildIncomeTaxParamsFromEmployee,
     computeAnnualIncomeTax
@@ -18,25 +19,64 @@ import {
     sumProjectedRemainingSalary
 } from './salaryRevisionHelper.js';
 
+/** Org-scoped TDS monthly cut modes (SaaS setting). */
+export const TDS_CALCULATION_MODE = Object.freeze({
+    /** Tax due through FY month N minus YTD TDS already deducted (catch-up). */
+    CUMULATIVE: 'cumulative',
+    /** This month's proportional share only; no past TDS adjustment. */
+    INDEPENDENT: 'independent'
+});
+
+export const DEFAULT_TDS_CALCULATION_MODE = TDS_CALCULATION_MODE.CUMULATIVE;
+
+const tdsModeCache = new Map();
+
 function asNumber(value, fallback = 0) {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
 }
 
-function computeConfiguredComponent(config, baseAmount) {
-    const cfg = config && typeof config === 'object' ? config : {};
-    const base = Math.max(0, asNumber(baseAmount, 0));
-    const percentage = asNumber(cfg.percentage, 0);
-    const fixedAmount = asNumber(cfg.fixedAmount, 0);
-    const isPercentage = cfg.isPercentage !== false;
-    const raw = isPercentage ? (base * percentage) / 100 : fixedAmount;
-    return Math.round(Math.max(0, raw));
+/**
+ * Normalize org setting to a known TDS mode. Unknown / missing → cumulative (safe default).
+ */
+export function normalizeTdsCalculationMode(value) {
+    const v = String(value || '').trim().toLowerCase();
+    if (v === TDS_CALCULATION_MODE.INDEPENDENT) return TDS_CALCULATION_MODE.INDEPENDENT;
+    return TDS_CALCULATION_MODE.CUMULATIVE;
+}
+
+export function clearTdsCalculationModeCache(organizationId) {
+    if (!organizationId) {
+        tdsModeCache.clear();
+        return;
+    }
+    tdsModeCache.delete(String(organizationId));
+}
+
+/**
+ * Resolve org TDS mode with short-lived in-process cache (bulk payroll safe).
+ */
+export async function resolveOrgTdsCalculationMode(organizationId) {
+    if (!organizationId) return DEFAULT_TDS_CALCULATION_MODE;
+
+    const key = String(organizationId);
+    if (tdsModeCache.has(key)) {
+        return tdsModeCache.get(key);
+    }
+
+    const org = await Organization.findById(organizationId)
+        .select('settings.tdsCalculationMode')
+        .lean();
+
+    const mode = normalizeTdsCalculationMode(org?.settings?.tdsCalculationMode);
+    tdsModeCache.set(key, mode);
+    return mode;
 }
 
 export { FY_MONTHS, normalizeMonthName, getFyMonthIndex, getFyStartYear, listFyMonthsBefore };
 
 export function projectFullMonthBreakdown(emp, salaryStructure, month, year) {
-    return projectFullMonthBreakdownForMonth(emp, salaryStructure, month, year, computeConfiguredComponent);
+    return projectFullMonthBreakdownForMonth(emp, salaryStructure, month, year);
 }
 
 export function getFyEmploymentWindow(emp, month, year) {
@@ -136,10 +176,12 @@ export async function fetchYtdPayrollStats({ employeeId, organizationId, month, 
     return aggregateYtdFromPayrolls([...byKey.values()]);
 }
 
-export function computeCumulativeMonthlyIncomeTax({
+/**
+ * Build projected annual figures + annual tax shared by both TDS modes.
+ */
+export function buildProjectedAnnualTaxContext({
     taxParamsBase,
     ytdTaxableGross = 0,
-    ytdTdsDeducted = 0,
     ytdPfEmployee = 0,
     ytdProfessionalTax = 0,
     currentMonthTaxableGross = 0,
@@ -150,11 +192,8 @@ export function computeCumulativeMonthlyIncomeTax({
     projectedRemainingPt = 0,
     fullMonthlySalary = 0,
     fullMonthlyBasic = 0,
-    fullMonthlyHra = 0,
-    monthsElapsedInFy = 1
+    fullMonthlyHra = 0
 }) {
-    if (monthsElapsedInFy <= 0) return 0;
-
     const projectedAnnualGross = Math.max(
         0,
         Math.round(ytdTaxableGross + currentMonthTaxableGross + projectedRemainingGross)
@@ -182,8 +221,101 @@ export function computeCumulativeMonthlyIncomeTax({
         annualProfessionalTax: projectedAnnualPt
     });
 
+    return {
+        projectedAnnualGross,
+        projectedAnnualPf,
+        projectedAnnualPt,
+        annualTax,
+        currentMonthTaxableGross: Math.max(0, Math.round(asNumber(currentMonthTaxableGross, 0)))
+    };
+}
+
+/**
+ * Cumulative mode: tax due through FY month N minus YTD TDS (catch-up / adjustment).
+ */
+export function computeCumulativeModeMonthlyTds({
+    annualTax,
+    monthsElapsedInFy = 1,
+    ytdTdsDeducted = 0
+}) {
+    if (monthsElapsedInFy <= 0) return 0;
     const taxDueThroughCurrentMonth = Math.round((annualTax * monthsElapsedInFy) / 12);
     return Math.max(0, taxDueThroughCurrentMonth - Math.max(0, ytdTdsDeducted));
+}
+
+/**
+ * Independent mode: this month's proportional share of annual tax.
+ * Current month uses present/earned gross; future months stay full in the annual estimate.
+ * Does NOT subtract past TDS deductions.
+ */
+export function computeIndependentModeMonthlyTds({
+    annualTax,
+    projectedAnnualGross = 0,
+    currentMonthTaxableGross = 0
+}) {
+    const annual = Math.max(0, asNumber(annualTax, 0));
+    const projected = Math.max(0, asNumber(projectedAnnualGross, 0));
+    const current = Math.max(0, asNumber(currentMonthTaxableGross, 0));
+    if (annual <= 0 || projected <= 0 || current <= 0) return 0;
+    return Math.max(0, Math.round((annual * current) / projected));
+}
+
+/**
+ * Monthly TDS from projected annual tax using org-selected mode.
+ * @param {object} args
+ * @param {'cumulative'|'independent'} [args.tdsCalculationMode]
+ */
+export function computeCumulativeMonthlyIncomeTax({
+    taxParamsBase,
+    ytdTaxableGross = 0,
+    ytdTdsDeducted = 0,
+    ytdPfEmployee = 0,
+    ytdProfessionalTax = 0,
+    currentMonthTaxableGross = 0,
+    currentMonthPf = 0,
+    currentMonthProfessionalTax = 0,
+    projectedRemainingGross = 0,
+    projectedRemainingPf = 0,
+    projectedRemainingPt = 0,
+    fullMonthlySalary = 0,
+    fullMonthlyBasic = 0,
+    fullMonthlyHra = 0,
+    monthsElapsedInFy = 1,
+    tdsCalculationMode = DEFAULT_TDS_CALCULATION_MODE
+}) {
+    if (monthsElapsedInFy <= 0) return 0;
+
+    const ctx = buildProjectedAnnualTaxContext({
+        taxParamsBase,
+        ytdTaxableGross,
+        ytdPfEmployee,
+        ytdProfessionalTax,
+        currentMonthTaxableGross,
+        currentMonthPf,
+        currentMonthProfessionalTax,
+        projectedRemainingGross,
+        projectedRemainingPf,
+        projectedRemainingPt,
+        fullMonthlySalary,
+        fullMonthlyBasic,
+        fullMonthlyHra
+    });
+
+    const mode = normalizeTdsCalculationMode(tdsCalculationMode);
+
+    if (mode === TDS_CALCULATION_MODE.INDEPENDENT) {
+        return computeIndependentModeMonthlyTds({
+            annualTax: ctx.annualTax,
+            projectedAnnualGross: ctx.projectedAnnualGross,
+            currentMonthTaxableGross: ctx.currentMonthTaxableGross
+        });
+    }
+
+    return computeCumulativeModeMonthlyTds({
+        annualTax: ctx.annualTax,
+        monthsElapsedInFy,
+        ytdTdsDeducted
+    });
 }
 
 export async function computeRegimeIncomeTaxCumulative({
@@ -212,12 +344,15 @@ export async function computeRegimeIncomeTaxCumulative({
     const { monthsElapsed, monthsRemaining } = getFyEmploymentWindow(emp, month, year);
     if (monthsElapsed <= 0) return 0;
 
-    const ytd = await fetchYtdPayrollStats({
-        employeeId: emp._id,
-        organizationId,
-        month,
-        year
-    });
+    const [ytd, tdsCalculationMode] = await Promise.all([
+        fetchYtdPayrollStats({
+            employeeId: emp._id,
+            organizationId,
+            month,
+            year
+        }),
+        resolveOrgTdsCalculationMode(organizationId)
+    ]);
 
     const projectedRemainingGross = sumProjectedRemainingSalary(emp, month, year, monthsRemaining);
     const projectedRemainingPf = sumProjectedRemainingPf(emp, month, year, monthsRemaining);
@@ -238,6 +373,7 @@ export async function computeRegimeIncomeTaxCumulative({
         fullMonthlySalary,
         fullMonthlyBasic: breakdown.basicWage,
         fullMonthlyHra: breakdown.houseRentAllowance,
-        monthsElapsedInFy: monthsElapsed
+        monthsElapsedInFy: monthsElapsed,
+        tdsCalculationMode
     });
 }

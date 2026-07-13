@@ -49,7 +49,7 @@ const getConnection = () => {
 /**
  * Process auto check-out for all active attendance records
  */
-async function processAutoCheckOut() {
+export async function processAutoCheckOut() {
     try {
         const now = new Date();
 
@@ -177,7 +177,7 @@ async function processAutoCheckOut() {
 /**
  * Send pre-checkout notifications (X minutes before auto check-out)
  */
-async function sendPreCheckOutNotifications() {
+export async function sendPreCheckOutNotifications() {
     try {
         const now = new Date();
 
@@ -251,8 +251,7 @@ async function sendPreCheckOutNotifications() {
 
         if (notifiedCount > 0) {
             logger.info('Pre-checkout notifications sent', {
-                notifiedCount,
-                currentTime
+                notifiedCount
             });
         }
 

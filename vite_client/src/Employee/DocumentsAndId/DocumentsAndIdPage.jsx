@@ -126,6 +126,7 @@ const DocumentsAndIdPage = () => {
   }, [myUploadedDocs, policyDocs]);
 
   const statusLabel = (doc) => {
+    if (doc.approvalStatus === 'Withdrawn') return 'Withdrawn';
     if (doc.approvalStatus === 'Rejected') return 'Rejected';
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'Pending HR approval';
     if (doc.approvalStatus === 'Approved') return 'Approved';
@@ -133,6 +134,7 @@ const DocumentsAndIdPage = () => {
   };
 
   const statusClass = (doc) => {
+    if (doc.approvalStatus === 'Withdrawn') return 'bg-slate-100 text-slate-700';
     if (doc.approvalStatus === 'Rejected') return 'bg-red-100 text-red-700';
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'bg-yellow-100 text-yellow-700';
     return 'bg-[#20C997]/15 text-[#0a8f6c]';

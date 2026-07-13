@@ -1237,8 +1237,8 @@ export const deleteMyDocument = asyncHandler(async (req, res) => {
 
     document.isActive = false;
     if (document.requiresApproval) {
-        document.approvalStatus = 'Rejected';
-        document.rejectionReason = document.rejectionReason || 'Removed by employee';
+        document.approvalStatus = 'Withdrawn';
+        document.rejectionReason = 'Removed by employee';
     }
     await document.save();
 

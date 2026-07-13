@@ -11,6 +11,7 @@ const UPLOADS_DOCUMENTS_DIR = path.join(__dirname, '..', 'uploads', 'documents')
 export const JOB_DOCUMENT_TYPES = {
     OFFER_LETTER: 'OFFER_LETTER',
     AADHAR_CARD: 'AADHAR_CARD',
+    PAN_CARD: 'PAN_CARD',
     GUARANTOR_FORM: 'GUARANTOR_FORM',
     DEGREE_CERTIFICATE: 'DEGREE_CERTIFICATE',
     OTHER: 'OTHER',
@@ -19,10 +20,67 @@ export const JOB_DOCUMENT_TYPES = {
 const JOB_TYPE_LABELS = {
     OFFER_LETTER: 'Offer Letter',
     AADHAR_CARD: 'Aadhar Card',
+    PAN_CARD: 'Pan Card',
     GUARANTOR_FORM: 'Guarantor Form',
     DEGREE_CERTIFICATE: 'Degree Certificate',
     OTHER: 'Other Document',
 };
+
+/** Pull the main ID / reference number from job-details additionalInfo */
+export function extractDocumentNumber(documentType, parsedInfo = {}) {
+    if (!parsedInfo || typeof parsedInfo !== 'object') return '';
+    switch (documentType) {
+        case 'PAN_CARD':
+            return String(parsedInfo.panNumber || '').trim();
+        case 'AADHAR_CARD':
+            return String(parsedInfo.aadharNumber || '').trim();
+        case 'OFFER_LETTER':
+            return String(parsedInfo.effectiveDate || '').trim();
+        case 'GUARANTOR_FORM':
+            return String(parsedInfo.guarantorName || parsedInfo.guarantorContact || '').trim();
+        case 'DEGREE_CERTIFICATE':
+            return String(parsedInfo.institution || parsedInfo.yearObtained || '').trim();
+        default:
+            return String(
+                parsedInfo.panNumber ||
+                parsedInfo.aadharNumber ||
+                parsedInfo.documentNumber ||
+                ''
+            ).trim();
+    }
+}
+
+/** Human-readable description for HR document list */
+export function formatJobDocDescription(documentType, parsedInfo = {}) {
+    if (!parsedInfo || typeof parsedInfo !== 'object' || !Object.keys(parsedInfo).length) {
+        return '';
+    }
+    switch (documentType) {
+        case 'PAN_CARD':
+            return parsedInfo.panNumber ? `PAN Number: ${parsedInfo.panNumber}` : '';
+        case 'AADHAR_CARD':
+            return parsedInfo.aadharNumber ? `Aadhar Number: ${parsedInfo.aadharNumber}` : '';
+        case 'OFFER_LETTER':
+            return parsedInfo.effectiveDate ? `Effective Date: ${parsedInfo.effectiveDate}` : '';
+        case 'GUARANTOR_FORM': {
+            const parts = [];
+            if (parsedInfo.guarantorName) parts.push(`Name: ${parsedInfo.guarantorName}`);
+            if (parsedInfo.guarantorContact) parts.push(`Contact: ${parsedInfo.guarantorContact}`);
+            return parts.join(' · ');
+        }
+        case 'DEGREE_CERTIFICATE': {
+            const parts = [];
+            if (parsedInfo.institution) parts.push(parsedInfo.institution);
+            if (parsedInfo.yearObtained) parts.push(parsedInfo.yearObtained);
+            return parts.join(' · ');
+        }
+        default:
+            return Object.entries(parsedInfo)
+                .filter(([, v]) => v != null && String(v).trim() !== '')
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(' · ');
+    }
+}
 
 const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certificate',
     'Training', 'Compliance', 'Financial', 'Legal', 'Other'];
@@ -98,11 +156,14 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
     const fileBinary = requireUploadFileBuffer(file);
 
     if (isJobType) {
+        const documentNumber = extractDocumentNumber(documentType, parsedInfo);
+        const readableDescription = formatJobDocDescription(documentType, parsedInfo);
+
         const doc = new Document({
             organizationId,
             uploadedBy: employeeId,
             name: JOB_TYPE_LABELS[documentType] || documentType,
-            description: Object.keys(parsedInfo).length ? JSON.stringify(parsedInfo) : '',
+            description: readableDescription,
             category: 'Employee',
             type: mimeToDocumentTypeEnum(file.mimetype),
             fileUrl: relFileUrl,
@@ -118,7 +179,11 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             accessLevel: 'Private',
             isActive: true,
             employeeJobDocumentType: documentType,
-            tags: [documentType],
+            tags: [documentType, ...(documentNumber ? [documentNumber] : [])],
+            metadata: {
+                documentNumber: documentNumber || undefined,
+                additionalInfo: Object.keys(parsedInfo).length ? parsedInfo : undefined,
+            },
         });
         await doc.save();
         await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id);
@@ -185,6 +250,9 @@ export async function mergeLegacyAndCanonicalEmployeeDocuments(employee) {
         originalName: d.fileName,
         fileSize: d.fileSize,
         size: d.fileSize,
+        description: d.description,
+        metadata: d.metadata,
+        documentNumber: d.metadata?.documentNumber || '',
     }));
 
     const legacy = (employee.documents || []).map((d) => (d && typeof d.toObject === 'function' ? d.toObject() : { ...d }));

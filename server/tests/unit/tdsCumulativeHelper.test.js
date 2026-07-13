@@ -5,7 +5,11 @@ import {
     listFyMonthsBefore,
     getFyEmploymentWindow,
     extractEmployeeTaxableGross,
-    computeCumulativeMonthlyIncomeTax
+    computeCumulativeMonthlyIncomeTax,
+    normalizeTdsCalculationMode,
+    computeCumulativeModeMonthlyTds,
+    computeIndependentModeMonthlyTds,
+    TDS_CALCULATION_MODE
 } from '../../helpers/tdsCumulativeHelper.js';
 import { getExitFyMonthIndex } from '../../helpers/fyCalendarHelper.js';
 import { computeAnnualIncomeTax, resolveTaxDeclaration } from '../../helpers/incomeTaxCalculation.js';
@@ -64,6 +68,19 @@ describe('tdsCumulativeHelper', () => {
         });
     });
 
+    describe('normalizeTdsCalculationMode', () => {
+        it('defaults unknown values to cumulative', () => {
+            expect(normalizeTdsCalculationMode(undefined)).toBe(TDS_CALCULATION_MODE.CUMULATIVE);
+            expect(normalizeTdsCalculationMode('')).toBe(TDS_CALCULATION_MODE.CUMULATIVE);
+            expect(normalizeTdsCalculationMode('weird')).toBe(TDS_CALCULATION_MODE.CUMULATIVE);
+        });
+
+        it('accepts independent', () => {
+            expect(normalizeTdsCalculationMode('independent')).toBe(TDS_CALCULATION_MODE.INDEPENDENT);
+            expect(normalizeTdsCalculationMode('INDEPENDENT')).toBe(TDS_CALCULATION_MODE.INDEPENDENT);
+        });
+    });
+
     describe('computeCumulativeMonthlyIncomeTax', () => {
         const taxParamsBase = { taxRegime: 'old', section80C: {}, section80D: {}, section80E: 0, section24b: 0, monthlyRent: 0, metroCity: false };
 
@@ -88,7 +105,8 @@ describe('tdsCumulativeHelper', () => {
                 fullMonthlySalary: fullMonthly,
                 fullMonthlyBasic: 75000,
                 fullMonthlyHra: 30000,
-                monthsElapsedInFy: 1
+                monthsElapsedInFy: 1,
+                tdsCalculationMode: 'cumulative'
             });
 
             expect(cumulative).toBeLessThan(flatMonthly);
@@ -106,7 +124,8 @@ describe('tdsCumulativeHelper', () => {
                 fullMonthlySalary: 150000,
                 fullMonthlyBasic: 75000,
                 fullMonthlyHra: 30000,
-                monthsElapsedInFy: 10
+                monthsElapsedInFy: 10,
+                tdsCalculationMode: 'cumulative'
             });
 
             const taxWithoutExit = computeCumulativeMonthlyIncomeTax({
@@ -120,10 +139,124 @@ describe('tdsCumulativeHelper', () => {
                 fullMonthlySalary: 150000,
                 fullMonthlyBasic: 75000,
                 fullMonthlyHra: 30000,
-                monthsElapsedInFy: 10
+                monthsElapsedInFy: 10,
+                tdsCalculationMode: 'cumulative'
             });
 
             expect(taxWithExit).toBeLessThanOrEqual(taxWithoutExit);
+        });
+
+        it('independent mode ignores past TDS deductions (no catch-up)', () => {
+            const baseArgs = {
+                taxParamsBase,
+                ytdTaxableGross: 2100000,
+                currentMonthTaxableGross: 1610000,
+                currentMonthPf: 1800,
+                projectedRemainingGross: 9 * 2100000,
+                projectedRemainingPf: 9 * 1800,
+                fullMonthlySalary: 2100000,
+                fullMonthlyBasic: 1050000,
+                fullMonthlyHra: 420000,
+                monthsElapsedInFy: 3
+            };
+
+            const withHighPastTds = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                ytdTdsDeducted: 5_000_000,
+                tdsCalculationMode: 'independent'
+            });
+            const withZeroPastTds = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                ytdTdsDeducted: 0,
+                tdsCalculationMode: 'independent'
+            });
+
+            expect(withHighPastTds).toBe(withZeroPastTds);
+            expect(withHighPastTds).toBeGreaterThan(0);
+        });
+
+        it('cumulative mode reduces TDS when past deductions are high', () => {
+            const baseArgs = {
+                taxParamsBase,
+                ytdTaxableGross: 2100000,
+                currentMonthTaxableGross: 1610000,
+                currentMonthPf: 1800,
+                projectedRemainingGross: 9 * 2100000,
+                projectedRemainingPf: 9 * 1800,
+                fullMonthlySalary: 2100000,
+                fullMonthlyBasic: 1050000,
+                fullMonthlyHra: 420000,
+                monthsElapsedInFy: 3,
+                tdsCalculationMode: 'cumulative'
+            };
+
+            const withHighPastTds = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                ytdTdsDeducted: 5_000_000
+            });
+            const withZeroPastTds = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                ytdTdsDeducted: 0
+            });
+
+            expect(withHighPastTds).toBe(0);
+            expect(withZeroPastTds).toBeGreaterThan(0);
+        });
+
+        it('independent mode scales with current month present gross', () => {
+            const full = computeCumulativeMonthlyIncomeTax({
+                taxParamsBase,
+                ytdTaxableGross: 0,
+                ytdTdsDeducted: 999999,
+                currentMonthTaxableGross: 2100000,
+                currentMonthPf: 1800,
+                projectedRemainingGross: 11 * 2100000,
+                projectedRemainingPf: 11 * 1800,
+                fullMonthlySalary: 2100000,
+                fullMonthlyBasic: 1050000,
+                fullMonthlyHra: 420000,
+                monthsElapsedInFy: 1,
+                tdsCalculationMode: 'independent'
+            });
+            const lop = computeCumulativeMonthlyIncomeTax({
+                taxParamsBase,
+                ytdTaxableGross: 0,
+                ytdTdsDeducted: 999999,
+                currentMonthTaxableGross: 1610000,
+                currentMonthPf: 1800,
+                projectedRemainingGross: 11 * 2100000,
+                projectedRemainingPf: 11 * 1800,
+                fullMonthlySalary: 2100000,
+                fullMonthlyBasic: 1050000,
+                fullMonthlyHra: 420000,
+                monthsElapsedInFy: 1,
+                tdsCalculationMode: 'independent'
+            });
+
+            expect(lop).toBeLessThan(full);
+            expect(lop).toBeGreaterThan(0);
+        });
+    });
+
+    describe('mode helpers', () => {
+        it('computeIndependentModeMonthlyTds is proportional', () => {
+            expect(
+                computeIndependentModeMonthlyTds({
+                    annualTax: 120000,
+                    projectedAnnualGross: 1200000,
+                    currentMonthTaxableGross: 100000
+                })
+            ).toBe(10000);
+        });
+
+        it('computeCumulativeModeMonthlyTds subtracts YTD', () => {
+            expect(
+                computeCumulativeModeMonthlyTds({
+                    annualTax: 120000,
+                    monthsElapsedInFy: 3,
+                    ytdTdsDeducted: 15000
+                })
+            ).toBe(15000);
         });
     });
 });

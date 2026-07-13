@@ -630,6 +630,10 @@ export const organizationValidations = {
             .optional()
             .trim()
             .isLength({ min: 2, max: 64 }).withMessage('timezone must be a valid IANA timezone string'),
+        body('tdsCalculationMode')
+            .optional()
+            .isIn(['cumulative', 'independent'])
+            .withMessage('tdsCalculationMode must be cumulative or independent'),
         handleValidationErrors
     ],
 
