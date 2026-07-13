@@ -213,31 +213,82 @@
   }
 }
 
+/* ── Global responsive base (preserve desktop look) ── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent flex/grid children from forcing page-wide horizontal scroll */
+.main-scroll-area,
+.main-scroll-area > * {
+  min-width: 0;
+}
+
+/* Tables: allow horizontal scroll without breaking the page */
+.table-responsive,
+.overflow-x-auto {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Additional responsive utilities */
 @media (max-width: 640px) {
-  /* Ensure tables don't break layout */
   table {
     font-size: 0.875rem;
   }
-  
-  /* Improve button touch targets */
-  button, a {
-    min-height: 44px; /* iOS recommended touch target */
+
+  /* Touch targets for primary controls — skip already-compact icon/padding controls */
+  button:not([class*="p-1"]):not([class*="p-1.5"]):not([class*="p-2"]):not([class*="h-"]):not([class*="w-8"]):not([class*="w-9"]):not([class*="w-10"]),
+  a:not([class*="p-1"]):not([class*="p-1.5"]):not([class*="p-2"]) {
+    min-height: 44px;
+  }
+
+  /* Stack common modal action rows when space is tight */
+  .modal-content {
+    margin: 1rem;
+    max-width: calc(100% - 2rem);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
   }
 }
 
 /* Improve form inputs on mobile */
 @media (max-width: 768px) {
-  input, textarea, select {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
     font-size: 16px; /* Prevents zoom on iOS */
+    max-width: 100%;
   }
 }
 
-/* Ensure modals are responsive */
-@media (max-width: 640px) {
-  .modal-content {
-    margin: 1rem;
-    max-width: calc(100% - 2rem);
+/* Safe area for notched phones (header / fixed bars) */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }
 

@@ -56,6 +56,15 @@ const Header = () => {
     }, []);
 
     useEffect(() => {
+        if (!isMobile || !mobileMenuOpen) return undefined;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previous;
+        };
+    }, [isMobile, mobileMenuOpen]);
+
+    useEffect(() => {
         if (!authChecked || (!user && !employee)) return;
 
         const { portals, activePortal: nextPortal } = syncPortalsForSession({
@@ -189,36 +198,38 @@ const Header = () => {
                 <header
                     className={
                         useLightEmployeeNav
-                            ? 'fixed top-0 right-0 left-0 z-30 border-b border-gray-200 bg-white text-gray-800 shadow-sm'
-                            : 'fixed top-0 right-0 left-0 z-30 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
+                            ? 'safe-area-top fixed top-0 right-0 left-0 z-30 border-b border-gray-200 bg-white text-gray-800 shadow-sm'
+                            : 'safe-area-top fixed top-0 right-0 left-0 z-30 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
                     }
                 >
-                    <div className="flex items-center justify-between p-4">
+                    <div className="flex min-w-0 items-center justify-between gap-2 p-3 sm:p-4">
                         <button
+                            type="button"
+                            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                             onClick={toggleMobileMenu}
                             className={
                                 useLightEmployeeNav
-                                    ? 'rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none'
-                                    : 'rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50 focus:outline-none'
+                                    ? 'shrink-0 rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none'
+                                    : 'shrink-0 rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50 focus:outline-none'
                             }
                         >
-                            <FaBars className="text-xl" />
+                            {mobileMenuOpen ? <FaTimes className="text-xl" /> : <FaBars className="text-xl" />}
                         </button>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
                             <NotificationDropdown />
 
                             <div
                                 className={
                                     useLightEmployeeNav
-                                        ? 'relative cursor-pointer rounded-lg p-2 text-xl text-gray-600 transition-colors hover:bg-gray-100'
-                                        : 'relative cursor-pointer rounded-lg p-2 text-xl text-white transition-colors hover:bg-gray-700/50'
+                                        ? 'relative hidden cursor-pointer rounded-lg p-2 text-xl text-gray-600 transition-colors hover:bg-gray-100 sm:block'
+                                        : 'relative hidden cursor-pointer rounded-lg p-2 text-xl text-white transition-colors hover:bg-gray-700/50 sm:block'
                                 }
                             >
                                 <FaEnvelope className="hover:opacity-80" />
                             </div>
 
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <FaUserCircle
                                     className={
                                         useLightEmployeeNav
@@ -228,17 +239,18 @@ const Header = () => {
                                     onClick={toggleDropdown}
                                 />
                                 {dropdownOpen && (
-                                    <div className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-56 border border-gray-100 animate-scaleIn">
+                                    <div className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-[min(14rem,calc(100vw-2rem))] border border-gray-100 animate-scaleIn">
                                         <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
                                             <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>
                                             <RoleBucketBadges className="mt-2" />
                                         </div>
                                         <button
+                                            type="button"
                                             className="flex items-center w-full px-4 py-3 text-sm text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
                                             onClick={openLogoutModal}
                                         >
-                                            <FaSignOutAlt className="mr-2" />
+                                            <FaSignOutAlt className="mr-2 shrink-0" />
                                             Logout
                                         </button>
                                     </div>
@@ -247,13 +259,23 @@ const Header = () => {
                         </div>
                     </div>
 
+                    {/* Mobile menu backdrop */}
+                    {mobileMenuOpen && (
+                        <button
+                            type="button"
+                            aria-label="Close menu overlay"
+                            className="fixed inset-0 top-14 z-20 bg-black/40"
+                            onClick={() => setMobileMenuOpen(false)}
+                        />
+                    )}
+
                     {/* Mobile Menu */}
                     {mobileMenuOpen && (
                         <div
                             className={
                                 useLightEmployeeNav
-                                    ? 'animate-slideDown border-b border-gray-200 bg-white text-gray-800 shadow-lg max-h-[calc(100vh-64px)] overflow-hidden flex flex-col'
-                                    : 'animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl max-h-[calc(100vh-64px)] overflow-hidden flex flex-col'
+                                    ? 'relative z-30 animate-slideDown border-b border-gray-200 bg-white text-gray-800 shadow-lg max-h-[min(calc(100vh-3.5rem),calc(100dvh-3.5rem))] overflow-hidden flex flex-col'
+                                    : 'relative z-30 animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl max-h-[min(calc(100vh-3.5rem),calc(100dvh-3.5rem))] overflow-hidden flex flex-col'
                             }
                         >
                             <div
@@ -462,8 +484,14 @@ const Header = () => {
                 </div>
             )}
 
-            {/* Spacer for mobile header height */}
-            {isMobile && <div className="pt-16"></div>}
+            {/* Spacer for mobile header height (+ notch safe area) */}
+            {isMobile && (
+                <div
+                    className="shrink-0"
+                    style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+                    aria-hidden="true"
+                />
+            )}
 
             {/* Logout Confirmation Modal */}
             <Transition appear show={logoutModalOpen} as={Fragment}>

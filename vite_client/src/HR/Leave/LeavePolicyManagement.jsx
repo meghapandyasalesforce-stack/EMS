@@ -371,7 +371,7 @@ const LeavePolicyManagement = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-4 mb-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Accrual Method *</label>
                                         <select
@@ -644,7 +644,7 @@ const LeavePolicyManagement = () => {
                     {/* Date Handling Rules */}
                     <div className="mb-4 border-t pt-4">
                         <h4 className="font-medium mb-3">Date Handling Rules</h4>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <label className="flex items-center">
                                 <input
                                     type="checkbox"
