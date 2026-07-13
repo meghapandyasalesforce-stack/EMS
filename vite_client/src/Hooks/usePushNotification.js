@@ -116,7 +116,7 @@ export const usePushNotification = () => {
     }
   }, [subscription]);
 
-  const requestPermission = useCallback(async () => {
+         const requestPermission = useCallback(async () => {
     if (!('Notification' in window)) {
       setError('This browser does not support notifications');
       return false;
