@@ -6,7 +6,7 @@ import {
   ensurePushSubscription,
   saveSubscriptionToServer,
   syncPushSubscriptionIfGranted,
-} from '../utils/push';';
+} from '../utils/push';
 
 /**
  * Hook to manage push notifications
