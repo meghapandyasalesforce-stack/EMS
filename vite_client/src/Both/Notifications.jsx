@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 import { FaCheck, FaTrash } from 'react-icons/fa';
+import EnablePushNotificationsButton from '../components/EnablePushNotificationsButton';
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
@@ -52,6 +53,8 @@ const Notifications = () => {
             <button onClick={markAll} className="px-3 py-2 text-sm sm:text-base bg-theme-secondary hover:bg-theme-primary text-white rounded transition">Mark all read</button>
           </div>
         </div>
+
+        <EnablePushNotificationsButton />
 
         {loading ? (
           <div className="text-center py-10 text-gray-500">Loading...</div>

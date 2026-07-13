@@ -293,56 +293,87 @@ const getNotificationTitle = (type) => {
 };
 
 /**
- * Get notification URL based on type and metadata
+ * Get in-app path for notification click (path-only so SW uses current origin).
+ * Avoids hardcoded localhost / wrong host opening the wrong page.
  */
-const getNotificationUrl = (type, metadata) => {
-  const baseUrl = getPublicOrigin();
-  
+const getNotificationUrl = (type, metadata = {}) => {
   switch (type) {
+    case 'task':
     case 'task_update':
     case 'task_created':
     case 'task_completed':
-      return metadata.taskId ? `${baseUrl}/tasks/${metadata.taskId}` : `${baseUrl}/tasks`;
+      if (metadata.projectId) return `/employee/projects/${metadata.projectId}`;
+      return '/employee/projects';
     case 'break':
-      return `${baseUrl}/admin/dashboard`;
-    case 'announcement':
-      return `${baseUrl}/notifications`;
+    case 'punch_out':
+    case 'attendance':
+      return '/attendance';
+    case 'leave_request':
+    case 'leave_manager_approved':
+      return '/leave-management';
     case 'leave':
-      return `${baseUrl}/employee/leave-attendance`;
+    case 'leave_approved':
+    case 'leave_rejected':
+      return '/employee/leave-attendance';
     case 'payroll':
-      return `${baseUrl}/employee/payroll`;
+      return '/employee-payroll';
     case 'new_employee':
-      return `${baseUrl}/admin/employees`;
+      return '/employees';
     case 'attendance_regularization':
     case 'attendance_regularization_request':
+      return '/attendance-regularization';
     case 'attendance_regularization_approved':
     case 'attendance_regularization_rejected':
-      return `${baseUrl}/employee/attendance-regularization`;
+      return '/employee/leave-attendance';
+    case 'holiday':
+    case 'birthday':
+    case 'anniversary':
+      return '/employee/calendar';
+    case 'announcement':
+    case 'general':
+    case 'system':
     default:
-      return `${baseUrl}/notifications`;
+      return '/notifications';
   }
+};
+
+/** Normalize click target to a same-origin path. */
+const toAppPath = (raw, type, metadata) => {
+  const fallback = getNotificationUrl(type, metadata);
+  const value = (raw || fallback || '/notifications').trim();
+  try {
+    if (/^https?:\/\//i.test(value)) {
+      const parsed = new URL(value);
+      return `${parsed.pathname}${parsed.search}` || fallback;
+    }
+  } catch {
+    return fallback;
+  }
+  return value.startsWith('/') ? value : `/${value}`;
 };
 
 /**
  * Create push notification payload
- * Uses absolute https icons/links so Android Chrome/PWA can render reliably.
+ * Brand as Paarsiv; path-only click URL so the correct page opens on this origin.
  */
 export const createPushPayload = (message, type = 'general', metadata = {}) => {
   const origin = getPublicOrigin();
   const icon = `${origin}/logo192.png`;
   const uniqueTag = `${type}-${metadata.notificationId || Date.now()}`;
+  const typeTitle = metadata.title || getNotificationTitle(type);
+  const bodyText = message || typeTitle;
+  const clickPath = toAppPath(metadata.url, type, metadata);
 
   return {
-    title: metadata.title || getNotificationTitle(type),
-    body: message,
+    title: 'Paarsiv',
+    body: typeTitle && typeTitle !== bodyText ? `${typeTitle} — ${bodyText}` : bodyText,
     icon,
     badge: icon,
-    image: icon,
     data: {
-      url: getNotificationUrl(type, metadata),
+      ...metadata,
       notificationId: metadata.notificationId,
-      type: type,
-      ...metadata
+      type,
+      url: clickPath,
     },
     tag: uniqueTag,
     renotify: true,
