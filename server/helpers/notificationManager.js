@@ -6,6 +6,7 @@
 
 import logger from './logger.js';
 import { sendNotification, sendBroadcastNotification } from './notificationService.js';
+import { getCachedEffectiveTimezone } from './orgContextCache.js';
 
 // Event registry - maps event types to their configuration and handlers
 const eventRegistry = new Map();
@@ -177,9 +178,13 @@ export const notify = async (params) => {
       return { success: true, notified: 0, message: 'No recipients to notify' };
     }
 
+    // Resolve org timezone so message builders don't use the server process TZ
+    const timezone = await getCachedEffectiveTimezone(organizationId);
+    const eventData = { ...data, organizationId, timezone };
+
     // Build message and metadata
-    const message = providedMessage || buildMessage(eventConfig, { ...data, organizationId });
-    const metadata = buildMetadata(eventConfig, { ...data, metadata: providedMetadata, organizationId });
+    const message = providedMessage || buildMessage(eventConfig, eventData);
+    const metadata = buildMetadata(eventConfig, { ...eventData, metadata: providedMetadata });
     const notificationTitle = title || eventConfig.defaultTitle;
     const notificationPriority = priority || eventConfig.defaultPriority;
     const { senderId: resolvedSenderId, senderType: resolvedSenderType } = resolveSender({

@@ -8,6 +8,8 @@ import { registerEvent } from './notificationManager.js';
 import Employee from '../models/employee.model.js';
 import User from '../models/user.model.js';
 import logger from './logger.js';
+import { DEFAULT_TIMEZONE } from '../constants/timezoneOptions.js';
+import { formatDateInTimezone, formatTimeInTimezone } from './timezoneHelper.js';
 
 // Helper function to normalize role text
 const normalizeRoleText = (value) => String(value || '').trim().toLowerCase();
@@ -275,8 +277,8 @@ registerEvent({
   recipientResolver: async ({ organizationId }) => {
     return await getHrAdminCeoRecipients(organizationId);
   },
-  messageBuilder: ({ employee }) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  messageBuilder: ({ employee, timezone }) => {
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     return `${employee.name} ${employee.lastName || ''} has started a break at ${time}.`;
   },
   metadataBuilder: ({ employee }) => ({
@@ -295,8 +297,8 @@ registerEvent({
   recipientResolver: async ({ organizationId }) => {
     return await getHrAdminCeoRecipients(organizationId);
   },
-  messageBuilder: ({ employee }) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  messageBuilder: ({ employee, timezone }) => {
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     return `${employee.name} ${employee.lastName || ''} has returned from break at ${time}.`;
   },
   metadataBuilder: ({ employee }) => ({
@@ -317,8 +319,8 @@ registerEvent({
   recipientResolver: async ({ organizationId }) => {
     return await getHrAdminCeoRecipients(organizationId);
   },
-  messageBuilder: ({ employee }) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  messageBuilder: ({ employee, timezone }) => {
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     return `${employee.name} ${employee.lastName || ''} clocked in at ${time}.`;
   },
   metadataBuilder: ({ employee, attendanceData }) => ({
@@ -338,8 +340,8 @@ registerEvent({
   recipientResolver: async ({ organizationId }) => {
     return await getHrAdminCeoRecipients(organizationId);
   },
-  messageBuilder: ({ employee }) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  messageBuilder: ({ employee, timezone }) => {
+    const time = formatTimeInTimezone(new Date(), timezone || DEFAULT_TIMEZONE);
     return `${employee.name} ${employee.lastName || ''} clocked out at ${time}.`;
   },
   metadataBuilder: ({ employee, attendanceData }) => ({
@@ -357,8 +359,9 @@ registerEvent({
   defaultType: 'attendance_penalty',
   defaultPriority: 'medium',
   recipientResolver: async ({ employee }) => [employee._id],
-  messageBuilder: ({ clockInTime, expectedTime, lateMinutes }) => {
-    return `You checked in ${lateMinutes} minutes late on ${clockInTime.toLocaleDateString()} at ${clockInTime.toLocaleTimeString()}. Expected time: ${expectedTime.toLocaleTimeString()}.`;
+  messageBuilder: ({ clockInTime, expectedTime, lateMinutes, timezone }) => {
+    const tz = timezone || DEFAULT_TIMEZONE;
+    return `You checked in ${lateMinutes} minutes late on ${formatDateInTimezone(clockInTime, tz)} at ${formatTimeInTimezone(clockInTime, tz)}. Expected time: ${formatTimeInTimezone(expectedTime, tz)}.`;
   },
   metadataBuilder: ({ lateMinutes, clockInTime, expectedTime, rule }) => ({
     penaltyType: 'late_arrival',
@@ -376,8 +379,9 @@ registerEvent({
   defaultType: 'attendance_penalty',
   defaultPriority: 'medium',
   recipientResolver: async ({ employee }) => [employee._id],
-  messageBuilder: ({ clockOutTime, expectedTime, earlyMinutes }) => {
-    return `You checked out ${earlyMinutes} minutes early on ${clockOutTime.toLocaleDateString()} at ${clockOutTime.toLocaleTimeString()}. Expected time: ${expectedTime.toLocaleTimeString()}.`;
+  messageBuilder: ({ clockOutTime, expectedTime, earlyMinutes, timezone }) => {
+    const tz = timezone || DEFAULT_TIMEZONE;
+    return `You checked out ${earlyMinutes} minutes early on ${formatDateInTimezone(clockOutTime, tz)} at ${formatTimeInTimezone(clockOutTime, tz)}. Expected time: ${formatTimeInTimezone(expectedTime, tz)}.`;
   },
   metadataBuilder: ({ earlyMinutes, clockOutTime, expectedTime, rule }) => ({
     penaltyType: 'early_departure',
