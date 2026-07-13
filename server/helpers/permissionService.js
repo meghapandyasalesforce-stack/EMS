@@ -69,6 +69,16 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
       user = await User.findById(employee.userId)
         .select('name email roles role organizationId')
         .lean();
+    }
+    if (!user && employee?.email) {
+      user = await User.findOne({
+        email: employee.email,
+        organizationId: employee.organizationId,
+      })
+        .select('name email roles role organizationId')
+        .lean();
+    }
+    if (user) {
       if (Array.isArray(user?.roles)) {
         user.roles.forEach((r) => platformRoles.add(r));
       }
@@ -88,8 +98,13 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
   }
 
   const functionalRoles = employee ? getEffectiveFunctionalRoles(employee) : [];
+  const jobTitle = String(employee?.jobTitle || '').toLowerCase().trim();
 
-  if (functionalRoles.includes('hr') && !buckets.has(ROLE_BUCKETS.HR_MANAGER)) {
+  // Job title distinguishes HR Manager vs HR Executive (both use functionalRoles: ['hr'])
+  if (jobTitle === 'hr manager') {
+    buckets.add(ROLE_BUCKETS.HR_MANAGER);
+    buckets.delete(ROLE_BUCKETS.HR_EXECUTIVE); // job title wins over stale hr_executive on User
+  } else if (functionalRoles.includes('hr') && !buckets.has(ROLE_BUCKETS.HR_MANAGER)) {
     buckets.add(ROLE_BUCKETS.HR_EXECUTIVE);
   }
   if (

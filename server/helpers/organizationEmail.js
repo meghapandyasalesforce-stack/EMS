@@ -30,15 +30,15 @@ export const sendOrganizationWelcomeEmail = async (email, organizationName, admi
                 <style>
                     body {
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                        background-color: #f5f5f5;
+                        background-color: #000000;
                         margin: 0;
                         padding: 0;
-                        color: #333333;
+                        color: #FFFFFF;
                     }
                     .container {
                         max-width: 600px;
                         margin: 40px auto;
-                        background-color: #ffffff;
+                        background-color: #1a1a1a;
                         padding: 40px;
                         border-radius: 8px;
                         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -56,17 +56,17 @@ export const sendOrganizationWelcomeEmail = async (email, organizationName, admi
                     .title {
                         font-size: 24px;
                         font-weight: 600;
-                        color: #1F2937;
+                        color: #FFFFFF;
                         margin-bottom: 10px;
                     }
                     .subtitle {
                         font-size: 16px;
-                        color: #6B7280;
+                        color: #CCCCCC;
                     }
                     .content {
                         font-size: 16px;
                         line-height: 1.6;
-                        color: #374151;
+                        color: #FFFFFF;
                         margin-bottom: 30px;
                     }
                     .button {
@@ -91,9 +91,9 @@ export const sendOrganizationWelcomeEmail = async (email, organizationName, admi
                     .footer {
                         margin-top: 40px;
                         padding-top: 20px;
-                        border-top: 1px solid #E5E7EB;
+                        border-top: 1px solid #333333;
                         font-size: 14px;
-                        color: #6B7280;
+                        color: #CCCCCC;
                         text-align: center;
                     }
                     .security-notice {
@@ -142,10 +142,13 @@ export const sendOrganizationWelcomeEmail = async (email, organizationName, admi
                     </div>
                     
                     <div class="footer">
-                        <p>Best regards,<br>The ${process.env.APP_NAME || 'EMS-Paarsiv'} Team</p>
-                        <p style="margin-top: 20px; font-size: 12px; color: #9CA3AF;">
-                            This email was sent to ${email}. If you didn't create an account, please ignore this email.
-                        </p>
+                        <p>Regards,</p>
+                        <p><strong>Paarsiv Technologies Private Limited</strong></p>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 15px;">
+                            <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+                        </div>
+                        <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+                        <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
                     </div>
                 </div>
             </body>
@@ -193,14 +196,23 @@ export const sendVerificationReminder = async (email, organizationName, verifica
                 <meta charset="UTF-8">
                 <title>Verify Your Email</title>
             </head>
-            <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
-                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px;">
-                    <h2 style="color: #333;">Email Verification Reminder</h2>
+            <body style="font-family: Arial, sans-serif; background-color: #000000; padding: 20px; color: #FFFFFF;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a1a; padding: 30px; border-radius: 8px;">
+                    <h2 style="color: #FFFFFF;">Email Verification Reminder</h2>
                     <p>Hello,</p>
                     <p>Please verify your email address for <strong>${organizationName}</strong> by clicking the link below:</p>
                     <p><a href="${verificationUrl}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email</a></p>
                     <p>Or copy this link: ${verificationUrl}</p>
-                    <p style="color: #666; font-size: 14px;">This link will expire in 24 hours.</p>
+                    <p style="color: #CCCCCC; font-size: 14px;">This link will expire in 24 hours.</p>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #333333; font-size: 14px; color: #CCCCCC; text-align: center;">
+                        <p>Regards,</p>
+                        <p><strong>Paarsiv Technologies Private Limited</strong></p>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 15px;">
+                            <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+                        </div>
+                        <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+                        <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+                    </div>
                 </div>
             </body>
             </html>

@@ -4,6 +4,40 @@ import { ADMIN_PAYROLL_ENDPOINT } from '../utils/constant';
 
 const API_BASE_URL = ADMIN_PAYROLL_ENDPOINT;
 
+const extractApiErrorMessage = (error, fallback) => {
+    const data = error?.response?.data;
+    if (data && typeof data === 'object' && !(data instanceof Blob)) {
+        return data.message || data.error || fallback;
+    }
+    if (typeof data === 'string' && data.trim()) {
+        return data.trim();
+    }
+    return error?.message || fallback;
+};
+
+const extractBlobErrorMessage = async (blob, fallback) => {
+    if (!(blob instanceof Blob)) return fallback;
+    try {
+        const text = await blob.text();
+        const parsed = JSON.parse(text);
+        return parsed.message || parsed.error || parsed.details || fallback;
+    } catch {
+        return fallback;
+    }
+};
+
+const resolvePayrollRecordId = (payrollOrId) => {
+    if (payrollOrId == null) return null;
+    if (typeof payrollOrId === 'string' || typeof payrollOrId === 'number') {
+        const id = String(payrollOrId).trim();
+        return id && id !== 'undefined' && id !== 'null' ? id : null;
+    }
+    const id = payrollOrId._id || payrollOrId.payrollId || payrollOrId.monthly?._id;
+    if (id == null) return null;
+    const normalized = String(id).trim();
+    return normalized && normalized !== 'undefined' && normalized !== 'null' ? normalized : null;
+};
+
 // Async thunks
 export const fetchAdminEmployeePayrollHistory = createAsyncThunk(
     'adminEmployeePayroll/fetchPayrollHistory',
@@ -35,21 +69,29 @@ export const fetchAdminCurrentMonthPayroll = createAsyncThunk(
 
 export const fetchAdminPayrollDetails = createAsyncThunk(
     'adminEmployeePayroll/fetchPayrollDetails',
-    async (payrollId, { rejectWithValue }) => {
+    async (payrollOrId, { rejectWithValue }) => {
+        const payrollId = resolvePayrollRecordId(payrollOrId);
+        if (!payrollId) {
+            return rejectWithValue('Payroll record ID is missing. Refresh the page and try again.');
+        }
         try {
             const response = await axios.get(`${API_BASE_URL}/details/${payrollId}`, {
                 withCredentials: true
             });
             return response.data;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Failed to fetch payroll details');
+            return rejectWithValue(extractApiErrorMessage(error, 'Failed to fetch payroll details'));
         }
     }
 );
 
 export const downloadAdminPayslip = createAsyncThunk(
     'adminEmployeePayroll/downloadPayslip',
-    async (payrollId, { rejectWithValue }) => {
+    async (payrollOrId, { rejectWithValue }) => {
+        const payrollId = resolvePayrollRecordId(payrollOrId);
+        if (!payrollId) {
+            return rejectWithValue('Payroll record ID is missing. Refresh the page and try again.');
+        }
         try {
             // Use the correct export-pdf endpoint with blob response type
             const response = await axios.get(`${API_BASE_URL}/${payrollId}/export-pdf`, {
@@ -58,17 +100,14 @@ export const downloadAdminPayslip = createAsyncThunk(
             });
             return response.data; // Return blob data
         } catch (error) {
-            // If error response is JSON, try to parse it
             if (error.response?.data instanceof Blob) {
-                try {
-                    const text = await error.response.data.text();
-                    const errorData = JSON.parse(text);
-                    return rejectWithValue(errorData.message || 'Failed to download payslip');
-                } catch (parseError) {
-                    return rejectWithValue('Failed to download payslip');
-                }
+                const message = await extractBlobErrorMessage(
+                    error.response.data,
+                    'Failed to download payslip'
+                );
+                return rejectWithValue(message);
             }
-            return rejectWithValue(error.response?.data?.message || 'Failed to download payslip');
+            return rejectWithValue(extractApiErrorMessage(error, 'Failed to download payslip'));
         }
     }
 );

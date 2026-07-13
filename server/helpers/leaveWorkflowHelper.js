@@ -81,7 +81,7 @@ export const getLeaveApprovalStageLabel = (leave = {}) => {
             : 'Awaiting Manager';
     }
     if (pending.approverType === 'HR') {
-        return 'Awaiting HR';
+        return 'Awaiting HR approval';
     }
 
     return pending.stepName || 'Pending';

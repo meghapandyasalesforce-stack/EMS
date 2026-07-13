@@ -26,9 +26,20 @@ const leavePolicySchema = new mongoose.Schema({
         default: Date.now
     },
     expiryDate: Date,
+
+    /** Leave cycle — default January to December (calendar year) */
+    leaveCycle: {
+        startMonth: { type: Number, default: 1, min: 1, max: 12 },
+        endMonth: { type: Number, default: 12, min: 1, max: 12 },
+    },
     
     // Leave types configuration (Fixed Split Policy)
     leaveTypes: [{
+        /** HR can disable a leave type without removing it from policy */
+        enabled: {
+            type: Boolean,
+            default: true,
+        },
         type: {
             type: String,
             enum: ['casual', 'paid', 'sick', 'maternity', 'paternity', 'vacation', 'privileged', 'compensatory', 'sabbatical', 'loss_of_pay'],
@@ -74,11 +85,11 @@ const leavePolicySchema = new mongoose.Schema({
         carryForward: {
             enabled: {
                 type: Boolean,
-                default: false
+                default: true
             },
             maxDays: {
                 type: Number,
-                default: 0,
+                default: 18,
                 min: 0
             },
             // Expiry after carry-forward (in days)

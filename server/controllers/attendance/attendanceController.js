@@ -7,7 +7,9 @@ import User from "../../models/user.model.js";
 import mongoose from 'mongoose';
 import { DateTime } from 'luxon';
 import logger from "../../helpers/logger.js";
-import { sendBreakNotification, sendNotificationToUsers } from "../../helpers/notificationService.js";
+import { sendNotificationToUsers } from "../../helpers/notificationService.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
 import { buildManagerMatchQuery, getManagerEmployeeIds, isEmployeeLinkedToManager } from "../../helpers/managerHelper.js";
 import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingService.js";
@@ -356,23 +358,17 @@ export const clockIn = async (req, res) => {
       }
     }
 
-    // Apply grace period for late arrival if rule enabled
-    let effectiveStartTime = new Date(officeStartTime);
-    if (activeRule?.enablePenaltyRules && activeRule?.penaltyRules?.lateArrival?.enabled) {
-      // Use grace period from penalty rules or checkInOutTimes
+    // Determine late arrival: only flag when penalty rules are active
+    let isLateArrival = false;
+    if (activeRule?.enablePenaltyRules) {
       const graceMinutes = Number(
-        activeRule.penaltyRules.lateArrival.gracePeriod || 
-        activeRule.checkInOutTimes?.checkInGracePeriod || 
+        (activeRule.penaltyRules?.lateArrival?.enabled && activeRule.penaltyRules?.lateArrival?.gracePeriod) ||
+        activeRule.checkInOutTimes?.checkInGracePeriod ||
         0
       );
-      effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
-    } else if (activeRule?.checkInOutTimes?.checkInGracePeriod) {
-      // Apply grace period even if penalty rules are disabled
-      const graceMinutes = Number(activeRule.checkInOutTimes.checkInGracePeriod || 0);
-      effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
+      const effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
+      isLateArrival = clockInTime > effectiveStartTime;
     }
-    
-    const isLateArrival = clockInTime > effectiveStartTime;
 
     // Get real IP address
     const clientIP = getClientIP(req);
@@ -799,7 +795,13 @@ export const breakIn = async (req, res) => {
       const employee = await Employee.findById(req.employee._id).select(
         'name lastName email organizationId'
       );
-      if (employee) await sendBreakNotification(employee);
+      if (employee) {
+        await notify({
+          type: 'break_started',
+          organizationId: employee.organizationId,
+          data: { employee }
+        });
+      }
     });
 
     res.json(attendance);
@@ -845,6 +847,42 @@ export const breakOut = async (req, res) => {
 
     invalidateAttendanceCachesAsync();
     emitEmployeesOnBreakChangedAsync(organizationId);
+
+    logger.info('About to trigger break ended notification', {
+      employeeId: req.employee._id
+    });
+
+    runInBackground('break-out-notify-admins', async () => {
+      try {
+        logger.info('Break ended background task started', {
+          employeeId: req.employee._id
+        });
+        const employee = await Employee.findById(req.employee._id).select(
+          'name lastName email organizationId'
+        );
+        if (employee) {
+          logger.info('Employee found for break ended notification', {
+            employeeId: employee._id,
+            employeeName: employee.name
+          });
+          await notify({
+            type: 'break_ended',
+            organizationId: employee.organizationId,
+            data: { employee }
+          });
+        } else {
+          logger.warn('Employee not found for break ended notification', {
+            employeeId: req.employee._id
+          });
+        }
+      } catch (error) {
+        logger.error('Error in break ended background task', {
+          error: error.message,
+          stack: error.stack,
+          employeeId: req.employee._id
+        });
+      }
+    });
 
     res.json(attendance);
   } catch (error) {
@@ -1203,6 +1241,42 @@ export const clockOut = async (req, res) => {
     invalidateAttendanceCachesAsync();
     emitAttendanceTodayChangedAsync(organizationId);
 
+    logger.info('About to trigger punch out notification', {
+      employeeId: req.employee._id
+    });
+
+    runInBackground('clock-out-notify-admins', async () => {
+      try {
+        logger.info('Punch out background task started', {
+          employeeId: req.employee._id
+        });
+        const employee = await Employee.findById(req.employee._id).select(
+          'name lastName email organizationId'
+        );
+        if (employee) {
+          logger.info('Employee found for punch out notification', {
+            employeeId: employee._id,
+            employeeName: employee.name
+          });
+          await notify({
+            type: 'punch_out',
+            organizationId: employee.organizationId,
+            data: { employee }
+          });
+        } else {
+          logger.warn('Employee not found for punch out notification', {
+            employeeId: req.employee._id
+          });
+        }
+      } catch (error) {
+        logger.error('Error in punch out background task', {
+          error: error.message,
+          stack: error.stack,
+          employeeId: req.employee._id
+        });
+      }
+    });
+
     const attendanceObj = attendance.toObject ? attendance.toObject() : attendance;
     res.json({
       ...attendanceObj,
@@ -1520,7 +1594,9 @@ export const getTodayStatus = async (req, res) => {
     const organizationId = getOrganizationId(req);
     const dayContext = await getAttendanceDayContext(organizationId);
     // 1. Get all active employees for this organization
-    let employeeQuery = addOrganizationFilter(req, { active: true });
+    let employeeQuery = addOrganizationFilter(req, {
+      $or: [{ status: 'active' }, { active: true }]
+    });
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees attendance for employees with manager="Arun Kumar" or "Arun"
@@ -1698,7 +1774,9 @@ export const getEmployeeList = async (req, res) => {
   try {
     const { department, includeInactive } = req.query;
     
-    const query = addOrganizationFilter(req, { active: true }); // Default to only active employees
+    const query = addOrganizationFilter(req, {
+      $or: [{ status: 'active' }, { active: true }]
+    });
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees employees with manager="Arun Kumar" or "Arun"
@@ -1706,7 +1784,8 @@ export const getEmployeeList = async (req, res) => {
     if (isManager && req.employee) {
       const managerQuery = buildManagerMatchQuery(req.employee);
       if (managerQuery && managerQuery.$or) {
-        query.$or = managerQuery.$or;
+        query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
+        delete query.$or;
       }
       const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
       logger.info('Manager filtering employee list by manager field', {
@@ -2194,11 +2273,16 @@ export const getTeamAttendanceHistory = async (req, res) => {
       limit = '25'
     } = req.query;
 
-    const query = addOrganizationFilter(req, { active: true });
+    const query = addOrganizationFilter(req, {
+      $or: [{ status: 'active' }, { active: true }]
+    });
     const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
     if (isManager && req.employee) {
       const managerQuery = buildManagerMatchQuery(req.employee);
-      if (managerQuery?.$or) query.$or = managerQuery.$or;
+      if (managerQuery?.$or) {
+        query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
+        delete query.$or;
+      }
     } else if (department) {
       query.department = department;
     }

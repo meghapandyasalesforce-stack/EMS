@@ -291,20 +291,15 @@ function DashboardEmployee() {
                 }
 
                 const monthSessions = monthLogs.data?.sessions || [];
-                const monthHours = monthSessions.reduce((sum, session) => sum + getGrossHours(session), 0);
+                const monthHours = monthLogs.data?.summary?.totalEffectiveHours
+                    || monthSessions.reduce((sum, session) => sum + getGrossHours(session), 0);
 
-                const completedDates = new Set();
-                monthSessions.forEach((s) => {
-                    if (s.clockIn && s.clockOut) {
-                        completedDates.add(format(new Date(s.date), 'yyyy-MM-dd'));
-                    }
-                });
-                const daysPresent = completedDates.size;
+                const daysPresent = monthLogs.data?.summary?.presentDays ?? monthSessions.filter(s => s.clockIn && s.clockOut).length;
                 const avgDayHours = daysPresent > 0 ? monthHours / daysPresent : 0;
                 const overtimeHours = Math.max(0, monthHours - daysPresent * 8);
 
-                const expectedHours = 22 * 8;
-                const attendanceRate = expectedHours > 0 ? Math.round((monthHours / expectedHours) * 100) : 0;
+                const workingDays = monthLogs.data?.summary?.workingDays || 22;
+                const attendanceRate = workingDays > 0 ? Math.round((daysPresent / workingDays) * 100) : 0;
 
                 let projects = [];
                 try {

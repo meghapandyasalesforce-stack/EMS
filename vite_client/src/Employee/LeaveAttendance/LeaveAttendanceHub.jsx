@@ -7,6 +7,7 @@ import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
 import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
+import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
 
 const toDateInput = (d) => {
   const dt = new Date(d);
@@ -91,6 +92,25 @@ const statusPill = (status) => {
   if (s.includes('absent')) return 'bg-[#FEE2E2] text-[#B91C1C]';
   if (s.includes('weekend') || s.includes('holiday')) return 'bg-[#E5E7EB] text-[#374151]';
   return 'bg-[#E5E7EB] text-[#374151]';
+};
+
+const leaveStatusPill = (displayStatus) => {
+  const s = String(displayStatus || '').toLowerCase();
+  if (s.includes('approved')) return 'bg-[#DCFCE7] text-[#166534]';
+  if (s.includes('rejected')) return 'bg-[#FEE2E2] text-[#B91C1C]';
+  if (s.includes('manager')) return 'bg-[#FEF3C7] text-[#92400E]';
+  if (s.includes('hr')) return 'bg-[#DBEAFE] text-[#1D4ED8]';
+  if (s.includes('pending')) return 'bg-[#FEF3C7] text-[#92400E]';
+  return 'bg-[#E5E7EB] text-[#374151]';
+};
+
+const getLeaveDisplayStatus = (leave) => {
+  const status = String(leave?.status || 'pending').toLowerCase();
+  if (status === 'pending' && leave?.approvalStage) return leave.approvalStage;
+  if (status === 'approved') return 'Approved';
+  if (status === 'rejected') return 'Rejected';
+  if (status === 'cancelled') return 'Cancelled';
+  return leave?.approvalStage || 'Pending';
 };
 
 const heatmapCellClass = (status) => {
@@ -302,7 +322,9 @@ const LeaveAttendanceHub = () => {
         startDate: leave.startDate ? new Date(leave.startDate) : null,
         endDate: leave.endDate ? new Date(leave.endDate) : null,
         duration: Number(leave.duration || 0),
-        status: String(leave.status || 'pending').toLowerCase()
+        status: String(leave.status || 'pending').toLowerCase(),
+        approvalStage: leave.approvalStage || '',
+        displayStatus: getLeaveDisplayStatus(leave),
       }));
   }, [leaveState.myLeaves]);
 
@@ -361,21 +383,21 @@ const LeaveAttendanceHub = () => {
     }
   }, [currentLogPage, totalLogPages]);
 
-  const leaveTypeBalances = useMemo(() => {
-    if (!leaveBalance?.balances?.length) return [];
-    return leaveBalance.balances.map((typeBalance) => ({
-      typeKey: typeBalance.leaveType,
-      displayName: leaveBalance.policy?.leaveTypes?.find((lt) => lt.type === typeBalance.leaveType)?.displayName ||
-        typeBalance.leaveType,
+  const primaryLeaveBalance = useMemo(() => {
+    const summary = getLeaveSummary(leaveBalance);
+    if (!leaveBalance) return null;
+    return {
+      typeKey: 'employee',
+      displayName: getLeaveDisplayLabel(),
       annualQuota: Number(
-        leaveBalance.policy?.leaveTypes?.find((lt) => lt.type === typeBalance.leaveType)?.accrual?.amount || 0
+        leaveBalance.policy?.leaveTypes?.find((lt) => lt.type === 'casual')?.accrual?.amount || 0
       ),
-      accrued: Number(typeBalance.accrued || 0),
-      carriedForward: Number(typeBalance.carriedForward || 0),
-      total: Number((typeBalance.accrued || 0) + (typeBalance.carriedForward || 0)),
-      available: Number(typeBalance.available || 0),
-      used: Number(typeBalance.used || 0)
-    }));
+      accrued: summary.totalAccrued,
+      carriedForward: summary.totalCarriedForward,
+      total: summary.totalAccrued + summary.totalCarriedForward,
+      available: summary.totalAvailableLeave,
+      used: summary.totalUsed,
+    };
   }, [leaveBalance]);
 
   const regTypeLabel = (type) =>
@@ -619,7 +641,7 @@ const LeaveAttendanceHub = () => {
                                 )}
                                 {notPunchedOut && (
                                   <span className="rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                                    Not out
+                                    Not Punch out
                                   </span>
                                 )}
                               </div>
@@ -833,6 +855,13 @@ const LeaveAttendanceHub = () => {
 
           {panelTab === 'leave-summary' && (
             <div className="space-y-5">
+               {/* <div className="rounded-lg border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-3 text-sm text-[#0C4A6E]"> */}
+                {/* <p className="font-semibold">Leave approval flow</p>
+                <p className="mt-1 text-xs text-[#0369A1]">
+                  Apply for leave → Manager approves → HR gives final approval. Balance updates only after HR approval.
+                // </p> */} 
+              {/* </div> */}
+
               <button
                 onClick={() => navigate('/leave')}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#20C997] bg-[#20C997] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#10B981]"
@@ -846,37 +875,35 @@ const LeaveAttendanceHub = () => {
                   <p className="rounded-lg bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">{leaveBalanceError}</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {leaveTypeBalances.length === 0 ? (
+                    {!primaryLeaveBalance ? (
                       <p className="col-span-full rounded-lg bg-[#F8FAFC] p-3 text-sm text-[#64748B]">No leave balance data available.</p>
                     ) : (
-                      leaveTypeBalances.map((lb) => (
-                        <div key={lb.typeKey} className="space-y-2">
-                          <CircleMeter
-                            label={String(lb.displayName).replaceAll('_', ' ')}
-                            value={lb.available}
-                            total={lb.total}
-                            used={lb.used}
-                          />
-                          <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[11px] text-[#475569]">
-                            <div className="flex items-center justify-between">
-                              <span>Annual quota</span>
-                              <span className="font-semibold text-[#0F172A]">{lb.annualQuota}</span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between">
-                              <span>Accrued</span>
-                              <span className="font-semibold text-[#0F172A]">{lb.accrued}</span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between">
-                              <span>Carry forward</span>
-                              <span className="font-semibold text-[#0F172A]">{lb.carriedForward}</span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between">
-                              <span>Available</span>
-                              <span className="font-semibold text-[#0F766E]">{lb.available}</span>
-                            </div>
+                      <div className="space-y-2">
+                        <CircleMeter
+                          label={primaryLeaveBalance.displayName}
+                          value={primaryLeaveBalance.available}
+                          total={primaryLeaveBalance.total}
+                          used={primaryLeaveBalance.used}
+                        />
+                        <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[11px] text-[#475569]">
+                          <div className="flex items-center justify-between">
+                            <span>Annual quota</span>
+                            <span className="font-semibold text-[#0F172A]">{primaryLeaveBalance.annualQuota}</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span>Accrued</span>
+                            <span className="font-semibold text-[#0F172A]">{primaryLeaveBalance.accrued}</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span>Carry forward</span>
+                            <span className="font-semibold text-[#0F172A]">{primaryLeaveBalance.carriedForward}</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span>Available</span>
+                            <span className="font-semibold text-[#0F766E]">{primaryLeaveBalance.available}</span>
                           </div>
                         </div>
-                      ))
+                      </div>
                     )}
                   </div>
                 )}
@@ -892,11 +919,11 @@ const LeaveAttendanceHub = () => {
                   ) : leaveRows.slice(0, 8).map((row) => (
                     <div key={row.id} className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-semibold capitalize text-[#1E293B]">
-                          {String(row.type).replaceAll('_', ' ')}
+                        <p className="text-sm font-semibold text-[#1E293B]">
+                          {getLeaveDisplayLabel()}
                         </p>
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusPill(row.status)}`}>
-                          {row.status}
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${leaveStatusPill(row.displayStatus)}`}>
+                          {row.displayStatus}
                         </span>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#475569]">
@@ -938,13 +965,13 @@ const LeaveAttendanceHub = () => {
                         </tr>
                       ) : leaveRows.slice(0, 8).map((row) => (
                         <tr key={row.id} className="border-b border-[#F1F5F9] text-sm text-[#1E293B] last:border-b-0">
-                          <td className="px-4 py-3 capitalize">{String(row.type).replaceAll('_', ' ')}</td>
+                          <td className="px-4 py-3">{getLeaveDisplayLabel()}</td>
                           <td className="px-4 py-3">{row.startDate ? row.startDate.toLocaleDateString() : '--'}</td>
                           <td className="px-4 py-3">{row.endDate ? row.endDate.toLocaleDateString() : '--'}</td>
                           <td className="px-4 py-3">{row.duration}</td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusPill(row.status)}`}>
-                              {row.status}
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${leaveStatusPill(row.displayStatus)}`}>
+                              {row.displayStatus}
                             </span>
                           </td>
                         </tr>

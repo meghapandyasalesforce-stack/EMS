@@ -101,7 +101,7 @@ const documentSchema = new mongoose.Schema({
     // HR Approval fields for employee-uploaded documents
     approvalStatus: {
         type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
+        enum: ['Pending', 'Approved', 'Rejected', 'Withdrawn'],
         default: 'Pending'
     },
     approvedBy: {
@@ -122,12 +122,15 @@ const documentSchema = new mongoose.Schema({
     metadata: {
         author: String,
         keywords: [String],
-        language: String
+        language: String,
+        /** Human-facing ID from job upload (PAN, Aadhar, etc.) */
+        documentNumber: String,
+        additionalInfo: mongoose.Schema.Types.Mixed,
     },
     /** Job-details / onboarding uploads (Offer letter, degree, etc.) — single active row per type per employee */
     employeeJobDocumentType: {
         type: String,
-        enum: ['OFFER_LETTER', 'BIRTH_CERTIFICATE', 'GUARANTOR_FORM', 'DEGREE_CERTIFICATE', 'OTHER'],
+        enum: ['OFFER_LETTER', 'AADHAR_CARD', 'PAN_CARD', 'GUARANTOR_FORM', 'DEGREE_CERTIFICATE', 'OTHER'],
         required: false
     }
 }, {

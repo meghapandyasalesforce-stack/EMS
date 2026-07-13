@@ -15,6 +15,7 @@ import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { autoGenerateIdCard } from '../admin/idCardController.js';
 import mongoose from 'mongoose';
 import { isValidTimezone } from '../../constants/timezoneOptions.js';
+import { clearPayrollGenerationCaches } from '../../helpers/payrollGenerationHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -250,6 +251,7 @@ export const updateOrganizationSettings = async (req, res) => {
             employeeIdStartNumber,
             employeeIdMinDigits,
             timezone,
+            tdsCalculationMode,
         } = req.body;
 
         const organization = await Organization.findById(organizationId);
@@ -308,6 +310,10 @@ export const updateOrganizationSettings = async (req, res) => {
         }
         if (employeeIdStartNumber !== undefined) {
             organization.settings.employeeIdNextNumber = newStartNumber;
+        }
+        if (tdsCalculationMode !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.tdsCalculationMode = tdsCalculationMode;
         }
         if (timezone !== undefined) {
             if (!isValidTimezone(timezone)) {
@@ -455,12 +461,16 @@ export const updateOrganizationSettings = async (req, res) => {
 
         await organization.save();
 
+        // Payroll generation caches (incl. TDS mode) — invalidate after settings change.
+        clearPayrollGenerationCaches({ organizationId });
+
         // ID card stats are already tracked in idCardsGenerated and idCardsFailed variables above
         // They are updated during migration if migration occurred
 
         logger.info('Organization settings updated', { 
             organizationId: organization._id,
             migrationCompleted: formatChanged && newPrefix ? true : false,
+            tdsCalculationMode: organization.settings?.tdsCalculationMode,
             idCardsGenerated,
             idCardsFailed
         });

@@ -9,6 +9,8 @@ const PendingApprovals = () => {
   const [loading, setLoading] = useState(true);
   const [selectedApproval, setSelectedApproval] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     fetchPendingApprovals();
@@ -34,11 +36,26 @@ const PendingApprovals = () => {
         comments
       });
       toast.success(`Request ${action.toLowerCase()}ed successfully`);
+      setRejectingId(null);
+      setRejectReason('');
       fetchPendingApprovals();
       setShowDetail(false);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to process approval');
     }
+  };
+
+  const handleRejectClick = (approvalId) => {
+    setRejectingId(approvalId);
+    setRejectReason('');
+  };
+
+  const handleRejectConfirm = (approvalId, stepNumber) => {
+    if (!rejectReason.trim()) {
+      toast.warning('Please enter a rejection reason');
+      return;
+    }
+    handleAction(approvalId, stepNumber, 'Reject', rejectReason.trim());
   };
 
   if (loading) {
@@ -118,12 +135,7 @@ const PendingApprovals = () => {
                       Approve
                     </button>
                     <button
-                      onClick={() => {
-                        const reason = window.prompt('Rejection reason:');
-                        if (reason) {
-                          handleAction(approval._id, pendingStep?.stepNumber, 'Reject', reason);
-                        }
-                      }}
+                      onClick={() => handleRejectClick(approval._id)}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                     >
                       <FiXCircle className="w-4 h-4" />
@@ -131,6 +143,36 @@ const PendingApprovals = () => {
                     </button>
                   </div>
                 </div>
+              {rejectingId === approval._id && (
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Rejection reason <span className="text-red-500">*</span></p>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Explain briefly for the requester…"
+                    rows={2}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 resize-none"
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => { setRejectingId(null); setRejectReason(''); }}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRejectConfirm(approval._id, pendingStep?.stepNumber)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <FiXCircle className="w-4 h-4" />
+                      Confirm Reject
+                    </button>
+                  </div>
+                </div>
+              )}
               </div>
             );
           })}

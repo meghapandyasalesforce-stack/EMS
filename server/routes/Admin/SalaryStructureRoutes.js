@@ -14,40 +14,26 @@ import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 
 const router = express.Router();
 
-// Create salary structure
-router.route('/')
-    .post(isAdminAuthenticated, createSalaryStructure);
-
-// Get all salary structures
-router.route('/')
-    .get(isAdminAuthenticated, getAllSalaryStructures);
-
-// Get salary structure by ID
-router.route('/:id')
-    .get(isAdminAuthenticated, getSalaryStructureById);
-
-// Update salary structure
-router.route('/:id')
-    .put(isAdminAuthenticated, updateSalaryStructure);
-
-// Delete salary structure
-router.route('/:id')
-    .delete(isAdminAuthenticated, deleteSalaryStructure);
-
-// Apply salary structure to employee
+// Static paths must come before /:id to avoid being swallowed by the param route
 router.route('/apply')
     .post(isAdminAuthenticated, applySalaryStructure);
 
-// Calculate salary for employee using structure
-router.route('/calculate/:structureId/:employeeId')
-    .get(isAdminAuthenticated, calculateEmployeeSalary);
-
-// Generate payroll using salary structure
 router.route('/generate-payroll')
     .post(isAdminAuthenticated, generatePayrollWithStructure);
 
-// Get applicable salary structures for employee
 router.route('/applicable/:employeeId')
     .get(isAdminAuthenticated, getApplicableStructures);
+
+router.route('/calculate/:structureId/:employeeId')
+    .get(isAdminAuthenticated, calculateEmployeeSalary);
+
+router.route('/')
+    .post(isAdminAuthenticated, createSalaryStructure)
+    .get(isAdminAuthenticated, getAllSalaryStructures);
+
+router.route('/:id')
+    .get(isAdminAuthenticated, getSalaryStructureById)
+    .put(isAdminAuthenticated, updateSalaryStructure)
+    .delete(isAdminAuthenticated, deleteSalaryStructure);
 
 export default router;

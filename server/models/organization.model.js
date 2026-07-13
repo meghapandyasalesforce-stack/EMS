@@ -264,6 +264,16 @@ const organizationSchema = new mongoose.Schema({
         ipWhitelist: {
             enabled: { type: Boolean, default: false },
             addresses: [{ type: String }]
+        },
+        /**
+         * Payroll TDS monthly cut mode (org-scoped, SaaS-ready).
+         * - cumulative: tax due through FY month N minus YTD TDS (catch-up)
+         * - independent: this month's share only; no past TDS adjustment
+         */
+        tdsCalculationMode: {
+            type: String,
+            enum: ['cumulative', 'independent'],
+            default: 'cumulative'
         }
     },
     logo: {

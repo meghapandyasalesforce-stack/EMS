@@ -56,6 +56,15 @@ const Header = () => {
     }, []);
 
     useEffect(() => {
+        if (!isMobile || !mobileMenuOpen) return undefined;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previous;
+        };
+    }, [isMobile, mobileMenuOpen]);
+
+    useEffect(() => {
         if (!authChecked || (!user && !employee)) return;
 
         const { portals, activePortal: nextPortal } = syncPortalsForSession({
@@ -171,7 +180,7 @@ const Header = () => {
     );
     const useLightEmployeeNav = effectivePortal
         ? effectivePortal === 'employee'
-        : !isAdminUser;
+        : (user?.role || employee?.role || '').toLowerCase() === 'employee';
 
     // Highlight active route — exact match for '/', startsWith for all others
     const isActive = useCallback(
@@ -189,56 +198,59 @@ const Header = () => {
                 <header
                     className={
                         useLightEmployeeNav
-                            ? 'fixed top-0 right-0 left-0 z-30 border-b border-slate-200/90 bg-[var(--color-bg)] text-slate-800 shadow-sm'
-                            : 'fixed top-0 right-0 left-0 z-30 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
+                            ? 'safe-area-top fixed top-0 right-0 left-0 z-30 border-b border-gray-200 bg-white text-gray-800 shadow-sm'
+                            : 'safe-area-top fixed top-0 right-0 left-0 z-30 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
                     }
                 >
-                    <div className="flex items-center justify-between p-4">
+                    <div className="flex min-w-0 items-center justify-between gap-2 p-3 sm:p-4">
                         <button
+                            type="button"
+                            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                             onClick={toggleMobileMenu}
                             className={
                                 useLightEmployeeNav
-                                    ? 'rounded-lg p-2 text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none'
-                                    : 'rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50 focus:outline-none'
+                                    ? 'shrink-0 rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none'
+                                    : 'shrink-0 rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50 focus:outline-none'
                             }
                         >
-                            <FaBars className="text-xl" />
+                            {mobileMenuOpen ? <FaTimes className="text-xl" /> : <FaBars className="text-xl" />}
                         </button>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
                             <NotificationDropdown />
 
                             <div
                                 className={
                                     useLightEmployeeNav
-                                        ? 'relative cursor-pointer rounded-lg p-2 text-xl text-slate-600 transition-colors hover:bg-slate-100'
-                                        : 'relative cursor-pointer rounded-lg p-2 text-xl text-white transition-colors hover:bg-gray-700/50'
+                                        ? 'relative hidden cursor-pointer rounded-lg p-2 text-xl text-gray-600 transition-colors hover:bg-gray-100 sm:block'
+                                        : 'relative hidden cursor-pointer rounded-lg p-2 text-xl text-white transition-colors hover:bg-gray-700/50 sm:block'
                                 }
                             >
                                 <FaEnvelope className="hover:opacity-80" />
                             </div>
 
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <FaUserCircle
                                     className={
                                         useLightEmployeeNav
-                                            ? 'cursor-pointer rounded-lg p-1 text-2xl text-slate-600 transition-colors hover:bg-slate-100 hover:opacity-90'
+                                            ? 'cursor-pointer rounded-lg p-1 text-2xl text-gray-600 transition-colors hover:bg-gray-100 hover:opacity-90'
                                             : 'cursor-pointer rounded-lg p-1 text-2xl text-white transition-colors hover:bg-gray-700/50 hover:opacity-90'
                                     }
                                     onClick={toggleDropdown}
                                 />
                                 {dropdownOpen && (
-                                    <div className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-56 border border-gray-100 animate-scaleIn">
+                                    <div className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-[min(14rem,calc(100vw-2rem))] border border-gray-100 animate-scaleIn">
                                         <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
                                             <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>
                                             <RoleBucketBadges className="mt-2" />
                                         </div>
                                         <button
+                                            type="button"
                                             className="flex items-center w-full px-4 py-3 text-sm text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
                                             onClick={openLogoutModal}
                                         >
-                                            <FaSignOutAlt className="mr-2" />
+                                            <FaSignOutAlt className="mr-2 shrink-0" />
                                             Logout
                                         </button>
                                     </div>
@@ -247,59 +259,87 @@ const Header = () => {
                         </div>
                     </div>
 
+                    {/* Mobile menu backdrop */}
+                    {mobileMenuOpen && (
+                        <button
+                            type="button"
+                            aria-label="Close menu overlay"
+                            className="fixed inset-0 top-14 z-20 bg-black/40"
+                            onClick={() => setMobileMenuOpen(false)}
+                        />
+                    )}
+
                     {/* Mobile Menu */}
                     {mobileMenuOpen && (
                         <div
                             className={
                                 useLightEmployeeNav
-                                    ? 'animate-slideDown border-b border-slate-200/90 bg-[var(--color-bg)] text-slate-800 shadow-lg'
-                                    : 'animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl'
+                                    ? 'relative z-30 animate-slideDown border-b border-gray-200 bg-white text-gray-800 shadow-lg max-h-[min(calc(100vh-3.5rem),calc(100dvh-3.5rem))] overflow-hidden flex flex-col'
+                                    : 'relative z-30 animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl max-h-[min(calc(100vh-3.5rem),calc(100dvh-3.5rem))] overflow-hidden flex flex-col'
                             }
                         >
                             <div
                                 className={
                                     useLightEmployeeNav
-                                        ? 'flex items-center justify-between border-b border-slate-200/90 bg-[var(--color-bg-soft)] px-4 py-4'
-                                        : 'flex items-center justify-between border-b border-gray-700/50 bg-gray-800/50 px-4 py-4 backdrop-blur-sm'
+                                        ? 'flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4 flex-shrink-0'
+                                        : 'flex items-center justify-between border-b border-gray-700/50 bg-gray-800/50 px-4 py-4 backdrop-blur-sm flex-shrink-0'
                                 }
                             >
                                 <h3 className="text-2xl font-extrabold tracking-tight">
-                                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
-                                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
-                                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
-                                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>r</span>
-                                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
-                                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>i</span>
-                                    <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>v</span>
+                                    {useLightEmployeeNav ? (
+                                        <>
+                                            <span style={{ color: 'var(--color-primary)' }}>p</span>
+                                            <span className="text-gray-800">a</span>
+                                            <span className="text-gray-800">a</span>
+                                            <span className="text-gray-800">r</span>
+                                            <span style={{ color: 'var(--color-primary)' }}>s</span>
+                                            <span className="text-gray-800">i</span>
+                                            <span className="text-gray-800">v</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
+                                            <span className="text-white">a</span>
+                                            <span className="text-white">a</span>
+                                            <span className="text-white">r</span>
+                                            <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
+                                            <span className="text-white">i</span>
+                                            <span className="text-white">v</span>
+                                        </>
+                                    )}
                                 </h3>
                                 <button
                                     onClick={toggleMobileMenu}
                                     className={
                                         useLightEmployeeNav
-                                            ? 'rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-200/80'
+                                            ? 'rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-200/80'
                                             : 'rounded-lg p-2 text-white transition-colors hover:bg-gray-700/50'
                                     }
                                 >
                                     <FaTimes className="text-xl" />
                                 </button>
                             </div>
-                            <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
-                            <nav className="flex flex-col py-2">
+                            <div className="flex-shrink-0">
+                                <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
+                            </div>
+                            <nav className="flex flex-col py-2 overflow-y-auto overflow-x-hidden flex-1">
                                 {navItems.map((item, index) => (
                                     <Link
                                         key={item.path}
                                         to={item.path}
                                         className={`mx-2 flex items-center rounded-xl p-4 transition-all duration-300 ${
                                             isActive(item.path)
-                                                ? 'text-white shadow-lg'
+                                                ? 'scale-105 text-white shadow-lg'
                                                 : useLightEmployeeNav
-                                                    ? 'text-slate-600 hover:bg-slate-100'
+                                                    ? 'text-gray-600 hover:bg-gray-100'
                                                     : 'text-gray-300 hover:bg-gray-700/50'
                                         }`}
                                         onClick={() => setMobileMenuOpen(false)}
                                         style={{
                                             animationDelay: `${index * 50}ms`,
-                                            ...(isActive(item.path) ? { backgroundColor: 'var(--color-primary)' } : {}),
+                                            ...(isActive(item.path)
+                                                ? { backgroundColor: 'var(--color-primary)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12)' }
+                                                : {}),
                                         }}
                                     >
                                         <span className={`text-lg mr-3 transition-transform ${isActive(item.path) ? 'scale-110' : ''}`}>
@@ -307,7 +347,7 @@ const Header = () => {
                                         </span>
                                         <span className="font-medium">{item.name}</span>
                                         {isActive(item.path) && (
-                                            <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                            <div className="ml-auto w-1.5 h-1.5 animate-pulse rounded-full bg-white"></div>
                                         )}
                                     </Link>
                                 ))}
@@ -320,7 +360,7 @@ const Header = () => {
                 <div
                     className={
                         useLightEmployeeNav
-                            ? 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-slate-200/90 bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm'
+                            ? 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-gray-200 bg-white text-gray-700 shadow-sm'
                             : 'fixed top-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-gray-700/50 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white shadow-2xl'
                     }
                 >
@@ -328,28 +368,43 @@ const Header = () => {
                     <div
                         className={
                             useLightEmployeeNav
-                                ? 'flex flex-shrink-0 items-center justify-between border-b border-slate-200/90 bg-[var(--color-bg-soft)] p-5'
+                                ? 'flex flex-shrink-0 items-center justify-center border-b border-gray-200 bg-white p-6'
                                 : 'flex flex-shrink-0 items-center justify-between border-b border-gray-700/50 bg-gray-800/50 p-5 backdrop-blur-sm'
                         }
                     >
-                        <h3 className="text-3xl font-extrabold tracking-tight">
-                            <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
-                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
-                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>a</span>
-                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>r</span>
-                            <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
-                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>i</span>
-                            <span className={useLightEmployeeNav ? 'text-slate-800' : 'text-white'}>v</span>
+                        <h3 className={`text-3xl font-extrabold tracking-tight ${useLightEmployeeNav ? '' : ''}`}>
+                            {useLightEmployeeNav ? (
+                                <>
+                                    <span style={{ color: 'var(--color-primary)' }}>p</span>
+                                    <span className="text-gray-800">a</span>
+                                    <span className="text-gray-800">a</span>
+                                    <span className="text-gray-800">r</span>
+                                    <span style={{ color: 'var(--color-primary)' }}>s</span>
+                                    <span className="text-gray-800">i</span>
+                                    <span className="text-gray-800">v</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
+                                    <span className="text-white">a</span>
+                                    <span className="text-white">a</span>
+                                    <span className="text-white">r</span>
+                                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
+                                    <span className="text-white">i</span>
+                                    <span className="text-white">v</span>
+                                </>
+                            )}
                         </h3>
                     </div>
 
-                    <PortalSwitcher lightTheme={useLightEmployeeNav} />
+                    {useLightEmployeeNav && <PortalSwitcher lightTheme={true} />}
+                    {!useLightEmployeeNav && <PortalSwitcher lightTheme={false} />}
 
                     {/* Nav links */}
                     <nav
                         className={
                             useLightEmployeeNav
-                                ? 'scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-2 py-3'
+                                ? 'scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-3 py-4'
                                 : 'scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-2 py-3'
                         }
                     >
@@ -361,7 +416,7 @@ const Header = () => {
                                     isActive(item.path)
                                         ? 'scale-105 text-white shadow-lg'
                                         : useLightEmployeeNav
-                                            ? 'text-slate-600 hover:translate-x-1 hover:bg-slate-100/90 hover:text-slate-900'
+                                            ? 'text-gray-600 hover:translate-x-1 hover:bg-gray-100/90 hover:text-gray-900'
                                             : 'text-gray-300 hover:translate-x-1 hover:bg-gray-700/50 hover:text-white'
                                 }`}
                                 style={{
@@ -386,7 +441,7 @@ const Header = () => {
                     <div
                         className={
                             useLightEmployeeNav
-                                ? 'flex-shrink-0 border-t border-slate-200/90 bg-[var(--color-bg-soft)] p-4'
+                                ? 'flex-shrink-0 border-t border-gray-200 bg-white p-4'
                                 : 'flex-shrink-0 border-t border-gray-700/50 bg-gray-800/50 p-4 backdrop-blur-sm'
                         }
                     >
@@ -394,7 +449,7 @@ const Header = () => {
                             <span
                                 className={
                                     useLightEmployeeNav
-                                        ? 'text-xs font-semibold uppercase tracking-wide text-slate-500'
+                                        ? 'text-xs font-semibold uppercase tracking-wide text-gray-500'
                                         : 'text-xs font-semibold uppercase tracking-wide text-gray-400'
                                 }
                             >
@@ -410,7 +465,7 @@ const Header = () => {
                     <div
                         className={
                             useLightEmployeeNav
-                                ? 'flex-shrink-0 border-t border-slate-200/90 bg-[var(--color-bg-soft)] p-4'
+                                ? 'flex-shrink-0 border-t border-gray-200 bg-white p-4'
                                 : 'flex-shrink-0 border-t border-gray-700/50 bg-gray-800/50 p-4 backdrop-blur-sm'
                         }
                     >
@@ -418,7 +473,7 @@ const Header = () => {
                             onClick={openLogoutModal}
                             className={
                                 useLightEmployeeNav
-                                    ? 'group flex w-full items-center justify-center gap-3 rounded-xl border border-transparent p-3 text-slate-600 transition-all duration-300 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                                    ? 'group flex w-full items-center justify-center gap-3 rounded-xl border border-transparent p-3 text-gray-600 transition-all duration-300 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                                     : 'group flex w-full items-center justify-center gap-3 rounded-xl border border-transparent p-3 text-gray-300 transition-all duration-300 hover:border-red-500/30 hover:bg-red-500/20 hover:text-white'
                             }
                         >
@@ -429,8 +484,14 @@ const Header = () => {
                 </div>
             )}
 
-            {/* Spacer for mobile header height */}
-            {isMobile && <div className="pt-16"></div>}
+            {/* Spacer for mobile header height (+ notch safe area) */}
+            {isMobile && (
+                <div
+                    className="shrink-0"
+                    style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+                    aria-hidden="true"
+                />
+            )}
 
             {/* Logout Confirmation Modal */}
             <Transition appear show={logoutModalOpen} as={Fragment}>

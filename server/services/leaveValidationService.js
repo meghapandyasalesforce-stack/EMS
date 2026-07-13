@@ -15,6 +15,24 @@ import {
 } from '../helpers/leavePolicyAccrualHelper.js';
 
 class LeaveValidationService {
+    /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
+    parseLeaveDate(dateInput) {
+        if (!dateInput) {
+            return null;
+        }
+        if (typeof dateInput === 'string') {
+            const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (match) {
+                return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+            }
+        }
+        const parsed = new Date(dateInput);
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+
     /**
      * Validate leave request against all rules
      */
@@ -40,8 +58,11 @@ class LeaveValidationService {
                 return { valid: false, errors: [`Leave type ${leaveData.leaveType} not configured in policy`] };
             }
 
-            const startDate = new Date(leaveData.startDate);
-            const endDate = new Date(leaveData.endDate);
+            const startDate = this.parseLeaveDate(leaveData.startDate);
+            const endDate = this.parseLeaveDate(leaveData.endDate);
+            if (!startDate || !endDate) {
+                return { valid: false, errors: ['Invalid start or end date'] };
+            }
 
             // 1. Check probation period restrictions
             if (leaveTypeConfig.probationRestrictions?.enabled) {
@@ -89,7 +110,12 @@ class LeaveValidationService {
             }
 
             // 5. Calculate duration (used for balance check and min/max)
-            const duration = await this.calculateDuration(startDate, endDate, policy.dateHandlingRules, calendar, organizationId);
+            let duration = await this.calculateDuration(startDate, endDate, policy.dateHandlingRules, calendar, organizationId);
+            const workingDays = dateHandlingCheck.workingDays ?? duration;
+
+            if (leaveData.isHalfDay && workingDays > 0) {
+                duration = 0.5;
+            }
 
             // 6. Check leave balance (policy year = leave start year; LOP skips balance)
             const balanceCheck = await this.checkLeaveBalance(
@@ -105,7 +131,9 @@ class LeaveValidationService {
             }
 
             // 7. Check minimum/maximum days per request
-            if (duration < leaveTypeConfig.minDaysPerRequest) {
+            if (duration === 0) {
+                errors.push('Selected dates fall on non-working days (weekend or holiday). Please choose a working day.');
+            } else if (duration < leaveTypeConfig.minDaysPerRequest) {
                 errors.push(`Minimum ${leaveTypeConfig.minDaysPerRequest} days required for ${leaveTypeConfig.displayName}`);
             }
             if (leaveTypeConfig.maxDaysPerRequest && duration > leaveTypeConfig.maxDaysPerRequest) {
@@ -236,7 +264,7 @@ class LeaveValidationService {
                 errors,
                 warnings,
                 duration,
-                workingDays: dateHandlingCheck.workingDays
+                workingDays
             };
         } catch (error) {
             logger.error('Leave validation error', { error: error.message, stack: error.stack });

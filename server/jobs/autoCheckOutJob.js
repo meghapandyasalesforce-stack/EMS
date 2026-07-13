@@ -14,6 +14,12 @@ import {
     getAttendanceDayContext,
     buildOrgTodayAttendanceFilter,
 } from '../helpers/attendanceDayHelper.js';
+import {
+    getExpectedWorkingHoursFromRule,
+    getEffectiveOfficeEndForEarlyDeparture,
+} from '../helpers/attendanceSecurityHelper.js';
+import { getCachedEffectiveTimezone } from '../helpers/orgContextCache.js';
+import { DateTime } from 'luxon';
 
 // Get Redis connection config
 const getConnection = () => {
@@ -43,10 +49,9 @@ const getConnection = () => {
 /**
  * Process auto check-out for all active attendance records
  */
-async function processAutoCheckOut() {
+export async function processAutoCheckOut() {
     try {
         const now = new Date();
-        const currentTime = new Date().toTimeString().slice(0, 5); // HH:mm format
 
         // Get all active attendance rules with auto check-out enabled
         const rules = await AttendanceRule.find({
@@ -59,10 +64,13 @@ async function processAutoCheckOut() {
 
         for (const rule of rules) {
             try {
-                const autoCheckOutTime = rule.autoCheckOut.time;
-                
-                // Check if current time matches auto check-out time
-                if (currentTime === autoCheckOutTime) {
+                const autoCheckOutTime = rule.autoCheckOut.time; // e.g. "18:00"
+
+                // Compare current time in the ORG's timezone, not server local time
+                const orgTimezone = await getCachedEffectiveTimezone(rule.organizationId);
+                const currentTimeInOrg = DateTime.now().setZone(orgTimezone).toFormat('HH:mm');
+
+                if (currentTimeInOrg === autoCheckOutTime) {
                     const dayContext = await getAttendanceDayContext(rule.organizationId, now);
                     // Find all employees checked in but not checked out for this organization
                     const activeAttendances = await Attendance.find({
@@ -73,17 +81,33 @@ async function processAutoCheckOut() {
 
                     for (const attendance of activeAttendances) {
                         try {
-                            // Auto check-out
-                            await Attendance.updateOne(
-                                { _id: attendance._id },
-                                {
-                                    $set: {
-                                        clockOut: new Date(),
-                                        status: 'present',
-                                        autoCheckedOut: true
-                                    }
+                            // Use findById + save so the pre-save hook runs and
+                            // calculates effectiveHours, grossHours, overtimeHours,
+                            // isEarlyDeparture correctly.
+                            const doc = await Attendance.findById(attendance._id);
+                            if (!doc || doc.clockOut) continue;
+
+                            const clockOutTime = new Date();
+                            doc.clockOut = clockOutTime;
+                            doc.autoCheckedOut = true;
+
+                            // Close any open breaks before saving
+                            for (const b of doc.breaks || []) {
+                                if (b.breakIn && !b.breakOut) {
+                                    b.breakOut = clockOutTime;
+                                    const ms = clockOutTime - new Date(b.breakIn);
+                                    doc.totalBreakDuration = (doc.totalBreakDuration || 0) + ms;
                                 }
-                            );
+                            }
+
+                            // Determine status: half-day if effective hours < half expected
+                            const grossMs = clockOutTime - new Date(doc.clockIn);
+                            const breakMs = doc.totalBreakDuration || 0;
+                            const effectiveHours = (grossMs - breakMs) / (1000 * 60 * 60);
+                            const expectedHours = getExpectedWorkingHoursFromRule(rule, doc.date || doc.clockIn);
+                            doc.status = effectiveHours < expectedHours / 2 ? 'half-day' : 'present';
+
+                            await doc.save(); // triggers pre-save hook for hour calculations
 
                             // Send notification
                             if (attendance.userId) {
@@ -101,11 +125,13 @@ async function processAutoCheckOut() {
                             }
 
                             processedCount++;
-                            
+
                             logger.info('Auto check-out processed', {
                                 attendanceId: attendance._id,
                                 userId: attendance.userId?._id,
-                                time: autoCheckOutTime
+                                time: autoCheckOutTime,
+                                status: doc.status,
+                                effectiveHours: doc.effectiveHours
                             });
                         } catch (error) {
                             errorCount++;
@@ -130,8 +156,7 @@ async function processAutoCheckOut() {
         if (processedCount > 0) {
             logger.info('Auto check-out job completed', {
                 processedCount,
-                errorCount,
-                currentTime
+                errorCount
             });
         }
 
@@ -152,12 +177,10 @@ async function processAutoCheckOut() {
 /**
  * Send pre-checkout notifications (X minutes before auto check-out)
  */
-async function sendPreCheckOutNotifications() {
+export async function sendPreCheckOutNotifications() {
     try {
         const now = new Date();
-        const currentTime = now.toTimeString().slice(0, 5); // HH:mm format
 
-        // Get all active attendance rules with auto check-out enabled
         const rules = await AttendanceRule.find({
             isActive: true,
             'autoCheckOut.enabled': true
@@ -170,14 +193,20 @@ async function sendPreCheckOutNotifications() {
                 const autoCheckOutTime = rule.autoCheckOut.time;
                 const notifyBeforeMinutes = rule.autoCheckOut.notifyBeforeMinutes || 15;
 
-                // Calculate notification time
-                const [hours, minutes] = autoCheckOutTime.split(':').map(Number);
-                const notificationTime = new Date();
-                notificationTime.setHours(hours, minutes - notifyBeforeMinutes, 0, 0);
-                const notificationTimeStr = notificationTime.toTimeString().slice(0, 5);
+                // Calculate notification time in org timezone
+                const orgTimezone = await getCachedEffectiveTimezone(rule.organizationId);
+                const currentTimeInOrg = DateTime.now().setZone(orgTimezone).toFormat('HH:mm');
+                const notificationTimeStr = DateTime.now()
+                    .setZone(orgTimezone)
+                    .set({
+                        hour: parseInt(autoCheckOutTime.split(':')[0], 10),
+                        minute: parseInt(autoCheckOutTime.split(':')[1], 10),
+                        second: 0
+                    })
+                    .minus({ minutes: notifyBeforeMinutes })
+                    .toFormat('HH:mm');
 
-                // Check if current time matches notification time
-                if (currentTime === notificationTimeStr) {
+                if (currentTimeInOrg === notificationTimeStr) {
                     const dayContext = await getAttendanceDayContext(rule.organizationId, now);
 
                     // Find all employees checked in but not checked out
@@ -222,8 +251,7 @@ async function sendPreCheckOutNotifications() {
 
         if (notifiedCount > 0) {
             logger.info('Pre-checkout notifications sent', {
-                notifiedCount,
-                currentTime
+                notifiedCount
             });
         }
 

@@ -95,9 +95,75 @@ const leaveBalanceSchema = new mongoose.Schema({
         toYear: Number,
         leaveType: String,
         amount: Number,
-        date: Date
+        date: Date,
+        processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+        previousAvailable: Number,
     }],
+
+    /** Prevents duplicate carry-forward for the same year transition */
+    carryForwardProcessed: [{
+        fromYear: Number,
+        toYear: Number,
+        processedAt: Date,
+        processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+    }],
+
+    /** Last automated period recalculation marker */
+    lastAutomatedUpdate: {
+        fromYear: Number,
+        fromMonth: Number,
+        toYear: Number,
+        toMonth: Number,
+        updatedAt: Date,
+        updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+    },
     
+    /** Monthly allocation log — prevents duplicate monthly credits */
+    monthlyAllocationLog: [{
+        year: Number,
+        month: Number,
+        leaveType: String,
+        amount: Number,
+        allocatedAt: { type: Date, default: Date.now },
+    }],
+
+    /** Employee-level leave wallet (shared pool) — not tied to any leave type */
+    employeeLeaveSummary: {
+        /** Current balance snap from Manual Correction — latest save is the accrual starting point */
+        openingLeaveBalance: {
+            active: { type: Boolean, default: false },
+            balance: Number,
+            openingYear: Number,
+            openingMonth: Number,
+            reason: String,
+            setBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            setAt: Date,
+        },
+        /** Running correction anchor — adjusts balance from a month forward without replacing opening */
+        manualOverride: {
+            active: { type: Boolean, default: false },
+            available: Number,
+            accrued: Number,
+            used: Number,
+            carriedForward: Number,
+            /** Month/year this manual balance anchors rolling accrual from */
+            anchorYear: Number,
+            anchorMonth: Number,
+            reason: String,
+            adjustedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            adjustedAt: Date,
+        },
+        /** HR-added manual carry forward entries with effective dates */
+        manualCarryForwards: [{
+            amount: Number,
+            effectiveYear: Number,
+            effectiveMonth: Number,
+            reason: String,
+            addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            addedAt: Date,
+        }],
+    },
+
     // Metadata
     isLocked: {
         type: Boolean,

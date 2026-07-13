@@ -44,6 +44,26 @@ export function nowInTimezone(timezone = DEFAULT_TIMEZONE) {
   return DateTime.now().setZone(normalizeTimezone(timezone));
 }
 
+/**
+ * Format a time for notifications in the given IANA timezone (e.g. "07:26 AM").
+ */
+export function formatTimeInTimezone(date = new Date(), timezone = DEFAULT_TIMEZONE) {
+  const tz = normalizeTimezone(timezone);
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  return DateTime.fromJSDate(value, { zone: tz }).toFormat('hh:mm a');
+}
+
+/**
+ * Format a date for notifications in the given IANA timezone (e.g. "13/07/2026").
+ */
+export function formatDateInTimezone(date = new Date(), timezone = DEFAULT_TIMEZONE) {
+  const tz = normalizeTimezone(timezone);
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  return DateTime.fromJSDate(value, { zone: tz }).toFormat('dd/MM/yyyy');
+}
+
 /** Start of calendar month and start of next month in the given timezone (UTC instants). */
 export function getMonthBoundsInTimezone(date = new Date(), timezone = DEFAULT_TIMEZONE) {
   const tz = normalizeTimezone(timezone);

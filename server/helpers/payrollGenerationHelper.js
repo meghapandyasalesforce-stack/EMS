@@ -1,10 +1,23 @@
+import { DateTime } from 'luxon';
 import Attendance from '../models/attendance.model.js';
 import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
-import { computeEarningsFromGross, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
-import { computeRegimeIncomeTaxCumulative } from './tdsCumulativeHelper.js';
+import logger from './logger.js';
+import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
+import { computeRegimeIncomeTaxCumulative, clearTdsCalculationModeCache } from './tdsCumulativeHelper.js';
+import { getCachedEffectiveTimezone } from './orgContextCache.js';
+import { getDateKeyInTimezone, getEndOfDayInTimezone } from './timezoneHelper.js';
+import { buildAttendancePeriodFilter, parseDateKeyInTimezone } from './attendanceDayHelper.js';
+
+const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+/** Default overtime multiplier when salary structure does not specify a rate. */
+export const DEFAULT_OVERTIME_RATE = 1.5;
+
+/** ESI applies only when monthly gross is at or below this statutory limit (₹21,000). */
+export const ESI_GROSS_WAGE_LIMIT = 21000;
 
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
@@ -13,6 +26,8 @@ const salaryStructureByIdCache = new Map();
 const salaryStructureByApplicabilityCache = new Map();
 
 export function clearPayrollGenerationCaches({ organizationId, structureId } = {}) {
+    clearTdsCalculationModeCache(organizationId);
+
     const orgKey = organizationId ? `${String(organizationId)}:` : null;
     const structureKey = structureId && organizationId ? `${String(organizationId)}:${String(structureId)}` : null;
 
@@ -147,23 +162,102 @@ function getDayName(date) {
     return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][date.getDay()];
 }
 
-function dateKey(date) {
-    // Stable day key independent of time (local timezone).
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+/** Weekday name for yyyy-MM-dd in the org IANA timezone (SaaS-safe; no server TZ). */
+export function getDayNameFromDateKey(dateKey, timezone) {
+    const dt = parseDateKeyInTimezone(dateKey, timezone);
+    return WEEKDAY_NAMES[dt.weekday - 1];
 }
 
-function buildIsWorkingDayFn(calendar) {
-    if (!calendar) return null;
+function createDayKeyFn(timezone) {
+    return (date) => getDateKeyInTimezone(date, timezone);
+}
 
-    const holidayDates = new Set(
-        (calendar.holidays || [])
+function buildHolidayDateKeySet(calendar, dayKey) {
+    return new Set(
+        (calendar?.holidays || [])
             .filter((h) => h && h.isActive !== false)
             .map((h) => {
                 const hd = new Date(h.date);
-                return Number.isNaN(hd.getTime()) ? null : dateKey(hd);
+                return Number.isNaN(hd.getTime()) ? null : dayKey(hd);
             })
             .filter(Boolean)
     );
+}
+
+/**
+ * Working-day predicate keyed by org calendar day (yyyy-MM-dd).
+ * Use this for attendance/payroll counting across any tenant timezone.
+ */
+export function buildIsWorkingDayKeyFn(calendar, timezone, dayKey) {
+    const holidayDates = buildHolidayDateKeySet(calendar, dayKey);
+
+    return (dateKey) => {
+        if (!dateKey) return false;
+        const dayName = getDayNameFromDateKey(dateKey, timezone);
+        const isWorkingByWeek =
+            calendar?.workingDays && typeof calendar.workingDays[dayName] === 'boolean'
+                ? calendar.workingDays[dayName]
+                : !['saturday', 'sunday'].includes(dayName);
+
+        if (!isWorkingByWeek) return false;
+        return !holidayDates.has(dateKey);
+    };
+}
+
+/** Resolve canonical attendance day key for payroll bucketing. */
+export function resolveAttendanceRecordDateKey(record, dayKey) {
+    if (record?.attendanceDateKey) {
+        return String(record.attendanceDateKey).slice(0, 10);
+    }
+    if (record?.date) {
+        const d = new Date(record.date);
+        if (!Number.isNaN(d.getTime())) {
+            return dayKey(d);
+        }
+    }
+    return null;
+}
+
+/** Walk inclusive yyyy-MM-dd range in org timezone. */
+export function eachDateKeyInInclusiveRange(startKey, endKey, timezone, visit) {
+    if (!startKey || !endKey || startKey > endKey) return;
+    let cursor = parseDateKeyInTimezone(startKey, timezone);
+    const end = parseDateKeyInTimezone(endKey, timezone);
+    while (cursor <= end) {
+        visit(cursor.toFormat('yyyy-MM-dd'));
+        cursor = cursor.plus({ days: 1 });
+    }
+}
+
+/** Count working days between two org date keys (inclusive). */
+export function countWorkingDaysInDateKeyRange(startKey, endKey, timezone, isWorkingDayKeyFn) {
+    let working = 0;
+    eachDateKeyInInclusiveRange(startKey, endKey, timezone, (key) => {
+        if (isWorkingDayKeyFn(key)) working += 1;
+    });
+    return working;
+}
+
+/**
+ * Build dateKey → attendance credit from raw rows using org date keys only.
+ */
+export function buildAttendanceCreditByDay(records, { dayKey, isWorkingDayKeyFn }) {
+    const attByDay = new Map();
+    for (const r of records) {
+        const key = resolveAttendanceRecordDateKey(r, dayKey);
+        if (!key || (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key))) {
+            continue;
+        }
+        const c = attendanceDayCredit(r);
+        attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
+    }
+    return attByDay;
+}
+
+export function buildIsWorkingDayFn(calendar, dayKey) {
+    if (!calendar) return null;
+
+    const holidayDates = buildHolidayDateKeySet(calendar, dayKey);
 
     return (date) => {
         const dayName = getDayName(date);
@@ -173,7 +267,7 @@ function buildIsWorkingDayFn(calendar) {
                 : date.getDay() !== 0 && date.getDay() !== 6; // fallback: Mon–Fri
 
         if (!isWorkingByWeek) return false;
-        return !holidayDates.has(dateKey(date));
+        return !holidayDates.has(dayKey(date));
     };
 }
 
@@ -234,13 +328,98 @@ function attendanceHoursWorked(record) {
  * Paid-day credit (0–1) from one attendance row using worked hours.
  * present/loggedOut with 0 effective and 0 gross hours → 0 (treat as no paid time).
  */
-function attendanceDayCredit(record) {
+export function attendanceDayCredit(record) {
     const status = (record.status || '').toLowerCase();
     const h = attendanceHoursWorked(record);
     if (h <= 0) return 0;
     if (status === 'half-day') return Math.min(0.5, h / STANDARD_FULL_DAY_HOURS);
     if (status === 'present' || status === 'loggedout') return Math.min(1, h / STANDARD_FULL_DAY_HOURS);
     return 0;
+}
+
+/** Sum paid-day credits over org date keys in [walkStartKey, walkEndKey]. */
+export function sumEffectivePresentDaysByKeys(
+    walkStartKey,
+    walkEndKey,
+    attByDay,
+    paidLeaveByDay,
+    timezone,
+    isWorkingDayKeyFn
+) {
+    let total = 0;
+    eachDateKeyInInclusiveRange(walkStartKey, walkEndKey, timezone, (key) => {
+        if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+            return;
+        }
+        const att = attByDay.get(key) || 0;
+        const lev = paidLeaveByDay.get(key) || 0;
+        total += Math.min(1, att + lev);
+    });
+    return total;
+}
+
+/**
+ * Map dateKey → paid leave credit using org calendar days (timezone-safe).
+ */
+export function buildPaidLeaveByDayMapForOrg(
+    approvedLeaves,
+    walkStartKey,
+    walkEndKey,
+    timezone,
+    isWorkingDayKeyFn
+) {
+    const paidLeaveByDay = new Map();
+
+    for (const lv of approvedLeaves) {
+        const isLop = (lv.leaveType || '').toString().toLowerCase() === 'loss_of_pay';
+        if (isLop) continue;
+
+        const isHalf = lv.isHalfDay === true || Number(lv.duration) === 0.5;
+        const leaveStartKey = getDateKeyInTimezone(new Date(lv.startDate), timezone);
+        const leaveEndKey = getDateKeyInTimezone(new Date(lv.endDate), timezone);
+        const overlapStartKey = leaveStartKey > walkStartKey ? leaveStartKey : walkStartKey;
+        const overlapEndKey = leaveEndKey < walkEndKey ? leaveEndKey : walkEndKey;
+        if (overlapStartKey > overlapEndKey) continue;
+
+        if (isHalf) {
+            let credited = false;
+            eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+                if (credited) return;
+                if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+                    return;
+                }
+                paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 0.5));
+                credited = true;
+            });
+            continue;
+        }
+
+        eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+            if (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key)) {
+                return;
+            }
+            paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 1));
+        });
+    }
+
+    return paidLeaveByDay;
+}
+
+/** Count leave working days overlapping a period using org date keys. */
+export function leaveWorkingDaysInDateKeyRange(lv, walkStartKey, walkEndKey, timezone, isWorkingDayKeyFn) {
+    const leaveStartKey = getDateKeyInTimezone(new Date(lv.startDate), timezone);
+    const leaveEndKey = getDateKeyInTimezone(new Date(lv.endDate), timezone);
+    const overlapStartKey = leaveStartKey > walkStartKey ? leaveStartKey : walkStartKey;
+    const overlapEndKey = leaveEndKey < walkEndKey ? leaveEndKey : walkEndKey;
+    if (overlapStartKey > overlapEndKey) return 0;
+
+    let working = 0;
+    eachDateKeyInInclusiveRange(overlapStartKey, overlapEndKey, timezone, (key) => {
+        if (typeof isWorkingDayKeyFn === 'function' ? isWorkingDayKeyFn(key) : true) {
+            working += 1;
+        }
+    });
+    return working;
 }
 
 function isWorkingDayForPayroll(day, isWorkingDayFn) {
@@ -253,7 +432,7 @@ function isWorkingDayForPayroll(day, isWorkingDayFn) {
  * Map dateKey → paid leave credit (0–1) for approved non–loss-of-pay leaves overlapping [effStart, effEnd].
  * Half-day leave: 0.5 on the first overlapping working day only.
  */
-function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn) {
+export function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn, dayKey) {
     const paidLeaveByDay = new Map();
     const rangeStart = startOfDay(new Date(effStart));
     const rangeEnd = startOfDay(new Date(effEnd));
@@ -273,7 +452,7 @@ function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn
             for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
                 const day = new Date(d);
                 if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
-                const key = dateKey(day);
+                const key = dayKey(day);
                 paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 0.5));
                 break;
             }
@@ -283,7 +462,7 @@ function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn
         for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
             const day = new Date(d);
             if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
-            const key = dateKey(day);
+            const key = dayKey(day);
             paidLeaveByDay.set(key, Math.min(1, (paidLeaveByDay.get(key) || 0) + 1));
         }
     }
@@ -292,7 +471,7 @@ function buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn
 }
 
 /** Sum daily credits over working days in [walkStart, walkEnd]: each day min(1, attendance + paid leave). */
-function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, isWorkingDayFn) {
+export function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, isWorkingDayFn, dayKey) {
     let total = 0;
     const a = startOfDay(new Date(walkStart));
     const b = startOfDay(new Date(walkEnd));
@@ -300,12 +479,29 @@ function sumEffectivePresentDays(walkStart, walkEnd, attByDay, paidLeaveByDay, i
     for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
         const day = new Date(d);
         if (!isWorkingDayForPayroll(day, isWorkingDayFn)) continue;
-        const key = dateKey(day);
+        const key = dayKey(day);
         const att = attByDay.get(key) || 0;
         const lev = paidLeaveByDay.get(key) || 0;
         total += Math.min(1, att + lev);
     }
     return total;
+}
+
+/** Pure proration math used by payroll generation (exported for unit tests). */
+export function computePayrollProration({
+    fullGross,
+    fullMonthCalDays,
+    serviceWindowCalDays,
+    attendanceWorkingDays,
+    effectivePresent
+}) {
+    const unpaidWorkingDays = Math.max(0, attendanceWorkingDays - effectivePresent);
+    const paidPayrollDays = Math.max(0, serviceWindowCalDays - unpaidWorkingDays);
+    const effectiveGross =
+        fullMonthCalDays > 0
+            ? Math.round((fullGross * paidPayrollDays) / fullMonthCalDays)
+            : 0;
+    return { unpaidWorkingDays, paidPayrollDays, effectiveGross };
 }
 
 /**
@@ -407,6 +603,17 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     }
 
     const orgId = emp.organizationId || organizationId;
+    const orgTimezone = await getCachedEffectiveTimezone(orgId);
+    const dayKey = createDayKeyFn(orgTimezone);
+
+    const monthStartDt = DateTime.fromObject(
+        { year: yearNum, month: monthIndex + 1, day: 1 },
+        { zone: orgTimezone }
+    );
+    const monthEndDt = monthStartDt.endOf('month');
+    const monthStartKey = monthStartDt.toFormat('yyyy-MM-dd');
+    const monthEndKey = monthEndDt.toFormat('yyyy-MM-dd');
+
     const calendarKey = `${String(orgId)}-${String(yearNum)}`;
     let calendar = calendarCache.get(calendarKey);
     if (!calendar) {
@@ -414,42 +621,42 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         // Cache null too (so we don't keep querying if calendar doesn't exist).
         calendarCache.set(calendarKey, calendar || null);
     }
-    const isWorkingDayFn = buildIsWorkingDayFn(calendar);
+    const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, orgTimezone, dayKey);
+
+    const effStartKey = getDateKeyInTimezone(effStart, orgTimezone);
+    const effEndKey = getDateKeyInTimezone(effEnd, orgTimezone);
 
     // Working-day metric for attendance dashboards/reports (excludes weekends/holidays).
-    const attendanceWorkingDays = Math.max(0, countWorkingDaysInclusive(effStart, effEnd, isWorkingDayFn));
+    const attendanceWorkingDays = Math.max(
+        0,
+        countWorkingDaysInDateKeyRange(effStartKey, effEndKey, orgTimezone, isWorkingDayKeyFn)
+    );
     // Full calendar month length (e.g. April → 30) — used for a stable "one day" rate (G/D), including for terminated staff.
     const fullMonthCalDays = Math.max(1, countCalendarDaysInclusive(startOfMonth, endOfMonth));
     // Proration window: days employed in this month (join through last working/termination, capped at month end).
     const serviceWindowCalDays = Math.max(1, countCalendarDaysInclusive(effStart, effEnd));
+
+    const periodStart = monthStartDt.startOf('day').toJSDate();
+    const periodEnd = getEndOfDayInTimezone(monthEndDt.toJSDate(), orgTimezone);
 
     const attendanceRecords =
         effStart <= effEnd
             ? await Attendance.find({
                   userId: emp._id,
                   organizationId: orgId,
-                  date: { $gte: effStart, $lte: effEnd }
+                  ...buildAttendancePeriodFilter({
+                      startDateKey: monthStartKey,
+                      endDateKey: monthEndKey,
+                      periodStart,
+                      periodEnd
+                  })
               })
             : [];
 
-    // If a calendar exists, only count attendance on working days.
-    // This keeps the proration denominator and numerator consistent for holidays/weekends.
-    const attendanceRecordsForCounting =
-        typeof isWorkingDayFn === 'function'
-            ? attendanceRecords.filter((r) => {
-                  const d = r?.date ? new Date(r.date) : null;
-                  return d && !Number.isNaN(d.getTime()) ? isWorkingDayFn(d) : false;
-              })
-            : attendanceRecords;
-
-    const attByDay = new Map();
-    for (const r of attendanceRecordsForCounting) {
-        const d = r?.date ? new Date(r.date) : null;
-        if (!d || Number.isNaN(d.getTime())) continue;
-        const key = dateKey(d);
-        const c = attendanceDayCredit(r);
-        attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
-    }
+    const attByDay = buildAttendanceCreditByDay(attendanceRecords, {
+        dayKey,
+        isWorkingDayKeyFn
+    });
 
     const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
 
@@ -466,16 +673,19 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
     const payrollLeaves = approvedLeaves
         .map((lv) => {
-            const overlapWorkingDays = leaveWorkingDaysInRange(lv, effStart, effEnd, isWorkingDayFn);
+            const overlapWorkingDays = leaveWorkingDaysInDateKeyRange(
+                lv,
+                effStartKey,
+                effEndKey,
+                orgTimezone,
+                isWorkingDayKeyFn
+            );
             if (!overlapWorkingDays) return null;
 
-            // Half-day leave: the leave document marks it with `isHalfDay` and `duration: 0.5`.
-            // `leaveWorkingDaysInRange()` counts whole working days, so we convert it to 0.5 here.
+            // Half-day leave: single 0.5-day event on the first overlapping working day (matches pay credit).
             let days = overlapWorkingDays;
             if (lv?.isHalfDay === true || Number(lv?.duration) === 0.5) {
-                // `leaveWorkingDaysInRange()` counts whole working days (1 per day).
-                // Half-day leaves should contribute half of a day per overlapped working day.
-                days = overlapWorkingDays * 0.5;
+                days = 0.5;
             }
             const isLossOfPay = (lv.leaveType || '').toString().toLowerCase() === 'loss_of_pay';
             return {
@@ -487,18 +697,32 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         })
         .filter(Boolean);
 
-    const paidLeaveByDay = buildPaidLeaveByDayMap(approvedLeaves, effStart, effEnd, isWorkingDayFn);
+    const paidLeaveByDay = buildPaidLeaveByDayMapForOrg(
+        approvedLeaves,
+        effStartKey,
+        effEndKey,
+        orgTimezone,
+        isWorkingDayKeyFn
+    );
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
-    const effectivePresent = sumEffectivePresentDays(effStart, effEnd, attByDay, paidLeaveByDay, isWorkingDayFn);
+    const effectivePresent = sumEffectivePresentDaysByKeys(
+        effStartKey,
+        effEndKey,
+        attByDay,
+        paidLeaveByDay,
+        orgTimezone,
+        isWorkingDayKeyFn
+    );
     const fullGross = emp.salary || 0;
     // Weekend/holiday days are paid by default under calendar-day proration.
     // Only missing paid credit on working days reduces monthly payout.
-    const unpaidWorkingDays = Math.max(0, attendanceWorkingDays - effectivePresent);
-    const paidPayrollDays = Math.max(0, serviceWindowCalDays - unpaidWorkingDays);
-    const effectiveGross =
-        fullMonthCalDays > 0
-            ? Math.round((fullGross * paidPayrollDays) / fullMonthCalDays)
-            : 0;
+    const { unpaidWorkingDays, paidPayrollDays, effectiveGross } = computePayrollProration({
+        fullGross,
+        fullMonthCalDays,
+        serviceWindowCalDays,
+        attendanceWorkingDays,
+        effectivePresent
+    });
     const salaryStructure = await resolveSalaryStructureForEmployee(emp, orgId);
     // Overtime / "one day" value: always monthly gross ÷ full month calendar days, not ÷ (join→term) window.
     const perDayRate = fullGross / fullMonthCalDays;
@@ -517,19 +741,17 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
                 asNumber(overtimeRules.maxHoursPerMonth, asNumber(totalOvertimeHours, 0))
             ))
             : 0;
-        const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, 1.5);
+        const overtimeRatePerHour = (perDayRate / 8) * asNumber(overtimeRules.rate, DEFAULT_OVERTIME_RATE);
         const overtimePay = overtimeEnabled ? Math.round(cappedOvertimeHours * overtimeRatePerHour) : 0;
 
-        const basicWage = computeConfiguredComponent(salaryStructure?.earnings?.basicWage, effectiveGross);
-        const houseRentAllowance = computeConfiguredComponent(salaryStructure?.earnings?.houseRentAllowance, effectiveGross);
-        // SPA is always the residual balance, independent of configured SPA %/fixed values.
-        const specialAllowance = Math.max(0, Math.round(effectiveGross - basicWage - houseRentAllowance));
+        const coreEarnings = computeSalaryStructureCoreEarnings(salaryStructure, effectiveGross);
+        const { basicWage, houseRentAllowance, transportAllowance, medicalAllowance, specialAllowance } = coreEarnings;
 
         earnings = {
             basicWage,
             houseRentAllowance,
-            transportAllowance: computeConfiguredComponent(salaryStructure?.earnings?.transportAllowance, effectiveGross),
-            medicalAllowance: computeConfiguredComponent(salaryStructure?.earnings?.medicalAllowance, effectiveGross),
+            transportAllowance,
+            medicalAllowance,
             overtime: overtimePay,
             gratuity: 0,
             specialAllowance,
@@ -542,7 +764,10 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         basicSalary = earnings.basicWage;
         const pfWageBase = pfWageFromBasicWage(basicSalary);
         earnings.pfEmployer = computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, pfWageBase);
-        earnings.esiEmployer = computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, basicSalary);
+        const esiEligible = effectiveGross <= ESI_GROSS_WAGE_LIMIT;
+        earnings.esiEmployer = esiEligible
+            ? computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, basicSalary)
+            : 0;
         earnings.totalEarnings =
             (earnings.basicWage || 0) +
             (earnings.houseRentAllowance || 0) +
@@ -558,7 +783,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
         deductions = {
             pfEmployee: computeConfiguredComponent(salaryStructure?.deductions?.pfEmployee, pfWageBase),
-            esiEmployee: computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary),
+            esiEmployee: esiEligible
+                ? computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary)
+                : 0,
             professionalTax: computeConfiguredComponent(salaryStructure?.deductions?.professionalTax, effectiveGross),
             incomeTax: 0,
             advanceSalary: 0,
@@ -578,9 +805,10 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         const formula = computeEarningsFromGross(effectiveGross);
         // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
         basicSalary = formula.basicWage;
-        const overtimeRatePerHour = perDayRate / 8;
+        const overtimeRatePerHour = (perDayRate / 8) * DEFAULT_OVERTIME_RATE;
         const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
 
+        const esiEligibleFallback = effectiveGross <= ESI_GROSS_WAGE_LIMIT;
         earnings = {
             basicWage: formula.basicWage,
             houseRentAllowance: formula.houseRentAllowance,
@@ -591,9 +819,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             specialAllowance: formula.specialAllowance,
             performanceBonus: 0,
             projectBonus: 0,
-            attendanceBonus: unpaidDays === 0 ? 0 : 0,
+            attendanceBonus: 0,
             pfEmployer: employerPfFromBasicWage(basicSalary),
-            esiEmployer: Math.round(basicSalary * 0.0325)
+            esiEmployer: esiEligibleFallback ? Math.round(basicSalary * 0.0325) : 0
         };
         earnings.totalEarnings =
             formula.totalEarnings +
@@ -605,7 +833,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
         deductions = {
             pfEmployee: employeePfFromBasicWage(basicSalary),
-            esiEmployee: Math.round(basicSalary * 0.0075),
+            esiEmployee: esiEligibleFallback ? Math.round(basicSalary * 0.0075) : 0,
             professionalTax: 0,
             incomeTax: 0,
             advanceSalary: 0,
@@ -667,28 +895,36 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
     ) {
         return base;
     }
-    const empId = payroll.employeeId?._id || payroll.employeeId;
-    if (!empId) return base;
-    const emp = await Employee.findById(empId)
-        .select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
-        .lean();
-    if (!emp) return base;
-    const orgId = organizationId || emp.organizationId;
-    const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
-    const monthIndex = new Date(`${payroll.month} 1, ${yearNum}`).getMonth();
-    const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
-    endOfMonth.setHours(23, 59, 59, 999);
-    const payload = await buildGeneratedPayrollPayload({
-        emp,
-        month: payroll.month,
-        year: yearNum,
-        organizationId: orgId,
-        mode: 'final',
-        asOf: endOfMonth
-    });
-    return {
-        workingDays: payload.workingDays ?? base.workingDays,
-        presentDays: payload.presentDays ?? base.presentDays,
-        unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
-    };
+    try {
+        const empId = payroll.employeeId?._id || payroll.employeeId;
+        if (!empId) return base;
+        const emp = await Employee.findById(empId)
+            .select('salary salaryRevisions organizationId joiningDate department position roleLevel salaryStructure status terminationDate lastWorkingDate financialDetails')
+            .lean();
+        if (!emp) return base;
+        const orgId = organizationId || emp.organizationId;
+        const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
+        const monthIndex = new Date(`${payroll.month} 1, ${yearNum}`).getMonth();
+        const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+        const payload = await buildGeneratedPayrollPayload({
+            emp,
+            month: payroll.month,
+            year: yearNum,
+            organizationId: orgId,
+            mode: 'final',
+            asOf: endOfMonth
+        });
+        return {
+            workingDays: payload.workingDays ?? base.workingDays,
+            presentDays: payload.presentDays ?? base.presentDays,
+            unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
+        };
+    } catch (error) {
+        logger.warn('Payslip attendance enrichment failed; using stored payroll metrics', {
+            error: error.message,
+            payrollId: payroll?._id,
+        });
+        return base;
+    }
 }

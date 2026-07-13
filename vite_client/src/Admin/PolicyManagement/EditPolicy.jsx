@@ -226,7 +226,7 @@ const EditPolicy = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Applicable departments (leave empty for all)
                     </label>
-                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-4">
                         {departments.map(dept => (
                             <label key={dept} className="flex items-center gap-2 cursor-pointer">
                                 <input

@@ -8,6 +8,8 @@ import Calendar from "../../models/calendar.model.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
 import { normalizeLeaveTypeForPolicy } from "../../helpers/leaveTypeHelper.js";
 import { buildEmployeeLeaveBalanceResponse } from "../../helpers/leaveBalanceResponseHelper.js";
+import { notify } from "../../helpers/notificationManager.js";
+import "../../helpers/notificationEventRegistry.js";
 import {
     ensureDefaultLeaveWorkflow,
     attachWorkflowSummariesToLeaves,
@@ -15,6 +17,7 @@ import {
 } from "../../helpers/leaveWorkflowHelper.js";
 import path from "path";
 import { upload as leaveDocumentUpload } from "../fileUpload/uploadConfigController.js";
+import { sendLeaveRequestNotification } from "../../helpers/leaveEmailHelper.js";
 
 
 /**
@@ -232,6 +235,46 @@ export const createLeave = async (req, res) => {
                 isHalfDay: leave.isHalfDay
             }
         });
+
+        // Send email notification to approver (non-blocking)
+        setImmediate(async () => {
+            try {
+                await sendLeaveRequestNotification(
+                    {
+                        _id: leave._id,
+                        employeeName: leave.employeeName,
+                        leaveType: leave.leaveType,
+                        startDate: leave.startDate,
+                        endDate: leave.endDate,
+                        duration: leave.duration,
+                        reason: leave.reason,
+                        status: leave.status,
+                        department: employee.department,
+                        designation: employee.jobTitle
+                    },
+                    employeeId,
+                    organizationId
+                );
+            } catch (emailError) {
+                logger.error('Failed to send leave request email notification', {
+                    leaveId: leave._id,
+                    employeeId,
+                    error: emailError.message
+                });
+                // Email failure should not block the leave creation
+            }
+        });
+
+        setImmediate(async () => {
+            await notify({
+                type: 'leave_applied',
+                organizationId,
+                data: {
+                    leave,
+                    employee
+                }
+            });
+        });
         
         // ✅ INTEGRATE APPROVAL WORKFLOW (Manager → HR)
         try {
@@ -345,24 +388,40 @@ export const getMyLeaves = async (req, res) => {
         let balanceByType = null;
         if (organizationId) {
             try {
-                const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
-                if (balance && balance.balances && balance.balances.length) {
+                const balanceResponse = await buildEmployeeLeaveBalanceResponse(
+                    employeeId,
+                    year,
+                    organizationId
+                );
+                if (balanceResponse?.leaveSummary) {
+                    const summary = balanceResponse.leaveSummary;
+                    totalLeaves = (summary.totalAccrued || 0) + (summary.totalCarriedForward || 0);
+                    remainingLeaves = summary.totalAvailableLeave || 0;
+                    balanceByType = {
+                        sick: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
+                        annual: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
+                        casual: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
+                    };
+                } else if (balanceResponse?.balances?.length) {
+                    totalLeaves = balanceResponse.balances.reduce(
+                        (sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0),
+                        0
+                    );
+                    remainingLeaves = Number(balanceResponse.totalAvailableLeave) ||
+                        balanceResponse.balances.reduce((sum, b) => sum + (b.available || 0), 0);
                     balanceByType = {
                         sick: { accrued: 0, available: 0, used: 0, pending: 0 },
                         annual: { accrued: 0, available: 0, used: 0, pending: 0 },
-                        casual: { accrued: 0, available: 0, used: 0, pending: 0 }
+                        casual: { accrued: 0, available: 0, used: 0, pending: 0 },
                     };
-                    totalLeaves = balance.balances.reduce((sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0), 0);
-                    remainingLeaves = balance.balances.reduce((sum, b) => sum + (b.available || 0), 0);
-
-                    for (const b of balance.balances) {
+                    for (const b of balanceResponse.balances) {
                         const typeKey = b.leaveType === 'paid' ? 'annual' : b.leaveType;
                         if (!balanceByType[typeKey]) continue;
                         balanceByType[typeKey] = {
                             accrued: (b.accrued || 0) + (b.carriedForward || 0),
                             available: b.available || 0,
                             used: b.used || 0,
-                            pending: b.pending || 0
+                            pending: b.pending || 0,
                         };
                     }
                 }

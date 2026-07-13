@@ -5,14 +5,17 @@ import axios from '../utils/axios';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { io } from 'socket.io-client';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
+import { getTokenFromCookie } from '../utils/authHelper';
+import { getSocketIOUrl } from '../utils/socketUrl';
 
 const NotificationDropdown = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, maxHeight: 512, width: 320 });
     const buttonRef = useRef(null);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
@@ -68,8 +71,45 @@ const NotificationDropdown = () => {
         };
     }, [authUser]);
 
+    // Realtime in-app updates while the phone/laptop app is open
+    useEffect(() => {
+        if (!authUser || authUser?.mustResetPassword) return;
+
+        const url = getSocketIOUrl();
+        if (!url) return;
+
+        const token = getTokenFromCookie();
+        const socket = io(url, {
+            path: '/socket.io',
+            withCredentials: true,
+            auth: token ? { token } : {},
+            transports: ['websocket', 'polling'],
+        });
+
+        const onNotification = (payload) => {
+            const notification = payload?.data || payload;
+            if (!notification) return;
+
+            setUnreadCount((prev) => prev + 1);
+            setNotifications((prev) => {
+                const id = notification._id || notification.id;
+                if (id && prev.some((n) => String(n._id) === String(id))) return prev;
+                return [notification, ...prev].slice(0, 10);
+            });
+
+            const message = notification.message || notification.title || 'New notification';
+            toast.info(message, { autoClose: 4000 });
+        };
+
+        socket.on('notification', onNotification);
+
+        return () => {
+            socket.off('notification', onNotification);
+            socket.disconnect();
+        };
+    }, [authUser]);
+
     // Calculate dropdown position when opening – panel opens to the right of the button, stays in viewport
-    const DROPDOWN_WIDTH_PX = 320; // w-80 = 20rem
     const DROPDOWN_MAX_HEIGHT_PX = 512;
 
     useEffect(() => {
@@ -79,31 +119,36 @@ const NotificationDropdown = () => {
                 const viewportHeight = window.innerHeight;
                 const viewportWidth = window.innerWidth;
                 const spacing = 8;
+                const dropdownWidth = Math.min(320, viewportWidth - spacing * 2);
 
-                // Horizontal: open to the right of the button (e.g. right of sidebar), never overflow right
+                // Horizontal: prefer under/near button, never overflow viewport
                 let left = buttonRect.right + spacing;
-                if (left + DROPDOWN_WIDTH_PX > viewportWidth - spacing) {
-                    left = Math.max(spacing, viewportWidth - DROPDOWN_WIDTH_PX - spacing);
+                if (left + dropdownWidth > viewportWidth - spacing) {
+                    left = Math.max(spacing, buttonRect.right - dropdownWidth);
+                }
+                if (left + dropdownWidth > viewportWidth - spacing) {
+                    left = Math.max(spacing, viewportWidth - dropdownWidth - spacing);
                 }
                 if (left < spacing) left = spacing;
 
                 // Vertical: prefer below button, keep within viewport
                 const spaceBelow = viewportHeight - buttonRect.bottom - spacing;
                 const spaceAbove = buttonRect.top - spacing;
-                const openBelow = spaceBelow >= Math.min(DROPDOWN_MAX_HEIGHT_PX, spaceBelow) || spaceBelow >= spaceAbove;
+                const maxHeight = Math.min(DROPDOWN_MAX_HEIGHT_PX, viewportHeight - spacing * 2);
+                const openBelow = spaceBelow >= Math.min(maxHeight, spaceBelow) || spaceBelow >= spaceAbove;
                 let top;
                 if (openBelow) {
                     top = buttonRect.bottom + spacing;
-                    const maxTop = viewportHeight - DROPDOWN_MAX_HEIGHT_PX - spacing;
+                    const maxTop = viewportHeight - maxHeight - spacing;
                     if (top > maxTop) top = Math.max(spacing, maxTop);
                 } else {
-                    top = buttonRect.top - spacing - DROPDOWN_MAX_HEIGHT_PX;
+                    top = buttonRect.top - spacing - maxHeight;
                     if (top < spacing) top = spacing;
                 }
 
-                setDropdownPosition({ top, left });
+                setDropdownPosition({ top, left, maxHeight, width: dropdownWidth });
             } catch (error) {
-                setDropdownPosition({ top: 80, left: 24 });
+                setDropdownPosition({ top: 80, left: 16, maxHeight: 400, width: Math.min(320, window.innerWidth - 32) });
             }
         }
     }, [isOpen]);
@@ -317,11 +362,13 @@ const NotificationDropdown = () => {
                     />
                     <div 
                         ref={dropdownRef}
-                        className="fixed w-80 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] flex flex-col"
+                        className="fixed bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] flex flex-col"
                         style={{
                             top: `${dropdownPosition.top}px`,
                             left: `${dropdownPosition.left}px`,
-                            maxHeight: 'min(32rem, calc(100vh - 2rem))'
+                            width: `${dropdownPosition.width || 320}px`,
+                            maxWidth: 'calc(100vw - 2rem)',
+                            maxHeight: `${dropdownPosition.maxHeight || 512}px`,
                         }}
                         role="dialog"
                         aria-label="Notifications"

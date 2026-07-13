@@ -1,14 +1,17 @@
 import rateLimit from 'express-rate-limit';
 import { 
-    DEFAULT_RATE_LIMIT_WINDOW_MS, 
     LOGIN_RATE_LIMIT_MAX,
     PASSWORD_RESET_RATE_LIMIT_MAX,
     PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
-    DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    getRateLimitWindowMs,
+    getRateLimitMaxRequests
 } from '../config/constants.js';
 
+const RATE_LIMIT_WINDOW_MS = getRateLimitWindowMs();
+const RATE_LIMIT_MAX_REQUESTS = getRateLimitMaxRequests();
+
 export const loginLimiter = rateLimit({
-    windowMs: DEFAULT_RATE_LIMIT_WINDOW_MS, // 15 minutes
+    windowMs: RATE_LIMIT_WINDOW_MS,
     max: process.env.NODE_ENV === 'production' ? LOGIN_RATE_LIMIT_MAX : 50, // Higher limit for development (50 vs 5)
     message: {
         success: false,
@@ -29,8 +32,9 @@ export const loginLimiter = rateLimit({
 });
 
 export const apiLimiter = rateLimit({
-    windowMs: DEFAULT_RATE_LIMIT_WINDOW_MS, // 15 minutes
-    max: process.env.NODE_ENV === 'production' ? DEFAULT_RATE_LIMIT_MAX_REQUESTS : 10000, // Much higher limit for development (10k vs 100)
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    // Production/dev limits come from RATE_LIMIT_MAX_REQUESTS (fallback in getRateLimitMaxRequests)
+    max: RATE_LIMIT_MAX_REQUESTS,
     message: {
         success: false,
         message: 'Too many requests, please try again later'

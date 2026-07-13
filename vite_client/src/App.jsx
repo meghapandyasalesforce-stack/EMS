@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import Header from './Shared/Header';
 import InstallPrompt from './components/InstallPrompt';
+import ReleaseNotesPopup from './components/ReleaseNotesPopup';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import { checkAuthSession } from './context/Auth/authSlice';
@@ -87,16 +88,19 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
+        <div className="min-h-screen max-w-[100vw] overflow-x-clip bg-[var(--color-bg-soft)] text-[var(--color-text)]">
             {!shouldHideLayout && <Header />}
             <InstallPrompt />
+            <ReleaseNotesPopup />
             {shouldHideLayout ? (
-                <Routes>
-                    {renderRoutes(authRoutes)}
-                </Routes>
+                <div className="min-w-0 max-w-[100vw] overflow-x-clip">
+                    <Routes>
+                        {renderRoutes(authRoutes)}
+                    </Routes>
+                </div>
             ) : (
-                <div className="flex min-h-[calc(100vh-64px)] ml-0 lg:ml-64">
-                    <div className="main-scroll-area flex-1 min-w-0 overflow-auto bg-[var(--color-bg)]">
+                <div className="flex min-h-[calc(100vh-64px)] max-w-[100vw] ml-0 overflow-x-clip lg:ml-64">
+                    <div className="main-scroll-area flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)]">
                         <ScrollToTop />
                         <Routes>
                             {renderRoutes(authRoutes)}

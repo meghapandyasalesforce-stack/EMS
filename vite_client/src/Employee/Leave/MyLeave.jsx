@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
 import { toast } from 'react-toastify';
+import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
 
 const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
@@ -70,8 +71,17 @@ const MyLeavePage = () => {
     }
   };
 
-  // Use leave balance from policy if available, otherwise use hardcoded values
+  const leaveSummary = getLeaveSummary(leaveBalance);
+
   const getMaxLeaves = () => {
+    if (leaveBalance?.leaveSummary || leaveBalance?.totalAvailableLeave != null) {
+      const totalEntitlement = leaveSummary.totalAccrued + leaveSummary.totalCarriedForward;
+      return {
+        sick: totalEntitlement,
+        annual: totalEntitlement,
+        casual: totalEntitlement,
+      };
+    }
     if (leaveBalance?.balances) {
       const maxLeaves = {};
       leaveBalance.balances.forEach(balance => {
@@ -103,6 +113,9 @@ const MyLeavePage = () => {
   const statsBalanceByType = statsData?.balanceByType || {};
 
   const getTypeRemaining = (type, takenKey) => {
+    if (leaveBalance?.leaveSummary || leaveBalance?.totalAvailableLeave != null) {
+      return leaveSummary.totalAvailableLeave;
+    }
     if (leaveBalance?.balances) {
       return Math.max(0, (MAX_LEAVES[type] || 0) - (safeLeavesByType[takenKey] || 0));
     }
@@ -113,10 +126,14 @@ const MyLeavePage = () => {
   };
 
   const calculatedStats = {
-    totalLeaves: leaveBalance?.balances 
+    totalLeaves: leaveBalance?.leaveSummary || leaveBalance?.totalAvailableLeave != null
+      ? leaveSummary.totalAccrued + leaveSummary.totalCarriedForward
+      : leaveBalance?.balances
       ? leaveBalance.balances.reduce((sum, b) => sum + (b.accrued + b.carriedForward), 0)
       : (statsData?.totalLeaves || 0),
-    remainingLeaves: leaveBalance?.balances
+    remainingLeaves: leaveBalance?.leaveSummary || leaveBalance?.totalAvailableLeave != null
+      ? leaveSummary.totalAvailableLeave
+      : leaveBalance?.balances
       ? leaveBalance.balances.reduce((sum, b) => sum + b.available, 0)
       : (statsData?.remainingLeaves || 0),
     sickLeaves: {
@@ -212,7 +229,7 @@ const MyLeavePage = () => {
     return <div className="text-center py-10 text-red-500">Error: {state.error}</div>;
   }
 
-  if (!statsData && !leaveBalance) {
+  if (!statsData && !leaveBalance && leavesData.length === 0) {
     return <div className="text-center py-10 text-gray-500">No leave data available.</div>;
   }
 
@@ -298,50 +315,33 @@ const MyLeavePage = () => {
                   Policy: <strong>{leaveBalance.policy.policyName}</strong>
                 </p>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {leaveBalance.balances?.map((typeBalance) => {
-                  const policyType = leaveBalance.policy?.leaveTypes?.find(lt => lt.type === typeBalance.leaveType);
-                  return (
-                    <div key={typeBalance.leaveType} className="bg-gray-50 rounded-lg p-4">
-                      <h3 className="font-semibold mb-2 capitalize">
-                        {policyType?.displayName || typeBalance.leaveType} Leave
-                      </h3>
-                      <div className="space-y-1 text-sm">
+              {(() => {
+                return (
+                  <div className="max-w-md bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">Employee Leave Summary</h3>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">This Month Leave:</span>
+                        <span className="font-medium">{leaveSummary.earnedThisMonth} days</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Used:</span>
+                        <span className="font-medium text-red-600">-{leaveSummary.totalUsed} days</span>
+                      </div>
+                      <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Accrued:</span>
-                          <span className="font-medium">{typeBalance.accrued} days</span>
-                        </div>
-                        {typeBalance.carriedForward > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Carried Forward:</span>
-                            <span className="font-medium text-theme-secondary">+{typeBalance.carriedForward} days</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Used:</span>
-                          <span className="font-medium text-red-600">-{typeBalance.used} days</span>
-                        </div>
-                        {typeBalance.pending > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Pending:</span>
-                            <span className="font-medium text-yellow-600">-{typeBalance.pending} days</span>
-                          </div>
-                        )}
-                        <div className="border-t pt-2 mt-2">
-                          <div className="flex justify-between">
-                            <span className="font-semibold">Available:</span>
-                            <span className={`font-bold text-lg ${
-                              typeBalance.available > 0 ? 'text-theme-primary' : 'text-red-600'
-                            }`}>
-                              {typeBalance.available} days
-                            </span>
-                          </div>
+                          <span className="font-semibold">Available:</span>
+                          <span className={`font-bold text-lg ${
+                            leaveSummary.totalAvailableLeave > 0 ? 'text-theme-primary' : 'text-red-600'
+                          }`}>
+                            {leaveSummary.totalAvailableLeave} days
+                          </span>
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">

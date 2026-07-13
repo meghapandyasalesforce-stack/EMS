@@ -15,38 +15,23 @@ import { roleValidations } from '../../middlewares/inputValidation.js';
 
 const router = express.Router();
 
-// Create role
-router.route('/')
-    .post(isAdminAuthenticated, roleValidations.create, createRole);
-
-// Get all roles
-// Allow HR to read roles (for viewing role hierarchy)
-router.route('/')
-    .get(isAdminOrHROrExecutiveAuthenticated, getAllRoles);
-
-// Get role hierarchy
-// Allow HR to view role hierarchy
+// Static paths before /:id
 router.route('/hierarchy')
     .get(isAdminOrHROrExecutiveAuthenticated, getRoleHierarchy);
 
-// Get role by ID
-router.route('/:id')
-    .get(isAdminAuthenticated, roleValidations.getById, getRoleById);
-
-// Update role
-router.route('/:id')
-    .put(isAdminAuthenticated, roleValidations.update, updateRole);
-
-// Delete role
-router.route('/:id')
-    .delete(isAdminAuthenticated, roleValidations.getById, deleteRole);
-
-// Assign role to employee
 router.route('/assign')
     .post(isAdminAuthenticated, roleValidations.assign, assignRoleToEmployee);
 
-// Check user permissions
 router.route('/permissions/:userType/:userId')
     .get(isAdminAuthenticated, checkPermissions);
+
+router.route('/')
+    .post(isAdminAuthenticated, roleValidations.create, createRole)
+    .get(isAdminOrHROrExecutiveAuthenticated, getAllRoles);
+
+router.route('/:id')
+    .get(isAdminAuthenticated, roleValidations.getById, getRoleById)
+    .put(isAdminAuthenticated, roleValidations.update, updateRole)
+    .delete(isAdminAuthenticated, roleValidations.getById, deleteRole);
 
 export default router;

@@ -24,7 +24,7 @@ const SimpleDataTable = ({ columns, rows, emptyMessage = 'No records found.' }) 
           {rows.map((row, idx) => (
             <tr key={row._id || row.id || idx} className="hover:bg-slate-50/80">
               {columns.map((col) => (
-                <td key={col.key} className="whitespace-nowrap px-4 py-3 text-slate-700">
+                <td key={col.key} className="px-3 py-3 text-slate-700 sm:whitespace-nowrap sm:px-4">
                   {col.render ? col.render(row) : row[col.key] ?? '—'}
                 </td>
               ))}

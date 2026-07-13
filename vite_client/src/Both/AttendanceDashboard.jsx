@@ -19,34 +19,26 @@ const AttendanceDashboard = () => {
 
     const fetchAttendanceData = async () => {
         try {
-            // Get attendance logs and calculate stats from them
             const logsRes = await axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/get-logs`);
-            const logs = logsRes.data?.logs || logsRes.data || [];
+            // Backend returns { sessions, dailyStats, summary, period }
+            const logs = logsRes.data?.sessions || [];
             setAttendanceLogs(logs);
-            
-            // Calculate stats from logs
+
             if (logs.length > 0) {
-                const totalHours = logs.reduce((sum, log) => {
-                    if (log.clockIn && log.clockOut) {
-                        const hours = (new Date(log.clockOut) - new Date(log.clockIn)) / (1000 * 60 * 60);
-                        return sum + hours;
-                    }
-                    return sum;
+                const completedLogs = logs.filter(log => log.clockIn && log.clockOut);
+                const totalHours = completedLogs.reduce((sum, log) => {
+                    return sum + ((new Date(log.clockOut) - new Date(log.clockIn)) / (1000 * 60 * 60));
                 }, 0);
-                const avgHours = logs.length > 0 ? totalHours / logs.length : 0;
-                const onTimeCount = logs.filter(log => log.status === 'on-time' || !log.status).length;
+                const avgHours = completedLogs.length > 0 ? totalHours / completedLogs.length : 0;
+                const onTimeCount = logs.filter(log => !log.isLateArrival).length;
                 const onTimePercentage = logs.length > 0 ? (onTimeCount / logs.length) * 100 : 0;
-                
-                setAttendanceStats({
-                    avgHoursPerDay: avgHours,
-                    onTimePercentage: onTimePercentage
-                });
+
+                setAttendanceStats({ avgHoursPerDay: avgHours, onTimePercentage });
             } else {
                 setAttendanceStats({ avgHoursPerDay: 0, onTimePercentage: 0 });
             }
             setIsLoading(false);
         } catch (error) {
-            // Removed console.error for production
             setIsLoading(false);
         }
     };
@@ -71,11 +63,14 @@ const AttendanceDashboard = () => {
 
     const handleClockOut = async () => {
         try {
-            const todayLog = attendanceLogs.find(log => 
-                new Date(log.date).toDateString() === new Date().toDateString()
-            );
-            if (todayLog && !todayLog.clockOut) {
-                await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/clock-out`, { logId: todayLog._id });
+            // Find today's open session using attendanceDateKey or date
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const todayLog = attendanceLogs.find(log => {
+                const key = log.attendanceDateKey || new Date(log.date).toISOString().slice(0, 10);
+                return key === todayStr && !log.clockOut;
+            });
+            if (todayLog) {
+                await axios.post(`${BOTH_ATTENDANCE_ENDPOINT}/clock-out`, {});
                 fetchAttendanceData();
             }
         } catch (error) {

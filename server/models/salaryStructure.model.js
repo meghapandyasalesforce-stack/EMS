@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { computeSalaryStructureCoreEarnings, computeConfiguredComponent, pfWageFromBasicWage } from '../helpers/salaryCalculation.js';
 
 const salaryStructureSchema = new mongoose.Schema({
     // Organization reference (multi-tenancy)
@@ -128,38 +129,35 @@ const salaryStructureSchema = new mongoose.Schema({
 salaryStructureSchema.index({ isActive: 1 });
 salaryStructureSchema.index({ applicableTo: 1 });
 
-// Method to calculate salary based on this structure
+// Method to calculate salary based on this structure (baseSalary = monthly gross/CTC)
 salaryStructureSchema.methods.calculateSalary = function(baseSalary) {
+    const gross = Math.max(0, Number(baseSalary) || 0);
+    const core = computeSalaryStructureCoreEarnings(this, gross);
+    const pfWageBase = pfWageFromBasicWage(core.basicWage);
+
     const result = {
-        earnings: {},
-        deductions: {},
+        earnings: {
+            basicWage: core.basicWage,
+            houseRentAllowance: core.houseRentAllowance,
+            transportAllowance: core.transportAllowance,
+            medicalAllowance: core.medicalAllowance,
+            specialAllowance: core.specialAllowance,
+            pfEmployer: computeConfiguredComponent(this.earnings?.pfEmployer, pfWageBase),
+            esiEmployer: computeConfiguredComponent(this.earnings?.esiEmployer, core.basicWage)
+        },
+        deductions: {
+            pfEmployee: computeConfiguredComponent(this.deductions?.pfEmployee, pfWageBase),
+            esiEmployee: computeConfiguredComponent(this.deductions?.esiEmployee, core.basicWage),
+            professionalTax: computeConfiguredComponent(this.deductions?.professionalTax, gross),
+            incomeTax: 0
+        },
         totalEarnings: 0,
         totalDeductions: 0,
         netSalary: 0
     };
 
-    // Calculate earnings
-    Object.keys(this.earnings).forEach(key => {
-        const earning = this.earnings[key];
-        if (earning.isPercentage) {
-            result.earnings[key] = (baseSalary * earning.percentage) / 100;
-        } else {
-            result.earnings[key] = earning.fixedAmount;
-        }
-        result.totalEarnings += result.earnings[key];
-    });
-
-    // Calculate deductions
-    Object.keys(this.deductions).forEach(key => {
-        const deduction = this.deductions[key];
-        if (deduction.isPercentage) {
-            result.deductions[key] = (baseSalary * deduction.percentage) / 100;
-        } else {
-            result.deductions[key] = deduction.fixedAmount;
-        }
-        result.totalDeductions += result.deductions[key];
-    });
-
+    result.totalEarnings = Object.values(result.earnings).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    result.totalDeductions = Object.values(result.deductions).reduce((sum, v) => sum + (Number(v) || 0), 0);
     result.netSalary = result.totalEarnings - result.totalDeductions;
     return result;
 };

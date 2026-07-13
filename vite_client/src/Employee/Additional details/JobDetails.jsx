@@ -8,9 +8,8 @@ const JobDetails = () => {
     const [isLoading, setIsLoading] = useState(false);
 
     const offerLetterRef = useRef(null);
-    const birthCertificateRef = useRef(null);
-    const guarantorFormRef = useRef(null);
-    const degreeCertificateRef = useRef(null);
+    const aadharCardRef = useRef(null);
+    const panCardRef = useRef(null);
 
     const handleAdditionalInfoChange = (type, field, value) => {
         setAdditionalInfo(prev => ({
@@ -72,14 +71,11 @@ const JobDetails = () => {
                 case 'OFFER_LETTER':
                     offerLetterRef.current.value = '';
                     break;
-                case 'BIRTH_CERTIFICATE':
-                    birthCertificateRef.current.value = '';
+                case 'AADHAR_CARD':
+                    aadharCardRef.current.value = '';
                     break;
-                case 'GUARANTOR_FORM':
-                    guarantorFormRef.current.value = '';
-                    break;
-                case 'DEGREE_CERTIFICATE':
-                    degreeCertificateRef.current.value = '';
+                case 'PAN_CARD':
+                    panCardRef.current.value = '';
                     break;
             }
         } catch (error) {
@@ -128,21 +124,32 @@ const JobDetails = () => {
                         </div>
                     </div>
 
-                    {/* Birth Certificate */}
+                    {/* Aadhar Card */}
                     <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Birth Certificate</h3>
+                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Aadhar Card</h3>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-2">
                                 <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
                                 <input 
                                     type="file" 
-                                    ref={birthCertificateRef} 
+                                    ref={aadharCardRef} 
                                     className="border p-2 rounded w-full text-sm"
                                     accept=".pdf,.jpg,.jpeg,.png"
                                 />
                             </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="font-medium text-gray-700 text-sm md:text-base">Aadhar Number</label>
+                                <input
+                                    type="text"
+                                    value={additionalInfo.AADHAR_CARD?.aadharNumber ?? ''}
+                                    onChange={(e) => handleAdditionalInfoChange('AADHAR_CARD', 'aadharNumber', e.target.value)}
+                                    className="border p-2 rounded text-sm"
+                                    placeholder="XXXX XXXX XXXX"
+                                    maxLength={14}
+                                />
+                            </div>
                             <button
-                                onClick={() => handleUpload(birthCertificateRef.current.files[0], 'BIRTH_CERTIFICATE')}
+                                onClick={() => handleUpload(aadharCardRef.current.files[0], 'AADHAR_CARD')}
                                 disabled={isLoading}
                                 className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >
@@ -151,88 +158,32 @@ const JobDetails = () => {
                         </div>
                     </div>
 
-                    {/* Guarantor Form */}
+                    {/* Pan Card */}
                     <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Guarantor's Form</h3>
+                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Pan Card</h3>
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-col gap-2">
                                 <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
                                 <input 
                                     type="file" 
-                                    ref={guarantorFormRef} 
-                                    className="border p-2 rounded w-full text-sm"
-                                    accept=".pdf,.doc,.docx"
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
-                                <div className="flex flex-col gap-2">
-                                    <label className="font-medium text-gray-700 text-sm md:text-base">Guarantor Name</label>
-                                    <input
-                                        type="text"
-                                        value={additionalInfo.GUARANTOR_FORM?.guarantorName ?? ''}
-                                        onChange={(e) => handleAdditionalInfoChange('GUARANTOR_FORM', 'guarantorName', e.target.value)}
-                                        className="border p-2 rounded text-sm"
-                                        placeholder="Guarantor full name"
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="font-medium text-gray-700 text-sm md:text-base">Guarantor Contact</label>
-                                    <input
-                                        type="text"
-                                        value={additionalInfo.GUARANTOR_FORM?.guarantorContact ?? ''}
-                                        onChange={(e) => handleAdditionalInfoChange('GUARANTOR_FORM', 'guarantorContact', e.target.value)}
-                                        className="border p-2 rounded text-sm"
-                                        placeholder="Phone or email"
-                                    />
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => handleUpload(guarantorFormRef.current.files[0], 'GUARANTOR_FORM')}
-                                disabled={isLoading}
-                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
-                            >
-                                {isLoading ? 'Uploading...' : 'Upload'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Degree Certificate */}
-                    <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Degree Certificate</h3>
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
-                                <input 
-                                    type="file" 
-                                    ref={degreeCertificateRef} 
+                                    ref={panCardRef} 
                                     className="border p-2 rounded w-full text-sm"
                                     accept=".pdf,.jpg,.jpeg,.png"
                                 />
                             </div>
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
-                                <div className="flex flex-col gap-2">
-                                    <label className="font-medium text-gray-700 text-sm md:text-base">Institution</label>
-                                    <input
-                                        type="text"
-                                        value={additionalInfo.DEGREE_CERTIFICATE?.institution ?? ''}
-                                        onChange={(e) => handleAdditionalInfoChange('DEGREE_CERTIFICATE', 'institution', e.target.value)}
-                                        className="border p-2 rounded text-sm"
-                                        placeholder="School or university"
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="font-medium text-gray-700 text-sm md:text-base">Year Obtained</label>
-                                    <input
-                                        type="text"
-                                        value={additionalInfo.DEGREE_CERTIFICATE?.yearObtained ?? ''}
-                                        onChange={(e) => handleAdditionalInfoChange('DEGREE_CERTIFICATE', 'yearObtained', e.target.value)}
-                                        className="border p-2 rounded text-sm"
-                                        placeholder="e.g. 2020"
-                                    />
-                                </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="font-medium text-gray-700 text-sm md:text-base">PAN Number</label>
+                                <input
+                                    type="text"
+                                    value={additionalInfo.PAN_CARD?.panNumber ?? ''}
+                                    onChange={(e) => handleAdditionalInfoChange('PAN_CARD', 'panNumber', e.target.value.toUpperCase())}
+                                    className="border p-2 rounded text-sm uppercase"
+                                    placeholder="ABCDE1234F"
+                                    maxLength={10}
+                                />
                             </div>
                             <button
-                                onClick={() => handleUpload(degreeCertificateRef.current.files[0], 'DEGREE_CERTIFICATE')}
+                                onClick={() => handleUpload(panCardRef.current.files[0], 'PAN_CARD')}
                                 disabled={isLoading}
                                 className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                             >

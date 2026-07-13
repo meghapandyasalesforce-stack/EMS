@@ -22,6 +22,9 @@ import {
     isAdminUser,
 } from '../../helpers/regularizationWorkflowActionHelper.js';
 import { getRegularizationLimitSummary, isRegularizationInCurrentMonth } from '../../helpers/regularizationLimitHelper.js';
+import { sendRegularizationRequestNotification, sendRegularizationApprovalNotification, sendRegularizationRejectionNotification } from '../../helpers/attendanceRegularizationEmailHelper.js';
+import { notify } from '../../helpers/notificationManager.js';
+import '../../helpers/notificationEventRegistry.js';
 
 /** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
 function parseCalendarDayQuery(raw, boundary) {
@@ -328,6 +331,53 @@ export const createRegularizationRequest = async (req, res) => {
             employeeId,
             managerId: manager._id,
             attendanceDate
+        });
+
+        // Send push notification to manager, HR, and Admin (non-blocking)
+        setImmediate(async () => {
+            try {
+                await notify({
+                    type: 'attendance_regularization_request',
+                    organizationId,
+                    data: {
+                        regularization: regularizationRequest,
+                        employee
+                    }
+                });
+            } catch (notificationError) {
+                logger.error('Failed to send regularization request push notification', {
+                    requestId: regularizationRequest._id,
+                    employeeId,
+                    error: notificationError.message
+                });
+                // Notification failure should not block the request creation
+            }
+        });
+
+        // Send email notification to manager (non-blocking)
+        setImmediate(async () => {
+            try {
+                await sendRegularizationRequestNotification(
+                    {
+                        _id: regularizationRequest._id,
+                        attendanceDate: regularizationRequest.attendanceDate,
+                        regularizationType: regularizationRequest.regularizationType,
+                        requestedClockIn: regularizationRequest.requestedClockIn,
+                        requestedClockOut: regularizationRequest.requestedClockOut,
+                        reason: regularizationRequest.reason,
+                        createdAt: regularizationRequest.createdAt
+                    },
+                    employeeId,
+                    organizationId
+                );
+            } catch (emailError) {
+                logger.error('Failed to send regularization request email notification', {
+                    requestId: regularizationRequest._id,
+                    employeeId,
+                    error: emailError.message
+                });
+                // Email failure should not block the request creation
+            }
         });
 
         res.status(201).json({
@@ -643,6 +693,62 @@ export const approveRegularization = async (req, res) => {
                     .populate('managerId', 'name lastName email employeeId')
                     .populate('reviewedBy', 'name lastName email employeeId');
 
+                // Send push notification for final approval (non-blocking)
+                if (updatedRequest?.status === 'approved') {
+                    const employeeIdForNotification = updatedRequest.employeeId?._id || updatedRequest.employeeId;
+                    if (employeeIdForNotification) {
+                        setImmediate(async () => {
+                            try {
+                                const employeeForNotification = await Employee.findById(employeeIdForNotification).lean();
+                                if (employeeForNotification) {
+                                    await notify({
+                                        type: 'attendance_regularization_approved',
+                                        organizationId,
+                                        data: {
+                                            regularization: updatedRequest,
+                                            employee: employeeForNotification
+                                        }
+                                    });
+                                }
+                            } catch (notificationError) {
+                                logger.error('Failed to send regularization approval push notification (workflow)', {
+                                    requestId: updatedRequest._id,
+                                    employeeId: employeeIdForNotification,
+                                    error: notificationError.message
+                                });
+                            }
+                        });
+                    }
+                }
+
+                // Send email notification for final approval (non-blocking)
+                if (updatedRequest?.status === 'approved') {
+                    const employeeIdForNotification = updatedRequest.employeeId?._id || updatedRequest.employeeId;
+                    if (employeeIdForNotification) {
+                        setImmediate(async () => {
+                            try {
+                                const reviewerEmployee = await Employee.findById(reviewerEmployeeId).select('name lastName').lean();
+                                await sendRegularizationApprovalNotification(
+                                    {
+                                        _id: updatedRequest._id,
+                                        attendanceDate: updatedRequest.attendanceDate,
+                                        regularizationType: updatedRequest.regularizationType,
+                                        approvedAt: updatedRequest.approvedAt,
+                                        approvedByName: reviewerEmployee ? `${reviewerEmployee.name} ${reviewerEmployee.lastName || ''}` : 'Manager'
+                                    },
+                                    employeeIdForNotification
+                                );
+                            } catch (emailError) {
+                                logger.error('Failed to send regularization approval email notification (workflow)', {
+                                    requestId: updatedRequest._id,
+                                    employeeId: employeeIdForNotification,
+                                    error: emailError.message
+                                });
+                            }
+                        });
+                    }
+                }
+
                 return res.json({
                     success: true,
                     message: updatedRequest?.status === 'approved'
@@ -661,6 +767,59 @@ export const approveRegularization = async (req, res) => {
             reviewerId: reviewerEmployeeId,
             managerResponse: req.body.managerResponse || 'Approved'
         });
+
+        // Send push notification to employee (non-blocking)
+        const employeeIdForNotification = regularizationRequest.employeeId?._id || regularizationRequest.employeeId;
+        if (employeeIdForNotification) {
+            setImmediate(async () => {
+                try {
+                    const employeeForNotification = await Employee.findById(employeeIdForNotification).lean();
+                    if (employeeForNotification) {
+                        await notify({
+                            type: 'attendance_regularization_approved',
+                            organizationId,
+                            data: {
+                                regularization: updatedRequest,
+                                employee: employeeForNotification
+                            }
+                        });
+                    }
+                } catch (notificationError) {
+                    logger.error('Failed to send regularization approval push notification', {
+                        requestId: updatedRequest._id,
+                        employeeId: employeeIdForNotification,
+                        error: notificationError.message
+                    });
+                    // Notification failure should not block the approval
+                }
+            });
+        }
+
+        // Send email notification to employee (non-blocking)
+        if (employeeIdForNotification) {
+            setImmediate(async () => {
+                try {
+                    const reviewerEmployee = await Employee.findById(reviewerEmployeeId).select('name lastName').lean();
+                    await sendRegularizationApprovalNotification(
+                        {
+                            _id: updatedRequest._id,
+                            attendanceDate: updatedRequest.attendanceDate,
+                            regularizationType: updatedRequest.regularizationType,
+                            approvedAt: updatedRequest.approvedAt,
+                            approvedByName: reviewerEmployee ? `${reviewerEmployee.name} ${reviewerEmployee.lastName || ''}` : 'Manager'
+                        },
+                        employeeIdForNotification
+                    );
+                } catch (emailError) {
+                    logger.error('Failed to send regularization approval email notification', {
+                        requestId: updatedRequest._id,
+                        employeeId: employeeIdForNotification,
+                        error: emailError.message
+                    });
+                    // Email failure should not block the approval
+                }
+            });
+        }
 
         res.json({
             success: true,
@@ -784,6 +943,63 @@ export const rejectRegularization = async (req, res) => {
                     .populate('managerId', 'name lastName email employeeId')
                     .populate('reviewedBy', 'name lastName email employeeId');
 
+                // Send push notification for rejection (non-blocking)
+                if (updatedRequest?.status === 'rejected') {
+                    const employeeIdForNotification = updatedRequest.employeeId?._id || updatedRequest.employeeId;
+                    if (employeeIdForNotification) {
+                        setImmediate(async () => {
+                            try {
+                                const employeeForNotification = await Employee.findById(employeeIdForNotification).lean();
+                                if (employeeForNotification) {
+                                    await notify({
+                                        type: 'attendance_regularization_rejected',
+                                        organizationId,
+                                        data: {
+                                            regularization: updatedRequest,
+                                            employee: employeeForNotification
+                                        }
+                                    });
+                                }
+                            } catch (notificationError) {
+                                logger.error('Failed to send regularization rejection push notification (workflow)', {
+                                    requestId: updatedRequest._id,
+                                    employeeId: employeeIdForNotification,
+                                    error: notificationError.message
+                                });
+                            }
+                        });
+                    }
+                }
+
+                // Send email notification for rejection (non-blocking)
+                if (updatedRequest?.status === 'rejected') {
+                    const employeeIdForNotification = updatedRequest.employeeId?._id || updatedRequest.employeeId;
+                    if (employeeIdForNotification) {
+                        setImmediate(async () => {
+                            try {
+                                const reviewerEmployee = await Employee.findById(reviewerEmployeeId).select('name lastName').lean();
+                                await sendRegularizationRejectionNotification(
+                                    {
+                                        _id: updatedRequest._id,
+                                        attendanceDate: updatedRequest.attendanceDate,
+                                        regularizationType: updatedRequest.regularizationType,
+                                        rejectedAt: updatedRequest.rejectedAt,
+                                        rejectedByName: reviewerEmployee ? `${reviewerEmployee.name} ${reviewerEmployee.lastName || ''}` : 'Manager',
+                                        rejectionReason: rejectionReason
+                                    },
+                                    employeeIdForNotification
+                                );
+                            } catch (emailError) {
+                                logger.error('Failed to send regularization rejection email notification (workflow)', {
+                                    requestId: updatedRequest._id,
+                                    employeeId: employeeIdForNotification,
+                                    error: emailError.message
+                                });
+                            }
+                        });
+                    }
+                }
+
                 return res.json({
                     success: true,
                     message: 'Regularization request rejected',
@@ -797,6 +1013,60 @@ export const rejectRegularization = async (req, res) => {
             reviewerId: reviewerEmployeeId,
             rejectionReason
         });
+
+        // Send push notification to employee (non-blocking)
+        const employeeIdForNotification = regularizationRequest.employeeId?._id || regularizationRequest.employeeId;
+        if (employeeIdForNotification) {
+            setImmediate(async () => {
+                try {
+                    const employeeForNotification = await Employee.findById(employeeIdForNotification).lean();
+                    if (employeeForNotification) {
+                        await notify({
+                            type: 'attendance_regularization_rejected',
+                            organizationId,
+                            data: {
+                                regularization: updatedRequest,
+                                employee: employeeForNotification
+                            }
+                        });
+                    }
+                } catch (notificationError) {
+                    logger.error('Failed to send regularization rejection push notification', {
+                        requestId: updatedRequest._id,
+                        employeeId: employeeIdForNotification,
+                        error: notificationError.message
+                    });
+                    // Notification failure should not block the rejection
+                }
+            });
+        }
+
+        // Send email notification to employee (non-blocking)
+        if (employeeIdForNotification) {
+            setImmediate(async () => {
+                try {
+                    const reviewerEmployee = await Employee.findById(reviewerEmployeeId).select('name lastName').lean();
+                    await sendRegularizationRejectionNotification(
+                        {
+                            _id: updatedRequest._id,
+                            attendanceDate: updatedRequest.attendanceDate,
+                            regularizationType: updatedRequest.regularizationType,
+                            rejectedAt: updatedRequest.rejectedAt,
+                            rejectedByName: reviewerEmployee ? `${reviewerEmployee.name} ${reviewerEmployee.lastName || ''}` : 'Manager',
+                            rejectionReason: rejectionReason
+                        },
+                        employeeIdForNotification
+                    );
+                } catch (emailError) {
+                    logger.error('Failed to send regularization rejection email notification', {
+                        requestId: updatedRequest._id,
+                        employeeId: employeeIdForNotification,
+                        error: emailError.message
+                    });
+                    // Email failure should not block the rejection
+                }
+            });
+        }
 
         res.json({
             success: true,

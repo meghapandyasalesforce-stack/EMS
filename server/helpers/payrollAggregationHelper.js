@@ -83,3 +83,30 @@ export function aggregatePayrollPeriod(payrolls) {
     };
 }
 
+/** True only for 24-char hex MongoDB ObjectId strings (rejects "undefined", etc.). */
+export function isValidMongoObjectId(value) {
+    if (value == null || value === '' || value === 'undefined' || value === 'null') {
+        return false;
+    }
+    return /^[a-fA-F0-9]{24}$/.test(String(value));
+}
+
+/** Ensure API payloads always expose both `_id` and `payrollId` for download/details routes. */
+export function attachPayrollRecordIds(payroll) {
+    if (!payroll || typeof payroll !== 'object') return payroll;
+
+    const id =
+        payroll._id?.toString?.() ||
+        payroll._id ||
+        payroll.payrollId?.toString?.() ||
+        payroll.payrollId;
+
+    if (!id) return payroll;
+
+    return {
+        ...payroll,
+        _id: id,
+        payrollId: id,
+    };
+}
+

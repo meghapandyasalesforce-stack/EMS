@@ -20,16 +20,19 @@ const LeavePolicyManagement = () => {
         applicableEmployees: [],
         leaveTypes: [
             {
+                enabled: true,
                 type: 'casual',
                 displayName: 'Casual Leave',
                 accrual: {
-                    method: 'fixed',
-                    amount: 12,
-                    frequency: 'yearly'
+                    method: 'monthly',
+                    amount: 1.5,
+                    frequency: 'monthly',
+                    maxAccrual: 18,
                 },
+                maxDaysPerMonth: 1.5,
                 carryForward: {
-                    enabled: false,
-                    maxDays: 0
+                    enabled: true,
+                    maxDays: 18
                 },
                 requiresApproval: true,
                 requiresDocument: false,
@@ -154,16 +157,19 @@ const LeavePolicyManagement = () => {
             leaveTypes: [
                 ...formData.leaveTypes,
                 {
+                    enabled: true,
                     type: 'casual',
                     displayName: '',
                     accrual: {
-                        method: 'fixed',
-                        amount: 0,
-                        frequency: 'yearly'
+                        method: 'monthly',
+                        amount: 1.5,
+                        frequency: 'monthly',
+                        maxAccrual: 18,
                     },
+                    maxDaysPerMonth: 1.5,
                     carryForward: {
-                        enabled: false,
-                        maxDays: 0
+                        enabled: true,
+                        maxDays: 18
                     },
                     requiresApproval: true,
                     requiresDocument: false,
@@ -365,7 +371,7 @@ const LeavePolicyManagement = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-4 mb-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Accrual Method *</label>
                                         <select
@@ -433,11 +439,29 @@ const LeavePolicyManagement = () => {
                                         <label className="flex items-center">
                                             <input
                                                 type="checkbox"
+                                                checked={leaveType.enabled !== false}
+                                                onChange={(e) => updateLeaveType(index, 'enabled', e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            Enabled
+                                        </label>
+                                        <label className="flex items-center">
+                                            <input
+                                                type="checkbox"
                                                 checked={leaveType.requiresApproval}
                                                 onChange={(e) => updateLeaveType(index, 'requiresApproval', e.target.checked)}
                                                 className="mr-2"
                                             />
                                             Requires Approval
+                                        </label>
+                                        <label className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(leaveType.requiresDocument)}
+                                                onChange={(e) => updateLeaveType(index, 'requiresDocument', e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            Requires Document
                                         </label>
                                         <label className="flex items-center">
                                             <input
@@ -620,7 +644,7 @@ const LeavePolicyManagement = () => {
                     {/* Date Handling Rules */}
                     <div className="mb-4 border-t pt-4">
                         <h4 className="font-medium mb-3">Date Handling Rules</h4>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <label className="flex items-center">
                                 <input
                                     type="checkbox"

@@ -12,9 +12,10 @@ import { sendSuccess, sendError, sendNotFound, sendForbidden, sendValidationErro
 import { addOrganizationFilter, getOrganizationId } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
-import { buildManagerMatchQuery, isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
+import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
 import { getDataScope } from '../../helpers/permissionService.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
+import { canManageEmployeeLifecycle } from '../../helpers/employeeLifecycleHelper.js';
 import {
   isOrgOwnerUser,
   linkOrgOwnerMeProfile,
@@ -183,12 +184,20 @@ export const getAllEmployees = async (req, res) => {
     }
 };
 
+const toPlainEmployee = (doc) => {
+    if (!doc) return null;
+    return typeof doc.toObject === 'function' ? doc.toObject() : doc;
+};
+
 /**
- * Update employee active status (Admin/HR)
  * PATCH /api/v1/admin/employee/:employeeId/status
  */
 export const updateEmployeeStatus = async (req, res) => {
     try {
+        if (!canManageEmployeeLifecycle(req)) {
+            return sendForbidden(res, 'Only organization admin or HR can deactivate or activate employees.');
+        }
+
         const { employeeId } = req.params;
         const { active } = req.body;
 
@@ -212,15 +221,6 @@ export const updateEmployeeStatus = async (req, res) => {
             return sendNotFound(res, 'Employee');
         }
 
-        // Manager can update status only for employees linked to them.
-        const isManagerScope = shouldApplyLineManagerScope(req) && !!req.employee?.isManager;
-        if (isManagerScope) {
-            const linked = isEmployeeLinkedToManager(employeeBefore, req.employee);
-            if (!linked) {
-                return sendForbidden(res, 'You can only update status for employees linked to you.');
-            }
-        }
-
         if (employeeBefore.status === 'terminated') {
             return sendValidationError(
                 res,
@@ -238,7 +238,9 @@ export const updateEmployeeStatus = async (req, res) => {
             { new: true, runValidators: true }
         ).select('-password');
 
-        // Invalidate employee list caches so status changes are reflected immediately.
+        if (!updatedEmployee) {
+            return sendNotFound(res, 'Employee');
+        }
         const orgIdForCache = organizationId || updatedEmployee?.organizationId || employeeBefore?.organizationId;
         if (orgIdForCache) {
             try {
@@ -248,30 +250,33 @@ export const updateEmployeeStatus = async (req, res) => {
             }
         }
 
-        // Log audit trail
-        await logUpdate({
-            entityType: 'Employee',
-            entityId: employeeId,
-            entityName: `${employeeBefore.name} ${employeeBefore.lastName || ''}`.trim(),
-            req,
-            before: employeeBefore,
-            after: updatedEmployee.toObject(),
-            metadata: {
-                statusChange: true,
-                previousStatus: employeeBefore.status,
-                newStatus: updatedEmployee.status,
-                previousActive: employeeBefore.active,
-                newActive: updatedEmployee.active
-            }
-        });
+        try {
+            await logUpdate({
+                entityType: 'Employee',
+                entityId: employeeId,
+                entityName: `${employeeBefore.name} ${employeeBefore.lastName || ''}`.trim(),
+                req,
+                before: employeeBefore,
+                after: toPlainEmployee(updatedEmployee),
+                metadata: {
+                    statusChange: true,
+                    previousStatus: employeeBefore.status,
+                    newStatus: updatedEmployee.status,
+                    previousActive: employeeBefore.active,
+                    newActive: updatedEmployee.active,
+                },
+            });
+        } catch (auditError) {
+            logger.warn('Audit log failed after employee status update', { error: auditError.message });
+        }
 
         return sendSuccess(res, {
-            employee: updatedEmployee
+            employee: updatedEmployee,
         }, `Employee ${active ? 'activated' : 'deactivated'} successfully`);
 
     } catch (error) {
         logger.error('Error updating employee status', { error: error.message, stack: error.stack });
-        return sendInternalError(res, 'Failed to update employee status', error);
+        return sendError(res, 'Failed to update employee status', 500, 'INTERNAL_ERROR');
     }
 };
 
@@ -281,6 +286,10 @@ export const updateEmployeeStatus = async (req, res) => {
  */
 export const terminateEmployee = async (req, res) => {
     try {
+        if (!canManageEmployeeLifecycle(req)) {
+            return sendForbidden(res, 'Only organization admin or HR can terminate employees.');
+        }
+
         const { employeeId } = req.params;
         const { terminationDate, lastWorkingDate, reason, notes, eligibleForRehire } = req.body || {};
 
@@ -308,15 +317,6 @@ export const terminateEmployee = async (req, res) => {
             return sendNotFound(res, 'Employee');
         }
 
-        // Manager can terminate only employees linked to them.
-        const isManagerScope = shouldApplyLineManagerScope(req) && !!req.employee?.isManager;
-        if (isManagerScope) {
-            const linked = isEmployeeLinkedToManager(employeeBefore, req.employee);
-            if (!linked) {
-                return sendForbidden(res, 'You can only terminate employees linked to you.');
-            }
-        }
-
         if (employeeBefore.status === 'terminated') {
             return sendValidationError(res, { status: 'Employee is already terminated.' });
         }
@@ -334,7 +334,7 @@ export const terminateEmployee = async (req, res) => {
             terminationReason: reason || '',
             terminationNotes: notes || '',
             eligibleForRehire: Boolean(eligibleForRehire),
-            terminatedBy: req.user?._id || req.employee?._id
+            terminatedBy: req.user?._id || req.employee?.userId || null,
         };
 
         const updatedEmployee = await Employee.findOneAndUpdate(
@@ -342,6 +342,10 @@ export const terminateEmployee = async (req, res) => {
             updateData,
             { new: true, runValidators: true }
         ).select('-password');
+
+        if (!updatedEmployee) {
+            return sendNotFound(res, 'Employee');
+        }
 
         const orgIdForCache = organizationId || updatedEmployee?.organizationId || employeeBefore?.organizationId;
         if (orgIdForCache) {
@@ -352,21 +356,25 @@ export const terminateEmployee = async (req, res) => {
             }
         }
 
-        await logUpdate({
-            entityType: 'Employee',
-            entityId: employeeId,
-            entityName: `${employeeBefore.name} ${employeeBefore.lastName || ''}`.trim(),
-            req,
-            before: employeeBefore,
-            after: updatedEmployee.toObject(),
-            metadata: {
-                statusChange: true,
-                previousStatus: employeeBefore.status,
-                newStatus: updatedEmployee.status,
-                terminationDate: parsedTerminationDate,
-                lastWorkingDate: parsedLastWorkingDate
-            }
-        });
+        try {
+            await logUpdate({
+                entityType: 'Employee',
+                entityId: employeeId,
+                entityName: `${employeeBefore.name} ${employeeBefore.lastName || ''}`.trim(),
+                req,
+                before: employeeBefore,
+                after: toPlainEmployee(updatedEmployee),
+                metadata: {
+                    statusChange: true,
+                    previousStatus: employeeBefore.status,
+                    newStatus: updatedEmployee.status,
+                    terminationDate: parsedTerminationDate,
+                    lastWorkingDate: parsedLastWorkingDate,
+                },
+            });
+        } catch (auditError) {
+            logger.warn('Audit log failed after employee termination', { error: auditError.message });
+        }
 
         return sendSuccess(
             res,
@@ -375,7 +383,7 @@ export const terminateEmployee = async (req, res) => {
         );
     } catch (error) {
         logger.error('Error terminating employee', { error: error.message, stack: error.stack });
-        return sendInternalError(res, 'Failed to terminate employee', error);
+        return sendError(res, 'Failed to terminate employee', 500, 'INTERNAL_ERROR');
     }
 };
 
@@ -574,9 +582,8 @@ export const linkEmployeeAsOrgOwnerMeProfile = async (req, res) => {
  */
 export const deleteEmployee = async (req, res) => {
     try {
-        // Require admin or HR (middleware ensures one of these is set)
-        if (!req.user && !req.employee) {
-            return sendForbidden(res, 'Access denied. Admin or HR required.');
+        if (!canManageEmployeeLifecycle(req)) {
+            return sendForbidden(res, 'Only organization admin or HR can delete employees.');
         }
 
         const { employeeId } = req.params;
@@ -628,7 +635,7 @@ export const deleteEmployee = async (req, res) => {
         return sendSuccess(res, null, 'Employee deleted successfully');
     } catch (error) {
         logger.error('Error deleting employee', { error: error.message, stack: error.stack });
-        return sendInternalError(res, 'Failed to delete employee', error);
+        return sendError(res, 'Failed to delete employee', 500, 'INTERNAL_ERROR');
     }
 };
 

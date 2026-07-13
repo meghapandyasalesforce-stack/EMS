@@ -25,6 +25,8 @@ import { getDashboardRouteForUser } from '../../helpers/dashboardRouteHelper.js'
 import { autoGenerateIdCard } from '../admin/idCardController.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { ALL_SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
+import { notify } from '../../helpers/notificationManager.js';
+import '../../helpers/notificationEventRegistry.js';
 import {
     applySystemRoleToEmployee,
     syncLinkedUserForSystemRole,
@@ -144,10 +146,10 @@ import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWo
 
 export const registerEmployee = async (req, res) => {
     try {
-        if (!req.authContext?.isOrgOwner) {
+        if (!req.authContext?.isOrgOwner && !req.authContext?.isHrManager && !req.authContext?.isHrExecutive) {
             return sendError(
                 res,
-                'Only organization owners can create employees',
+                'Only organization owners and HR staff can create employees',
                 403,
                 'ORG_OWNER_ONLY'
             );
@@ -581,6 +583,20 @@ export const registerEmployee = async (req, res) => {
 
         runInBackground('register-employee-cache-invalidate', async () => {
             await invalidateEmployeesCache(organizationId);
+        });
+
+        // Send new employee notification to HR, Admin, and CEO
+        runInBackground('register-employee-notification', async () => {
+            const employeeForNotification = await Employee.findById(employee._id).select(
+                'name lastName email organizationId jobTitle department'
+            );
+            if (employeeForNotification) {
+                await notify({
+                    type: 'new_employee_joined',
+                    organizationId: employeeForNotification.organizationId,
+                    data: { employee: employeeForNotification }
+                });
+            }
         });
         
         let emailSent = false;

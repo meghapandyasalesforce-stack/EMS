@@ -871,7 +871,7 @@ const OrganizationRegister = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-4xl w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
+            <div className="max-w-4xl w-full space-y-8 bg-white p-5 sm:p-8 rounded-2xl shadow-xl">
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
                         <FaBuilding className="h-12 w-12 text-theme-secondary" />

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import { submitLeave, resetStatus } from '../../context/employeeLeaveSlice';
 import { toast } from 'react-toastify';
 import { useMediaQuery } from 'react-responsive';
-import { useLocation } from 'react-router-dom';
+import { DEFAULT_LEAVE_TYPE, getAllLeaveTypeOptions } from '../../constants/leaveConstants';
 
 const LeaveApplication = () => {
   const dispatch = useDispatch();
@@ -17,7 +18,7 @@ const LeaveApplication = () => {
     email: '',
     startDate: '',
     endDate: '',
-    leaveType: location.state?.leaveType || '',
+    leaveType: location.state?.leaveType || DEFAULT_LEAVE_TYPE,
     reason: '',
     document: null,
     isHalfDay: false,
@@ -25,6 +26,7 @@ const LeaveApplication = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const leaveTypeOptions = useMemo(() => getAllLeaveTypeOptions(), []);
 
   useEffect(() => {
     if (user) {
@@ -60,8 +62,7 @@ const LeaveApplication = () => {
     if (!leaveForm.email) formErrors.email = 'Email is required';
     if (!leaveForm.startDate) formErrors.startDate = 'Start date is required';
     if (!leaveForm.endDate) formErrors.endDate = 'End date is required';
-    if (!leaveForm.leaveType) formErrors.leaveType = 'Leave type is required';
-    if (!leaveForm.reason) formErrors.reason = 'Reason is required';
+    if (!leaveForm.reason.trim()) formErrors.reason = 'Please select or enter a reason';
     
     if (leaveForm.startDate && leaveForm.endDate) {
       if (new Date(leaveForm.startDate) > new Date(leaveForm.endDate)) {
@@ -86,7 +87,7 @@ const LeaveApplication = () => {
       startDate: leaveForm.startDate,
       endDate: leaveForm.endDate,
       leaveType: leaveForm.leaveType,
-      reason: leaveForm.reason,
+      reason: leaveForm.reason.trim(),
       isHalfDay: leaveForm.isHalfDay,
       halfDayType: leaveForm.isHalfDay ? leaveForm.halfDayType : null,
       document: leaveForm.document,
@@ -95,13 +96,13 @@ const LeaveApplication = () => {
 
   useEffect(() => {
     if (success) {
-      toast.success('Leave application submitted successfully!');
+      toast.success('Leave submitted. It goes to your manager first, then HR for final approval.');
       setLeaveForm({
         name: user?.name || '',
         email: user?.email || '',
         startDate: '',
         endDate: '',
-        leaveType: '',
+        leaveType: DEFAULT_LEAVE_TYPE,
         reason: '',
         document: null,
         isHalfDay: false,
@@ -119,7 +120,10 @@ const LeaveApplication = () => {
   return (
     <div className="bg-white p-4 md:p-8 rounded-xl shadow-md mt-4 lg:mt-10 transition-all duration-300">
       <div className="mx-auto w-full lg:max-w-2xl">
-        <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-6 text-gray-800">Leave Application Form</h2>
+        <h2 className="text-xl md:text-2xl font-bold mb-2 text-gray-800">Leave Application Form</h2>
+        <p className="mb-4 md:mb-6 text-sm text-gray-600">
+          After you submit, your manager must approve first. Then HR completes final approval before leave is deducted from your balance.
+        </p>
         <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 md:space-y-6">
           {/* Name and Email */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -140,9 +144,9 @@ const LeaveApplication = () => {
             ))}
           </div>
 
-          {/* Leave Type */}
+          {/* Leave type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Leave Type</label>
+            <label className="block text-sm font-medium text-gray-700">Leave type</label>
             <select
               name="leaveType"
               value={leaveForm.leaveType}
@@ -150,19 +154,12 @@ const LeaveApplication = () => {
               disabled={submitting}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
             >
-              <option value="">Select leave type</option>
-              <option value="sick">Sick Leave</option>
-              <option value="annual">Annual Leave</option>
-              <option value="casual">Casual Leave</option>
-              <option value="vacation">Vacation Leave</option>
-              <option value="privileged">Privileged Leave</option>
-              <option value="maternity">Maternity Leave</option>
-              <option value="paternity">Paternity Leave</option>
-              <option value="compensatory">Compensatory Leave</option>
-              <option value="sabbatical">Sabbatical Leave</option>
-              <option value="loss_of_pay">Loss of Pay</option>
+              {leaveTypeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
-            {errors.leaveType && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.leaveType}</p>}
           </div>
 
           {/* Date Fields */}
@@ -231,8 +228,9 @@ const LeaveApplication = () => {
               name="reason"
               value={leaveForm.reason}
               onChange={handleChange}
-              rows="3"
               disabled={submitting}
+              rows="3"
+              placeholder="Enter reason for leave"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
             />
             {errors.reason && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.reason}</p>}

@@ -12,7 +12,8 @@ import {
 } from '../../../../utils/systemRoleHelpers';
 import LoadingSpinner from '../../../../components/LoadingSpinner';
 
-const AccessTab = ({ employeeId, employee = null, canEdit = true }) => {
+const AccessTab = ({ employeeId, employee = null, canEdit = true, onAccessUpdated }) => {
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [access, setAccess] = useState(null);
@@ -35,7 +36,13 @@ const AccessTab = ({ employeeId, employee = null, canEdit = true }) => {
 
   useEffect(() => {
     if (employeeId) loadAccess();
-  }, [employeeId]);
+  }, [
+    employeeId,
+    employee?.functionalRoles?.join(','),
+    employee?.jobTitle,
+    employee?.department,
+    employee?.position,
+  ]);
 
   const catalog = access?.catalog || [];
 
@@ -79,6 +86,9 @@ const AccessTab = ({ employeeId, employee = null, canEdit = true }) => {
       });
       toast.success(`System access updated to ${roleLabel}. Ask them to log out and back in.`);
       await loadAccess();
+      if (typeof onAccessUpdated === 'function') {
+        await onAccessUpdated(); // parent refreshes employee + navbar session
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update system access');
     } finally {

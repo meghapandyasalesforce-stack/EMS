@@ -126,6 +126,7 @@ const DocumentsAndIdPage = () => {
   }, [myUploadedDocs, policyDocs]);
 
   const statusLabel = (doc) => {
+    if (doc.approvalStatus === 'Withdrawn') return 'Withdrawn';
     if (doc.approvalStatus === 'Rejected') return 'Rejected';
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'Pending HR approval';
     if (doc.approvalStatus === 'Approved') return 'Approved';
@@ -133,6 +134,7 @@ const DocumentsAndIdPage = () => {
   };
 
   const statusClass = (doc) => {
+    if (doc.approvalStatus === 'Withdrawn') return 'bg-slate-100 text-slate-700';
     if (doc.approvalStatus === 'Rejected') return 'bg-red-100 text-red-700';
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') return 'bg-yellow-100 text-yellow-700';
     return 'bg-[#20C997]/15 text-[#0a8f6c]';
@@ -355,226 +357,56 @@ const DocumentsAndIdPage = () => {
                 {uploading ? 'Uploading...' : 'Upload Document'}
               </button>
             </div>
-
-            <div ref={companyDocsRef} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-900">HR Policies & Company Docs</h2>
-              </div>
-              {policyDocs.length === 0 ? (
-                <p className="text-sm text-slate-500">No HR policy documents available yet.</p>
-              ) : (
-                <div className="space-y-3">
-                  {policyDocs.map((doc) => (
-                    <div key={doc._id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-800">{doc.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()} • {formatBytes(doc.fileSize)}
-                        </p>
-                        <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
-                          {statusLabel(doc)}
-                        </span>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handlePreviewDocument(doc)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          title="Preview"
-                        >
-                          <FaEye /> Preview
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadDocument(doc)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                          title="Download"
-                        >
-                          <FaDownload /> Download
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-xl font-semibold text-slate-900">My Uploaded Documents</h2>
-              {myUploadedDocs.length === 0 ? (
-                <p className="text-sm text-slate-500">You have not uploaded any documents yet.</p>
-              ) : (
-                <div className="space-y-3">
-                  {myUploadedDocs.map((doc) => (
-                    <div key={doc._id} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-800">{doc.name}</p>
-                        <p className="text-xs text-slate-500">
-                          {formatBytes(doc.fileSize)} • Uploaded {new Date(doc.createdAt).toLocaleDateString()}
-                        </p>
-                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
-                          {statusLabel(doc)}
-                        </span>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handlePreviewDocument(doc)}
-                          className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
-                        >
-                          <FaEye className="text-xs" /> Preview
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadDocument(doc)}
-                          className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
-                        >
-                          <FaDownload className="text-xs" /> Download
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-xl font-semibold text-slate-900">My Contracts & Letters</h2>
-              {contractDocs.length === 0 ? (
-                <p className="text-sm text-slate-500">No contracts or letters available.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-max text-sm">
-                    <thead className="border-b text-left text-slate-500">
-                      <tr>
-                        <th className="py-2 pr-3">Document Name</th>
-                        <th className="py-2 pr-3">Date Signed</th>
-                        <th className="py-2 pr-3">Status</th>
-                        <th className="py-2 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contractDocs.map((doc) => (
-                        <tr key={doc._id} className="border-b last:border-b-0">
-                          <td className="py-3 pr-3 text-slate-800">{doc.name}</td>
-                          <td className="py-3 pr-3 text-slate-600">{new Date(doc.createdAt).toLocaleDateString()}</td>
-                          <td className="py-3 pr-3">
-                            <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
-                              {statusLabel(doc)}
-                            </span>
-                          </td>
-                          <td className="py-3 text-right">
-                            <div className="inline-flex items-center gap-3 justify-end">
-                              <button
-                                type="button"
-                                onClick={() => handlePreviewDocument(doc)}
-                                className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
-                              >
-                                <FaEye className="text-xs" /> Preview
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadDocument(doc)}
-                                className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
-                              >
-                                <FaDownload className="text-xs" /> Download
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm lg:col-span-2">
-                <h3 className="mb-4 border-l-4 border-[#20C997] pl-3 text-2xl font-semibold text-slate-900">Data Privacy & Security</h3>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div>
-                    <FaShieldAlt className="mb-2 text-[#20C997]" />
-                    <p className="font-semibold text-slate-800">AES-256 Encryption</p>
-                    <p className="text-sm text-slate-500">All uploaded files are encrypted using enterprise-grade standards.</p>
-                  </div>
-                  <div>
-                    <FaClock className="mb-2 text-[#20C997]" />
-                    <p className="font-semibold text-slate-800">Retention Policy</p>
-                    <p className="text-sm text-slate-500">Documents are retained based on compliance and policy timelines.</p>
-                  </div>
-                  <div>
-                    <FaClipboardList className="mb-2 text-[#20C997]" />
-                    <p className="font-semibold text-slate-800">Access Logs</p>
-                    <p className="text-sm text-slate-500">Every preview/download is logged in your security audit trail.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-gradient-to-br from-[#0a8f6c] to-[#006D4E] p-5 text-white shadow-sm">
-                <p className="text-3xl font-semibold leading-tight">Need help with your documents?</p>
-                <p className="mt-2 text-sm text-white/85">
-                  Connect with HR support for verification and document validity questions.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('/helpdesk')}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#006D4E]"
-                >
-                  <FaHeadset /> Chat with HR
-                </button>
-              </div>
-            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <h2 className="mb-3 text-lg font-semibold text-slate-800">Digital ID Card</h2>
+          <div className="w-full space-y-4 xl:sticky xl:top-6 xl:self-start">
+            <div className="w-full rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-xl font-semibold text-slate-800">Digital ID Card</h2>
               {idCard ? (
                 <div
-                  className="rounded-2xl p-4 text-white"
+                  className="w-full min-h-[340px] rounded-2xl p-6 text-white"
                   style={{
                     background: `linear-gradient(135deg, ${idCard.cardDesign?.accentColor || '#2563eb'}, ${idCard.cardDesign?.backgroundColor || '#059669'})`
                   }}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xl font-semibold">{idCard.cardDesign?.companyName || 'paarsiv'}</p>
-                    <FaIdCard className="opacity-80" />
+                    <p className="text-2xl font-semibold">{idCard.cardDesign?.companyName || 'paarsiv'}</p>
+                    <FaIdCard className="text-2xl opacity-80" />
                   </div>
-                  <p className="text-[11px] opacity-80">EMPLOYEE ID</p>
+                  <p className="mt-1 text-xs tracking-wide opacity-80">EMPLOYEE ID</p>
 
-                  <div className="my-3 flex justify-center">
+                  <div className="my-5 flex justify-center">
                     {idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto ? (
                       <img
                         src={getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}
                         alt="Employee"
-                        className="h-16 w-16 rounded-full border-2 border-white/80 object-cover"
+                        className="h-24 w-24 rounded-full border-2 border-white/80 object-cover"
                       />
                     ) : (
-                      <div className="h-16 w-16 rounded-full border-2 border-white/70 bg-white/20" />
+                      <div className="h-24 w-24 rounded-full border-2 border-white/70 bg-white/20" />
                     )}
                   </div>
 
-                  <p className="text-center font-semibold">
+                  <p className="text-center text-lg font-semibold">
                     {idCard.employeeId?.name} {idCard.employeeId?.lastName}
                   </p>
-                  <p className="text-center text-xs opacity-90">{idCard.employeeId?.jobTitle || 'Employee'}</p>
+                  <p className="text-center text-sm opacity-90">{idCard.employeeId?.jobTitle || 'Employee'}</p>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
+                  <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="opacity-70">ID NUMBER</p>
+                      <p className="text-xs opacity-70">ID NUMBER</p>
                       <p className="font-medium">{idCard.employeeId?.employeeId || '--'}</p>
                     </div>
                     <div>
-                      <p className="opacity-70">CARD NO.</p>
+                      <p className="text-xs opacity-70">CARD NO.</p>
                       <p className="font-medium">{idCard.cardNumber || '--'}</p>
                     </div>
                     <div>
-                      <p className="opacity-70">DEPARTMENT</p>
+                      <p className="text-xs opacity-70">DEPARTMENT</p>
                       <p className="font-medium">{idCard.employeeId?.department || '--'}</p>
                     </div>
                     <div>
-                      <p className="opacity-70">STATUS</p>
+                      <p className="text-xs opacity-70">STATUS</p>
                       <p className="font-medium capitalize">{idCard.status || '--'}</p>
                     </div>
                   </div>
@@ -608,6 +440,176 @@ const DocumentsAndIdPage = () => {
             >
               <FaExclamationTriangle className="text-red-500" />
               <span className="font-medium text-slate-800">Report Lost Card</span>
+            </button>
+          </div>
+        </div>
+
+        <div ref={companyDocsRef} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-slate-900">HR Policies & Company Docs</h2>
+          </div>
+          {policyDocs.length === 0 ? (
+            <p className="text-sm text-slate-500">No HR policy documents available yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {policyDocs.map((doc) => (
+                <div key={doc._id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{doc.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()} • {formatBytes(doc.fileSize)}
+                    </p>
+                    <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                      {statusLabel(doc)}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePreviewDocument(doc)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      title="Preview"
+                    >
+                      <FaEye /> Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDocument(doc)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      title="Download"
+                    >
+                      <FaDownload /> Download
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-xl font-semibold text-slate-900">My Uploaded Documents</h2>
+          {myUploadedDocs.length === 0 ? (
+            <p className="text-sm text-slate-500">You have not uploaded any documents yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {myUploadedDocs.map((doc) => (
+                <div key={doc._id} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-800">{doc.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {formatBytes(doc.fileSize)} • Uploaded {new Date(doc.createdAt).toLocaleDateString()}
+                    </p>
+                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                      {statusLabel(doc)}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePreviewDocument(doc)}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
+                    >
+                      <FaEye className="text-xs" /> Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDocument(doc)}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
+                    >
+                      <FaDownload className="text-xs" /> Download
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-xl font-semibold text-slate-900">My Contracts & Letters</h2>
+          {contractDocs.length === 0 ? (
+            <p className="text-sm text-slate-500">No contracts or letters available.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
+                <thead className="border-b text-left text-slate-500">
+                  <tr>
+                    <th className="py-2 pr-3">Document Name</th>
+                    <th className="py-2 pr-3">Date Signed</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contractDocs.map((doc) => (
+                    <tr key={doc._id} className="border-b last:border-b-0">
+                      <td className="py-3 pr-3 text-slate-800">{doc.name}</td>
+                      <td className="py-3 pr-3 text-slate-600">{new Date(doc.createdAt).toLocaleDateString()}</td>
+                      <td className="py-3 pr-3">
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                          {statusLabel(doc)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="inline-flex items-center gap-3 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewDocument(doc)}
+                            className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
+                          >
+                            <FaEye className="text-xs" /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadDocument(doc)}
+                            className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
+                          >
+                            <FaDownload className="text-xs" /> Download
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm lg:col-span-2">
+            <h3 className="mb-4 border-l-4 border-[#20C997] pl-3 text-2xl font-semibold text-slate-900">Data Privacy & Security</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <FaShieldAlt className="mb-2 text-[#20C997]" />
+                <p className="font-semibold text-slate-800">AES-256 Encryption</p>
+                <p className="text-sm text-slate-500">All uploaded files are encrypted using enterprise-grade standards.</p>
+              </div>
+              <div>
+                <FaClock className="mb-2 text-[#20C997]" />
+                <p className="font-semibold text-slate-800">Retention Policy</p>
+                <p className="text-sm text-slate-500">Documents are retained based on compliance and policy timelines.</p>
+              </div>
+              <div>
+                <FaClipboardList className="mb-2 text-[#20C997]" />
+                <p className="font-semibold text-slate-800">Access Logs</p>
+                <p className="text-sm text-slate-500">Every preview/download is logged in your security audit trail.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-gradient-to-br from-[#0a8f6c] to-[#006D4E] p-5 text-white shadow-sm">
+            <p className="text-3xl font-semibold leading-tight">Need help with your documents?</p>
+            <p className="mt-2 text-sm text-white/85">
+              Connect with HR support for verification and document validity questions.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/helpdesk')}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#006D4E]"
+            >
+              <FaHeadset /> Chat with HR
             </button>
           </div>
         </div>

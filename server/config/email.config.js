@@ -16,7 +16,8 @@ export const getEmailConfig = () => {
     const emailHost = process.env.EMAIL_HOST || 'smtp.office365.com';
     const emailPort = parseInt(process.env.EMAIL_PORT || '587', 10);
     const emailFrom = process.env.EMAIL_FROM || emailUser;
-    const emailService = process.env.EMAIL_SERVICE; // Optional: force service (gmail, outlook, etc.)
+    const emailService = process.env.EMAIL_SERVICE; // gmail, outlook, sendgrid, mailgun, ses, brevo
+    const apiKey = process.env.EMAIL_API_KEY; // For transactional email services
 
     return {
         user: emailUser,
@@ -24,7 +25,8 @@ export const getEmailConfig = () => {
         host: emailHost,
         port: emailPort,
         from: emailFrom,
-        service: emailService
+        service: emailService,
+        apiKey: apiKey
     };
 };
 
@@ -38,10 +40,16 @@ export const detectEmailProvider = (config) => {
     
     // If service is explicitly set, use it
     if (service) {
+        const serviceLower = service.toLowerCase();
         return {
-            type: service.toLowerCase(),
-            isGmail: service.toLowerCase() === 'gmail',
-            isOutlook: ['outlook', 'office365'].includes(service.toLowerCase())
+            type: serviceLower,
+            isGmail: serviceLower === 'gmail',
+            isOutlook: ['outlook', 'office365'].includes(serviceLower),
+            isSendGrid: serviceLower === 'sendgrid',
+            isMailgun: serviceLower === 'mailgun',
+            isSES: serviceLower === 'ses',
+            isBrevo: serviceLower === 'brevo',
+            isTransactional: ['sendgrid', 'mailgun', 'ses', 'brevo'].includes(serviceLower)
         };
     }
     
@@ -59,7 +67,12 @@ export const detectEmailProvider = (config) => {
     return {
         type: providerType,
         isGmail,
-        isOutlook
+        isOutlook,
+        isSendGrid: false,
+        isMailgun: false,
+        isSES: false,
+        isBrevo: false,
+        isTransactional: false
     };
 };
 
@@ -72,15 +85,70 @@ export const createEmailTransporter = (config = null) => {
     const emailConfig = config || getEmailConfig();
     const provider = detectEmailProvider(emailConfig);
     
-    // Validate credentials
-    if (!emailConfig.user || !emailConfig.password) {
-        throw new Error('Email credentials not configured. Please set EMAIL_USER/EMAIL_USERNAME and EMAIL_PASS/EMAIL_PASSWORD environment variables.');
-    }
-    
     let transporterConfig;
     
-    if (provider.isGmail) {
+    // Transactional email services (SendGrid, Mailgun, SES, Brevo)
+    if (provider.isSendGrid) {
+        if (!emailConfig.apiKey) {
+            throw new Error('EMAIL_API_KEY is required for SendGrid. Please set EMAIL_API_KEY environment variable.');
+        }
+        transporterConfig = {
+            host: 'smtp.sendgrid.net',
+            port: 587,
+            secure: false,
+            auth: {
+                user: 'apikey',
+                pass: emailConfig.apiKey
+            }
+        };
+        logger.info('Using SendGrid configuration');
+    } else if (provider.isMailgun) {
+        if (!emailConfig.apiKey) {
+            throw new Error('EMAIL_API_KEY is required for Mailgun. Please set EMAIL_API_KEY environment variable.');
+        }
+        transporterConfig = {
+            host: 'smtp.mailgun.org',
+            port: 587,
+            secure: false,
+            auth: {
+                user: emailConfig.apiKey,
+                pass: emailConfig.apiKey // Mailgun uses API key as both username and password
+            }
+        };
+        logger.info('Using Mailgun configuration');
+    } else if (provider.isSES) {
+        if (!emailConfig.apiKey) {
+            throw new Error('EMAIL_API_KEY is required for AWS SES. Please set EMAIL_API_KEY environment variable.');
+        }
+        transporterConfig = {
+            host: 'email-smtp.us-east-1.amazonaws.com', // Default region, can be customized
+            port: 587,
+            secure: false,
+            auth: {
+                user: emailConfig.apiKey.split(':')[0], // AWS SES uses format: ACCESS_KEY_ID/SECRET_ACCESS_KEY
+                pass: emailConfig.apiKey.split(':')[1]
+            }
+        };
+        logger.info('Using AWS SES configuration');
+    } else if (provider.isBrevo) {
+        if (!emailConfig.apiKey) {
+            throw new Error('EMAIL_API_KEY is required for Brevo. Please set EMAIL_API_KEY environment variable.');
+        }
+        transporterConfig = {
+            host: 'smtp-relay.brevo.com',
+            port: 587,
+            secure: false,
+            auth: {
+                user: emailConfig.apiKey,
+                pass: emailConfig.apiKey // Brevo uses API key as both username and password
+            }
+        };
+        logger.info('Using Brevo configuration');
+    } else if (provider.isGmail) {
         // Gmail configuration - use service instead of host
+        if (!emailConfig.user || !emailConfig.password) {
+            throw new Error('EMAIL_USER and EMAIL_PASS are required for Gmail. Please set these environment variables.');
+        }
         transporterConfig = {
             service: 'gmail',
             auth: {
@@ -96,6 +164,9 @@ export const createEmailTransporter = (config = null) => {
         });
     } else if (provider.isOutlook) {
         // Outlook/Office 365 configuration
+        if (!emailConfig.user || !emailConfig.password) {
+            throw new Error('EMAIL_USER and EMAIL_PASS are required for Outlook. Please set these environment variables.');
+        }
         transporterConfig = {
             host: emailConfig.host,
             port: emailConfig.port,
@@ -117,6 +188,9 @@ export const createEmailTransporter = (config = null) => {
         });
     } else {
         // Generic SMTP configuration
+        if (!emailConfig.user || !emailConfig.password) {
+            throw new Error('EMAIL_USER and EMAIL_PASS are required for SMTP. Please set these environment variables.');
+        }
         transporterConfig = {
             host: emailConfig.host,
             port: emailConfig.port,
