@@ -84,11 +84,11 @@ const Register = () => {
 
     return (
         <div 
-            className="flex justify-center items-center min-h-screen bg-cover bg-center bg-fixed"
+            className="flex justify-center items-center min-h-screen bg-cover bg-center bg-fixed p-4 sm:p-6"
             style={{ backgroundImage: "url('../media/Untitled-2 (2).png')" }}
         >
             <form 
-                className="w-full max-w-md p-8 bg-white rounded-lg shadow-md text-center"
+                className="w-full max-w-md p-5 sm:p-8 bg-white rounded-lg shadow-md text-center mx-auto"
                 onSubmit={handleSubmit}
             >
                 <h1 className="text-2xl font-bold mb-6 text-theme-primary" style={{ color: 'var(--color-primary)' }}>Welcome to Paarsiv</h1>

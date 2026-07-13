@@ -22,7 +22,7 @@ const OrganizationLogin = () => {
 
     // Show loading while redirecting
     return (
-        <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center">
+        <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center p-4">
             <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
                 <p className="text-gray-600">Redirecting to login...</p>
@@ -104,7 +104,7 @@ const OrganizationLogin = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
+            <div className="max-w-md w-full space-y-8 bg-white p-5 sm:p-8 rounded-2xl shadow-xl">
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
                         <FaBuilding className="h-12 w-12 text-theme-primary" />

@@ -291,9 +291,9 @@ function Login() {
 
     return (
         <>
-        <div className="flex justify-center items-center min-h-screen bg-cover bg-center bg-fixed"
+        <div className="flex justify-center items-center min-h-screen bg-cover bg-center bg-fixed p-4 sm:p-6"
              style={{ backgroundImage: "url('../media/Untitled-2 (2).png')" }}>
-            <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm text-center">
+            <div className="bg-white p-5 sm:p-8 rounded-lg shadow-md w-full max-w-sm text-center mx-auto">
                 <h1 className="text-2xl font-bold mb-2 text-theme-primary" style={{ color: 'var(--color-primary)' }}>Login</h1>
                 <p className="mb-5 text-theme-primary opacity-90" style={{ color: 'var(--color-primary)' }}>Login to your account.</p>
 

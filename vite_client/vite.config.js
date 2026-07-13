@@ -473,6 +473,8 @@ export default defineConfig(({ mode }) => {
     ]
   },
   server: {
+    // Allow ngrok / tunnel hosts for mobile push testing on localhost
+    allowedHosts: ['.ngrok-free.dev', '.ngrok.io', '.ngrok-free.app'],
     proxy: {
       '/socket.io': {
         target: proxyTarget,

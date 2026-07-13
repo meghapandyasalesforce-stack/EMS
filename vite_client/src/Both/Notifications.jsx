@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 import { FaCheck, FaTrash } from 'react-icons/fa';
+import EnablePushNotificationsButton from '../components/EnablePushNotificationsButton';
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
@@ -53,6 +54,8 @@ const Notifications = () => {
           </div>
         </div>
 
+        <EnablePushNotificationsButton />
+
         {loading ? (
           <div className="text-center py-10 text-gray-500">Loading...</div>
         ) : notifications.length === 0 ? (
@@ -60,19 +63,29 @@ const Notifications = () => {
         ) : (
           <ul className="divide-y divide-gray-200">
             {notifications.map(n => (
-              <li key={n._id} className={`flex items-start justify-between p-4 ${n.isRead ? '' : 'bg-theme-secondary/10'}`}>
-                <div className="pr-4">
-                  <p className="text-sm font-medium text-gray-800">{n.message}</p>
+              <li key={n._id} className={`flex items-start justify-between gap-3 p-4 ${n.isRead ? '' : 'bg-theme-secondary/10'}`}>
+                <div className="min-w-0 flex-1 pr-2">
+                  <p className="text-sm font-medium text-gray-800 break-words">{n.message}</p>
                   <p className="text-xs text-gray-500 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex shrink-0 gap-2">
                   {!n.isRead && (
-                    <button onClick={() => markOne(n._id)} className="p-2 rounded bg-theme-secondary/10 hover:bg-blue-200 text-theme-secondary" title="Mark as read">
-                      <FaCheck />
+                    <button
+                      type="button"
+                      onClick={() => markOne(n._id)}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded bg-theme-secondary/10 hover:bg-blue-200 text-theme-secondary"
+                      title="Mark as read"
+                    >
+                      <FaCheck className="h-4 w-4" />
                     </button>
                   )}
-                  <button onClick={() => removeOne(n._id)} className="p-2 rounded bg-red-100 hover:bg-red-200 text-red-700" title="Delete">
-                    <FaTrash />
+                  <button
+                    type="button"
+                    onClick={() => removeOne(n._id)}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded bg-red-100 hover:bg-red-200 text-red-700"
+                    title="Delete"
+                  >
+                    <FaTrash className="h-4 w-4" />
                   </button>
                 </div>
               </li>
