@@ -277,7 +277,7 @@ export const sendNotificationToUsers = async (recipientIds, sender, message, typ
           notificationId: notification._id
         });
         
-        await sendPushNotification(recipientId, 'User', pushPayload);
+        await sendPushNotification(recipientId, 'User', pushPayload, organizationId);
       }
     } catch (pushError) {
       logger.error('Error sending push notifications', {
@@ -539,7 +539,7 @@ export const sendNotification = async ({
           title
         });
         
-        await sendPushNotification(userId, recipientType, pushPayload);
+        await sendPushNotification(userId, recipientType, pushPayload, userOrgId);
       }
     } catch (pushError) {
       logger.error('Error sending push notification', {

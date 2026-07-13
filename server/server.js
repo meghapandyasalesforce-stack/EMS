@@ -12,6 +12,8 @@
 // import express from "express";
 import './loadEnv.js';
 
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -42,6 +44,9 @@ import logger from "./helpers/logger.js";
 
 // Initialize centralized notification event registry
 import './helpers/notificationEventRegistry.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -141,6 +146,20 @@ app.use(corsMiddleware);
 // ✅ Static files (MUST be before organization isolation and other middleware)
 // This ensures static file requests are handled before they reach route handlers
 // CRITICAL: Static files must be registered early to prevent route conflicts
+
+// Serve public directory at root level for logo.png and other public assets
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    maxAge: "1d",
+    fallthrough: true,
+    setHeaders: (res) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+    },
+  })
+);
+
+// Serve uploads directory with custom middleware
 app.use("/uploads", staticFilesCorsMiddleware);
 app.use("/uploads", staticFilesCheckMiddleware, staticFilesConfig);
 // Handle 404s for missing static files (after express.static, before route handlers)
@@ -150,7 +169,7 @@ app.use(staticCacheHeaders); // Add cache headers for static files
 // ✅ Request timeout (prevent hanging requests)
 // Skip timeout for static file requests to allow large file downloads
 app.use((req, res, next) => {
-  if (req.path.startsWith('/uploads/')) {
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
     return next();
   }
   requestTimeout(parseInt(process.env.REQUEST_TIMEOUT_MS || '30000'))(req, res, next);
@@ -159,14 +178,14 @@ app.use((req, res, next) => {
 // ✅ Rate limiting + CSRF (skip for static files - already handled above)
 app.use((req, res, next) => {
   // Skip rate limiting for static file requests
-  if (req.path.startsWith('/uploads/')) {
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
     return next();
   }
   apiLimiter(req, res, next);
 });
 app.use((req, res, next) => {
   // Skip CSRF for static file requests
-  if (req.path.startsWith('/uploads/')) {
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
     return next();
   }
   csrfProtection(req, res, next);
@@ -178,7 +197,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   // Skip organization isolation for static file requests
   // Static files don't need organization context
-  if (req.path.startsWith('/uploads/')) {
+  if (req.path.startsWith('/uploads/') || req.path.startsWith('/logo') || req.path.startsWith('/favicon')) {
     return next();
   }
   setOrganizationContext(req, res, next);

@@ -73,30 +73,28 @@ export const subscribe = async (req, res) => {
       });
     }
 
-    // Check if subscription already exists
-    const existing = await PushSubscription.findOne({
-      userId,
-      userType,
-      endpoint: subscription.endpoint
-    });
+    // Upsert by endpoint: one browser endpoint can only belong to one account.
+    // Reassign when the same device switches users, or refresh keys for the same user.
+    const existing = await PushSubscription.findOne({ endpoint: subscription.endpoint });
 
     if (existing) {
-      // Update existing subscription
+      existing.userId = userId;
+      existing.userType = userType;
+      existing.organizationId = organizationId;
       existing.keys = {
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth
       };
-      existing.organizationId = organizationId;
       existing.userAgent = req.get('User-Agent');
       await existing.save();
 
-      return res.json({ 
-        success: true, 
-        message: 'Subscription updated successfully' 
+      logger.info(`Push subscription updated for user ${userId} (${userType})`);
+      return res.json({
+        success: true,
+        message: 'Subscription updated successfully'
       });
     }
 
-    // Create new subscription
     await PushSubscription.create({
       organizationId,
       userId,
@@ -110,15 +108,15 @@ export const subscribe = async (req, res) => {
     });
 
     logger.info(`Push subscription created for user ${userId} (${userType})`);
-    res.json({ 
-      success: true, 
-      message: 'Subscription saved successfully' 
+    res.json({
+      success: true,
+      message: 'Subscription saved successfully'
     });
   } catch (error) {
     logger.error('Error saving push subscription', { error: error.message, stack: error.stack });
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    res.status(500).json({
+      success: false,
+      message: error.message
     });
   }
 };
@@ -202,12 +200,23 @@ export const sendTestPush = async (req, res) => {
   try {
     const userId = req.user?._id || req.employee?._id;
     const userType = req.user ? 'User' : 'Employee';
+    let organizationId = req.user?.organizationId || req.employee?.organizationId;
 
     if (!userId) {
       return res.status(401).json({
         success: false,
         message: 'User not authenticated',
       });
+    }
+
+    if (!organizationId) {
+      if (req.user?._id) {
+        const user = await User.findById(req.user._id).select('organizationId').lean();
+        organizationId = user?.organizationId;
+      } else if (req.employee?._id) {
+        const employee = await Employee.findById(req.employee._id).select('organizationId').lean();
+        organizationId = employee?.organizationId;
+      }
     }
 
     const payload = createPushPayload(
@@ -259,6 +268,7 @@ export const sendTestPush = async (req, res) => {
       message: 'Test push notification sent',
       sent: result.sent,
       failed: result.failed,
+      devices: result.devices || [],
     });
   } catch (error) {
     logger.error('Error sending test push', { error: error.message, stack: error.stack });

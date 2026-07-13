@@ -53,7 +53,15 @@ export const resolveSystemRoleFromRecords = (employee, user = null) => {
   if (platformRoles.has(PLATFORM_ROLES.PAYROLL_ADMIN) || functional.has('finance')) {
     return SYSTEM_ROLE_IDS.PAYROLL_ADMIN;
   }
-  if (platformRoles.has(PLATFORM_ROLES.HR_EXECUTIVE) || functional.has('hr')) {
+  if (platformRoles.has(PLATFORM_ROLES.HR_EXECUTIVE)) {
+    return SYSTEM_ROLE_IDS.HR_EXECUTIVE;
+  }
+  // Distinguish HR Manager vs HR Executive when only functionalRoles has 'hr'
+  if (functional.has('hr')) {
+    const title = String(employee.jobTitle || '').toLowerCase().trim();
+    if (title === 'hr manager') {
+      return SYSTEM_ROLE_IDS.HR_MANAGER;
+    }
     return SYSTEM_ROLE_IDS.HR_EXECUTIVE;
   }
   if (
@@ -134,12 +142,50 @@ export const syncLinkedUserForSystemRole = async ({
 
   return null;
 };
+/** Keep job title/department aligned with system access. Does NOT change CEO/CTO/CFO/VP position rules. */
+/** Keep job title/department/position aligned with system access. Does NOT force CEO/CTO/CFO/VP. */
+export const applyJobProfileForSystemRole = (employee, systemRoleId) => {
+  const currentPos = String(employee.position || '').toLowerCase().trim();
+  const isLeadershipPos = ['ceo', 'cto', 'cfo', 'vp'].includes(currentPos);
 
+  if (systemRoleId === SYSTEM_ROLE_IDS.HR_MANAGER) {
+    employee.jobTitle = 'HR Manager';
+    employee.department = 'HR';
+    employee.position = 'Manager';
+  } else if (systemRoleId === SYSTEM_ROLE_IDS.HR_EXECUTIVE) {
+    employee.jobTitle = 'HR Executive';
+    employee.department = 'HR';
+    employee.position = 'Executive';
+  } else if (systemRoleId === SYSTEM_ROLE_IDS.PAYROLL_ADMIN) {
+    employee.department = 'Finance';
+    if (!isLeadershipPos) {
+      employee.position = 'Manager';
+    }
+  } else if (systemRoleId === SYSTEM_ROLE_IDS.LINE_MANAGER) {
+    if (!isLeadershipPos) {
+      employee.position = 'Manager';
+    }
+  } else if (systemRoleId === SYSTEM_ROLE_IDS.EXECUTIVE) {
+    // Leadership access — set position Executive, but never overwrite CEO/CTO/CFO/VP
+    if (['HR Manager', 'HR Executive'].includes(String(employee.jobTitle || ''))) {
+      employee.jobTitle = 'Executive';
+    }
+    if (!isLeadershipPos) {
+      employee.position = 'Executive';
+    }
+  } else if (systemRoleId === SYSTEM_ROLE_IDS.EMPLOYEE) {
+    if (['HR Manager', 'HR Executive'].includes(String(employee.jobTitle || ''))) {
+      employee.jobTitle = 'Employee';
+    }
+  }
+  return employee;
+};
 export const assignSystemRoleToEmployee = async ({
   employeeId,
   systemRoleId,
   organizationId,
   plaintextPassword = null,
+  syncJobProfile = true,
 }) => {
   if (!ALL_SYSTEM_ROLE_IDS.includes(systemRoleId)) {
     throw new Error(`Invalid system role: ${systemRoleId}`);
@@ -151,22 +197,32 @@ export const assignSystemRoleToEmployee = async ({
   }
 
   applySystemRoleToEmployee(employee, systemRoleId);
+  if (syncJobProfile) {
+    applyJobProfileForSystemRole(employee, systemRoleId);
+  }
   await employee.save();
 
-  // Only sync platform roles on an already-linked User account.
-  // Never create a new User from an Employee — functionalRoles on the
-  // Employee document is sufficient for the permissions system.
   let user = null;
   if (employee.userId) {
     user = await User.findById(employee.userId);
+  }
+  if (!user && employee.email) {
+    user = await User.findOne({
+      email: employee.email,
+      organizationId: organizationId || employee.organizationId,
+    });
     if (user) {
-      user = await syncLinkedUserForSystemRole({
-        employee,
-        systemRoleId,
-        organizationId,
-        existingUser: user,
-      });
+      employee.userId = user._id;
+      await employee.save();
     }
+  }
+  if (user) {
+    user = await syncLinkedUserForSystemRole({
+      employee,
+      systemRoleId,
+      organizationId,
+      existingUser: user,
+    });
   }
 
   return {

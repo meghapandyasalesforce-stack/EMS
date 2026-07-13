@@ -6,14 +6,18 @@ const router = express.Router();
 
 let vapidConfigured = false;
 function ensureVapidConfigured() {
-  if (!vapidConfigured) {
-    webpush.setVapidDetails(
-      process.env.VAPID_EMAIL,
-      process.env.VAPID_PUBLIC_KEY,
-      process.env.VAPID_PRIVATE_KEY
-    );
-    vapidConfigured = true;
+  if (vapidConfigured) return;
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject =
+    process.env.VAPID_SUBJECT ||
+    process.env.VAPID_EMAIL ||
+    'mailto:admin@example.com';
+  if (!publicKey || !privateKey) {
+    throw new Error('VAPID keys not configured');
   }
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  vapidConfigured = true;
 }
 
 router.post('/subscribe', async (req, res) => {

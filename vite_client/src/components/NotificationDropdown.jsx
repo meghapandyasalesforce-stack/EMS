@@ -5,7 +5,10 @@ import axios from '../utils/axios';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { io } from 'socket.io-client';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
+import { getTokenFromCookie } from '../utils/authHelper';
+import { getSocketIOUrl } from '../utils/socketUrl';
 
 const NotificationDropdown = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -65,6 +68,44 @@ const NotificationDropdown = () => {
             clearTimeout(initialTimeout);
             if (interval) clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [authUser]);
+
+    // Realtime in-app updates while the phone/laptop app is open
+    useEffect(() => {
+        if (!authUser || authUser?.mustResetPassword) return;
+
+        const url = getSocketIOUrl();
+        if (!url) return;
+
+        const token = getTokenFromCookie();
+        const socket = io(url, {
+            path: '/socket.io',
+            withCredentials: true,
+            auth: token ? { token } : {},
+            transports: ['websocket', 'polling'],
+        });
+
+        const onNotification = (payload) => {
+            const notification = payload?.data || payload;
+            if (!notification) return;
+
+            setUnreadCount((prev) => prev + 1);
+            setNotifications((prev) => {
+                const id = notification._id || notification.id;
+                if (id && prev.some((n) => String(n._id) === String(id))) return prev;
+                return [notification, ...prev].slice(0, 10);
+            });
+
+            const message = notification.message || notification.title || 'New notification';
+            toast.info(message, { autoClose: 4000 });
+        };
+
+        socket.on('notification', onNotification);
+
+        return () => {
+            socket.off('notification', onNotification);
+            socket.disconnect();
         };
     }, [authUser]);
 

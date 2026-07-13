@@ -252,15 +252,15 @@ const Header = () => {
                         <div
                             className={
                                 useLightEmployeeNav
-                                    ? 'animate-slideDown border-b border-gray-200 bg-white text-gray-800 shadow-lg'
-                                    : 'animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl'
+                                    ? 'animate-slideDown border-b border-gray-200 bg-white text-gray-800 shadow-lg max-h-[calc(100vh-64px)] overflow-hidden flex flex-col'
+                                    : 'animate-slideDown border-b border-gray-700/50 bg-gradient-to-b from-gray-800 to-gray-900 text-white shadow-2xl max-h-[calc(100vh-64px)] overflow-hidden flex flex-col'
                             }
                         >
                             <div
                                 className={
                                     useLightEmployeeNav
-                                        ? 'flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4'
-                                        : 'flex items-center justify-between border-b border-gray-700/50 bg-gray-800/50 px-4 py-4 backdrop-blur-sm'
+                                        ? 'flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-4 flex-shrink-0'
+                                        : 'flex items-center justify-between border-b border-gray-700/50 bg-gray-800/50 px-4 py-4 backdrop-blur-sm flex-shrink-0'
                                 }
                             >
                                 <h3 className="text-2xl font-extrabold tracking-tight">
@@ -297,8 +297,10 @@ const Header = () => {
                                     <FaTimes className="text-xl" />
                                 </button>
                             </div>
-                            <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
-                            <nav className="flex flex-col py-2">
+                            <div className="flex-shrink-0">
+                                <PortalSwitcher compact lightTheme={useLightEmployeeNav} />
+                            </div>
+                            <nav className="flex flex-col py-2 overflow-y-auto overflow-x-hidden flex-1">
                                 {navItems.map((item, index) => (
                                     <Link
                                         key={item.path}

@@ -2,6 +2,11 @@ import { useEffect, useState, useCallback } from 'react';
 import axios from '../utils/axios';
 import { BOTH_PUSH_SUBSCRIPTION_ENDPOINT } from '../utils/constant';
 import logger from '../utils/logger.js';
+import {
+  ensurePushSubscription,
+  saveSubscriptionToServer,
+  syncPushSubscriptionIfGranted,
+} from '../utils/push';';
 
 /**
  * Hook to manage push notifications
@@ -14,34 +19,12 @@ export const usePushNotification = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Helper: Convert base64 URL to Uint8Array
-  const urlBase64ToUint8Array = (base64String) => {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-      .replace(/\-/g, '+')
-      .replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
-  };
-
-  // Helper: Convert ArrayBuffer to base64url (Web Push standard)
-  const arrayBufferToBase64 = (buffer) => {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    bytes.forEach(byte => binary += String.fromCharCode(byte));
-    return window.btoa(binary)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  };
-
   // Initialize push notifications
   const initializePush = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Check browser support
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         setIsSupported(false);
         setIsLoading(false);
@@ -50,17 +33,12 @@ export const usePushNotification = () => {
 
       setIsSupported(true);
 
-      // Get service worker registration (VitePWA registers it automatically)
       let registration;
       try {
-        // Wait for any existing service worker to be ready
-        if (navigator.serviceWorker.controller) {
-          registration = await navigator.serviceWorker.ready;
-        } else {
-          // Wait a bit for VitePWA to register, then get registration
+        if (!navigator.serviceWorker.controller) {
           await new Promise(resolve => setTimeout(resolve, 100));
-          registration = await navigator.serviceWorker.ready;
         }
+        registration = await navigator.serviceWorker.ready;
       } catch (swError) {
         logger.error('Service Worker registration failed', swError);
         setError('Failed to register service worker');
@@ -74,7 +52,6 @@ export const usePushNotification = () => {
         return;
       }
 
-      // Get VAPID public key from server
       let vapidPublicKey;
       try {
         const { data } = await axios.get(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/vapid-public-key`);
@@ -89,36 +66,18 @@ export const usePushNotification = () => {
         return;
       }
 
-      // Check existing subscription
-      let sub = await registration.pushManager.getSubscription();
-      
-      if (!sub) {
-        // Create new subscription
-        try {
-          sub = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-          });
-        } catch (subscribeError) {
-          logger.error('Failed to subscribe to push', subscribeError);
-          setError('Failed to subscribe to push notifications');
-          setIsLoading(false);
-          return;
-        }
+      let sub;
+      try {
+        sub = await ensurePushSubscription(registration, vapidPublicKey);
+      } catch (subscribeError) {
+        logger.error('Failed to subscribe to push', subscribeError);
+        setError('Failed to subscribe to push notifications');
+        setIsLoading(false);
+        return;
       }
 
-      // Send subscription to server
       try {
-        await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscribe`, {
-          subscription: {
-            endpoint: sub.endpoint,
-            keys: {
-              p256dh: arrayBufferToBase64(sub.getKey('p256dh')),
-              auth: arrayBufferToBase64(sub.getKey('auth'))
-            }
-          }
-        });
-
+        await saveSubscriptionToServer(sub);
         setSubscription(sub);
         setIsSubscribed(true);
       } catch (serverError) {
@@ -135,14 +94,11 @@ export const usePushNotification = () => {
     }
   }, []);
 
-  // Unsubscribe from push notifications
   const unsubscribe = useCallback(async () => {
     try {
       if (subscription) {
-        // Unsubscribe from browser
         await subscription.unsubscribe();
-        
-        // Remove from server
+
         try {
           await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-unsubscribe`, {
             endpoint: subscription.endpoint
@@ -189,9 +145,7 @@ export const usePushNotification = () => {
     }
   }, []);
 
-  // Detect browser support on mount without requesting permission
-   // Detect browser support and restore existing subscription on mount
-   useEffect(() => {
+  useEffect(() => {
     const init = async () => {
       const supported =
         'serviceWorker' in navigator &&
@@ -207,27 +161,10 @@ export const usePushNotification = () => {
       }
 
       try {
-        const registration = await navigator.serviceWorker.ready;
-        const existingSub = await registration.pushManager.getSubscription();
-
-        if (existingSub && Notification.permission === 'granted') {
-          setSubscription(existingSub);
+        const sub = await syncPushSubscriptionIfGranted();
+        if (sub) {
+          setSubscription(sub);
           setIsSubscribed(true);
-
-          // Re-sync subscription with backend after page reload
-          try {
-            await axios.post(`${BOTH_PUSH_SUBSCRIPTION_ENDPOINT}/push-subscribe`, {
-              subscription: {
-                endpoint: existingSub.endpoint,
-                keys: {
-                  p256dh: arrayBufferToBase64(existingSub.getKey('p256dh')),
-                  auth: arrayBufferToBase64(existingSub.getKey('auth'))
-                }
-              }
-            });
-          } catch (syncError) {
-            logger.error('Failed to re-sync push subscription with server', syncError);
-          }
         }
       } catch (err) {
         logger.error('Failed to restore push subscription', err);
@@ -251,4 +188,3 @@ export const usePushNotification = () => {
     sendTestNotification,
   };
 };
-

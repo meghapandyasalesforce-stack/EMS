@@ -3,7 +3,8 @@ import { createEmailTransporter, getEmailFrom, detectEmailProvider, getEmailConf
 
 const LEAVE_EMAIL_SENDER_NAME = 'Paarsiv Technologies Private Limited';
 const REGULARIZATION_EMAIL_SENDER = 'kunalpareekn@gmail.com';
-
+const LOGO_URL_LIGHT = 'https://www.paarsiv.com/wp-content/uploads/2024/08/paarsiv-1.png';
+const LOGO_URL_DARK = 'https://www.paarsiv.com/wp-content/uploads/2024/08/paarsiv-white-png-1.png';
 const getLeaveEmailFrom = () => {
   const emailFrom = getEmailFrom();
   if (!emailFrom) return null;
@@ -60,50 +61,102 @@ export const sendWelcomeEmail = async (email, name, password = null, resetUrl = 
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Welcome to Paarsiv</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #1e1e2f;
+      body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
       margin: 0;
       padding: 0;
-      color: #e0e0e0;
+      color: #FFFFFF;
     }
     .container {
       max-width: 600px;
       margin: 40px auto;
-      background-color: #2b2b3c;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
     }
     .header {
       text-align: center;
-      color: #7c9eff;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
     }
     .message {
       font-size: 16px;
-      color: #dddddd;
+      color: #FFFFFF;
       line-height: 1.6;
+      margin: 0 0 15px 0;
     }
     .password-box {
-      background-color: #383850;
-      padding: 14px;
+      background-color: #F8F9FA;
+      padding: 20px;
       font-weight: bold;
       font-size: 18px;
-      color: #ff6e91;
+      color: #5CC9A7;
       text-align: center;
-      border-radius: 6px;
+      border-radius: 8px;
       margin: 20px 0;
+      border: 1px solid #E5E7EB;
+    }
+    .button {
+      background-color: #5CC9A7;
+      color: #ffffff;
+      padding: 14px 28px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      display: inline-block;
+      margin: 20px 0;
+    }
+    .button:hover {
+      background-color: #4AB896;
     }
     .footer {
       font-size: 14px;
-      color: #888888;
+      color: #CCCCCC;
       text-align: center;
-      margin-top: 30px;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
     }
     a {
-      color: #9dc1ff;
+      color: #5CC9A7;
       text-decoration: none;
     }
     a:hover {
@@ -113,19 +166,23 @@ export const sendWelcomeEmail = async (email, name, password = null, resetUrl = 
 </head>
 <body>
   <div class="container">
-    <h2 class="header">Welcome to Paarsiv!</h2>
-    <p class="message">
-      Hello, ${name}!
-    </p>
+       <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Welcome to Paarsiv</h1>
+    <p class="message">Dear ${name},</p>
     <p class="message">
       Your account has been successfully created by the Paarsiv Admin Team. You are now part of our employee network.
     </p>
     ${useResetLink ? `
     <p class="message">
-      Click the link below to set your password and activate your account:
+      Click the button below to set your password and activate your account:
     </p>
     <div style="text-align: center; margin: 20px 0;">
-      <a href="${resetUrl}" style="background-color: #7c9eff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Set Your Password</a>
+      <a href="${resetUrl}" class="button">Set Your Password</a>
     </div>
     <p class="message">
       <strong>Security Notice:</strong> This link will expire in 24 hours. Please set your password immediately.
@@ -143,7 +200,13 @@ export const sendWelcomeEmail = async (email, name, password = null, resetUrl = 
       Need help? Contact your administrator or reach out to <a href="mailto:support@paarsiv.com">support@paarsiv.com</a>.
     </p>
     <div class="footer">
-      &copy; 2025 Paarsiv. All rights reserved.
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
     </div>
   </div>
 </body>
@@ -252,32 +315,128 @@ export const sendPasswordResetEmail = async (email, name, resetUrl) => {
     subject: 'Password Reset Request - Paarsiv HR System',
     html: `
     <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <title>Password Reset</title>
-      <style>
-        body { font-family: Arial, sans-serif; background-color: #1e1e2f; margin: 0; padding: 0; color: #e0e0e0; }
-        .container { max-width: 600px; margin: 40px auto; background-color: #2b2b3c; padding: 30px; border-radius: 10px; }
-        .header { text-align: center; color: #7c9eff; }
-        .message { font-size: 16px; color: #dddddd; line-height: 1.6; }
-        .button { background-color: #7c9eff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; }
-        .footer { font-size: 14px; color: #888888; text-align: center; margin-top: 30px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h2 class="header">Password Reset Request</h2>
-        <p class="message">Hello ${name},</p>
-        <p class="message">You requested to reset your password. Click the button below to reset it:</p>
-        <div style="text-align: center; margin: 20px 0;">
-          <a href="${resetUrl}" class="button">Reset Password</a>
-        </div>
-        <p class="message"><strong>Note:</strong> This link will expire in 1 hour.</p>
-        <div class="footer">&copy; 2025 Paarsiv. All rights reserved.</div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Reset</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
+      margin: 0;
+      padding: 0;
+      color: #FFFFFF;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
+      margin: 0 0 15px 0;
+    }
+    .button {
+      background-color: #5CC9A7;
+      color: #ffffff;
+      padding: 14px 28px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      display: inline-block;
+      margin: 20px 0;
+    }
+    .button:hover {
+      background-color: #4AB896;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+       <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Password Reset Request</h1>
+    <p class="message">Dear ${name},</p>
+    <p class="message">You requested to reset your password. Click the button below to reset it:</p>
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="${resetUrl}" class="button">Reset Password</a>
+    </div>
+    <p class="message"><strong>Note:</strong> This link will expire in 1 hour.</p>
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
       </div>
-    </body>
-    </html>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
     `
   };
 
@@ -313,7 +472,113 @@ export const sendNotificationEmail = async (email, subject, message, html) => {
     to: email,
     subject: subject || 'Notification from Paarsiv HR System',
     text: message,
-    html: html || `<p>${message}</p>`
+    html: html || `
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
+      margin: 0;
+      padding: 0;
+      color: #FFFFFF;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
+      margin: 0 0 15px 0;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Notification</h1>
+    <p class="message">${message}</p>
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
+    `
   };
 
   try {
@@ -368,43 +633,181 @@ const generateRegularizationRequestEmailTemplate = (data) => {
   <title>Attendance Regularization Request</title>
   <style>
     body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
       margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      color: #333333;
-      line-height: 1.6;
+      padding: 0;
+      color: #FFFFFF;
     }
-    p {
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
       margin: 0 0 15px 0;
     }
-    strong {
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #F8F9FA;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+    .info-table tr:nth-child(even) {
+      background-color: #F1F3F5;
+    }
+    .info-label {
       font-weight: bold;
+      color: #1a1a1a;
+      width: 40%;
+    }
+    .info-value {
+      color: #4a4a4a;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-pending {
+      background-color: #FFF4D6;
+      color: #B8860B;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h2>Attendance Regularization Request</h2>
-  
-  <p>Dear Manager,</p>
-  
-  <p>${data.employeeName || 'An employee'} has applied for attendance regularization.</p>
-  
-  <p><strong>Employee Name:</strong> ${data.employeeName || 'N/A'}</p>
-  <p><strong>Employee ID:</strong> ${data.employeeId || 'N/A'}</p>
-  <p><strong>Department:</strong> ${data.department || 'N/A'}</p>
-  <p><strong>Attendance Date:</strong> ${attendanceDate}</p>
-  <p><strong>Regularization Type:</strong> ${regularizationTypeText}</p>
-  <p><strong>Requested Time:</strong> ${requestedTimeText}</p>
-  <p><strong>Reason:</strong></p>
-  <p>${data.reason || 'N/A'}</p>
-  <p><strong>Request Status:</strong> Pending</p>
-  <p><strong>Submitted Date & Time:</strong> ${submittedAt}</p>
-  
-  <p>Please review and approve or reject this request.</p>
-  
-  <p>Regards,</p>
-  <p><strong>Paarsiv Technologies Private Limited</strong></p>
+  <div class="container">
+     <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Attendance Regularization Request</h1>
+    <p class="message">Dear Manager,</p>
+    <p class="message">${data.employeeName || 'An employee'} has applied for attendance regularization.</p>
+    
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Employee Name</td>
+        <td class="info-value">${data.employeeName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Employee ID</td>
+        <td class="info-value">${data.employeeId || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Department</td>
+        <td class="info-value">${data.department || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Attendance Date</td>
+        <td class="info-value">${attendanceDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Regularization Type</td>
+        <td class="info-value">${regularizationTypeText}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Requested Time</td>
+        <td class="info-value">${requestedTimeText}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Reason</td>
+        <td class="info-value">${data.reason || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Status</td>
+        <td class="info-value"><span class="status-badge status-pending">Pending</span></td>
+      </tr>
+      <tr>
+        <td class="info-label">Submitted Date & Time</td>
+        <td class="info-value">${submittedAt}</td>
+      </tr>
+    </table>
+    
+    <p class="message">Please review and approve or reject this request.</p>
+    
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
 </body>
 </html>`;
 };
@@ -461,39 +864,181 @@ const generateRegularizationEmailTemplate = (data, status) => {
   <title>Attendance Regularization ${statusText}</title>
   <style>
     body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
       margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      color: #333333;
-      line-height: 1.6;
+      padding: 0;
+      color: #FFFFFF;
     }
-    p {
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
       margin: 0 0 15px 0;
     }
-    strong {
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #F8F9FA;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+    .info-table tr:nth-child(even) {
+      background-color: #F1F3F5;
+    }
+    .info-label {
       font-weight: bold;
+      color: #1a1a1a;
+      width: 40%;
+    }
+    .info-value {
+      color: #4a4a4a;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-approved {
+      background-color: #E8F8EF;
+      color: #2E7D32;
+    }
+    .status-rejected {
+      background-color: #FDECEC;
+      color: #C62828;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h2>Attendance Regularization ${statusText}</h2>
-  
-  <p>Dear ${data.employeeName || 'Employee'},</p>
-  
-  <p>Your attendance regularization request has been <strong>${statusText}</strong>.</p>
-  
-  <p><strong>Attendance Date:</strong> ${attendanceDate}</p>
-  <p><strong>Regularization Type:</strong> ${regularizationTypeText}</p>
-  <p><strong>${isApproved ? 'Approved By' : 'Rejected By'}:</strong> ${actionBy}</p>
-  <p><strong>${isApproved ? 'Approval Date & Time' : 'Rejection Date & Time'}:</strong> ${actionDate}</p>
-  ${!isApproved ? `<p><strong>Rejection Reason:</strong></p><p>${data.rejectionReason || data.rejectionReason || 'N/A'}</p>` : ''}
-  <p><strong>Status:</strong> ${statusText}</p>
-  
-  <p>If you have any questions, please contact HR or your reporting manager.</p>
-  
-  <p>Regards,</p>
-  <p><strong>Paarsiv Technologies Private Limited</strong></p>
+  <div class="container">
+       <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Attendance Regularization ${statusText}</h1>
+    <p class="message">Dear ${data.employeeName || 'Employee'},</p>
+    <p class="message">Your attendance regularization request has been <strong>${statusText}</strong>.</p>
+    
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Employee Name</td>
+        <td class="info-value">${data.employeeName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Employee ID</td>
+        <td class="info-value">${data.employeeId || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Attendance Date</td>
+        <td class="info-value">${attendanceDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Regularization Type</td>
+        <td class="info-value">${regularizationTypeText}</td>
+      </tr>
+      <tr>
+        <td class="info-label">${isApproved ? 'Approved By' : 'Rejected By'}</td>
+        <td class="info-value">${actionBy}</td>
+      </tr>
+      <tr>
+        <td class="info-label">${isApproved ? 'Approval Date & Time' : 'Rejection Date & Time'}</td>
+        <td class="info-value">${actionDate}</td>
+      </tr>
+      ${!isApproved ? `<tr>
+        <td class="info-label">Rejection Reason</td>
+        <td class="info-value">${data.rejectionReason || data.rejectionReason || 'N/A'}</td>
+      </tr>` : ''}
+      <tr>
+        <td class="info-label">Status</td>
+        <td class="info-value"><span class="status-badge status-${status}">${statusText}</span></td>
+      </tr>
+    </table>
+
+    <p class="message">If you have any questions, please contact HR or your reporting manager.</p>
+
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
 </body>
 </html>`;
 };
@@ -517,39 +1062,179 @@ const generateLeaveRequestEmailTemplate = (data) => {
   <title>Leave Request</title>
   <style>
     body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
       margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      color: #333333;
-      line-height: 1.6;
+      padding: 0;
+      color: #FFFFFF;
     }
-    p {
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
       margin: 0 0 15px 0;
     }
-    strong {
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #F8F9FA;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+    .info-table tr:nth-child(even) {
+      background-color: #F1F3F5;
+    }
+    .info-label {
       font-weight: bold;
+      color: #1a1a1a;
+      width: 40%;
+    }
+    .info-value {
+      color: #4a4a4a;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-pending {
+      background-color: #FFF4D6;
+      color: #B8860B;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <p>Dear ${managerName},</p>
-  
-  <p>I hope you are doing well.</p>
-  
-  <p>I would like to request leave from <strong>${startDate}</strong> to <strong>${endDate}</strong> (<strong>${numberOfDays} day(s)</strong>).</p>
-  
-  <p><strong>Reason for Leave:</strong></p>
-  <p>${data.reason || 'N/A'}</p>
-  
-  <p>I kindly request you to review and approve my leave request. Please let me know if any additional information is required.</p>
-  
-  <p>Thank you for your time and consideration.</p>
-  
-  <p>Regards,</p>
-  <p><strong>${data.employeeName || 'Employee'}</strong></p>
-  <p>${data.employeeId || 'N/A'}</p>
-  <p>${data.department || 'N/A'}</p>
+  <div class="container">
+       <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Leave Request</h1>
+    <p class="message">Dear ${managerName},</p>
+    <p class="message">I hope you are doing well.</p>
+    <p class="message">I would like to request leave from <strong>${startDate}</strong> to <strong>${endDate}</strong> (<strong>${numberOfDays} day(s)</strong>).</p>
+    
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Employee Name</td>
+        <td class="info-value">${data.employeeName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Employee ID</td>
+        <td class="info-value">${data.employeeId || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Department</td>
+        <td class="info-value">${data.department || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Leave Dates</td>
+        <td class="info-value">${startDate} to ${endDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Number of Days</td>
+        <td class="info-value">${numberOfDays}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Reason</td>
+        <td class="info-value">${data.reason || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Status</td>
+        <td class="info-value"><span class="status-badge status-pending">Pending</span></td>
+      </tr>
+    </table>
+    
+    <p class="message">I kindly request you to review and approve my leave request. Please let me know if any additional information is required.</p>
+    
+    <p class="message">Thank you for your time and consideration.</p>
+    
+    <p class="message">Regards,</p>
+    <p class="message"><strong>${data.employeeName || 'Employee'}</strong></p>
+    
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
 </body>
 </html>`;
 };
@@ -648,7 +1333,7 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
   const numberOfDays = data.duration || data.totalDays || 'N/A';
   const isApproved = status === 'approved';
   const remarks = data.rejectionReason || data.remarks || data.reason || 'N/A';
-  const statusText = isApproved ? 'approved' : 'rejected';
+  const statusText = isApproved ? 'Approved' : 'Rejected';
   const remarksLabel = isApproved ? 'Remarks' : 'Rejection Reason';
 
   return `<!DOCTYPE html>
@@ -656,39 +1341,178 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leave Request ${isApproved ? 'Approved' : 'Rejected'}</title>
+  <title>Leave Request ${statusText}</title>
   <style>
     body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
       margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      color: #333333;
-      line-height: 1.6;
+      padding: 0;
+      color: #FFFFFF;
     }
-    p {
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
       margin: 0 0 15px 0;
     }
-    strong {
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #F8F9FA;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+    .info-table tr:nth-child(even) {
+      background-color: #F1F3F5;
+    }
+    .info-label {
       font-weight: bold;
+      color: #1a1a1a;
+      width: 40%;
+    }
+    .info-value {
+      color: #4a4a4a;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-approved {
+      background-color: #E8F8EF;
+      color: #2E7D32;
+    }
+    .status-rejected {
+      background-color: #FDECEC;
+      color: #C62828;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h2>Paarsiv Technologies Private Limited</h2>
-  <p>Dear ${data.employeeName || 'Employee'},</p>
+  <div class="container">
+       <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Leave Request ${statusText}</h1>
+    <p class="message">Dear ${data.employeeName || 'Employee'},</p>
+    <p class="message">Your leave request has been <strong>${statusText}</strong>.</p>
+    
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Employee Name</td>
+        <td class="info-value">${data.employeeName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Employee ID</td>
+        <td class="info-value">${data.employeeId || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Leave Dates</td>
+        <td class="info-value">${startDate} to ${endDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Number of Days</td>
+        <td class="info-value">${numberOfDays}</td>
+      </tr>
+      <tr>
+        <td class="info-label">${remarksLabel}</td>
+        <td class="info-value">${remarks}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Status</td>
+        <td class="info-value"><span class="status-badge status-${status}">${statusText}</span></td>
+      </tr>
+    </table>
 
-  <p>Your leave request has been <strong>${statusText}</strong>.</p>
+    <p class="message">If you have any questions, please contact HR or your reporting manager.</p>
 
-  <p><strong>Leave Dates:</strong> ${startDate} to ${endDate}</p>
-  <p><strong>Number of Days:</strong> ${numberOfDays}</p>
-  <p><strong>${remarksLabel}:</strong></p>
-  <p>${remarks}</p>
-
-  <p>If you have any questions, please contact HR or your reporting manager.</p>
-
-  <p>Regards,</p>
-  <p><strong>Paarsiv Technologies Private Limited</strong></p>
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="40" style="display:none;vertical-align:middle;margin-right:8px;" />
+        <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="40" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">P</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
 </body>
 </html>`;
 };

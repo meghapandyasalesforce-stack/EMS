@@ -7,7 +7,6 @@ export const MINT_DARK = '#0d9488';
 export const DETAIL_TABS = [
   { id: 'personal', label: 'Personal' },
   { id: 'job', label: 'Job Details' },
-  { id: 'access', label: 'Access', permissionGated: true },
   { id: 'documents', label: 'Documents', hrOnly: true },
   { id: 'leave', label: 'Leave' },
   { id: 'payroll', label: 'Payroll', hideForHrExecutive: true },

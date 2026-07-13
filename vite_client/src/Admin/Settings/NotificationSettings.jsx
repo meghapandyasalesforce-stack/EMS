@@ -43,7 +43,14 @@ const NotificationSettings = () => {
         setTestingPush(true);
         try {
             const result = await sendTestNotification();
-            toast.success(result.message || 'Test push sent! Check for a browser notification.');
+            const devices = result.devices || [];
+            const mobile = devices.filter((d) => d.device === 'mobile');
+            const mobileOk = mobile.filter((d) => d.status === 'sent').length;
+            const summary = devices.length
+                ? ` Sent ${result.sent}/${devices.length} devices` +
+                  (mobile.length ? ` (mobile: ${mobileOk}/${mobile.length})` : '')
+                : '';
+            toast.success((result.message || 'Test push sent!') + summary);
         } catch (err) {
             toast.error(err.message || 'Failed to send test push');
         } finally {

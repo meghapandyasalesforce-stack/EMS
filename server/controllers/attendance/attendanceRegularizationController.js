@@ -24,6 +24,7 @@ import {
 import { getRegularizationLimitSummary, isRegularizationInCurrentMonth } from '../../helpers/regularizationLimitHelper.js';
 import { sendRegularizationRequestNotification, sendRegularizationApprovalNotification, sendRegularizationRejectionNotification } from '../../helpers/attendanceRegularizationEmailHelper.js';
 import { notify } from '../../helpers/notificationManager.js';
+import '../../helpers/notificationEventRegistry.js';
 
 /** Parse calendar `YYYY-MM-DD` from query; local start/end-of-day boundary, or null if invalid */
 function parseCalendarDayQuery(raw, boundary) {

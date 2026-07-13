@@ -9,6 +9,7 @@ import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { assignSystemRoleToEmployee } from '../../helpers/systemRoleService.js';
 import { SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
 import { buildSalaryRevisionEntries } from '../../helpers/salaryRevisionHelper.js';
+import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
 
 async function resolveManagerReference(organizationId, managerInput) {
   const raw = String(managerInput || '').trim();
@@ -140,36 +141,51 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
 
-    // Work-info edits do not auto-change HR/manager functional roles — use "Make HR Manager" or Access tab.
+    const workProfileChanged =
+      jobTitle !== undefined || department !== undefined || position !== undefined;
 
-    // Update employee work information
-    // Explicitly include salary field in the response
-    const updatedEmployee = await Employee.findOneAndUpdate(
-      { _id: employeeId, organizationId },
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password -role').lean();
+  let updatedEmployee = await Employee.findOneAndUpdate(
+    { _id: employeeId, organizationId },
+    updateData,
+    { new: true, runValidators: true }
+  ).select('-password -role').lean();
 
-    // Ensure employee list caches reflect work-info changes immediately.
-    if (updatedEmployee?.organizationId) {
-      try {
-        await invalidateEmployeesCache(updatedEmployee.organizationId);
-      } catch (e) {
-        logger.warn('Failed to invalidate employees cache after work-info update', { error: e.message });
-      }
-    }
-
-    // Ensure salary is explicitly included in the response
-    if (updatedEmployee && updatedEmployee.salary === undefined) {
-      const employeeWithSalary = await Employee.findById(employeeId).select('salary').lean();
-      updatedEmployee.salary = employeeWithSalary?.salary ?? 0;
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Employee work information updated successfully',
-      employee: updatedEmployee
+  // Job Details → sync system role from job fields; keep the title/position the user saved
+  if (workProfileChanged && updatedEmployee) {
+    const { systemRoleId } = inferSystemRoleFromWorkInfo({
+      department: updatedEmployee.department,
+      jobTitle: updatedEmployee.jobTitle,
+      position: updatedEmployee.position,
     });
+    await assignSystemRoleToEmployee({
+      employeeId,
+      systemRoleId,
+      organizationId,
+      syncJobProfile: false,
+    });
+    updatedEmployee = await Employee.findOne({ _id: employeeId, organizationId })
+      .select('-password -role')
+      .lean();
+  }
+
+  if (updatedEmployee?.organizationId) {
+    try {
+      await invalidateEmployeesCache(updatedEmployee.organizationId);
+    } catch (e) {
+      logger.warn('Failed to invalidate employees cache after work-info update', { error: e.message });
+    }
+  }
+
+  if (updatedEmployee && updatedEmployee.salary === undefined) {
+    const employeeWithSalary = await Employee.findById(employeeId).select('salary').lean();
+    updatedEmployee.salary = employeeWithSalary?.salary ?? 0;
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Employee work information updated successfully',
+    employee: updatedEmployee,
+  });
 
   } catch (error) {
     logger.error('Error updating employee work information', { error: error.message, stack: error.stack });

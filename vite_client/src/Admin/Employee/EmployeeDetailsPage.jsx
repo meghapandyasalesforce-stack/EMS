@@ -23,6 +23,7 @@ import { toast } from 'react-toastify';
 import { useSelector, useDispatch } from 'react-redux';
 import { FiChevronRight, FiEdit, FiStar } from 'react-icons/fi';
 import { isHR, isManager } from '../../utils/managerHelper';
+import { checkAuthSession } from '../../context/Auth/authSlice';
 import {
   fetchEmployeeDetails,
   updateEmployeeStatus,
@@ -41,7 +42,6 @@ import LeaveTab from './employeeDetails/tabs/LeaveTab';
 import PayrollTab from './employeeDetails/tabs/PayrollTab';
 import PerformanceTab from './employeeDetails/tabs/PerformanceTab';
 import TimelineTab from './employeeDetails/tabs/TimelineTab';
-import AccessTab from './employeeDetails/tabs/AccessTab';
 import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import { PERMISSIONS } from '../../utils/permissions';
 import CareerTimelineWidget from './employeeDetails/widgets/CareerTimelineWidget';
@@ -52,14 +52,7 @@ import {
   getAttendanceRate,
   getFullName,
 } from './employeeDetails/utils';
-import SuggestRoleUpdateModal from '../../components/SuggestRoleUpdateModal';
-import {
-  assignEmployeeSystemRole,
-  fetchEmployeeAccess,
-  fetchSuggestedSystemRole,
-  promoteEmployeeToHrManager,
-} from '../../utils/systemRoleApi';
-import { getRoleLabel } from '../../utils/systemRoleHelpers';
+import { promoteEmployeeToHrManager } from '../../utils/systemRoleApi';
 
 const EmployeeDetailsPage = () => {
   const { employeeId } = useParams();
@@ -95,8 +88,6 @@ const EmployeeDetailsPage = () => {
   const [jobTitleOptions, setJobTitleOptions] = useState([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   const [managerPreview, setManagerPreview] = useState(null);
-  const [roleUpdatePrompt, setRoleUpdatePrompt] = useState(null);
-  const [updatingSystemRole, setUpdatingSystemRole] = useState(false);
   const [promotingToHr, setPromotingToHr] = useState(false);
 
   useEffect(() => {
@@ -334,48 +325,19 @@ const EmployeeDetailsPage = () => {
     setEditWorkForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const checkRoleUpdateAfterWorkSave = async (workData) => {
-    if (!canManageAccess) return;
+  const refreshAfterRoleChange = async () => {
+    const authUser = currentUser;
+    const editingSelf =
+      String(authUser?._id || '') === String(employeeId) ||
+      String(authUser?.employeeProfileId || '') === String(employeeId);
 
-    try {
-      const [suggested, access] = await Promise.all([
-        fetchSuggestedSystemRole({
-          department: workData.department,
-          jobTitle: workData.jobTitle,
-          position: workData.position,
-        }),
-        fetchEmployeeAccess(employeeId),
-      ]);
-
-      if (suggested.systemRoleId !== access.systemRoleId) {
-        const catalog = access.catalog || [];
-        setRoleUpdatePrompt({
-          suggested,
-          currentRoleId: access.systemRoleId,
-          currentRoleLabel: access.systemRoleLabel || getRoleLabel(access.systemRoleId, catalog),
-          suggestedRoleLabel: suggested.label || getRoleLabel(suggested.systemRoleId, catalog),
-        });
-      }
-    } catch {
-      // Non-fatal — work info was still saved
+    // Only refresh session/navbar when editing your own profile.
+    // checkAuthSession overwrites employeeDetails with the logged-in user.
+    if (editingSelf) {
+      await dispatch(checkAuthSession());
     }
-  };
-
-  const handleApplyRoleUpdate = async () => {
-    if (!roleUpdatePrompt) return;
-
-    setUpdatingSystemRole(true);
-    try {
-      await assignEmployeeSystemRole(employeeId, roleUpdatePrompt.suggested.systemRoleId);
-      toast.success(
-        `System access updated to ${roleUpdatePrompt.suggestedRoleLabel}. Ask them to log out and back in.`
-      );
-      setRoleUpdatePrompt(null);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update system access');
-    } finally {
-      setUpdatingSystemRole(false);
-    }
+    // Always reload the employee from the URL so this profile stays open
+    await dispatch(fetchEmployeeDetails(employeeId));
   };
 
   const handlePromoteToHrManager = async () => {
@@ -428,9 +390,13 @@ const EmployeeDetailsPage = () => {
       })
     );
     if (updateEmployeeWorkInfo.fulfilled.match(resultAction)) {
-      setSnackbar({ open: true, message: 'Work information updated.', severity: 'success' });
+      setSnackbar({
+        open: true,
+        message: 'Work information and system access updated. Ask them to log out and back in.',
+        severity: 'success',
+      });
       setOpenEditWorkDialog(false);
-      await checkRoleUpdateAfterWorkSave(workData);
+      await refreshAfterRoleChange();
     } else {
       setSnackbar({
         open: true,
@@ -507,14 +473,6 @@ const EmployeeDetailsPage = () => {
         );
       case 'timeline':
         return <TimelineTab employee={employee} />;
-      case 'access':
-        return (
-          <AccessTab
-            employeeId={employee._id}
-            employee={employee}
-            canEdit={canManageAccess && !isManagerReadOnly}
-          />
-        );
       default:
         return <PersonalTab employee={employee} />;
     }
@@ -900,18 +858,6 @@ const EmployeeDetailsPage = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
-
-      <SuggestRoleUpdateModal
-        open={Boolean(roleUpdatePrompt)}
-        employeeName={employee ? getFullName(employee) : ''}
-        currentRoleLabel={roleUpdatePrompt?.currentRoleLabel}
-        suggestedRoleLabel={roleUpdatePrompt?.suggestedRoleLabel}
-        suggestedRoleId={roleUpdatePrompt?.suggested?.systemRoleId}
-        reason={roleUpdatePrompt?.suggested?.reason}
-        saving={updatingSystemRole}
-        onApply={handleApplyRoleUpdate}
-        onDismiss={() => setRoleUpdatePrompt(null)}
-      />
     </div>
   );
 };

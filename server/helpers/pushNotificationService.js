@@ -25,35 +25,73 @@ const ensureVAPID = () => {
   return true;
 };
 
+/**
+ * Public https origin for notification icons/links.
+ * Avoids localhost URLs on mobile (breaks icons/clicks on real devices).
+ */
+const getPublicOrigin = () => {
+  const candidates = [
+    process.env.PUBLIC_APP_URL,
+    process.env.FRONTEND_URL,
+    process.env.CLIENT_URL,
+    ...(process.env.ALLOWED_ORIGINS || '').split(','),
+  ]
+    .map((value) => (value || '').trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+  const httpsPublic = candidates.find(
+    (origin) =>
+      origin.startsWith('https://') &&
+      !/localhost|127\.0\.0\.1/i.test(origin)
+  );
+  if (httpsPublic) return httpsPublic;
+
+  return candidates[0] || 'http://localhost:5173';
+};
+
+const PUSH_SEND_OPTIONS = {
+  TTL: 60 * 60 * 24,
+  urgency: 'high',
+  headers: {
+    Urgency: 'high',
+  },
+};
+
 export const sendPushNotification = async (userId, userType, payload, organizationId) => {
   if (!ensureVAPID()) {
     logger.warn('VAPID not configured, skipping push notification');
     return { sent: 0, failed: 0, reason: 'VAPID_NOT_CONFIGURED' };
   }
-/**
- * Send push notification to a specific user
- * @param {String|ObjectId} userId - User ID
- * @param {String} userType - 'User' or 'Employee'
- * @param {Object} payload - Notification payload
- * @param {String} organizationId - Organization ID to filter subscriptions
- * @returns {Promise<Object>} - { sent: number, failed: number }
- */
+
+  /**
+   * Send push notification to a specific user
+   * @param {String|ObjectId} userId - User ID
+   * @param {String} userType - 'User' or 'Employee'
+   * @param {Object} payload - Notification payload
+   * @param {String} organizationId - Organization ID to filter subscriptions
+   * @returns {Promise<Object>} - { sent: number, failed: number }
+   */
 
   logger.info('sendPushNotification called', {
     userId,
     userType,
     payloadType: payload.data?.type,
-    payloadTitle: payload.notification?.title,
+    payloadTitle: payload.title,
     organizationId
   });
 
   try {
-    // Query by userId and organizationId to ensure we find subscriptions for the correct organization
-    const query = { userId };
+    // Prefer userId + org filter; if org filter yields nothing, fall back to userId only
+    // so devices subscribed under a slightly different org cast still receive pushes.
+    let query = { userId };
     if (organizationId) {
       query.organizationId = organizationId;
     }
-    const subscriptions = await PushSubscription.find(query);
+    let subscriptions = await PushSubscription.find(query);
+
+    if (subscriptions.length === 0 && organizationId) {
+      subscriptions = await PushSubscription.find({ userId });
+    }
 
     logger.info('Push subscriptions found for userId', {
       userId,
@@ -78,28 +116,56 @@ export const sendPushNotification = async (userId, userType, payload, organizati
 
         return webpush.sendNotification(
           subscriptionObj,
-          JSON.stringify(payload)
+          JSON.stringify(payload),
+          PUSH_SEND_OPTIONS
         );
       })
     );
 
-    const sent = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const deviceResults = results.map((result, index) => {
+      const sub = subscriptions[index];
+      const isMobile = /Android|iPhone|iPad|Mobile/i.test(sub.userAgent || '');
+      if (result.status === 'fulfilled') {
+        return {
+          id: sub._id,
+          device: isMobile ? 'mobile' : 'desktop',
+          userAgent: sub.userAgent,
+          status: 'sent',
+          statusCode: result.value?.statusCode || 201,
+        };
+      }
+      const statusCode = result.reason?.statusCode;
+      return {
+        id: sub._id,
+        device: isMobile ? 'mobile' : 'desktop',
+        userAgent: sub.userAgent,
+        status: 'failed',
+        statusCode,
+        error: result.reason?.message || String(result.reason),
+      };
+    });
 
-    // Log failures and only remove expired/invalid subscriptions (410/404)
+    const sent = deviceResults.filter(r => r.status === 'sent').length;
+    const failed = deviceResults.filter(r => r.status === 'failed').length;
+
+    // Remove expired/invalid subscriptions (404/410) and unauthorized/VAPID mismatch (403)
     if (failed > 0) {
       const failedIndices = [];
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          const statusCode = result.reason?.statusCode;
+      deviceResults.forEach((deviceResult, index) => {
+        if (deviceResult.status === 'failed') {
           logger.error('Push notification delivery failed', {
             userId,
             userType,
             endpoint: subscriptions[index]?.endpoint,
-            statusCode,
-            error: result.reason?.message || String(result.reason),
+            device: deviceResult.device,
+            statusCode: deviceResult.statusCode,
+            error: deviceResult.error,
           });
-          if (statusCode === 404 || statusCode === 410) {
+          if (
+            deviceResult.statusCode === 404 ||
+            deviceResult.statusCode === 410 ||
+            deviceResult.statusCode === 403
+          ) {
             failedIndices.push(index);
           }
         }
@@ -112,8 +178,10 @@ export const sendPushNotification = async (userId, userType, payload, organizati
       }
     }
 
-    logger.info(`Push notification sent: ${sent} successful, ${failed} failed`);
-    return { sent, failed };
+    logger.info(`Push notification sent: ${sent} successful, ${failed} failed`, {
+      devices: deviceResults.map(d => ({ device: d.device, status: d.status, statusCode: d.statusCode })),
+    });
+    return { sent, failed, devices: deviceResults };
   } catch (error) {
     logger.error('Error sending push notification', { error: error.message, stack: error.stack });
     return { sent: 0, failed: 0 };
@@ -152,7 +220,8 @@ export const sendBroadcastPushNotification = async (payload, organizationId) => 
 
         return webpush.sendNotification(
           subscriptionObj,
-          JSON.stringify(payload)
+          JSON.stringify(payload),
+          PUSH_SEND_OPTIONS
         );
       })
     );
@@ -170,7 +239,7 @@ export const sendBroadcastPushNotification = async (payload, organizationId) => 
             statusCode,
             error: result.reason?.message || String(result.reason),
           });
-          if (statusCode === 404 || statusCode === 410) {
+          if (statusCode === 404 || statusCode === 410 || statusCode === 403) {
             failedIndices.push(index);
           }
         }
@@ -215,6 +284,10 @@ const getNotificationTitle = (type) => {
     'birthday': 'Birthday Celebration 🎂',
     'anniversary': 'Work Anniversary 🎉',
     'attendance': 'Attendance Update',
+    'attendance_regularization': 'Attendance Regularization',
+    'attendance_regularization_request': 'Attendance Regularization Request',
+    'attendance_regularization_approved': 'Attendance Regularization Approved',
+    'attendance_regularization_rejected': 'Attendance Regularization Rejected',
   };
   return titles[type] || 'Notification';
 };
@@ -223,7 +296,7 @@ const getNotificationTitle = (type) => {
  * Get notification URL based on type and metadata
  */
 const getNotificationUrl = (type, metadata) => {
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const baseUrl = getPublicOrigin();
   
   switch (type) {
     case 'task_update':
@@ -240,6 +313,11 @@ const getNotificationUrl = (type, metadata) => {
       return `${baseUrl}/employee/payroll`;
     case 'new_employee':
       return `${baseUrl}/admin/employees`;
+    case 'attendance_regularization':
+    case 'attendance_regularization_request':
+    case 'attendance_regularization_approved':
+    case 'attendance_regularization_rejected':
+      return `${baseUrl}/employee/attendance-regularization`;
     default:
       return `${baseUrl}/notifications`;
   }
@@ -247,22 +325,30 @@ const getNotificationUrl = (type, metadata) => {
 
 /**
  * Create push notification payload
+ * Uses absolute https icons/links so Android Chrome/PWA can render reliably.
  */
 export const createPushPayload = (message, type = 'general', metadata = {}) => {
+  const origin = getPublicOrigin();
+  const icon = `${origin}/logo192.png`;
+  const uniqueTag = `${type}-${metadata.notificationId || Date.now()}`;
+
   return {
     title: metadata.title || getNotificationTitle(type),
     body: message,
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
+    icon,
+    badge: icon,
+    image: icon,
     data: {
       url: getNotificationUrl(type, metadata),
       notificationId: metadata.notificationId,
       type: type,
       ...metadata
     },
-    tag: type,
-    requireInteraction: type === 'announcement' || type === 'system',
-    vibrate: type === 'announcement' ? [200, 100, 200] : [200]
+    tag: uniqueTag,
+    renotify: true,
+    // requireInteraction is unreliable on Android; keep false for mobile delivery
+    requireInteraction: false,
+    vibrate: [200, 100, 200],
   };
 };
 
