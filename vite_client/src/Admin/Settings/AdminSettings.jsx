@@ -82,44 +82,52 @@ const AdminSettings = () => {
     const activeComponent = settingsTabs.find(tab => tab.id === activeTab)?.component;
 
     return (
-        <div className="min-h-screen bg-[var(--color-bg-soft)] text-[var(--color-text)]">
-            <div className="max-w-6xl mx-auto space-y-6 lg:space-y-8 p-4 md:p-6 lg:p-8">
+        <div className="min-h-screen w-full min-w-0 bg-[var(--color-bg-soft)] text-[var(--color-text)]">
+            <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6 md:px-6 lg:px-8 lg:py-8">
                 {/* Header */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                        <FaCog className="mr-3 text-[var(--color-primary)]" />
-                        Admin Settings
+                <div className="mb-4 rounded-lg bg-white p-4 shadow-md sm:mb-6 sm:p-5 md:p-6">
+                    <h1 className="flex items-center text-xl font-bold text-gray-900 sm:text-2xl md:text-3xl">
+                        <FaCog className="mr-2 flex-shrink-0 text-[var(--color-primary)] sm:mr-3" />
+                        <span className="leading-tight">Admin Settings</span>
                     </h1>
-                    <p className="text-gray-600 mt-2">Manage system settings and configurations</p>
+                    <p className="mt-1.5 text-sm text-gray-600 sm:mt-2 sm:text-base">
+                        Manage system settings and configurations
+                    </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12 lg:gap-6 xl:gap-8">
                     {/* Sidebar Navigation */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-lg shadow-md p-4">
-                            <h2 className="text-lg font-semibold text-gray-800 mb-4">Settings</h2>
-                            <nav className="space-y-2">
+                    <aside className="min-w-0 lg:col-span-3 xl:col-span-3">
+                        <div className="rounded-lg bg-white p-3 shadow-md sm:p-4 lg:sticky lg:top-4">
+                            <h2 className="mb-3 px-1 text-base font-semibold text-gray-800 sm:mb-4 sm:text-lg">
+                                Settings
+                            </h2>
+                            {/* Mobile / tablet: horizontal scroll; desktop: stacked list */}
+                            <nav className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:space-y-1.5 lg:gap-0 lg:overflow-visible lg:pb-0">
                                 {settingsTabs.map((tab) => (
                                     <button
                                         key={tab.id}
+                                        type="button"
                                         onClick={() => setActiveTab(tab.id)}
-                                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                                        className={`flex flex-shrink-0 items-center space-x-2.5 rounded-lg px-3 py-2.5 text-left transition-colors sm:space-x-3 sm:px-4 sm:py-3 ${
                                             activeTab === tab.id
                                                 ? 'bg-[var(--color-primary)] text-white'
                                                 : 'text-gray-700 hover:bg-gray-100'
-                                        }`}
+                                        } lg:w-full`}
                                     >
-                                        <span className="text-xl">{tab.icon}</span>
-                                        <span className="font-medium">{tab.name}</span>
+                                        <span className="flex-shrink-0 text-lg sm:text-xl">{tab.icon}</span>
+                                        <span className="whitespace-nowrap text-sm font-medium sm:text-base">
+                                            {tab.name}
+                                        </span>
                                     </button>
                                 ))}
                             </nav>
                         </div>
-                    </div>
+                    </aside>
 
                     {/* Main Content Area */}
-                    <div className="lg:col-span-3">
-                        <div className="bg-white rounded-lg shadow-md">
+                    <div className="min-w-0 lg:col-span-9 xl:col-span-9">
+                        <div className="overflow-hidden rounded-lg bg-white shadow-md">
                             {activeComponent}
                         </div>
                     </div>
@@ -132,13 +140,13 @@ const AdminSettings = () => {
 // Placeholder components for other settings tabs
 
 const SecuritySettings = () => (
-    <div className="p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Security Settings</h2>
+    <div className="p-4 sm:p-5 md:p-6">
+        <h2 className="mb-4 text-xl font-bold text-gray-800 sm:mb-6 sm:text-2xl">Security Settings</h2>
         <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium mb-2">Password Policy</h3>
+            <div className="rounded-lg bg-gray-50 p-4">
+                <h3 className="mb-2 font-medium">Password Policy</h3>
                 <p className="text-sm text-gray-600">Configure password requirements for all users</p>
-                <button className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90">
+                <button type="button" className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
                     Configure
                 </button>
             </div>
@@ -147,13 +155,13 @@ const SecuritySettings = () => (
 );
 
 const PermissionsSettings = () => (
-    <div className="p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Permission Settings</h2>
+    <div className="p-4 sm:p-5 md:p-6">
+        <h2 className="mb-4 text-xl font-bold text-gray-800 sm:mb-6 sm:text-2xl">Permission Settings</h2>
         <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium mb-2">Role-based Access Control</h3>
+            <div className="rounded-lg bg-gray-50 p-4">
+                <h3 className="mb-2 font-medium">Role-based Access Control</h3>
                 <p className="text-sm text-gray-600">Manage access permissions for different user roles</p>
-                <button className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90">
+                <button type="button" className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
                     Manage Roles
                 </button>
             </div>
@@ -162,13 +170,13 @@ const PermissionsSettings = () => (
 );
 
 const ReportsSettings = () => (
-    <div className="p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Reports & Analytics</h2>
+    <div className="p-4 sm:p-5 md:p-6">
+        <h2 className="mb-4 text-xl font-bold text-gray-800 sm:mb-6 sm:text-2xl">Reports & Analytics</h2>
         <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium mb-2">Report Generation</h3>
+            <div className="rounded-lg bg-gray-50 p-4">
+                <h3 className="mb-2 font-medium">Report Generation</h3>
                 <p className="text-sm text-gray-600">Configure report settings and schedules</p>
-                <button className="mt-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90">
+                <button type="button" className="mt-3 rounded-lg bg-theme-primary px-4 py-2 text-white hover:opacity-90">
                     Configure Reports
                 </button>
             </div>
@@ -344,126 +352,130 @@ const GeneralSettingsContent = () => {
     }
 
     return (
-    <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">General Settings</h2>
+    <div className="p-4 sm:p-5 md:p-6">
+            <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-xl font-bold text-gray-800 sm:text-2xl">General Settings</h2>
                 <button
+                    type="button"
                     onClick={handleSaveSettings}
                     disabled={isSaving}
-                    className="flex items-center px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center rounded-md bg-theme-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50 sm:w-auto"
                 >
                     {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>
             </div>
 
-            <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex-1">
-                        <h3 className="text-lg font-medium text-gray-800 flex items-center">
-                            <FaUserShield className="mr-2" />
+            <div className="space-y-4 sm:space-y-5 md:space-y-6">
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaUserShield className="mr-2 flex-shrink-0" />
                             Allow Employee Registration
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="mt-1 text-sm text-gray-500">
                             Allow employees to register themselves in the system
                         </p>
                     </div>
                     <button
+                        type="button"
                         onClick={() => handleSettingChange('allowEmployeeRegistration')}
-                        className="ml-4"
+                        className="ml-2 flex-shrink-0"
                     >
                         {settings.allowEmployeeRegistration ? (
-                            <FiToggleRight className="w-12 h-6 text-theme-primary" />
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
                         ) : (
-                            <FiToggleLeft className="w-12 h-6 text-gray-400" />
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
                         )}
                     </button>
                 </div>
 
-                <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex-1">
-                        <h3 className="text-lg font-medium text-gray-800 flex items-center">
-                            <FaLock className="mr-2" />
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaLock className="mr-2 flex-shrink-0" />
                             Require Email Verification
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="mt-1 text-sm text-gray-500">
                             Require email verification for new employee registrations
                         </p>
                     </div>
                     <button
+                        type="button"
                         onClick={() => handleSettingChange('requireEmailVerification')}
-                        className="ml-4"
+                        className="ml-2 flex-shrink-0"
                     >
                         {settings.requireEmailVerification ? (
-                            <FiToggleRight className="w-12 h-6 text-theme-primary" />
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
                         ) : (
-                            <FiToggleLeft className="w-12 h-6 text-gray-400" />
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
                         )}
                     </button>
                 </div>
 
-                <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex-1">
-                        <h3 className="text-lg font-medium text-gray-800 flex items-center">
-                            <FaCog className="mr-2" />
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaCog className="mr-2 flex-shrink-0" />
                             Allow Self Service
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="mt-1 text-sm text-gray-500">
                             Allow employees to update their own profile information
                         </p>
                     </div>
                     <button
+                        type="button"
                         onClick={() => handleSettingChange('allowSelfService')}
-                        className="ml-4"
+                        className="ml-2 flex-shrink-0"
                     >
                         {settings.allowSelfService ? (
-                            <FiToggleRight className="w-12 h-6 text-theme-primary" />
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
                         ) : (
-                            <FiToggleLeft className="w-12 h-6 text-gray-400" />
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
                         )}
                     </button>
                 </div>
 
-                <div className="p-4 border border-gray-200 rounded-lg">
-                    <h3 className="text-lg font-medium text-gray-800 flex items-center mb-1">
-                        <FaChartLine className="mr-2" />
+                <div className="rounded-lg border border-gray-200 p-3 sm:p-4">
+                    <h3 className="mb-1 flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                        <FaChartLine className="mr-2 flex-shrink-0" />
                         Payroll TDS calculation
                     </h3>
-                    <p className="text-sm text-gray-500 mb-4">
+                    <p className="mb-4 text-sm text-gray-500">
                         Applies on the next payroll generate / regenerate. Existing payslips are not changed automatically.
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <button
                             type="button"
                             onClick={() => setSettings((prev) => ({ ...prev, tdsCalculationMode: 'cumulative' }))}
-                            className={`text-left rounded-lg border p-4 transition ${
+                            className={`rounded-lg border p-3 text-left transition sm:p-4 ${
                                 settings.tdsCalculationMode === 'cumulative'
                                     ? 'border-theme-primary bg-theme-primary/5 ring-1 ring-theme-primary'
                                     : 'border-gray-200 hover:border-gray-300'
                             }`}
                         >
                             <div className="font-semibold text-gray-900">Past TDS adjustment</div>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="mt-1 text-sm text-gray-500">
                                 Cumulative: tax due through this FY month minus TDS already deducted. Catches up over/under cuts from earlier months.
                             </p>
                         </button>
                         <button
                             type="button"
                             onClick={() => setSettings((prev) => ({ ...prev, tdsCalculationMode: 'independent' }))}
-                            className={`text-left rounded-lg border p-4 transition ${
+                            className={`rounded-lg border p-3 text-left transition sm:p-4 ${
                                 settings.tdsCalculationMode === 'independent'
                                     ? 'border-theme-primary bg-theme-primary/5 ring-1 ring-theme-primary'
                                     : 'border-gray-200 hover:border-gray-300'
                             }`}
                         >
                             <div className="font-semibold text-gray-900">No past TDS adjustment</div>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="mt-1 text-sm text-gray-500">
                                 Independent: this month uses present/earned days; future months assumed full. Does not adjust for past TDS deductions.
                             </p>
                         </button>
                     </div>
                 </div>
 
-                <div className="p-4 border border-gray-200 rounded-lg">
+                <div className="rounded-lg border border-gray-200 p-3 sm:p-4">
                     <TimezoneSelect
                         id="admin-general-timezone"
                         value={settings.timezone}
@@ -473,47 +485,47 @@ const GeneralSettingsContent = () => {
                     />
                 </div>
 
-                <div className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex-1">
-                        <h3 className="text-lg font-medium text-gray-800 flex items-center">
-                            <FaRuler className="mr-2" />
+                <div className="rounded-lg border border-gray-200 p-3 sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaRuler className="mr-2 flex-shrink-0" />
                             Employee ID Format
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="mt-1 text-sm text-gray-500">
                             Example: prefix PRS + start 10 → PRS010
                         </p>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
+                        <div className="min-w-0">
                             <label className="block text-sm font-medium text-gray-700">Prefix</label>
                             <input
                                 type="text"
                                 value={settings.employeeIdPrefix}
                                 onChange={(e) => setSettings(prev => ({ ...prev, employeeIdPrefix: e.target.value }))}
-                                className="mt-1 w-full border rounded-md p-2"
+                                className="mt-1 w-full rounded-md border p-2"
                                 placeholder="PRS"
                             />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-sm font-medium text-gray-700">Start Number</label>
                             <input
                                 type="number"
                                 value={settings.employeeIdStartNumber}
                                 onChange={(e) => setSettings(prev => ({ ...prev, employeeIdStartNumber: Number(e.target.value) }))}
-                                className="mt-1 w-full border rounded-md p-2"
+                                className="mt-1 w-full rounded-md border p-2"
                                 min="1"
                             />
                         </div>
 
-                        <div>
+                        <div className="min-w-0 sm:col-span-2 md:col-span-1">
                             <label className="block text-sm font-medium text-gray-700">Min Digits</label>
                             <input
                                 type="number"
                                 value={settings.employeeIdMinDigits}
                                 onChange={(e) => setSettings(prev => ({ ...prev, employeeIdMinDigits: Number(e.target.value) }))}
-                                className="mt-1 w-full border rounded-md p-2"
+                                className="mt-1 w-full rounded-md border p-2"
                                 min="2"
                                 max="10"
                             />
@@ -528,15 +540,16 @@ const GeneralSettingsContent = () => {
 
             {/* Migration Status Banner */}
             {showMigrationStatus && (
-                <div className="mt-6 p-4 rounded-lg flex items-center border" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-primary) 40%, transparent)' }}>
-                    <FaCheckCircle className="mr-3 text-xl" style={{ color: 'var(--color-primary)' }} />
-                    <div className="flex-1">
+                <div className="mt-6 flex items-start gap-3 rounded-lg border p-3 sm:items-center sm:p-4" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-primary) 40%, transparent)' }}>
+                    <FaCheckCircle className="mt-0.5 flex-shrink-0 text-xl sm:mt-0" style={{ color: 'var(--color-primary)' }} />
+                    <div className="min-w-0 flex-1">
                         <p className="font-semibold text-[var(--color-text)]">Employee ID Migration Completed</p>
                         <p className="text-sm opacity-80 text-[var(--color-text)]">All employee IDs have been successfully updated to the new format.</p>
                     </div>
                     <button
+                        type="button"
                         onClick={() => setShowMigrationStatus(false)}
-                        className="hover:opacity-80 transition-opacity"
+                        className="flex-shrink-0 transition-opacity hover:opacity-80"
                         style={{ color: 'var(--color-primary)' }}
                     >
                         <FiX className="text-xl" />
@@ -546,24 +559,24 @@ const GeneralSettingsContent = () => {
 
             {/* Confirmation Dialog */}
             {showConfirmDialog && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-                        <div className="p-6">
-                            <div className="flex items-center mb-4">
-                                <FaExclamationTriangle className="text-yellow-500 text-3xl mr-3" />
-                                <h3 className="text-xl font-bold text-gray-800">Confirm Employee ID Format Change</h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+                        <div className="p-4 sm:p-6">
+                            <div className="mb-4 flex items-start sm:items-center">
+                                <FaExclamationTriangle className="mr-3 flex-shrink-0 text-2xl text-yellow-500 sm:text-3xl" />
+                                <h3 className="text-lg font-bold text-gray-800 sm:text-xl">Confirm Employee ID Format Change</h3>
                             </div>
                             
                             <div className="mb-4">
-                                <p className="text-gray-700 mb-3">
+                                <p className="mb-3 text-gray-700">
                                     You are about to change the Employee ID format. This will:
                                 </p>
-                                <ul className="list-disc list-inside text-gray-600 space-y-2 mb-4">
+                                <ul className="mb-4 list-disc space-y-2 pl-5 text-gray-600">
                                     <li>Update <strong>all existing employees</strong> with new Employee IDs</li>
                                     <li>Replace current IDs (e.g., "EMP-RAD-2025-7780") with the new format</li>
                                     <li>Assign sequential IDs starting from your configured start number</li>
                                 </ul>
-                                <div className="bg-theme-secondary/10 border border-theme-secondary rounded p-3">
+                                <div className="rounded border border-theme-secondary bg-theme-secondary/10 p-3">
                                     <p className="text-sm text-gray-700">
                                         <strong>New Format Preview:</strong> {pendingSettings?.employeeIdPrefix || 'EMP'}
                                         {String(pendingSettings?.employeeIdStartNumber || 1).padStart(pendingSettings?.employeeIdMinDigits || 3, '0')}
@@ -571,18 +584,20 @@ const GeneralSettingsContent = () => {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end space-x-3">
+                            <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row sm:space-x-3 sm:gap-0">
                                 <button
+                                    type="button"
                                     onClick={handleCancelMigration}
                                     disabled={isSaving}
-                                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleConfirmMigration}
                                     disabled={isSaving}
-                                    className="px-4 py-2 bg-theme-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                    className="rounded-md bg-theme-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50"
                                 >
                                     {isSaving ? 'Migrating...' : 'Confirm & Migrate'}
                                 </button>

@@ -1,7 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
 import {
     getEffectiveSalaryForMonth,
-    buildSalaryRevisionEntries
+    buildSalaryRevisionEntries,
+    sumProjectedRemainingSalary
 } from '../../helpers/salaryRevisionHelper.js';
 
 describe('salaryRevisionHelper', () => {
@@ -20,6 +21,34 @@ describe('salaryRevisionHelper', () => {
             };
             expect(getEffectiveSalaryForMonth(emp, 'July', 2026)).toBe(100000);
             expect(getEffectiveSalaryForMonth(emp, 'October', 2026)).toBe(125000);
+        });
+
+        it('keeps pre-hike CTC for months before revision effectiveFrom', () => {
+            const emp = {
+                salary: 2100000,
+                salaryRevisions: [
+                    { salary: 21000, effectiveFrom: new Date('2024-08-26') },
+                    { salary: 2100000, effectiveFrom: new Date('2026-07-01') }
+                ]
+            };
+            expect(getEffectiveSalaryForMonth(emp, 'April', 2026)).toBe(21000);
+            expect(getEffectiveSalaryForMonth(emp, 'May', 2026)).toBe(21000);
+            expect(getEffectiveSalaryForMonth(emp, 'June', 2026)).toBe(21000);
+            expect(getEffectiveSalaryForMonth(emp, 'July', 2026)).toBe(2100000);
+        });
+    });
+
+    describe('sumProjectedRemainingSalary', () => {
+        it('freezes remaining FY months at current payroll month rate', () => {
+            const emp = {
+                salary: 2100000,
+                salaryRevisions: [
+                    { salary: 21000, effectiveFrom: new Date('2024-08-26') },
+                    { salary: 2100000, effectiveFrom: new Date('2026-07-01') }
+                ]
+            };
+            expect(sumProjectedRemainingSalary(emp, 'April', 2026, 11)).toBe(21000 * 11);
+            expect(sumProjectedRemainingSalary(emp, 'July', 2026, 8)).toBe(2100000 * 8);
         });
     });
 

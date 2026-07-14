@@ -2,6 +2,10 @@ import Employee from '../models/employee.model.js';
 import { isEmployeeLinkedToManager } from './managerHelper.js';
 import { PERMISSIONS } from '../config/permissions.constants.js';
 import { resolveAuthContext, hasAnyPermission } from './permissionService.js';
+import {
+    getEffectiveFunctionalRoles,
+    isHrStaffEmployee,
+} from './functionalRolesHelper.js';
 
 /**
  * Canonical organizationId for leave balance reads/writes.
@@ -13,6 +17,13 @@ export async function resolveLeaveBalanceOrganizationId(employeeId, organization
     if (!employeeId) return null;
     const targetEmployee = await Employee.findById(employeeId).select('organizationId').lean();
     return targetEmployee?.organizationId || null;
+}
+
+const EXECUTIVE_ROLE_KEYS = new Set(['executive', 'ceo', 'cto', 'cfo', 'vp']);
+
+function isExecutiveEmployee(employee) {
+    if (!employee) return false;
+    return getEffectiveFunctionalRoles(employee).some((role) => EXECUTIVE_ROLE_KEYS.has(role));
 }
 
 /**
@@ -41,14 +52,21 @@ export async function resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, {
     const ctx = req.authContext || (req.decoded ? await resolveAuthContext(req.decoded, req) : null);
 
     const isOrgAdmin = jwtRole === 'admin' || Boolean(ctx?.isOrgOwner);
+    // Prefer RBAC buckets; also fall back to loaded workforce profile (jobTitle / department / functionalRoles)
+    // when middleware forgot to attach authContext (e.g. older isAuthenticatedBoth paths).
     const isHrStaff = Boolean(
         ctx?.isHrManager ||
         ctx?.isHrExecutive ||
         ctx?.buckets?.includes('hr_manager') ||
         ctx?.buckets?.includes('hr_executive') ||
-        hasAnyPermission(ctx, [PERMISSIONS.LEAVE_POLICY_MANAGE])
+        hasAnyPermission(ctx, [PERMISSIONS.LEAVE_POLICY_MANAGE]) ||
+        isHrStaffEmployee(req.employee)
     );
-    const isExecutive = Boolean(ctx?.isExecutive || ctx?.buckets?.includes('executive'));
+    const isExecutive = Boolean(
+        ctx?.isExecutive ||
+        ctx?.buckets?.includes('executive') ||
+        isExecutiveEmployee(req.employee)
+    );
 
     const isSelf = viewerEmployeeId && viewerEmployeeId === targetId;
 

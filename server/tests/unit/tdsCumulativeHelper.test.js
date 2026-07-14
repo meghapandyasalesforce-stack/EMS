@@ -262,7 +262,7 @@ describe('tdsCumulativeHelper', () => {
 });
 
 describe('salaryRevisionHelper', () => {
-    it('uses revision effective from month for projection', () => {
+    it('projects remaining months at this payroll month CTC (no early hike foresight)', () => {
         const emp = {
             salary: 125000,
             salaryRevisions: [
@@ -274,8 +274,12 @@ describe('salaryRevisionHelper', () => {
         expect(getEffectiveSalaryForMonth(emp, 'August', 2026)).toBe(100000);
         expect(getEffectiveSalaryForMonth(emp, 'September', 2026)).toBe(125000);
 
+        // August run does not pull September's hike into the annual estimate early.
         const remaining = sumProjectedRemainingSalary(emp, 'August', 2026, 4);
-        expect(remaining).toBe(125000 * 4);
+        expect(remaining).toBe(100000 * 4);
+
+        const afterHike = sumProjectedRemainingSalary(emp, 'September', 2026, 3);
+        expect(afterHike).toBe(125000 * 3);
     });
 });
 

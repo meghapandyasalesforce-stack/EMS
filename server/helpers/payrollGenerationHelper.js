@@ -6,6 +6,7 @@ import Employee from '../models/employee.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import logger from './logger.js';
 import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
+import { getEffectiveSalaryForMonth } from './salaryRevisionHelper.js';
 import { computeRegimeIncomeTaxCumulative, clearTdsCalculationModeCache } from './tdsCumulativeHelper.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
 import { getDateKeyInTimezone, getEndOfDayInTimezone } from './timezoneHelper.js';
@@ -713,7 +714,9 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         orgTimezone,
         isWorkingDayKeyFn
     );
-    const fullGross = emp.salary || 0;
+    // Pay this month from revision-effective CTC (not live emp.salary alone), so TDS YTD
+    // and earnings stay aligned when a hike lands mid-year (e.g. 21k → 21L in July).
+    const fullGross = getEffectiveSalaryForMonth(emp, month, yearNum) || 0;
     // Weekend/holiday days are paid by default under calendar-day proration.
     // Only missing paid credit on working days reduces monthly payout.
     const { unpaidWorkingDays, paidPayrollDays, effectiveGross } = computePayrollProration({
@@ -725,7 +728,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     });
     const salaryStructure = await resolveSalaryStructureForEmployee(emp, orgId);
     // Overtime / "one day" value: always monthly gross ÷ full month calendar days, not ÷ (join→term) window.
-    const perDayRate = fullGross / fullMonthCalDays;
+    const perDayRate = fullGross > 0 && fullMonthCalDays > 0 ? fullGross / fullMonthCalDays : 0;
     const unpaidDays = unpaidWorkingDays;
 
     let basicSalary = 0;
