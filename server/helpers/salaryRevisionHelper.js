@@ -2,8 +2,7 @@ import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeeP
 import {
     getCalendarYearForFyMonth,
     getFyMonthIndex,
-    getFyStartYear,
-    listFyMonthsAfter
+    getFyStartYear
 } from './fyCalendarHelper.js';
 
 function asNumber(value, fallback = 0) {
@@ -81,21 +80,25 @@ export function buildSalaryRevisionEntries({ previousSalary, newSalary, joiningD
     return entries;
 }
 
+/**
+ * Project remaining FY months at this payroll month's effective CTC.
+ * Future-dated revisions are NOT applied early — the hike lands in the
+ * payroll month it becomes effective (keeps Apr–Jun at pre-hike rate when
+ * raise is July, then July+ projects at the new CTC).
+ */
 export function sumProjectedRemainingSalary(emp, month, year, monthsRemaining) {
-    const months = listFyMonthsAfter(month, year, monthsRemaining);
-    return months.reduce(
-        (sum, row) => sum + getEffectiveSalaryForMonth(emp, row.month, row.year),
-        0
-    );
+    const count = Math.max(0, Number(monthsRemaining) || 0);
+    if (count <= 0) return 0;
+    const rate = getEffectiveSalaryForMonth(emp, month, year);
+    return rate * count;
 }
 
 export function sumProjectedRemainingPf(emp, month, year, monthsRemaining) {
-    const months = listFyMonthsAfter(month, year, monthsRemaining);
-    return months.reduce((sum, row) => {
-        const salary = getEffectiveSalaryForMonth(emp, row.month, row.year);
-        const basic = computeEarningsFromGross(salary).basicWage;
-        return sum + employeePfFromBasicWage(basic);
-    }, 0);
+    const count = Math.max(0, Number(monthsRemaining) || 0);
+    if (count <= 0) return 0;
+    const salary = getEffectiveSalaryForMonth(emp, month, year);
+    const basic = computeEarningsFromGross(salary).basicWage;
+    return employeePfFromBasicWage(basic) * count;
 }
 
 export function projectFullMonthBreakdownForMonth(emp, salaryStructure, month, year) {
