@@ -61,35 +61,35 @@ const EmailSettings = () => {
 
     if (loading) {
         return (
-            <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="p-4 sm:p-5 md:p-6">
                 <div className="animate-pulse">Loading email configuration...</div>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Email Configuration</h2>
+        <div className="p-4 sm:p-5 md:p-6">
+            <h2 className="mb-4 text-xl font-semibold text-gray-800 sm:mb-6 sm:text-2xl">Email Configuration</h2>
             
             {emailStatus && (
                 <div className="mb-6">
-                    <div className={`p-4 rounded-lg mb-4 ${emailStatus.validated ? 'bg-theme-primary/10 border border-theme-primary' : emailStatus.configured ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'}`}>
-                        <div className="flex items-center mb-2">
+                    <div className={`mb-4 rounded-lg p-3 sm:p-4 ${emailStatus.validated ? 'bg-theme-primary/10 border border-theme-primary' : emailStatus.configured ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'}`}>
+                        <div className="mb-2 flex items-center">
                             <span className={`font-semibold ${emailStatus.validated ? 'text-theme-primary' : emailStatus.configured ? 'text-yellow-800' : 'text-red-800'}`}>
                                 Status: {emailStatus.validated ? '✓ Validated & Working' : emailStatus.configured ? '⚠ Configured (Not Validated)' : '✗ Not Configured'}
                             </span>
                         </div>
                         {emailStatus.validationMessage && (
-                            <div className={`text-sm mb-2 ${emailStatus.validated ? 'text-theme-primary' : 'text-yellow-700'}`}>
+                            <div className={`mb-2 text-sm ${emailStatus.validated ? 'text-theme-primary' : 'text-yellow-700'}`}>
                                 {emailStatus.validationMessage}
                             </div>
                         )}
                         {emailStatus.validationRecommendation && !emailStatus.validated && (
-                            <div className="text-sm text-yellow-700 mb-2">
+                            <div className="mb-2 text-sm text-yellow-700">
                                 <strong>Recommendation:</strong> {emailStatus.validationRecommendation}
                             </div>
                         )}
-                        <div className="text-sm text-gray-600 space-y-1">
+                        <div className="space-y-1 break-words text-sm text-gray-600">
                             <p><strong>Provider:</strong> {emailStatus.provider}</p>
                             <p><strong>Host:</strong> {emailStatus.emailHost}</p>
                             <p><strong>Port:</strong> {emailStatus.emailPort}</p>
@@ -100,9 +100,9 @@ const EmailSettings = () => {
                     </div>
 
                     {emailStatus.recommendations && emailStatus.recommendations.length > 0 && (
-                        <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4 mb-4">
-                            <h3 className="font-semibold text-theme-secondary mb-2">Recommendations:</h3>
-                            <ul className="list-disc list-inside text-sm text-theme-secondary space-y-1">
+                        <div className="mb-4 rounded-lg border border-theme-secondary bg-theme-secondary/10 p-3 sm:p-4">
+                            <h3 className="mb-2 font-semibold text-theme-secondary">Recommendations:</h3>
+                            <ul className="list-disc space-y-1 pl-5 text-sm text-theme-secondary">
                                 {emailStatus.recommendations.map((rec, index) => (
                                     <li key={index}>{rec}</li>
                                 ))}
@@ -112,11 +112,11 @@ const EmailSettings = () => {
                 </div>
             )}
 
-            <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Test Email Configuration</h3>
+            <div className="border-t pt-5 sm:pt-6">
+                <h3 className="mb-4 text-lg font-semibold text-gray-800">Test Email Configuration</h3>
                 <form onSubmit={handleTestEmail} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="mb-2 block text-sm font-medium text-gray-700">
                             Test Email Address
                         </label>
                         <input
@@ -124,15 +124,15 @@ const EmailSettings = () => {
                             value={testEmail}
                             onChange={(e) => setTestEmail(e.target.value)}
                             placeholder="Enter email address to test"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                            className="w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                             required
                         />
                     </div>
                     <button
                         type="submit"
                         disabled={testing}
-                        className={`px-6 py-2 bg-theme-secondary text-white rounded-md hover:bg-theme-primary transition-colors ${
-                            testing ? 'opacity-50 cursor-not-allowed' : ''
+                        className={`w-full rounded-md bg-theme-secondary px-6 py-2 text-white transition-colors hover:bg-theme-primary sm:w-auto ${
+                            testing ? 'cursor-not-allowed opacity-50' : ''
                         }`}
                     >
                         {testing ? 'Sending...' : 'Send Test Email'}
@@ -140,9 +140,9 @@ const EmailSettings = () => {
                 </form>
             </div>
 
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold text-gray-800 mb-2">Troubleshooting</h4>
-                <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+            <div className="mt-6 rounded-lg bg-gray-50 p-3 sm:p-4">
+                <h4 className="mb-2 font-semibold text-gray-800">Troubleshooting</h4>
+                <ul className="list-disc space-y-1 pl-5 text-sm text-gray-600">
                     <li>Check server logs for detailed error messages</li>
                     <li>Verify environment variables are set correctly</li>
                     <li>For Gmail: Use App Password instead of regular password</li>

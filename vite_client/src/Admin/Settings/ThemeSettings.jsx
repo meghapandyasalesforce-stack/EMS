@@ -113,9 +113,9 @@ const ThemeSettings = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-5 p-4 sm:space-y-6 sm:p-5 md:p-6">
       <div>
-        <h2 className="text-2xl font-bold text-[var(--color-text)] mb-2">
+        <h2 className="mb-2 text-xl font-bold text-[var(--color-text)] sm:text-2xl">
           Theme &amp; Branding
         </h2>
         <p className="text-sm text-[var(--color-text)] opacity-80">
@@ -133,9 +133,9 @@ const ThemeSettings = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 md:gap-6">
             <div>
-              <label className="block text-sm font-medium text-[var(--color-text)] mb-1">
+              <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">
                 Primary color
               </label>
               <div className="flex items-center gap-2">
@@ -206,30 +206,30 @@ const ThemeSettings = () => {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--color-primary)] hover:opacity-90 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
             >
               {saving ? 'Saving...' : 'Save Theme'}
             </button>
           </div>
 
           {/* Save current as preset */}
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-semibold text-[var(--color-text)] mb-3">
+          <div className="border-t border-gray-200 pt-5 sm:pt-6">
+            <h3 className="mb-3 text-base font-semibold text-[var(--color-text)] sm:text-lg">
               Save current theme as preset
             </h3>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <input
                 type="text"
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
                 placeholder="e.g. Summer Green"
-                className="px-3 py-2 border border-gray-300 rounded-lg text-[var(--color-text)] bg-[var(--color-bg)] min-w-[180px]"
+                className="w-full min-w-0 rounded-lg border border-gray-300 bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)] sm:w-auto sm:min-w-[180px]"
               />
               <button
                 type="button"
                 onClick={handleSaveAsPreset}
                 disabled={saving || !presetName.trim()}
-                className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-[var(--color-secondary)] hover:opacity-90 disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--color-secondary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
               >
                 Save preset
               </button>
@@ -238,20 +238,20 @@ const ThemeSettings = () => {
 
           {/* Saved themes - choose previous theme */}
           {themePresets.length > 0 && (
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-semibold text-[var(--color-text)] mb-3">
+            <div className="border-t border-gray-200 pt-5 sm:pt-6">
+              <h3 className="mb-3 text-base font-semibold text-[var(--color-text)] sm:text-lg">
                 Saved themes
               </h3>
-              <p className="text-sm text-[var(--color-text)] opacity-70 mb-3">
+              <p className="mb-3 text-sm text-[var(--color-text)] opacity-70">
                 Click Apply to use a previously saved theme.
               </p>
               <ul className="space-y-2">
                 {themePresets.map((preset, index) => (
                   <li
                     key={index}
-                    className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[var(--color-bg-soft)] border border-gray-200"
+                    className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-[var(--color-bg-soft)] p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className="font-medium text-[var(--color-text)]">{preset.name}</span>
                       <span className="flex gap-1">
                         {[preset.primaryColor, preset.secondaryColor, preset.accentColor]
@@ -259,7 +259,7 @@ const ThemeSettings = () => {
                           .map((hex, i) => (
                             <span
                               key={i}
-                              className="w-5 h-5 rounded-full border border-gray-300"
+                              className="h-5 w-5 rounded-full border border-gray-300"
                               style={{ backgroundColor: hex }}
                               title={hex}
                             />
@@ -270,7 +270,7 @@ const ThemeSettings = () => {
                       type="button"
                       onClick={() => handleApplyPreset(index)}
                       disabled={saving}
-                      className="px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-[var(--color-primary)] hover:opacity-90 disabled:opacity-60"
+                      className="w-full rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
                     >
                       Apply
                     </button>

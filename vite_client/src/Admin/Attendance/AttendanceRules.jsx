@@ -242,14 +242,14 @@ const AttendanceRules = () => {
         : '';
 
     return (
-        <div className="p-6">
+        <div className="p-4 sm:p-5 md:p-6">
             {/* Header */}
-            <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                    <FaRuler className="mr-3 text-theme-secondary" />
+            <div className="mb-5 sm:mb-6">
+                <h2 className="flex items-center text-xl font-bold text-gray-900 sm:text-2xl">
+                    <FaRuler className="mr-2 flex-shrink-0 text-theme-secondary sm:mr-3" />
                     Attendance Rules
                 </h2>
-                <p className="text-gray-600 mt-1">Configure location-based attendance and rules</p>
+                <p className="mt-1 text-sm text-gray-600 sm:text-base">Configure location-based attendance and rules</p>
             </div>
 
             {loading ? (

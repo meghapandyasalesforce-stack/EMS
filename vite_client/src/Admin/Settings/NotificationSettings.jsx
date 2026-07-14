@@ -130,33 +130,35 @@ const NotificationSettings = () => {
 
     if (loading) {
         return (
-            <div className="p-6">
-                <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary"></div>
+            <div className="p-4 sm:p-5 md:p-6">
+                <div className="flex h-64 items-center justify-center">
+                    <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-theme-secondary"></div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                    <FaBell className="mr-3 text-theme-secondary" />
+        <div className="p-4 sm:p-5 md:p-6">
+            <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="flex items-center text-xl font-bold text-gray-800 sm:text-2xl">
+                    <FaBell className="mr-2 flex-shrink-0 text-theme-secondary sm:mr-3" />
                     Notification Settings
                 </h2>
-                <div className="flex space-x-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:space-x-3 sm:gap-0">
                     <button
+                        type="button"
                         onClick={handleReset}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition flex items-center"
+                        className="flex w-full items-center justify-center rounded-lg bg-gray-200 px-4 py-2 text-gray-700 transition hover:bg-gray-300 sm:w-auto"
                     >
                         <FaUndo className="mr-2" />
                         Reset to Default
                     </button>
                     <button
+                        type="button"
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition flex items-center disabled:opacity-50"
+                        className="flex w-full items-center justify-center rounded-lg bg-theme-primary px-4 py-2 text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
                     >
                         <FaSave className="mr-2" />
                         {saving ? 'Saving...' : 'Save Settings'}
@@ -164,15 +166,15 @@ const NotificationSettings = () => {
                 </div>
             </div>
 
-            <div className="space-y-8">
+            <div className="space-y-5 sm:space-y-6 md:space-y-8">
                 {/* Email Notifications */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <FaEnvelope className="mr-2 text-theme-secondary" />
+                <div className="rounded-lg bg-gray-50 p-3 sm:p-4 md:p-6">
+                    <h3 className="mb-4 flex items-center text-base font-semibold text-gray-800 sm:text-lg">
+                        <FaEnvelope className="mr-2 flex-shrink-0 text-theme-secondary" />
                         Email Notifications
                     </h3>
-                    <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-                        <div>
+                    <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 shadow-sm sm:items-center sm:p-4">
+                        <div className="min-w-0 flex-1">
                             <h4 className="font-medium text-gray-900">Enable Email Notifications</h4>
                             <p className="text-sm text-gray-600">Receive notifications via email for important events</p>
                         </div>
@@ -189,15 +191,15 @@ const NotificationSettings = () => {
                 </div>
 
                 {/* Task Notifications */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <FaTasks className="mr-2 text-theme-primary" />
+                <div className="rounded-lg bg-gray-50 p-3 sm:p-4 md:p-6">
+                    <h3 className="mb-4 flex items-center text-base font-semibold text-gray-800 sm:text-lg">
+                        <FaTasks className="mr-2 flex-shrink-0 text-theme-primary" />
                         Task Notifications
                     </h3>
                     
                     {/* Enable Task Notifications */}
-                    <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm mb-4">
-                        <div>
+                    <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-white p-3 shadow-sm sm:items-center sm:p-4">
+                        <div className="min-w-0 flex-1">
                             <h4 className="font-medium text-gray-900">Enable Task Notifications</h4>
                             <p className="text-sm text-gray-600">Receive notifications when employees update their tasks</p>
                         </div>
@@ -215,11 +217,11 @@ const NotificationSettings = () => {
                     {settings.taskNotifications.enabled && (
                         <div className="space-y-4">
                             {/* Task Event Types */}
-                            <div className="bg-white rounded-lg shadow-sm p-4">
-                                <h5 className="font-medium text-gray-900 mb-3">Task Event Types</h5>
+                            <div className="rounded-lg bg-white p-3 shadow-sm sm:p-4">
+                                <h5 className="mb-3 font-medium text-gray-900">Task Event Types</h5>
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                                        <div className="min-w-0 flex-1">
                                             <h6 className="text-sm font-medium text-gray-800">Task Created</h6>
                                             <p className="text-xs text-gray-600">Notify when a new task is created</p>
                                         </div>
@@ -233,8 +235,8 @@ const NotificationSettings = () => {
                                             <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                                        <div className="min-w-0 flex-1">
                                             <h6 className="text-sm font-medium text-gray-800">Task Updated</h6>
                                             <p className="text-xs text-gray-600">Notify when a task is modified</p>
                                         </div>
@@ -248,8 +250,8 @@ const NotificationSettings = () => {
                                             <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                                        <div className="min-w-0 flex-1">
                                             <h6 className="text-sm font-medium text-gray-800">Task Completed</h6>
                                             <p className="text-xs text-gray-600">Notify when a task is marked as completed</p>
                                         </div>
@@ -267,14 +269,14 @@ const NotificationSettings = () => {
                             </div>
 
                             {/* Notification Recipients */}
-                            <div className="bg-white rounded-lg shadow-sm p-4">
-                                <h5 className="font-medium text-gray-900 mb-3 flex items-center">
-                                    <FaUsers className="mr-2 text-purple-600" />
+                            <div className="rounded-lg bg-white p-3 shadow-sm sm:p-4">
+                                <h5 className="mb-3 flex items-center font-medium text-gray-900">
+                                    <FaUsers className="mr-2 flex-shrink-0 text-purple-600" />
                                     Notification Recipients
                                 </h5>
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                                        <div className="min-w-0 flex-1">
                                             <h6 className="text-sm font-medium text-gray-800">Notify Admins</h6>
                                             <p className="text-xs text-gray-600">Send notifications to all system administrators</p>
                                         </div>
@@ -288,8 +290,8 @@ const NotificationSettings = () => {
                                             <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                                        <div className="min-w-0 flex-1">
                                             <h6 className="text-sm font-medium text-gray-800">Notify Managers</h6>
                                             <p className="text-xs text-gray-600">Send notifications to employee managers</p>
                                         </div>
@@ -303,8 +305,8 @@ const NotificationSettings = () => {
                                             <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                         </label>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex items-start justify-between gap-3 sm:items-center">
+                                        <div className="min-w-0 flex-1">
                                             <h6 className="text-sm font-medium text-gray-800">Notify Project Managers</h6>
                                             <p className="text-xs text-gray-600">Send notifications to project leaders and managers</p>
                                         </div>
@@ -325,14 +327,14 @@ const NotificationSettings = () => {
                 </div>
 
                 {/* General Notifications */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <FaBell className="mr-2 text-orange-600" />
+                <div className="rounded-lg bg-gray-50 p-3 sm:p-4 md:p-6">
+                    <h3 className="mb-4 flex items-center text-base font-semibold text-gray-800 sm:text-lg">
+                        <FaBell className="mr-2 flex-shrink-0 text-orange-600" />
                         General Notifications
                     </h3>
                     
-                    <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm mb-4">
-                        <div>
+                    <div className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-white p-3 shadow-sm sm:items-center sm:p-4">
+                        <div className="min-w-0 flex-1">
                             <h4 className="font-medium text-gray-900">Enable General Notifications</h4>
                             <p className="text-sm text-gray-600">Receive general system notifications</p>
                         </div>
@@ -349,8 +351,8 @@ const NotificationSettings = () => {
 
                     {settings.generalNotifications.enabled && (
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm">
-                                <div>
+                            <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 shadow-sm sm:items-center">
+                                <div className="min-w-0 flex-1">
                                     <h5 className="text-sm font-medium text-gray-800">System Updates</h5>
                                     <p className="text-xs text-gray-600">Notifications about system maintenance and updates</p>
                                 </div>
@@ -364,8 +366,8 @@ const NotificationSettings = () => {
                                     <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-theme-primary"></div>
                                 </label>
                             </div>
-                            <div className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm">
-                                <div>
+                            <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 shadow-sm sm:items-center">
+                                <div className="min-w-0 flex-1">
                                     <h5 className="text-sm font-medium text-gray-800">Announcements</h5>
                                     <p className="text-xs text-gray-600">Important announcements and news</p>
                                 </div>
@@ -384,11 +386,11 @@ const NotificationSettings = () => {
                 </div>
 
                 {/* Push Notifications */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Push Notifications</h3>
+                <div className="rounded-lg bg-gray-50 p-3 sm:p-4 md:p-6">
+                    <h3 className="mb-4 text-base font-semibold text-gray-800 sm:text-lg">Push Notifications</h3>
                     
                     {!isSupported && (
-                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 sm:p-4">
                             <p className="text-sm text-yellow-800">
                                 Your browser does not support push notifications. Please use a modern browser like Chrome, Firefox, or Edge.
                             </p>
@@ -396,24 +398,24 @@ const NotificationSettings = () => {
                     )}
 
                     {pushError && (
-                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 sm:p-4">
                             <p className="text-sm text-red-800">{pushError}</p>
                         </div>
                     )}
 
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-                            <div>
+                        <div className="flex items-start justify-between gap-3 rounded-lg bg-white p-3 shadow-sm sm:items-center sm:p-4">
+                            <div className="min-w-0 flex-1">
                                 <h4 className="font-medium text-gray-900">Enable Push Notifications</h4>
                                 <p className="text-sm text-gray-600">Receive real-time push notifications in the browser</p>
                                 {isSubscribed && (
-                                    <p className="text-xs text-theme-primary mt-1">✓ Push notifications are active</p>
+                                    <p className="mt-1 text-xs text-theme-primary">✓ Push notifications are active</p>
                                 )}
                                 {!isSubscribed && isSupported && !pushLoading && (
-                                    <p className="text-xs text-gray-500 mt-1">Click to enable browser push notifications</p>
+                                    <p className="mt-1 text-xs text-gray-500">Click to enable browser push notifications</p>
                                 )}
                             </div>
-                            <div className="flex items-center space-x-3">
+                            <div className="flex flex-shrink-0 items-center space-x-3">
                                 {pushLoading && (
                                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-theme-secondary"></div>
                                 )}
@@ -445,8 +447,8 @@ const NotificationSettings = () => {
                         </div>
 
                         {isSubscribed && (
-                            <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-                                <div>
+                            <div className="flex flex-col gap-3 rounded-lg bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                                <div className="min-w-0 flex-1">
                                     <h4 className="font-medium text-gray-900">Test Push Notification</h4>
                                     <p className="text-sm text-gray-600">
                                         Send a test popup to this browser (minimize the window if you do not see it)
@@ -456,7 +458,7 @@ const NotificationSettings = () => {
                                     type="button"
                                     onClick={handleTestPush}
                                     disabled={testingPush || pushLoading}
-                                    className="px-4 py-2 text-sm font-medium text-white bg-theme-primary rounded-md hover:opacity-90 disabled:opacity-50"
+                                    className="w-full flex-shrink-0 rounded-md bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 sm:w-auto"
                                 >
                                     {testingPush ? 'Sending...' : 'Send Test'}
                                 </button>
@@ -466,16 +468,16 @@ const NotificationSettings = () => {
                 </div>
 
                 {/* Notification Frequency */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Notification Frequency</h3>
-                    <div className="bg-white rounded-lg shadow-sm p-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="rounded-lg bg-gray-50 p-3 sm:p-4 md:p-6">
+                    <h3 className="mb-4 text-base font-semibold text-gray-800 sm:text-lg">Notification Frequency</h3>
+                    <div className="rounded-lg bg-white p-3 shadow-sm sm:p-4">
+                        <label className="mb-2 block text-sm font-medium text-gray-700">
                             How often would you like to receive notifications?
                         </label>
                         <select
                             value={settings.frequency}
                             onChange={(e) => handleToggle('frequency', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-[var(--color-primary)]"
                         >
                             <option value="immediate">Immediate</option>
                             <option value="hourly">Hourly Digest</option>
