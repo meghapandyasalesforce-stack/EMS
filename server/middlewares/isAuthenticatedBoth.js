@@ -33,6 +33,9 @@ const isAuthenticatedBoth = async (req, res, next) => {
       });
     }
 
+    // Controllers/helpers (e.g. leave balance access) resolve HR via authContext from JWT.
+    req.decoded = decoded;
+
     const ctx = await loadEmployeeContext(req, decoded);
 
     // Only workforce-only sessions hard-fail when profile is missing
