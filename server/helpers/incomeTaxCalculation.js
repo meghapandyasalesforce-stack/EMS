@@ -5,7 +5,9 @@
 
 export const TAX_REGIME = {
     OLD: 'old',
-    NEW: 'new'
+    NEW: 'new',
+    /** Employee opted out of payroll TDS (e.g. no PAN / exempt). */
+    NA: 'na'
 };
 
 const CESS_RATE = 0.04;
@@ -60,11 +62,15 @@ export function normalizeTaxRegime(value) {
     const v = String(value || '').trim().toLowerCase();
     if (v === 'old' || v === 'old regime' || v === 'old_regime') return TAX_REGIME.OLD;
     if (v === 'new' || v === 'new regime' || v === 'new_regime') return TAX_REGIME.NEW;
+    if (v === 'n/a' || v === 'na' || v === 'none' || v === 'not applicable') return TAX_REGIME.NA;
     return TAX_REGIME.NEW;
 }
 
 export function formatTaxRegimeLabel(regime) {
-    return normalizeTaxRegime(regime) === TAX_REGIME.OLD ? 'Old' : 'New';
+    const normalized = normalizeTaxRegime(regime);
+    if (normalized === TAX_REGIME.OLD) return 'Old';
+    if (normalized === TAX_REGIME.NA) return 'N/A';
+    return 'New';
 }
 
 /** India FY label e.g. "2026-27" for a given date (April–March). */
@@ -283,6 +289,8 @@ export function computeAnnualIncomeTax({
 }) {
     const regime = normalizeTaxRegime(taxRegime);
     const gross = Math.max(0, annualGrossIncome);
+
+    if (regime === TAX_REGIME.NA) return 0;
 
     if (regime === TAX_REGIME.NEW) {
         const totalIncome = Math.max(0, gross - STANDARD_DEDUCTION[TAX_REGIME.NEW]);

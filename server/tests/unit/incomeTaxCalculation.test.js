@@ -24,6 +24,12 @@ describe('incomeTaxCalculation', () => {
             expect(normalizeTaxRegime('New')).toBe(TAX_REGIME.NEW);
             expect(normalizeTaxRegime('')).toBe(TAX_REGIME.NEW);
         });
+
+        it('maps N/A regime variants', () => {
+            expect(normalizeTaxRegime('N/A')).toBe(TAX_REGIME.NA);
+            expect(normalizeTaxRegime('na')).toBe(TAX_REGIME.NA);
+            expect(normalizeTaxRegime('not applicable')).toBe(TAX_REGIME.NA);
+        });
     });
 
     describe('getIndianFinancialYear', () => {
@@ -127,6 +133,15 @@ describe('incomeTaxCalculation', () => {
     });
 
     describe('computeAnnualIncomeTax', () => {
+        it('returns zero tax when tax regime is N/A', () => {
+            const tax = computeAnnualIncomeTax({
+                taxRegime: 'N/A',
+                annualGrossIncome: 5000000,
+                annualPfEmployee: 21600
+            });
+            expect(tax).toBe(0);
+        });
+
         it('applies zero tax for eligible income under new regime rebate', () => {
             const tax = computeAnnualIncomeTax({
                 taxRegime: 'new',

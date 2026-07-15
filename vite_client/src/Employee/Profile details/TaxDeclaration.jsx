@@ -26,6 +26,7 @@ const TaxDeclaration = () => {
 
   const taxRegime = (employee?.financialDetails?.taxRegime || 'New').toLowerCase();
   const isOldRegime = taxRegime === 'old' || taxRegime === 'old regime';
+  const isNaRegime = taxRegime === 'n/a' || taxRegime === 'na';
 
   useEffect(() => {
     dispatch(fetchTaxDeclaration());
@@ -104,9 +105,11 @@ const TaxDeclaration = () => {
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Tax declaration (FY {taxDeclaration?.financialYear || '—'})</h3>
           <p className="text-sm text-gray-500 mt-1">
-            {isOldRegime
-              ? 'Used for TDS under Old regime. PF is included automatically from payroll.'
-              : 'You are on New regime — 80C/80D/HRA declarations are not applied to TDS.'}
+            {isNaRegime
+              ? 'Tax regime is N/A — payroll TDS is not deducted.'
+              : isOldRegime
+                ? 'Used for TDS under Old regime. PF is included automatically from payroll.'
+                : 'You are on New regime — 80C/80D/HRA declarations are not applied to TDS.'}
           </p>
         </div>
         {!isEditing && (

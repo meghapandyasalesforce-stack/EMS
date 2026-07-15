@@ -116,6 +116,7 @@ const FinancialDetails = () => {
               >
                 <option value="New">New Regime</option>
                 <option value="Old">Old Regime</option>
+                <option value="N/A">N/A (no TDS)</option>
               </select>
             </div>
 
@@ -174,7 +175,10 @@ const FinancialDetails = () => {
               <strong>EPF UAN:</strong> {formData.epfUan || 'N/A'}
             </p>
             <p className="mb-2">
-              <strong>Tax Regime:</strong> {formData.taxRegime || 'N/A'}
+              <strong>Tax Regime:</strong>{' '}
+              {formData.taxRegime === 'N/A'
+                ? 'N/A (no TDS)'
+                : formData.taxRegime || 'N/A'}
             </p>
             <p className="mb-4">
               <strong>Metro city:</strong> {formData.metroCity ? 'Yes' : 'No'}
