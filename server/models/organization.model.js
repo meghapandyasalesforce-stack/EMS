@@ -274,6 +274,15 @@ const organizationSchema = new mongoose.Schema({
             type: String,
             enum: ['cumulative', 'independent'],
             default: 'cumulative'
+        },
+        /**
+         * Work From Home: when true, employees can punch in with the
+         * "Work From Home" option (office geofence not enforced for WFH punches).
+         * Defaults to true to preserve existing punch-in behavior.
+         */
+        allowWorkFromHome: {
+            type: Boolean,
+            default: true
         }
     },
     logo: {

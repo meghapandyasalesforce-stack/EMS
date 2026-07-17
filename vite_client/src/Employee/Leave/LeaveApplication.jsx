@@ -5,6 +5,43 @@ import { submitLeave, resetStatus } from '../../context/employeeLeaveSlice';
 import { toast } from 'react-toastify';
 import { useMediaQuery } from 'react-responsive';
 import { DEFAULT_LEAVE_TYPE, getAllLeaveTypeOptions } from '../../constants/leaveConstants';
+import axios from '../../utils/axios';
+import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
+
+const SICK_DOC_MESSAGE =
+  'Medical certificate is required when Sick Leave exceeds 1 day in a calendar month.';
+
+/** Days of an existing leave that fall in a given calendar month. */
+function getLeaveDaysInMonth(leave, year, monthIndex) {
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+  const lStart = new Date(leave.startDate);
+  const lEnd = new Date(leave.endDate);
+  if (lEnd < monthStart || lStart > monthEnd) return 0;
+
+  const duration = Number(leave.duration);
+  if (leave.isHalfDay || duration === 0.5) return 0.5;
+  if (Number.isFinite(duration) && duration > 0) {
+    const totalMs = Math.max(lEnd - lStart, 0);
+    const totalDays = Math.floor(totalMs / (1000 * 60 * 60 * 24)) + 1;
+    const overlapStart = new Date(Math.max(lStart.getTime(), monthStart.getTime()));
+    const overlapEnd = new Date(Math.min(lEnd.getTime(), monthEnd.getTime()));
+    const overlapDays = Math.floor((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24)) + 1;
+    if (totalDays <= 0) return 0;
+    return (duration * overlapDays) / totalDays;
+  }
+  return 0;
+}
+
+function getSickDaysUsedInMonth(leaves, year, monthIndex) {
+  return (leaves || [])
+    .filter(
+      (l) =>
+        l.leaveType === 'sick' &&
+        (l.status === 'pending' || l.status === 'approved')
+    )
+    .reduce((sum, leave) => sum + getLeaveDaysInMonth(leave, year, monthIndex), 0);
+}
 
 const LeaveApplication = () => {
   const dispatch = useDispatch();
@@ -26,6 +63,7 @@ const LeaveApplication = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const [myLeaves, setMyLeaves] = useState([]);
   const leaveTypeOptions = useMemo(() => getAllLeaveTypeOptions(), []);
 
   useEffect(() => {
@@ -38,9 +76,80 @@ const LeaveApplication = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await axios.get(`${EMPLOYEE_LEAVE_ENDPOINT}/get-my-leaves`, {
+          withCredentials: true,
+        });
+        if (!cancelled) {
+          setMyLeaves(response.data?.leaves || []);
+        }
+      } catch {
+        if (!cancelled) setMyLeaves([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isSickLeave = leaveForm.leaveType === 'sick';
+
+  const sickDocumentRequired = useMemo(() => {
+    if (!isSickLeave || !leaveForm.startDate || !leaveForm.endDate) return false;
+
+    const start = new Date(`${leaveForm.startDate}T00:00:00`);
+    const end = new Date(`${leaveForm.endDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return false;
+    }
+
+    const epsilon = 1e-9;
+    let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const lastMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+
+    while (cursor.getTime() <= lastMonth.getTime()) {
+      const year = cursor.getFullYear();
+      const monthIndex = cursor.getMonth();
+      const monthStart = new Date(year, monthIndex, 1);
+      const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+      const segmentStart = new Date(Math.max(start.getTime(), monthStart.getTime()));
+      const segmentEnd = new Date(Math.min(end.getTime(), monthEnd.getTime()));
+      if (segmentStart <= segmentEnd) {
+        const requestedInMonth = leaveForm.isHalfDay
+          ? 0.5
+          : Math.floor((segmentEnd - segmentStart) / (1000 * 60 * 60 * 24)) + 1;
+        const usedInMonth = getSickDaysUsedInMonth(myLeaves, year, monthIndex);
+        if (usedInMonth + requestedInMonth > 1 + epsilon) {
+          return true;
+        }
+      }
+      cursor = new Date(year, monthIndex + 1, 1);
+    }
+    return false;
+  }, [
+    isSickLeave,
+    leaveForm.startDate,
+    leaveForm.endDate,
+    leaveForm.isHalfDay,
+    myLeaves,
+  ]);
+
+  // Show optional upload for non-sick; for sick only when monthly total exceeds 1 day
+  const showDocumentUpload = !isSickLeave || sickDocumentRequired;
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setLeaveForm({ ...leaveForm, [name]: value });
+    setLeaveForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'leaveType' && value !== 'sick') {
+        // keep document as-is for other types
+      }
+      return next;
+    });
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -48,10 +157,25 @@ const LeaveApplication = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file && file.size > 5 * 1024 * 1024) {
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
       setErrors({ ...errors, document: 'File size must be less than 5MB' });
       return;
     }
+
+    if (sickDocumentRequired) {
+      const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+      const extOk = /\.(pdf|jpe?g|png)$/i.test(file.name);
+      if (!allowed.includes(file.type) && !extOk) {
+        setErrors({
+          ...errors,
+          document: 'Only PDF, JPG, JPEG, or PNG files are allowed',
+        });
+        return;
+      }
+    }
+
     setLeaveForm({ ...leaveForm, document: file });
     setErrors({ ...errors, document: '' });
   };
@@ -63,11 +187,15 @@ const LeaveApplication = () => {
     if (!leaveForm.startDate) formErrors.startDate = 'Start date is required';
     if (!leaveForm.endDate) formErrors.endDate = 'End date is required';
     if (!leaveForm.reason.trim()) formErrors.reason = 'Please select or enter a reason';
-    
+
     if (leaveForm.startDate && leaveForm.endDate) {
       if (new Date(leaveForm.startDate) > new Date(leaveForm.endDate)) {
         formErrors.endDate = 'End date must be after start date';
       }
+    }
+
+    if (sickDocumentRequired && !(leaveForm.document instanceof File)) {
+      formErrors.document = SICK_DOC_MESSAGE;
     }
 
     return formErrors;
@@ -90,7 +218,7 @@ const LeaveApplication = () => {
       reason: leaveForm.reason.trim(),
       isHalfDay: leaveForm.isHalfDay,
       halfDayType: leaveForm.isHalfDay ? leaveForm.halfDayType : null,
-      document: leaveForm.document,
+      document: isSickLeave && !sickDocumentRequired ? null : leaveForm.document,
     }));
   };
 
@@ -110,6 +238,11 @@ const LeaveApplication = () => {
       });
       setErrors({});
       dispatch(resetStatus());
+      // Refresh leaves so next sick application uses updated monthly totals
+      axios
+        .get(`${EMPLOYEE_LEAVE_ENDPOINT}/get-my-leaves`, { withCredentials: true })
+        .then((response) => setMyLeaves(response.data?.leaves || []))
+        .catch(() => {});
     }
     if (error) {
       toast.error(`Submission failed: ${error}`);
@@ -117,16 +250,25 @@ const LeaveApplication = () => {
     }
   }, [success, error, dispatch, user]);
 
+  // Clear selected file when sick document upload is no longer required
+  useEffect(() => {
+    if (isSickLeave && !sickDocumentRequired && leaveForm.document) {
+      setLeaveForm((prev) => ({ ...prev, document: null }));
+      setErrors((prev) => ({ ...prev, document: '' }));
+    }
+  }, [isSickLeave, sickDocumentRequired]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="bg-white p-4 md:p-8 rounded-xl shadow-md mt-4 lg:mt-10 transition-all duration-300">
-      <div className="mx-auto w-full lg:max-w-2xl">
-        <h2 className="text-xl md:text-2xl font-bold mb-2 text-gray-800">Leave Application Form</h2>
-        <p className="mb-4 md:mb-6 text-sm text-gray-600">
+    <div className="page-shell w-full min-w-0">
+      <div className="page-shell-inner">
+        <div className="mt-4 w-full min-w-0 rounded-xl bg-white p-3 shadow-md transition-all duration-300 sm:p-4 md:p-6 lg:mt-6">
+        <h2 className="mb-2 text-xl font-bold text-gray-800 md:text-2xl">Leave Application Form</h2>
+        <p className="mb-4 text-sm text-gray-600 md:mb-6">
           After you submit, your manager must approve first. Then HR completes final approval before leave is deducted from your balance.
         </p>
         <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 md:space-y-6">
           {/* Name and Email */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <div className="hrms-form-grid">
             {['name', 'email'].map((field) => (
               <div key={field}>
                 <label className="block text-sm font-medium text-gray-700">
@@ -163,7 +305,7 @@ const LeaveApplication = () => {
           </div>
 
           {/* Date Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <div className="hrms-form-grid">
             {['startDate', 'endDate'].map((field) => (
               <div key={field}>
                 <label className="block text-sm font-medium text-gray-700">
@@ -184,7 +326,7 @@ const LeaveApplication = () => {
           </div>
 
           {/* Half Day Option */}
-          {leaveForm.startDate && leaveForm.endDate && 
+          {leaveForm.startDate && leaveForm.endDate &&
            new Date(leaveForm.startDate).toDateString() === new Date(leaveForm.endDate).toDateString() && (
             <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4">
               <label className="flex items-center mb-2">
@@ -236,38 +378,55 @@ const LeaveApplication = () => {
             {errors.reason && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.reason}</p>}
           </div>
 
-          {/* Document Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Supporting Document (Optional)
-            </label>
-            <div className="flex items-center space-x-2 md:space-x-4 mt-2">
-              <label
-                htmlFor="document"
-                className={`cursor-pointer inline-flex items-center px-3 py-1 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded ${
-                  submitting 
-                    ? 'bg-gray-400 text-gray-700' 
-                    : 'bg-theme-primary text-white hover:opacity-90'
-                }`}
-              >
-                Upload File
+          {/* Document Upload — for Sick Leave only when monthly total exceeds 1 day; optional for other types */}
+          {showDocumentUpload && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                {sickDocumentRequired
+                  ? 'Medical Certificate (Required)'
+                  : 'Supporting Document (Optional)'}
               </label>
-              <span className="text-xs md:text-sm text-gray-600 truncate max-w-[120px] md:max-w-xs">
-                {leaveForm.document ? leaveForm.document.name : 'No file chosen'}
-              </span>
+              {sickDocumentRequired && (
+                <p className="text-xs text-amber-700 mt-1">{SICK_DOC_MESSAGE}</p>
+              )}
+              <div className="flex items-center space-x-2 md:space-x-4 mt-2">
+                <label
+                  htmlFor="document"
+                  className={`cursor-pointer inline-flex items-center px-3 py-1 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded ${
+                    submitting
+                      ? 'bg-gray-400 text-gray-700'
+                      : 'bg-theme-primary text-white hover:opacity-90'
+                  }`}
+                >
+                  Upload File
+                </label>
+                <span className="text-xs md:text-sm text-gray-600 truncate max-w-[120px] md:max-w-xs">
+                  {leaveForm.document ? leaveForm.document.name : 'No file chosen'}
+                </span>
+              </div>
+              <input
+                type="file"
+                id="document"
+                name="document"
+                className="hidden"
+                onChange={handleFileChange}
+                accept={
+                  sickDocumentRequired
+                    ? '.pdf,.jpg,.jpeg,.png'
+                    : '.pdf,.doc,.docx,.jpg,.jpeg,.png'
+                }
+                disabled={submitting}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {sickDocumentRequired
+                  ? 'Max size: 5MB. Formats: PDF, JPG, JPEG, PNG'
+                  : 'Max size: 5MB. Formats: PDF, DOC, DOCX, JPG, PNG'}
+              </p>
+              {errors.document && (
+                <p className="text-red-500 text-xs md:text-sm mt-1">{errors.document}</p>
+              )}
             </div>
-            <input
-              type="file"
-              id="document"
-              name="document"
-              className="hidden"
-              onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              disabled={submitting}
-            />
-            <p className="text-xs text-gray-500 mt-1">Max size: 5MB. Formats: PDF, DOC, DOCX, JPG, PNG</p>
-            {errors.document && <p className="text-red-500 text-xs md:text-sm mt-1">{errors.document}</p>}
-          </div>
+          )}
 
           {/* Submit Button */}
           <button
@@ -292,6 +451,7 @@ const LeaveApplication = () => {
             )}
           </button>
         </form>
+        </div>
       </div>
     </div>
   );

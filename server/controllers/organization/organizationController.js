@@ -252,6 +252,7 @@ export const updateOrganizationSettings = async (req, res) => {
             employeeIdMinDigits,
             timezone,
             tdsCalculationMode,
+            allowWorkFromHome,
         } = req.body;
 
         const organization = await Organization.findById(organizationId);
@@ -314,6 +315,10 @@ export const updateOrganizationSettings = async (req, res) => {
         if (tdsCalculationMode !== undefined) {
             if (!organization.settings) organization.settings = {};
             organization.settings.tdsCalculationMode = tdsCalculationMode;
+        }
+        if (allowWorkFromHome !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.allowWorkFromHome = !!allowWorkFromHome;
         }
         if (timezone !== undefined) {
             if (!isValidTimezone(timezone)) {

@@ -64,8 +64,8 @@ const MyOnboardingPage = () => {
 
     if (!workflow) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-                <div className="max-w-4xl mx-auto">
+            <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+                <div className="page-shell-inner">
                     <div className="bg-white rounded-lg shadow-md p-8 text-center">
                         <FaTasks className="mx-auto text-6xl text-gray-400 mb-4" />
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">No Onboarding Workflow</h2>
@@ -119,10 +119,10 @@ const MyOnboardingPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
                 {/* Header */}
-                <div className="mb-6">
+                <div>
                     <button
                         onClick={() => navigate('/dashboard-employee')}
                         className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"

@@ -28,9 +28,7 @@ export const HR_PORTAL_TABS = ['hr_manager'];
 const ME_PROFILE_ROUTES = [
   '/profile-details',
   '/contact-details',
-  '/next-of-kin-details',
   '/education-qualifications',
-  '/guarantor-details',
   '/family-details',
   '/job-details',
   '/financial-details',

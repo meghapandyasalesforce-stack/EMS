@@ -317,10 +317,12 @@ const EmployeeCalendar = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-secondary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading calendar...</p>
+      <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+        <div className="page-shell-inner flex items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-theme-secondary"></div>
+            <p className="text-gray-600">Loading calendar...</p>
+          </div>
         </div>
       </div>
     );
@@ -333,8 +335,8 @@ const EmployeeCalendar = () => {
   const selectedDateEvents = getEventsForDateObj(selectedDate);
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] p-4 sm:p-6 transition-all duration-300">
-      <div className="mx-auto max-w-[1320px] space-y-6">
+    <div className="page-shell min-h-screen bg-[#F4F6FB] transition-all duration-300">
+      <div className="page-shell-inner hrms-stack">
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -397,7 +399,7 @@ const EmployeeCalendar = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+        <div className="hrms-main-rail">
           <div className="space-y-5">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="flex flex-wrap items-center gap-3">

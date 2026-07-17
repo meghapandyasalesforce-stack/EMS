@@ -260,13 +260,11 @@ const RoleHierarchy = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-6 lg:p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
-              <p className="text-lg text-gray-600">Manage user roles and permissions</p>
-            </div>
+      <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="page-shell-inner hrms-stack">
+          <div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
+            <p className="text-lg text-gray-600">Manage user roles and permissions</p>
           </div>
           
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -285,10 +283,10 @@ const RoleHierarchy = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-6 lg:p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="page-shell-inner hrms-stack">
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Role Management</h1>
             <p className="text-lg text-gray-600">Manage user roles and permissions</p>

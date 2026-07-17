@@ -92,15 +92,14 @@ const EmployeeProfile = ({ employeeId }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6">
-      {/* Mobile top padding to account for navbar */}
-      <div className="pt-16 md:pt-0">
-        <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <div className="page-shell">
+        <div className="page-shell-inner">
           {/* Profile Header */}
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className=" bg-gray-800 px-4 sm:px-6 py-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <div className="mb-4 sm:mb-0">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
                   <h1 className="text-xl sm:text-2xl font-bold text-white">
                     {employee.name} {employee.lastName}
                   </h1>
@@ -123,10 +122,10 @@ const EmployeeProfile = ({ employeeId }) => {
             </div>
 
             {/* Main Content */}
-            <div className="px-4 sm:px-6 py-4">
+            <div className="px-4 sm:px-6 py-5 hrms-stack">
               {/* Personal Information */}
               <Section title="Personal Information">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="hrms-form-grid">
                   <InfoField label="Email" value={employee.email} />
                   <InfoField label="Personal Email" value={employee.personalEmail} />
                   <InfoField label="Primary Phone" value={employee.phone1} />
@@ -138,7 +137,7 @@ const EmployeeProfile = ({ employeeId }) => {
               {/* Financial Information */}
               {employee.financialDetails && (
                 <Section title="Financial Information">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="hrms-form-grid">
                     <InfoField label="Bank Name" value={employee.financialDetails.bankName} />
                     <InfoField label="Account Name" value={employee.financialDetails.accountName} />
                     <InfoField label="Account Number" value={employee.financialDetails.accountNo} />
@@ -193,7 +192,7 @@ const EmployeeProfile = ({ employeeId }) => {
               {/* Family Details */}
               {employee.familyDetails && employee.familyDetails.length > 0 && (
                 <Section title="Family Members">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="hrms-form-grid">
                     {employee.familyDetails.map((member, index) => (
                       <div key={index} className="border rounded-lg p-4">
                         <h3 className="font-semibold text-gray-800">{member.fullName}</h3>
@@ -239,7 +238,7 @@ const EmployeeProfile = ({ employeeId }) => {
               {/* Documents */}
               {employee.documents && employee.documents.length > 0 && (
                 <Section title="Documents">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="hrms-form-grid">
                     {employee.documents.map((doc, index) => (
                       <div key={index} className="border rounded-lg p-4 flex items-center justify-between">
                         <div>
@@ -264,14 +263,14 @@ const EmployeeProfile = ({ employeeId }) => {
 };
 
 const Section = ({ title, children }) => (
-  <div className="mb-8 last:mb-0">
+  <div className="w-full min-w-0">
     <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">{title}</h2>
     {children}
   </div>
 );
 
 const InfoField = ({ label, value, spanFull = false }) => (
-  <div className={spanFull ? "col-span-1 md:col-span-2" : ""}>
+  <div className={spanFull ? "md:col-span-2 min-w-0" : "min-w-0"}>
     <p className="text-sm font-medium text-gray-500">{label}</p>
     <p className="text-gray-800 break-words">{value || "-"}</p>
   </div>

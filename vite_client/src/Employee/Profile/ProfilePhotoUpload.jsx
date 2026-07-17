@@ -1,51 +1,111 @@
-import React, { useState, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { FiCamera, FiUpload, FiX, FiUser } from 'react-icons/fi';
+import React, { useCallback, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { FiCamera, FiUpload, FiX, FiUser, FiZoomIn } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios, { getProfilePhotoUrl } from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
 
+const OUTPUT_SIZE = 400;
+const VIEWPORT_SIZE = 280;
+
+function cropToBlob({ image, offsetX, offsetY, zoom, viewportSize }) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = OUTPUT_SIZE;
+    canvas.height = OUTPUT_SIZE;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      reject(new Error('Canvas not available'));
+      return;
+    }
+
+    // Display width = viewportSize * zoom maps to naturalWidth
+    const scale = image.naturalWidth / (viewportSize * zoom);
+    const srcSize = viewportSize * scale;
+    const srcX = (-offsetX) * scale;
+    const srcY = (-offsetY) * scale;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+    ctx.drawImage(image, srcX, srcY, srcSize, srcSize, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) reject(new Error('Failed to create image'));
+        else resolve(blob);
+      },
+      'image/jpeg',
+      0.9
+    );
+  });
+}
+
 const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) => {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [sourceUrl, setSourceUrl] = useState(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [dragging, setDragging] = useState(false);
+  const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
   const [uploading, setUploading] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [stream, setStream] = useState(null);
+
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const imageRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
   const user = useSelector((state) => state.auth.user);
   const { isPermissionGranted, isPermissionDenied, requestCameraPermission } = usePermissions();
 
+  const currentPhotoUrl = getProfilePhotoUrl(user?.profilePhoto || user?.profilePicture);
+
+  const minZoomForCover = (w, h) => {
+    if (!w || !h) return 1;
+    // Need displayH >= viewport and displayW >= viewport
+    return Math.max(1, w / h);
+  };
+
+  const setNewSource = (url) => {
+    if (sourceUrl?.startsWith('blob:')) URL.revokeObjectURL(sourceUrl);
+    setSourceUrl(url);
+    setOffset({ x: 0, y: 0 });
+    setZoom(1);
+    setImgNatural({ w: 0, h: 0 });
+  };
+
+  const resetEditor = () => {
+    if (sourceUrl?.startsWith('blob:')) URL.revokeObjectURL(sourceUrl);
+    setSourceUrl(null);
+    setOffset({ x: 0, y: 0 });
+    setZoom(1);
+    setImgNatural({ w: 0, h: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   // Handle file selection
   const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast.error('File size must be less than 5MB');
-        return;
-      }
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please select an image file');
-        return;
-      }
-      setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => setPreview(e.target.result);
-      reader.readAsDataURL(file);
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast.error('File size must be less than 5MB');
+      return;
     }
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    setNewSource(URL.createObjectURL(file));
   };
 
   // Start camera with permission check
   const startCamera = async () => {
-    // Check if permission is denied
     if (isPermissionDenied('camera')) {
       toast.error('Camera permission denied. Please enable it in browser settings.');
       return;
     }
 
-    // Request permission if not granted
     if (!isPermissionGranted('camera')) {
       try {
         const result = await requestCameraPermission();
@@ -61,8 +121,8 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: 640, 
+        video: {
+          width: 640,
           height: 640,
           facingMode: 'user'
         }
@@ -98,35 +158,74 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    // Set canvas size to video size
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
-    // Draw video frame to canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Convert canvas to blob
     canvas.toBlob((blob) => {
       if (blob) {
-        const file = new File([blob], 'camera-photo.jpg', { type: 'image/jpeg' });
-        setSelectedFile(file);
-        setPreview(URL.createObjectURL(blob));
+        setNewSource(URL.createObjectURL(blob));
         stopCamera();
       }
     }, 'image/jpeg', 0.8);
   };
 
-  // Upload photo
+  const clampOffset = useCallback(
+    (x, y, nextZoom = zoom) => {
+      if (!imgNatural.w || !imgNatural.h) return { x, y };
+      const displayW = VIEWPORT_SIZE * nextZoom;
+      const displayH = (imgNatural.h / imgNatural.w) * displayW;
+      const minX = Math.min(0, VIEWPORT_SIZE - displayW);
+      const minY = Math.min(0, VIEWPORT_SIZE - displayH);
+      return {
+        x: Math.max(minX, Math.min(0, x)),
+        y: Math.max(minY, Math.min(0, y)),
+      };
+    },
+    [imgNatural, zoom]
+  );
+
+  const onPointerDown = (e) => {
+    if (!sourceUrl) return;
+    e.preventDefault();
+    setDragging(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+  };
+
+  const onPointerMove = (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    setOffset(clampOffset(dragStartRef.current.ox + dx, dragStartRef.current.oy + dy));
+  };
+
+  const onPointerUp = () => setDragging(false);
+
+  const handleZoomChange = (value) => {
+    const nextZoom = Number(value);
+    setZoom(nextZoom);
+    setOffset((prev) => clampOffset(prev.x, prev.y, nextZoom));
+  };
+
+  // Crop and upload photo
   const uploadPhoto = async () => {
-    if (!selectedFile) {
+    if (!sourceUrl || !imageRef.current) {
       toast.error('Please select a photo first');
       return;
     }
 
     setUploading(true);
     try {
+      const blob = await cropToBlob({
+        image: imageRef.current,
+        offsetX: offset.x,
+        offsetY: offset.y,
+        zoom,
+        viewportSize: VIEWPORT_SIZE,
+      });
+      const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
       const formData = new FormData();
-      formData.append('profilePhoto', selectedFile);
+      formData.append('profilePhoto', file);
 
       const response = await axios.post(
         `/v1/both/profile-photo/${userType}/upload`,
@@ -142,30 +241,20 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       toast.success('Profile photo uploaded successfully!');
       if (onPhotoUpdate) {
         // Server response structure: { success: true, profilePhoto: {...}, fileSize: ... }
-        // The sendSuccess helper merges the data object, so profilePhoto is at the root level
         const profilePhotoData = response.data?.profilePhoto || response.data?.data?.profilePhoto || response.data;
         onPhotoUpdate(profilePhotoData);
       }
-      
-      // Reset state
-      setSelectedFile(null);
-      setPreview(null);
+
+      resetEditor();
     } catch (error) {
-      // Removed console.error for production
       toast.error(error.response?.data?.message || 'Failed to upload photo');
     } finally {
       setUploading(false);
     }
   };
 
-  // Remove selected photo
-  const removePhoto = () => {
-    setSelectedFile(null);
-    setPreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  const displayW = VIEWPORT_SIZE * zoom;
+  const displayH = imgNatural.w ? (imgNatural.h / imgNatural.w) * displayW : displayW;
 
   return (
     <div className="bg-white rounded-xl p-6 border-2 border-gray-200">
@@ -174,49 +263,91 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
         Profile Photo
       </h3>
 
-      {/* Current Photo Display */}
+      {/* Adjust / preview viewport */}
       <div className="flex flex-col items-center mb-6">
-        <div className="relative">
-          <div className="w-32 h-32 relative aspect-square rounded-full overflow-hidden bg-white border border-gray-200">
-            {preview ? (
-              <img
-                src={preview}
-                alt="Preview"
-                className="absolute inset-0 block h-full w-full min-h-full min-w-full scale-[1.15] object-cover object-[center_22%]"
-                style={{ objectFit: 'cover', objectPosition: 'center 22%' }}
-              />
-            ) : user?.profilePhoto ? (
-              <img
-                src={getProfilePhotoUrl(user.profilePhoto)}
-                alt="Current Profile"
-                className="absolute inset-0 block h-full w-full min-h-full min-w-full scale-[1.15] object-cover object-[center_22%]"
-                style={{ objectFit: 'cover', objectPosition: 'center 22%' }}
-                crossOrigin="anonymous"
-                onError={(e) => {
-                  // Fallback if image fails to load
-                  e.target.style.display = 'none';
-                  e.target.nextSibling?.classList.remove('hidden');
-                }}
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <FiUser className="w-16 h-16 text-gray-400" />
-              </div>
-            )}
-          </div>
-          {preview && (
+        <div
+          className="relative overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100 shadow-inner touch-none"
+          style={{
+            width: VIEWPORT_SIZE,
+            height: VIEWPORT_SIZE,
+            cursor: sourceUrl ? (dragging ? 'grabbing' : 'grab') : 'default',
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+        >
+          {sourceUrl ? (
+            <img
+              ref={imageRef}
+              src={sourceUrl}
+              alt="Adjust"
+              draggable={false}
+              className="absolute max-w-none select-none"
+              style={{
+                width: displayW,
+                height: displayH,
+                left: offset.x,
+                top: offset.y,
+              }}
+              onLoad={(e) => {
+                const w = e.target.naturalWidth;
+                const h = e.target.naturalHeight;
+                const coverZoom = minZoomForCover(w, h);
+                setImgNatural({ w, h });
+                setZoom(coverZoom);
+                // Center the image in the circle
+                const dispW = VIEWPORT_SIZE * coverZoom;
+                const dispH = (h / w) * dispW;
+                setOffset({
+                  x: (VIEWPORT_SIZE - dispW) / 2,
+                  y: (VIEWPORT_SIZE - dispH) / 2,
+                });
+              }}
+            />
+          ) : currentPhotoUrl ? (
+            <img
+              src={currentPhotoUrl}
+              alt="Current Profile"
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              crossOrigin="anonymous"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <FiUser className="w-16 h-16 text-gray-400" />
+            </div>
+          )}
+
+          {sourceUrl && (
             <button
-              onClick={removePhoto}
-              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+              onClick={resetEditor}
+              className="absolute right-6 top-4 rounded-full bg-red-500 p-1 text-white shadow hover:bg-red-600 transition-colors"
+              title="Discard selected photo"
             >
               <FiX className="w-4 h-4" />
             </button>
           )}
         </div>
         <p className="text-sm text-gray-600 mt-2">
-          {preview ? 'New photo selected' : 'Current profile photo'}
+          {sourceUrl ? 'Drag to reposition · zoom to fit' : 'Current profile photo'}
         </p>
       </div>
+
+      {/* Zoom slider */}
+      {sourceUrl && (
+        <label className="mb-4 flex items-center gap-3 text-sm text-slate-600">
+          <FiZoomIn className="h-4 w-4 shrink-0" />
+          <input
+            type="range"
+            min={minZoomForCover(imgNatural.w, imgNatural.h)}
+            max={Math.max(3, minZoomForCover(imgNatural.w, imgNatural.h) + 2)}
+            step="0.05"
+            value={zoom}
+            onChange={(e) => handleZoomChange(e.target.value)}
+            className="w-full accent-emerald-600"
+          />
+        </label>
+      )}
 
       {/* Camera Mode */}
       {cameraMode && (
@@ -250,7 +381,6 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       {/* Upload Options */}
       {!cameraMode && (
         <div className="space-y-3">
-          {/* File Upload */}
           <div>
             <input
               ref={fileInputRef}
@@ -268,7 +398,6 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
             </button>
           </div>
 
-          {/* Camera Option */}
           <button
             onClick={startCamera}
             className="w-full bg-theme-secondary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center"
@@ -280,7 +409,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
       )}
 
       {/* Upload Button */}
-      {selectedFile && !cameraMode && (
+      {sourceUrl && !cameraMode && (
         <div className="mt-4">
           <button
             onClick={uploadPhoto}
@@ -288,23 +417,8 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
             className="w-full bg-theme-primary hover:bg-theme-primary text-white py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center disabled:opacity-50"
           >
             <FiUpload className="mr-2" />
-            {uploading ? 'Uploading...' : 'Upload Photo'}
+            {uploading ? 'Uploading...' : 'Save Photo'}
           </button>
-        </div>
-      )}
-
-      {/* File Info */}
-      {selectedFile && (
-        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-600">
-            <strong>File:</strong> {selectedFile.name}
-          </p>
-          <p className="text-sm text-gray-600">
-            <strong>Size:</strong> {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-          </p>
-          <p className="text-sm text-gray-600">
-            <strong>Type:</strong> {selectedFile.type}
-          </p>
         </div>
       )}
 
@@ -314,7 +428,7 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
         <ul className="text-xs text-theme-secondary space-y-1">
           <li>• Maximum file size: 5MB</li>
           <li>• Supported formats: JPG, PNG, GIF</li>
-          <li>• Recommended size: 400x400 pixels</li>
+          <li>• Drag the photo to reposition, use the slider to zoom</li>
           <li>• Make sure your face is clearly visible</li>
         </ul>
       </div>

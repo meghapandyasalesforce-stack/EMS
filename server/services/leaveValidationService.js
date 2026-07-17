@@ -140,13 +140,12 @@ class LeaveValidationService {
                 errors.push(`Maximum ${leaveTypeConfig.maxDaysPerRequest} days allowed for ${leaveTypeConfig.displayName}`);
             }
 
-            // 8. Check maximum days allowed per calendar month (monthly take cap for same leave type)
-            const monthlyTakeCap = Number(leaveTypeConfig.maxDaysPerMonth) > 0
-                ? Number(leaveTypeConfig.maxDaysPerMonth)
-                : getMonthlyEntitlementAmount(leaveTypeConfig);
+            // 8. Check maximum days allowed per calendar month only when an explicit
+            // monthly take cap is configured on the leave type. Monthly accrual itself
+            // should not limit how much of an accumulated balance can be consumed.
+            const maxDaysPerMonth = Number(leaveTypeConfig.maxDaysPerMonth);
 
-            if (monthlyTakeCap && Number.isFinite(monthlyTakeCap) && monthlyTakeCap > 0) {
-                const maxDaysPerMonth = monthlyTakeCap;
+            if (Number.isFinite(maxDaysPerMonth) && maxDaysPerMonth > 0) {
                 const firstMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
                 const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999);
 
@@ -257,6 +256,103 @@ class LeaveValidationService {
             );
             if (!overlapCheck.allowed) {
                 errors.push(overlapCheck.reason);
+            }
+
+            // 10. Sick Leave: medical document required when monthly total exceeds 1 day
+            if (normalizedType === 'sick') {
+                const hasDocument = typeof leaveData.document === 'string'
+                    ? leaveData.document.trim().length > 0
+                    : Boolean(leaveData.document);
+
+                if (!hasDocument) {
+                    const epsilon = 1e-9;
+                    const firstMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+                    const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+                    const sickLeaves = await Leave.find({
+                        organizationId,
+                        employee: employeeId,
+                        leaveType: 'sick',
+                        status: { $in: ['pending', 'approved'] },
+                        startDate: { $lte: lastMonth },
+                        endDate: { $gte: firstMonth }
+                    });
+
+                    const totalLeaveDaysCache = new Map();
+                    for (const l of sickLeaves) {
+                        const totalLeaveDaysCounted = await this.calculateDuration(
+                            new Date(l.startDate),
+                            new Date(l.endDate),
+                            policy.dateHandlingRules,
+                            calendar,
+                            organizationId
+                        );
+                        totalLeaveDaysCache.set(String(l._id), totalLeaveDaysCounted);
+                    }
+
+                    const firstMonthCursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+                    const lastMonthCursor = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+                    const monthCursor = new Date(firstMonthCursor);
+                    let documentRequired = false;
+
+                    while (monthCursor.getTime() <= lastMonthCursor.getTime() && !documentRequired) {
+                        const monthStart = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+                        const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0, 23, 59, 59, 999);
+                        const segmentStart = new Date(Math.max(startDate.getTime(), monthStart.getTime()));
+                        const segmentEnd = new Date(Math.min(endDate.getTime(), monthEnd.getTime()));
+
+                        if (segmentStart.getTime() <= segmentEnd.getTime()) {
+                            const requestedSegmentDays = leaveData.isHalfDay
+                                ? 0.5
+                                : await this.calculateDuration(
+                                    segmentStart,
+                                    segmentEnd,
+                                    policy.dateHandlingRules,
+                                    calendar,
+                                    organizationId
+                                );
+
+                            let usedDays = 0;
+                            for (const l of sickLeaves) {
+                                const lStart = new Date(l.startDate);
+                                const lEnd = new Date(l.endDate);
+                                if (lEnd.getTime() < monthStart.getTime() || lStart.getTime() > monthEnd.getTime()) {
+                                    continue;
+                                }
+
+                                const overlapStart = new Date(Math.max(lStart.getTime(), monthStart.getTime()));
+                                const overlapEnd = new Date(Math.min(lEnd.getTime(), monthEnd.getTime()));
+                                if (overlapStart.getTime() > overlapEnd.getTime()) continue;
+
+                                const totalLeaveDaysCounted = totalLeaveDaysCache.get(String(l._id)) ?? 0;
+                                const overlapWorkingDays = await this.calculateDuration(
+                                    overlapStart,
+                                    overlapEnd,
+                                    policy.dateHandlingRules,
+                                    calendar,
+                                    organizationId
+                                );
+
+                                if (totalLeaveDaysCounted > 0) {
+                                    const ratio = overlapWorkingDays / totalLeaveDaysCounted;
+                                    usedDays += (Number(l.duration) || 0) * ratio;
+                                }
+                            }
+
+                            if (usedDays + requestedSegmentDays > 1 + epsilon) {
+                                documentRequired = true;
+                            }
+                        }
+
+                        monthCursor.setMonth(monthCursor.getMonth() + 1);
+                    }
+
+                    if (documentRequired) {
+                        errors.push(
+                            'Medical certificate is required when Sick Leave exceeds 1 day in a calendar month.'
+                        );
+                    }
+                }
             }
 
             return {

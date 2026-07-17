@@ -126,7 +126,8 @@ const EditPolicy = () => {
     }
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
+        <div className="page-shell">
+        <div className="page-shell-inner">
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Edit company policy</h1>
                 <p className="text-gray-600 mt-2">Update policy details for your organization</p>
@@ -281,6 +282,7 @@ const EditPolicy = () => {
                     </button>
                 </div>
             </form>
+        </div>
         </div>
     );
 };

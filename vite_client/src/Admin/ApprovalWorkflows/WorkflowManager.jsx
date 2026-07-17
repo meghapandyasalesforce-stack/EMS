@@ -86,10 +86,12 @@ const WorkflowManager = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Approval Workflows</h1>
             <p className="text-lg text-gray-600">Manage multi-step approval processes</p>
@@ -112,7 +114,7 @@ const WorkflowManager = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-md p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Entity Type</label>
@@ -230,6 +232,8 @@ const WorkflowManager = () => {
             </button>
           </div>
         )}
+      </div>
+      </div>
       </div>
 
       {/* Modals */}

@@ -332,11 +332,13 @@ const CalendarManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
       <ToastContainer position="top-right" autoClose={3000} />
-      <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8">
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
         {/* Header */}
-        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-slate-200 p-8">
+        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 lg:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="flex-1 min-w-0">
               <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">Calendar Management</h1>
@@ -587,6 +589,8 @@ const CalendarManagement = () => {
         </div>
 
       </div>
+      </div>
+      </div>
 
       {/* Modals */}
       {showHolidayModal && (
@@ -627,7 +631,7 @@ const HolidayModal = ({ title, formData, setFormData, onSubmit, onClose }) => {
   const todayDateString = new Date().toISOString().split('T')[0];
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform animate-slideUp">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform animate-slideUp">
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -733,7 +737,7 @@ const SettingsModal = ({ formData, setFormData, onSubmit, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl transform animate-slideUp">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform animate-slideUp">
         <div className="bg-gradient-to-r from-gray-600 to-gray-700 p-6 rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -833,7 +837,7 @@ const UploadModal = ({ onSubmit, onClose, uploading }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform animate-slideUp">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform animate-slideUp">
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-white bg-opacity-20 rounded-lg">

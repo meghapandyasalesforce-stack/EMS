@@ -67,9 +67,9 @@ const GuarantorDetails = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
-      <div className="max-w-4xl mx-auto bg-white p-4 md:p-6 rounded-lg shadow">
-        <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-800">Guarantor Details</h2>
+    <div className="w-full min-w-0">
+      <div className="w-full rounded-lg border border-slate-100 bg-white p-4 sm:p-5 md:p-6 shadow-sm">
+        <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-800 text-left">Guarantor Details</h2>
 
         {(reduxError || localError) && (
           <div className="mb-4 p-2 text-red-600 bg-red-100 rounded">

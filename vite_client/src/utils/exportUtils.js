@@ -40,8 +40,8 @@ export const exportToCSV = (data, filename = 'export.csv') => {
         )
     ].join('\n');
 
-    // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Create blob and download (UTF-8 BOM so Excel decodes special characters correctly)
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);

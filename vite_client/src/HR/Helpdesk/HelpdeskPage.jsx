@@ -33,8 +33,8 @@ const HelpdeskPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-gray-50 p-3 sm:p-4 transition-all duration-300">
+            <div className="w-full max-w-[1600px] mx-auto">
                 <div className="mb-6 flex justify-between items-center">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">HR Helpdesk</h1>
@@ -46,8 +46,8 @@ const HelpdeskPage = () => {
                     </button>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md mb-6 p-4">
-                    <div className="flex gap-2">
+                <div className="bg-white rounded-lg shadow-md mb-6 p-3 sm:p-4">
+                    <div className="flex gap-2 overflow-x-auto">
                         {['all', 'Open', 'In Progress', 'Resolved', 'Closed'].map((status) => (
                             <button
                                 key={status}
@@ -65,7 +65,8 @@ const HelpdeskPage = () => {
                 </div>
 
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <table className="min-w-full divide-y divide-gray-200">
+                    <div className="overflow-x-auto">
+                    <table className="min-w-[720px] w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket #</th>
@@ -117,8 +118,9 @@ const HelpdeskPage = () => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                     {tickets.length === 0 && (
-                        <div className="text-center py-12">
+                        <div className="text-center py-8 sm:py-10">
                             <FaTicketAlt className="mx-auto text-gray-400 text-5xl mb-4" />
                             <p className="text-gray-500">No tickets found.</p>
                         </div>

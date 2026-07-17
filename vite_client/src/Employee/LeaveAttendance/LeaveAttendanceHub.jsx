@@ -8,6 +8,7 @@ import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSl
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
 import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
 import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
+import WfhRequestPanel from '../Wfh/WfhRequestPanel';
 
 const toDateInput = (d) => {
   const dt = new Date(d);
@@ -528,39 +529,40 @@ const LeaveAttendanceHub = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb] pt-16 lg:pt-0">
-      <div className="mx-auto max-w-screen-2xl px-4 py-6 md:px-6">
-        <div className="mb-5">
+    <div className="page-shell min-h-screen bg-[#f4f6fb]">
+      <div className="page-shell-inner hrms-stack">
+        <div>
           <p className="text-xs text-slate-500">
             {calendarCursor.toLocaleString('default', { month: 'long' })} {calendarCursor.getFullYear()} - {employee?.name || 'Employee'}
           </p>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="hrms-mobile-full min-w-0 rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
             <p className="text-xs text-[#64748B]">Days present</p>
             <p className="mt-2 text-3xl font-bold text-[#20C997]">{presentCount}</p>
           </div>
-          <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
+          <div className="hrms-mobile-full min-w-0 rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
             <p className="text-xs text-[#64748B]">Days absent</p>
             <p className="mt-2 text-3xl font-bold text-[#EF4444]">{absentCount}</p>
           </div>
-          <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
+          <div className="hrms-mobile-full min-w-0 rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
             <p className="text-xs text-[#64748B]">Late check-ins</p>
             <p className="mt-2 text-3xl font-bold text-[#F59E0B]">{lateCount}</p>
           </div>
-          <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
+          <div className="hrms-mobile-full min-w-0 rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-4 text-[#0F172A] shadow-sm">
             <p className="text-xs text-[#64748B]">Regularized</p>
             <p className="mt-2 text-3xl font-bold text-[#34D399]">{regularizedCount}</p>
           </div>
         </div>
 
-        <section className="rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] p-3 md:p-4 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
+        <section className="hrms-mobile-full min-w-0 rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] p-3 shadow-sm md:p-4">
+          <div className="hrms-tabs-scroll mb-4">
             {[
               { id: 'attendance-log', label: 'Attendance log' },
               { id: 'leave-summary', label: 'Leave summary' },
-              { id: 'regularization-history', label: 'Regularization history' }
+              { id: 'regularization-history', label: 'Regularization history' },
+              { id: 'wfh-request', label: 'Work From Home' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1080,6 +1082,8 @@ const LeaveAttendanceHub = () => {
               </div>
             </div>
           )}
+
+          {panelTab === 'wfh-request' && <WfhRequestPanel />}
         </section>
       </div>
     </div>

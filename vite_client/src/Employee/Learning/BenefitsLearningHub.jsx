@@ -204,8 +204,8 @@ const BenefitsLearningHub = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#F4F6FB] p-4 sm:p-6 transition-all duration-300">
-            <div className="mx-auto max-w-[1240px] space-y-6">
+        <div className="page-shell min-h-screen bg-[#F4F6FB] transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
                 <header className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -214,7 +214,7 @@ const BenefitsLearningHub = () => {
                                 Access your employee benefits and growth resources in one place.
                             </p>
                         </div>
-                        <div className="flex gap-2 rounded-lg bg-slate-100 p-1">
+                        <div className="hrms-tabs-scroll rounded-lg bg-slate-100 p-1">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('benefits')}
@@ -239,7 +239,7 @@ const BenefitsLearningHub = () => {
 
                 <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
                     <div className="grid grid-cols-1 md:grid-cols-2">
-                        <div className="space-y-4 bg-[#d9f5ef] p-6 md:p-8">
+                        <div className="space-y-4 bg-[#d9f5ef] p-4 sm:p-6 md:p-6">
                             <span className="inline-flex rounded-full bg-[#20C997]/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#006D4E]">
                                 Enrollment Open
                             </span>

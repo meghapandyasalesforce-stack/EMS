@@ -101,9 +101,9 @@ const FamilyDetails = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
-      <div className="max-w-xl mx-auto p-6 bg-white rounded-xl shadow-md border border-gray-200">
-        <h2 className="text-2xl font-semibold text-center text-gray-800 mb-6">Family Details</h2>
+    <div className="w-full min-w-0">
+      <div className="w-full rounded-xl border border-gray-200 bg-white p-4 sm:p-5 md:p-6 shadow-sm">
+        <h2 className="text-xl sm:text-2xl font-semibold text-left text-gray-800 mb-5 sm:mb-6">Family Details</h2>
 
         {!formOpen && familyDetails.length > 0 ? (
           <div className="space-y-4">
@@ -154,8 +154,9 @@ const FamilyDetails = () => {
                 ? 'Update the details below, then click Update.'
                 : 'Add a new family member below.'}
             </p>
+            <div className="hrms-form-grid">
             {['fullName', 'occupation', 'relationship', 'phoneNo', 'address'].map((field) => (
-              <div key={field} className="flex flex-col">
+              <div key={field} className={`flex flex-col${field === 'address' ? ' md:col-span-2' : ''}`}>
                 <label htmlFor={field} className="font-medium text-gray-700 capitalize">
                   {field === 'phoneNo' ? 'Phone Number' : field.replace(/([A-Z])/g, ' $1')}
                 </label>
@@ -170,6 +171,7 @@ const FamilyDetails = () => {
                 />
               </div>
             ))}
+            </div>
 
             <div className="flex gap-3 pt-2 flex-wrap">
               <button

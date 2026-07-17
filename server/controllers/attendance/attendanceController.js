@@ -4,6 +4,7 @@ import Leave from "../../models/leave.model.js";
 import AttendanceRule from "../../models/attendanceRule.model.js";
 import Calendar from "../../models/calendar.model.js";
 import User from "../../models/user.model.js";
+import Organization from "../../models/organization.model.js";
 import mongoose from 'mongoose';
 import { DateTime } from 'luxon';
 import logger from "../../helpers/logger.js";
@@ -322,6 +323,22 @@ export const clockIn = async (req, res) => {
       });
     }
 
+    // Work From Home punch: office geofence is NOT enforced (location captured for record only).
+    // Office punches keep the existing verification flow unchanged.
+    const isWfhPunch = req.body.workLocation === 'home' || req.body.workLocation === 'work_from_home';
+    if (isWfhPunch) {
+      const org = await Organization.findById(organizationId)
+        .select('settings.allowWorkFromHome')
+        .lean();
+      if (org?.settings?.allowWorkFromHome === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'Work From Home punch-in is disabled by your organization. Please punch in from the office.',
+          code: 'WFH_DISABLED'
+        });
+      }
+    }
+
     const clockInTime = new Date();
     
     // Get office start time from rule or use default — use org timezone to avoid server-local-time drift
@@ -471,7 +488,22 @@ export const clockIn = async (req, res) => {
         !isNaN(activeRule.coordinates.longitude) &&
         !(activeRule.coordinates.latitude === 0 && activeRule.coordinates.longitude === 0);
 
-      if (appliesToDept && hasRuleCoords && !isExempt) {
+      if (isWfhPunch && appliesToDept && hasRuleCoords && !isExempt) {
+        // WFH punch: never block on office geofence; record distance for reference only.
+        if (typeof locationInfo.latitude === 'number' &&
+            typeof locationInfo.longitude === 'number' &&
+            !isNaN(locationInfo.latitude) &&
+            !isNaN(locationInfo.longitude) &&
+            !(locationInfo.latitude === 0 && locationInfo.longitude === 0)) {
+          locationDistance = distanceInMeters(
+            locationInfo.latitude,
+            locationInfo.longitude,
+            activeRule.coordinates.latitude,
+            activeRule.coordinates.longitude
+          );
+          locationInfo.locationDistance = locationDistance;
+        }
+      } else if (appliesToDept && hasRuleCoords && !isExempt) {
         const enforceRadius = !activeRule.enableSimplePunches;
 
         const hasValidLatitude = typeof locationInfo.latitude === 'number' &&
@@ -604,11 +636,13 @@ export const clockIn = async (req, res) => {
       const admins = await User.find({ role: 'admin', organizationId }).select('_id');
       if (!admins.length || !employee) return;
 
-      const locationStatus = locationMatch
-        ? `✅ At office location (${Math.round(locationDistance || 0)}m away)`
-        : activeRule
-          ? '⚠️ Location not verified'
-          : '📍 Location not required';
+      const locationStatus = isWfhPunch
+        ? '🏠 Work From Home'
+        : locationMatch
+          ? `✅ At office location (${Math.round(locationDistance || 0)}m away)`
+          : activeRule
+            ? '⚠️ Location not verified'
+            : '📍 Location not required';
       const deviceEmoji =
         networkInfo.deviceType === 'mobile' || networkInfo.deviceType === 'tablet'
           ? '📱'
@@ -1055,9 +1089,13 @@ export const clockOut = async (req, res) => {
       }
     }
 
+    // WFH session: clock-out is allowed from anywhere (location recorded for reference only).
+    const isWfhSession = attendance.workLocation === 'work_from_home' || attendance.workLocation === 'home';
+
     // Validate check-out is near check-in (strict mode only). Simple punches: independent locations.
     const checkInLocation = attendance.clockInLocation;
-    if (!activeRule?.enableSimplePunches &&
+    if (!isWfhSession &&
+        !activeRule?.enableSimplePunches &&
         checkInLocation &&
         typeof checkInLocation.latitude === 'number' &&
         typeof checkInLocation.longitude === 'number' &&
@@ -1118,7 +1156,21 @@ export const clockOut = async (req, res) => {
         !isNaN(activeRule.coordinates.longitude) &&
         !(activeRule.coordinates.latitude === 0 && activeRule.coordinates.longitude === 0);
 
-      if (appliesToDept && hasRuleCoords && !isExempt) {
+      if (isWfhSession && appliesToDept && hasRuleCoords && !isExempt) {
+        // WFH session: never block clock-out on office geofence; record distance for reference only.
+        if (typeof locationInfo.latitude === 'number' &&
+            typeof locationInfo.longitude === 'number' &&
+            !isNaN(locationInfo.latitude) &&
+            !isNaN(locationInfo.longitude) &&
+            !(locationInfo.latitude === 0 && locationInfo.longitude === 0)) {
+          locationInfo.locationDistance = distanceInMeters(
+            locationInfo.latitude,
+            locationInfo.longitude,
+            activeRule.coordinates.latitude,
+            activeRule.coordinates.longitude
+          );
+        }
+      } else if (appliesToDept && hasRuleCoords && !isExempt) {
         const enforceRadius = !activeRule.enableSimplePunches;
 
         const hasValidLatitude = typeof locationInfo.latitude === 'number' &&
@@ -2254,6 +2306,11 @@ const matchesTeamAttendanceFilter = (row, statusFilter) => {
     return ['present', 'late', 'wfh'].includes(row.uiStatus);
   }
 
+  // Office = any in-office punch day (present or late, but not WFH)
+  if (statusFilter === 'office') {
+    return ['present', 'late'].includes(row.uiStatus);
+  }
+
   return row.uiStatus === statusFilter;
 };
 
@@ -2434,6 +2491,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
         status: record.status,
         uiStatus,
         workLocation: record.workLocation,
+        locationVerified: record.clockInLocation?.locationMatch === true,
         isLateArrival: record.isLateArrival,
         employee: {
           _id: pop._id,
@@ -2504,6 +2562,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
               status: uiStatus === 'leave' ? 'leave' : 'absent',
               uiStatus,
               workLocation: null,
+              locationVerified: false,
               isLateArrival: false,
               employee: employeePayload
             });
@@ -2636,6 +2695,12 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
       organizationId 
     }).lean();
 
+    // Org-level WFH punch availability (defaults to true when unset)
+    const orgSettings = await Organization.findById(organizationId)
+      .select('settings.allowWorkFromHome')
+      .lean();
+    const allowWorkFromHome = orgSettings?.settings?.allowWorkFromHome !== false;
+
     if (!activeRule) {
       // Return default values if no rule exists
       return res.json({
@@ -2647,7 +2712,8 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
           maximumRadius: 500,
           enableSimplePunches: true, // Default to true if no rule
           locationRequired: false,
-          enforceOfficeRadius: false
+          enforceOfficeRadius: false,
+          allowWorkFromHome
         }
       });
     }
@@ -2690,7 +2756,8 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
         locationRequired,
         enforceOfficeRadius,
         applicableToDepartment: appliesToDept,
-        isExempt: isExempt
+        isExempt: isExempt,
+        allowWorkFromHome
       }
     });
   } catch (error) {

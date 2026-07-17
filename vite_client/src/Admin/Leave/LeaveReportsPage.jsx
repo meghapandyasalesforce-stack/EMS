@@ -37,13 +37,15 @@ const LeaveReportsPage = () => {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl p-4 md:p-8">
+    <div className="page-shell mx-auto w-full">
+      <div className="page-shell-inner">
       <h1 className="text-2xl font-bold text-slate-900">Leave Reports</h1>
       <p className="mt-1 text-sm text-slate-500">
         Employee balances, monthly usage, carry-forward summaries, and approval statistics.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="hrms-tabs-scroll">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -56,10 +58,11 @@ const LeaveReportsPage = () => {
             {t.label}
           </button>
         ))}
+        </div>
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="ml-auto rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm sm:ml-auto sm:w-auto"
         >
           {[year - 2, year - 1, year, year + 1].map((y) => (
             <option key={y} value={y}>{y}</option>
@@ -79,6 +82,7 @@ const LeaveReportsPage = () => {
             {JSON.stringify(data, null, 2)}
           </pre>
         )}
+      </div>
       </div>
     </div>
   );

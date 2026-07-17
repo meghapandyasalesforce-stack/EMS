@@ -694,8 +694,8 @@ function AddEmployee() {
 
     return (
         <div className="min-h-screen bg-[#F5F7FB]">
-            <div className="p-4 sm:p-6 lg:p-8">
-                <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            <div className="page-shell">
+                <div className="page-shell-inner rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
                     <h1 className="mb-2 text-xl font-semibold text-slate-900 sm:text-2xl">Add employee</h1>
                     <p className="mb-6 text-sm text-slate-500">
                         Create a profile and assign job details. System access is assigned automatically from the role.

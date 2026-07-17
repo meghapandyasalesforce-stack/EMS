@@ -151,6 +151,64 @@ export const uploadEmployeePhoto = async (req, res) => {
     }
 };
 
+// Admin / HR / executive: upload profile photo for a specific employee
+export const uploadEmployeePhotoByAdmin = async (req, res) => {
+    try {
+        if (!req.file) {
+            return sendError(res, 'No image file provided', 400, 'NO_FILE');
+        }
+
+        const { employeeId } = req.params;
+        const employee = await Employee.findById(employeeId);
+
+        if (!employee) {
+            return sendNotFound(res, 'Employee');
+        }
+
+        if (employee.profilePhoto && employee.profilePhoto.filename) {
+            const oldPhotoPath = path.join(__dirname, '../../uploads/profile-photos', employee.profilePhoto.filename);
+            if (fs.existsSync(oldPhotoPath)) {
+                fs.unlinkSync(oldPhotoPath);
+            }
+        }
+
+        const uploadDir = path.join(__dirname, '../../uploads/profile-photos');
+        const initialPath = path.join(uploadDir, req.file.filename);
+        if (!fs.existsSync(initialPath)) {
+            logger.error('File was not saved', { savedFilePath: initialPath });
+            return sendInternalError(res, 'File upload failed - file not found on disk');
+        }
+
+        const {
+            storedFilename,
+            currentPath,
+            optimizationResult,
+            thumbnailUrl,
+            fileStats,
+        } = await finalizeProfilePhotoUpload(uploadDir, req.file.filename);
+
+        logger.info('Employee profile photo uploaded by admin', {
+            filename: storedFilename,
+            path: currentPath,
+            size: fileStats?.size || 'unknown',
+            optimized: !!optimizationResult,
+            employeeId: employeeId.toString(),
+            uploadedBy: req.user?._id?.toString() || req.employee?._id?.toString(),
+        });
+
+        employee.profilePhoto = buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResult);
+        await employee.save();
+
+        return sendSuccess(res, {
+            profilePhoto: employee.profilePhoto,
+            fileSize: fileStats?.size
+        }, 'Profile photo uploaded successfully');
+    } catch (error) {
+        logger.error('Admin employee photo upload error', { error: error.message, stack: error.stack });
+        return sendInternalError(res, 'Failed to upload profile photo', error);
+    }
+};
+
 // Upload profile photo for admin
 export const uploadAdminPhoto = async (req, res) => {
     try {

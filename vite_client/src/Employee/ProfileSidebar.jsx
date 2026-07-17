@@ -23,11 +23,9 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
   const sections = [
     'Personal Details',
     'Contact Details',
-    'Next of kin Details',
     'Education Qualifications',
-    'Guarantor Details',
     'Family Details',
-    'Job Details',
+    'Documents',
     'Financial Details',
   ];
 
@@ -43,19 +41,13 @@ const ProfileSidebar = ({ activeSection, onSectionClick }) => {
       case 'Personal Details':
         navigate('/profile-details');
         break;
-      case 'Next of kin Details':
-        navigate('/next-of-kin-details');
-        break;
       case 'Education Qualifications':
         navigate('/education-qualifications');
-        break;
-      case 'Guarantor Details':
-        navigate('/guarantor-details');
         break;
       case 'Family Details':
         navigate('/family-details');
         break;
-      case 'Job Details':
+      case 'Documents':
         navigate('/job-details');
         break;
       case 'Financial Details':

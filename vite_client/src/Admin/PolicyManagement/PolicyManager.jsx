@@ -76,12 +76,13 @@ const PolicyManager = () => {
     }
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-800">Company Policies</h1>
+        <div className="page-shell">
+        <div className="page-shell-inner hrms-stack">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h1 className="text-2xl font-bold text-gray-800 sm:text-3xl">Company Policies</h1>
                 <button
                     onClick={() => navigate('/admin/policies/create')}
-                    className="bg-theme-primary text-white px-4 py-2 rounded-lg hover:opacity-90 flex items-center gap-2"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-theme-primary px-4 py-2.5 text-white hover:opacity-90 sm:w-auto"
                 >
                     <FaPlus /> Create Policy
                 </button>
@@ -202,6 +203,7 @@ const PolicyManager = () => {
                     ))
                 )}
             </div>
+        </div>
         </div>
     );
 };

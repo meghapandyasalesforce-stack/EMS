@@ -220,9 +220,9 @@ const SuccessionPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Succession Planning</h1>
                         <p className="text-gray-600 mt-1">Plan for key positions and manage talent pool</p>
@@ -256,7 +256,7 @@ const SuccessionPage = () => {
 
                 {/* Tabs */}
                 <div className="bg-white rounded-lg shadow-md mb-6">
-                    <div className="flex border-b">
+                    <div className="flex border-b overflow-x-auto">
                         <button
                             onClick={() => {
                                 setActiveTab('plans');
@@ -403,7 +403,7 @@ const SuccessionPage = () => {
                             </div>
                         ))}
                         {filteredPlans.length === 0 && (
-                            <div className="col-span-3 text-center py-12">
+                            <div className="col-span-3 text-center py-8 sm:py-10">
                                 <FaUserTie className="mx-auto text-gray-400 text-5xl mb-4" />
                                 <p className="text-gray-500">
                                     {successionPlans.length === 0 
@@ -415,7 +415,8 @@ const SuccessionPage = () => {
                     </div>
                 ) : (
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <div className="overflow-x-auto">
+                        <table className="min-w-[640px] w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
@@ -468,7 +469,7 @@ const SuccessionPage = () => {
                                 ))}
                                 {filteredTalent.length === 0 && (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan="5" className="px-6 py-8 sm:py-10 text-center text-gray-500">
                                             <FaUsers className="mx-auto text-4xl mb-2 text-gray-400" />
                                             <p>
                                                 {talentPool.length === 0 
@@ -480,6 +481,7 @@ const SuccessionPage = () => {
                                 )}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 )}
             </div>
@@ -609,7 +611,7 @@ const SuccessionPage = () => {
             {/* Add Talent Modal */}
             {showAddTalentModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-semibold mb-4">Add to Talent Pool</h3>
                         <form onSubmit={handleAddTalent} className="space-y-4">
                             <div>

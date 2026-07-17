@@ -131,14 +131,17 @@ const PlatformRolesPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="mb-2 text-2xl font-bold text-slate-900">Platform & functional roles</h1>
-      <p className="mb-6 text-sm text-slate-500">
-        Assign RBAC roles for login accounts (platform) and workforce hats (functional).
-        Users must log out and back in after changes.
-      </p>
+    <div className="page-shell">
+      <div className="page-shell-inner hrms-stack">
+      <div>
+        <h1 className="mb-2 text-2xl font-bold text-slate-900">Platform & functional roles</h1>
+        <p className="mb-0 text-sm text-slate-500">
+          Assign RBAC roles for login accounts (platform) and workforce hats (functional).
+          Users must log out and back in after changes.
+        </p>
+      </div>
 
-      <div className="space-y-4">
+      <div className="hrms-stack">
         {(employees || []).map((emp) => {
           const id = emp._id || emp.id;
           const draft = drafts[id] || { functionalRoles: [], platformRoles: [] };
@@ -222,6 +225,7 @@ const PlatformRolesPage = () => {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

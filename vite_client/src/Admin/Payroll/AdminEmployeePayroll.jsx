@@ -191,10 +191,12 @@ const AdminEmployeePayroll = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-5">
-            <div className="max-w-6xl mx-auto">
+        <div className="min-h-screen bg-gray-50">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
                 {/* Header */}
-                <div className="mb-5">
+                <div>
                     <div className="flex items-center justify-between mb-3">
                         <button
                             onClick={() => navigate('/admin-payroll')}
@@ -428,6 +430,8 @@ const AdminEmployeePayroll = () => {
                         </div>
                     )}
                 </div>
+            </div>
+            </div>
             </div>
 
             {/* Payroll Details Modal */}

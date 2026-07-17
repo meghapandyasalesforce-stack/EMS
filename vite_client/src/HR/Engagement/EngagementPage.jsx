@@ -120,8 +120,8 @@ const EngagementPage = () => {
     }
 
     return (
-        <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-[1400px] space-y-6">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+            <div className="page-shell-inner hrms-stack">
                 <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-center gap-4">

@@ -979,7 +979,8 @@ export const getEmployeeInfoByEmployee = async (req, res) => {
         }
 
         const employee = await Employee.findById(employeeId)
-            .select('-password -active -role -salary -manager');
+            .select('-password -active -role -salary')
+            .populate('managerId', 'name lastName employeeId');
 
         if (!employee) {
             return res.status(404).json({ 

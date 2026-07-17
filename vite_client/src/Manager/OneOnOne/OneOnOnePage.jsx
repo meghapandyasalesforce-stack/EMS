@@ -229,9 +229,9 @@ const OneOnOnePage = () => {
     }
 
     return (
-        <div className="min-h-screen p-4 transition-all duration-300 sm:p-6 lg:p-8" style={{ background: PAGE_BG }}>
-            <div className="mx-auto max-w-[1200px]">
-                <header className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+        <div className="page-shell min-h-screen transition-all duration-300" style={{ background: PAGE_BG }}>
+            <div className="page-shell-inner hrms-stack">
+                <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">
                             One-on-One Meetings

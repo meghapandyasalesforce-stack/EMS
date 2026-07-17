@@ -225,8 +225,9 @@ const SurveyDetailPage = () => {
 
     if (!survey) {
         return (
-            <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-4 sm:p-6">
-                <div className="mx-auto max-w-4xl rounded-[28px] border border-slate-100 bg-white p-8 text-center shadow-sm">
+            <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+                <div className="page-shell-inner">
+                <div className="rounded-[28px] border border-slate-100 bg-white p-8 text-center shadow-sm">
                     <p className="text-lg font-semibold text-slate-900">Survey not found</p>
                     <button
                         type="button"
@@ -236,13 +237,14 @@ const SurveyDetailPage = () => {
                         Back to Engagement
                     </button>
                 </div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-4xl space-y-5">
+        <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+            <div className="page-shell-inner hrms-stack">
                 <button
                     type="button"
                     onClick={() => navigate('/engagement')}

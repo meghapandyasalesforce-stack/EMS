@@ -9,7 +9,7 @@ import {
   todayDateKeyInTimezone,
   isSessionForToday,
 } from '../../utils/orgTimezone';
-import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft } from 'react-icons/fi';
+import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft, FiMapPin, FiHome } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
@@ -62,8 +62,19 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const [attendanceRule, setAttendanceRule] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [cachedLocation, setCachedLocation] = useState(null);
+  const [workLocation, setWorkLocation] = useState('office');
 
   const locationRequiredForPunch = isLocationRequiredForPunch(attendanceRule);
+  // Org-level WFH availability (defaults to allowed when the rule doesn't specify)
+  const wfhAllowed = attendanceRule?.allowWorkFromHome !== false;
+  const isWfhSelected = wfhAllowed && workLocation === 'work_from_home';
+
+  // If org disables WFH, fall back to office selection
+  useEffect(() => {
+    if (!wfhAllowed && workLocation !== 'office') {
+      setWorkLocation('office');
+    }
+  }, [wfhAllowed, workLocation]);
 
   // Permission management (do not block GPS before browser prompt)
   usePermissions();
@@ -314,10 +325,21 @@ const AttendanceBox = ({ variant = 'default' }) => {
       const requiresLocation = isLocationRequiredForPunch(attendanceRule);
 
       const clockInData = {
-        workLocation: 'office',
+        workLocation: isWfhSelected ? 'work_from_home' : 'office',
       };
 
-      if (requiresLocation) {
+      if (isWfhSelected) {
+        // WFH punch: capture location for record purposes only — never block the punch
+        try {
+          const locationData = await resolveLocationForPunch();
+          clockInData.latitude = locationData.latitude;
+          clockInData.longitude = locationData.longitude;
+          clockInData.address = locationData.address;
+          clockInData.accuracy = locationData.accuracy;
+        } catch {
+          // proceed without location for WFH punches
+        }
+      } else if (requiresLocation) {
         try {
           const locationData = await resolveLocationForPunch();
           clockInData.latitude = locationData.latitude;
@@ -425,9 +447,21 @@ const AttendanceBox = ({ variant = 'default' }) => {
       setIsProcessing(true);
 
       const requiresLocation = isLocationRequiredForPunch(attendanceRule);
+      const isWfhSession = currentSession?.workLocation === 'work_from_home';
       const clockOutData = {};
 
-      if (requiresLocation) {
+      if (isWfhSession) {
+        // WFH session: capture location for record purposes only — never block the punch-out
+        try {
+          const locationData = await resolveLocationForPunch();
+          clockOutData.latitude = locationData.latitude;
+          clockOutData.longitude = locationData.longitude;
+          clockOutData.address = locationData.address;
+          clockOutData.accuracy = locationData.accuracy;
+        } catch {
+          // proceed without location for WFH punch-out
+        }
+      } else if (requiresLocation) {
         try {
           const locationData = await resolveLocationForPunch();
           clockOutData.latitude = locationData.latitude;
@@ -632,6 +666,12 @@ const AttendanceBox = ({ variant = 'default' }) => {
                         >
                           {isOnBreak ? 'On break' : 'Punched in'}
                         </span>
+                        {currentSession.workLocation === 'work_from_home' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800">
+                            <FiHome className="h-3.5 w-3.5" />
+                            WFH
+                          </span>
+                        )}
                         <span className="text-sm text-slate-500">
                           Since {formatTime(currentSession.clockIn)}
                         </span>
@@ -701,14 +741,48 @@ const AttendanceBox = ({ variant = 'default' }) => {
                 <p className="text-lg font-semibold text-slate-800">Ready to start your day?</p>
                 <p className="text-sm text-slate-500">Punch in to begin tracking your hours.</p>
               </div>
-              <button
-                type="button"
-                onClick={handleClockIn}
-                disabled={isProcessing || loading}
-                className="rounded-full bg-[#20C997] px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1ab589] disabled:bg-slate-300 shrink-0"
-              >
-                {isProcessing || loading ? 'Processing…' : 'Punch in'}
-              </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                {wfhAllowed && (
+                  <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Work location">
+                    <button
+                      type="button"
+                      onClick={() => setWorkLocation('office')}
+                      className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                        workLocation === 'office'
+                          ? 'bg-white text-[#006D4E] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <FiMapPin className="h-3.5 w-3.5" />
+                      Office
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWorkLocation('work_from_home')}
+                      className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                        workLocation === 'work_from_home'
+                          ? 'bg-white text-[#006D4E] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <FiHome className="h-3.5 w-3.5" />
+                      Home
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClockIn}
+                  disabled={isProcessing || loading}
+                  className="rounded-full bg-[#20C997] px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1ab589] disabled:bg-slate-300 shrink-0"
+                >
+                  {isProcessing || loading
+                    ? 'Processing…'
+                    : isWfhSelected
+                      ? 'Punch in · WFH'
+                      : 'Punch in'}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -800,6 +874,12 @@ const AttendanceBox = ({ variant = 'default' }) => {
                         : 'text-theme-primary'
                     }`}>
                       {currentSession.clockOut ? 'Punched Out' : 'Punched In'}
+                      {currentSession.workLocation === 'work_from_home' && (
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 align-middle">
+                          <FiHome className="w-3 h-3" />
+                          WFH
+                        </span>
+                      )}
                     </h3>
                     <p className={`text-sm font-medium ${
                       currentSession.clockOut 
@@ -947,6 +1027,36 @@ const AttendanceBox = ({ variant = 'default' }) => {
               Click below to punch in and start tracking your work hours
             </p>
 
+            {/* Work Location Selection (Office / Work From Home) */}
+            {wfhAllowed && (
+              <div className="flex justify-center gap-3 mb-6" role="group" aria-label="Work location">
+                <button
+                  type="button"
+                  onClick={() => setWorkLocation('office')}
+                  className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
+                    workLocation === 'office'
+                      ? 'border-theme-primary bg-theme-primary/10 text-theme-primary'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  <FiMapPin className="w-4 h-4" />
+                  Punch In – Office
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkLocation('work_from_home')}
+                  className={`flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition-all ${
+                    workLocation === 'work_from_home'
+                      ? 'border-theme-primary bg-theme-primary/10 text-theme-primary'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  <FiHome className="w-4 h-4" />
+                  Punch In – Work From Home
+                </button>
+              </div>
+            )}
+
             {/* Punch In Button */}
               <button
                 onClick={handleClockIn}
@@ -964,8 +1074,8 @@ const AttendanceBox = ({ variant = 'default' }) => {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">
-                  <FiClock className="w-5 h-5 mr-2" />
-                    Punch In
+                  {isWfhSelected ? <FiHome className="w-5 h-5 mr-2" /> : <FiClock className="w-5 h-5 mr-2" />}
+                    {isWfhSelected ? 'Punch In (Work From Home)' : 'Punch In'}
                   </div>
                 )}
               </button>

@@ -112,73 +112,73 @@ const ContactDetails = () => {
         <div className="w-full font-sans">
                 {isEditing ? (
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4 md:gap-5">
-                        <div className="flex flex-col sm:flex-row flex-wrap -mx-2">
-                            <div className="w-full sm:w-1/2 px-2 mb-4 sm:mb-0">
-                                <label className="block mb-2 text-sm font-medium text-gray-700">Phone 1*</label>
+                        <div className="hrms-form-grid">
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">Phone 1*</label>
                                 <input
                                     type="text"
                                     name="phone1"
                                     value={formData.phone1}
                                     onChange={handleChange}
-                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                     required
                                 />
                             </div>
-                            <div className="w-full sm:w-1/2 px-2">
-                                <label className="block mb-2 text-sm font-medium text-gray-700">Phone 2</label>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">Phone 2</label>
                                 <input
                                     type="text"
                                     name="phone2"
                                     value={formData.phone2}
                                     onChange={handleChange}
-                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block mb-2 text-sm font-medium text-gray-700">Personal Email*</label>
+                            <label className="mb-2 block text-sm font-medium text-gray-700">Personal Email*</label>
                             <input
                                 type="email"
                                 name="personalEmail"
                                 value={formData.personalEmail}
                                 onChange={handleChange}
-                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                 required
                             />
                         </div>
 
                         <div>
-                            <label className="block mb-2 text-sm font-medium text-gray-700">Address*</label>
+                            <label className="mb-2 block text-sm font-medium text-gray-700">Address*</label>
                             <textarea
                                 name="address"
                                 value={formData.address}
                                 onChange={handleChange}
-                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm resize-none"
+                                className="w-full resize-none rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                 rows={4}
                                 required
                             />
                         </div>
 
-                        <div className="flex flex-col sm:flex-row flex-wrap -mx-2">
-                            <div className="w-full sm:w-1/2 px-2 mb-4 sm:mb-0">
-                                <label className="block mb-2 text-sm font-medium text-gray-700">Birth Date</label>
+                        <div className="hrms-form-grid">
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">Birth Date</label>
                                 <input
                                     type="date"
                                     name="birthDate"
                                     value={formData.birthDate}
                                     onChange={handleChange}
-                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                     max={new Date().toISOString().split('T')[0]}
                                 />
                             </div>
-                            <div className="w-full sm:w-1/2 px-2">
-                                <label className="block mb-2 text-sm font-medium text-gray-700">Gender</label>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700">Gender</label>
                                 <select
                                     name="gender"
                                     value={formData.gender}
                                     onChange={handleChange}
-                                    className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                    className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                 >
                                     <option value="">Select gender</option>
                                     <option value="Male">Male</option>
@@ -190,19 +190,19 @@ const ContactDetails = () => {
                         </div>
 
                         <div>
-                            <label className="block mb-2 text-sm font-medium text-gray-700">National ID document</label>
+                            <label className="mb-2 block text-sm font-medium text-gray-700">National ID document</label>
                             <select
                                 name="nationalIdType"
                                 value={formData.nationalIdType}
                                 onChange={handleChange}
-                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm mb-2"
+                                className="mb-2 w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                             >
                                 <option value="">Select document type</option>
                                 {NATIONAL_ID_TYPE_VALUES.map((t) => (
                                     <option key={t} value={t}>{t}</option>
                                 ))}
                             </select>
-                            <label className="block mb-2 text-sm font-medium text-gray-700">ID number</label>
+                            <label className="mb-2 block text-sm font-medium text-gray-700">ID number</label>
                             <input
                                 type={formData.nationalIdType === 'Aadhaar' ? 'tel' : 'text'}
                                 name="nationalId"
@@ -210,29 +210,29 @@ const ContactDetails = () => {
                                 onChange={handleChange}
                                 inputMode={formData.nationalIdType === 'Aadhaar' ? 'numeric' : 'text'}
                                 autoComplete="off"
-                                className="w-full p-2 md:p-2.5 border rounded bg-theme-secondary/10 text-sm"
+                                className="w-full rounded border bg-theme-secondary/10 p-2 text-sm md:p-2.5"
                                 placeholder={getNationalIdPlaceholder(formData.nationalIdType)}
                                 disabled={!formData.nationalIdType}
                             />
                             {formData.nationalIdType && (
-                                <p className="text-xs text-gray-500 mt-1">
+                                <p className="mt-1 text-xs text-gray-500">
                                     Format is checked when you save based on the document selected.
                                 </p>
                             )}
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
                             <button
                                 type="submit"
                                 disabled={updatingInfo}
-                                className="bg-theme-primary hover:bg-theme-primary text-white font-semibold py-2 px-4 sm:px-6 rounded"
+                                className="w-full rounded bg-theme-primary px-4 py-2 font-semibold text-white hover:bg-theme-primary sm:w-auto sm:px-6"
                             >
                                 {updatingInfo ? 'Saving...' : 'Save'}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setIsEditing(false)}
-                                className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 sm:px-6 rounded"
+                                className="w-full rounded bg-gray-500 px-4 py-2 font-semibold text-white hover:bg-gray-600 sm:w-auto sm:px-6"
                             >
                                 Cancel
                             </button>

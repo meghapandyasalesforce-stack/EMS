@@ -166,7 +166,8 @@ const OrganizationProfile = () => {
     }
 
     return (
-        <div className="max-w-4xl mx-auto p-6">
+        <div className="page-shell">
+            <div className="page-shell-inner">
             <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center">
@@ -320,7 +321,7 @@ const OrganizationProfile = () => {
                                 <FiMapPin className="mr-2" />
                                 Address
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="hrms-form-grid">
                                 <div className="md:col-span-2">
                                     <input
                                         type="text"
@@ -446,6 +447,7 @@ const OrganizationProfile = () => {
                         )}
                     </div>
                 </form>
+            </div>
             </div>
         </div>
     );

@@ -257,8 +257,10 @@ const SalaryStructureManager = () => {
 
   return (
     <div className="min-h-screen bg-[#F3F7F5]">
-      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Salary Structure Management</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -277,7 +279,7 @@ const SalaryStructureManager = () => {
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs text-slate-500">Total structures</p>
             <p className="mt-2 text-2xl font-bold text-slate-900">{totalStructures}</p>
@@ -415,7 +417,9 @@ const SalaryStructureManager = () => {
             </button>
           </div>
         )}
-        </div>
+      </div>
+      </div>
+      </div>
 
       {/* Create/Edit Modal */}
       {(showCreateModal || showEditModal) && (
@@ -523,7 +527,7 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
-      <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
+      <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6 md:p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
             <FiSettings className="h-5 w-5" />
@@ -823,7 +827,7 @@ const StructureModal = ({ title, formData, setFormData, onSubmit, onClose }) => 
 const ApplyModal = ({ structure, employees, selectedEmployee, setSelectedEmployee, onSubmit, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6 md:p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
             <FiUsers className="h-5 w-5" />
@@ -893,7 +897,7 @@ const ApplyModal = ({ structure, employees, selectedEmployee, setSelectedEmploye
 const CalculateModal = ({ structure, employees, selectedEmployee, setSelectedEmployee, calculatedSalary, onCalculate, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
-      <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6 md:p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
             <FaCalculator className="h-5 w-5" />

@@ -2,7 +2,6 @@ import logger from './logger.js';
 import { createEmailTransporter, getEmailFrom, detectEmailProvider, getEmailConfig } from '../config/email.config.js';
 
 const LEAVE_EMAIL_SENDER_NAME = 'Paarsiv Technologies Private Limited';
-const REGULARIZATION_EMAIL_SENDER = 'kunalpareekn@gmail.com';
 const LOGO_URL_LIGHT = 'https://www.paarsiv.com/wp-content/uploads/2024/08/paarsiv-1.png';
 const LOGO_URL_DARK = 'https://www.paarsiv.com/wp-content/uploads/2024/08/paarsiv-white-png-1.png';
 const getLeaveEmailFrom = () => {
@@ -12,7 +11,8 @@ const getLeaveEmailFrom = () => {
 };
 
 const getRegularizationEmailFrom = () => {
-  return REGULARIZATION_EMAIL_SENDER;
+  // Same display name as leave / other HR mails so inbox shows "Paarsiv Technologies..."
+  return getLeaveEmailFrom();
 };
 
 const buildLeaveCcList = (ccEmails = [], ...excludeEmails) => {
@@ -1505,8 +1505,6 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
       <p>Regards,</p>
       <p><strong>Paarsiv Technologies Private Limited</strong></p>
       <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
-        <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="40" style="display:none;vertical-align:middle;margin-right:8px;" />
-        <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="40" style="display:inline-block;vertical-align:middle;margin-right:8px;" />
         <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">P</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
       </div>
       <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
@@ -1734,11 +1732,550 @@ export const sendRegularizationRejectionEmail = async (regularizationData, emplo
   }
 };
 
+/**
+ * Generate Work From Home request email template (same branding as leave emails)
+ * @param {Object} data - WFH request data
+ * @returns {string} HTML content
+ */
+const generateWfhRequestEmailTemplate = (data) => {
+  const wfhDate = data.wfhDate
+    ? new Date(data.wfhDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+    : 'N/A';
+  const submittedAt = data.submittedAt
+    ? new Date(data.submittedAt).toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : new Date().toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const managerName = data.managerName || 'Manager';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work From Home Request</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
+      margin: 0;
+      padding: 0;
+      color: #FFFFFF;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
+      margin: 0 0 15px 0;
+    }
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #F8F9FA;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+    .info-table tr:nth-child(even) {
+      background-color: #F1F3F5;
+    }
+    .info-label {
+      font-weight: bold;
+      color: #1a1a1a;
+      width: 40%;
+    }
+    .info-value {
+      color: #4a4a4a;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-pending {
+      background-color: #FFF4D6;
+      color: #B8860B;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .footer-logo {
+      max-width: 80px;
+      height: auto;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+       <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Work From Home Request</h1>
+    <p class="message">Dear ${managerName},</p>
+    <p class="message">I hope you are doing well.</p>
+    <p class="message">I would like to inform you that I plan to work from home on <strong>${wfhDate}</strong>.</p>
+    
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Employee Name</td>
+        <td class="info-value">${data.employeeName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Employee ID</td>
+        <td class="info-value">${data.employeeId || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Department</td>
+        <td class="info-value">${data.department || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Designation</td>
+        <td class="info-value">${data.designation || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">WFH Date</td>
+        <td class="info-value">${wfhDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Reason</td>
+        <td class="info-value">${data.reason || 'N/A'}</td>
+      </tr>
+      ${data.remarks ? `<tr>
+        <td class="info-label">Remarks</td>
+        <td class="info-value">${data.remarks}</td>
+      </tr>` : ''}
+      <tr>
+        <td class="info-label">Submitted On</td>
+        <td class="info-value">${submittedAt}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Status</td>
+        <td class="info-value"><span class="status-badge status-pending">Submitted</span></td>
+      </tr>
+    </table>
+    
+    <p class="message">Please let me know if any additional information is required.</p>
+    
+    <p class="message">Thank you for your time and consideration.</p>
+    
+    <p class="message">Regards,</p>
+    <p class="message"><strong>${data.employeeName || 'Employee'}</strong></p>
+    
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">p</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+/**
+ * Send Work From Home request email to reporting manager (CC: HR, Admin)
+ * Independent from leave and attendance workflows.
+ * @param {Object} wfhData - WFH request data (employeeName, employeeId, department, designation, wfhDate, reason, remarks, submittedAt, managerName)
+ * @param {string} approverEmail - Reporting manager email address
+ * @param {Array} ccEmails - CC email addresses (HR, Admin)
+ * @param {string} employeeEmail - Employee email address (used for reply-to)
+ * @returns {Promise<void>}
+ */
+export const sendWfhRequestEmail = async (wfhData, approverEmail, ccEmails = [], employeeEmail = null) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getLeaveEmailFrom();
+
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, approverEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: approverEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Work From Home Request - ${wfhData.employeeName || 'Employee'}`,
+    html: generateWfhRequestEmailTemplate(wfhData)
+  };
+
+  // Always send from system SMTP account; allow manager to reply to the employee
+  if (employeeEmail) {
+    mailOptions.replyTo = employeeEmail;
+  }
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('WFH request email sent', {
+      from: emailFrom,
+      replyTo: employeeEmail,
+      to: approverEmail,
+      cc: ccList,
+      messageId: info.messageId
+    });
+  } catch (error) {
+    logger.error('Error sending WFH request email', {
+      from: emailFrom,
+      replyTo: employeeEmail,
+      to: approverEmail,
+      error: error.message
+    });
+    throw error;
+  }
+};
+
+/**
+ * Decision email template for WFH approve/reject — same layout as leave approval.
+ */
+const generateWfhDecisionEmailTemplate = (data, status) => {
+  const isApproved = status === 'approved';
+  const statusText = isApproved ? 'Approved' : 'Rejected';
+  const remarksLabel = isApproved ? 'Remarks' : 'Rejection Reason';
+  const remarks = data.reviewNote || data.remarks || data.reason || 'N/A';
+  const wfhDate = data.wfhDate
+    ? new Date(data.wfhDate).toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    : 'N/A';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work From Home Request ${statusText}</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #0d0d0d;
+      margin: 0;
+      padding: 0;
+      color: #FFFFFF;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 32px;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo-dark { display: block !important; }
+    .logo-light { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    @media (prefers-color-scheme: light) {
+      .logo-light { display: block !important; max-height: none; mso-hide: none; }
+      .logo-dark { display: none !important; max-height: 0; overflow: hidden; mso-hide: all; }
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #444444;
+      margin: 0 0 24px 0;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: #5CC9A7;
+      margin: 10px 0;
+    }
+    .heading {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin: 20px 0 15px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #FFFFFF;
+      line-height: 1.6;
+      margin: 0 0 15px 0;
+    }
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #F8F9FA;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .info-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+    .info-table tr:nth-child(even) {
+      background-color: #F1F3F5;
+    }
+    .info-label {
+      font-weight: bold;
+      color: #1a1a1a;
+      width: 40%;
+    }
+    .info-value {
+      color: #4a4a4a;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status-approved {
+      background-color: #E8F8EF;
+      color: #2E7D32;
+    }
+    .status-rejected {
+      background-color: #FDECEC;
+      color: #C62828;
+    }
+    .footer {
+      font-size: 14px;
+      color: #CCCCCC;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #E5E7EB;
+    }
+    .powered-by-footer {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .powered-by-footer span {
+      font-size: 12px;
+      color: #CCCCCC;
+    }
+    a {
+      color: #5CC9A7;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <hr class="divider" />
+      <div class="company-name"></div>
+    </div>
+    <h1 class="heading">Work From Home Request ${statusText}</h1>
+    <p class="message">Dear ${data.employeeName || 'Employee'},</p>
+    <p class="message">Your Work From Home request has been <strong>${statusText}</strong>.</p>
+
+    <table class="info-table">
+      <tr>
+        <td class="info-label">Employee Name</td>
+        <td class="info-value">${data.employeeName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Employee ID</td>
+        <td class="info-value">${data.employeeId || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">WFH Date</td>
+        <td class="info-value">${wfhDate}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Manager Name</td>
+        <td class="info-value">${data.managerName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Reviewed By</td>
+        <td class="info-value">${data.reviewerName || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td class="info-label">${remarksLabel}</td>
+        <td class="info-value">${remarks}</td>
+      </tr>
+      <tr>
+        <td class="info-label">Status</td>
+        <td class="info-value"><span class="status-badge status-${status}">${statusText}</span></td>
+      </tr>
+    </table>
+
+    <p class="message">If you have any questions, please contact HR or your reporting manager.</p>
+
+    <div class="footer">
+      <p>Regards,</p>
+      <p><strong>Paarsiv Technologies Private Limited</strong></p>
+      <div class="powered-by-footer" style="text-align: center; margin-top: 15px;">
+        <span style="vertical-align:middle;color: #FFFFFF;">Powered by <span style="color: #5CC9A7;">P</span><span style="color: #CCCCCC;">aar</span><span style="color: #5CC9A7;">s</span><span style="color: #CCCCCC;">iv</span></span>
+      </div>
+      <p style="font-size: 12px; color: #CCCCCC; margin-top: 15px;">&copy; 2026 Paarsiv Technologies Private Limited</p>
+      <p style="font-size: 12px; color: #CCCCCC;">This is an automated email. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+/**
+ * Send WFH approval email to employee (same format as leave approval).
+ */
+export const sendWfhApprovalEmail = async (wfhData, employeeEmail, ccEmails = []) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getLeaveEmailFrom();
+
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Work From Home Request Approved - ${wfhData.employeeName || 'Employee'}`,
+    html: generateWfhDecisionEmailTemplate(wfhData, 'approved')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('WFH approval email sent', {
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      messageId: info.messageId
+    });
+  } catch (error) {
+    logger.error('Error sending WFH approval email', {
+      from: emailFrom,
+      to: employeeEmail,
+      error: error.message
+    });
+    throw error;
+  }
+};
+
+/**
+ * Send WFH rejection email to employee (same format as leave rejection).
+ */
+export const sendWfhRejectionEmail = async (wfhData, employeeEmail, ccEmails = []) => {
+  const transporter = createEmailTransporter();
+  const emailFrom = getLeaveEmailFrom();
+
+  if (!emailFrom) {
+    throw new Error('EMAIL_FROM not configured');
+  }
+
+  const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+
+  const mailOptions = {
+    from: emailFrom,
+    to: employeeEmail,
+    cc: ccList.length > 0 ? ccList : undefined,
+    subject: `Work From Home Request Rejected - ${wfhData.employeeName || 'Employee'}`,
+    html: generateWfhDecisionEmailTemplate(wfhData, 'rejected')
+  };
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail(mailOptions);
+    logger.info('WFH rejection email sent', {
+      from: emailFrom,
+      to: employeeEmail,
+      cc: ccList,
+      messageId: info.messageId
+    });
+  } catch (error) {
+    logger.error('Error sending WFH rejection email', {
+      from: emailFrom,
+      to: employeeEmail,
+      error: error.message
+    });
+    throw error;
+  }
+};
+
 export default {
   sendWelcomeEmail,
   sendPasswordResetEmail,
   sendNotificationEmail,
   sendLeaveRequestEmail,
   sendLeaveApprovalEmail,
-  sendLeaveRejectionEmail
+  sendLeaveRejectionEmail,
+  sendWfhRequestEmail,
+  sendWfhApprovalEmail,
+  sendWfhRejectionEmail
 };
