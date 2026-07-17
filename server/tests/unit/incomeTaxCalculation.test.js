@@ -7,7 +7,10 @@ import {
     computeSection80D,
     computeAnnualIncomeTax,
     computeMonthlyIncomeTax,
-    getIndianFinancialYear
+    getIndianFinancialYear,
+    resolveSurchargeBand,
+    computeSurcharge,
+    computeTaxBeforeSurcharge
 } from '../../helpers/incomeTaxCalculation.js';
 
 describe('incomeTaxCalculation', () => {
@@ -20,6 +23,12 @@ describe('incomeTaxCalculation', () => {
         it('maps new regime variants and defaults empty to new', () => {
             expect(normalizeTaxRegime('New')).toBe(TAX_REGIME.NEW);
             expect(normalizeTaxRegime('')).toBe(TAX_REGIME.NEW);
+        });
+
+        it('maps N/A regime variants', () => {
+            expect(normalizeTaxRegime('N/A')).toBe(TAX_REGIME.NA);
+            expect(normalizeTaxRegime('na')).toBe(TAX_REGIME.NA);
+            expect(normalizeTaxRegime('not applicable')).toBe(TAX_REGIME.NA);
         });
     });
 
@@ -66,7 +75,73 @@ describe('incomeTaxCalculation', () => {
         });
     });
 
+    describe('surcharge', () => {
+        it('applies 0% at or below 50L', () => {
+            expect(resolveSurchargeBand(5000000, 'old')).toEqual({ rate: 0, threshold: 0 });
+            expect(computeSurcharge(100000, 5000000, 'old')).toBe(0);
+        });
+
+        it('applies 10% between 50L and 1Cr', () => {
+            expect(resolveSurchargeBand(6000000, 'old').rate).toBe(0.1);
+            expect(computeSurcharge(100000, 6000000, 'old')).toBe(10000);
+        });
+
+        it('applies 25% band between 2Cr and 5Cr, with marginal relief near threshold', () => {
+            expect(resolveSurchargeBand(20703344, 'old')).toEqual({ rate: 0.25, threshold: 20000000 });
+            const tax = 6023503.2;
+            const surcharge = computeSurcharge(tax, 20703344, 'old');
+            // Full 25% would be ~15.06L; marginal relief vs ₹2Cr caps it lower.
+            expect(surcharge).toBeGreaterThan(0);
+            expect(surcharge).toBeLessThan(tax * 0.25);
+            expect(surcharge).toBeCloseTo(492340.8, 5);
+        });
+
+        it('applies full 25% surcharge when well above 2Cr threshold', () => {
+            const income = 40000000;
+            const tax = computeTaxBeforeSurcharge(income, 'old');
+            const surcharge = computeSurcharge(tax, income, 'old');
+            expect(surcharge).toBeCloseTo(tax * 0.25, 5);
+        });
+
+        it('applies marginal relief just above 50L', () => {
+            const income = 5000100;
+            const tax = computeTaxBeforeSurcharge(income, 'old');
+            const surcharge = computeSurcharge(tax, income, 'old');
+            const taxAt50L = computeTaxBeforeSurcharge(5000000, 'old');
+            expect(tax + surcharge).toBeLessThanOrEqual(taxAt50L + (income - 5000000) + 1e-6);
+            expect(surcharge).toBeLessThan(tax * 0.1);
+        });
+
+        it('caps new-regime top surcharge at 25%', () => {
+            expect(resolveSurchargeBand(60000000, 'new').rate).toBe(0.25);
+            expect(resolveSurchargeBand(60000000, 'old').rate).toBe(0.37);
+        });
+
+        it('raises annual tax when income crosses 50L', () => {
+            const below = computeAnnualIncomeTax({
+                taxRegime: 'old',
+                annualGrossIncome: 5050000,
+                annualPfEmployee: 21600
+            });
+            const above = computeAnnualIncomeTax({
+                taxRegime: 'old',
+                annualGrossIncome: 6000000,
+                annualPfEmployee: 21600
+            });
+            expect(above).toBeGreaterThan(below);
+        });
+    });
+
     describe('computeAnnualIncomeTax', () => {
+        it('returns zero tax when tax regime is N/A', () => {
+            const tax = computeAnnualIncomeTax({
+                taxRegime: 'N/A',
+                annualGrossIncome: 5000000,
+                annualPfEmployee: 21600
+            });
+            expect(tax).toBe(0);
+        });
+
         it('applies zero tax for eligible income under new regime rebate', () => {
             const tax = computeAnnualIncomeTax({
                 taxRegime: 'new',
@@ -103,6 +178,23 @@ describe('incomeTaxCalculation', () => {
                 annualGrossIncome: 1800000
             });
             expect(newTax).toBeLessThan(oldTax);
+        });
+
+        it('includes surcharge with marginal relief near 2Cr for old regime', () => {
+            const gross = 20753344;
+            const tax = computeAnnualIncomeTax({
+                taxRegime: 'old',
+                annualGrossIncome: gross,
+                annualPfEmployee: 0
+            });
+            // taxable ≈ 2.07Cr → 25% band, but marginal relief vs tax at ₹2Cr caps it
+            const taxable = gross - 50000;
+            const basic = computeTaxBeforeSurcharge(taxable, 'old');
+            const surcharge = computeSurcharge(basic, taxable, 'old');
+            expect(surcharge).toBeGreaterThan(0);
+            expect(surcharge).toBeLessThan(basic * 0.25);
+            expect(tax).toBe(Math.round((basic + surcharge) * 1.04));
+            expect(tax).toBeGreaterThan(Math.round(basic * 1.04));
         });
     });
 

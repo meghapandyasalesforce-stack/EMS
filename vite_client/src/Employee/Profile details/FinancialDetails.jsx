@@ -118,6 +118,7 @@ const FinancialDetails = () => {
               >
                 <option value="New">New Regime</option>
                 <option value="Old">Old Regime</option>
+                <option value="N/A">N/A (no TDS)</option>
               </select>
             </div>
 
@@ -171,20 +172,21 @@ const FinancialDetails = () => {
               </p>
             </div>
             <h3 className="text-lg font-semibold mb-4 mt-6">Tax & statutory</h3>
-            <div className="hrms-form-grid text-sm">
-              <p>
-                <strong>PAN Number:</strong> {formData.panNumber || 'N/A'}
-              </p>
-              <p>
-                <strong>EPF UAN:</strong> {formData.epfUan || 'N/A'}
-              </p>
-              <p>
-                <strong>Tax Regime:</strong> {formData.taxRegime || 'N/A'}
-              </p>
-              <p>
-                <strong>Metro city:</strong> {formData.metroCity ? 'Yes' : 'No'}
-              </p>
-            </div>
+            <p className="mb-2">
+              <strong>PAN Number:</strong> {formData.panNumber || 'N/A'}
+            </p>
+            <p className="mb-2">
+              <strong>EPF UAN:</strong> {formData.epfUan || 'N/A'}
+            </p>
+            <p className="mb-2">
+              <strong>Tax Regime:</strong>{' '}
+              {formData.taxRegime === 'N/A'
+                ? 'N/A (no TDS)'
+                : formData.taxRegime || 'N/A'}
+            </p>
+            <p className="mb-4">
+              <strong>Metro city:</strong> {formData.metroCity ? 'Yes' : 'No'}
+            </p>
             <button
               onClick={() => setIsEditing(true)}
               className="mt-4 bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 transition"

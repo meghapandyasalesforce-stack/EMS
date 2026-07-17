@@ -2,7 +2,10 @@ import Payroll from '../models/payroll.model.js';
 import Organization from '../models/organization.model.js';
 import {
     buildIncomeTaxParamsFromEmployee,
-    computeAnnualIncomeTax
+    computeAnnualIncomeTax,
+    normalizeTaxRegime,
+    resolveEmployeeTaxRegime,
+    TAX_REGIME
 } from './incomeTaxCalculation.js';
 import {
     FY_MONTHS,
@@ -329,6 +332,8 @@ export async function computeRegimeIncomeTaxCumulative({
 }) {
     const fullMonthlySalary = getEffectiveSalaryForMonth(emp, month, year);
     if (!fullMonthlySalary) return 0;
+
+    if (normalizeTaxRegime(resolveEmployeeTaxRegime(emp)) === TAX_REGIME.NA) return 0;
 
     const breakdown = projectFullMonthBreakdown(emp, salaryStructure, month, year);
     const taxParamsBase = buildIncomeTaxParamsFromEmployee(emp, {

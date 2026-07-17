@@ -1,10 +1,13 @@
 /**
  * Indian income tax (TDS) — Old vs New regime (FY 2025-26).
+ * Includes individual surcharge (with marginal relief) + 4% cess.
  */
 
 export const TAX_REGIME = {
     OLD: 'old',
-    NEW: 'new'
+    NEW: 'new',
+    /** Employee opted out of payroll TDS (e.g. no PAN / exempt). */
+    NA: 'na'
 };
 
 const CESS_RATE = 0.04;
@@ -33,15 +36,41 @@ const NEW_REGIME_SLABS = [
     { upto: Infinity, rate: 0.3 }
 ];
 
+/**
+ * Individual surcharge bands on taxable income.
+ * New regime caps the top surcharge at 25% (Budget 2023).
+ * `upto` is inclusive for that band; `rate` applies when income is in
+ * (previous upto, this upto].
+ */
+const SURCHARGE_BANDS_OLD = [
+    { upto: 5000000, rate: 0 },
+    { upto: 10000000, rate: 0.1 },
+    { upto: 20000000, rate: 0.15 },
+    { upto: 50000000, rate: 0.25 },
+    { upto: Infinity, rate: 0.37 }
+];
+
+const SURCHARGE_BANDS_NEW = [
+    { upto: 5000000, rate: 0 },
+    { upto: 10000000, rate: 0.1 },
+    { upto: 20000000, rate: 0.15 },
+    { upto: 50000000, rate: 0.25 },
+    { upto: Infinity, rate: 0.25 }
+];
+
 export function normalizeTaxRegime(value) {
     const v = String(value || '').trim().toLowerCase();
     if (v === 'old' || v === 'old regime' || v === 'old_regime') return TAX_REGIME.OLD;
     if (v === 'new' || v === 'new regime' || v === 'new_regime') return TAX_REGIME.NEW;
+    if (v === 'n/a' || v === 'na' || v === 'none' || v === 'not applicable') return TAX_REGIME.NA;
     return TAX_REGIME.NEW;
 }
 
 export function formatTaxRegimeLabel(regime) {
-    return normalizeTaxRegime(regime) === TAX_REGIME.OLD ? 'Old' : 'New';
+    const normalized = normalizeTaxRegime(regime);
+    if (normalized === TAX_REGIME.OLD) return 'Old';
+    if (normalized === TAX_REGIME.NA) return 'N/A';
+    return 'New';
 }
 
 /** India FY label e.g. "2026-27" for a given date (April–March). */
@@ -90,6 +119,62 @@ function applyRebate87A(tax, regime, totalIncome) {
     }
 
     return tax;
+}
+
+function getSurchargeBands(regime) {
+    return regime === TAX_REGIME.NEW ? SURCHARGE_BANDS_NEW : SURCHARGE_BANDS_OLD;
+}
+
+/**
+ * Resolve surcharge rate and the lower threshold of the active band.
+ */
+export function resolveSurchargeBand(taxableIncome, regime = TAX_REGIME.OLD) {
+    const income = Math.max(0, Number(taxableIncome) || 0);
+    const bands = getSurchargeBands(normalizeTaxRegime(regime));
+    let previousLimit = 0;
+
+    for (const band of bands) {
+        if (income <= band.upto) {
+            return { rate: band.rate, threshold: previousLimit };
+        }
+        previousLimit = band.upto === Infinity ? previousLimit : band.upto;
+    }
+
+    return { rate: 0, threshold: 0 };
+}
+
+/** Slab tax + 87A rebate only (before surcharge / cess). */
+export function computeTaxBeforeSurcharge(taxableIncome, regime) {
+    const normalized = normalizeTaxRegime(regime);
+    const income = Math.max(0, Number(taxableIncome) || 0);
+    const slabs = normalized === TAX_REGIME.NEW ? NEW_REGIME_SLABS : OLD_REGIME_SLABS;
+    const baseTax = applySlabs(income, slabs);
+    return applyRebate87A(baseTax, normalized, income);
+}
+
+/**
+ * Surcharge on income tax with marginal relief near band thresholds.
+ * Relief caps tax+surcharge so the jump past the threshold never exceeds
+ * the income increase itself.
+ */
+export function computeSurcharge(taxAfterRebate, taxableIncome, regime = TAX_REGIME.OLD) {
+    const tax = Math.max(0, Number(taxAfterRebate) || 0);
+    const income = Math.max(0, Number(taxableIncome) || 0);
+    const normalized = normalizeTaxRegime(regime);
+    const { rate, threshold } = resolveSurchargeBand(income, normalized);
+
+    if (tax <= 0 || rate <= 0) return 0;
+
+    const rawSurcharge = tax * rate;
+    const taxAtThreshold = threshold > 0 ? computeTaxBeforeSurcharge(threshold, normalized) : 0;
+    const maxTaxPlusSurcharge = taxAtThreshold + Math.max(0, income - threshold);
+    const cappedTotal = Math.min(tax + rawSurcharge, maxTaxPlusSurcharge);
+    return Math.max(0, cappedTotal - tax);
+}
+
+function finalizeAnnualTax(taxAfterRebate, taxableIncome, regime) {
+    const surcharge = computeSurcharge(taxAfterRebate, taxableIncome, regime);
+    return Math.round((taxAfterRebate + surcharge) * (1 + CESS_RATE));
 }
 
 /**
@@ -186,7 +271,7 @@ export function resolveTaxDeclaration(emp, { month, year } = {}) {
 }
 
 /**
- * Annual income tax (incl. 4% cess).
+ * Annual income tax (slab tax − rebate + surcharge + 4% cess).
  */
 export function computeAnnualIncomeTax({
     taxRegime,
@@ -205,11 +290,12 @@ export function computeAnnualIncomeTax({
     const regime = normalizeTaxRegime(taxRegime);
     const gross = Math.max(0, annualGrossIncome);
 
+    if (regime === TAX_REGIME.NA) return 0;
+
     if (regime === TAX_REGIME.NEW) {
         const totalIncome = Math.max(0, gross - STANDARD_DEDUCTION[TAX_REGIME.NEW]);
-        const baseTax = applySlabs(totalIncome, NEW_REGIME_SLABS);
-        const afterRebate = applyRebate87A(baseTax, TAX_REGIME.NEW, totalIncome);
-        return Math.round(afterRebate * (1 + CESS_RATE));
+        const afterRebate = computeTaxBeforeSurcharge(totalIncome, TAX_REGIME.NEW);
+        return finalizeAnnualTax(afterRebate, totalIncome, TAX_REGIME.NEW);
     }
 
     const section80cTotal = computeSection80CTotal({ annualPfEmployee, section80C });
@@ -234,9 +320,8 @@ export function computeAnnualIncomeTax({
             profTax
     );
 
-    const baseTax = applySlabs(totalIncome, OLD_REGIME_SLABS);
-    const afterRebate = applyRebate87A(baseTax, TAX_REGIME.OLD, totalIncome);
-    return Math.round(afterRebate * (1 + CESS_RATE));
+    const afterRebate = computeTaxBeforeSurcharge(totalIncome, TAX_REGIME.OLD);
+    return finalizeAnnualTax(afterRebate, totalIncome, TAX_REGIME.OLD);
 }
 
 export function computeMonthlyIncomeTax(params) {
