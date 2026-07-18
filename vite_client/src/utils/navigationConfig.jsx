@@ -358,6 +358,7 @@ const HR_NAV_ITEMS = [
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
     { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
+    { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock /> },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
     { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_SELF] },

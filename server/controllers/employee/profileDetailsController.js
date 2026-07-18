@@ -14,6 +14,11 @@ import { getEffectiveFunctionalRoles } from '../../helpers/functionalRolesHelper
 import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { sanitizeTaxDeclarationInput } from '../../helpers/taxDeclarationHelper.js';
 import { getIndianFinancialYear } from '../../helpers/incomeTaxCalculation.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import {
+    createTaxRegimeChangeRequestForEmployee,
+    isNaRegime,
+} from './taxRegimeChangeController.js';
 
 /** Only HR staff may view another employee's uploaded documents (not admin/manager). */
 const isRequesterHrStaff = async (req) => {
@@ -667,6 +672,7 @@ export const updateFamilyDetail = async (req, res) => {
 export const updateFinancialDetails = async (req, res) => {
     try {
         const employeeId = req.employee?._id;
+        const organizationId = getOrganizationId(req);
         const { bankName, ifsc, accountNo, accountName, panNumber, epfUan, taxRegime, metroCity } = req.body;
 
         if (!bankName || !ifsc || !accountNo || !accountName) {
@@ -684,10 +690,15 @@ export const updateFinancialDetails = async (req, res) => {
 
         const existing = await Employee.findById(employeeId).select('financialDetails').lean();
         const prev = existing?.financialDetails || {};
+        const previousRegime = prev.taxRegime || 'New';
 
-        const normalizedRegime = (taxRegime != null && String(taxRegime).trim())
+        const requestedRegime = (taxRegime != null && String(taxRegime).trim())
             ? String(taxRegime).trim()
-            : (prev.taxRegime || 'New');
+            : previousRegime;
+
+        // N/A requires HR/Admin approval — keep previous regime until approved
+        const requestingNaRegime = isNaRegime(requestedRegime) && !isNaRegime(previousRegime);
+        const normalizedRegime = requestingNaRegime ? previousRegime : requestedRegime;
 
         const financialDetails = {
             ...prev,
@@ -707,9 +718,33 @@ export const updateFinancialDetails = async (req, res) => {
             { new: true }
         ).select('financialDetails');
 
+        let taxRegimeRequest = null;
+        if (requestingNaRegime) {
+            if (!organizationId) {
+                return res.status(400).json({
+                    message: 'Organization is required to request tax regime N/A',
+                    financialDetails: updatedEmployee.financialDetails,
+                });
+            }
+
+            const result = await createTaxRegimeChangeRequestForEmployee({
+                employeeId,
+                organizationId,
+                currentTaxRegime: previousRegime,
+                reason: 'Employee selected N/A (no TDS) while saving financial details',
+            });
+            taxRegimeRequest = result.request;
+        }
+
         res.status(200).json({
-            message: 'Financial details updated successfully',
-            financialDetails: updatedEmployee.financialDetails
+            message: requestingNaRegime
+                ? (taxRegimeRequest
+                    ? 'Financial details saved. Tax regime N/A request sent to HR/Admin for approval.'
+                    : 'Financial details saved.')
+                : 'Financial details updated successfully',
+            financialDetails: updatedEmployee.financialDetails,
+            taxRegimeRequest,
+            taxRegimeRequestPending: Boolean(requestingNaRegime),
         });
 
     } catch (error) {

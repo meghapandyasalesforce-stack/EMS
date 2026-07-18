@@ -1,3 +1,6 @@
+import { DateTime } from 'luxon';
+import { normalizeTimezone } from './timezoneHelper.js';
+
 /** Indian FY order: April → March */
 export const FY_MONTHS = [
     'April', 'May', 'June', 'July', 'August', 'September',
@@ -8,6 +11,19 @@ export function normalizeMonthName(month) {
     const raw = String(month || '').trim();
     if (!raw) return '';
     return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+/** Calendar year + English month name for a Date in an IANA timezone (SaaS-safe). */
+export function getCalendarPartsInTimezone(dateInput, timezone) {
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (Number.isNaN(d.getTime())) return null;
+    const dt = DateTime.fromJSDate(d, { zone: normalizeTimezone(timezone) });
+    if (!dt.isValid) return null;
+    return {
+        year: dt.year,
+        monthName: dt.setLocale('en-US').toFormat('MMMM'),
+        monthIndex0: dt.month - 1
+    };
 }
 
 export function getFyMonthIndex(month, year) {
@@ -65,13 +81,16 @@ export function listFyMonthsAfter(month, year, count) {
     return result;
 }
 
-export function getExitFyMonthIndex(emp) {
+/**
+ * FY month index (0=April … 11=March) of last working / termination date.
+ * @param {object} emp
+ * @param {string} [timezone] org IANA TZ — defaults via normalizeTimezone (UTC if missing)
+ */
+export function getExitFyMonthIndex(emp, timezone) {
     const exitRaw = emp?.lastWorkingDate || emp?.terminationDate;
     if (!exitRaw) return null;
 
-    const exit = new Date(exitRaw);
-    if (Number.isNaN(exit.getTime())) return null;
-
-    const exitMonth = exit.toLocaleString('en-US', { month: 'long' });
-    return getFyMonthIndex(exitMonth, exit.getFullYear());
+    const parts = getCalendarPartsInTimezone(exitRaw, timezone);
+    if (!parts) return null;
+    return getFyMonthIndex(parts.monthName, parts.year);
 }

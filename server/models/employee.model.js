@@ -402,6 +402,7 @@ const employeeSchema = new mongoose.Schema({
         taxDeclaration: {
             financialYear: { type: String },
             section80C: {
+                epf: { type: Number, default: 0 },
                 ppf: { type: Number, default: 0 },
                 lic: { type: Number, default: 0 },
                 elss: { type: Number, default: 0 },

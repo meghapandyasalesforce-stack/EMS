@@ -74,6 +74,28 @@ export function getMonthBoundsInTimezone(date = new Date(), timezone = DEFAULT_T
   };
 }
 
+/**
+ * Inclusive UTC instants for a named payroll month in the org timezone.
+ * Use for Mongo queries (join/LWD/termination) — never server-local Date month-end.
+ * @param {number} yearNum
+ * @param {number} monthIndex0 — 0=January … 11=December
+ * @param {string} timezone
+ */
+export function getPayrollMonthUtcBounds(yearNum, monthIndex0, timezone = DEFAULT_TIMEZONE) {
+  const tz = normalizeTimezone(timezone);
+  const monthStartDt = DateTime.fromObject(
+    { year: yearNum, month: monthIndex0 + 1, day: 1 },
+    { zone: tz }
+  ).startOf('day');
+  const monthEndDt = monthStartDt.endOf('month');
+  return {
+    monthStart: monthStartDt.toJSDate(),
+    monthEnd: monthEndDt.toJSDate(),
+    monthStartKey: monthStartDt.toFormat('yyyy-MM-dd'),
+    monthEndKey: monthEndDt.toFormat('yyyy-MM-dd')
+  };
+}
+
 /** Whether two dates fall in the same calendar month in the given timezone. */
 export function isSameCalendarMonthInTimezone(dateA, dateB, timezone = DEFAULT_TIMEZONE) {
   const tz = normalizeTimezone(timezone);

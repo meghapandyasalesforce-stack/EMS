@@ -1,26 +1,24 @@
 import cron from 'node-cron';
+import { DateTime } from 'luxon';
 import Organization from '../models/organization.model.js';
 import Employee from '../models/employee.model.js';
 import Payroll from '../models/payroll.model.js';
 import logger from '../helpers/logger.js';
-import { buildGeneratedPayrollPayload, isFinalGenerationAllowedForPeriod } from '../helpers/payrollGenerationHelper.js';
+import {
+    buildGeneratedPayrollPayload,
+    isFinalGenerationAllowedForPeriod,
+    getPayrollMonthUtcBounds
+} from '../helpers/payrollGenerationHelper.js';
+import { getCachedEffectiveTimezone } from '../helpers/orgContextCache.js';
 
-function getMonthLabel(date) {
-    return date.toLocaleString('default', { month: 'long' });
-}
-
-function calcEndOfMonth(year, monthIndex) {
-    const end = new Date(year, monthIndex + 1, 0);
-    end.setHours(23, 59, 59, 999);
-    return end;
-}
-
-async function runPreviewForOrg({ organizationId, month, year, asOf }) {
+async function runPreviewForOrg({ organizationId, month, year, asOf, orgTimezone }) {
     const targetYear = parseInt(year, 10);
     const targetMonthIndex = new Date(`${month} 1, ${targetYear}`).getMonth();
-    const monthStart = new Date(targetYear, targetMonthIndex, 1);
-    monthStart.setHours(0, 0, 0, 0);
-    const endOfMonth = calcEndOfMonth(targetYear, targetMonthIndex);
+    const { monthStart, monthEnd: endOfMonth } = getPayrollMonthUtcBounds(
+        targetYear,
+        targetMonthIndex,
+        orgTimezone
+    );
     const employees = await Employee.find({
         salary: { $exists: true, $gt: 0 },
         organizationId,
@@ -89,18 +87,20 @@ async function runPreviewForOrg({ organizationId, month, year, asOf }) {
     }
 }
 
-async function runFinalForOrg({ organizationId, month, year, now }) {
+async function runFinalForOrg({ organizationId, month, year, now, orgTimezone }) {
     const targetYear = parseInt(year, 10);
     const targetMonthIndex = new Date(`${month} 1, ${targetYear}`).getMonth();
 
-    // Safety: only final on/after month-end
-    if (!isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex)) {
+    // Safety: only final on/after month-end in org timezone
+    if (!isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex, orgTimezone)) {
         return;
     }
 
-    const endOfMonth = calcEndOfMonth(targetYear, targetMonthIndex);
-    const monthStart = new Date(targetYear, targetMonthIndex, 1);
-    monthStart.setHours(0, 0, 0, 0);
+    const { monthStart, monthEnd: endOfMonth } = getPayrollMonthUtcBounds(
+        targetYear,
+        targetMonthIndex,
+        orgTimezone
+    );
 
     const employees = await Employee.find({
         salary: { $exists: true, $gt: 0 },
@@ -180,30 +180,33 @@ export const schedulePayrollRunJobs = () => {
         logger.info('Running payroll run automation job');
         const now = new Date();
 
-        const currentMonth = getMonthLabel(now);
-        const currentYear = now.getFullYear();
-
-        const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const prevMonth = getMonthLabel(prevMonthDate);
-        const prevYear = prevMonthDate.getFullYear();
-
         try {
             const organizations = await Organization.find({});
 
             for (const org of organizations) {
                 try {
+                    const orgTimezone = await getCachedEffectiveTimezone(org._id);
+                    const nowInOrg = DateTime.fromJSDate(now, { zone: orgTimezone });
+                    const currentMonth = nowInOrg.setLocale('en-US').toFormat('MMMM');
+                    const currentYear = nowInOrg.year;
+                    const prevInOrg = nowInOrg.minus({ months: 1 });
+                    const prevMonth = prevInOrg.setLocale('en-US').toFormat('MMMM');
+                    const prevYear = prevInOrg.year;
+
                     await runFinalForOrg({
                         organizationId: org._id,
                         month: prevMonth,
                         year: prevYear,
-                        now
+                        now,
+                        orgTimezone
                     });
 
                     await runPreviewForOrg({
                         organizationId: org._id,
                         month: currentMonth,
                         year: currentYear,
-                        asOf: now
+                        asOf: now,
+                        orgTimezone
                     });
                 } catch (orgError) {
                     logger.error('Payroll automation failed for organization', {
@@ -219,4 +222,3 @@ export const schedulePayrollRunJobs = () => {
 
     logger.info('Payroll automation jobs scheduled');
 };
-

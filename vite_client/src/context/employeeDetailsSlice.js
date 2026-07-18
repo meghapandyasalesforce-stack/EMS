@@ -369,7 +369,10 @@ export const updateFinancialDetails = createAsyncThunk(
       );
       return {
         ...employee,
-        financialDetails: response.data.financialDetails
+        financialDetails: response.data.financialDetails,
+        taxRegimeRequest: response.data.taxRegimeRequest || null,
+        taxRegimeRequestPending: Boolean(response.data.taxRegimeRequestPending),
+        message: response.data.message,
       };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to update financial details');
@@ -716,7 +719,13 @@ const employeeDetailsSlice = createSlice({
       })
       .addCase(updateFinancialDetails.fulfilled, (state, action) => {
         state.updatingFinancialDetails = false;
-        state.employee = action.payload;
+        const {
+          taxRegimeRequest: _taxRegimeRequest,
+          taxRegimeRequestPending: _taxRegimeRequestPending,
+          message: _message,
+          ...employeePayload
+        } = action.payload || {};
+        state.employee = employeePayload;
       })
       .addCase(updateFinancialDetails.rejected, (state, action) => {
         state.updatingFinancialDetails = false;

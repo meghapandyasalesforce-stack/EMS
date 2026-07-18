@@ -1,6 +1,6 @@
-import { getIndianFinancialYear } from './incomeTaxCalculation.js';
+import { getIndianFinancialYear, SECTION_80C_EPF_ANNUAL_CAP } from './incomeTaxCalculation.js';
 
-const NUMERIC_80C_FIELDS = ['ppf', 'lic', 'elss', 'tuitionFees', 'homeLoanPrincipal', 'other'];
+const NUMERIC_80C_FIELDS = ['epf', 'ppf', 'lic', 'elss', 'tuitionFees', 'homeLoanPrincipal', 'other'];
 const NUMERIC_80D_FIELDS = ['selfFamilyPremium', 'parentsPremium'];
 
 function toNonNegativeInt(value) {
@@ -17,6 +17,8 @@ export function sanitizeTaxDeclarationInput(body = {}) {
     for (const key of NUMERIC_80C_FIELDS) {
         section80C[key] = toNonNegativeInt(body.section80C?.[key]);
     }
+    // Employee may declare EPF under 80C only up to statutory annual cap (₹1,800 × 12).
+    section80C.epf = Math.min(SECTION_80C_EPF_ANNUAL_CAP, section80C.epf);
 
     const section80D = {
         selfFamilyPremium: toNonNegativeInt(body.section80D?.selfFamilyPremium),

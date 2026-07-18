@@ -33,24 +33,35 @@ describe('tdsCumulativeHelper', () => {
     });
 
     describe('lastWorkingDate in employment window', () => {
+        const TZ = 'Asia/Kolkata';
+
         it('sets monthsRemaining to 0 on exit month', () => {
-            const emp = { lastWorkingDate: new Date('2027-01-31') };
-            const window = getFyEmploymentWindow(emp, 'January', 2027);
+            const emp = { lastWorkingDate: new Date('2027-01-31T00:00:00.000Z') };
+            const window = getFyEmploymentWindow(emp, 'January', 2027, TZ);
             expect(window.monthsRemaining).toBe(0);
-            expect(getExitFyMonthIndex(emp)).toBe(9);
+            expect(getExitFyMonthIndex(emp, TZ)).toBe(9);
         });
 
         it('limits remaining months before exit', () => {
-            const emp = { lastWorkingDate: new Date('2027-01-31') };
-            const window = getFyEmploymentWindow(emp, 'December', 2026);
+            const emp = { lastWorkingDate: new Date('2027-01-31T00:00:00.000Z') };
+            const window = getFyEmploymentWindow(emp, 'December', 2026, TZ);
             expect(window.monthsRemaining).toBe(1);
         });
 
         it('returns zero employment after exit month', () => {
-            const emp = { lastWorkingDate: new Date('2027-01-31') };
-            const window = getFyEmploymentWindow(emp, 'February', 2027);
+            const emp = { lastWorkingDate: new Date('2027-01-31T00:00:00.000Z') };
+            const window = getFyEmploymentWindow(emp, 'February', 2027, TZ);
             expect(window.monthsElapsed).toBe(0);
             expect(window.monthsRemaining).toBe(0);
+        });
+
+        it('uses org TZ so IST midnight join is not shifted to previous month', () => {
+            // 2026-06-30T18:30:00.000Z = 1 July 2026 00:00 IST
+            const emp = { joiningDate: new Date('2026-06-30T18:30:00.000Z') };
+            const window = getFyEmploymentWindow(emp, 'July', 2026, TZ);
+            expect(window.startIdx).toBe(3); // July
+            expect(window.monthsElapsed).toBe(1);
+            expect(window.monthsRemaining).toBe(8);
         });
     });
 
@@ -146,7 +157,7 @@ describe('tdsCumulativeHelper', () => {
             expect(taxWithExit).toBeLessThanOrEqual(taxWithoutExit);
         });
 
-        it('independent mode ignores past TDS deductions (no catch-up)', () => {
+        it('independent mode spreads remaining tax over current + future months', () => {
             const baseArgs = {
                 taxParamsBase,
                 ytdTaxableGross: 2100000,
@@ -157,22 +168,24 @@ describe('tdsCumulativeHelper', () => {
                 fullMonthlySalary: 2100000,
                 fullMonthlyBasic: 1050000,
                 fullMonthlyHra: 420000,
-                monthsElapsedInFy: 3
+                monthsElapsedInFy: 3,
+                monthsRemainingAfterCurrent: 9,
+                tdsCalculationMode: 'independent'
             };
 
-            const withHighPastTds = computeCumulativeMonthlyIncomeTax({
-                ...baseArgs,
-                ytdTdsDeducted: 5_000_000,
-                tdsCalculationMode: 'independent'
-            });
             const withZeroPastTds = computeCumulativeMonthlyIncomeTax({
                 ...baseArgs,
-                ytdTdsDeducted: 0,
-                tdsCalculationMode: 'independent'
+                ytdTdsDeducted: 0
+            });
+            const withPartialPastTds = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                ytdTdsDeducted: Math.round(withZeroPastTds / 2)
             });
 
-            expect(withHighPastTds).toBe(withZeroPastTds);
-            expect(withHighPastTds).toBeGreaterThan(0);
+            expect(withZeroPastTds).toBeGreaterThan(0);
+            // Higher YTD TDS → lower remaining balance to spread this month.
+            expect(withPartialPastTds).toBeLessThan(withZeroPastTds);
+            expect(withPartialPastTds).toBeGreaterThan(0);
         });
 
         it('cumulative mode reduces TDS when past deductions are high', () => {
@@ -203,50 +216,66 @@ describe('tdsCumulativeHelper', () => {
             expect(withZeroPastTds).toBeGreaterThan(0);
         });
 
-        it('independent mode scales with current month present gross', () => {
-            const full = computeCumulativeMonthlyIncomeTax({
+        it('independent mode charges more per month when fewer months remain', () => {
+            const baseArgs = {
                 taxParamsBase,
-                ytdTaxableGross: 0,
-                ytdTdsDeducted: 999999,
+                ytdTaxableGross: 2100000,
+                ytdTdsDeducted: 0,
                 currentMonthTaxableGross: 2100000,
                 currentMonthPf: 1800,
-                projectedRemainingGross: 11 * 2100000,
-                projectedRemainingPf: 11 * 1800,
+                // Keep annual projection identical; only the collection window changes.
+                projectedRemainingGross: 8 * 2100000,
+                projectedRemainingPf: 8 * 1800,
                 fullMonthlySalary: 2100000,
                 fullMonthlyBasic: 1050000,
                 fullMonthlyHra: 420000,
-                monthsElapsedInFy: 1,
+                monthsElapsedInFy: 4,
                 tdsCalculationMode: 'independent'
+            };
+
+            const nineMonthsLeft = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                monthsRemainingAfterCurrent: 8 // current + 8 = 9
             });
-            const lop = computeCumulativeMonthlyIncomeTax({
-                taxParamsBase,
-                ytdTaxableGross: 0,
-                ytdTdsDeducted: 999999,
-                currentMonthTaxableGross: 1610000,
-                currentMonthPf: 1800,
-                projectedRemainingGross: 11 * 2100000,
-                projectedRemainingPf: 11 * 1800,
-                fullMonthlySalary: 2100000,
-                fullMonthlyBasic: 1050000,
-                fullMonthlyHra: 420000,
-                monthsElapsedInFy: 1,
-                tdsCalculationMode: 'independent'
+            const twelveMonthsLeft = computeCumulativeMonthlyIncomeTax({
+                ...baseArgs,
+                monthsRemainingAfterCurrent: 11 // current + 11 = 12
             });
 
-            expect(lop).toBeLessThan(full);
-            expect(lop).toBeGreaterThan(0);
+            expect(nineMonthsLeft).toBeGreaterThan(twelveMonthsLeft);
+            // Same remaining annual tax: monthly ≈ total/9 vs total/12.
+            expect(nineMonthsLeft).toBe(Math.round((twelveMonthsLeft * 12) / 9));
         });
     });
 
     describe('mode helpers', () => {
-        it('computeIndependentModeMonthlyTds is proportional', () => {
+        it('computeIndependentModeMonthlyTds spreads remaining tax over months left', () => {
             expect(
                 computeIndependentModeMonthlyTds({
-                    annualTax: 120000,
-                    projectedAnnualGross: 1200000,
+                    annualTax: 90000,
+                    ytdTdsDeducted: 0,
+                    monthsRemainingIncludingCurrent: 9,
                     currentMonthTaxableGross: 100000
                 })
             ).toBe(10000);
+
+            expect(
+                computeIndependentModeMonthlyTds({
+                    annualTax: 90000,
+                    ytdTdsDeducted: 30000,
+                    monthsRemainingIncludingCurrent: 6,
+                    currentMonthTaxableGross: 100000
+                })
+            ).toBe(10000);
+
+            expect(
+                computeIndependentModeMonthlyTds({
+                    annualTax: 90000,
+                    ytdTdsDeducted: 0,
+                    monthsRemainingIncludingCurrent: 9,
+                    currentMonthTaxableGross: 0
+                })
+            ).toBe(0);
         });
 
         it('computeCumulativeModeMonthlyTds subtracts YTD', () => {
@@ -254,9 +283,31 @@ describe('tdsCumulativeHelper', () => {
                 computeCumulativeModeMonthlyTds({
                     annualTax: 120000,
                     monthsElapsedInFy: 3,
-                    ytdTdsDeducted: 15000
+                    ytdTdsDeducted: 15000,
+                    employmentMonthsInFy: 12
                 })
             ).toBe(15000);
+        });
+
+        it('computeCumulativeModeMonthlyTds uses employment span not always 12', () => {
+            // Mid-year joiner: 9 employment months; month 1 should be annual/9 not annual/12
+            expect(
+                computeCumulativeModeMonthlyTds({
+                    annualTax: 90000,
+                    monthsElapsedInFy: 1,
+                    ytdTdsDeducted: 0,
+                    employmentMonthsInFy: 9
+                })
+            ).toBe(10000);
+
+            expect(
+                computeCumulativeModeMonthlyTds({
+                    annualTax: 90000,
+                    monthsElapsedInFy: 9,
+                    ytdTdsDeducted: 80000,
+                    employmentMonthsInFy: 9
+                })
+            ).toBe(10000);
         });
     });
 });

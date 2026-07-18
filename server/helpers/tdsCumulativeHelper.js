@@ -9,6 +9,7 @@ import {
 } from './incomeTaxCalculation.js';
 import {
     FY_MONTHS,
+    getCalendarPartsInTimezone,
     getExitFyMonthIndex,
     getFyMonthIndex,
     getFyStartYear,
@@ -21,12 +22,13 @@ import {
     sumProjectedRemainingPf,
     sumProjectedRemainingSalary
 } from './salaryRevisionHelper.js';
+import { getCachedEffectiveTimezone } from './orgContextCache.js';
 
 /** Org-scoped TDS monthly cut modes (SaaS setting). */
 export const TDS_CALCULATION_MODE = Object.freeze({
-    /** Tax due through FY month N minus YTD TDS already deducted (catch-up). */
+    /** Tax due through employment months elapsed / employment span in FY (catch-up). */
     CUMULATIVE: 'cumulative',
-    /** This month's proportional share only; no past TDS adjustment. */
+    /** Remaining annual tax spread evenly over current + future FY months (cannot reopen past slips). */
     INDEPENDENT: 'independent'
 });
 
@@ -82,21 +84,24 @@ export function projectFullMonthBreakdown(emp, salaryStructure, month, year) {
     return projectFullMonthBreakdownForMonth(emp, salaryStructure, month, year);
 }
 
-export function getFyEmploymentWindow(emp, month, year) {
+/**
+ * Employment window within the Indian FY for TDS pacing.
+ * Join / exit calendar months are resolved in `timezone` (org IANA TZ).
+ */
+export function getFyEmploymentWindow(emp, month, year, timezone) {
     const fyStartYear = getFyStartYear(month, year);
     const currentIdx = getFyMonthIndex(month, year);
     let startIdx = 0;
 
     if (emp?.joiningDate) {
-        const join = new Date(emp.joiningDate);
-        if (!Number.isNaN(join.getTime())) {
-            const joinMonth = join.toLocaleString('en-US', { month: 'long' });
-            const joinFyStart = getFyStartYear(joinMonth, join.getFullYear());
+        const joinParts = getCalendarPartsInTimezone(emp.joiningDate, timezone);
+        if (joinParts) {
+            const joinFyStart = getFyStartYear(joinParts.monthName, joinParts.year);
             if (joinFyStart > fyStartYear) {
                 return { startIdx: 12, currentIdx, monthsElapsed: 0, monthsRemaining: 0 };
             }
             if (joinFyStart === fyStartYear) {
-                startIdx = getFyMonthIndex(joinMonth, join.getFullYear());
+                startIdx = getFyMonthIndex(joinParts.monthName, joinParts.year);
             }
         }
     }
@@ -105,7 +110,7 @@ export function getFyEmploymentWindow(emp, month, year) {
         return { startIdx, currentIdx, monthsElapsed: 0, monthsRemaining: 0 };
     }
 
-    const exitIdx = getExitFyMonthIndex(emp);
+    const exitIdx = getExitFyMonthIndex(emp, timezone);
     if (exitIdx != null && currentIdx > exitIdx) {
         return { startIdx, currentIdx, monthsElapsed: 0, monthsRemaining: 0 };
     }
@@ -234,33 +239,41 @@ export function buildProjectedAnnualTaxContext({
 }
 
 /**
- * Cumulative mode: tax due through FY month N minus YTD TDS (catch-up / adjustment).
+ * Cumulative mode: tax due through employment months elapsed minus YTD TDS.
+ * Divisor is employment span in the FY (join→exit/March), not always 12 —
+ * so mid-year joiners are not stuck at elapsed/12 of annual tax.
  */
 export function computeCumulativeModeMonthlyTds({
     annualTax,
     monthsElapsedInFy = 1,
-    ytdTdsDeducted = 0
+    ytdTdsDeducted = 0,
+    employmentMonthsInFy = 12
 }) {
     if (monthsElapsedInFy <= 0) return 0;
-    const taxDueThroughCurrentMonth = Math.round((annualTax * monthsElapsedInFy) / 12);
+    const divisor = Math.max(1, Math.round(asNumber(employmentMonthsInFy, 12)));
+    const taxDueThroughCurrentMonth = Math.round((annualTax * monthsElapsedInFy) / divisor);
     return Math.max(0, taxDueThroughCurrentMonth - Math.max(0, ytdTdsDeducted));
 }
 
 /**
- * Independent mode: this month's proportional share of annual tax.
- * Current month uses present/earned gross; future months stay full in the annual estimate.
- * Does NOT subtract past TDS deductions.
+ * Independent mode: spread remaining annual tax over current + future FY months.
+ * Past payslips are not reopened; already-deducted YTD TDS is subtracted, then the
+ * balance is divided by months left including this month (e.g. July → March = 9).
  */
 export function computeIndependentModeMonthlyTds({
     annualTax,
-    projectedAnnualGross = 0,
+    ytdTdsDeducted = 0,
+    monthsRemainingIncludingCurrent = 1,
     currentMonthTaxableGross = 0
 }) {
     const annual = Math.max(0, asNumber(annualTax, 0));
-    const projected = Math.max(0, asNumber(projectedAnnualGross, 0));
+    const months = Math.max(0, Math.round(asNumber(monthsRemainingIncludingCurrent, 0)));
+    const ytd = Math.max(0, asNumber(ytdTdsDeducted, 0));
     const current = Math.max(0, asNumber(currentMonthTaxableGross, 0));
-    if (annual <= 0 || projected <= 0 || current <= 0) return 0;
-    return Math.max(0, Math.round((annual * current) / projected));
+    // No earnings this month → nothing to deduct from.
+    if (annual <= 0 || months <= 0 || current <= 0) return 0;
+    const remainingTax = Math.max(0, annual - ytd);
+    return Math.max(0, Math.round(remainingTax / months));
 }
 
 /**
@@ -284,6 +297,8 @@ export function computeCumulativeMonthlyIncomeTax({
     fullMonthlyBasic = 0,
     fullMonthlyHra = 0,
     monthsElapsedInFy = 1,
+    /** FY months after the current payroll month (Aug–Mar when current is July → 8). Omit to assume 12 − elapsed. */
+    monthsRemainingAfterCurrent,
     tdsCalculationMode = DEFAULT_TDS_CALCULATION_MODE
 }) {
     if (monthsElapsedInFy <= 0) return 0;
@@ -306,18 +321,27 @@ export function computeCumulativeMonthlyIncomeTax({
 
     const mode = normalizeTdsCalculationMode(tdsCalculationMode);
 
+    const monthsAfter =
+        monthsRemainingAfterCurrent === undefined || monthsRemainingAfterCurrent === null
+            ? Math.max(0, 12 - monthsElapsedInFy)
+            : Math.max(0, Math.round(asNumber(monthsRemainingAfterCurrent, 0)));
+
     if (mode === TDS_CALCULATION_MODE.INDEPENDENT) {
+        const monthsRemainingIncludingCurrent = Math.max(1, monthsAfter + 1);
         return computeIndependentModeMonthlyTds({
             annualTax: ctx.annualTax,
-            projectedAnnualGross: ctx.projectedAnnualGross,
+            ytdTdsDeducted,
+            monthsRemainingIncludingCurrent,
             currentMonthTaxableGross: ctx.currentMonthTaxableGross
         });
     }
 
+    const employmentMonthsInFy = Math.max(1, monthsElapsedInFy + monthsAfter);
     return computeCumulativeModeMonthlyTds({
         annualTax: ctx.annualTax,
         monthsElapsedInFy,
-        ytdTdsDeducted
+        ytdTdsDeducted,
+        employmentMonthsInFy
     });
 }
 
@@ -346,18 +370,24 @@ export async function computeRegimeIncomeTaxCumulative({
         year
     });
 
-    const { monthsElapsed, monthsRemaining } = getFyEmploymentWindow(emp, month, year);
-    if (monthsElapsed <= 0) return 0;
-
-    const [ytd, tdsCalculationMode] = await Promise.all([
+    const [ytd, tdsCalculationMode, orgTimezone] = await Promise.all([
         fetchYtdPayrollStats({
             employeeId: emp._id,
             organizationId,
             month,
             year
         }),
-        resolveOrgTdsCalculationMode(organizationId)
+        resolveOrgTdsCalculationMode(organizationId),
+        getCachedEffectiveTimezone(organizationId)
     ]);
+
+    const { monthsElapsed, monthsRemaining } = getFyEmploymentWindow(
+        emp,
+        month,
+        year,
+        orgTimezone
+    );
+    if (monthsElapsed <= 0) return 0;
 
     const projectedRemainingGross = sumProjectedRemainingSalary(emp, month, year, monthsRemaining);
     const projectedRemainingPf = sumProjectedRemainingPf(emp, month, year, monthsRemaining);
@@ -379,6 +409,7 @@ export async function computeRegimeIncomeTaxCumulative({
         fullMonthlyBasic: breakdown.basicWage,
         fullMonthlyHra: breakdown.houseRentAllowance,
         monthsElapsedInFy: monthsElapsed,
+        monthsRemainingAfterCurrent: monthsRemaining,
         tdsCalculationMode
     });
 }

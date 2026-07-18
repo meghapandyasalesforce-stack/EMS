@@ -8,9 +8,12 @@ import { computeEarningsFromGross, employeePfFromBasicWage } from "../../helpers
 import {
     pickDisplayPayroll,
     buildGeneratedPayrollPayload,
-    isFinalGenerationAllowedForPeriod
+    isFinalGenerationAllowedForPeriod,
+    getPayrollMonthUtcBounds
 } from "../../helpers/payrollGenerationHelper.js";
 import { aggregatePayrollPeriod, attachPayrollRecordIds, isValidMongoObjectId } from "../../helpers/payrollAggregationHelper.js";
+import { getCachedEffectiveTimezone } from "../../helpers/orgContextCache.js";
+import { DateTime } from "luxon";
 
 const MONTH_ORDER = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
@@ -1306,12 +1309,23 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         const targetYear = parseInt(year, 10);
         const targetMonthIndex = new Date(`${month} 1, ${year}`).getMonth();
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonthIndex = now.getMonth();
 
         if (Number.isNaN(targetYear)) {
             return res.status(400).json({ success: false, message: 'Invalid year value' });
         }
+
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.'
+            });
+        }
+
+        const orgTimezone = await getCachedEffectiveTimezone(organizationId);
+        const nowInOrg = DateTime.fromJSDate(now, { zone: orgTimezone });
+        const currentYear = nowInOrg.year;
+        const currentMonthIndex = nowInOrg.month - 1;
 
         if (targetYear > currentYear || (targetYear === currentYear && targetMonthIndex > currentMonthIndex)) {
             return res.status(400).json({
@@ -1323,7 +1337,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         if (
             mode === 'final' &&
             !forceFinalBeforePeriodEnd &&
-            !isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex)
+            !isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex, orgTimezone)
         ) {
             return res.status(400).json({
                 success: false,
@@ -1332,18 +1346,11 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             });
         }
 
-        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
-        if (!organizationId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Organization ID is required. Please ensure you are authenticated.'
-            });
-        }
-
-        const monthStart = new Date(targetYear, targetMonthIndex, 1);
-        monthStart.setHours(0, 0, 0, 0);
-        const endOfMonth = new Date(targetYear, targetMonthIndex + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
+        const { monthStart, monthEnd: endOfMonth } = getPayrollMonthUtcBounds(
+            targetYear,
+            targetMonthIndex,
+            orgTimezone
+        );
 
         const employees = await Employee.find({
             salary: { $exists: true, $gt: 0 },

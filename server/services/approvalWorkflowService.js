@@ -14,6 +14,10 @@ import {
     applyRegularizationApproval,
     applyRegularizationRejection
 } from './attendanceRegularizationWorkflowService.js';
+import {
+    applyTaxRegimeChangeApproval,
+    applyTaxRegimeChangeRejection
+} from './taxRegimeChangeWorkflowService.js';
 
 const normalizeText = (value = '') => String(value).trim().toLowerCase();
 
@@ -667,6 +671,25 @@ const updateEntityStatus = async (instance) => {
                 } else if (instance.status === 'Rejected') {
                     await applyRegularizationRejection({
                         regularizationRequest,
+                        reviewerId: instance.rejectedBy || null,
+                        rejectionReason: instance.rejectionReason || 'Rejected through approval workflow'
+                    });
+                }
+            }
+        } else if (instance.entityType === 'TaxRegimeChange') {
+            const TaxRegimeChange = (await import('../models/taxRegimeChange.model.js')).default;
+            const taxRegimeRequest = await TaxRegimeChange.findById(instance.entityId);
+
+            if (taxRegimeRequest) {
+                if (instance.status === 'Approved') {
+                    await applyTaxRegimeChangeApproval({
+                        taxRegimeRequest,
+                        reviewerId: instance.steps[instance.steps.length - 1]?.approverId || instance.rejectedBy || null,
+                        comments: 'Approved through workflow'
+                    });
+                } else if (instance.status === 'Rejected') {
+                    await applyTaxRegimeChangeRejection({
+                        taxRegimeRequest,
                         reviewerId: instance.rejectedBy || null,
                         rejectionReason: instance.rejectionReason || 'Rejected through approval workflow'
                     });

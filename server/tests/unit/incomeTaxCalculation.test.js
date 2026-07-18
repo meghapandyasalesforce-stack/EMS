@@ -40,11 +40,30 @@ describe('incomeTaxCalculation', () => {
     });
 
     describe('computeSection80CTotal', () => {
-        it('caps combined PF and declared investments at 1.5L', () => {
+        it('uses only declared EPF (not payroll annualPfEmployee)', () => {
             expect(
                 computeSection80CTotal({
                     annualPfEmployee: 21600,
-                    section80C: { lic: 30000, elss: 100000 }
+                    section80C: {}
+                })
+            ).toBe(0);
+            expect(
+                computeSection80CTotal({
+                    annualPfEmployee: 0,
+                    section80C: { epf: 20000 }
+                })
+            ).toBe(20000);
+        });
+
+        it('caps declared EPF at 21600 and total 80C at 1.5L', () => {
+            expect(
+                computeSection80CTotal({
+                    section80C: { epf: 30000 }
+                })
+            ).toBe(21600);
+            expect(
+                computeSection80CTotal({
+                    section80C: { epf: 21600, lic: 30000, elss: 100000 }
                 })
             ).toBe(150000);
         });
@@ -154,18 +173,41 @@ describe('incomeTaxCalculation', () => {
             const withDeclarations = computeAnnualIncomeTax({
                 taxRegime: 'old',
                 annualGrossIncome: 1500000,
-                annualPfEmployee: 21600,
-                section80C: { lic: 30000, elss: 50000 }
+                section80C: { epf: 21600, lic: 30000, elss: 50000 }
             });
 
-            const pfOnly = computeAnnualIncomeTax({
+            const noDeclarations = computeAnnualIncomeTax({
                 taxRegime: 'old',
                 annualGrossIncome: 1500000,
                 annualPfEmployee: 21600,
                 section80C: {}
             });
 
-            expect(withDeclarations).toBeLessThan(pfOnly);
+            expect(withDeclarations).toBeLessThan(noDeclarations);
+        });
+
+        it('does not reduce taxable income for payroll PF unless EPF is declared', () => {
+            const withPayrollPfOnly = computeAnnualIncomeTax({
+                taxRegime: 'old',
+                annualGrossIncome: 1500000,
+                annualPfEmployee: 21600,
+                section80C: {}
+            });
+            const withDeclaredEpf = computeAnnualIncomeTax({
+                taxRegime: 'old',
+                annualGrossIncome: 1500000,
+                annualPfEmployee: 0,
+                section80C: { epf: 20000 }
+            });
+            const withNoPf = computeAnnualIncomeTax({
+                taxRegime: 'old',
+                annualGrossIncome: 1500000,
+                annualPfEmployee: 0,
+                section80C: {}
+            });
+
+            expect(withPayrollPfOnly).toBe(withNoPf);
+            expect(withDeclaredEpf).toBeLessThan(withNoPf);
         });
 
         it('charges less under new than old without deductions', () => {

@@ -455,7 +455,7 @@ const GeneralSettingsContent = () => {
                         >
                             <div className="font-semibold text-gray-900">Past TDS adjustment</div>
                             <p className="mt-1 text-sm text-gray-500">
-                                Cumulative: tax due through this FY month minus TDS already deducted. Catches up over/under cuts from earlier months.
+                                Cumulative: tax due through employment months in the FY minus TDS already deducted (mid-year join uses join→March span, not always ÷12).
                             </p>
                         </button>
                         <button
@@ -469,7 +469,7 @@ const GeneralSettingsContent = () => {
                         >
                             <div className="font-semibold text-gray-900">No past TDS adjustment</div>
                             <p className="mt-1 text-sm text-gray-500">
-                                Independent: this month uses present/earned days; future months assumed full. Does not adjust for past TDS deductions.
+                                Independent: remaining annual tax ÷ months left (this month → March). Past slips are not reopened; already-cut TDS is subtracted first.
                             </p>
                         </button>
                     </div>

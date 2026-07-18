@@ -9,8 +9,10 @@ import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeeP
 import { getEffectiveSalaryForMonth } from './salaryRevisionHelper.js';
 import { computeRegimeIncomeTaxCumulative, clearTdsCalculationModeCache } from './tdsCumulativeHelper.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
-import { getDateKeyInTimezone, getEndOfDayInTimezone } from './timezoneHelper.js';
+import { getDateKeyInTimezone, getEndOfDayInTimezone, getPayrollMonthUtcBounds } from './timezoneHelper.js';
 import { buildAttendancePeriodFilter, parseDateKeyInTimezone } from './attendanceDayHelper.js';
+
+export { getPayrollMonthUtcBounds };
 
 const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -237,6 +239,48 @@ export function countWorkingDaysInDateKeyRange(startKey, endKey, timezone, isWor
         if (isWorkingDayKeyFn(key)) working += 1;
     });
     return working;
+}
+
+/** Count calendar days between two org date keys (inclusive). */
+export function countCalendarDaysInDateKeyRange(startKey, endKey, timezone) {
+    let days = 0;
+    eachDateKeyInInclusiveRange(startKey, endKey, timezone, () => {
+        days += 1;
+    });
+    return days;
+}
+
+/**
+ * Clamp join / termination into the payroll month using org-timezone date keys.
+ * Avoids server-local Date month-end spilling into the next calendar day (e.g. UTC → IST +1).
+ */
+export function resolvePayrollServiceDateKeys({
+    monthStartKey,
+    monthEndKey,
+    joiningDate,
+    lastWorkingDate,
+    terminationDate,
+    timezone
+}) {
+    let effStartKey = monthStartKey;
+    let effEndKey = monthEndKey;
+
+    if (joiningDate) {
+        const joinKey = getDateKeyInTimezone(new Date(joiningDate), timezone);
+        if (joinKey && joinKey > effStartKey) {
+            effStartKey = joinKey;
+        }
+    }
+
+    const term = lastWorkingDate || terminationDate;
+    if (term) {
+        const endKey = getDateKeyInTimezone(new Date(term), timezone);
+        if (endKey && endKey < effEndKey) {
+            effEndKey = endKey;
+        }
+    }
+
+    return { effStartKey, effEndKey };
 }
 
 /**
@@ -521,16 +565,23 @@ export function pickDisplayPayroll(payrolls) {
         )[0];
 }
 
-/** True when final monthly run is allowed (last calendar day of target month or later, or past months). */
-export function isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex) {
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    if (y > targetYear || (y === targetYear && m > targetMonthIndex)) return true;
-    if (y === targetYear && m === targetMonthIndex) {
-        const lastDay = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
-        return now.getDate() >= lastDay;
-    }
-    return false;
+/**
+ * True when final monthly run is allowed (last calendar day of target month or later in org TZ).
+ * @param {Date} now
+ * @param {number} targetYear
+ * @param {number} targetMonthIndex — 0=January … 11=December
+ * @param {string} [timezone] org IANA timezone
+ */
+export function isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex, timezone) {
+    const nowDt = DateTime.fromJSDate(now instanceof Date ? now : new Date(now), {
+        zone: timezone || 'UTC'
+    });
+    if (!nowDt.isValid) return false;
+    const monthEnd = DateTime.fromObject(
+        { year: targetYear, month: targetMonthIndex + 1, day: 1 },
+        { zone: timezone || 'UTC' }
+    ).endOf('month');
+    return nowDt.startOf('day') >= monthEnd.startOf('day');
 }
 
 /**
@@ -546,27 +597,35 @@ export function isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIn
 export async function buildGeneratedPayrollPayload({ emp, month, year, organizationId, mode, asOf }) {
     const yearNum = typeof year === 'number' ? year : parseInt(year, 10);
     const monthIndex = new Date(`${month} 1, ${yearNum}`).getMonth();
-    const startOfMonth = new Date(yearNum, monthIndex, 1);
-    const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
-    endOfMonth.setHours(23, 59, 59, 999);
-
-    const join = emp.joiningDate ? startOfDay(new Date(emp.joiningDate)) : null;
-    const effStart = join && join > startOfMonth ? join : startOfMonth;
-    const terminationOrLastWorking = emp?.lastWorkingDate || emp?.terminationDate;
 
     void mode;
     void asOf;
     // Monthly payroll must always be computed on the full month's calendar window.
     // Keep `mode` for record state/workflow, but do not cap payroll math by asOf date.
-    let effEnd = endOfMonth;
-    if (terminationOrLastWorking) {
-        const empEnd = endOfDay(new Date(terminationOrLastWorking));
-        if (!Number.isNaN(empEnd.getTime())) {
-            effEnd = new Date(Math.min(endOfMonth.getTime(), empEnd.getTime()));
-        }
-    }
 
-    if (effStart > effEnd) {
+    const orgId = emp.organizationId || organizationId;
+    const orgTimezone = await getCachedEffectiveTimezone(orgId);
+    const dayKey = createDayKeyFn(orgTimezone);
+
+    // Month bounds in org IANA timezone (never use server-local Date month-end — UTC→IST spills +1 day).
+    const monthStartDt = DateTime.fromObject(
+        { year: yearNum, month: monthIndex + 1, day: 1 },
+        { zone: orgTimezone }
+    );
+    const monthEndDt = monthStartDt.endOf('month');
+    const monthStartKey = monthStartDt.toFormat('yyyy-MM-dd');
+    const monthEndKey = monthEndDt.toFormat('yyyy-MM-dd');
+
+    const { effStartKey, effEndKey } = resolvePayrollServiceDateKeys({
+        monthStartKey,
+        monthEndKey,
+        joiningDate: emp?.joiningDate,
+        lastWorkingDate: emp?.lastWorkingDate,
+        terminationDate: emp?.terminationDate,
+        timezone: orgTimezone
+    });
+
+    if (!effStartKey || !effEndKey || effStartKey > effEndKey) {
         return {
             basicSalary: 0,
             earnings: {
@@ -603,17 +662,8 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         };
     }
 
-    const orgId = emp.organizationId || organizationId;
-    const orgTimezone = await getCachedEffectiveTimezone(orgId);
-    const dayKey = createDayKeyFn(orgTimezone);
-
-    const monthStartDt = DateTime.fromObject(
-        { year: yearNum, month: monthIndex + 1, day: 1 },
-        { zone: orgTimezone }
-    );
-    const monthEndDt = monthStartDt.endOf('month');
-    const monthStartKey = monthStartDt.toFormat('yyyy-MM-dd');
-    const monthEndKey = monthEndDt.toFormat('yyyy-MM-dd');
+    const effStart = parseDateKeyInTimezone(effStartKey, orgTimezone).startOf('day').toJSDate();
+    const effEnd = parseDateKeyInTimezone(effEndKey, orgTimezone).endOf('day').toJSDate();
 
     const calendarKey = `${String(orgId)}-${String(yearNum)}`;
     let calendar = calendarCache.get(calendarKey);
@@ -624,24 +674,27 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     }
     const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, orgTimezone, dayKey);
 
-    const effStartKey = getDateKeyInTimezone(effStart, orgTimezone);
-    const effEndKey = getDateKeyInTimezone(effEnd, orgTimezone);
-
     // Working-day metric for attendance dashboards/reports (excludes weekends/holidays).
     const attendanceWorkingDays = Math.max(
         0,
         countWorkingDaysInDateKeyRange(effStartKey, effEndKey, orgTimezone, isWorkingDayKeyFn)
     );
     // Full calendar month length (e.g. April → 30) — used for a stable "one day" rate (G/D), including for terminated staff.
-    const fullMonthCalDays = Math.max(1, countCalendarDaysInclusive(startOfMonth, endOfMonth));
+    const fullMonthCalDays = Math.max(
+        1,
+        countCalendarDaysInDateKeyRange(monthStartKey, monthEndKey, orgTimezone)
+    );
     // Proration window: days employed in this month (join through last working/termination, capped at month end).
-    const serviceWindowCalDays = Math.max(1, countCalendarDaysInclusive(effStart, effEnd));
+    const serviceWindowCalDays = Math.max(
+        1,
+        countCalendarDaysInDateKeyRange(effStartKey, effEndKey, orgTimezone)
+    );
 
     const periodStart = monthStartDt.startOf('day').toJSDate();
     const periodEnd = getEndOfDayInTimezone(monthEndDt.toJSDate(), orgTimezone);
 
     const attendanceRecords =
-        effStart <= effEnd
+        effStartKey <= effEndKey
             ? await Attendance.find({
                   userId: emp._id,
                   organizationId: orgId,
@@ -662,7 +715,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);
 
     const approvedLeaves =
-        effStart <= effEnd
+        effStartKey <= effEndKey
             ? await Leave.find({
                   employee: emp._id,
                   organizationId: orgId,
@@ -907,16 +960,12 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
         if (!emp) return base;
         const orgId = organizationId || emp.organizationId;
         const yearNum = typeof payroll.year === 'number' ? payroll.year : parseInt(String(payroll.year), 10);
-        const monthIndex = new Date(`${payroll.month} 1, ${yearNum}`).getMonth();
-        const endOfMonth = new Date(yearNum, monthIndex + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
         const payload = await buildGeneratedPayrollPayload({
             emp,
             month: payroll.month,
             year: yearNum,
             organizationId: orgId,
-            mode: 'final',
-            asOf: endOfMonth
+            mode: 'final'
         });
         return {
             workingDays: payload.workingDays ?? base.workingDays,
