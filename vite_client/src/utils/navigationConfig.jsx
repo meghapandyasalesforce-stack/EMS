@@ -41,7 +41,7 @@ const resolveNavFromRbac = (permissionFlags, role, position, profile) => {
     if (permissionFlags.isPayrollAdmin) {
         return getFinanceNavigation();
     }
-    if (permissionFlags.isLineManager) {
+    if (permissionFlags.isLineManager || permissionFlags.isProjectManager) {
         return getManagerNavigation(profile);
     }
     return null;
@@ -114,6 +114,7 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
         case 'payroll_admin':
             return filterNavByPermissions(getFinanceNavigation(), permissions);
         case 'line_manager':
+        case 'project_manager':
             return filterNavByPermissions(getManagerNavigation(profile), permissions);
         case 'employee':
             return getNavigationForMePortal({ profile, permissions, permissionFlags, position });

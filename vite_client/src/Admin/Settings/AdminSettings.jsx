@@ -197,6 +197,7 @@ const GeneralSettingsContent = () => {
         requireEmailVerification: false,
         allowSelfService: true,
         allowWorkFromHome: true,
+        allowNonWorkingDayPunch: false,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
         employeeIdMinDigits: 3,
@@ -221,6 +222,7 @@ const GeneralSettingsContent = () => {
                 requireEmailVerification: profile.settings.requireEmailVerification ?? false,
                 allowSelfService: profile.settings.allowSelfService ?? true,
                 allowWorkFromHome: profile.settings.allowWorkFromHome ?? true,
+                allowNonWorkingDayPunch: profile.settings.allowNonWorkingDayPunch ?? false,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
                 employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
@@ -285,6 +287,7 @@ const GeneralSettingsContent = () => {
                     requireEmailVerification: updatedProfile.settings.requireEmailVerification ?? false,
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
                     allowWorkFromHome: updatedProfile.settings.allowWorkFromHome ?? true,
+                    allowNonWorkingDayPunch: updatedProfile.settings.allowNonWorkingDayPunch ?? false,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
                     employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
@@ -455,6 +458,30 @@ const GeneralSettingsContent = () => {
                         className="ml-2 flex-shrink-0"
                     >
                         {settings.allowWorkFromHome ? (
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
+                        ) : (
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
+                        )}
+                    </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaCog className="mr-2 flex-shrink-0" />
+                            Allow punch on non-working days
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                            When off, employees cannot punch in on weekends, configured off-days, or holidays
+                            (based on the org calendar). Turn on to allow overtime or emergency punches on those days.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleSettingChange('allowNonWorkingDayPunch')}
+                        className="ml-2 flex-shrink-0"
+                    >
+                        {settings.allowNonWorkingDayPunch ? (
                             <FiToggleRight className="h-6 w-12 text-theme-primary" />
                         ) : (
                             <FiToggleLeft className="h-6 w-12 text-gray-400" />

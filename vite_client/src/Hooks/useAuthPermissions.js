@@ -24,6 +24,7 @@ export const useAuthPermissions = () => {
     isHrExecutive: !!permissionFlags.isHrExecutive,
     isPayrollAdmin: !!permissionFlags.isPayrollAdmin,
     isLineManager: !!permissionFlags.isLineManager,
+    isProjectManager: !!permissionFlags.isProjectManager,
     isExecutive: !!permissionFlags.isExecutive,
   };
 };

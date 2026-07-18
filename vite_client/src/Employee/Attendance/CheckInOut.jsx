@@ -117,6 +117,15 @@ const CheckInOut = () => {
   const isWfhSessionUI =
     currentSession?.workLocation === 'work_from_home' || currentSession?.workLocation === 'home';
 
+  const allowNonWorkingDayPunchUI = attendanceRule?.allowNonWorkingDayPunch === true;
+  const isWorkingDayTodayUI = attendanceRule?.isWorkingDay !== false;
+  const punchBlockedByNonWorkingDayUI =
+    attendanceRule != null && !isWorkingDayTodayUI && !allowNonWorkingDayPunchUI;
+  const nonWorkingDayLabelUI =
+    attendanceRule?.nonWorkingReason === 'holiday'
+      ? (attendanceRule.holidayName ? `Holiday (${attendanceRule.holidayName})` : 'Holiday')
+      : 'Non-working day';
+
   // If org disables WFH, fall back to office selection
   useEffect(() => {
     if (!wfhAllowedUI && workLocation !== 'office') {
@@ -522,6 +531,14 @@ const CheckInOut = () => {
 
   const handleClockIn = async () => {
     try {
+      if (punchBlockedByNonWorkingDayUI) {
+        showNotification(
+          `${nonWorkingDayLabelUI} — punch-in is not available.`,
+          'error'
+        );
+        return;
+      }
+
       const openSession = sessions.find(session => !session.clockOut);
 
       if (openSession) {
@@ -1599,7 +1616,15 @@ const CheckInOut = () => {
               )}
             </div>
           ) : (
-            <div className="text-center py-8">
+            <div className="relative text-center py-8">
+              {punchBlockedByNonWorkingDayUI && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/75 backdrop-blur-[1px]">
+                  <div className="mx-4 max-w-sm rounded-2xl border border-slate-200 bg-white px-6 py-5 text-center shadow-lg">
+                    <p className="text-lg font-semibold text-slate-800">{nonWorkingDayLabelUI}</p>
+                    <p className="mt-1 text-sm text-slate-500">Can&apos;t punch in on a non-working day</p>
+                  </div>
+                </div>
+              )}
               <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
                 <FiClock className="w-10 h-10 text-theme-accent" />
               </div>
@@ -1744,20 +1769,37 @@ const CheckInOut = () => {
               {/* Enhanced Check In Button */}
               <button
                 onClick={handleClockIn}
-                disabled={loading || isProcessing || (enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false)}
+                disabled={
+                  loading ||
+                  isProcessing ||
+                  punchBlockedByNonWorkingDayUI ||
+                  (enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false)
+                }
                 className={`w-full max-w-md py-5 px-8 rounded-2xl text-white font-bold text-xl shadow-xl transition-all duration-200 ${
-                  loading || isProcessing || (enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false)
+                  loading ||
+                  isProcessing ||
+                  punchBlockedByNonWorkingDayUI ||
+                  (enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false)
                     ? 'bg-gray-400 cursor-not-allowed' 
                     : 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 hover:shadow-2xl transform hover:scale-105'
                 }`}
-                title={enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false 
-                  ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
-                  : 'Check In'}
+                title={
+                  punchBlockedByNonWorkingDayUI
+                    ? `${nonWorkingDayLabelUI} — punch-in is not available.`
+                    : enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false 
+                      ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
+                      : 'Check In'
+                }
               >
                 {loading || isProcessing ? (
                   <div className="flex items-center justify-center">
                     <FiLoader className="animate-spin w-6 h-6 mr-3" />
                     Processing...
+                  </div>
+                ) : punchBlockedByNonWorkingDayUI ? (
+                  <div className="flex items-center justify-center">
+                    <FiXCircle className="w-6 h-6 mr-3" />
+                    Unavailable today
                   </div>
                 ) : enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false ? (
                   <div className="flex items-center justify-center">
