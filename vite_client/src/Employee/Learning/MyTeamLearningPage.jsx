@@ -100,9 +100,9 @@ const MyTeamLearningPage = () => {
     const categories = ['all', ...new Set(learnings.map(l => l.category))];
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
+                <div className="bg-white rounded-xl shadow-md p-6">
                     <div className="flex items-center gap-4 mb-6">
                         <button
                             onClick={() => navigate('/dashboard-employee')}
@@ -117,7 +117,7 @@ const MyTeamLearningPage = () => {
                     </div>
 
                     {/* Category Filter */}
-                    <div className="flex gap-2 mb-6 border-b flex-wrap">
+                    <div className="hrms-tabs-scroll mb-6 border-b">
                         {categories.map((category) => (
                             <button
                                 key={category}

@@ -634,6 +634,9 @@ export const organizationValidations = {
             .optional()
             .isIn(['cumulative', 'independent'])
             .withMessage('tdsCalculationMode must be cumulative or independent'),
+        body('allowWorkFromHome')
+            .optional()
+            .isBoolean().withMessage('allowWorkFromHome must be a boolean'),
         handleValidationErrors
     ],
 

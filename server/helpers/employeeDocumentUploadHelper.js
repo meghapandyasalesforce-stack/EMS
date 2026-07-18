@@ -39,7 +39,7 @@ export function extractDocumentNumber(documentType, parsedInfo = {}) {
         case 'GUARANTOR_FORM':
             return String(parsedInfo.guarantorName || parsedInfo.guarantorContact || '').trim();
         case 'DEGREE_CERTIFICATE':
-            return String(parsedInfo.institution || parsedInfo.yearObtained || '').trim();
+            return String(parsedInfo.marksheetLevel || parsedInfo.institution || parsedInfo.yearObtained || '').trim();
         default:
             return String(
                 parsedInfo.panNumber ||
@@ -69,6 +69,9 @@ export function formatJobDocDescription(documentType, parsedInfo = {}) {
             return parts.join(' · ');
         }
         case 'DEGREE_CERTIFICATE': {
+            if (parsedInfo.marksheetLevel) {
+                return `Level: ${parsedInfo.marksheetLevel}`;
+            }
             const parts = [];
             if (parsedInfo.institution) parts.push(parsedInfo.institution);
             if (parsedInfo.yearObtained) parts.push(parsedInfo.yearObtained);
@@ -106,27 +109,42 @@ function deleteFileIfExists(fileUrl) {
     }
 }
 
+function matchesMarksheetLevel(doc, marksheetLevel) {
+    const level = doc?.metadata?.additionalInfo?.marksheetLevel;
+    return String(level || '').trim() === String(marksheetLevel || '').trim();
+}
+
 /** Deactivate older rows of the same job-doc type and remove their files (caller must pass new doc _id to keep). */
-export async function deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, keepId) {
-    const olds = await Document.find({
+export async function deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, keepId, parsedInfo = {}) {
+    const candidateFilter = {
         organizationId,
         uploadedBy: employeeId,
         category: 'Employee',
         employeeJobDocumentType: documentType,
         isActive: true,
         _id: { $ne: keepId },
-    }).lean();
+    };
 
-    await Document.updateMany(
-        {
-            organizationId,
-            uploadedBy: employeeId,
-            category: 'Employee',
-            employeeJobDocumentType: documentType,
-            _id: { $ne: keepId },
-        },
-        { $set: { isActive: false } }
-    );
+    const marksheetLevel = documentType === 'DEGREE_CERTIFICATE'
+        ? String(parsedInfo?.marksheetLevel || '').trim()
+        : '';
+
+    if (documentType === 'DEGREE_CERTIFICATE' && marksheetLevel) {
+        const candidates = await Document.find(candidateFilter).lean();
+        const idsToDeactivate = candidates
+            .filter((doc) => matchesMarksheetLevel(doc, marksheetLevel))
+            .map((doc) => doc._id);
+
+        if (idsToDeactivate.length > 0) {
+            await Document.updateMany(
+                { _id: { $in: idsToDeactivate } },
+                { $set: { isActive: false } }
+            );
+        }
+        return;
+    }
+
+    await Document.updateMany(candidateFilter, { $set: { isActive: false } });
 }
 
 /**
@@ -159,10 +177,14 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         const documentNumber = extractDocumentNumber(documentType, parsedInfo);
         const readableDescription = formatJobDocDescription(documentType, parsedInfo);
 
+        const docName = documentType === 'DEGREE_CERTIFICATE' && parsedInfo.marksheetLevel
+            ? `Marksheet - ${parsedInfo.marksheetLevel}`
+            : (JOB_TYPE_LABELS[documentType] || documentType);
+
         const doc = new Document({
             organizationId,
             uploadedBy: employeeId,
-            name: JOB_TYPE_LABELS[documentType] || documentType,
+            name: docName,
             description: readableDescription,
             category: 'Employee',
             type: mimeToDocumentTypeEnum(file.mimetype),
@@ -186,7 +208,7 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             },
         });
         await doc.save();
-        await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id);
+        await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id, parsedInfo);
         await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
         return doc;
     }

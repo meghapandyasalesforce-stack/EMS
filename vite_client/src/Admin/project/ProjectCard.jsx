@@ -137,7 +137,7 @@ const ProjectCard = ({ project, isOverdue = false, progress = 0 }) => {
       headers.map((header) => `"${row[header] ?? ''}"`).join(','),
     ].join('\n');
 
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

@@ -44,7 +44,7 @@ const Notifications = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-semibold text-gray-800">Notifications</h1>

@@ -200,7 +200,7 @@ const AttendanceStats = () => {
     const header = Object.keys(rows[0] || { date: '' });
     const escape = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
     const csv = [header.join(','), ...rows.map(r => header.map(k => escape(r[k])).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -226,9 +226,9 @@ const AttendanceStats = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
-      <div className="mx-auto p-4 max-w-screen-2xl">
-        <div className="flex items-center gap-4 mb-3">
+    <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
+      <div className="page-shell-inner hrms-stack">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/dashboard')}
             className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
@@ -425,7 +425,7 @@ const AttendanceStats = () => {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-max divide-y divide-gray-200">
+            <table className="w-full min-w-[640px] divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>

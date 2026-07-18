@@ -492,11 +492,11 @@ const DocumentsPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#f4f6f8] p-4 sm:p-6 transition-all duration-300">
-            <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-6">
+        <div className="page-shell min-h-screen bg-[#f4f6f8] transition-all duration-300">
+            <div className="page-shell-inner hrms-split">
                 {/* Sidebar */}
-                <aside className="w-full lg:w-64 shrink-0 space-y-6">
-                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-4">
+                <aside className="min-w-0 space-y-6">
+                    <div className="rounded-xl border border-gray-200/80 bg-white p-4 shadow-sm">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Categories</p>
                         <nav className="space-y-1">
                             {CATEGORY_NAV.map((item) => {
@@ -523,7 +523,7 @@ const DocumentsPage = () => {
                         </nav>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-4">
+                    <div className="rounded-xl border border-gray-200/80 bg-white p-4 shadow-sm">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Access level</p>
                         <div className="space-y-2 text-sm">
                             <label className="flex items-center gap-2 cursor-pointer text-gray-700">
@@ -572,7 +572,7 @@ const DocumentsPage = () => {
                 </aside>
 
                 {/* Main */}
-                <main className="flex-1 min-w-0 space-y-6">
+                <main className="min-w-0 space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Documents</h1>
@@ -693,7 +693,7 @@ const DocumentsPage = () => {
                                                     })()}
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col gap-2 xl:w-[340px] shrink-0">
+                                            <div className="flex min-w-0 flex-col gap-2 xl:min-w-[min(100%,20rem)] xl:max-w-[min(100%,24rem)] xl:shrink-0">
                                                 <label className="sr-only" htmlFor={`note-${doc._id}`}>Review note</label>
                                                 <textarea
                                                     id={`note-${doc._id}`}
@@ -737,7 +737,7 @@ const DocumentsPage = () => {
                         </div>
 
                         <div className="overflow-x-auto">
-                            <table className="min-w-full text-sm">
+                            <table className="min-w-[720px] w-full text-sm">
                                 <thead>
                                     <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50/80">
                                         <th className="px-5 py-3">Employee</th>
@@ -1012,7 +1012,7 @@ const DocumentsPage = () => {
             {/* Reject from table row */}
             {rejectingDoc && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl">
                         <h3 className="text-lg font-semibold text-gray-800 mb-2">Reject document</h3>
                         <p className="text-sm text-gray-600 mb-4">
                             <strong>{rejectingDoc.name}</strong>

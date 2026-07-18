@@ -70,7 +70,7 @@ export const getAllLeaves = async (req, res) => {
         const [leavesRaw, total] = await Promise.all([
             Leave.find(query)
                 .select('-__v')
-                .populate('employee', 'name lastName email department jobTitle designation position profilePhoto')
+                .populate('employee', 'name lastName email department jobTitle designation position profilePhoto manager managerId')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)

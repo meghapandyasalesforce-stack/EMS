@@ -147,7 +147,7 @@ const EmployeeTasks = () => {
 
   if (!projectsLoaded) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-theme-secondary" />
       </div>
     );
@@ -155,7 +155,7 @@ const EmployeeTasks = () => {
 
   if (!currentProject) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-md w-full border border-gray-200">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FiUser size={28} className="text-red-600" />
@@ -179,8 +179,8 @@ const EmployeeTasks = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
+      <div className="w-full max-w-[1600px] mx-auto">
         {/* Header Section */}
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-5 mb-5 border border-gray-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">

@@ -240,9 +240,11 @@ const WorkforcePage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Workforce Planning</h1>
                         <p className="text-gray-600 mt-1">Forecast and plan headcount</p>
@@ -275,8 +277,8 @@ const WorkforcePage = () => {
                 </div>
 
                 {/* Tabs */}
-                <div className="bg-white rounded-lg shadow-md mb-6">
-                    <div className="flex border-b">
+                <div className="bg-white rounded-lg shadow-md">
+                    <div className="hrms-tabs-scroll border-b">
                         <button
                             onClick={() => {
                                 setActiveTab('plans');
@@ -305,7 +307,7 @@ const WorkforcePage = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="mb-6 flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-4">
                     <div className="relative flex-1">
                         <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                         <input
@@ -445,7 +447,7 @@ const WorkforcePage = () => {
                             );
                         })}
                         {filteredPlans.length === 0 && (
-                            <div className="col-span-3 text-center py-12">
+                            <div className="col-span-3 text-center py-8 sm:py-10">
                                 <FaChartLine className="mx-auto text-gray-400 text-5xl mb-4" />
                                 <p className="text-gray-500">
                                     {workforcePlans.length === 0 
@@ -457,7 +459,8 @@ const WorkforcePage = () => {
                     </div>
                 ) : (
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <div className="overflow-x-auto">
+                        <table className="min-w-[720px] w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -505,7 +508,7 @@ const WorkforcePage = () => {
                                 })}
                                 {filteredForecasts.length === 0 && (
                                     <tr>
-                                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan="7" className="px-6 py-8 sm:py-10 text-center text-gray-500">
                                             <FaCalendar className="mx-auto text-4xl mb-2 text-gray-400" />
                                             <p>
                                                 {forecasts.length === 0 
@@ -517,6 +520,7 @@ const WorkforcePage = () => {
                                 )}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 )}
             </div>
@@ -701,7 +705,7 @@ const WorkforcePage = () => {
             {/* Create Forecast Modal */}
             {showCreateForecastModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-semibold mb-4">Create Headcount Forecast</h3>
                         <form onSubmit={handleCreateForecast} className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -841,6 +845,8 @@ const WorkforcePage = () => {
                     </div>
                 </div>
             )}
+        </div>
+        </div>
         </div>
     );
 };

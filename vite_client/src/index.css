@@ -213,6 +213,169 @@
   }
 }
 
+/* Shared page shell — consistent SaaS spacing (8/16/24) */
+.page-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0.75rem; /* 12px → scales to 16/24 */
+  box-sizing: border-box;
+}
+
+.page-shell-inner {
+  width: 100%;
+  max-width: 1600px;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 640px) {
+  .page-shell {
+    padding: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-shell {
+    padding: 1.5rem;
+  }
+}
+
+/* Balanced profile / detail split: ~34% / 66% on desktop */
+.hrms-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .hrms-split {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 2.05fr);
+    gap: 1.5rem;
+  }
+}
+
+/* Main + rail: content first, proportional side panel */
+.hrms-main-rail {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .hrms-main-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .hrms-main-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.38fr);
+  }
+}
+
+/* Dense form field grid — full available width */
+.hrms-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .hrms-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.5rem;
+  }
+}
+
+.hrms-form-grid > * {
+  min-width: 0;
+}
+
+.hrms-form-grid input:not([type="checkbox"]):not([type="radio"]),
+.hrms-form-grid select,
+.hrms-form-grid textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Horizontally scrollable tab bars (mobile-safe) */
+.hrms-tabs-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  width: 100%;
+  min-width: 0;
+}
+
+.hrms-tabs-scroll > * {
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .hrms-tabs-scroll {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+/* Stack section spacing */
+.hrms-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .hrms-stack {
+    gap: 1rem;
+  }
+
+  /* Full-bleed cards & comfortable mobile padding */
+  .hrms-mobile-full {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .hrms-mobile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .hrms-mobile-actions > button,
+  .hrms-mobile-actions > a {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Modal panels: keep within viewport on all devices */
+.modal-panel {
+  max-width: calc(100vw - 1.5rem);
+  max-height: min(90vh, 100dvh - 1.5rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ── Global responsive base (preserve desktop look) ── */
 html {
   -webkit-text-size-adjust: 100%;
@@ -245,6 +408,11 @@ canvas {
 .overflow-x-auto {
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  width: 100%;
 }
 
 /* Additional responsive utilities */

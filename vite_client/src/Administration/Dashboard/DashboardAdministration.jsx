@@ -13,12 +13,14 @@ import {
   FiDollarSign,
   FiDownload,
   FiLayers,
+  FiBell,
   FiSearch,
   FiTarget,
   FiTrendingUp,
   FiUsers,
   FiZap
 } from "react-icons/fi";
+import { format } from "date-fns";
 import { toast } from "react-toastify";
 import {
   useAttendanceSummary,
@@ -152,21 +154,8 @@ const DashboardAdministration = () => {
     }).format(amount);
   };
 
-  const greeting = (() => {
-    if (isCEO) return "Good morning, Chief Executive Officer";
-    if (isCTO) return "Good morning, Chief Technology Officer";
-    if (isCFO) return "Good morning, Chief Financial Officer";
-    if (isVP) return "Good morning, Vice President";
-    return "Good morning, Leadership Team";
-  })();
-
-  const dashboardTitle = (() => {
-    if (isCEO) return "Strategic Overview";
-    if (isCTO) return "Technology Overview";
-    if (isCFO) return "Financial Overview";
-    if (isVP) return "Executive Overview";
-    return `${executiveTitle} Overview`;
-  })();
+  const displayName = profile?.name || user?.name || user?.username || executiveTitle;
+  const greeting = `Good morning, ${displayName}`;
 
   if (isLoading) return <LoadingSpinner message="Loading administration dashboard..." />;
 
@@ -263,7 +252,7 @@ const DashboardAdministration = () => {
     const csv = reportRows
       .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -291,35 +280,48 @@ const DashboardAdministration = () => {
   return (
     <div className="min-h-screen bg-[#F3F7F5]">
       <AnnouncementBanner />
-      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <h1 className="text-xl font-bold text-emerald-700 sm:text-2xl">{dashboardTitle}</h1>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-              <FiSearch className="h-4 w-4" />
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search enterprise data..."
-                className="w-48 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-              />
-            </label>
-            <div className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
-              {executiveTitle}
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm md:px-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                {greeting} 👋
+              </h1>
+              <p className="text-sm text-slate-500">{format(new Date(), "dd MMM yyyy")}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="hidden min-w-[260px] items-center gap-2 rounded-full border border-slate-200 px-3 py-2 lg:flex">
+                <FiSearch className="text-slate-400" />
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                />
+              </div>
+              <button
+                type="button"
+                className="relative rounded-full border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+                onClick={() => navigate("/notifications")}
+              >
+                <FiBell className="h-5 w-5" />
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-orange-500"></span>
+              </button>
+              <button
+                type="button"
+                className="h-10 w-10 rounded-full bg-slate-200 text-sm font-semibold text-slate-700"
+                onClick={() => navigate("/profile-details")}
+              >
+                {(displayName || "M").charAt(0).toUpperCase()}
+              </button>
             </div>
           </div>
         </div>
 
-        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">{greeting}</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {isCEO
-                  ? "Live workforce, delivery, and cost signals from your EMS data—not sample dashboards."
-                  : "Headcount efficiency and delivery indicators for this quarter."}
-              </p>
-            </div>
             <div className="flex flex-wrap gap-2">
               {["week", "month", "quarter", "year"].map((period) => (
                 <button
@@ -374,7 +376,7 @@ const DashboardAdministration = () => {
         </div>
 
         {isCEO && (
-          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
               Punch in / punch out
             </h3>
@@ -382,7 +384,7 @@ const DashboardAdministration = () => {
           </div>
         )}
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {kpiCards.map((card) => (
             <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
@@ -395,8 +397,8 @@ const DashboardAdministration = () => {
           ))}
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2 sm:p-5">
+        <div className="hrms-main-rail">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-semibold text-slate-900">Business performance trends</h3>
               <span className="text-xs text-slate-500">Headcount vs Payroll</span>
@@ -446,7 +448,7 @@ const DashboardAdministration = () => {
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-semibold text-slate-900">Department health index</h3>
@@ -657,8 +659,8 @@ const DashboardAdministration = () => {
         </div>
 
         {(alerts.length > 0 || !financialLoading || !predictiveLoading) && (
-          <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2 sm:p-5">
+          <div className="hrms-main-rail">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <h3 className="mb-3 text-lg font-semibold text-slate-900">Critical alerts</h3>
               <div className="space-y-2">
                 {alerts.slice(0, 4).map((alert, idx) => (
@@ -724,6 +726,8 @@ const DashboardAdministration = () => {
             </div>
           </div>
         )}
+      </div>
+      </div>
       </div>
     </div>
   );

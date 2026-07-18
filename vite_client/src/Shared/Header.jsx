@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FaBell, FaEnvelope, FaUserCircle, FaBars, FaTimes, FaSignOutAlt } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
@@ -22,6 +22,7 @@ const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+    const mobileProfileRef = useRef(null);
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const location = useLocation();
@@ -63,6 +64,24 @@ const Header = () => {
             document.body.style.overflow = previous;
         };
     }, [isMobile, mobileMenuOpen]);
+
+    // Close mobile profile dropdown when tapping/clicking outside it
+    useEffect(() => {
+        if (!isMobile || !dropdownOpen) return undefined;
+
+        const handlePointerOutside = (event) => {
+            if (mobileProfileRef.current && !mobileProfileRef.current.contains(event.target)) {
+                setDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerOutside);
+        document.addEventListener('touchstart', handlePointerOutside);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerOutside);
+            document.removeEventListener('touchstart', handlePointerOutside);
+        };
+    }, [isMobile, dropdownOpen]);
 
     useEffect(() => {
         if (!authChecked || (!user && !employee)) return;
@@ -229,7 +248,7 @@ const Header = () => {
                                 <FaEnvelope className="hover:opacity-80" />
                             </div>
 
-                            <div className="relative shrink-0">
+                            <div className="relative shrink-0" ref={mobileProfileRef}>
                                 <FaUserCircle
                                     className={
                                         useLightEmployeeNav
@@ -327,9 +346,9 @@ const Header = () => {
                                     <Link
                                         key={item.path}
                                         to={item.path}
-                                        className={`mx-2 flex items-center rounded-xl p-4 transition-all duration-300 ${
+                                        className={`mx-2 flex items-center rounded-xl px-3 py-3 sm:p-4 transition-all duration-300 ${
                                             isActive(item.path)
-                                                ? 'scale-105 text-white shadow-lg'
+                                                ? 'scale-[1.02] text-white shadow-lg'
                                                 : useLightEmployeeNav
                                                     ? 'text-gray-600 hover:bg-gray-100'
                                                     : 'text-gray-300 hover:bg-gray-700/50'

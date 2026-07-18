@@ -124,10 +124,10 @@ const IdCardView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8" ref={cardRef}>
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="page-shell min-h-screen bg-gray-50" ref={cardRef}>
+      <div className="page-shell-inner hrms-stack">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
               type="button"

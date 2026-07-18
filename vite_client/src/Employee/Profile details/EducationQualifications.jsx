@@ -235,8 +235,8 @@ const EducationQualifications = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
-      <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full min-w-0">
+      <div className="w-full">
         {apiError && (
           <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700">
             <p>{apiError}</p>
@@ -272,7 +272,7 @@ const EducationQualifications = () => {
 
           {showAcademicForm && (
             <div className="mb-6 space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="hrms-form-grid">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Institution <span className="text-red-500">*</span>
@@ -439,6 +439,7 @@ const EducationQualifications = () => {
 
           {showProfessionalForm && (
             <div className="mb-6 space-y-3">
+              <div className="hrms-form-grid">
               <input
                 className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 placeholder="Title"
@@ -463,6 +464,7 @@ const EducationQualifications = () => {
                 value={professionalInput.description}
                 onChange={(e) => setProfessionalInput({ ...professionalInput, description: e.target.value })}
               />
+              </div>
               <button
                 type="button"
                 onClick={handleSaveProfessional}

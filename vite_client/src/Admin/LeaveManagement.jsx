@@ -16,6 +16,8 @@ import { getAllLeaves, updateLeave } from '../context/leaveSlice';
 import { toast } from 'react-toastify';
 import axios, { getUploadUrl } from '../utils/axios';
 import { ADMIN_LEAVE_ENDPOINT } from '../utils/constant';
+import useAuthPermissions from '../Hooks/useAuthPermissions';
+import { isHR } from '../utils/managerHelper';
 import 'react-toastify/dist/ReactToastify.css';
 
 const TEAL = '#20C997';
@@ -94,6 +96,32 @@ function jobTitleLabel(leave) {
   return em?.jobTitle || em?.designation || em?.position || '—';
 }
 
+function managerDisplayName(leave) {
+  const em = leave?.employee;
+  if (em?.manager) {
+    if (typeof em.manager === 'string' && em.manager.trim()) return em.manager.trim();
+    if (typeof em.manager === 'object') {
+      const name = [em.manager.name, em.manager.lastName].filter(Boolean).join(' ').trim();
+      if (name) return name;
+    }
+  }
+
+  const steps = leave?.workflowSummary?.steps || [];
+  const managerStep = steps.find(
+    (s) =>
+      s?.approverType === 'Manager' ||
+      /manager/i.test(String(s?.stepName || ''))
+  );
+  if (managerStep?.approverName) return managerStep.approverName;
+
+  const pending = leave?.workflowSummary?.pendingStep;
+  if (pending?.approverType === 'Manager' && pending.approverName) {
+    return pending.approverName;
+  }
+
+  return '—';
+}
+
 function profilePhotoSrc(leave) {
   const emp = leave?.employee;
   const photoRef = emp?.profilePhoto?.url || emp?.profilePhoto;
@@ -147,6 +175,11 @@ const LeaveManagement = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { leaves, loading, error } = useSelector((state) => state.leave);
+  const currentUser = useSelector((state) => state.auth?.user);
+  const sessionEmployee = useSelector((state) => state.employeeDetails?.employee);
+  const { isHrManager, isHrExecutive } = useAuthPermissions();
+  const showManagerColumn =
+    isHrManager || isHrExecutive || isHR(currentUser) || isHR(sessionEmployee);
 
   const [selectedId, setSelectedId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -304,11 +337,13 @@ const LeaveManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] pb-10 transition-all duration-300 lg:mt-0">
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row lg:gap-0 lg:py-8">
-        <div
-          className={`min-w-0 flex-1 space-y-6 ${selectedLeave ? 'lg:pr-[420px] xl:pr-[440px]' : ''}`}
-        >
+    <div className="page-shell min-h-screen bg-[#F4F6FB] pb-10 transition-all duration-300 lg:mt-0">
+      <div
+        className={`page-shell-inner ${
+          selectedLeave ? 'hrms-main-rail' : 'hrms-stack'
+        }`}
+      >
+        <div className="min-w-0 space-y-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900">Leave Management</h1>
@@ -343,7 +378,7 @@ const LeaveManagement = () => {
 
           <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-              <div className="relative min-w-[200px] flex-1 lg:max-w-md">
+              <div className="relative min-w-0 w-full sm:min-w-[200px] flex-1 lg:max-w-md">
                 <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
@@ -437,7 +472,7 @@ const LeaveManagement = () => {
 
             <div className="overflow-hidden rounded-xl border border-slate-100">
               {clientFiltered.length === 0 ? (
-                <div className="bg-white px-6 py-16 text-center">
+                <div className="bg-white px-6 py-8 sm:py-10 text-center">
                   <FiCalendar className="mx-auto mb-3 h-10 w-10 text-slate-300" />
                   <p className="font-medium text-slate-900">No leave requests match filters</p>
                   <p className="mt-1 text-sm text-slate-500">
@@ -455,6 +490,7 @@ const LeaveManagement = () => {
                         <th className="px-3 py-3">From – To</th>
                         <th className="px-3 py-3">Days</th>
                         <th className="px-3 py-3">Status</th>
+                        {showManagerColumn && <th className="px-3 py-3">Manager</th>}
                         <th className="px-3 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -535,6 +571,13 @@ const LeaveManagement = () => {
                                   : leave.status || '—'}
                               </span>
                             </td>
+                            {showManagerColumn && (
+                              <td className="px-3 py-3 text-slate-700">
+                                <span className="font-medium text-slate-800">
+                                  {managerDisplayName(leave)}
+                                </span>
+                              </td>
+                            )}
                             <td className="px-3 py-3 text-right">
                               <div
                                 className="flex justify-end gap-1"
@@ -616,7 +659,7 @@ const LeaveManagement = () => {
 
         {selectedLeave && (
           <aside
-            className="fixed inset-0 z-40 flex justify-end lg:static lg:inset-auto lg:z-0 lg:flex lg:h-auto lg:min-h-0 lg:overflow-visible"
+            className="fixed inset-0 z-40 flex justify-end lg:static lg:inset-auto lg:z-0 lg:block lg:h-auto lg:min-w-0 lg:overflow-visible"
             aria-label="Request details"
           >
             <button
@@ -628,7 +671,7 @@ const LeaveManagement = () => {
                 setRejectReason('');
               }}
             />
-            <div className="relative z-10 mt-auto flex max-h-[90vh] w-full max-w-[440px] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl lg:fixed lg:right-6 lg:top-24 lg:mt-0 lg:max-h-[calc(100vh-7rem)] lg:rounded-2xl xl:right-10">
+            <div className="relative z-10 mt-auto flex max-h-[90vh] w-full max-w-[440px] flex-col overflow-hidden rounded-t-3xl border border-slate-100 bg-white shadow-2xl lg:sticky lg:top-6 lg:mt-0 lg:max-h-[calc(100vh-5rem)] lg:max-w-none lg:rounded-2xl lg:shadow-sm">
               <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">Request Details</h2>

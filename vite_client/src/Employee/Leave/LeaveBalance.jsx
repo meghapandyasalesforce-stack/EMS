@@ -38,17 +38,21 @@ const LeaveBalance = () => {
 
     if (loading) {
         return (
-            <div className="p-6">
+            <div className="page-shell">
+                <div className="page-shell-inner">
                 <div className="text-center py-8">Loading leave balance...</div>
+                </div>
             </div>
         );
     }
 
     if (!balance) {
         return (
-            <div className="p-6">
+            <div className="page-shell">
+                <div className="page-shell-inner">
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-yellow-800">No leave balance found. Please contact HR to set up your leave policy.</p>
+                </div>
                 </div>
             </div>
         );
@@ -58,8 +62,9 @@ const LeaveBalance = () => {
     const leaveLabel = getLeaveDisplayLabel();
 
     return (
-        <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
+        <div className="page-shell">
+            <div className="page-shell-inner hrms-stack">
+            <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">My Leave Balance</h2>
                 <select
                     value={year}
@@ -149,7 +154,7 @@ const LeaveBalance = () => {
             </div>
 
             {/* Employee leave summary */}
-            <div className="max-w-md mb-6">
+            <div>
                 <div className="bg-white rounded-lg shadow p-6">
                     <h3 className="text-lg font-semibold mb-4">Employee Leave Summary</h3>
                     <div className="space-y-2">
@@ -194,6 +199,7 @@ const LeaveBalance = () => {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );

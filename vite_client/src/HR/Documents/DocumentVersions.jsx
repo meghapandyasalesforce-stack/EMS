@@ -68,9 +68,9 @@ const DocumentVersions = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-4xl mx-auto">
-                <div className="mb-6 flex items-center gap-4">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
+                <div className="flex items-center gap-4">
                     <button
                         onClick={() => navigate('/documents')}
                         className="text-gray-600 hover:text-gray-800"
@@ -154,7 +154,7 @@ const DocumentVersions = () => {
                     </div>
 
                     {versions.length === 0 && (
-                        <div className="text-center py-12">
+                        <div className="text-center py-8 sm:py-10">
                             <FaHistory className="mx-auto text-gray-400 text-5xl mb-4" />
                             <p className="text-gray-500">No version history available</p>
                         </div>

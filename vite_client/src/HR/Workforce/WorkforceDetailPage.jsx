@@ -188,13 +188,13 @@ const WorkforceDetailPage = () => {
     const filledPositions = plan.hiringPlan?.filter(h => h.status === 'Filled').length || 0;
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
                 {/* Header */}
-                <div className="mb-6">
+                <div>
                     <button
                         onClick={() => navigate('/workforce')}
-                        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
+                        className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-800"
                     >
                         <FaArrowLeft /> Back to Workforce Planning
                     </button>
@@ -211,9 +211,9 @@ const WorkforceDetailPage = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="hrms-main-rail">
                     {/* Main Content */}
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="min-w-0 space-y-6">
                         {/* Headcount Overview */}
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h2 className="text-xl font-semibold mb-4">Headcount Overview</h2>
@@ -389,7 +389,7 @@ const WorkforceDetailPage = () => {
                     </div>
 
                     {/* Sidebar */}
-                    <div className="space-y-6">
+                    <div className="min-w-0 space-y-6">
                         {/* Plan Info */}
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold mb-4">Plan Information</h3>
@@ -464,7 +464,7 @@ const WorkforceDetailPage = () => {
             {/* Add Hiring Position Modal */}
             {showAddHiringModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-semibold mb-4">Add Hiring Position</h3>
                         <form onSubmit={addHiringPosition} className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -594,7 +594,7 @@ const WorkforceDetailPage = () => {
             {/* Add Risk Modal */}
             {showAddRiskModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-semibold mb-4">Add Risk</h3>
                         <form onSubmit={addRisk} className="space-y-4">
                             <div>

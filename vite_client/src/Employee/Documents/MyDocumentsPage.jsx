@@ -230,7 +230,7 @@ const MyDocumentsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] p-4 sm:p-6">
+    <div className="min-h-screen bg-[#F4F6FB]">
       <input
         ref={replaceInputRef}
         type="file"
@@ -239,7 +239,9 @@ const MyDocumentsPage = () => {
         onChange={handleReplaceFile}
       />
 
-      <div className="mx-auto max-w-[1100px] space-y-6">
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -396,10 +398,12 @@ const MyDocumentsPage = () => {
           )}
         </div>
       </div>
+      </div>
+      </div>
 
       {showUploadModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Upload document</h2>
             <form onSubmit={handleUpload} className="mt-4 space-y-4">
               <div>
@@ -474,8 +478,8 @@ const MyDocumentsPage = () => {
       ) : null}
 
       {editDoc ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Edit document</h2>
             <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
               <div>
@@ -533,8 +537,8 @@ const MyDocumentsPage = () => {
       ) : null}
 
       {deleteDoc ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">Delete document?</h2>
             <p className="mt-2 text-sm text-slate-600">
               Remove <strong>{deleteDoc.name || deleteDoc.fileName}</strong> from your documents? This cannot be undone.

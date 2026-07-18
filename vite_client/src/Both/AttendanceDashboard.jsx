@@ -89,7 +89,7 @@ const AttendanceDashboard = () => {
     }
 
     return (
-        <div className="p-4 sm:p-6 md:p-8 bg-gray-900 min-h-screen text-white">
+        <div className="p-3 sm:p-4 md:p-6 bg-gray-900 min-h-screen text-white">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
                 <h1 className="text-xl sm:text-2xl font-bold">Attendance Dashboard</h1>
                 <div className="text-right">
@@ -141,7 +141,7 @@ const AttendanceDashboard = () => {
                     <button className="text-gray-400 hover:text-white px-3 sm:px-4 py-2 rounded text-xs sm:text-sm">NOV</button>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full border-collapse min-w-full">
+                    <table className="w-full border-collapse min-w-[640px]">
                         <thead>
                             <tr>
                                 <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">DATE</th>

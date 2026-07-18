@@ -230,12 +230,34 @@ function DashboardEmployee() {
                     }
                     const capsRaw = leaveRes.data?.statistics?.monthlyLeaveCaps;
                     if (capsRaw?.types?.length) {
+                        const joinRaw =
+                            employee?.joiningDate || profile?.joiningDate || user?.joiningDate;
+                        const now = new Date();
+                        const viewYear = now.getFullYear();
+                        const viewMonth = now.getMonth() + 1;
+                        let monthsEarned = viewMonth;
+                        if (joinRaw) {
+                            const join = new Date(joinRaw);
+                            if (!Number.isNaN(join.getTime())) {
+                                const joinYear = join.getFullYear();
+                                const joinMonth = join.getMonth() + 1;
+                                if (
+                                    joinYear > viewYear ||
+                                    (joinYear === viewYear && joinMonth > viewMonth)
+                                ) {
+                                    monthsEarned = 0;
+                                } else if (joinYear === viewYear) {
+                                    monthsEarned = viewMonth - joinMonth + 1;
+                                } else {
+                                    monthsEarned = viewMonth;
+                                }
+                            }
+                        }
+                        const monthlyRate = 1.5;
                         monthlyCapSummary = {
                             ...capsRaw,
-                            totalRemainingThisMonth: capsRaw.types.reduce(
-                                (sum, t) => sum + (Number(t.remainingThisMonth) || 0),
-                                0
-                            ),
+                            totalRemainingThisMonth:
+                                Math.round(monthsEarned * monthlyRate * 1000) / 1000,
                         };
                     }
                 } catch {
@@ -338,7 +360,7 @@ function DashboardEmployee() {
         };
 
         fetchDashboardStats();
-    }, []);
+    }, [employee?.joiningDate, profile?.joiningDate, user?.joiningDate]);
 
     useEffect(() => {
         if (user?.mustResetPassword) {
@@ -440,13 +462,13 @@ function DashboardEmployee() {
     );
 
     return (
-        <div className={`${shellClass} p-4 sm:p-5 md:p-6 lg:p-8`} style={shellStyle}>
+        <div className={`page-shell ${shellClass}`} style={shellStyle}>
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="mx-auto max-w-[1400px]">
-                <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:gap-10">
+            <div className="page-shell-inner hrms-stack">
+                <div className="hrms-main-rail">
                     {/* Main column */}
-                    <div className="min-w-0 flex-1 space-y-6">
+                    <div className="min-w-0 space-y-4 sm:space-y-6">
                         {/* Top bar */}
                         <header
                             className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between md:p-6"
@@ -675,7 +697,7 @@ function DashboardEmployee() {
                     </div>
 
                     {/* Right rail */}
-                    <aside className="w-full shrink-0 space-y-5 xl:w-[320px]">
+                    <aside className="w-full min-w-0 space-y-5">
                         <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: WS.border }}>
                             <div
                                 className="rounded-t-2xl px-5 py-3"

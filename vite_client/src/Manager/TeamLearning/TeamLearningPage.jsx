@@ -217,9 +217,9 @@ const TeamLearningPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
+                <div className="bg-white rounded-xl shadow-md p-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">Team Learning Resources</h1>
@@ -334,8 +334,8 @@ const TeamLearningPage = () => {
 
             {/* Create/Edit Modal */}
             {showCreateModal && isManagerUser && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
+                    <div className="bg-white rounded-lg p-4 sm:p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-lg font-semibold mb-4">
                             {selectedLearning ? 'Edit Learning Resource' : 'Create Learning Resource'}
                         </h3>
@@ -368,7 +368,7 @@ const TeamLearningPage = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Category

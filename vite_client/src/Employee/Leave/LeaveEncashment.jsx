@@ -80,9 +80,9 @@ const LeaveEncashment = () => {
     ];
 
     return (
-        <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
-            <div className="p-4 md:p-8 max-w-screen-2xl mx-auto">
-                <div className="flex justify-between items-center mb-6">
+        <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
+                <div className="flex justify-between items-center">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Leave Encashment</h1>
                     <button
                         onClick={() => setShowRequestForm(!showRequestForm)}
@@ -169,7 +169,7 @@ const LeaveEncashment = () => {
                         <h2 className="text-lg font-semibold">Encashment History</h2>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-[640px] w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Leave Type</th>

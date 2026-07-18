@@ -16,6 +16,7 @@ import attendanceRouter from "../routes/Both/AttendanceRoutes.js";
 import organizationTimezoneRouter from "../routes/Both/OrganizationTimezoneRoutes.js";
 import attendanceRegularizationRouter from "../routes/Both/AttendanceRegularizationRoutes.js";
 import taxRegimeChangeRouter from "../routes/Both/TaxRegimeChangeRoutes.js";
+import wfhRequestRouter from "../routes/Both/WfhRequestRoutes.js";
 import payrollRouter from "../routes/Admin/PayrollRoutes.js";
 import profileDetailsRouter from "../routes/Employee/ProfileDetailsRoutes.js";
 import employeeCalendarRouter from "../routes/Employee/EmployeeCalendarRoutes.js";
@@ -126,6 +127,7 @@ export const registerRoutes = (app) => {
   app.use("/api/v1/both/organization-timezone", organizationTimezoneRouter);
   app.use("/api/v1/both/attendance-regularization", attendanceRegularizationRouter);
   app.use("/api/v1/both/tax-regime-change", taxRegimeChangeRouter);
+  app.use("/api/v1/both/wfh-requests", wfhRequestRouter);
   app.use("/api/v1/both/notification", notificationRouter);
   app.use("/api/v1/both/push-subscription", pushSubscriptionRouter);
   app.use("/api/v1/both/profile-details", profileDetailsRouter);

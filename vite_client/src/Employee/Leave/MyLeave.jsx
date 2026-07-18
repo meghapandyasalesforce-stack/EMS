@@ -261,11 +261,11 @@ const MyLeavePage = () => {
   const formatRemaining = (value) => (value == null ? '—' : value);
 
   return (
-    <div className="min-h-screen bg-gray-100 pt-16 lg:pt-0 transition-all duration-300">
-      <div className="p-4 md:p-8 max-w-screen-2xl mx-auto">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+    <div className="page-shell min-h-screen bg-gray-100 transition-all duration-300">
+      <div className="page-shell-inner hrms-stack">
+        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">My Leave Dashboard</h1>
-          <div className="flex space-x-2 w-full md:w-auto">
+          <div className="flex w-full flex-wrap gap-2 md:w-auto md:space-x-0">
             <button
               onClick={() => setActiveTab('leaves')}
               className={`px-3 py-1 md:px-4 md:py-2 rounded-lg text-sm md:text-base ${
@@ -294,13 +294,13 @@ const MyLeavePage = () => {
         </header>
 
         {/* Leave Balance from Policy */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
+        <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-bold">Leave Balance ({selectedYear})</h2>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="border rounded px-3 py-2"
+              className="w-full rounded border px-3 py-2 sm:w-auto"
             >
               {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
                 <option key={y} value={y}>{y}</option>
@@ -317,7 +317,7 @@ const MyLeavePage = () => {
               )}
               {(() => {
                 return (
-                  <div className="max-w-md bg-gray-50 rounded-lg p-4">
+                  <div className="w-full min-w-0 rounded-lg bg-gray-50 p-4">
                     <h3 className="font-semibold mb-2">Employee Leave Summary</h3>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
@@ -378,11 +378,11 @@ const MyLeavePage = () => {
         </div>
 
         {/* Monthly Leave Usage */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4">Monthly Leave Usage</h2>
+        <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
+          <h2 className="mb-4 text-xl font-bold">Monthly Leave Usage</h2>
           {monthlyLeaves.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-[640px] w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
@@ -471,7 +471,7 @@ const MyLeavePage = () => {
                 <h2 className="text-lg font-semibold text-gray-800">Leave History</h2>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-[640px] w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>

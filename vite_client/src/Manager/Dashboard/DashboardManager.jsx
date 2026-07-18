@@ -614,7 +614,7 @@ const DashboardManager = () => {
     
     if (user?.mustResetPassword) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
+            <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
                 <PasswordResetPopup onClose={() => navigate('/login')} />
             </div>
         );
@@ -626,7 +626,7 @@ const DashboardManager = () => {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-red-600 font-medium mb-4">Error: {error}</p>
                     <button 
@@ -642,7 +642,7 @@ const DashboardManager = () => {
 
     if (!user) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-gray-600 font-medium mb-4">Please log in to access the dashboard</p>
                     <button 
@@ -674,10 +674,12 @@ const DashboardManager = () => {
         return dueDate < new Date() && task.status !== 'Completed' && task.status !== 'completed';
     }).length;
     return (
-        <div className="min-h-screen bg-[#f6f8fb] p-4 sm:p-5 transition-all duration-300">
+        <div className="min-h-screen bg-[#f6f8fb] transition-all duration-300">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="mx-auto max-w-[1400px] space-y-6">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
                 <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm md:px-6">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -747,8 +749,8 @@ const DashboardManager = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 items-stretch">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                <div className="hrms-main-rail items-stretch">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="mb-4 flex items-center justify-between">
                             <h3 className="text-2xl font-semibold text-slate-900">Attendance Health</h3>
                             <div className="flex items-center gap-4 text-xs text-slate-500">
@@ -894,8 +896,8 @@ const DashboardManager = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+                <div className="hrms-main-rail">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Team Approvals</h3>
                         <div className="space-y-4">
                             {teamPendingLeaves.slice(0, 2).map((leave, index) => (
@@ -996,9 +998,11 @@ const DashboardManager = () => {
                     </div>
                 </div>
             </div>
+            </div>
+            </div>
 
             <button
-                className="fixed bottom-8 right-8 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
+                className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600"
                 onClick={() => navigate('/leave-management')}
             >
                 <FaPlus />

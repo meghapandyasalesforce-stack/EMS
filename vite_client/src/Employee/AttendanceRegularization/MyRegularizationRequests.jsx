@@ -214,12 +214,12 @@ const MyRegularizationRequests = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
+            <div className="w-full max-w-[1600px] mx-auto">
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6 min-w-0">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-800">My Attendance Regularization Requests</h1>
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 break-words">My Attendance Regularization Requests</h1>
                             <p className="text-gray-600 mt-1">Request corrections for your attendance records</p>
                             {limitsLoading ? (
                                 <p className="text-sm text-gray-500 mt-1">Loading monthly regularization limit...</p>
@@ -246,7 +246,7 @@ const MyRegularizationRequests = () => {
                                 setShowCreateModal(true);
                             }}
                             disabled={!canCreateRequest}
-                            className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <FaPlus />
                             New Request
@@ -254,20 +254,22 @@ const MyRegularizationRequests = () => {
                     </div>
 
                     {/* Filter Tabs */}
-                    <div className="flex gap-2 mb-6 border-b">
-                        {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((status) => (
-                            <button
-                                key={status}
-                                onClick={() => setFilterStatus(status)}
-                                className={`px-4 py-2 font-medium text-sm transition-colors ${
-                                    filterStatus === status
-                                        ? 'border-b-2 border-theme-secondary text-theme-secondary'
-                                        : 'text-gray-600 hover:text-gray-800'
-                                }`}
-                            >
-                                {status.charAt(0).toUpperCase() + status.slice(1)} ({requests.filter(r => status === 'all' || r.status === status).length})
-                            </button>
-                        ))}
+                    <div className="mb-6 w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+                        <div className="flex w-max min-w-full gap-2 border-b">
+                            {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={() => setFilterStatus(status)}
+                                    className={`shrink-0 whitespace-nowrap px-4 py-2 font-medium text-sm transition-colors ${
+                                        filterStatus === status
+                                            ? 'border-b-2 border-theme-secondary text-theme-secondary'
+                                            : 'text-gray-600 hover:text-gray-800'
+                                    }`}
+                                >
+                                    {status.charAt(0).toUpperCase() + status.slice(1)} ({requests.filter(r => status === 'all' || r.status === status).length})
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Requests List */}
@@ -297,8 +299,8 @@ const MyRegularizationRequests = () => {
                                     className="border rounded-lg p-4 hover:shadow-md transition-shadow"
                                 >
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-3 mb-2">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-3 mb-2">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusBadge(request.status)}`}>
                                                     {request.status}
                                                 </span>
@@ -309,7 +311,7 @@ const MyRegularizationRequests = () => {
                                                     {format(new Date(request.attendanceDate), 'MMM dd, yyyy')}
                                                 </span>
                                             </div>
-                                            <div className="text-sm text-gray-600 space-y-1">
+                                            <div className="text-sm text-gray-600 space-y-1 break-words">
                                                 {request.requestedClockIn && (
                                                     <p><strong>Requested Clock In:</strong> {format(new Date(request.requestedClockIn), 'hh:mm a')}</p>
                                                 )}
@@ -343,8 +345,8 @@ const MyRegularizationRequests = () => {
 
             {/* Create Request Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
+                    <div className="bg-white rounded-lg p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-x-hidden overflow-y-auto">
                         <h3 className="text-lg font-semibold mb-4">Create Attendance Regularization Request</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
@@ -451,7 +453,7 @@ const MyRegularizationRequests = () => {
                                 <p className="text-xs text-gray-500 mt-1">{formData.reason.length}/500 characters</p>
                             </div>
 
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex flex-wrap gap-2 justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {

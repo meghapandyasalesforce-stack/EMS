@@ -137,9 +137,7 @@ const ProfileDetailsPage = lazy(() => import('../Employee/Profile details/Profil
 export const profileDetailRoutes = [
   { path: '/profile-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/contact-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
-  { path: '/next-of-kin-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/education-qualifications', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
-  { path: '/guarantor-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/family-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/job-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] },
   { path: '/financial-details', component: ProfileDetailsPage, message: 'Loading profile details...', allowedRoles: [] }
@@ -149,9 +147,7 @@ export const renderProfileRoutes = () => {
   const paths = [
     '/profile-details',
     '/contact-details',
-    '/next-of-kin-details',
     '/education-qualifications',
-    '/guarantor-details',
     '/family-details',
     '/job-details',
     '/financial-details',

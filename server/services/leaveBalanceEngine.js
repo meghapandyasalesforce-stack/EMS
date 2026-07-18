@@ -165,6 +165,10 @@ class LeaveBalanceEngine {
                 if (!pooledTypeSet.has(typeBalance.leaveType)) {
                     continue;
                 }
+                // Leave-type Balance Adjustment owns this type independently.
+                if (typeBalance.manualOverride?.active) {
+                    continue;
+                }
                 typeBalance.available = sharedAvailable;
             }
 
@@ -328,27 +332,23 @@ class LeaveBalanceEngine {
             typeBalance.expired = expired;
         }
 
-        // Preserve manual corrections from admin / HR / manager
+        // Preserve manual corrections from admin / HR / manager (per leave type — independent of pool)
         if (typeBalance.manualOverride?.active) {
             const mo = typeBalance.manualOverride;
-            const employeeWalletOverride = balance.employeeLeaveSummary?.manualOverride?.active;
-            if (pooledAvailable && employeeWalletOverride) {
-                // Employee wallet override owns the shared balance.
-            } else if (pooledAvailable) {
-                if (mo.used != null && !Number.isNaN(Number(mo.used))) {
-                    typeBalance.used = Number(mo.used);
-                }
-            } else {
-                if (mo.accrued != null && !Number.isNaN(Number(mo.accrued))) {
-                    typeBalance.accrued = Number(mo.accrued);
-                }
-                if (mo.used != null && !Number.isNaN(Number(mo.used))) {
-                    typeBalance.used = Number(mo.used);
-                }
-                if (mo.carriedForward != null && !Number.isNaN(Number(mo.carriedForward))) {
-                    typeBalance.carriedForward = Number(mo.carriedForward);
-                }
+            if (mo.accrued != null && !Number.isNaN(Number(mo.accrued))) {
+                typeBalance.accrued = Number(mo.accrued);
             }
+            if (mo.used != null && !Number.isNaN(Number(mo.used))) {
+                typeBalance.used = Number(mo.used);
+            }
+            if (mo.carriedForward != null && !Number.isNaN(Number(mo.carriedForward))) {
+                typeBalance.carriedForward = Number(mo.carriedForward);
+            }
+            typeBalance.available = Math.max(
+                0,
+                roundLeaveDays((typeBalance.accrued || 0) - (typeBalance.used || 0))
+            );
+            return;
         }
 
         // Available follows rolling month-by-month balance (pending/expired reduce usable amount)

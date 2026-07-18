@@ -697,7 +697,7 @@ const DashboardHR = () => {
 
     if (user?.mustResetPassword) {
         return (
-            <div className="min-h-screen bg-[#F5F7FB] p-4 sm:p-5">
+            <div className="min-h-screen bg-[#F5F7FB] p-3 sm:p-4">
                 <PasswordResetPopup onClose={() => navigate('/login')} />
             </div>
         );
@@ -749,10 +749,12 @@ const DashboardHR = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F7FB] p-4 sm:p-5 md:p-6 lg:p-8">
+        <div className="min-h-screen bg-[#F5F7FB]">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="mx-auto max-w-[1400px] space-y-6">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
                 <header
                     className="rounded-[32px] border bg-white/95 p-5 shadow-sm backdrop-blur md:p-6"
                     style={{ borderColor: WS.border }}
@@ -875,8 +877,8 @@ const DashboardHR = () => {
                     />
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <Panel title="Monthly Hiring vs Attrition" className="xl:col-span-2">
+                <div className="hrms-main-rail">
+                    <Panel title="Monthly Hiring vs Attrition">
                         <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-2">
                                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -950,17 +952,20 @@ const DashboardHR = () => {
 
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                     <Panel title="Headcount by Department">
-                        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-                            <div className="relative h-[240px]">
+                        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                            <div className="relative h-[220px] w-full max-w-[220px] justify-self-center">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={departmentData}
                                             dataKey="count"
                                             nameKey="name"
-                                            innerRadius={62}
-                                            outerRadius={86}
-                                            paddingAngle={4}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={56}
+                                            outerRadius={78}
+                                            paddingAngle={2}
+                                            cornerRadius={4}
                                             stroke="none"
                                         >
                                             {departmentData.map((entry) => (
@@ -1064,8 +1069,8 @@ const DashboardHR = () => {
                     </Panel>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <Panel title="Recent Hires" className="xl:col-span-2">
+                <div className="hrms-main-rail">
+                    <Panel title="Recent Hires">
                         <div className="mb-4 flex items-center justify-between gap-3">
                             <p className="text-sm text-slate-500">
                                 {searchQuery ? `Filtered by "${searchQuery}"` : 'Newest additions to your workforce'}
@@ -1181,6 +1186,8 @@ const DashboardHR = () => {
                         Refreshing dashboard widgets...
                     </div>
                 ) : null}
+            </div>
+            </div>
             </div>
         </div>
     );

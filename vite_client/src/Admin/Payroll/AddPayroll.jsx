@@ -287,8 +287,8 @@ const AddPayroll = () => {
     const { earningsTotal, deductionsTotal, inHandSalary } = calculateTotals();
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-4xl mx-auto">
+        <div className="page-shell min-h-screen bg-gray-50">
+            <div className="page-shell-inner">
                 {/* Header */}
                 <div className="mb-8">
                     <div className="flex items-center space-x-4 mb-4">
@@ -321,7 +321,7 @@ const AddPayroll = () => {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-8">
+                <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 lg:p-6">
                     {/* Employee Selection */}
                     <div className="mb-8">
                         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -606,7 +606,7 @@ const AddPayroll = () => {
                     </div>
 
                     {/* Submit Button */}
-                    <div className="flex justify-end space-x-4">
+                    <div className="flex flex-wrap justify-end gap-3">
                         <button
                             type="button"
                             onClick={() => navigate('/admin-payroll')}

@@ -63,7 +63,7 @@ const AllAttendanceStatsComponent = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Main Content - responsive to sidebar state */}
-      <div className="transition-all duration-300 ease-in-out lg:pl-8 p-4 lg:p-8">
+      <div className="transition-all duration-300 ease-in-out lg:pl-6 p-3 sm:p-4 lg:p-6">
         {!showEmployeeDetails ? (
           <>
             <h2 className="text-xl lg:text-2xl font-bold mb-6 text-gray-800">Employee Attendance</h2>

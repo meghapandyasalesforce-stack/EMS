@@ -386,16 +386,29 @@ const AllAttendanceStatsComponent = () => {
       /* eslint-enable no-await-in-loop */
 
       const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const headers = ['Name', 'Email', 'Department', 'Date', 'In', 'Out', 'Hours', 'Break', 'Status', 'Location'];
+      // Existing columns preserved; new columns appended at the end only.
+      const headers = [
+        'Name', 'Email', 'Department', 'Date', 'In', 'Out', 'Hours', 'Break', 'Status', 'Location',
+        'Employee ID', 'Attendance Type', 'Verified Status',
+      ];
       const lines = [headers.join(',')];
       for (const r of rowsOut) {
         const name = [r.employee?.name, r.employee?.lastName].filter(Boolean).join(' ').trim();
+        const isWfh = r.uiStatus === 'wfh' || r.workLocation === 'work_from_home';
+        const hasPunch = !!r.clockIn;
         const loc =
           r.uiStatus === 'wfh'
             ? 'Remote'
             : r.uiStatus === 'absent' || r.uiStatus === 'leave'
               ? '—'
               : 'Office';
+        const attendanceType = !hasPunch ? '—' : isWfh ? 'Work From Home' : 'Office';
+        // Verified applies to office punches only (GPS geofence match)
+        const verifiedStatus = !hasPunch || isWfh
+          ? 'N/A'
+          : r.locationVerified === true
+            ? 'Verified'
+            : 'Non-Verified';
         lines.push(
           [
             escape(name),
@@ -408,10 +421,14 @@ const AllAttendanceStatsComponent = () => {
             escape(formatBreakMinutes(toBreakMinutes(r))),
             escape(r.uiStatus),
             escape(loc),
+            escape(r.employee?.employeeId),
+            escape(attendanceType),
+            escape(verifiedStatus),
           ].join(',')
         );
       }
-      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      // UTF-8 BOM so Excel decodes special characters (e.g. em dash) correctly
+      const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -451,19 +468,19 @@ const AllAttendanceStatsComponent = () => {
   if (showEmployeeDetails && employeeDetails) {
     const recordsFull = employeeStats?.recentRecords || [];
     return (
-      <div className="min-h-screen bg-[#f4f7f6]">
-        <div className="p-4 lg:p-8 max-w-[1200px] mx-auto">
+      <div className="page-shell min-h-screen bg-[#f4f7f6]">
+        <div className="page-shell-inner hrms-stack">
           <button
             type="button"
             onClick={handleBackToList}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium"
+            className="inline-flex items-center gap-2 text-sm font-medium"
             style={{ color: TEAL }}
           >
             <FiChevronLeft className="h-5 w-5" />
             Back to team history
           </button>
 
-          <div className="rounded-2xl bg-white shadow-sm border border-slate-100 p-6 mb-6">
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">
               {employeeDetails.name} {employeeDetails.lastName || ''}
               {employeeDetails.employeeId ? (
@@ -506,7 +523,7 @@ const AllAttendanceStatsComponent = () => {
               </h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-[640px] w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50/80">
                     <th className="px-6 py-3">Date</th>
@@ -549,9 +566,9 @@ const AllAttendanceStatsComponent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6]">
-      <div className="p-4 lg:p-8 max-w-[1400px] mx-auto">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+    <div className="page-shell min-h-screen bg-[#f4f7f6]">
+      <div className="page-shell-inner hrms-stack">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Attendance History</h1>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -580,7 +597,7 @@ const AllAttendanceStatsComponent = () => {
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{errMsg}</div>
         ) : null}
 
-        <section className="rounded-2xl bg-white shadow-sm border border-slate-100 p-5 lg:p-6 mb-6">
+        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm lg:p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
@@ -659,6 +676,7 @@ const AllAttendanceStatsComponent = () => {
               { id: 'late', label: 'Late' },
               { id: 'absent', label: 'Absent' },
               { id: 'leave', label: 'On Leave' },
+              { id: 'office', label: 'Office' },
               { id: 'wfh', label: 'WFH' },
             ].map((chip) => (
               <button
@@ -691,7 +709,7 @@ const AllAttendanceStatsComponent = () => {
               <select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-[200px] max-w-full"
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px] max-w-full"
               >
                 <option value="">All departments</option>
                 {departmentSelectOptions.map((d) => (
@@ -706,7 +724,7 @@ const AllAttendanceStatsComponent = () => {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-[200px]"
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm min-w-0 w-full sm:min-w-[200px]"
               >
                 <option value="date_desc">Date descending</option>
                 <option value="date_asc">Date ascending</option>
@@ -715,7 +733,7 @@ const AllAttendanceStatsComponent = () => {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               title: 'Avg attendance %',
@@ -757,7 +775,7 @@ const AllAttendanceStatsComponent = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <div className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">Daily attendance %</h3>
             <div className="h-[280px] w-full">
@@ -813,7 +831,7 @@ const AllAttendanceStatsComponent = () => {
 
         <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[760px] w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50/90 border-b border-slate-100">
                   <th className="px-4 py-4 pl-6">Team member</th>
@@ -933,7 +951,7 @@ const AllAttendanceStatsComponent = () => {
           </div>
 
           {!team.records?.length && !team.loading ? (
-            <p className="py-12 text-center text-slate-500 text-sm">No attendance rows match your filters.</p>
+            <p className="py-8 sm:py-10 text-center text-slate-500 text-sm">No attendance rows match your filters.</p>
           ) : null}
 
           <footer className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 bg-slate-50/50">

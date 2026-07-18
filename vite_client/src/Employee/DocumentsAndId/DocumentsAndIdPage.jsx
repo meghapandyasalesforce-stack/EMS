@@ -230,15 +230,15 @@ const DocumentsAndIdPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] p-4 sm:p-6 transition-all duration-300">
-      <div className="mx-auto max-w-[1240px] space-y-6">
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight text-slate-900">Personal Documents</h1>
-              <p className="mt-1 text-slate-600">Manage your identity files and secure records in one place.</p>
+    <div className="page-shell min-h-screen bg-[#F4F6FB] transition-all duration-300">
+      <div className="page-shell-inner hrms-stack">
+        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">Personal Documents</h1>
+              <p className="mt-1 text-sm text-slate-600 sm:text-base">Manage your identity files and secure records in one place.</p>
             </div>
-            <div className="relative w-full md:w-[360px]">
+            <div className="relative w-full lg:max-w-sm lg:shrink-0">
               <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -249,9 +249,9 @@ const DocumentsAndIdPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="space-y-6 xl:col-span-2">
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="hrms-main-rail">
+          <div className="min-w-0 space-y-6">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                 <span className="inline-flex rounded-full bg-[#20C997]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#0a8f6c]">
                   Company Identity
@@ -532,7 +532,7 @@ const DocumentsAndIdPage = () => {
             <p className="text-sm text-slate-500">No contracts or letters available.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-max text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="border-b text-left text-slate-500">
                   <tr>
                     <th className="py-2 pr-3">Document Name</th>
@@ -577,8 +577,8 @@ const DocumentsAndIdPage = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm lg:col-span-2">
+        <div className="hrms-main-rail">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm min-w-0">
             <h3 className="mb-4 border-l-4 border-[#20C997] pl-3 text-2xl font-semibold text-slate-900">Data Privacy & Security</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>

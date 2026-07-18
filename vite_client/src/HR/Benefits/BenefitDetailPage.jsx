@@ -125,13 +125,13 @@ const BenefitDetailPage = () => {
     const pendingEnrollments = enrollments.filter(e => e.status === 'Pending').length;
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
                 {/* Header */}
-                <div className="mb-6">
+                <div>
                     <button
                         onClick={() => navigate('/benefits')}
-                        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
+                        className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-800"
                     >
                         <FaArrowLeft /> Back to Benefits
                     </button>
@@ -151,9 +151,9 @@ const BenefitDetailPage = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="hrms-main-rail">
                     {/* Main Content */}
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="min-w-0 space-y-6">
                         {/* Plan Details */}
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h2 className="text-xl font-semibold mb-4">Plan Details</h2>
@@ -332,7 +332,7 @@ const BenefitDetailPage = () => {
                     </div>
 
                     {/* Sidebar */}
-                    <div className="space-y-6">
+                    <div className="min-w-0 space-y-6">
                         {/* Enrollment Stats */}
                         {isPrivilegedView && (
                         <div className="bg-white rounded-lg shadow-md p-6">

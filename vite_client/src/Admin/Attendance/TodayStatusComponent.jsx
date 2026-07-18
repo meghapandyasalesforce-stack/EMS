@@ -124,19 +124,19 @@ const TodayStatusComponent = () => {
     );
   if (error)
     return (
-      <div className="text-red-600 text-center py-12 bg-[#f4f7f6]">
+      <div className="text-red-600 text-center py-8 sm:py-10 bg-[#f4f7f6]">
         {error.message || 'Something went wrong'}
       </div>
     );
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6]">
-      <div className="p-4 lg:p-8 max-w-[1400px] mx-auto">
-        <header className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-8">
+    <div className="page-shell min-h-screen bg-[#f4f7f6]">
+      <div className="page-shell-inner hrms-stack">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">{headerDate}</p>
-            <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Today's live roster</h1>
-            <p className="text-slate-600 text-sm mt-1">Who's in, on break, or absent right now</p>
+            <p className="mb-1 text-sm font-medium text-slate-500">{headerDate}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Today's live roster</h1>
+            <p className="mt-1 text-sm text-slate-600">Who's in, on break, or absent right now</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -160,7 +160,7 @@ const TodayStatusComponent = () => {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               title: 'Present now',
@@ -212,7 +212,7 @@ const TodayStatusComponent = () => {
             <h2 className="text-lg font-semibold text-slate-900">Present ({presentEmployees.length})</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
                   <th className="px-6 py-3">Team member</th>
@@ -299,7 +299,7 @@ const TodayStatusComponent = () => {
             </table>
           </div>
           {presentEmployees.length === 0 ? (
-            <p className="py-12 text-center text-slate-500 text-sm">No employees are checked in yet.</p>
+            <p className="py-8 sm:py-10 text-center text-slate-500 text-sm">No employees are checked in yet.</p>
           ) : null}
         </section>
 
@@ -309,7 +309,7 @@ const TodayStatusComponent = () => {
               <h2 className="text-lg font-semibold text-slate-900">On break ({onBreakEmployees.length})</h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-[640px] w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
                     <th className="px-6 py-3">Team member</th>
@@ -359,7 +359,7 @@ const TodayStatusComponent = () => {
             <h2 className="text-lg font-semibold text-slate-900">Absent ({absentEmployees.length})</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
                   <th className="px-6 py-3">Team member</th>
@@ -393,7 +393,7 @@ const TodayStatusComponent = () => {
             </table>
           </div>
           {absentEmployees.length === 0 ? (
-            <p className="py-12 text-center text-slate-500 text-sm">Everyone checked in.</p>
+            <p className="py-8 sm:py-10 text-center text-slate-500 text-sm">Everyone checked in.</p>
           ) : null}
         </section>
       </div>

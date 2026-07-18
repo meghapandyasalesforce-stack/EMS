@@ -418,8 +418,8 @@ const UpdatePayroll = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-      <div className="max-w-5xl mx-auto">
+    <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+      <div className="page-shell-inner">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Update Payroll</h2>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">{error}</div>}

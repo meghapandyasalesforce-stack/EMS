@@ -118,7 +118,15 @@ export const getAllEmployees = async (req, res) => {
         const organizationId = getOrganizationId(req);
 
         const scope = req.authContext ? getDataScope(req.authContext) : 'organization';
-        const shouldApplyManagerFilter = scope === 'team' && req.employee;
+        // Line managers must only see their own direct reports on My Team / employee list,
+        // even if they also have project permissions that widen dataScope elsewhere.
+        // HR Manager / HR Executive / Org Owner keep organization-wide employee lists.
+        const isLineManagerOnly =
+            Boolean(req.authContext?.isLineManager) &&
+            !req.authContext?.isHrManager &&
+            !req.authContext?.isHrExecutive &&
+            !req.authContext?.isOrgOwner;
+        const shouldApplyManagerFilter = (scope === 'team' || isLineManagerOnly) && req.employee;
         if (shouldApplyManagerFilter) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
@@ -130,7 +138,7 @@ export const getAllEmployees = async (req, res) => {
             logger.info('Manager filtering employees by manager field', {
                 managerId: req.employee._id,
                 managerName: managerName,
-                matchingCriteria: 'Employees where manager field matches manager name'
+                matchingCriteria: 'Employees where managerId/manager field matches this manager'
             });
         }
 

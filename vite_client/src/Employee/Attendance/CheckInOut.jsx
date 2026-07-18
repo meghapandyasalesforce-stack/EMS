@@ -109,6 +109,21 @@ const CheckInOut = () => {
       : locationRequiredUI && !attendanceRule?.enableSimplePunches)
   );
 
+  // Org-level WFH availability (defaults to allowed when the rule doesn't specify)
+  const wfhAllowedUI = attendanceRule?.allowWorkFromHome !== false;
+  // WFH punch selected: office radius must not gate the punch-in button
+  const isWfhSelectedUI = wfhAllowedUI && (workLocation === 'home' || workLocation === 'work_from_home');
+  // WFH session in progress: office radius must not gate the punch-out button
+  const isWfhSessionUI =
+    currentSession?.workLocation === 'work_from_home' || currentSession?.workLocation === 'home';
+
+  // If org disables WFH, fall back to office selection
+  useEffect(() => {
+    if (!wfhAllowedUI && workLocation !== 'office') {
+      setWorkLocation('office');
+    }
+  }, [wfhAllowedUI, workLocation]);
+
   // Get current location with permission check
   const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
@@ -543,12 +558,15 @@ const CheckInOut = () => {
                                       attendanceRule.coordinates.latitude &&
                                       attendanceRule.coordinates.longitude;
 
-      const requiresLocation = !!(hasRuleWithCoordinates && (
+      // WFH punch: location is captured for record purposes only — never required, radius never enforced
+      const isWfhPunch = workLocation === 'home' || workLocation === 'work_from_home';
+
+      const requiresLocation = !isWfhPunch && !!(hasRuleWithCoordinates && (
         typeof attendanceRule.locationRequired === 'boolean'
           ? attendanceRule.locationRequired
           : !attendanceRule.enableSimplePunches
       ));
-      const enforceOfficeRadius = !!(hasRuleWithCoordinates && (
+      const enforceOfficeRadius = !isWfhPunch && !!(hasRuleWithCoordinates && (
         typeof attendanceRule.enforceOfficeRadius === 'boolean'
           ? attendanceRule.enforceOfficeRadius
           : requiresLocation && !attendanceRule.enableSimplePunches
@@ -841,12 +859,16 @@ const CheckInOut = () => {
         attendanceRule.coordinates.latitude &&
         attendanceRule.coordinates.longitude;
 
-      const requiresLocationForCheckout = !!(hasRuleWithCoordinates && (
+      // WFH session: clock-out allowed from anywhere (location captured for record only)
+      const isWfhSession =
+        currentSession?.workLocation === 'work_from_home' || currentSession?.workLocation === 'home';
+
+      const requiresLocationForCheckout = !isWfhSession && !!(hasRuleWithCoordinates && (
         typeof attendanceRule.locationRequired === 'boolean'
           ? attendanceRule.locationRequired
           : !attendanceRule.enableSimplePunches
       ));
-      const enforceOfficeRadiusCheckout = !!(hasRuleWithCoordinates && (
+      const enforceOfficeRadiusCheckout = !isWfhSession && !!(hasRuleWithCoordinates && (
         typeof attendanceRule.enforceOfficeRadius === 'boolean'
           ? attendanceRule.enforceOfficeRadius
           : requiresLocationForCheckout && !attendanceRule.enableSimplePunches
@@ -1094,28 +1116,28 @@ const CheckInOut = () => {
   return (
     <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
       {/* Enhanced Header */}
-      <div className="bg-theme-primary px-8 py-6 relative overflow-hidden">
+      <div className="bg-theme-primary px-4 sm:px-8 py-5 sm:py-6 relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent"></div>
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
         
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg">
-              <FiClock className="w-7 h-7 text-white" />
+        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg shrink-0">
+              <FiClock className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-1">Check In / Check Out</h2>
+            <div className="min-w-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">Check In / Check Out</h2>
               <p className="text-indigo-100 text-sm font-medium">Track your work hours with precision</p>
             </div>
           </div>
           
           {/* Enhanced Real-time Clock */}
-          <div className="bg-white/15 backdrop-blur-md text-white px-6 py-3 rounded-2xl flex items-center gap-3 shadow-lg border border-white/20">
+          <div className="bg-white/15 backdrop-blur-md text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl flex items-center gap-3 shadow-lg border border-white/20 self-start sm:self-auto">
             <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse shadow-lg"></div>
             <div className="text-right">
-              <div className="text-2xl font-mono font-bold">{format(currentTime, 'HH:mm:ss')}</div>
+              <div className="text-xl sm:text-2xl font-mono font-bold">{format(currentTime, 'HH:mm:ss')}</div>
               <div className="text-xs text-indigo-100 font-medium">{format(currentTime, 'EEEE, MMM dd')}</div>
             </div>
           </div>
@@ -1124,7 +1146,7 @@ const CheckInOut = () => {
 
       {/* Error Display */}
       {error && (
-        <div className="mx-8 mt-6">
+        <div className="mx-4 sm:mx-8 mt-6">
           <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 text-red-800 p-6 rounded-2xl shadow-lg" role="alert">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1162,7 +1184,7 @@ const CheckInOut = () => {
           </div>
         </div>
       ) : (
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-6">
           {/* Permission Status Indicators */}
           <div className="mb-6 bg-gray-50 rounded-xl p-4 border border-gray-200">
             <div className="flex items-center justify-between mb-3">
@@ -1515,13 +1537,13 @@ const CheckInOut = () => {
                   <div className="flex gap-3">
                     <button
                       onClick={handleClockOut}
-                      disabled={loading || isOnBreak || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)}
+                      disabled={loading || isOnBreak || isProcessing || (enforceOfficeRadiusUI && !isWfhSessionUI && isWithinRadius === false)}
                       className={`flex-1 py-4 px-6 rounded-2xl text-white font-bold flex items-center justify-center gap-3 text-lg shadow-lg transition-all duration-200 ${
-                        loading || isOnBreak || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)
+                        loading || isOnBreak || isProcessing || (enforceOfficeRadiusUI && !isWfhSessionUI && isWithinRadius === false)
                           ? 'bg-gray-400 cursor-not-allowed' 
                           : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 hover:shadow-xl transform hover:scale-105'
                       }`}
-                      title={enforceOfficeRadiusUI && isWithinRadius === false 
+                      title={enforceOfficeRadiusUI && !isWfhSessionUI && isWithinRadius === false 
                         ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check out.`
                         : 'Check Out'}
                     >
@@ -1530,7 +1552,7 @@ const CheckInOut = () => {
                           <FiLoader className="animate-spin w-5 h-5" />
                           Processing...
                         </>
-                      ) : enforceOfficeRadiusUI && isWithinRadius === false ? (
+                      ) : enforceOfficeRadiusUI && !isWfhSessionUI && isWithinRadius === false ? (
                         <>
                           <FiXCircle className="w-5 h-5" />
                           Outside Radius
@@ -1603,10 +1625,11 @@ const CheckInOut = () => {
                     />
                     <div className="flex flex-col items-center">
                       <FiMapPin className={`text-2xl mb-2 ${workLocation === 'office' ? 'text-theme-secondary' : 'text-gray-500'}`} />
-                      <span className={`font-semibold ${workLocation === 'office' ? 'text-theme-secondary' : 'text-gray-700'}`}>Office</span>
+                      <span className={`font-semibold ${workLocation === 'office' ? 'text-theme-secondary' : 'text-gray-700'}`}>Punch In – Office</span>
                     </div>
                   </label>
 
+                  {wfhAllowedUI && (
                   <label className={`flex items-center cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 ${
                     workLocation === 'home' 
                       ? 'border-theme-primary bg-gradient-to-br from-white to-theme-primary/10' 
@@ -1622,9 +1645,10 @@ const CheckInOut = () => {
                     />
                     <div className="flex flex-col items-center">
                       <FiHome className={`text-2xl mb-2 ${workLocation === 'home' ? 'text-theme-primary' : 'text-gray-500'}`} />
-                      <span className={`font-semibold ${workLocation === 'home' ? 'text-theme-primary' : 'text-gray-700'}`}>Home</span>
+                      <span className={`font-semibold ${workLocation === 'home' ? 'text-theme-primary' : 'text-gray-700'}`}>Punch In – Work From Home</span>
                     </div>
                   </label>
+                  )}
                 </div>
               </div>
 
@@ -1720,13 +1744,13 @@ const CheckInOut = () => {
               {/* Enhanced Check In Button */}
               <button
                 onClick={handleClockIn}
-                disabled={loading || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)}
+                disabled={loading || isProcessing || (enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false)}
                 className={`w-full max-w-md py-5 px-8 rounded-2xl text-white font-bold text-xl shadow-xl transition-all duration-200 ${
-                  loading || isProcessing || (enforceOfficeRadiusUI && isWithinRadius === false)
+                  loading || isProcessing || (enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false)
                     ? 'bg-gray-400 cursor-not-allowed' 
                     : 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] hover:opacity-90 hover:shadow-2xl transform hover:scale-105'
                 }`}
-                title={enforceOfficeRadiusUI && isWithinRadius === false 
+                title={enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false 
                   ? `You are ${distanceFromOffice}m away. Please move within ${attendanceRule.maximumRadius}m to check in.`
                   : 'Check In'}
               >
@@ -1735,15 +1759,15 @@ const CheckInOut = () => {
                     <FiLoader className="animate-spin w-6 h-6 mr-3" />
                     Processing...
                   </div>
-                ) : enforceOfficeRadiusUI && isWithinRadius === false ? (
+                ) : enforceOfficeRadiusUI && !isWfhSelectedUI && isWithinRadius === false ? (
                   <div className="flex items-center justify-center">
                     <FiXCircle className="w-6 h-6 mr-3" />
                     Outside Radius
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">
-                    <FiClock className="w-6 h-6 mr-3" />
-                    Check In
+                    {isWfhSelectedUI ? <FiHome className="w-6 h-6 mr-3" /> : <FiClock className="w-6 h-6 mr-3" />}
+                    {isWfhSelectedUI ? 'Check In (Work From Home)' : 'Check In'}
                   </div>
                 )}
               </button>
@@ -1754,9 +1778,9 @@ const CheckInOut = () => {
 
       {/* Enhanced Camera Modal */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-gray-200">
-            <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-3xl p-4 sm:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-theme-secondary/10 rounded-2xl flex items-center justify-center">
                   <FiCamera className="w-5 h-5 text-theme-secondary" />
@@ -1771,12 +1795,12 @@ const CheckInOut = () => {
               </button>
             </div>
             
-            <div className="relative mb-6">
+            <div className="relative mb-4 sm:mb-6">
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                className="w-full h-80 bg-gray-200 rounded-2xl shadow-lg"
+                className="w-full h-56 sm:h-80 bg-gray-200 rounded-2xl shadow-lg object-cover"
               />
               <canvas ref={canvasRef} className="hidden" />
             </div>
@@ -1802,7 +1826,7 @@ const CheckInOut = () => {
 
       {/* Enhanced Notification System */}
       {notification.show && (
-        <div className={`fixed bottom-6 right-6 p-6 rounded-2xl shadow-2xl text-white z-50 max-w-md border-2 ${
+        <div className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 p-4 sm:p-6 rounded-2xl shadow-2xl text-white z-50 sm:max-w-md border-2 ${
           notification.type === 'success' ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] border-theme-primary' : 
           notification.type === 'warning' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 border-yellow-400' : 
           'bg-gradient-to-r from-red-500 to-rose-600 border-red-400'

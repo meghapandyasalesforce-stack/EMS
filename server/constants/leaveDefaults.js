@@ -7,7 +7,7 @@ export const DEFAULT_MONTHLY_LEAVE_DAYS = 1.5;
 /** Earliest year selectable in leave history / recalculation UI */
 export const LEAVE_HISTORY_MIN_YEAR = 2016;
 
-export const LEAVE_TYPES_NO_CARRY_FORWARD = new Set(['loss_of_pay']);
+export const LEAVE_TYPES_NO_CARRY_FORWARD = new Set(['loss_of_pay', 'sick']);
 
 export function getEffectiveEntitlementAmount(leaveTypeConfig) {
     const maxAccrual = Number(leaveTypeConfig?.accrual?.maxAccrual);

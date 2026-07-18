@@ -67,7 +67,8 @@ const CreatePolicy = () => {
     };
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
+        <div className="page-shell">
+        <div className="page-shell-inner">
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Create Company Policy</h1>
                 <p className="text-gray-600 mt-2">Define a new policy for your organization</p>
@@ -221,6 +222,7 @@ const CreatePolicy = () => {
                     </button>
                 </div>
             </form>
+        </div>
         </div>
     );
 };

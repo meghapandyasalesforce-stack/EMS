@@ -4,9 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import ProfilePhotoUpload from '../Profile/ProfilePhotoUpload';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import ContactDetails from './ContactDetails';
-import NextOfKinDetails from '../Additional details/NextOfKinDetails';
 import EducationQualifications from './EducationQualifications';
-import GuarantorDetails from '../Additional details/GuarantorDetails';
 import FamilyDetails from '../Additional details/FamilyDetails';
 import JobDetails from '../Additional details/JobDetails';
 import FinancialDetails from './FinancialDetails';
@@ -93,9 +91,7 @@ function ProfileDetails() {
   const progressChecklist = [
     Boolean(formValues.firstName && formValues.lastName && formValues.dateOfBirth && formValues.gender && formValues.professionalBio), // Personal
     Boolean(profileSource?.phone1 && profileSource?.personalEmail && profileSource?.address), // Contact
-    Boolean((profileSource?.nextOfKins || []).length > 0), // Next of kin
     Boolean((profileSource?.academicRecords || []).length > 0 || (profileSource?.professionalQualifications || []).length > 0), // Education
-    Boolean((profileSource?.guarantors || []).length > 0), // Guarantor
     Boolean((profileSource?.familyDetails || []).length > 0), // Family
     Boolean(profileSource?.financialDetails?.bankName && profileSource?.financialDetails?.ifsc && profileSource?.financialDetails?.accountNo && profileSource?.financialDetails?.accountName), // Financial
     Boolean(profileSource?.documents && profileSource.documents.length > 0), // Job docs
@@ -105,6 +101,19 @@ function ProfileDetails() {
   const completionPercent = Math.max(10, Math.min(100, Math.round((completedSections / totalSections) * 100)));
   const stepsLeft = Math.max(0, totalSections - completedSections);
   const joinDateValue = employeeDetails?.joiningDate || user?.joiningDate;
+  const managerAssignedName = (() => {
+    const mgr = profileSource?.managerId || employeeDetails?.managerId || user?.managerId;
+    if (mgr && typeof mgr === 'object') {
+      const name = [mgr.name, mgr.lastName].filter(Boolean).join(' ').trim();
+      if (name) return name;
+    }
+    const managerName =
+      profileSource?.manager ||
+      employeeDetails?.manager ||
+      user?.manager ||
+      '';
+    return String(managerName).trim() || 'N/A';
+  })();
 
   const handleChange = (field, value) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
@@ -150,20 +159,16 @@ function ProfileDetails() {
   const tabs = [
     { id: 'personalDetails', label: 'Personal Details' },
     { id: 'contactDetails', label: 'Contact Details' },
-    { id: 'nextOfKinDetails', label: 'Next of kin Details' },
     { id: 'educationQualifications', label: 'Education Qualifications' },
-    { id: 'guarantorDetails', label: 'Guarantor Details' },
     { id: 'familyDetails', label: 'Family Details' },
-    { id: 'jobDetails', label: 'Job Details' },
+    { id: 'jobDetails', label: 'Documents' },
     { id: 'financialDetails', label: 'Financial Details' }
   ];
 
   const tabPathMap = {
     personalDetails: '/profile-details',
     contactDetails: '/contact-details',
-    nextOfKinDetails: '/next-of-kin-details',
     educationQualifications: '/education-qualifications',
-    guarantorDetails: '/guarantor-details',
     familyDetails: '/family-details',
     jobDetails: '/job-details',
     financialDetails: '/financial-details'
@@ -172,9 +177,7 @@ function ProfileDetails() {
   const pathTabMap = {
     '/profile-details': 'personalDetails',
     '/contact-details': 'contactDetails',
-    '/next-of-kin-details': 'nextOfKinDetails',
     '/education-qualifications': 'educationQualifications',
-    '/guarantor-details': 'guarantorDetails',
     '/family-details': 'familyDetails',
     '/job-details': 'jobDetails',
     '/financial-details': 'financialDetails'
@@ -235,10 +238,10 @@ function ProfileDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F7F5] p-4 transition-all duration-300 md:p-6">
-      <div className="mx-auto max-w-[1280px] space-y-5">
-        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="page-shell min-h-full w-full bg-[#F4F7F5] transition-all duration-300">
+      <div className="page-shell-inner hrms-stack">
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <p className="text-base font-semibold text-slate-800">Profile {completionPercent}% complete</p>
             <p className="text-sm font-semibold text-[#0a8f6c]">{stepsLeft} steps left</p>
           </div>
@@ -250,10 +253,9 @@ function ProfileDetails() {
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[300px_1fr]">
-            <aside className="space-y-4">
-              <div className="rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-sm">
+        <section className="hrms-split">
+            <aside className="min-w-0">
+              <div className="rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-sm sm:p-5 lg:sticky lg:top-4">
                 <div className="mb-4 flex justify-center">
                   <ProfilePicture
                     key={
@@ -268,38 +270,43 @@ function ProfileDetails() {
                     onEditClick={() => setShowPhotoUpload(true)}
                   />
                 </div>
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{profileSource?.name || user?.name || 'Employee'}</h2>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{profileSource?.name || user?.name || 'Employee'}</h2>
                 <p className="mt-1 text-sm font-semibold text-[#0a8f6c]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
-                <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-left text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Department</span>
-                    <span className="font-semibold text-slate-800">{user?.department || 'N/A'}</span>
+                <div className="mt-5 space-y-2.5 border-t border-slate-100 pt-4 text-left text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="shrink-0 text-slate-500">Department</span>
+                    <span className="text-right font-semibold text-slate-800">{user?.department || 'N/A'}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Employee ID</span>
-                    <span className="font-semibold text-slate-800">{user?.employeeId || 'N/A'}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="shrink-0 text-slate-500">Employee ID</span>
+                    <span className="text-right font-semibold text-slate-800">{user?.employeeId || 'N/A'}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Join Date</span>
-                    <span className="font-semibold text-slate-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="shrink-0 text-slate-500">Join Date</span>
+                    <span className="text-right font-semibold text-slate-800">
                       {joinDateValue ? new Date(joinDateValue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                     </span>
                   </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="shrink-0 text-slate-500">Manager Assigned</span>
+                    <span className="text-right font-semibold text-slate-800">{managerAssignedName}</span>
+                  </div>
                 </div>
               </div>
-
             </aside>
 
-            <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-5 pt-4">
-                <div className="flex flex-wrap gap-2">
+            <div className="min-w-0 w-full rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-3 pt-3 sm:px-5 sm:pt-4">
+                <div className="hrms-tabs-scroll" role="tablist">
                   {tabs.map((tab) => (
                     <button
                       key={tab.id}
                       type="button"
+                      role="tab"
+                      aria-selected={activeTab === tab.id}
                       onClick={() => handleTabClick(tab.id)}
-                      className={`rounded-t-lg px-4 py-2 text-sm font-semibold transition ${
+                      className={`rounded-t-lg px-3 py-2.5 text-sm font-semibold transition sm:px-4 ${
                         activeTab === tab.id
                           ? 'border-b-2 border-[#20C997] text-[#0a8f6c]'
                           : 'text-slate-500 hover:text-slate-700'
@@ -311,7 +318,7 @@ function ProfileDetails() {
                 </div>
               </div>
 
-              <div className="space-y-5 p-5">
+              <div className="min-w-0 space-y-4 p-4 sm:space-y-5 sm:p-5 md:p-6">
                 {activeTab === 'personalDetails' && (
                   <>
                     {isPersonalEditing ? (
@@ -368,12 +375,12 @@ function ProfileDetails() {
                       </>
                     ) : (
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <h3 className="text-base font-semibold text-slate-800">Personal Details</h3>
                           <button
                             type="button"
                             onClick={() => setIsPersonalEditing(true)}
-                            className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
+                            className="w-full rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] sm:w-auto"
                           >
                             Edit
                           </button>
@@ -406,16 +413,8 @@ function ProfileDetails() {
                   <ContactDetails />
                 )}
 
-                {activeTab === 'nextOfKinDetails' && (
-                  <NextOfKinDetails />
-                )}
-
                 {activeTab === 'educationQualifications' && (
                   <EducationQualifications />
-                )}
-
-                {activeTab === 'guarantorDetails' && (
-                  <GuarantorDetails />
                 )}
 
                 {activeTab === 'familyDetails' && (
@@ -431,7 +430,7 @@ function ProfileDetails() {
                 )}
 
                 {activeTab === 'personalDetails' && isPersonalEditing && (
-                  <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                  <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
                     <button
                       type="button"
                       onClick={() => {
@@ -439,7 +438,7 @@ function ProfileDetails() {
                         setIsPersonalEditing(false);
                       }}
                       disabled={isSavingPersonalDetails}
-                      className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       Cancel
                     </button>
@@ -447,7 +446,7 @@ function ProfileDetails() {
                       type="button"
                       onClick={handlePersonalDetailsSave}
                       disabled={isSavingPersonalDetails}
-                      className="rounded-xl bg-[#20C997] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0a8f6c] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-xl bg-[#20C997] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0a8f6c] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       {isSavingPersonalDetails ? 'Saving...' : 'Save Changes'}
                     </button>
@@ -455,7 +454,6 @@ function ProfileDetails() {
                 )}
               </div>
             </div>
-          </div>
         </section>
       </div>
 

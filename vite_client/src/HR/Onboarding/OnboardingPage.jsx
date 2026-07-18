@@ -145,9 +145,11 @@ const OnboardingPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">Onboarding Management</h1>
                         <p className="text-gray-600 mt-1">Manage new employee onboarding workflows</p>
@@ -162,7 +164,7 @@ const OnboardingPage = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="mb-6 flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-4">
                     <div className="relative flex-1">
                         <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                         <input
@@ -238,7 +240,7 @@ const OnboardingPage = () => {
                         );
                     })}
                     {filteredWorkflows.length === 0 && (
-                        <div className="col-span-3 text-center py-12">
+                        <div className="col-span-3 text-center py-8 sm:py-10">
                             <FaUserPlus className="mx-auto text-gray-400 text-5xl mb-4" />
                             <p className="text-gray-500">
                                 {workflows.length === 0 
@@ -485,6 +487,8 @@ const OnboardingPage = () => {
                     </div>
                 </div>
             )}
+        </div>
+        </div>
         </div>
     );
 };

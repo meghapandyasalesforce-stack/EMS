@@ -150,9 +150,9 @@ const FinancialDetails = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
-      <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-md">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Financial Details</h2>
+    <div className="w-full min-w-0">
+      <div className="w-full rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 md:p-6 shadow-sm">
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5 sm:mb-6 text-left">Financial Details</h2>
 
         {pendingNaRequest && (
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -163,6 +163,7 @@ const FinancialDetails = () => {
 
         {isEditing ? (
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="hrms-form-grid">
             {[
               { label: 'Bank Name', name: 'bankName', required: true },
               { label: 'IFSC Code', name: 'ifsc', required: true },
@@ -187,11 +188,12 @@ const FinancialDetails = () => {
                   value={formData[name]}
                   onChange={handleChange}
                   required={required}
-                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
                   placeholder={placeholder || label}
                 />
               </div>
             ))}
+            </div>
 
             <div className="flex flex-col gap-1">
               <label htmlFor="taxRegime" className="text-sm text-gray-700 font-medium">
@@ -202,7 +204,7 @@ const FinancialDetails = () => {
                 id="taxRegime"
                 value={formData.taxRegime}
                 onChange={handleChange}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
               >
                 <option value="New">New Regime</option>
                 <option value="Old">Old Regime</option>
@@ -247,21 +249,23 @@ const FinancialDetails = () => {
             </div>
           </form>
         ) : (
-          <div className="bg-white p-6 rounded-xl shadow-lg max-w-md mx-auto">
+          <div className="w-full rounded-xl border border-slate-100 bg-slate-50 p-4 sm:p-6">
             <h3 className="text-lg font-semibold mb-4">Bank Information</h3>
-            <p className="mb-2">
-              <strong>Bank Name:</strong> {formData.bankName || 'N/A'}
-            </p>
-            <p className="mb-2">
-              <strong>IFSC:</strong> {formData.ifsc || 'N/A'}
-            </p>
-            <p className="mb-2">
-              <strong>Account No:</strong>{' '}
-              {formData.accountNo ? '••••••••' + formData.accountNo.slice(-4) : 'N/A'}
-            </p>
-            <p className="mb-4">
-              <strong>Account Name:</strong> {formData.accountName || 'N/A'}
-            </p>
+            <div className="hrms-form-grid text-sm">
+              <p>
+                <strong>Bank Name:</strong> {formData.bankName || 'N/A'}
+              </p>
+              <p>
+                <strong>IFSC:</strong> {formData.ifsc || 'N/A'}
+              </p>
+              <p>
+                <strong>Account No:</strong>{' '}
+                {formData.accountNo ? '••••••••' + formData.accountNo.slice(-4) : 'N/A'}
+              </p>
+              <p>
+                <strong>Account Name:</strong> {formData.accountName || 'N/A'}
+              </p>
+            </div>
             <h3 className="text-lg font-semibold mb-4 mt-6">Tax & statutory</h3>
             <p className="mb-2">
               <strong>PAN Number:</strong> {formData.panNumber || 'N/A'}
@@ -280,7 +284,7 @@ const FinancialDetails = () => {
             </p>
             <button
               onClick={() => setIsEditing(true)}
-              className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 transition"
+              className="mt-4 bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 transition"
             >
               Edit
             </button>

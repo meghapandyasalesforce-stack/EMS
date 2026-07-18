@@ -364,9 +364,11 @@ const EmployeeOneOnOnePage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#F4F6FB] p-4 sm:p-6 lg:p-7 transition-all duration-300">
-            <div className="mx-auto max-w-[1240px]">
-                <header className="mb-6">
+        <div className="min-h-screen bg-[#F4F6FB] transition-all duration-300">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
+                <header>
                     <h1 className="text-4xl font-bold tracking-tight text-slate-900">My 1:1 Meetings</h1>
                     <p className="mt-1 text-slate-600">
                         Manage your ongoing growth conversations and feedback loops.
@@ -383,15 +385,15 @@ const EmployeeOneOnOnePage = () => {
                     </div>
                 ) : (
                     <>
-                        <section className="mb-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm md:p-6">
+                        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm md:p-6">
                             {nextMeeting ? (
-                                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-                                    <div className="flex items-start gap-5 border-l-[3px] border-[#20C997] pl-4">
+                                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                                    <div className="flex min-w-0 flex-1 items-start gap-5 border-l-[3px] border-[#20C997] pl-4">
                                         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[#20C997]/15 text-lg font-semibold text-[#006D4E]">
                                             {getInitials(getManagerName(nextMeeting))}
                                         </div>
-                                        <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
-                                            <div>
+                                        <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-start">
+                                            <div className="min-w-0 flex-1">
                                                 <span className="mb-2 inline-flex rounded-md bg-[#20C997]/15 px-2 py-1 text-[11px] font-semibold tracking-wide text-[#006D4E]">
                                                     NEXT MEETING
                                                 </span>
@@ -414,7 +416,7 @@ const EmployeeOneOnOnePage = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="w-full max-w-[180px] rounded-xl bg-slate-100/80 p-3 text-sm text-slate-600">
+                                            <div className="w-full min-w-0 md:max-w-xs rounded-xl bg-slate-100/80 p-3 text-sm text-slate-600">
                                                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-[#006D4E]">
                                                     Agenda Preview
                                                 </p>
@@ -429,7 +431,7 @@ const EmployeeOneOnOnePage = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap gap-3">
+                                    <div className="flex flex-wrap gap-3 lg:shrink-0">
                                         {nextMeeting.meetingLink && (
                                             <a
                                                 href={nextMeeting.meetingLink}
@@ -454,8 +456,8 @@ const EmployeeOneOnOnePage = () => {
                             )}
                         </section>
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                            <div className="space-y-6 xl:col-span-2">
+                        <div className="hrms-main-rail">
+                            <div className="min-w-0 space-y-6">
                                 <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                                     <div className="mb-4 flex items-center justify-between">
                                         <h3 className="text-xl font-semibold text-slate-900">Upcoming</h3>
@@ -725,6 +727,8 @@ const EmployeeOneOnOnePage = () => {
                     </>
                 )}
             </div>
+            </div>
+            </div>
             <input
                 ref={fileInputRef}
                 type="file"
@@ -733,8 +737,8 @@ const EmployeeOneOnOnePage = () => {
                 onChange={handleFileSelected}
             />
             {showHistoryModal && selectedMeeting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+                    <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
                         <div className="mb-4 flex items-center justify-between">
                             <h4 className="text-lg font-semibold text-slate-900">
                                 Meeting Summary & History

@@ -260,8 +260,8 @@ const EmployeePayroll = () => {
 
     if (loading && !currentMonthPayroll && !selectedMonthPayroll) {
         return (
-            <div className="flex min-h-screen items-center justify-center" style={{ background: PAGE_BG }}>
-                <div className="text-center">
+            <div className="page-shell flex min-h-screen items-center justify-center" style={{ background: PAGE_BG }}>
+                <div className="page-shell-inner text-center">
                     <FiLoader className="mx-auto mb-4 h-10 w-10 animate-spin" style={{ color: TEAL }} />
                     <p className="text-sm text-slate-600">Loading payroll…</p>
                 </div>
@@ -270,15 +270,15 @@ const EmployeePayroll = () => {
     }
 
     return (
-        <div className="min-h-screen p-4 transition-all duration-300 sm:p-6 lg:p-8" style={{ background: PAGE_BG }}>
-            <div className="mx-auto max-w-6xl">
-                <header className="mb-8">
+        <div className="page-shell min-h-screen transition-all duration-300" style={{ background: PAGE_BG }}>
+            <div className="page-shell-inner hrms-stack">
+                <header>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">My Payroll</h1>
                     <p className="mt-1 text-sm text-slate-600">View your salary details and download payslips.</p>
                 </header>
 
                 {error && (
-                    <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                         <div className="flex items-center gap-2">
                             <FiAlertCircle className="h-5 w-5 shrink-0" />
                             <span>{error}</span>
@@ -289,7 +289,7 @@ const EmployeePayroll = () => {
                 {/* Hero payslip card */}
                 {featured ? (
                     <section
-                        className="relative mb-8 overflow-hidden rounded-2xl p-6 text-white shadow-lg sm:p-8 lg:p-10"
+                        className="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg sm:p-8 lg:p-10"
                         style={{
                             background: `linear-gradient(135deg, ${TEAL} 0%, ${TEAL_LIGHT} 55%, #0d7a5c 100%)`,
                         }}
@@ -362,7 +362,7 @@ const EmployeePayroll = () => {
                         ) : null}
                     </section>
                 ) : (
-                    <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                    <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
                         <FiCalendar className="mx-auto mb-3 h-12 w-12 text-slate-300" />
                         <h2 className="text-lg font-semibold text-slate-800">No payroll published yet</h2>
                         <p className="mt-1 text-sm text-slate-500">Once your organization publishes payroll, it will show here.</p>
@@ -371,7 +371,7 @@ const EmployeePayroll = () => {
 
                 {/* Breakdown cards */}
                 {featured ? (
-                    <div className="mb-8 grid gap-6 lg:grid-cols-2">
+                    <div className="grid gap-6 lg:grid-cols-2">
                         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                             <div className="mb-5 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-4">
                                 <div>
@@ -430,7 +430,7 @@ const EmployeePayroll = () => {
                 ) : null}
 
                 {/* View any month */}
-                <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+                <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
                     <h2 className="text-base font-bold text-slate-900">View any month</h2>
                     <p className="mt-1 text-xs text-slate-600 sm:text-sm">
                         Select a month and year. Payroll reflects the payroll run (preview may show for the current month).
@@ -517,7 +517,7 @@ const EmployeePayroll = () => {
                                 <p className="mt-1 text-sm">Records appear after payroll is published.</p>
                             </div>
                         ) : (
-                            <table className="min-w-full divide-y divide-slate-100 text-sm">
+                            <table className="min-w-[640px] w-full divide-y divide-slate-100 text-sm">
                                 <thead>
                                     <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
                                         <th className="whitespace-nowrap px-5 py-3">Month</th>

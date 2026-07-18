@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from '../../../../utils/axios';
-import { getLeaveTypeDisplayName, getDisplayMonthlyAccrualRate } from '../../../../constants/leaveConstants';
+import { getLeaveTypeDisplayName } from '../../../../constants/leaveConstants';
 
 const MONTHS = [
   { value: 1, label: 'January' },
@@ -107,88 +107,44 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
     typeBalance.leaveTypeDisplayName ||
     policyType?.displayName ||
     getLeaveTypeDisplayName(typeBalance.leaveType, policyLeaveTypes);
-  const isPooledCategory = Boolean(typeBalance.isPooledCategory);
-  const accrued = Number(typeBalance.accrued ?? typeBalance.earnedToDate ?? 0);
   const used = Number(typeBalance.usedDays ?? typeBalance.used ?? 0);
   const available = Number(typeBalance.availableDays ?? typeBalance.available ?? 0);
-  const carried = Number(typeBalance.carriedDays ?? typeBalance.carriedForward ?? 0);
-  const monthlyRate = getDisplayMonthlyAccrualRate(
-    typeBalance.leaveType,
-    policyType,
-    typeBalance.monthlyRate
-  );
-  const yearlyMax = monthlyRate > 0 ? monthlyRate * 12 : 0;
+  const carriedForward = Number(typeBalance.carriedDays ?? typeBalance.carriedForward ?? 0);
+  const pending = Number(typeBalance.pendingDays ?? typeBalance.pending ?? 0);
 
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
       <h4 className="text-base font-semibold text-slate-900">{displayName}</h4>
 
       <dl className="mt-4 space-y-3 text-sm">
-        {isPooledCategory ? (
-          <>
-            <p className="text-xs text-slate-500">
-              Leave category only — your total balance is shown in the employee leave summary above.
-            </p>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-slate-600">Used:</dt>
-              <BalanceMetricValue
-                value={used}
-                prefix="-"
-                valueClassName="text-red-500"
-                daysClassName="text-red-500"
-              />
-            </div>
-            {Number(typeBalance.pendingDays ?? typeBalance.pending) > 0 && (
-              <div className="flex items-start justify-between gap-3">
-                <dt className="text-slate-600">Pending:</dt>
-                <BalanceMetricValue value={Number(typeBalance.pendingDays ?? typeBalance.pending)} />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-slate-600">Accrued:</dt>
-              <BalanceMetricValue value={accrued} />
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-slate-600">Used:</dt>
-              <BalanceMetricValue
-                value={used}
-                prefix="-"
-                valueClassName="text-red-500"
-                daysClassName="text-red-500"
-              />
-            </div>
-            <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-3">
-              <dt className="font-semibold text-slate-800">Available:</dt>
-              <BalanceMetricValue
-                value={available}
-                valueClassName="text-xl font-bold text-[#0d9488]"
-                daysClassName="text-[#0d9488]"
-              />
-            </div>
-          </>
+        <div className="flex items-start justify-between gap-3">
+          <dt className="font-semibold text-slate-800">Available:</dt>
+          <BalanceMetricValue
+            value={available}
+            valueClassName="text-xl font-bold text-[#0d9488]"
+            daysClassName="text-[#0d9488]"
+          />
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <dt className="text-slate-600">Used:</dt>
+          <BalanceMetricValue
+            value={used}
+            prefix="-"
+            valueClassName="text-red-500"
+            daysClassName="text-red-500"
+          />
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <dt className="text-slate-600">Carry Forward:</dt>
+          <BalanceMetricValue value={carriedForward} />
+        </div>
+        {pending > 0 && (
+          <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-3">
+            <dt className="text-slate-600">Pending:</dt>
+            <BalanceMetricValue value={pending} />
+          </div>
         )}
       </dl>
-
-      {monthlyRate > 0 && isPooledCategory && (
-        <div className="mt-4 flex items-start justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-          <span>Monthly entitlement</span>
-          <span className="text-right text-slate-500">
-            {fmtDays(monthlyRate)} days/month ({fmtDays(yearlyMax)}/year max)
-          </span>
-        </div>
-      )}
-
-      {monthlyRate > 0 && !isPooledCategory && (
-        <div className="mt-4 flex items-start justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-          <span>Monthly entitlement</span>
-          <span className="text-right text-slate-500">
-            {fmtDays(monthlyRate)} days/month ({fmtDays(yearlyMax)}/year max)
-          </span>
-        </div>
-      )}
     </div>
   );
 };

@@ -14,7 +14,7 @@ const ComplianceReport = lazy(() => import('./pages/ComplianceReport'));
 const HRReportsLayout = () => (
     <div className="flex min-h-[calc(100vh-64px)] flex-col bg-[#F5F7FB] lg:flex-row">
         <ReportsSidebar />
-        <main className="min-w-0 flex-1 overflow-auto p-3 sm:p-4 md:p-6 lg:p-8">
+        <main className="min-w-0 flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
             <Suspense fallback={<LoadingSpinner message="Loading report..." />}>
                 <Routes>
                     <Route index element={<Navigate to="headcount" replace />} />

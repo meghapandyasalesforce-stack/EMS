@@ -515,20 +515,20 @@ const EmployeeDetailsPage = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1400px] space-y-6">
-        <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <Link to="/employees" className="font-medium text-[#0d9488] hover:underline">
+    <div className="page-shell min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+      <div className="page-shell-inner hrms-stack px-4 pt-4 sm:px-0 sm:pt-0">
+        <nav className="flex flex-wrap items-center gap-3 text-base text-slate-500">
+          <Link to="/employees" className="font-semibold text-[#0d9488] hover:underline">
             Employee Directory
           </Link>
           <FiChevronRight className="h-4 w-4 shrink-0" />
-          <span className="font-medium text-slate-800">{getFullName(employee)}</span>
+          <span className="font-semibold text-slate-800">{getFullName(employee)}</span>
         </nav>
 
         <button
           type="button"
           onClick={() => navigate('/employees')}
-          className="inline-flex items-center rounded-full border-2 border-[#20C997] px-4 py-2 text-sm font-semibold text-[#0d9488] transition hover:bg-[#20C997]/10"
+        className="inline-flex self-start h-10 shrink-0 items-center justify-center rounded-full border-2 border-[#20C997] px-4 text-sm font-semibold text-[#0d9488] transition hover:bg-[#20C997]/10"
         >
           Back to employees
         </button>
@@ -559,8 +559,8 @@ const EmployeeDetailsPage = () => {
           onDeleteClick={() => setOpenDeleteDialog(true)}
         />
 
-        <div className="overflow-x-auto border-b border-slate-200">
-          <div className="flex min-w-max gap-1" role="tablist">
+        <div className="border-b border-slate-200">
+          <div className="hrms-tabs-scroll" role="tablist">
             {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -580,9 +580,9 @@ const EmployeeDetailsPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">{renderTabContent()}</div>
-          <aside className="space-y-4 xl:col-span-1">
+        <div className="hrms-main-rail">
+          <div className="min-w-0">{renderTabContent()}</div>
+          <aside className="min-w-0 space-y-4">
             {!hidePayrollForHrExecutive && <PayrollHighlightWidget employee={employee} />}
             <CareerTimelineWidget employee={employee} />
             <ReportingHierarchyWidget employee={employee} managerPreview={managerPreview} />

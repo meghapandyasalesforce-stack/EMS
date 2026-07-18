@@ -263,9 +263,9 @@ function DashboardAdmin() {
           </div>
         </div>
       )}
-    <div className="min-h-screen bg-[#F3F7F5]">
-      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
-        <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="page-shell min-h-screen bg-[#F3F7F5]">
+      <div className="page-shell-inner space-y-4 sm:space-y-5">
+        <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Good morning, {greetingName}</h1>
             <p className="mt-1 text-sm text-slate-500">{todayLabel}</p>
@@ -301,29 +301,29 @@ function DashboardAdmin() {
         </div>
 
         {employeesError && employeesError.response?.status !== 401 && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {employeesError.response?.data?.message || "Failed to load employees"}
           </div>
         )}
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           {statCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-3 flex items-start justify-between">
+            <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-2 flex items-start justify-between gap-2">
                 <p className="text-sm text-slate-500">{card.label}</p>
                 <span className="rounded-lg bg-slate-100 p-2 text-slate-600">{card.icon}</span>
               </div>
-              <p className="break-words text-2xl font-bold text-slate-900 sm:text-3xl">{card.value}</p>
+              <p className="break-words text-2xl font-bold text-slate-900">{card.value}</p>
               <p className="mt-1 text-xs text-slate-500">{card.sub}</p>
             </div>
           ))}
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-2">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-900">Attendance overview</h2>
-              <div className="hidden items-center gap-4 text-xs text-slate-500 sm:flex">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+          <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">Attendance overview</h2>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   Present
@@ -338,44 +338,74 @@ function DashboardAdmin() {
                 </span>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-              <div className="rounded-xl bg-emerald-50 p-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="rounded-xl bg-emerald-50 px-3 py-3 sm:p-4">
                 <p className="text-xs text-emerald-700">Present</p>
-                <p className="mt-2 text-2xl font-bold text-emerald-800">{todayAttendanceStats.present}</p>
+                <p className="mt-1 text-xl font-bold text-emerald-800 sm:text-2xl">{todayAttendanceStats.present}</p>
               </div>
-              <div className="rounded-xl bg-amber-50 p-4">
-                <p className="text-xs text-amber-700">Late Arrivals</p>
-                <p className="mt-2 text-2xl font-bold text-amber-800">{todayAttendanceStats.late}</p>
+              <div className="rounded-xl bg-amber-50 px-3 py-3 sm:p-4">
+                <p className="text-xs text-amber-700">Late</p>
+                <p className="mt-1 text-xl font-bold text-amber-800 sm:text-2xl">{todayAttendanceStats.late}</p>
               </div>
-              <div className="rounded-xl bg-rose-50 p-4">
+              <div className="rounded-xl bg-rose-50 px-3 py-3 sm:p-4">
                 <p className="text-xs text-rose-700">Absent</p>
-                <p className="mt-2 text-2xl font-bold text-rose-800">
+                <p className="mt-1 text-xl font-bold text-rose-800 sm:text-2xl">
                   {Math.max((todayAttendanceStats.total || employeeCount) - todayAttendanceStats.present, 0)}
                 </p>
               </div>
             </div>
-            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              Live chart area can be plugged here if you want graph rendering.
-            </div>
-            <div className="mt-3 flex items-center gap-4 text-xs text-slate-500 sm:hidden">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Present
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Late
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-rose-500" />
-                Absent
-              </span>
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span>Attendance rate</span>
+                <span className="font-semibold text-slate-800">
+                  {(todayAttendanceStats.total || employeeCount) > 0
+                    ? Math.round(
+                        (todayAttendanceStats.present /
+                          (todayAttendanceStats.total || employeeCount)) *
+                          100
+                      )
+                    : 0}
+                  %
+                </span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{
+                    width: `${
+                      (todayAttendanceStats.total || employeeCount) > 0
+                        ? Math.min(
+                            100,
+                            Math.round(
+                              (todayAttendanceStats.present /
+                                (todayAttendanceStats.total || employeeCount)) *
+                                100
+                            )
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  {todayAttendanceStats.present} of {todayAttendanceStats.total || employeeCount} present today
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/today-attendance")}
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:opacity-80"
+                >
+                  View today
+                  <FiArrowUpRight className="h-3 w-3" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-900">Announcements</h2>
+          <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">Announcements</h2>
               <button
                 onClick={() => setShowAnnouncementModal(true)}
                 className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary)] hover:opacity-80"
@@ -384,7 +414,7 @@ function DashboardAdmin() {
                 New
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="min-h-0 flex-1 space-y-2.5">
               {announcements.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
                   No announcements yet.
@@ -400,24 +430,24 @@ function DashboardAdmin() {
             </div>
             <button
               onClick={() => navigate("/sent-announcements")}
-              className="mt-4 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="mt-3 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               View All Announcements
             </button>
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">Pending approvals</h2>
-            <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-stretch">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">Pending approvals</h2>
+            <div className="space-y-2.5">
               {approvalsPreview.length === 0 ? (
                 <p className="text-sm text-slate-500">No pending requests.</p>
               ) : (
                 approvalsPreview.map((leave) => (
-                  <div key={leave._id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
+                  <div key={leave._id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">
                         {leave.employeeName || leave.employee?.name || "Employee"}
                       </p>
                       <p className="text-xs text-slate-500">
@@ -426,7 +456,7 @@ function DashboardAdmin() {
                     </div>
                     <button
                       onClick={() => navigate("/leave-management")}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)]"
+                      className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)]"
                     >
                       Review
                       <FiArrowUpRight className="h-3 w-3" />
@@ -437,9 +467,9 @@ function DashboardAdmin() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">Payroll snapshot</h2>
-            <div className="space-y-4">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">Payroll snapshot</h2>
+            <div className="space-y-3">
               {payrollByDepartment.length === 0 ? (
                 <p className="text-sm text-slate-500">No payroll data yet.</p>
               ) : (
@@ -456,14 +486,14 @@ function DashboardAdmin() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">Quick shortcuts</h2>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-1">
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">Quick shortcuts</h2>
+            <div className="grid grid-cols-2 gap-2.5">
               {quickShortcuts.map((shortcut) => (
                 <button
                   key={shortcut.label}
                   onClick={shortcut.action}
-                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-100"
                 >
                   <span className="text-lg text-slate-600">{shortcut.icon}</span>
                   <span>{shortcut.label}</span>
@@ -473,10 +503,10 @@ function DashboardAdmin() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">Upcoming events & holidays</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">Upcoming events & holidays</h2>
+            <div className="grid grid-cols-3 gap-2.5">
               {upcomingEvents.map((event) => (
                 <div key={event.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs text-slate-500">{event.tag}</p>
@@ -487,16 +517,16 @@ function DashboardAdmin() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">New hires this month</h2>
-            <div className="space-y-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">New hires this month</h2>
+            <div className="space-y-2.5">
               {newHires.length === 0 ? (
                 <p className="text-sm text-slate-500">No recent hires found.</p>
               ) : (
                 newHires.map((employee) => (
-                  <div key={employee._id || employee.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div key={employee._id || employee.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
                         {getInitials(`${employee.name || ""} ${employee.lastName || ""}`)}
                       </div>
                       <div className="min-w-0">
@@ -510,7 +540,7 @@ function DashboardAdmin() {
                     </div>
                     <button
                       onClick={() => navigate(`/employees/${employee._id || employee.id}`)}
-                      className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+                      className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
                     >
                       <FiEye className="h-3 w-3" />
                       View

@@ -1,44 +1,169 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BOTH_DOCUMENTS_ENDPOINT } from '../../utils/constant';
 import { getCsrfToken } from '../../utils/authHelper';
 
-const JobDetails = () => {
-    const employeeId = localStorage.getItem('employeeId');
-    const [additionalInfo, setAdditionalInfo] = useState({});
-    const [isLoading, setIsLoading] = useState(false);
+const MARKSHEET_LEVELS = [
+    { value: '10th', label: '10th' },
+    { value: '12th', label: '12th' },
+    { value: 'Graduation', label: 'Graduation' },
+];
 
-    const offerLetterRef = useRef(null);
-    const aadharCardRef = useRef(null);
-    const panCardRef = useRef(null);
+const DOCUMENT_SECTIONS = [
+    {
+        type: 'OFFER_LETTER',
+        title: 'Offer Letter',
+        accept: '.pdf,.doc,.docx',
+        extraField: {
+            key: 'effectiveDate',
+            label: 'Effective Date',
+            inputType: 'date',
+        },
+    },
+    {
+        type: 'AADHAR_CARD',
+        title: 'Aadhar Card',
+        accept: '.pdf,.jpg,.jpeg,.png',
+        extraField: {
+            key: 'aadharNumber',
+            label: 'Aadhar Number',
+            inputType: 'text',
+            placeholder: 'XXXX XXXX XXXX',
+            maxLength: 14,
+        },
+    },
+    {
+        type: 'PAN_CARD',
+        title: 'Pan Card',
+        accept: '.pdf,.jpg,.jpeg,.png',
+        extraField: {
+            key: 'panNumber',
+            label: 'PAN Number',
+            inputType: 'text',
+            placeholder: 'ABCDE1234F',
+            maxLength: 10,
+            upperCase: true,
+        },
+    },
+];
+
+const MARKSHEET_SECTION = {
+    type: 'DEGREE_CERTIFICATE',
+    title: 'Marksheet',
+    accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx',
+};
+
+const getMarksheetLevel = (doc) =>
+    String(doc?.metadata?.additionalInfo?.marksheetLevel || '').trim();
+
+const getUploadKey = (documentType, marksheetLevel) =>
+    marksheetLevel ? `${documentType}:${marksheetLevel}` : documentType;
+
+const statusLabel = (doc) => {
+    const status = doc?.approvalStatus || 'Pending';
+    if (status === 'Pending') return 'Pending';
+    if (status === 'Approved') return 'Approved';
+    if (status === 'Rejected') return 'Rejected';
+    return status;
+};
+
+const statusClass = (status) => {
+    if (status === 'Rejected') return 'bg-red-100 text-red-700';
+    if (status === 'Pending') return 'bg-amber-100 text-amber-800';
+    if (status === 'Approved') return 'bg-emerald-100 text-emerald-800';
+    return 'bg-slate-100 text-slate-700';
+};
+
+const JobDetails = () => {
+    const [additionalInfo, setAdditionalInfo] = useState({});
+    const [selectedMarksheetLevel, setSelectedMarksheetLevel] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingDocs, setLoadingDocs] = useState(true);
+    const [uploadedByType, setUploadedByType] = useState({});
+    const fileRefs = useRef({});
+
+    const loadUploadedDocuments = useCallback(async () => {
+        try {
+            setLoadingDocs(true);
+            const listUrl = BOTH_DOCUMENTS_ENDPOINT.startsWith('http')
+                ? `${BOTH_DOCUMENTS_ENDPOINT}/mine`
+                : `/api${BOTH_DOCUMENTS_ENDPOINT}/mine`;
+            const response = await fetch(`${listUrl}?limit=100`, {
+                method: 'GET',
+                credentials: 'include',
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to load documents');
+            }
+
+            const docs = Array.isArray(result.data) ? result.data : [];
+            const byType = {};
+            for (const doc of docs) {
+                const type = doc.employeeJobDocumentType;
+                if (!type) continue;
+
+                if (type === 'DEGREE_CERTIFICATE') {
+                    const level = getMarksheetLevel(doc);
+                    if (!level) continue;
+                    const key = getUploadKey(type, level);
+                    if (!byType[key]) {
+                        byType[key] = doc;
+                    }
+                    continue;
+                }
+
+                if (!byType[type]) {
+                    byType[type] = doc;
+                }
+            }
+            setUploadedByType(byType);
+        } catch {
+            setUploadedByType({});
+        } finally {
+            setLoadingDocs(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadUploadedDocuments();
+    }, [loadUploadedDocuments]);
 
     const handleAdditionalInfoChange = (type, field, value) => {
-        setAdditionalInfo(prev => ({
+        setAdditionalInfo((prev) => ({
             ...prev,
             [type]: {
                 ...(prev[type] || {}),
-                [field]: value
-            }
+                [field]: value,
+            },
         }));
     };
 
-    const handleUpload = async (file, documentType) => {
+    const handleUpload = async (file, documentType, marksheetLevel = '') => {
         if (!file) {
             alert(`Please select a file for ${documentType}`);
             return;
         }
 
+        if (documentType === 'DEGREE_CERTIFICATE' && !marksheetLevel) {
+            alert('Please select a marksheet level (10th, 12th, or Graduation) before uploading.');
+            return;
+        }
+
         setIsLoading(true);
-        
+
         try {
             const formData = new FormData();
             formData.append('document', file);
             formData.append('documentType', documentType);
-            
-            if (additionalInfo[documentType]) {
-                formData.append('additionalInfo', JSON.stringify(additionalInfo[documentType]));
+
+            const infoPayload = documentType === 'DEGREE_CERTIFICATE'
+                ? { marksheetLevel }
+                : additionalInfo[documentType];
+
+            if (infoPayload && Object.keys(infoPayload).length > 0) {
+                formData.append('additionalInfo', JSON.stringify(infoPayload));
             }
 
-            // Canonical employee uploads → Document collection (HR /documents list)
             const uploadUrl = BOTH_DOCUMENTS_ENDPOINT.startsWith('http')
                 ? `${BOTH_DOCUMENTS_ENDPOINT}/upload`
                 : `/api${BOTH_DOCUMENTS_ENDPOINT}/upload`;
@@ -58,7 +183,11 @@ const JobDetails = () => {
                 try {
                     result = JSON.parse(text);
                 } catch {
-                    throw new Error(response.ok ? 'Invalid response from server' : (text.slice(0, 100) || `Upload failed (${response.status})`));
+                    throw new Error(
+                        response.ok
+                            ? 'Invalid response from server'
+                            : text.slice(0, 100) || `Upload failed (${response.status})`
+                    );
                 }
             }
 
@@ -66,132 +195,210 @@ const JobDetails = () => {
                 throw new Error(result.message || `Failed to upload ${documentType} (${response.status})`);
             }
 
-            alert(result.message || `${documentType} uploaded successfully!`);
-            switch(documentType) {
-                case 'OFFER_LETTER':
-                    offerLetterRef.current.value = '';
-                    break;
-                case 'AADHAR_CARD':
-                    aadharCardRef.current.value = '';
-                    break;
-                case 'PAN_CARD':
-                    panCardRef.current.value = '';
-                    break;
+            const fileRefKey = getUploadKey(documentType, marksheetLevel);
+            if (fileRefs.current[fileRefKey]) {
+                fileRefs.current[fileRefKey].value = '';
             }
+            await loadUploadedDocuments();
+            alert(result.message || `${documentType} uploaded successfully!`);
         } catch (error) {
-            // Removed console.error for production
             alert(`Error: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
+    const renderUploadedStatus = (doc, levelLabel = '') => {
+        const label = statusLabel(doc);
+        const isRejected = label === 'Rejected';
+        return (
+            <div className="mb-3 flex flex-col gap-2 rounded-md border border-slate-100 bg-slate-50 p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className={`text-sm font-medium ${isRejected ? 'text-red-700' : 'text-emerald-700'}`}>
+                            {levelLabel ? `${levelLabel} — ` : ''}
+                            {isRejected ? 'Rejected' : 'Uploaded'}
+                        </p>
+                        {doc.fileName ? (
+                            <p className="mt-0.5 text-sm text-gray-600 truncate max-w-md">{doc.fileName}</p>
+                        ) : null}
+                    </div>
+                    <span
+                        className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass(label)}`}
+                    >
+                        {label}
+                    </span>
+                </div>
+                {isRejected && doc.rejectionReason ? (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        Reason: {doc.rejectionReason}
+                    </p>
+                ) : null}
+            </div>
+        );
+    };
+
+    const renderUploadForm = (section) => {
+        const { type, accept, extraField } = section;
+        const value = additionalInfo[type]?.[extraField.key] ?? '';
+
+        return (
+            <div className="flex flex-col gap-3">
+                <div className="hrms-form-grid">
+                <div className="flex flex-col gap-2 min-w-0">
+                    <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
+                    <input
+                        type="file"
+                        ref={(el) => {
+                            fileRefs.current[type] = el;
+                        }}
+                        className="w-full max-w-full border p-2 rounded text-sm"
+                        accept={accept}
+                    />
+                </div>
+                <div className="flex flex-col gap-2 min-w-0">
+                    <label className="font-medium text-gray-700 text-sm md:text-base">{extraField.label}</label>
+                    <input
+                        type={extraField.inputType}
+                        value={value}
+                        onChange={(e) =>
+                            handleAdditionalInfoChange(
+                                type,
+                                extraField.key,
+                                extraField.upperCase ? e.target.value.toUpperCase() : e.target.value
+                            )
+                        }
+                        className={`w-full max-w-full border p-2 rounded text-sm${extraField.upperCase ? ' uppercase' : ''}`}
+                        placeholder={extraField.placeholder}
+                        maxLength={extraField.maxLength}
+                    />
+                </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => handleUpload(fileRefs.current[type]?.files?.[0], type)}
+                    disabled={isLoading}
+                    className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
+                >
+                    {isLoading ? 'Uploading...' : 'Upload'}
+                </button>
+            </div>
+        );
+    };
+
+    const renderMarksheetSection = () => {
+        const { type, title, accept } = MARKSHEET_SECTION;
+        const selectedDoc = selectedMarksheetLevel
+            ? uploadedByType[getUploadKey(type, selectedMarksheetLevel)]
+            : null;
+        const isRejected = selectedDoc?.approvalStatus === 'Rejected';
+        const showUploadForm = selectedMarksheetLevel && (!selectedDoc || isRejected);
+        const fileRefKey = getUploadKey(type, selectedMarksheetLevel);
+
+        return (
+            <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
+                <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">{title}</h3>
+                {loadingDocs ? (
+                    <p className="text-sm text-gray-500">Loading…</p>
+                ) : (
+                    <>
+                        {MARKSHEET_LEVELS.map(({ value, label }) => {
+                            const doc = uploadedByType[getUploadKey(type, value)];
+                            if (!doc) return null;
+                            return (
+                                <div key={value}>
+                                    {renderUploadedStatus(doc, label)}
+                                </div>
+                            );
+                        })}
+
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-2">
+                                <label className="font-medium text-gray-700 text-sm md:text-base">
+                                    Select Marksheet
+                                </label>
+                                <select
+                                    value={selectedMarksheetLevel}
+                                    onChange={(e) => setSelectedMarksheetLevel(e.target.value)}
+                                    className="w-full max-w-full border p-2 rounded text-sm"
+                                >
+                                    <option value="">Select</option>
+                                    {MARKSHEET_LEVELS.map(({ value, label }) => (
+                                        <option key={value} value={value}>
+                                            {label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {showUploadForm ? (
+                                <>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="font-medium text-gray-700 text-sm md:text-base">
+                                            Upload File
+                                        </label>
+                                        <input
+                                            type="file"
+                                            ref={(el) => {
+                                                fileRefs.current[fileRefKey] = el;
+                                            }}
+                                            className="w-full max-w-full border p-2 rounded text-sm"
+                                            accept={accept}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            handleUpload(
+                                                fileRefs.current[fileRefKey]?.files?.[0],
+                                                type,
+                                                selectedMarksheetLevel
+                                            )
+                                        }
+                                        disabled={isLoading}
+                                        className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
+                                    >
+                                        {isLoading ? 'Uploading...' : 'Upload'}
+                                    </button>
+                                </>
+                            ) : selectedMarksheetLevel && selectedDoc && !isRejected ? (
+                                <p className="text-sm text-gray-500">
+                                    {selectedMarksheetLevel} marksheet is already uploaded. Select another level to upload more.
+                                </p>
+                            ) : null}
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+    };
+
     return (
-        <div className="p-4 md:p-6 bg-gray-50 min-h-screen transition-all duration-300">
-            <div className="w-full max-w-4xl mx-auto">
-                <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-6 text-center md:text-left">Job Details / Upload Documents</h2>
-                <div className="space-y-4 md:space-y-6">
-
-                    {/* Offer Letter */}
-                    <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Offer Letter</h3>
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
-                                <input 
-                                    type="file" 
-                                    ref={offerLetterRef} 
-                                    className="border p-2 rounded w-full text-sm"
-                                    accept=".pdf,.doc,.docx"
-                                />
+        <div className="w-full min-w-0">
+            <div className="w-full">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 md:mb-6 text-left">
+                    Documents
+                </h2>
+                <div className="space-y-3 sm:space-y-4 md:space-y-5">
+                    {DOCUMENT_SECTIONS.map((section) => {
+                        const uploadedDoc = uploadedByType[section.type];
+                        const isRejected = uploadedDoc?.approvalStatus === 'Rejected';
+                        const showUploadForm = !uploadedDoc || isRejected;
+                        return (
+                            <div key={section.type} className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
+                                <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">{section.title}</h3>
+                                {loadingDocs ? (
+                                    <p className="text-sm text-gray-500">Loading…</p>
+                                ) : (
+                                    <>
+                                        {uploadedDoc ? renderUploadedStatus(uploadedDoc) : null}
+                                        {showUploadForm ? renderUploadForm(section) : null}
+                                    </>
+                                )}
                             </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">Effective Date</label>
-                                <input
-                                    type="date"
-                                    value={additionalInfo.OFFER_LETTER?.effectiveDate ?? ''}
-                                    onChange={(e) => handleAdditionalInfoChange('OFFER_LETTER', 'effectiveDate', e.target.value)}
-                                    className="border p-2 rounded text-sm"
-                                />
-                            </div>
-                            <button
-                                onClick={() => handleUpload(offerLetterRef.current.files[0], 'OFFER_LETTER')}
-                                disabled={isLoading}
-                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
-                            >
-                                {isLoading ? 'Uploading...' : 'Upload'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Aadhar Card */}
-                    <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Aadhar Card</h3>
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
-                                <input 
-                                    type="file" 
-                                    ref={aadharCardRef} 
-                                    className="border p-2 rounded w-full text-sm"
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">Aadhar Number</label>
-                                <input
-                                    type="text"
-                                    value={additionalInfo.AADHAR_CARD?.aadharNumber ?? ''}
-                                    onChange={(e) => handleAdditionalInfoChange('AADHAR_CARD', 'aadharNumber', e.target.value)}
-                                    className="border p-2 rounded text-sm"
-                                    placeholder="XXXX XXXX XXXX"
-                                    maxLength={14}
-                                />
-                            </div>
-                            <button
-                                onClick={() => handleUpload(aadharCardRef.current.files[0], 'AADHAR_CARD')}
-                                disabled={isLoading}
-                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
-                            >
-                                {isLoading ? 'Uploading...' : 'Upload'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Pan Card */}
-                    <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
-                        <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">Pan Card</h3>
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
-                                <input 
-                                    type="file" 
-                                    ref={panCardRef} 
-                                    className="border p-2 rounded w-full text-sm"
-                                    accept=".pdf,.jpg,.jpeg,.png"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="font-medium text-gray-700 text-sm md:text-base">PAN Number</label>
-                                <input
-                                    type="text"
-                                    value={additionalInfo.PAN_CARD?.panNumber ?? ''}
-                                    onChange={(e) => handleAdditionalInfoChange('PAN_CARD', 'panNumber', e.target.value.toUpperCase())}
-                                    className="border p-2 rounded text-sm uppercase"
-                                    placeholder="ABCDE1234F"
-                                    maxLength={10}
-                                />
-                            </div>
-                            <button
-                                onClick={() => handleUpload(panCardRef.current.files[0], 'PAN_CARD')}
-                                disabled={isLoading}
-                                className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
-                            >
-                                {isLoading ? 'Uploading...' : 'Upload'}
-                            </button>
-                        </div>
-                    </div>
-
+                        );
+                    })}
+                    {renderMarksheetSection()}
                 </div>
             </div>
         </div>

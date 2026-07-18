@@ -66,14 +66,14 @@ const EmployeeDetailsHeader = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end lg:max-w-md">
           {canManageEmployeeActions && (
             <>
               <button
                 type="button"
                 onClick={onStatusClick}
                 disabled={updatingStatus || isTerminated}
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 ${
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50 sm:flex-none ${
                   employee.active ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-600 hover:bg-slate-700'
                 }`}
               >
@@ -85,7 +85,7 @@ const EmployeeDetailsHeader = ({
                   type="button"
                   onClick={onTerminateClick}
                   disabled={terminatingEmployee}
-                  className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50 sm:flex-none"
                 >
                   <FiClock className="h-4 w-4" />
                   Terminate
@@ -94,7 +94,7 @@ const EmployeeDetailsHeader = ({
               <button
                 type="button"
                 onClick={onDeleteClick}
-                className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 sm:flex-none"
               >
                 <FiTrash2 className="h-4 w-4" />
                 Delete

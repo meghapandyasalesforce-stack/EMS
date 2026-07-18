@@ -13,8 +13,10 @@ import {
   FiLoader,
   FiChevronLeft,
   FiChevronRight,
+  FiHome,
 } from 'react-icons/fi';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import TeamWfhRequestsPanel from './TeamWfhRequestsPanel';
 
 const TEAL = '#0a8f6c';
 const RED = '#dc2626';
@@ -165,6 +167,7 @@ function StatusPill({ status }) {
 }
 
 const RegularizationRequests = () => {
+  const [activeSection, setActiveSection] = useState('regularization');
   const authUser = useSelector((state) => state.auth.user);
   const employeeProfile = useSelector((state) => state.employeeDetails.employee);
   const userObj = authUser || employeeProfile;
@@ -475,7 +478,7 @@ const RegularizationRequests = () => {
       .filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager }))
       .every((r) => selectedIds.has(String(r._id)));
 
-  if (loading && !requests.length) {
+  if (activeSection === 'regularization' && loading && !requests.length) {
     return <LoadingSpinner message="Loading regularization requests..." />;
   }
 
@@ -485,48 +488,89 @@ const RegularizationRequests = () => {
   const canNext = currentPageNum < totalPagesNum && !loading;
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6] p-4 lg:p-8">
-      <div className="mx-auto max-w-[1400px]">
-        <header className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Regularization Requests</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Review and approve or reject team attendance correction requests.
+    <div className="page-shell min-h-screen bg-[#f4f7f6]">
+      <div className="page-shell-inner hrms-stack">
+        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+          <div className="shrink-0 md:max-w-[min(100%,28rem)]">
+            <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 md:whitespace-nowrap lg:text-3xl">
+              {activeSection === 'regularization' ? 'Regularization Requests' : 'Work From Home Applications'}
+            </h1>
+            <p className="mt-1 max-w-xl text-sm text-slate-600">
+              {activeSection === 'regularization'
+                ? 'Review and approve or reject team attendance correction requests.'
+                : 'View Work From Home applications submitted by employees.'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-3" role="tablist" aria-label="Quick filter by status">
-            {[
-              { key: 'all', label: 'All', n: statusSummary, bg: '#ffffff', color: '#0f172a' },
-              { key: 'pending', label: 'Pending', n: statusCounts.pending, bg: '#fef2f2', color: '#b91c1c' },
-              { key: 'approved', label: 'Approved', n: statusCounts.approved, bg: `${TEAL}18`, color: TEAL },
-              { key: 'rejected', label: 'Rejected', n: statusCounts.rejected, bg: '#f1f5f9', color: '#64748b' },
-              { key: 'cancelled', label: 'Cancelled', n: statusCounts.cancelled, bg: '#fafafa', color: '#737373' },
-            ].map((b) => {
-              const active = statusDropdown === b.key;
-              return (
-                <button
-                  key={b.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  title={`Show ${b.label}${b.key === 'all' ? ' statuses' : ' only'}`}
-                  onClick={() => {
-                    setPage(1);
-                    setStatusDropdown(b.key === 'all' ? 'all' : b.key);
-                  }}
-                  className={`rounded-full border px-4 py-2 text-center text-xs font-bold uppercase tracking-wide shadow-sm transition hover:brightness-[0.98] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 ${
-                    active ? 'ring-2 ring-[#0a8f6c] ring-offset-2 ring-offset-[#f4f7f6]' : ''
-                  }`}
-                  style={{ borderColor: active ? TEAL : GREY_BORDER, background: b.bg, color: b.color }}
-                >
-                  {(b.n ?? 0)} {b.label}
-                </button>
-              );
-            })}
-          </div>
+          {activeSection === 'regularization' ? (
+            <div className="w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain px-1 pb-3 pt-1 [-webkit-overflow-scrolling:touch] md:ml-auto md:w-auto md:overflow-visible md:p-1">
+              <div
+                className="flex w-max gap-4 pr-2 md:gap-3 md:pr-0"
+                role="tablist"
+                aria-label="Quick filter by status"
+              >
+                {[
+                  { key: 'all', label: 'All', n: statusSummary, bg: '#ffffff', color: '#0f172a' },
+                  { key: 'pending', label: 'Pending', n: statusCounts.pending, bg: '#fef2f2', color: '#b91c1c' },
+                  { key: 'approved', label: 'Approved', n: statusCounts.approved, bg: `${TEAL}18`, color: TEAL },
+                  { key: 'rejected', label: 'Rejected', n: statusCounts.rejected, bg: '#f1f5f9', color: '#64748b' },
+                  { key: 'cancelled', label: 'Cancelled', n: statusCounts.cancelled, bg: '#fafafa', color: '#737373' },
+                ].map((b) => {
+                  const active = statusDropdown === b.key;
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      title={`Show ${b.label}${b.key === 'all' ? ' statuses' : ' only'}`}
+                      onClick={() => {
+                        setPage(1);
+                        setStatusDropdown(b.key === 'all' ? 'all' : b.key);
+                      }}
+                      className={`shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-center text-xs font-bold uppercase tracking-wide shadow-sm transition hover:brightness-[0.98] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 ${
+                        active ? 'ring-2 ring-[#0a8f6c] ring-offset-2 ring-offset-[#f4f7f6]' : ''
+                      }`}
+                      style={{ borderColor: active ? TEAL : GREY_BORDER, background: b.bg, color: b.color }}
+                    >
+                      {(b.n ?? 0)} {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </header>
 
-        <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm lg:p-6">
+        <div
+          className="flex w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex sm:w-fit"
+          role="tablist"
+          aria-label="Request type"
+        >
+          {[
+            { key: 'regularization', label: 'Regularization', icon: FiClock },
+            { key: 'wfh', label: 'Work From Home', icon: FiHome },
+          ].map(({ key, label, icon: Icon }) => {
+            const active = activeSection === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveSection(key)}
+                className={`inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-4 ${
+                  active ? 'bg-[#0a8f6c] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className={activeSection === 'regularization' ? 'block' : 'hidden'}>
+        <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5 lg:p-6">
           <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -648,8 +692,8 @@ const RegularizationRequests = () => {
               </div>
             </div>
           ) : null}
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+            <table className="min-w-[1050px] text-sm md:min-w-full">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <th className="whitespace-nowrap px-4 py-3 pl-5">
@@ -667,6 +711,7 @@ const RegularizationRequests = () => {
                   <th className="min-w-[180px] px-4 py-3">Check-in / out (requested)</th>
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Manager Name</th>
                   <th className="px-4 py-3 pr-5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -675,6 +720,10 @@ const RegularizationRequests = () => {
                   const emp = req.employeeId;
                   const name = [emp?.name, emp?.lastName].filter(Boolean).join(' ').trim() || 'Unknown';
                   const dept = emp?.department || '—';
+                  const managerObj = req.managerId;
+                  const managerName = managerObj && typeof managerObj === 'object'
+                    ? [managerObj.name, managerObj.lastName].filter(Boolean).join(' ').trim() || '—'
+                    : (typeof managerObj === 'string' && managerObj.trim() ? managerObj : '—');
                   const isPending = req.status === 'pending';
                   const canAct = isPending && isMyTurn(req, { isAdmin, isHr, isExecutive, isManager });
                   const inFmt = req.requestedClockIn
@@ -729,6 +778,9 @@ const RegularizationRequests = () => {
                       <td className="whitespace-nowrap px-4 py-4">
                         <StatusPill status={req.status} />
                         <WorkflowStepPill req={req} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 text-slate-700">
+                        {managerName}
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 pr-5 text-right">
                         <div className="inline-flex items-center gap-2">
@@ -827,10 +879,13 @@ const RegularizationRequests = () => {
             </div>
           </div>
         </div>
+        </div>
+
+        {activeSection === 'wfh' ? <TeamWfhRequestsPanel /> : null}
       </div>
 
       {/* Drawer */}
-      {drawerReq ? (
+      {activeSection === 'regularization' && drawerReq ? (
         <div className="fixed inset-0 z-50 flex justify-end">
           <button
             type="button"
@@ -842,7 +897,7 @@ const RegularizationRequests = () => {
             className="relative h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl"
             style={{ boxShadow: '-8px 0 32px rgba(0,0,0,.12)' }}
           >
-            <div className="border-b border-slate-100 px-6 py-4">
+            <div className="border-b border-slate-100 px-4 py-4 sm:px-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Regularization Request</p>
@@ -860,17 +915,17 @@ const RegularizationRequests = () => {
               </div>
             </div>
 
-            <div className="px-6 py-5">
+            <div className="min-w-0 px-4 py-5 sm:px-6">
               <div className="mb-8 flex gap-4">
                 <RowAvatar employee={drawerReq.employeeId} sizeClass="h-14 w-14" />
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-lg font-bold text-slate-900">
                     {[drawerReq.employeeId?.name, drawerReq.employeeId?.lastName].filter(Boolean).join(' ').trim()}
                   </h2>
                   <p className="text-sm text-slate-600">
                     {drawerReq.employeeId?.position || drawerReq.employeeId?.department || 'Employee'}
                   </p>
-                  <p className="mt-2 text-xs text-slate-500">{drawerReq.employeeId?.email}</p>
+                  <p className="mt-2 break-all text-xs text-slate-500">{drawerReq.employeeId?.email}</p>
                 </div>
               </div>
 
@@ -967,7 +1022,7 @@ const RegularizationRequests = () => {
       ) : null}
 
       {/* Reject modal (single & bulk) */}
-      {rejectModalOpen ? (
+      {activeSection === 'regularization' && rejectModalOpen ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="mb-2 text-lg font-bold text-slate-900">
@@ -981,7 +1036,7 @@ const RegularizationRequests = () => {
               placeholder="Rejection reason…"
               className="mb-6 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-[#0a8f6c] focus:outline-none focus:ring-2 focus:ring-[#0a8f6c]/20"
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={closeRejectModal}

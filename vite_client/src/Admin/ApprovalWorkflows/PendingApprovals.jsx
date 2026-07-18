@@ -100,9 +100,11 @@ const PendingApprovals = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
+        <div>
           <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Pending Approvals</h1>
           <p className="text-lg text-gray-600">Review and approve pending requests</p>
         </div>
@@ -236,6 +238,8 @@ const PendingApprovals = () => {
             <p className="text-gray-500 text-sm mt-2">You're all caught up!</p>
           </div>
         )}
+      </div>
+      </div>
       </div>
 
       {showDetail && selectedApproval && (

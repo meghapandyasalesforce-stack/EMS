@@ -40,7 +40,7 @@ const OrganizationDashboard = () => {
 
     if (!statistics) {
         return (
-            <div className="text-center py-12">
+            <div className="text-center py-8 sm:py-10">
                 <p className="text-gray-500">No statistics available</p>
             </div>
         );
@@ -65,9 +65,12 @@ const OrganizationDashboard = () => {
     })) || [];
 
     return (
-        <div className="p-4 md:p-6 space-y-6 min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50">
+            <div className="page-shell">
+            <div className="page-shell-inner">
+            <div className="hrms-stack">
             {/* Header */}
-            <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Organization Dashboard</h1>
                     <p className="text-sm text-gray-600">Overview of your organization's key metrics and activities</p>
@@ -330,6 +333,9 @@ const OrganizationDashboard = () => {
                         )
                     )}
                 </div>
+            </div>
+            </div>
+            </div>
             </div>
         </div>
     );

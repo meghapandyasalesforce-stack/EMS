@@ -156,13 +156,13 @@ const OnboardingDetailPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
+        <div className="page-shell min-h-screen bg-gray-50 transition-all duration-300">
+            <div className="page-shell-inner hrms-stack">
                 {/* Header */}
-                <div className="mb-6">
+                <div>
                     <button
                         onClick={() => navigate('/onboarding')}
-                        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
+                        className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-800"
                     >
                         <FaArrowLeft /> Back to Workflows
                     </button>
@@ -213,11 +213,11 @@ const OnboardingDetailPage = () => {
                 </div>
 
                 {/* Workflow Details */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="hrms-main-rail">
                     {/* Main Content */}
-                    <div className="lg:col-span-2">
+                    <div className="min-w-0">
                         {/* Tasks Section */}
-                        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="mb-6 rounded-lg bg-white p-6 shadow-md">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-xl font-semibold">Tasks</h2>
                                 <button
@@ -305,7 +305,7 @@ const OnboardingDetailPage = () => {
                     </div>
 
                     {/* Sidebar */}
-                    <div className="space-y-6">
+                    <div className="min-w-0 space-y-6">
                         {/* Workflow Info */}
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold mb-4">Workflow Information</h3>
@@ -372,7 +372,7 @@ const OnboardingDetailPage = () => {
             {/* Add Task Modal */}
             {showAddTaskModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-semibold mb-4">Add New Task</h3>
                         <form onSubmit={addTask} className="space-y-4">
                             <div>

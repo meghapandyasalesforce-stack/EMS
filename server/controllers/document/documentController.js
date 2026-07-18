@@ -1122,9 +1122,13 @@ export const getMyDocuments = asyncHandler(async (req, res) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
     const skip = (pageNum - 1) * limitNum;
 
+    // Include Rejected (isActive false) so profile Job Details can show reason + re-upload
     const query = addOrganizationFilter(req, {
         uploadedBy: employeeId,
-        isActive: { $ne: false },
+        $or: [
+            { isActive: { $ne: false } },
+            { approvalStatus: 'Rejected' },
+        ],
     });
 
     const searchTrim = typeof search === 'string' ? search.trim() : '';

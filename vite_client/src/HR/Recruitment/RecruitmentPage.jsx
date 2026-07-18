@@ -37,8 +37,8 @@ const RecruitmentPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-5 transition-all duration-300">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-gray-50 p-3 sm:p-4 transition-all duration-300">
+            <div className="w-full max-w-[1600px] mx-auto">
                 {/* Header */}
                 <div className="mb-6 flex justify-between items-center">
                     <div>
@@ -56,7 +56,7 @@ const RecruitmentPage = () => {
 
                 {/* Tabs */}
                 <div className="bg-white rounded-lg shadow-md mb-6">
-                    <div className="flex border-b">
+                    <div className="flex border-b overflow-x-auto">
                         <button
                             onClick={() => setActiveTab('jobs')}
                             className={`px-6 py-3 font-medium ${activeTab === 'jobs' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
@@ -99,14 +99,15 @@ const RecruitmentPage = () => {
                             </div>
                         ))}
                         {jobPostings.length === 0 && (
-                            <div className="col-span-3 text-center py-12">
+                            <div className="col-span-3 text-center py-8 sm:py-10">
                                 <p className="text-gray-500">No job postings yet. Create your first job posting!</p>
                             </div>
                         )}
                     </div>
                 ) : (
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <div className="overflow-x-auto">
+                        <table className="min-w-[640px] w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
@@ -149,8 +150,9 @@ const RecruitmentPage = () => {
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                         {candidates.length === 0 && (
-                            <div className="text-center py-12">
+                            <div className="text-center py-8 sm:py-10">
                                 <p className="text-gray-500">No candidates yet.</p>
                             </div>
                         )}

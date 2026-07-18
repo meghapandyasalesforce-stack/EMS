@@ -370,16 +370,32 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
         const pooledTypes = leaveBalanceEngine
             .getPooledLeaveTypeConfigs(balance.policy || {})
             .map((lt) => lt.type);
-        const isEmployeeWalletAdjust =
-            normalizedType === 'employee' || pooledTypes.includes(normalizedType);
+        // Only the explicit employee wallet key uses the shared-wallet path.
+        // Specific leave types always adjust independently (even if also in the pool).
+        const isEmployeeWalletAdjust = normalizedType === 'employee';
 
         if (!isEmployeeWalletAdjust) {
-            const typeBalance = balance.balances.find((b) => b.leaveType === normalizedType);
+            let typeBalance = balance.balances.find((b) => b.leaveType === normalizedType);
             if (!typeBalance) {
-                return res.status(404).json({
-                    success: false,
-                    message: `Leave type "${normalizedType}" not found in this employee's balance`,
-                });
+                const policyHasType = (balance.policy?.leaveTypes || []).some(
+                    (lt) => lt?.type === normalizedType && lt.enabled !== false
+                );
+                if (!policyHasType) {
+                    return res.status(404).json({
+                        success: false,
+                        message: `Leave type "${normalizedType}" not found in this employee's balance`,
+                    });
+                }
+                typeBalance = {
+                    leaveType: normalizedType,
+                    accrued: 0,
+                    used: 0,
+                    available: 0,
+                    carriedForward: 0,
+                    expired: 0,
+                    pending: 0,
+                };
+                balance.balances.push(typeBalance);
             }
         }
 
@@ -416,28 +432,30 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     available: summary.totalAvailableLeave ?? 0,
                 };
 
-                const currentOverride = balance.employeeLeaveSummary?.manualOverride || {};
+                // Balance Adjustment overwrites the wallet — do not stack on prior available/CF.
+                // Available Leave = max(0, Earned So Far − Used). CF mirrors that remaining amount.
                 const merged = {
-                    accrued:
-                        nextAccrued ??
-                        (currentOverride.active ? currentOverride.accrued : prevSnapshot.accrued) ??
-                        prevSnapshot.accrued,
-                    used:
-                        nextUsed ??
-                        (currentOverride.active ? currentOverride.used : prevSnapshot.used) ??
-                        prevSnapshot.used,
-                    carriedForward:
-                        nextCarried !== undefined && nextCarried !== null && nextCarried !== ''
-                            ? prevSnapshot.carriedForward + nextCarried
-                            : (currentOverride.active
-                                ? currentOverride.carriedForward
-                                : prevSnapshot.carriedForward) ??
-                              prevSnapshot.carriedForward,
+                    accrued: nextAccrued ?? 0,
+                    used: nextUsed ?? 0,
+                    carriedForward: 0,
                 };
+                if (nextAccrued === undefined && nextUsed === undefined && nextCarried === undefined) {
+                    const currentOverride = balance.employeeLeaveSummary?.manualOverride || {};
+                    merged.accrued =
+                        (currentOverride.active ? currentOverride.accrued : prevSnapshot.accrued) ??
+                        prevSnapshot.accrued;
+                    merged.used =
+                        (currentOverride.active ? currentOverride.used : prevSnapshot.used) ??
+                        prevSnapshot.used;
+                }
                 const nextAvailable = Math.max(
                     0,
-                    roundLeaveDays(merged.accrued + merged.carriedForward - merged.used)
+                    roundLeaveDays(merged.accrued - merged.used)
                 );
+                merged.carriedForward =
+                    nextCarried !== undefined && nextCarried !== null && nextCarried !== ''
+                        ? Math.max(0, roundLeaveDays(nextCarried))
+                        : nextAvailable;
 
                 const anchorMonth = targetMonth;
 
@@ -636,9 +654,18 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     available: typeBalance.available,
                 };
 
+                // Overwrite this leave type only — Available = max(0, Earned − Used).
+                // Carry forward is stored as the auto value for display; it is not added again.
                 if (nextAccrued !== undefined) typeBalance.accrued = nextAccrued;
                 if (nextUsed !== undefined) typeBalance.used = nextUsed;
-                if (nextCarried !== undefined) typeBalance.carriedForward = nextCarried;
+                typeBalance.available = Math.max(
+                    0,
+                    roundLeaveDays((typeBalance.accrued || 0) - (typeBalance.used || 0))
+                );
+                typeBalance.carriedForward =
+                    nextCarried !== undefined
+                        ? Math.max(0, roundLeaveDays(nextCarried))
+                        : typeBalance.available;
 
                 typeBalance.manualOverride = {
                     active: true,
@@ -649,15 +676,6 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     adjustedBy: req.employee?._id || req.user?._id,
                     adjustedAt: new Date(),
                 };
-
-                typeBalance.available = Math.max(
-                    0,
-                    (typeBalance.accrued || 0) +
-                        (typeBalance.carriedForward || 0) -
-                        (typeBalance.used || 0) -
-                        (typeBalance.expired || 0) -
-                        (typeBalance.pending || 0)
-                );
 
                 balance.accrualHistory = balance.accrualHistory || [];
                 balance.accrualHistory.push({
@@ -693,6 +711,7 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     notes: reason ? String(reason).trim().slice(0, 500) : 'Manual balance adjustment',
                     remarks: remarks ? String(remarks).trim().slice(0, 500) : undefined,
                     toYear: targetYear,
+                    toMonth: targetMonth,
                 });
             }
         } catch (validationError) {

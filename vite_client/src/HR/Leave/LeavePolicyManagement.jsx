@@ -230,11 +230,11 @@ const LeavePolicyManagement = () => {
     };
 
     if (loading && !showForm) {
-        return <div className="p-6">Loading...</div>;
+        return <div className="p-3 sm:p-4">Loading...</div>;
     }
 
     return (
-        <div className="p-6">
+        <div className="p-3 sm:p-4">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-2xl font-bold">Leave Policy Management</h2>
@@ -817,7 +817,8 @@ const LeavePolicyManagement = () => {
             )}
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
+                <div className="overflow-x-auto">
+                <table className="min-w-[640px] w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policy Name</th>
@@ -880,6 +881,7 @@ const LeavePolicyManagement = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
                 {policies.length === 0 && (
                     <div className="text-center py-8 text-gray-500">
                         No leave policies found. Create one to get started.

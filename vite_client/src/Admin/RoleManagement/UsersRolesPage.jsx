@@ -102,8 +102,9 @@ const UsersRolesPage = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="mb-6">
+    <div className="page-shell">
+      <div className="page-shell-inner hrms-stack">
+      <div>
         <h1 className="text-2xl font-bold text-slate-900">Users &amp; roles</h1>
         <p className="mt-1 text-sm text-slate-500">
           Assign system access for your team. Changes take effect after the user logs out and back in.
@@ -225,6 +226,7 @@ const UsersRolesPage = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

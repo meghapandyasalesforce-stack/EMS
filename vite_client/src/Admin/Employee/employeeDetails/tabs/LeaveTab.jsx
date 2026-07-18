@@ -64,53 +64,112 @@ const fmtDays = (n) => {
   return v % 1 === 0 ? String(v) : v.toFixed(1);
 };
 
-const ManualAdjustModal = ({ open, saving, form, onChange, onClose, onSave }) => {
+const emptyTypeForm = () => ({ available: '0', used: '0', carriedForward: '0' });
+
+const ManualAdjustModal = ({
+  open,
+  saving,
+  leaveTypes,
+  forms,
+  onChange,
+  reason,
+  onReasonChange,
+  onClose,
+  onSave,
+}) => {
   if (!open) return null;
-  const preview = Math.max(
-    0,
-    (Number(form.accrued) || 0) + (Number(form.carriedForward) || 0) - (Number(form.used) || 0)
-  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl">
         <div className="border-b px-6 py-4">
-          <h3 className="text-lg font-semibold text-slate-900">Edit employee leave balance</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Balance Adjustment</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Adjust the shared leave wallet — not any leave category.
+            {/* Current Available Leave is from the leave policy. Carry Forward starts at 0 — whatever
+            you enter is added to Available for that leave type and included in the total summary. */}
           </p>
         </div>
-        <div className="space-y-3 px-6 py-4">
-          {[
-            { key: 'accrued', label: 'Earned so far' },
-            { key: 'used', label: 'Used' },
-            { key: 'carriedForward', label: 'Carried forward' },
-          ].map(({ key, label }) => (
-            <label key={key} className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">{label}</span>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={form[key]}
-                onChange={(e) => onChange(key, e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5"
-              />
-            </label>
-          ))}
-          <div className="rounded-xl bg-[#20C997]/10 px-4 py-3 text-center">
-            <span className="text-sm text-slate-600">Available after save</span>
-            <p className="text-2xl font-bold text-[#0d9488]">{fmtDays(preview)} days</p>
-          </div>
-          <input
-            placeholder="Reason (required)"
-            value={form.reason}
-            onChange={(e) => onChange('reason', e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-          />
+        <div className="overflow-y-auto px-6 py-4">
+          {leaveTypes.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-500">
+              No leave types found on this policy.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {leaveTypes.map((lt) => {
+                const typeKey = lt.type;
+                const form = forms[typeKey] || emptyTypeForm();
+                const label =
+                  lt.displayName || getLeaveTypeDisplayName(typeKey, leaveTypes);
+                const currentAvailable = Number(form.available) || 0;
+                const carryForward = form.carriedForward === '' ? 0 : Number(form.carriedForward) || 0;
+                const totalAfterCarry = Math.max(0, currentAvailable + carryForward);
+                return (
+                  <div
+                    key={typeKey}
+                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+                  >
+                    <h4 className="text-sm font-semibold text-slate-900">{label}</h4>
+                    <label className="mt-3 block text-sm">
+                      <span className="mb-1 block font-medium text-slate-700">
+                        Current Available Leave
+                      </span>
+                      <input
+                        type="text"
+                        value={`${fmtDays(currentAvailable)} Days`}
+                        readOnly
+                        tabIndex={-1}
+                        aria-readonly="true"
+                        className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700"
+                      />
+                    </label>
+                    <label className="mt-3 block text-sm">
+                      <span className="mb-1 block font-medium text-slate-700">
+                        Carry Forward 
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={form.carriedForward ?? '0'}
+                        onChange={(e) => onChange(typeKey, 'carriedForward', e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                      />
+                    </label>
+                    <p className="mt-2 text-xs text-slate-600">
+                      After save:{' '}
+                      <span className="font-semibold text-[#0d9488]">
+                        {fmtDays(totalAfterCarry)} days
+                      </span>
+                      {carryForward > 0
+                        ? ` (${fmtDays(currentAvailable)} + ${fmtDays(carryForward)})`
+                        : ''}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <label className="mt-4 block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Reason</span>
+            <input
+              placeholder="Reason (required)"
+              value={reason}
+              onChange={(e) => onReasonChange(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+            />
+          </label>
         </div>
         <div className="flex justify-end gap-2 border-t px-6 py-4">
-          <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2 text-sm">Cancel</button>
-          <button type="button" onClick={onSave} disabled={saving} className="rounded-xl bg-[#20C997] px-4 py-2 text-sm font-semibold text-white">
+          <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2 text-sm">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || leaveTypes.length === 0}
+            className="rounded-xl bg-[#20C997] px-4 py-2 text-sm font-semibold text-white"
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -207,8 +266,10 @@ const LeaveTab = ({ employeeId }) => {
   const [viewYear, setViewYear] = useState(currentYear);
   const [viewMonth, setViewMonth] = useState(currentMonth);
   const [showTools, setShowTools] = useState(false);
-  const [adjustTarget, setAdjustTarget] = useState(null);
-  const [adjustForm, setAdjustForm] = useState({ accrued: '', used: '', carriedForward: '', reason: '', remarks: '' });
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustForms, setAdjustForms] = useState({});
+  const [adjustInitialForms, setAdjustInitialForms] = useState({});
+  const [adjustReason, setAdjustReason] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showCarryForwardModal, setShowCarryForwardModal] = useState(false);
@@ -216,6 +277,13 @@ const LeaveTab = ({ employeeId }) => {
   const [savingCarryForward, setSavingCarryForward] = useState(false);
 
   const policyLeaveTypes = balance?.policy?.leaveTypes || [];
+  const editableLeaveTypes = useMemo(
+    () =>
+      (policyLeaveTypes || []).filter(
+        (lt) => lt?.type && lt.enabled !== false && lt.type !== 'loss_of_pay'
+      ),
+    [policyLeaveTypes]
+  );
   const employeeContext = balance?.employeeContext;
   const joiningMonth = employeeContext?.joiningMonth ?? 1;
   const joiningYear = employeeContext?.joiningYear ?? currentYear;
@@ -289,36 +357,78 @@ const LeaveTab = ({ employeeId }) => {
   };
 
   const openEditModal = () => {
-    setAdjustTarget({ leaveType: 'employee', label: 'Employee leave balance' });
-    setAdjustForm({
-      accrued: String(leaveSummary.totalAccrued ?? 0),
-      used: String(leaveSummary.totalUsed ?? 0),
-      carriedForward: String(leaveSummary.totalCarriedForward ?? 0),
-      reason: '',
-      remarks: '',
+    const nextForms = {};
+    editableLeaveTypes.forEach((lt) => {
+      const row = (balance?.balances || []).find((b) => b.leaveType === lt.type);
+      const available = Number(row?.availableDays ?? row?.available ?? 0) || 0;
+      const used = Number(row?.usedDays ?? row?.used ?? 0) || 0;
+      // Carry Forward always starts at 0 — HR enters the amount to add to Available.
+      nextForms[lt.type] = {
+        available: String(available),
+        used: String(used),
+        carriedForward: '0',
+      };
     });
+    setAdjustForms(nextForms);
+    setAdjustInitialForms(JSON.parse(JSON.stringify(nextForms)));
+    setAdjustReason('');
+    setAdjustOpen(true);
+  };
+
+  const handleAdjustFormChange = (leaveType, field, value) => {
+    if (!leaveType) return;
+    setAdjustForms((prev) => ({
+      ...prev,
+      [leaveType]: { ...(prev[leaveType] || emptyTypeForm()), [field]: value },
+    }));
   };
 
   const handleSaveManualAdjust = async () => {
-    if (!adjustTarget || !employeeId || !adjustForm.reason.trim()) {
+    if (!employeeId || !adjustReason.trim()) {
       toast.error('Please enter a reason');
       return;
     }
+
+    const changedTypes = editableLeaveTypes.filter((lt) => {
+      const form = adjustForms[lt.type] || emptyTypeForm();
+      const carriedForward = form.carriedForward === '' ? 0 : Number(form.carriedForward);
+      return carriedForward > 0;
+    });
+
+    if (changedTypes.length === 0) {
+      toast.info('Enter Carry Forward for at least one leave type');
+      return;
+    }
+
     setSavingAdjust(true);
     try {
-      const res = await axios.patch(`/v1/admin/leave-policy/balance/${employeeId}/adjust`, {
-        year: viewYear,
-        month: viewMonth,
-        leaveType: 'employee',
-        accrued: adjustForm.accrued === '' ? undefined : Number(adjustForm.accrued),
-        used: adjustForm.used === '' ? undefined : Number(adjustForm.used),
-        carriedForward: adjustForm.carriedForward === '' ? undefined : Number(adjustForm.carriedForward),
-        reason: adjustForm.reason.trim(),
-      });
-      setBalance(res.data?.balance || null);
-      setAdjustTarget(null);
-      toast.success('Balance adjusted');
-      await loadAudit();
+      let latestBalance = null;
+      for (const lt of changedTypes) {
+        const form = adjustForms[lt.type] || emptyTypeForm();
+        const available = form.available === '' ? 0 : Number(form.available);
+        const used = form.used === '' ? 0 : Number(form.used);
+        const carriedForward = form.carriedForward === '' ? 0 : Number(form.carriedForward);
+        // Available after save = Current Available + Carry Forward (added for every leave type).
+        const newAvailable = Math.max(0, available + carriedForward);
+        const accrued = Math.max(0, newAvailable + used);
+        const res = await axios.patch(`/v1/admin/leave-policy/balance/${employeeId}/adjust`, {
+          year: viewYear,
+          month: viewMonth,
+          leaveType: lt.type,
+          accrued,
+          used,
+          carriedForward,
+          reason: adjustReason.trim(),
+        });
+        latestBalance = res.data?.balance || latestBalance;
+      }
+      if (latestBalance) setBalance(latestBalance);
+      setAdjustOpen(false);
+      toast.success(
+        changedTypes.length === 1
+          ? 'Leave type balance adjusted'
+          : `${changedTypes.length} leave type balances adjusted`
+      );
       await refreshAll();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Adjustment failed');
@@ -532,11 +642,14 @@ const LeaveTab = ({ employeeId }) => {
       )}
 
       <ManualAdjustModal
-        open={Boolean(adjustTarget)}
-        form={adjustForm}
+        open={adjustOpen}
+        leaveTypes={editableLeaveTypes}
+        forms={adjustForms}
+        reason={adjustReason}
         saving={savingAdjust}
-        onChange={(field, value) => setAdjustForm((p) => ({ ...p, [field]: value }))}
-        onClose={() => !savingAdjust && setAdjustTarget(null)}
+        onChange={handleAdjustFormChange}
+        onReasonChange={setAdjustReason}
+        onClose={() => !savingAdjust && setAdjustOpen(false)}
         onSave={handleSaveManualAdjust}
       />
       <ManualCarryForwardModal

@@ -82,10 +82,10 @@ const AdminSettings = () => {
     const activeComponent = settingsTabs.find(tab => tab.id === activeTab)?.component;
 
     return (
-        <div className="min-h-screen w-full min-w-0 bg-[var(--color-bg-soft)] text-[var(--color-text)]">
-            <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6 md:px-6 lg:px-8 lg:py-8">
+        <div className="page-shell min-h-screen w-full min-w-0 bg-[var(--color-bg-soft)] text-[var(--color-text)]">
+            <div className="page-shell-inner hrms-stack">
                 {/* Header */}
-                <div className="mb-4 rounded-lg bg-white p-4 shadow-md sm:mb-6 sm:p-5 md:p-6">
+                <div className="rounded-lg bg-white p-4 shadow-md sm:p-5 md:p-6">
                     <h1 className="flex items-center text-xl font-bold text-gray-900 sm:text-2xl md:text-3xl">
                         <FaCog className="mr-2 flex-shrink-0 text-[var(--color-primary)] sm:mr-3" />
                         <span className="leading-tight">Admin Settings</span>
@@ -95,15 +95,15 @@ const AdminSettings = () => {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12 lg:gap-6 xl:gap-8">
+                <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12 lg:gap-6">
                     {/* Sidebar Navigation */}
-                    <aside className="min-w-0 lg:col-span-3 xl:col-span-3">
+                    <aside className="min-w-0 lg:col-span-3">
                         <div className="rounded-lg bg-white p-3 shadow-md sm:p-4 lg:sticky lg:top-4">
                             <h2 className="mb-3 px-1 text-base font-semibold text-gray-800 sm:mb-4 sm:text-lg">
                                 Settings
                             </h2>
                             {/* Mobile / tablet: horizontal scroll; desktop: stacked list */}
-                            <nav className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:space-y-1.5 lg:gap-0 lg:overflow-visible lg:pb-0">
+                            <nav className="hrms-tabs-scroll lg:flex-col lg:space-y-1.5 lg:overflow-visible lg:pb-0">
                                 {settingsTabs.map((tab) => (
                                     <button
                                         key={tab.id}
@@ -126,7 +126,7 @@ const AdminSettings = () => {
                     </aside>
 
                     {/* Main Content Area */}
-                    <div className="min-w-0 lg:col-span-9 xl:col-span-9">
+                    <div className="min-w-0 lg:col-span-9">
                         <div className="overflow-hidden rounded-lg bg-white shadow-md">
                             {activeComponent}
                         </div>
@@ -196,6 +196,7 @@ const GeneralSettingsContent = () => {
         allowEmployeeRegistration: true,
         requireEmailVerification: false,
         allowSelfService: true,
+        allowWorkFromHome: true,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
         employeeIdMinDigits: 3,
@@ -219,6 +220,7 @@ const GeneralSettingsContent = () => {
                 allowEmployeeRegistration: profile.settings.allowEmployeeRegistration ?? true,
                 requireEmailVerification: profile.settings.requireEmailVerification ?? false,
                 allowSelfService: profile.settings.allowSelfService ?? true,
+                allowWorkFromHome: profile.settings.allowWorkFromHome ?? true,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
                 employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
@@ -282,6 +284,7 @@ const GeneralSettingsContent = () => {
                     allowEmployeeRegistration: updatedProfile.settings.allowEmployeeRegistration ?? true,
                     requireEmailVerification: updatedProfile.settings.requireEmailVerification ?? false,
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
+                    allowWorkFromHome: updatedProfile.settings.allowWorkFromHome ?? true,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
                     employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
@@ -428,6 +431,30 @@ const GeneralSettingsContent = () => {
                         className="ml-2 flex-shrink-0"
                     >
                         {settings.allowSelfService ? (
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
+                        ) : (
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
+                        )}
+                    </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaCog className="mr-2 flex-shrink-0" />
+                            Allow Work From Home
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                            Allow employees to punch in with the &quot;Work From Home&quot; option. WFH punches are recorded
+                            from any location and are shown separately from office attendance. Office punch verification is unaffected.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleSettingChange('allowWorkFromHome')}
+                        className="ml-2 flex-shrink-0"
+                    >
+                        {settings.allowWorkFromHome ? (
                             <FiToggleRight className="h-6 w-12 text-theme-primary" />
                         ) : (
                             <FiToggleLeft className="h-6 w-12 text-gray-400" />

@@ -99,8 +99,8 @@ function App() {
                     </Routes>
                 </div>
             ) : (
-                <div className="flex min-h-[calc(100vh-64px)] max-w-[100vw] ml-0 overflow-x-clip lg:ml-64">
-                    <div className="main-scroll-area flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)]">
+                <div className="flex min-h-[calc(100dvh-3.5rem)] max-w-[100vw] ml-0 overflow-x-clip lg:ml-64 lg:min-h-screen">
+                    <div className="main-scroll-area flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] pt-14 sm:pt-16 lg:pt-0 safe-area-x">
                         <ScrollToTop />
                         <Routes>
                             {renderRoutes(authRoutes)}

@@ -437,8 +437,10 @@ const IdCardGenerator = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB] p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1400px] space-y-6">
+    <div className="min-h-[calc(100vh-64px)] bg-[#F5F7FB]">
+      <div className="page-shell">
+      <div className="page-shell-inner">
+      <div className="hrms-stack">
         {/* Header */}
         <header className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm md:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -455,8 +457,8 @@ const IdCardGenerator = () => {
                 <p className="mt-0.5 text-sm text-slate-500">Generate and manage employee ID cards</p>
               </div>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <label className="relative block min-w-[240px] flex-1 sm:max-w-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center w-full lg:w-auto">
+              <label className="relative block min-w-0 w-full sm:min-w-[240px] flex-1 sm:max-w-sm">
                 <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
@@ -493,7 +495,7 @@ const IdCardGenerator = () => {
             <FiFilter className="h-4 w-4 text-[#20C997]" />
             Filters
           </div>
-          <div className="min-w-[160px] flex-1">
+          <div className="min-w-0 w-full sm:min-w-[160px] flex-1">
             <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
             <select
               value={filters.status}
@@ -507,7 +509,7 @@ const IdCardGenerator = () => {
               <option value="suspended">Suspended</option>
             </select>
           </div>
-          <div className="min-w-[160px] flex-1">
+          <div className="min-w-0 w-full sm:min-w-[160px] flex-1">
             <label className="mb-1 block text-xs font-medium text-slate-500">Card Type</label>
             <select
               value={filters.cardType}
@@ -534,7 +536,7 @@ const IdCardGenerator = () => {
 
           <div className="p-5 md:p-6">
             {filteredCards.length === 0 ? (
-              <div className="py-16 text-center">
+              <div className="py-8 sm:py-10 text-center">
                 <div
                   className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
                   style={{ background: `${MINT}20` }}
@@ -647,6 +649,8 @@ const IdCardGenerator = () => {
             )}
           </div>
         </section>
+      </div>
+      </div>
       </div>
 
       {showGenerateModal && (

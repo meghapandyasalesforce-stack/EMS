@@ -202,10 +202,10 @@ const HRAnalyticsPage = () => {
         : 0;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 p-4 sm:p-6">
-            <div className="max-w-7xl mx-auto">
+        <div className="page-shell min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+            <div className="page-shell-inner hrms-stack">
                 {/* Header */}
-                <div className="mb-6">
+                <div>
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">HR Analytics Dashboard</h1>

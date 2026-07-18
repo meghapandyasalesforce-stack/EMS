@@ -50,4 +50,24 @@ describe('navigationConfig — Me portal', () => {
     expect(items.some((item) => item.path === '/dashboard-manager')).toBe(true);
     expect(items.some((item) => item.path === '/dashboard-employee')).toBe(false);
   });
+
+  it.each([
+    'employee',
+    'executive',
+    'hr_manager',
+    'payroll_admin',
+    'line_manager',
+  ])('shows personal attendance regularization in the %s portal', (portalId) => {
+    const items = getNavigationItems(
+      { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+      { _id: 'e1' },
+      [],
+      {},
+      portalId
+    );
+
+    expect(
+      items.some((item) => item.path === '/my-attendance-regularization')
+    ).toBe(true);
+  });
 });
