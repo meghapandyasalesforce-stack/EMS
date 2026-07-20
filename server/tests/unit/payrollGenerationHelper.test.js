@@ -16,7 +16,8 @@ import {
     sumEffectivePresentDays,
     sumEffectivePresentDaysByKeys,
     computePayrollProration,
-    resolvePayrollServiceDateKeys
+    resolvePayrollServiceDateKeys,
+    resolvePayslipSalaryPaidDays
 } from '../../helpers/payrollGenerationHelper.js';
 
 const TZ = 'Asia/Kolkata';
@@ -177,6 +178,30 @@ describe('payrollGenerationHelper', () => {
             });
             expect(unpaidWorkingDays).toBe(0);
             expect(effectiveGross).toBe(30000);
+        });
+    });
+
+    describe('resolvePayslipSalaryPaidDays', () => {
+        it('uses full calendar month minus unpaid leave', () => {
+            const paid = resolvePayslipSalaryPaidDays({
+                month: 'May',
+                year: 2026,
+                unpaidLeave: 2.39875,
+                timezone: TZ
+            });
+            expect(paid).toBeCloseTo(28.60125, 5);
+        });
+
+        it('shortens service window for mid-month join', () => {
+            const paid = resolvePayslipSalaryPaidDays({
+                month: 'May',
+                year: 2026,
+                unpaidLeave: 1,
+                joiningDate: new Date('2026-05-16T00:00:00+05:30'),
+                timezone: TZ
+            });
+            // May 16–31 = 16 calendar days − 1 unpaid
+            expect(paid).toBe(15);
         });
     });
 

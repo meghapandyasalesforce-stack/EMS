@@ -253,6 +253,7 @@ export const updateOrganizationSettings = async (req, res) => {
             timezone,
             tdsCalculationMode,
             allowWorkFromHome,
+            allowNonWorkingDayPunch,
         } = req.body;
 
         const organization = await Organization.findById(organizationId);
@@ -319,6 +320,10 @@ export const updateOrganizationSettings = async (req, res) => {
         if (allowWorkFromHome !== undefined) {
             if (!organization.settings) organization.settings = {};
             organization.settings.allowWorkFromHome = !!allowWorkFromHome;
+        }
+        if (allowNonWorkingDayPunch !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.allowNonWorkingDayPunch = !!allowNonWorkingDayPunch;
         }
         if (timezone !== undefined) {
             if (!isValidTimezone(timezone)) {

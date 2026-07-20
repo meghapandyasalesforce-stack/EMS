@@ -386,6 +386,7 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
       isHrExecutive: authContext.isHrExecutive,
       isPayrollAdmin: authContext.isPayrollAdmin,
       isLineManager: authContext.isLineManager,
+      isProjectManager: authContext.isProjectManager,
       isExecutive: authContext.isExecutive,
       jwtRole: session.jwtRole,
     },

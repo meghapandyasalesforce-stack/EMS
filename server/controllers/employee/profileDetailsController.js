@@ -1,4 +1,5 @@
 import Employee from '../../models/employee.model.js';
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import User from '../../models/user.model.js';
 import {
   findOrgOwnerEmployeeProfile,
@@ -872,7 +873,7 @@ export const getEmployeeInfoByAdmin = async (req, res) => {
     }
 
     // Manager can access only employees linked to them.
-    const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManagerScope = shouldScopeDataToManagedTeam(req);
     if (isManagerScope) {
       const linked = isEmployeeLinkedToManager(employee, req.employee);
       if (!linked) {

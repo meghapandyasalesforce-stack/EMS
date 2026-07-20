@@ -1,4 +1,5 @@
 import Task from "../../models/task.model.js";
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Project from "../../models/project.model.js";
 import ProjectUpdate from "../../models/projectUpdate.model.js";
 import ProjectWorkItem from "../../models/projectWorkItem.model.js";
@@ -300,7 +301,7 @@ export const getMyTasks = async (req, res) => {
         
         // Check if user is a manager (not admin or HR)
         // Example: Manager "Arun Kumar" sees tasks for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         
         if (isManager && req.employee) {
             // Manager: Get tasks from all employees linked to them

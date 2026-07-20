@@ -1,5 +1,6 @@
 import Leave from "../../models/leave.model.js"
 import Employee from "../../models/employee.model.js";
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import LeavePolicy from "../../models/leavePolicy.model.js";
 import mongoose from "mongoose";
 import logger from "../../helpers/logger.js";
@@ -53,7 +54,7 @@ export const getAllLeaves = async (req, res) => {
 
         // If user is a manager (not admin or HR), filter by manager field
         // Example: Manager "Arun Kumar" sees leaves for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const managerEmployeeIds = await getManagerEmployeeIds(Employee, req.organizationId, req.employee);
             query.employee = { $in: managerEmployeeIds };
@@ -192,7 +193,7 @@ export const updateLeaveStatus = async (req, res) => {
 
         // If user is a manager (not admin or HR), verify the leave belongs to an employee linked to them
         // Example: Manager "Arun Kumar" can only approve/reject leaves for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         let employeeLinkedForWorkflow = true;
         if (isManager && req.employee) {
             const leaveEmployee = await Employee.findById(leave.employee?._id || leave.employee).select('manager managerId').lean();

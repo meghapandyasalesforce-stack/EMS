@@ -1,4 +1,5 @@
 import Employee from '../../models/employee.model.js';
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import mongoose from 'mongoose';
 import Attendance from '../../models/attendance.model.js';
 import Project from '../../models/project.model.js';
@@ -73,7 +74,7 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     }
 
     // Manager can update only employees linked to them.
-    const isManagerScope = !!req.employee && req.employee?.isManager && !req.employee?.isProjectManager && !req.employee?.isHR && !req.user;
+    const isManagerScope = shouldScopeDataToManagedTeam(req);
     if (isManagerScope) {
       const linked = isEmployeeLinkedToManager(employee, req.employee);
       if (!linked) {

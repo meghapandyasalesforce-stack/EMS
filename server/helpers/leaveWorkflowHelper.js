@@ -1,4 +1,5 @@
 import { ApprovalWorkflow } from '../models/approvalWorkflow.model.js';
+import { shouldScopeDataToManagedTeam } from './permissionService.js';
 import { processApprovalAction } from '../services/approvalWorkflowService.js';
 import {
     attachWorkflowSummariesToRequests,
@@ -119,7 +120,7 @@ export const resolveLeaveWorkflowAction = async ({
     );
 
     const isManager =
-        req.employee?.isManager && !req.employee?.isHR && !req.user;
+        shouldScopeDataToManagedTeam(req);
     const isManagerStep = approverType === 'Manager';
     const managerTeamOverride =
         isManager && employeeLinked && isManagerStep && Boolean(reviewerEmployeeId);

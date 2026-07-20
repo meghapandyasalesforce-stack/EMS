@@ -107,12 +107,15 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
   } else if (functionalRoles.includes('hr') && !buckets.has(ROLE_BUCKETS.HR_MANAGER)) {
     buckets.add(ROLE_BUCKETS.HR_EXECUTIVE);
   }
-  if (
-    functionalRoles.includes('manager') ||
-    functionalRoles.includes('project_manager')
-  ) {
+
+  // Line manager (people manager) vs project manager are separate buckets
+  if (functionalRoles.includes('manager')) {
     buckets.add(ROLE_BUCKETS.LINE_MANAGER);
   }
+  if (functionalRoles.includes('project_manager')) {
+    buckets.add(ROLE_BUCKETS.PROJECT_MANAGER);
+  }
+
   if (functionalRoles.includes('finance')) {
     buckets.add(ROLE_BUCKETS.PAYROLL_ADMIN);
   }
@@ -154,6 +157,7 @@ export const resolveAuthContext = async (decoded, req = {}) => {
     isHrExecutive: roleInfo.buckets.includes(ROLE_BUCKETS.HR_EXECUTIVE),
     isPayrollAdmin: roleInfo.buckets.includes(ROLE_BUCKETS.PAYROLL_ADMIN),
     isLineManager: roleInfo.buckets.includes(ROLE_BUCKETS.LINE_MANAGER),
+    isProjectManager: roleInfo.buckets.includes(ROLE_BUCKETS.PROJECT_MANAGER),
     isExecutive: roleInfo.buckets.includes(ROLE_BUCKETS.EXECUTIVE),
   };
 };
@@ -176,6 +180,32 @@ export const hasAllPermissions = (authContext, permissionList = []) => {
   return permissionList.every((p) => hasPermission(authContext, p));
 };
 
+/**
+ * True when the requester is a people manager who must only see their direct reports.
+ * Does NOT use !req.user (linked User accounts used to skip team filters incorrectly).
+ * Pure project managers are excluded (org roster for project membership).
+ */
+export const shouldScopeDataToManagedTeam = (req) => {
+  if (!req?.employee?._id) return false;
+
+  const ctx = req.authContext;
+  if (ctx) {
+    if (ctx.isOrgOwner || ctx.isHrManager || ctx.isHrExecutive) return false;
+    if (ctx.isExecutive && hasPermission(ctx, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
+      return false;
+    }
+    if (ctx.isPayrollAdmin && hasPermission(ctx, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
+      return false;
+    }
+    // People managers are team-scoped even if they also have project_manager
+    if (ctx.isLineManager) return true;
+    return false;
+  }
+
+  // Legacy fallback when authContext was not attached
+  return Boolean(req.employee?.isManager && !req.employee?.isHR);
+};
+
 /** Data scope for list endpoints */
 export const getDataScope = (authContext) => {
   if (authContext?.isOrgOwner || authContext?.isHrManager || authContext?.isHrExecutive) {
@@ -189,12 +219,13 @@ export const getDataScope = (authContext) => {
   if (authContext?.isPayrollAdmin && hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
     return 'organization';
   }
+  // People managers: team only (takes precedence over project_manager hybrid)
   if (authContext?.isLineManager) {
-    // Project managers need org-wide scope to manage project membership
-    if (hasPermission(authContext, PERMISSIONS.PROJECT_ADMIN_VIEW)) {
-      return 'organization';
-    }
     return 'team';
+  }
+  // Pure project managers: org-wide for project membership pickers
+  if (authContext?.isProjectManager) {
+    return 'organization';
   }
   return 'self';
 };

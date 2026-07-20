@@ -9,8 +9,9 @@ import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeeP
 import { getEffectiveSalaryForMonth } from './salaryRevisionHelper.js';
 import { computeRegimeIncomeTaxCumulative, clearTdsCalculationModeCache } from './tdsCumulativeHelper.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
-import { getDateKeyInTimezone, getEndOfDayInTimezone, getPayrollMonthUtcBounds } from './timezoneHelper.js';
+import { getDateKeyInTimezone, getEndOfDayInTimezone, getPayrollMonthUtcBounds, normalizeTimezone } from './timezoneHelper.js';
 import { buildAttendancePeriodFilter, parseDateKeyInTimezone } from './attendanceDayHelper.js';
+import { DEFAULT_TIMEZONE } from '../constants/timezoneOptions.js';
 
 export { getPayrollMonthUtcBounds };
 
@@ -547,6 +548,61 @@ export function computePayrollProration({
             ? Math.round((fullGross * paidPayrollDays) / fullMonthCalDays)
             : 0;
     return { unpaidWorkingDays, paidPayrollDays, effectiveGross };
+}
+
+/**
+ * Calendar days salary was paid for on the payslip:
+ * service window in the month (join→LWD) minus unpaid working-day absences.
+ * Matches payroll proration's paidPayrollDays (not attendance workingDays).
+ */
+export function resolvePayslipSalaryPaidDays({
+    month,
+    year,
+    unpaidLeave,
+    joiningDate,
+    lastWorkingDate,
+    terminationDate,
+    timezone = DEFAULT_TIMEZONE,
+    fallbackWorkingDays = null
+}) {
+    const yearNum = parseInt(year, 10);
+    const monthIndex = new Date(`${month} 1, ${yearNum}`).getMonth();
+    if (Number.isNaN(monthIndex) || Number.isNaN(yearNum)) {
+        return fallbackWorkingDays;
+    }
+
+    const tz = normalizeTimezone(timezone);
+    const monthStartDt = DateTime.fromObject(
+        { year: yearNum, month: monthIndex + 1, day: 1 },
+        { zone: tz }
+    );
+    if (!monthStartDt.isValid) {
+        return fallbackWorkingDays;
+    }
+
+    const monthEndDt = monthStartDt.endOf('month');
+    const monthStartKey = monthStartDt.toFormat('yyyy-MM-dd');
+    const monthEndKey = monthEndDt.toFormat('yyyy-MM-dd');
+
+    const { effStartKey, effEndKey } = resolvePayrollServiceDateKeys({
+        monthStartKey,
+        monthEndKey,
+        joiningDate,
+        lastWorkingDate,
+        terminationDate,
+        timezone: tz
+    });
+
+    if (!effStartKey || !effEndKey || effStartKey > effEndKey) {
+        return 0;
+    }
+
+    const serviceWindowCalDays = countCalendarDaysInDateKeyRange(effStartKey, effEndKey, tz);
+    const unpaid = Number(unpaidLeave);
+    if (Number.isNaN(unpaid)) {
+        return serviceWindowCalDays;
+    }
+    return Math.max(0, serviceWindowCalDays - Math.max(0, unpaid));
 }
 
 /**

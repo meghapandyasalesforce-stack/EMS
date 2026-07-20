@@ -1,4 +1,5 @@
 import Payroll from "../../models/payroll.model.js";
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from"../../models/employee.model.js"
 import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
@@ -423,7 +424,7 @@ export const getAllPayrolls = async (req, res) => {
         
         const { month, year } = req.query;
         const isAdmin = req.user?.role === 'admin';
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         
         // Build base query: only add month/year when explicitly provided
         // Dashboard calls this endpoint without params to fetch all payrolls
@@ -725,7 +726,7 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
 
         // If user is a manager (not admin or HR), verify employee is linked to them
         // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const employee = await Employee.findById(employeeId).select('manager').lean();
             if (!employee) {
@@ -815,7 +816,7 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
 
         // If user is a manager (not admin or HR), verify employee is linked to them
         // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const employee = await Employee.findById(employeeId).select('manager').lean();
             if (!employee) {
@@ -902,7 +903,7 @@ export const getPayrollById = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Payroll not found' });
         }
 
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee && payroll.employeeId) {
             const employee = await Employee.findById(payroll.employeeId._id || payroll.employeeId).select('manager').lean();
             if (employee && !isEmployeeLinkedToManager(employee, req.employee)) {
@@ -928,7 +929,7 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
         
         // If user is a manager (not admin or HR), verify employee is linked to them
         // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const employee = await Employee.findById(employeeId).select('manager').lean();
             if (!employee) {
@@ -1011,7 +1012,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
 
         // If user is a manager (not admin or HR), filter by manager field
         // Example: Manager "Arun Kumar" sees payrolls for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {

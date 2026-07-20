@@ -38,6 +38,7 @@ export const getMyPermissions = asyncHandler(async (req, res) => {
       isHrExecutive: authContext.isHrExecutive,
       isPayrollAdmin: authContext.isPayrollAdmin,
       isLineManager: authContext.isLineManager,
+      isProjectManager: authContext.isProjectManager,
       isExecutive: authContext.isExecutive,
       jwtRole: authContext.jwtRole || decoded?.role || null,
     },

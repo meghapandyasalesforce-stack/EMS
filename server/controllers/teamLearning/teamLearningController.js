@@ -1,4 +1,5 @@
 import { TeamLearning, LearningProgress } from '../../models/teamLearning.model.js';
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from '../../models/employee.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { getManagerEmployeeIds } from '../../helpers/managerHelper.js';
@@ -97,7 +98,7 @@ export const getTeamLearning = asyncHandler(async (req, res) => {
     let query = addOrganizationFilter(req, {});
 
     // If user is a manager, show resources they created or assigned to their team
-    if (req.employee?.isManager && !req.employee?.isHR && !req.user) {
+    if (shouldScopeDataToManagedTeam(req)) {
         const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
         
         query.$or = [

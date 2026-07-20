@@ -1,4 +1,5 @@
 import WfhRequest from "../../models/wfhRequest.model.js";
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from "../../models/employee.model.js";
 import logger from "../../helpers/logger.js";
 import { getOrganizationId, addOrganizationFilter } from "../../helpers/organizationHelper.js";
@@ -163,7 +164,7 @@ export const getAllWfhRequests = async (req, res) => {
 
         // Managers should only see WFH applications submitted by their team.
         // HR and admins retain organization-wide visibility.
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager) {
             const teamEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
             filter.employeeId = { $in: teamEmployeeIds };
@@ -256,7 +257,7 @@ export const reviewWfhRequest = async (req, res) => {
 
         // Managers may only act on requests from their own team.
         const organizationId = getOrganizationId(req);
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager) {
             const teamEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
             const inTeam = teamEmployeeIds.some(

@@ -283,6 +283,15 @@ const organizationSchema = new mongoose.Schema({
         allowWorkFromHome: {
             type: Boolean,
             default: true
+        },
+        /**
+         * Non-working day punch: when true, employees may punch in on
+         * calendar non-working days (weekends / off days) and holidays.
+         * Defaults to false — punch-in is blocked unless admin enables this.
+         */
+        allowNonWorkingDayPunch: {
+            type: Boolean,
+            default: false
         }
     },
     logo: {
