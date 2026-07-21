@@ -1,48 +1,64 @@
-/** Default annual leave entitlement when policy amount is missing or zero */
-export const DEFAULT_LEAVE_ENTITLEMENT_DAYS = 18;
-
-/** Default monthly allocation (18 / 12) */
-export const DEFAULT_MONTHLY_LEAVE_DAYS = 1.5;
+import {
+    getAnnualEntitlementAmount,
+    getPolicyMonthlyAccrualAmount,
+    usesMonthlyAccrual,
+} from '../helpers/leavePolicyAccrualHelper.js';
 
 /** Earliest year selectable in leave history / recalculation UI */
 export const LEAVE_HISTORY_MIN_YEAR = 2016;
 
-export const LEAVE_TYPES_NO_CARRY_FORWARD = new Set(['loss_of_pay', 'sick']);
+/**
+ * LEGACY FALLBACK ONLY — do not use in balance/summary/validation when an active policy exists.
+ * Used for: new-policy form templates, API metadata, historical compatibility.
+ */
+export const DEFAULT_LEAVE_ENTITLEMENT_DAYS = 18;
 
-export function getEffectiveEntitlementAmount(leaveTypeConfig) {
-    const maxAccrual = Number(leaveTypeConfig?.accrual?.maxAccrual);
-    if (Number.isFinite(maxAccrual) && maxAccrual > 0) {
-        return maxAccrual;
-    }
-    const amount = Number(leaveTypeConfig?.accrual?.amount);
-    if (Number.isFinite(amount) && amount > 0) {
-        // accrual.amount <= 3 is the monthly rate (e.g. 1.5), not the annual cap
-        if (amount <= 3) {
-            return DEFAULT_LEAVE_ENTITLEMENT_DAYS;
-        }
-        return amount;
-    }
+/**
+ * LEGACY FALLBACK ONLY — do not use in balance/summary/validation when an active policy exists.
+ */
+export const DEFAULT_MONTHLY_LEAVE_DAYS = 1.5;
+
+/** Explicit legacy accessors — call sites must document why fallback is needed. */
+export function getLegacyDefaultAnnualEntitlement() {
     return DEFAULT_LEAVE_ENTITLEMENT_DAYS;
 }
 
+export function getLegacyDefaultMonthlyAccrual() {
+    return DEFAULT_MONTHLY_LEAVE_DAYS;
+}
+
 /**
- * Carry-forward defaults: always enabled for standard leave types.
- * 100% of unused balance carries — no cap, no expiry, no January reset.
+ * Annual entitlement from policy (accrual.maxAccrual). Returns 0 when unconfigured.
+ * Never falls back to DEFAULT_LEAVE_ENTITLEMENT_DAYS.
+ */
+export function getEffectiveEntitlementAmount(leaveTypeConfig) {
+    return getAnnualEntitlementAmount(leaveTypeConfig);
+}
+
+/**
+ * Carry-forward from policy configuration (respect HR settings per leave type).
  */
 export function getEffectiveCarryForwardConfig(leaveTypeConfig) {
-    const leaveType = leaveTypeConfig?.type;
-    if (LEAVE_TYPES_NO_CARRY_FORWARD.has(leaveType)) {
-        return { enabled: false, maxDays: null, expiresIfNotUsed: false, expiryDays: undefined };
+    const cf = leaveTypeConfig?.carryForward;
+    if (cf && typeof cf === 'object') {
+        return {
+            enabled: cf.enabled !== false,
+            maxDays: cf.maxDays != null ? Number(cf.maxDays) : null,
+            expiresIfNotUsed: Boolean(cf.expiresIfNotUsed),
+            expiryDays: cf.expiryDays,
+        };
     }
-
     return {
-        enabled: true,
+        enabled: false,
         maxDays: null,
         expiresIfNotUsed: false,
         expiryDays: undefined,
     };
 }
 
+/**
+ * Fill only missing structural fields — never inject 18/1.5 or overwrite HR values.
+ */
 export function applyLeaveTypeEntitlementDefaults(leaveType) {
     const plain =
         leaveType && typeof leaveType === 'object' && typeof leaveType.toObject === 'function'
@@ -52,24 +68,39 @@ export function applyLeaveTypeEntitlementDefaults(leaveType) {
         return plain;
     }
 
-    return {
+    const accrual = plain.accrual || {};
+    const normalizedAccrual = {
+        ...accrual,
+        method: accrual.method || 'monthly',
+        frequency: accrual.frequency || accrual.method || 'monthly',
+        anniversaryBased: Boolean(accrual.anniversaryBased),
+    };
+
+    if (accrual.amount != null && Number.isFinite(Number(accrual.amount))) {
+        normalizedAccrual.amount = Number(accrual.amount);
+    }
+    if (accrual.maxAccrual != null && Number.isFinite(Number(accrual.maxAccrual))) {
+        normalizedAccrual.maxAccrual = Number(accrual.maxAccrual);
+    }
+
+    const result = {
         ...plain,
         type: plain.type,
         enabled: plain.enabled !== false,
-        maxDaysPerMonth:
-            Number(plain.maxDaysPerMonth) > 0
-                ? Number(plain.maxDaysPerMonth)
-                : DEFAULT_MONTHLY_LEAVE_DAYS,
-        accrual: {
-            method: 'monthly',
-            frequency: 'monthly',
-            amount: DEFAULT_MONTHLY_LEAVE_DAYS,
-            anniversaryBased: false,
-        },
-        carryForward: {
-            enabled: true,
-            maxDays: null,
-            expiresIfNotUsed: false,
-        },
+        accrual: normalizedAccrual,
+        carryForward: plain.carryForward || { enabled: false },
     };
+
+    if (plain.maxDaysPerMonth != null && Number(plain.maxDaysPerMonth) > 0) {
+        result.maxDaysPerMonth = Number(plain.maxDaysPerMonth);
+    }
+
+    return result;
+}
+
+export function getEffectiveMonthlyAccrual(leaveTypeConfig) {
+    if (!usesMonthlyAccrual(leaveTypeConfig)) {
+        return 0;
+    }
+    return getPolicyMonthlyAccrualAmount(leaveTypeConfig);
 }

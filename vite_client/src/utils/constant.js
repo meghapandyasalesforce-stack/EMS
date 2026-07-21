@@ -39,6 +39,8 @@ export const BOTH_ATTENDANCE_ENDPOINT = `${BASE_URL}/both/attendance`
 export const BOTH_DOCUMENT_ENDPOINT = `${BASE_URL}/both/document`
 /** Canonical document library (employee uploads, HR list) */
 export const BOTH_DOCUMENTS_ENDPOINT = `${BASE_URL}/both/documents`
+export const BOTH_ONBOARDING_ENDPOINT = `${BASE_URL}/both/onboarding`
+export const ADMIN_ONBOARDING_ENDPOINT = `${BASE_URL}/admin/onboarding`
 export const BOTH_PASSWORD_ENDPOINT = `${BASE_URL}/both/password`
 export const BOTH_TASK_ENDPOINT = `${BASE_URL}/both/project-task`
 

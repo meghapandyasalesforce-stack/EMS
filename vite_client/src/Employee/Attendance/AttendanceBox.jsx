@@ -743,11 +743,11 @@ const AttendanceBox = ({ variant = 'default' }) => {
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
                 {wfhAllowed && (
-                  <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Work location">
+                  <div className="flex w-full sm:w-auto rounded-full border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Work location">
                     <button
                       type="button"
                       onClick={() => setWorkLocation('office')}
-                      className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                      className={`flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
                         workLocation === 'office'
                           ? 'bg-white text-[#006D4E] shadow-sm'
                           : 'text-slate-500 hover:text-slate-700'
@@ -759,7 +759,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
                     <button
                       type="button"
                       onClick={() => setWorkLocation('work_from_home')}
-                      className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                      className={`flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
                         workLocation === 'work_from_home'
                           ? 'bg-white text-[#006D4E] shadow-sm'
                           : 'text-slate-500 hover:text-slate-700'

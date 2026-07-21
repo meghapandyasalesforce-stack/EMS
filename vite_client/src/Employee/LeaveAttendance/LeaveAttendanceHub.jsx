@@ -7,7 +7,7 @@ import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
 import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
-import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
+import { getLeaveTypeDisplayName, getLeaveWidgetStats, getLeaveTypeCards } from '../../constants/leaveConstants';
 import WfhRequestPanel from '../Wfh/WfhRequestPanel';
 
 const toDateInput = (d) => {
@@ -170,7 +170,7 @@ const CircleMeter = ({ value, total, label, used }) => {
       </div>
       <div className="mt-3 flex items-center justify-between text-xs text-[#334155]">
         <span>{used} Used</span>
-        <span>{Math.max(0, total - used)} Left</span>
+        <span>{value} Available</span>
       </div>
     </div>
   );
@@ -384,22 +384,8 @@ const LeaveAttendanceHub = () => {
     }
   }, [currentLogPage, totalLogPages]);
 
-  const primaryLeaveBalance = useMemo(() => {
-    const summary = getLeaveSummary(leaveBalance);
-    if (!leaveBalance) return null;
-    return {
-      typeKey: 'employee',
-      displayName: getLeaveDisplayLabel(),
-      annualQuota: Number(
-        leaveBalance.policy?.leaveTypes?.find((lt) => lt.type === 'casual')?.accrual?.amount || 0
-      ),
-      accrued: summary.totalAccrued,
-      carriedForward: summary.totalCarriedForward,
-      total: summary.totalAccrued + summary.totalCarriedForward,
-      available: summary.totalAvailableLeave,
-      used: summary.totalUsed,
-    };
-  }, [leaveBalance]);
+  const leaveTypeCards = useMemo(() => getLeaveTypeCards(leaveBalance), [leaveBalance]);
+  const leaveStats = useMemo(() => getLeaveWidgetStats(leaveBalance), [leaveBalance]);
 
   const regTypeLabel = (type) =>
     ({
@@ -877,37 +863,62 @@ const LeaveAttendanceHub = () => {
                   <p className="rounded-lg bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">{leaveBalanceError}</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {!primaryLeaveBalance ? (
+                    {leaveTypeCards.length === 0 ? (
                       <p className="col-span-full rounded-lg bg-[#F8FAFC] p-3 text-sm text-[#64748B]">No leave balance data available.</p>
                     ) : (
-                      <div className="space-y-2">
-                        <CircleMeter
-                          label={primaryLeaveBalance.displayName}
-                          value={primaryLeaveBalance.available}
-                          total={primaryLeaveBalance.total}
-                          used={primaryLeaveBalance.used}
-                        />
-                        <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[11px] text-[#475569]">
-                          <div className="flex items-center justify-between">
-                            <span>Annual quota</span>
-                            <span className="font-semibold text-[#0F172A]">{primaryLeaveBalance.annualQuota}</span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between">
-                            <span>Accrued</span>
-                            <span className="font-semibold text-[#0F172A]">{primaryLeaveBalance.accrued}</span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between">
-                            <span>Carry forward</span>
-                            <span className="font-semibold text-[#0F172A]">{primaryLeaveBalance.carriedForward}</span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between">
-                            <span>Available</span>
-                            <span className="font-semibold text-[#0F766E]">{primaryLeaveBalance.available}</span>
+                      leaveTypeCards.map((card) => (
+                        <div key={card.leaveType} className="space-y-2">
+                          <CircleMeter
+                            label={card.displayName}
+                            value={card.available}
+                            total={card.chartTotal}
+                            used={card.used}
+                          />
+                          <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[11px] text-[#475569]">
+                            <div className="flex items-center justify-between">
+                              <span>Annual entitlement</span>
+                              <span className="font-semibold text-[#0F172A]">{card.annualEntitlement}</span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span>Monthly accrual</span>
+                              <span className="font-semibold text-[#0F172A]">{card.monthlyAccrual}</span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span>Current month accrual</span>
+                              <span className="font-semibold text-[#0F766E]">
+                                {card.currentMonthAccrual > 0 ? `+${card.currentMonthAccrual}` : card.currentMonthAccrual}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span>Used</span>
+                              <span className="font-semibold text-[#0F172A]">{card.used}</span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span>Carry forward</span>
+                              <span className="font-semibold text-[#0F172A]">{card.carriedForward}</span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between">
+                              <span>Available</span>
+                              <span className="font-semibold text-[#0F766E]">{card.available}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      ))
                     )}
                   </div>
+                  {leaveStats && (
+                    <div className="mt-4 rounded-lg border border-[#E2E8F0] bg-white px-4 py-3 text-xs text-[#475569]">
+                      <p className="font-semibold text-[#0F172A] mb-2">Leave summary</p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <span>Total annual: <strong>{leaveStats.annualQuota}</strong></span>
+                        <span>Current month: <strong>+{leaveStats.earnedThisMonth}</strong></span>
+                        <span>Available: <strong>{leaveStats.available}</strong></span>
+                        <span>Used: <strong>{leaveStats.used}</strong></span>
+                        <span>Carry forward: <strong>{leaveStats.carriedForward}</strong></span>
+                        <span>Manual adj.: <strong>{leaveStats.manualAdjustment}</strong></span>
+                      </div>
+                    </div>
+                  )}
                 )}
               </div>
 

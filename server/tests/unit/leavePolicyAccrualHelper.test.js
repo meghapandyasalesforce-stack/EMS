@@ -1,114 +1,209 @@
 import { describe, it, expect } from '@jest/globals';
 import {
-    MONTHS_PER_ACCRUAL_YEAR,
-    getMonthlyEntitlementAmount,
+    MONTHS_PER_LEAVE_CYCLE,
+    getPolicyMonthlyAccrualAmount,
+    getAnnualEntitlementAmount,
     getRollingAccrualMonthlyRate,
     getDisplayYearlyAccrualCap,
     getYearlyAccrualCap,
-    syncMonthlyEntitlementLeaveType,
     normalizePolicyLeaveTypes,
+    validateLeaveTypeAccrual,
+    validateLeavePolicyAccrual,
     getAppliableDaysThisMonth,
     getRemainingMonthlyTakeCap,
-    hasMonthlyEntitlement
+    hasMonthlyEntitlement,
+    usesMonthlyAccrual,
+    getAccrualPeriodsPerYear,
+    sumPolicyAnnualEntitlement,
+    sumPolicyMonthlyAccrual,
+    sumPolicyMonthlyAccrualForViewMonth,
 } from '../../helpers/leavePolicyAccrualHelper.js';
 
 describe('leavePolicyAccrualHelper', () => {
-    describe('monthly entitlement from policy', () => {
-        it('uses maxDaysPerMonth as monthly entitlement when set', () => {
-            expect(getMonthlyEntitlementAmount({ maxDaysPerMonth: 2 })).toBe(2);
-            expect(getYearlyAccrualCap({ maxDaysPerMonth: 2 })).toBe(24);
+    const casualType = {
+        type: 'casual',
+        displayName: 'Casual Leave',
+        enabled: true,
+        accrual: { method: 'monthly', frequency: 'monthly', amount: 0.5, maxAccrual: 6 },
+        maxDaysPerMonth: 2,
+    };
+
+    const sickType = {
+        type: 'sick',
+        displayName: 'Sick Leave',
+        enabled: true,
+        accrual: { method: 'monthly', frequency: 'monthly', amount: 1, maxAccrual: 12 },
+    };
+
+    describe('policy field mapping', () => {
+        it('reads monthly accrual from accrual.amount only', () => {
+            expect(getPolicyMonthlyAccrualAmount(casualType)).toBe(0.5);
+            expect(getPolicyMonthlyAccrualAmount({ ...casualType, maxDaysPerMonth: 2 })).toBe(0.5);
         });
 
-        it('falls back to monthly accrual amount when cap field empty', () => {
+        it('infers monthly from annual when amount is missing (legacy paid leave)', () => {
             expect(
-                getMonthlyEntitlementAmount({
-                    accrual: { method: 'monthly', amount: 1.5 }
+                getPolicyMonthlyAccrualAmount({
+                    type: 'paid',
+                    enabled: true,
+                    accrual: { method: 'monthly', frequency: 'monthly', maxAccrual: 12, amount: 0 },
                 })
-            ).toBe(1.5);
+            ).toBe(1);
         });
 
-        it('uses 1.5 rolling rate for standard leave regardless of legacy policy cap', () => {
-            expect(
-                getRollingAccrualMonthlyRate({ type: 'casual', maxDaysPerMonth: 1 })
-            ).toBe(1.5);
-            expect(getDisplayYearlyAccrualCap({ type: 'sick', maxDaysPerMonth: 0.5 })).toBe(18);
-            expect(
-                getRollingAccrualMonthlyRate({ type: 'loss_of_pay', maxDaysPerMonth: 2 })
-            ).toBe(2);
+        it('reads annual entitlement from accrual.maxAccrual only', () => {
+            expect(getAnnualEntitlementAmount(casualType)).toBe(6);
+            expect(getDisplayYearlyAccrualCap(casualType)).toBe(6);
+            expect(getYearlyAccrualCap(sickType)).toBe(12);
         });
 
-        it('syncs leave type to monthly accrual when maxDaysPerMonth set', () => {
-            const synced = syncMonthlyEntitlementLeaveType({
-                type: 'casual',
-                maxDaysPerMonth: 2,
-                accrual: { method: 'fixed', amount: 12 }
-            });
-            expect(synced.accrual.method).toBe('monthly');
-            expect(synced.accrual.amount).toBe(2);
-            expect(synced.accrual.maxAccrual).toBe(2 * MONTHS_PER_ACCRUAL_YEAR);
+        it('uses policy monthly rate for rolling accrual', () => {
+            expect(getRollingAccrualMonthlyRate(casualType)).toBe(0.5);
+            expect(getRollingAccrualMonthlyRate(sickType)).toBe(1);
         });
 
-        it('normalizes all leave types on policy save', () => {
-            const normalized = normalizePolicyLeaveTypes([
-                { type: 'paid', maxDaysPerMonth: 2 },
-                { type: 'sick', maxDaysPerMonth: null }
-            ]);
-            expect(normalized[0].accrual.method).toBe('monthly');
-            expect(normalized[0].accrual.amount).toBe(1.5);
-            expect(normalized[0].type).toBe('paid');
-            expect(normalized[1].accrual?.method).toBe('monthly');
-            expect(normalized[1].accrual?.amount).toBe(1.5);
-            expect(normalized[1].maxDaysPerMonth).toBe(1.5);
-            expect(normalized[1].carryForward?.enabled).toBe(true);
+        it('preserves HR values on normalize without hardcoded overwrite', () => {
+            const normalized = normalizePolicyLeaveTypes([casualType, sickType]);
+            expect(normalized[0].accrual.amount).toBe(0.5);
+            expect(normalized[0].accrual.maxAccrual).toBe(6);
+            expect(normalized[1].accrual.amount).toBe(1);
+            expect(normalized[1].accrual.maxAccrual).toBe(12);
         });
     });
 
-    describe('SaaS appliable days this month', () => {
-        it('returns min of available balance and remaining monthly take cap', () => {
+    describe('validation', () => {
+        it('accepts valid monthly × periods ≤ annual', () => {
+            expect(validateLeaveTypeAccrual(casualType)).toEqual([]);
+        });
+
+        it('rejects when monthly × periods exceeds annual', () => {
+            const invalid = {
+                ...casualType,
+                accrual: { ...casualType.accrual, amount: 0.5, maxAccrual: 5 },
+            };
+            const errors = validateLeaveTypeAccrual(invalid);
+            expect(errors.length).toBeGreaterThan(0);
+            expect(errors[0]).toMatch(/exceeds annual entitlement/i);
+        });
+
+        it('uses leave cycle month count for monthly frequency', () => {
+            expect(getAccrualPeriodsPerYear(casualType, { startMonth: 4, endMonth: 3 })).toBe(
+                MONTHS_PER_LEAVE_CYCLE
+            );
+        });
+
+        it('validates full policy', () => {
+            const errors = validateLeavePolicyAccrual({
+                leaveTypes: [casualType, sickType],
+                leaveCycle: { startMonth: 1, endMonth: 12 },
+            });
+            expect(errors).toEqual([]);
+            expect(sumPolicyAnnualEntitlement({ leaveTypes: [casualType, sickType] })).toBe(18);
+        });
+    });
+
+    describe('application limits vs accrual', () => {
+        it('allows applying up to available balance when no monthly cap', () => {
+            expect(
+                getAppliableDaysThisMonth({
+                    availableBalance: 3,
+                    maxDaysPerMonth: null,
+                    usedThisMonth: 0,
+                })
+            ).toBe(3);
+        });
+
+        it('caps application by maxDaysPerMonth but not by monthly accrual', () => {
             expect(
                 getAppliableDaysThisMonth({
                     availableBalance: 6,
                     maxDaysPerMonth: 2,
-                    usedThisMonth: 0
+                    usedThisMonth: 0,
                 })
             ).toBe(2);
-
-            expect(
-                getAppliableDaysThisMonth({
-                    availableBalance: 1,
-                    maxDaysPerMonth: 2,
-                    usedThisMonth: 0
-                })
-            ).toBe(1);
-
-            expect(
-                getAppliableDaysThisMonth({
-                    availableBalance: 6,
-                    maxDaysPerMonth: 2,
-                    usedThisMonth: 1.5
-                })
-            ).toBe(0.5);
         });
 
-        it('returns full available when no monthly take cap', () => {
-            expect(
-                getAppliableDaysThisMonth({
-                    availableBalance: 5,
-                    maxDaysPerMonth: null,
-                    usedThisMonth: 0
-                })
-            ).toBe(5);
-        });
-
-        it('detects monthly entitlement from cap or accrual', () => {
-            expect(hasMonthlyEntitlement({ maxDaysPerMonth: 2 })).toBe(true);
-            expect(hasMonthlyEntitlement({ accrual: { method: 'monthly', amount: 2 } })).toBe(true);
-            expect(hasMonthlyEntitlement({ accrual: { method: 'fixed', amount: 12 } })).toBe(false);
+        it('detects monthly accrual from accrual.amount', () => {
+            expect(hasMonthlyEntitlement(casualType)).toBe(true);
+            expect(usesMonthlyAccrual(casualType)).toBe(true);
         });
 
         it('computes remaining monthly take cap', () => {
             expect(getRemainingMonthlyTakeCap(2, 0.5)).toBe(1.5);
-            expect(getRemainingMonthlyTakeCap(2, 2)).toBe(0);
+        });
+    });
+
+    describe('fixed yearly leave type (standard policy model)', () => {
+        const fixedYearlyCasual = {
+            type: 'casual',
+            enabled: true,
+            accrual: { method: 'fixed', frequency: 'yearly', maxAccrual: 6, amount: 0.5 },
+            maxDaysPerMonth: 0.5,
+        };
+
+        const fixedYearlyPaid = {
+            type: 'paid',
+            enabled: true,
+            accrual: { method: 'fixed', frequency: 'yearly', maxAccrual: 12, amount: 1 },
+            maxDaysPerMonth: 1,
+        };
+
+        it('reads Amount as annual and Monthly Entitlement as monthly accrual', () => {
+            expect(getAnnualEntitlementAmount(fixedYearlyCasual)).toBe(6);
+            expect(getPolicyMonthlyAccrualAmount(fixedYearlyCasual)).toBe(0.5);
+            expect(getAnnualEntitlementAmount(fixedYearlyPaid)).toBe(12);
+            expect(getPolicyMonthlyAccrualAmount(fixedYearlyPaid)).toBe(1);
+        });
+
+        it('sums policy totals for leave summary', () => {
+            expect(sumPolicyAnnualEntitlement({ leaveTypes: [fixedYearlyCasual, fixedYearlyPaid] })).toBe(18);
+            expect(sumPolicyMonthlyAccrual({ leaveTypes: [fixedYearlyCasual, fixedYearlyPaid] })).toBe(1.5);
+        });
+
+        it('validates monthly × 12 ≤ annual', () => {
+            expect(validateLeaveTypeAccrual(fixedYearlyCasual)).toEqual([]);
+            expect(validateLeaveTypeAccrual(fixedYearlyPaid)).toEqual([]);
+        });
+
+        it('syncs maxDaysPerMonth from monthly entitlement on normalize', () => {
+            const normalized = normalizePolicyLeaveTypes([fixedYearlyCasual])[0];
+            expect(normalized.maxDaysPerMonth).toBe(0.5);
+            expect(normalized.accrual.maxAccrual).toBe(6);
+            expect(normalized.accrual.amount).toBe(0.5);
+        });
+    });
+
+    describe('leave summary policy totals', () => {
+        it('sums annual entitlement across all enabled leave types', () => {
+            expect(sumPolicyAnnualEntitlement({ leaveTypes: [casualType, sickType] })).toBe(18);
+        });
+
+        it('sums monthly accrual across enabled leave types', () => {
+            expect(sumPolicyMonthlyAccrual({ leaveTypes: [casualType, sickType] })).toBe(1.5);
+        });
+
+        it('returns policy monthly accrual for view month, not accumulated balance', () => {
+            const employee = { joiningDate: new Date('2025-07-01') };
+            expect(
+                sumPolicyMonthlyAccrualForViewMonth(
+                    { leaveTypes: [casualType] },
+                    employee,
+                    2026,
+                    4
+                )
+            ).toBe(0.5);
+        });
+
+        it('returns zero monthly accrual before join month', () => {
+            const employee = { joiningDate: new Date('2026-05-01') };
+            expect(
+                sumPolicyMonthlyAccrualForViewMonth(
+                    { leaveTypes: [casualType] },
+                    employee,
+                    2026,
+                    4
+                )
+            ).toBe(0);
         });
     });
 });

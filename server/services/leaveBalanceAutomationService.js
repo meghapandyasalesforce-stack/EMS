@@ -3,10 +3,10 @@ import LeaveBalance from '../models/leaveBalance.model.js';
 import LeaveBalanceAudit from '../models/leaveBalanceAudit.model.js';
 import leaveBalanceEngine from './leaveBalanceEngine.js';
 import logger from '../helpers/logger.js';
-import { LEAVE_TYPES_NO_CARRY_FORWARD, DEFAULT_MONTHLY_LEAVE_DAYS, getEffectiveCarryForwardConfig } from '../constants/leaveDefaults.js';
-import { getRollingAccrualMonthlyRate, usesMonthlyAllocation } from '../helpers/leavePolicyAccrualHelper.js';
+import { getEffectiveCarryForwardConfig } from '../constants/leaveDefaults.js';
+import { getRollingAccrualMonthlyRate, usesMonthlyAccrual } from '../helpers/leavePolicyAccrualHelper.js';
 import { getEmployeeLeaveYearBounds, clampLeavePeriodStart } from '../helpers/leaveYearBoundsHelper.js';
-import { getEffectiveJoiningDate } from '../helpers/leaveBalanceRulesHelper.js';
+import { getEffectiveJoiningDate, roundLeaveDays } from '../helpers/leaveBalanceRulesHelper.js';
 
 const ACTIVE_STATUSES = new Set(['active']);
 
@@ -139,60 +139,6 @@ class LeaveBalanceAutomationService {
         }
 
         const asOfDate = leaveBalanceEngine.endOfMonthDate(year, month - 1);
-        const pooledTypes = leaveBalanceEngine.getPooledLeaveTypeConfigs(policy);
-
-        if (pooledTypes.length > 0) {
-            const joiningDate = getEffectiveJoiningDate(employee);
-            const monthlyCredit = leaveBalanceEngine.calculateSingleMonthEarned(
-                DEFAULT_MONTHLY_LEAVE_DAYS,
-                employee,
-                year,
-                month - 1,
-                joiningDate
-            );
-            if (monthlyCredit <= 0) {
-                return { skipped: true, reason: 'not_eligible' };
-            }
-
-            await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId, {
-                asOfDate,
-                clearManualOverride,
-            });
-
-            let balance = await LeaveBalance.findOne({
-                organizationId,
-                employee: employeeId,
-                year,
-            });
-            if (!balance) {
-                return { skipped: true, reason: 'no_balance' };
-            }
-
-            const alreadyCredited =
-                !force && this.hasMonthlyAllocationLog(balance, year, month, 'employee');
-            if (alreadyCredited) {
-                return { skipped: true, reason: 'already_allocated', recorded: 0 };
-            }
-
-            const added = await this.recordMonthlyAllocation(
-                balance,
-                year,
-                month,
-                'employee',
-                monthlyCredit
-            );
-            if (added) {
-                balance.markModified('monthlyAllocationLog');
-                await balance.save();
-            }
-
-            await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId, {
-                asOfDate,
-                clearManualOverride: false,
-            });
-
-            return { skipped: false, recorded: added ? 1 : 0, credit: monthlyCredit };
-        }
 
         await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId, {
             asOfDate,
@@ -209,15 +155,15 @@ class LeaveBalanceAutomationService {
         }
 
         let recorded = 0;
+        let totalCredit = 0;
         for (const lt of policy.leaveTypes) {
-            if (lt.enabled === false || LEAVE_TYPES_NO_CARRY_FORWARD.has(lt.type)) {
+            if (lt.enabled === false) {
                 continue;
             }
-            if (!usesMonthlyAllocation(lt) && !force) {
+            if (!usesMonthlyAccrual(lt) && !force) {
                 continue;
             }
-            const monthlyAmount =
-                getRollingAccrualMonthlyRate(lt) ?? DEFAULT_MONTHLY_LEAVE_DAYS;
+            const monthlyAmount = getRollingAccrualMonthlyRate(lt);
             const joiningDate = getEffectiveJoiningDate(employee);
             const earned = leaveBalanceEngine.calculateSingleMonthEarned(
                 monthlyAmount,
@@ -230,7 +176,10 @@ class LeaveBalanceAutomationService {
 
             if (force || !this.hasMonthlyAllocationLog(balance, year, month, lt.type)) {
                 const added = await this.recordMonthlyAllocation(balance, year, month, lt.type, earned);
-                if (added) recorded += 1;
+                if (added) {
+                    recorded += 1;
+                    totalCredit = roundLeaveDays(totalCredit + earned);
+                }
             }
         }
 

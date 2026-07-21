@@ -602,18 +602,6 @@ const updateEntityStatus = async (instance) => {
                     leave.status = 'approved';
                     leave.approvedBy = instance.steps[instance.steps.length - 1]?.approverId;
                     leave.approvedAt = new Date();
-                    
-                    // Update leave balance
-                    try {
-                        const leaveBalanceEngine = (await import('./leaveBalanceEngine.js')).default;
-                        const year = new Date(leave.startDate).getFullYear();
-                        await leaveBalanceEngine.calculateBalance(leave.employee, year, leave.organizationId);
-                    } catch (balanceError) {
-                        logger.warn('Error updating leave balance after workflow approval', {
-                            error: balanceError.message,
-                            leaveId: leave._id
-                        });
-                    }
                 } else if (instance.status === 'Rejected') {
                     leave.status = 'rejected';
                     leave.rejectedBy = instance.rejectedBy;
@@ -621,6 +609,23 @@ const updateEntityStatus = async (instance) => {
                     leave.rejectionReason = instance.rejectionReason;
                 }
                 await leave.save();
+
+                if (instance.status === 'Approved') {
+                    try {
+                        const leaveBalanceEngine = (await import('./leaveBalanceEngine.js')).default;
+                        const year = new Date(leave.startDate).getFullYear();
+                        await leaveBalanceEngine.calculateBalance(
+                            leave.employee,
+                            year,
+                            leave.organizationId
+                        );
+                    } catch (balanceError) {
+                        logger.warn('Error updating leave balance after workflow approval', {
+                            error: balanceError.message,
+                            leaveId: leave._id,
+                        });
+                    }
+                }
 
                 if (instance.status === 'Rejected') {
                     await notify({

@@ -51,23 +51,43 @@ describe('navigationConfig — Me portal', () => {
     expect(items.some((item) => item.path === '/dashboard-employee')).toBe(false);
   });
 
-  it.each([
-    'employee',
-    'executive',
-    'hr_manager',
-    'payroll_admin',
-    'line_manager',
-  ])('shows personal attendance regularization in the %s portal', (portalId) => {
-    const items = getNavigationItems(
-      { role: 'employee', _id: '1', employeeProfileId: 'e1' },
-      { _id: 'e1' },
-      [],
-      {},
-      portalId
-    );
+  it.each(['employee', 'payroll_admin'])(
+    'shows personal regularization in the %s portal sidebar',
+    (portalId) => {
+      const items = getNavigationItems(
+        { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+        { _id: 'e1' },
+        [],
+        {},
+        portalId
+      );
 
-    expect(
-      items.some((item) => item.path === '/my-attendance-regularization')
-    ).toBe(true);
-  });
+      expect(
+        items.some((item) => item.path === '/my-attendance-regularization')
+      ).toBe(true);
+    }
+  );
+
+  it.each(['hr_manager', 'line_manager'])(
+    'shows team regularization (not personal) in the %s portal sidebar',
+    (portalId) => {
+      const items = getNavigationItems(
+        { role: 'employee', _id: '1', employeeProfileId: 'e1' },
+        { _id: 'e1' },
+        [],
+        {},
+        portalId
+      );
+
+      const teamPath =
+        portalId === 'line_manager'
+          ? '/manager/attendance-regularization'
+          : '/attendance-regularization';
+
+      expect(items.some((item) => item.path === teamPath)).toBe(true);
+      expect(
+        items.some((item) => item.path === '/my-attendance-regularization')
+      ).toBe(false);
+    }
+  );
 });

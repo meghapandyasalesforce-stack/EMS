@@ -11,6 +11,7 @@ import {
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
+import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { updateLeave } from '../../context/leaveSlice';
@@ -717,6 +718,8 @@ const DashboardManager = () => {
 
                 <AnnouncementBanner />
                 <AttendanceBox variant="dashboard" />
+
+                <PersonalDashboardKpiRow />
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

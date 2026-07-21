@@ -14,6 +14,7 @@ import { startApprovalTimeoutWorker, scheduleApprovalTimeout } from './approvalT
 import logger from '../helpers/logger.js';
 import { schedulePayrollRunJobs } from './payrollRunJob.js';
 import { scheduleSpecialEventNotificationJobs } from './specialEventNotificationJob.js';
+import { scheduleOnboardingJobs } from './onboardingScheduledJob.js';
 
 /**
  * Initialize all job workers
@@ -61,6 +62,13 @@ export const initializeWorkers = async () => {
                 logger.info('Auto check-out cron scheduled (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule auto check-out cron', { error: error.message });
+            }
+
+            try {
+                scheduleOnboardingJobs();
+                logger.info('Onboarding scheduled jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule onboarding jobs', { error: error.message });
             }
 
             return;
@@ -134,6 +142,13 @@ export const initializeWorkers = async () => {
             logger.info('Special event notification jobs scheduled');
         } catch (error) {
             logger.error('Failed to schedule special event notification jobs', { error: error.message });
+        }
+
+        try {
+            scheduleOnboardingJobs();
+            logger.info('Onboarding scheduled jobs registered');
+        } catch (error) {
+            logger.error('Failed to schedule onboarding jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {

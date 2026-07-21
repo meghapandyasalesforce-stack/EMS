@@ -585,6 +585,28 @@ export const registerEmployee = async (req, res) => {
             await invalidateEmployeesCache(organizationId);
         });
 
+        // Auto-create employee onboarding workflow (only if org setting enabled)
+        runInBackground('register-employee-onboarding', async () => {
+            try {
+                const { createEmployeeOnboardingWorkflow, getOrgOnboardingSettings } = await import('../../services/onboardingService.js');
+                const settings = await getOrgOnboardingSettings(organizationId);
+                if (!settings.autoCreateOnEmployeeRegister) {
+                    return;
+                }
+                await createEmployeeOnboardingWorkflow({
+                    employee,
+                    organizationId,
+                    initiatedBy: req.employee?._id || req.user?._id,
+                    joiningDate: employee.dateOfJoining,
+                });
+            } catch (onboardingErr) {
+                logger.warn('Auto onboarding workflow creation failed', {
+                    employeeId: employee._id,
+                    error: onboardingErr.message,
+                });
+            }
+        });
+
         // Send new employee notification to HR, Admin, and CEO
         runInBackground('register-employee-notification', async () => {
             const employeeForNotification = await Employee.findById(employee._id).select(

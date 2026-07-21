@@ -13,6 +13,15 @@ import {
     updateOrganizationBranding,
     getOrganizationAnalytics
 } from '../../controllers/organization/organizationController.js';
+import {
+    getOrganizationOnboardingStatus,
+    updateOrganizationOnboardingStep,
+    completeOrganizationOnboarding,
+    getOrganizationOnboardingReview,
+    getOrganizationDetails,
+    updateOrganizationLocale,
+    updateOrganizationBusinessInfo,
+} from '../../controllers/organization/organizationOnboardingController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isAdminOrExecutiveAuthenticated from '../../middlewares/isAdminOrExecutiveAuthenticated.js';
@@ -63,7 +72,14 @@ const router = express.Router();
 
 // All routes require admin authentication
 router.get('/profile', isAdminAuthenticated, getOrganizationProfile);
+router.get('/details', isAdminAuthenticated, getOrganizationDetails);
 router.put('/profile', isAdminAuthenticated, organizationValidations.updateProfile, updateOrganizationProfile);
+router.put('/business-info', isAdminAuthenticated, updateOrganizationBusinessInfo);
+router.put('/locale', isAdminAuthenticated, updateOrganizationLocale);
+router.get('/onboarding/status', isAdminAuthenticated, getOrganizationOnboardingStatus);
+router.put('/onboarding/step', isAdminAuthenticated, updateOrganizationOnboardingStep);
+router.post('/onboarding/complete', isAdminAuthenticated, completeOrganizationOnboarding);
+router.get('/onboarding/review', isAdminAuthenticated, getOrganizationOnboardingReview);
 router.post('/logo', isAdminAuthenticated, upload.single('logo'), uploadOrganizationLogo);
 router.delete('/logo', isAdminAuthenticated, deleteOrganizationLogo);
 router.put('/settings', isAdminOrHROrExecutiveAuthenticated, organizationValidations.updateSettings, updateOrganizationSettings);

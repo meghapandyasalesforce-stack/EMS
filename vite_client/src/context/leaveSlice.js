@@ -62,10 +62,17 @@ const leaveSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateLeave.fulfilled, (state) => {
+      .addCase(updateLeave.fulfilled, (state, action) => {
         state.loading = false;
-        // Backend returns { message, leave } not { leaves }; do not overwrite state.leaves.
-        // Component refetches getAllLeaves() after approve/reject.
+        const leave = action.payload?.leave;
+        const employeeId = leave?.employee?._id || leave?.employee;
+        if (employeeId && typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('leave-balance-updated', {
+              detail: { employeeId: String(employeeId) },
+            })
+          );
+        }
       })
 
       .addCase(updateLeave.rejected, (state, action) => {

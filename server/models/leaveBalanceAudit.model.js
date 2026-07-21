@@ -25,7 +25,14 @@ const leaveBalanceAuditSchema = new mongoose.Schema(
         },
         action: {
             type: String,
-            enum: ['period_update', 'carry_forward', 'monthly_auto', 'manual_adjust'],
+            enum: [
+                'period_update',
+                'carry_forward',
+                'monthly_auto',
+                'manual_adjust',
+                'manual_carry_forward',
+                'manual_carry_forward_reduce',
+            ],
             required: true,
             index: true,
         },

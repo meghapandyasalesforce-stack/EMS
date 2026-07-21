@@ -230,34 +230,13 @@ function DashboardEmployee() {
                     }
                     const capsRaw = leaveRes.data?.statistics?.monthlyLeaveCaps;
                     if (capsRaw?.types?.length) {
-                        const joinRaw =
-                            employee?.joiningDate || profile?.joiningDate || user?.joiningDate;
-                        const now = new Date();
-                        const viewYear = now.getFullYear();
-                        const viewMonth = now.getMonth() + 1;
-                        let monthsEarned = viewMonth;
-                        if (joinRaw) {
-                            const join = new Date(joinRaw);
-                            if (!Number.isNaN(join.getTime())) {
-                                const joinYear = join.getFullYear();
-                                const joinMonth = join.getMonth() + 1;
-                                if (
-                                    joinYear > viewYear ||
-                                    (joinYear === viewYear && joinMonth > viewMonth)
-                                ) {
-                                    monthsEarned = 0;
-                                } else if (joinYear === viewYear) {
-                                    monthsEarned = viewMonth - joinMonth + 1;
-                                } else {
-                                    monthsEarned = viewMonth;
-                                }
-                            }
-                        }
-                        const monthlyRate = 1.5;
+                        const totalAppliable = capsRaw.types.reduce(
+                            (sum, t) => sum + (Number(t.appliableThisMonth) || 0),
+                            0
+                        );
                         monthlyCapSummary = {
                             ...capsRaw,
-                            totalRemainingThisMonth:
-                                Math.round(monthsEarned * monthlyRate * 1000) / 1000,
+                            totalRemainingThisMonth: Math.round(totalAppliable * 1000) / 1000,
                         };
                     }
                 } catch {

@@ -680,9 +680,7 @@ class LeaveValidationService {
             }
 
             const monthlyEntitlement = getMonthlyEntitlementAmount(lt);
-            const monthlyTakeCap = Number(lt.maxDaysPerMonth) > 0
-                ? Number(lt.maxDaysPerMonth)
-                : monthlyEntitlement;
+            const monthlyTakeCap = Number(lt.maxDaysPerMonth) > 0 ? Number(lt.maxDaysPerMonth) : null;
 
             const usedThisMonth = await this.countMonthlyUsageForLeaveType(
                 employeeId,

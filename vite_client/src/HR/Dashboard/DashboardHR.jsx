@@ -47,6 +47,7 @@ import { handleApiError } from '../../utils/errorHandler';
 import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
+import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
 
 const WS = {
     bg: '#F5F7FB',
@@ -62,7 +63,38 @@ const WS = {
     muted: '#64748B',
 };
 
-const DEPARTMENT_COLORS = ['#20C997', '#0F9F7A', '#FF9B71', '#5BC0BE', '#A78BFA'];
+const DEPARTMENT_COLOR_MAP = {
+    Engineering: '#26C991',
+    Sales: '#149E77',
+    Design: '#FF9F71',
+    Others: '#66C2C2',
+};
+
+const DEPARTMENT_COLOR_FALLBACKS = ['#26C991', '#149E77', '#FF9F71', '#66C2C2'];
+
+const DEPARTMENT_LEGEND_ORDER = ['Engineering', 'Sales', 'Design', 'Others'];
+
+const HEADCOUNT_CHART = {
+    title: '#111827',
+    total: '#111827',
+    totalLabel: '#94A3B8',
+    legendLabel: '#334155',
+    legendValue: '#111827',
+};
+
+const sortDepartmentsForLegend = (rows) =>
+    [...rows].sort((a, b) => {
+        const aIndex = DEPARTMENT_LEGEND_ORDER.indexOf(a.name);
+        const bIndex = DEPARTMENT_LEGEND_ORDER.indexOf(b.name);
+        const aOrder = aIndex === -1 ? DEPARTMENT_LEGEND_ORDER.length : aIndex;
+        const bOrder = bIndex === -1 ? DEPARTMENT_LEGEND_ORDER.length : bIndex;
+
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return b.count - a.count;
+    });
+
+const getDepartmentColor = (name, index) =>
+    DEPARTMENT_COLOR_MAP[name] || DEPARTMENT_COLOR_FALLBACKS[index % DEPARTMENT_COLOR_FALLBACKS.length];
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('en-IN');
 
@@ -182,7 +214,7 @@ const buildDepartmentData = (employees) => {
     if (rows.length <= 4) {
         return rows.map((row, index) => ({
             ...row,
-            color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+            color: getDepartmentColor(row.name, index),
         }));
     }
 
@@ -191,7 +223,7 @@ const buildDepartmentData = (employees) => {
 
     return [...topRows, { name: 'Others', count: remainingCount }].map((row, index) => ({
         ...row,
-        color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+        color: getDepartmentColor(row.name, index),
     }));
 };
 
@@ -270,31 +302,31 @@ const getEventToneClasses = (tone) => {
 };
 
 const StatCard = ({ label, value, subtext, badge, badgeClassName, icon, iconClassName }) => (
-    <div className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:shadow-md" style={{ borderColor: WS.border }}>
-        <div className="mb-5 flex items-start justify-between gap-4">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${iconClassName}`}>{icon}</div>
+    <div className="rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md" style={{ borderColor: WS.border }}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconClassName}`}>{icon}</div>
             {badge ? (
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeClassName}`}>{badge}</span>
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badgeClassName}`}>{badge}</span>
             ) : null}
         </div>
-        <p className="text-sm text-slate-500">{label}</p>
-        <p className="mt-2 text-4xl font-semibold tracking-tight text-slate-900">{value}</p>
-        <p className="mt-2 text-sm text-slate-500">{subtext}</p>
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+        <p className="mt-1 text-xs text-slate-500">{subtext}</p>
     </div>
 );
 
 const Panel = ({ title, actionLabel, onAction, children, className = '' }) => (
     <section
-        className={`rounded-[28px] border bg-white p-5 shadow-sm md:p-6 ${className}`}
+        className={`rounded-2xl border bg-white p-4 shadow-sm ${className}`}
         style={{ borderColor: WS.border }}
     >
-        <div className="mb-5 flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {actionLabel ? (
                 <button
                     type="button"
                     onClick={onAction}
-                    className="text-sm font-medium text-emerald-600 transition hover:text-emerald-700"
+                    className="text-xs font-medium text-emerald-600 transition hover:text-emerald-700"
                 >
                     {actionLabel}
                 </button>
@@ -735,39 +767,39 @@ const DashboardHR = () => {
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
             <div className="page-shell">
-            <div className="page-shell-inner">
-            <div className="hrms-stack">
+            <div className="page-shell-inner max-w-6xl">
+            <div className="hrms-stack gap-4">
                 <header
-                    className="rounded-[32px] border bg-white/95 p-5 shadow-sm backdrop-blur md:p-6"
+                    className="rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur"
                     style={{ borderColor: WS.border }}
                 >
-                    <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                        <div className="flex min-w-0 items-center gap-4">
-                            <div className="hidden h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 sm:flex">
-                                <FiGrid className="h-6 w-6" />
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="hidden h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 sm:flex">
+                                <FiGrid className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">
                                     HR Workspace
                                 </p>
-                                <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                                <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 md:text-2xl">
                                     People dashboard
                                 </h1>
-                                <p className="mt-1 text-sm text-slate-500">
+                                <p className="mt-0.5 text-xs text-slate-500">
                                     {departmentLabel} · {todayLabel}
                                 </p>
                             </div>
                         </div>
 
-                        <div className="w-full xl:max-w-xl">
+                        <div className="w-full xl:max-w-md">
                             <label className="relative block">
-                                <FiSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(event) => setSearchQuery(event.target.value)}
                                     placeholder="Search employee or role..."
-                                    className="h-12 w-full rounded-full border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white"
+                                    className="h-10 w-full rounded-full border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white"
                                 />
                             </label>
                         </div>
@@ -809,14 +841,16 @@ const DashboardHR = () => {
                 </header>
 
                 <AnnouncementBanner />
-                <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                         Punch in / punch out
                     </h3>
                     <AttendanceBox variant="dashboard" />
                 </section>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <PersonalDashboardKpiRow compact />
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <StatCard
                         label="Total Employees"
                         value={formatNumber(orgEmployeeTotal)}
@@ -859,7 +893,7 @@ const DashboardHR = () => {
                     />
                 </div>
 
-                <div className="hrms-main-rail">
+                <div className="hrms-main-rail gap-4">
                     <Panel title="Monthly Hiring vs Attrition">
                         <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-2">
@@ -871,7 +905,7 @@ const DashboardHR = () => {
                                 Attrition
                             </span>
                         </div>
-                        <div className="h-[300px]">
+                        <div className="h-[220px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={monthlyHiringAttritionData} barGap={12}>
                                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#E2E8F0" />
@@ -897,7 +931,7 @@ const DashboardHR = () => {
                             <span>Average team attendance this month</span>
                             <span className="font-medium text-emerald-600">Live view</span>
                         </div>
-                        <div className="h-[300px]">
+                        <div className="h-[220px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={attendanceTrendData}>
                                     <defs>
@@ -932,25 +966,35 @@ const DashboardHR = () => {
                     </Panel>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <Panel title="Headcount by Department">
-                        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                            <div className="relative h-[220px] w-full max-w-[220px] justify-self-center">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    <section
+                        className="rounded-2xl border bg-white p-4 shadow-sm"
+                        style={{ borderColor: WS.border }}
+                    >
+                        <h2 className="mb-4 text-base font-bold leading-tight" style={{ color: HEADCOUNT_CHART.title }}>
+                            Headcount by Department
+                        </h2>
+                        <div className="flex items-center gap-4">
+                            <div className="relative h-[148px] w-[148px] shrink-0">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
-                                            data={departmentData}
+                                            data={departmentData.length > 0 ? departmentData : [{ name: 'Empty', count: 1, color: '#E2E8F0' }]}
                                             dataKey="count"
                                             nameKey="name"
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={56}
-                                            outerRadius={78}
-                                            paddingAngle={2}
-                                            cornerRadius={4}
-                                            stroke="none"
+                                            startAngle={90}
+                                            endAngle={-270}
+                                            innerRadius="52%"
+                                            outerRadius="78%"
+                                            paddingAngle={departmentData.length > 1 ? 4 : 0}
+                                            cornerRadius={departmentData.length > 1 ? 8 : 0}
+                                            stroke="#FFFFFF"
+                                            strokeWidth={3}
+                                            isAnimationActive={false}
                                         >
-                                            {departmentData.map((entry) => (
+                                            {(departmentData.length > 0 ? departmentData : [{ name: 'Empty', count: 1, color: '#E2E8F0' }]).map((entry) => (
                                                 <Cell key={entry.name} fill={entry.color} />
                                             ))}
                                         </Pie>
@@ -965,52 +1009,71 @@ const DashboardHR = () => {
                                     </PieChart>
                                 </ResponsiveContainer>
                                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-3xl font-semibold text-slate-900">
+                                    <span
+                                        className="text-[2rem] font-bold leading-none tabular-nums"
+                                        style={{ color: HEADCOUNT_CHART.total }}
+                                    >
                                         {departmentHeadcountTotal > 999
                                             ? `${(departmentHeadcountTotal / 1000).toFixed(1)}k`
-                                            : formatNumber(departmentHeadcountTotal)}
+                                            : departmentHeadcountTotal.toLocaleString('en-US')}
                                     </span>
-                                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Total</span>
+                                    <span
+                                        className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.22em]"
+                                        style={{ color: HEADCOUNT_CHART.totalLabel }}
+                                    >
+                                        Total
+                                    </span>
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
-                                {departmentData.map((item) => {
+                            <div className="min-w-0 flex-1 space-y-3 py-0.5">
+                                {sortDepartmentsForLegend(departmentData).map((item) => {
                                     const percentage =
                                         departmentHeadcountTotal > 0 ? Math.round((item.count / departmentHeadcountTotal) * 100) : 0;
 
                                     return (
-                                        <div key={item.name} className="flex items-center justify-between gap-3">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                                                <span className="truncate text-sm text-slate-700">{item.name}</span>
-                                            </div>
-                                            <span className="text-sm font-semibold text-slate-900">{percentage}%</span>
+                                        <div key={item.name} className="flex items-center gap-2.5">
+                                            <span
+                                                className="h-2 w-2 shrink-0 rounded-full"
+                                                style={{ backgroundColor: item.color }}
+                                            />
+                                            <span
+                                                className="min-w-0 flex-1 truncate text-[13px] font-normal leading-none"
+                                                style={{ color: HEADCOUNT_CHART.legendLabel }}
+                                            >
+                                                {item.name}
+                                            </span>
+                                            <span
+                                                className="shrink-0 text-[13px] font-bold leading-none tabular-nums"
+                                                style={{ color: HEADCOUNT_CHART.legendValue }}
+                                            >
+                                                {percentage}%
+                                            </span>
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
-                    </Panel>
+                    </section>
 
                     <Panel title="Pending Approvals" actionLabel="View All" onAction={() => navigate('/admin/pending-approvals')}>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-2.5">
                             {approvalSummary.map((item) => (
-                                <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
-                                    <p className={`text-3xl font-semibold ${item.accent}`}>{String(item.value).padStart(2, '0')}</p>
-                                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
+                                <div key={item.label} className="rounded-xl bg-slate-50 p-3">
+                                    <p className={`text-2xl font-semibold ${item.accent}`}>{String(item.value).padStart(2, '0')}</p>
+                                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="mt-4 space-y-3">
+                        <div className="mt-3 space-y-2">
                             {pendingApprovalsPreview.length > 0 ? (
                                 pendingApprovalsPreview.map((approval) => (
                                     <button
                                         key={approval._id}
                                         type="button"
                                         onClick={() => navigate('/admin/pending-approvals')}
-                                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 px-4 py-3 text-left transition hover:border-emerald-200 hover:bg-slate-50"
+                                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5 text-left transition hover:border-emerald-200 hover:bg-slate-50"
                                     >
                                         <div className="min-w-0">
                                             <p className="truncate text-sm font-semibold text-slate-900">
@@ -1024,7 +1087,7 @@ const DashboardHR = () => {
                                     </button>
                                 ))
                             ) : (
-                                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
                                     No pending approvals right now.
                                 </div>
                             )}
@@ -1032,26 +1095,26 @@ const DashboardHR = () => {
                     </Panel>
 
                     <Panel title="Upcoming Events">
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             {upcomingEvents.map((eventItem) => (
-                                <div key={eventItem.id} className="flex items-start gap-3">
+                                <div key={eventItem.id} className="flex items-start gap-2.5">
                                     <div
-                                        className={`mt-1 flex h-10 w-10 items-center justify-center rounded-2xl ${getEventToneClasses(eventItem.tone)}`}
+                                        className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl ${getEventToneClasses(eventItem.tone)}`}
                                     >
-                                        <FiCalendar className="h-4 w-4" />
+                                        <FiCalendar className="h-3.5 w-3.5" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-slate-900">{eventItem.title}</p>
-                                        <p className="text-sm text-slate-500">{eventItem.subtitle}</p>
+                                        <p className="text-sm font-semibold text-slate-900">{eventItem.title}</p>
+                                        <p className="text-xs text-slate-500">{eventItem.subtitle}</p>
                                     </div>
-                                    <p className="shrink-0 text-xs font-medium text-slate-400">{eventItem.dateLabel}</p>
+                                    <p className="shrink-0 text-[11px] font-medium text-slate-400">{eventItem.dateLabel}</p>
                                 </div>
                             ))}
                         </div>
                     </Panel>
                 </div>
 
-                <div className="hrms-main-rail">
+                <div className="hrms-main-rail gap-4">
                     <Panel title="Recent Hires">
                         <div className="mb-4 flex items-center justify-between gap-3">
                             <p className="text-sm text-slate-500">

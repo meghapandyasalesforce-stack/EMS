@@ -162,6 +162,15 @@ const leaveBalanceSchema = new mongoose.Schema({
             addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
             addedAt: Date,
         }],
+        /** HR reductions to leave balance (positive amount = days to subtract) */
+        manualCarryForwardReductions: [{
+            amount: Number,
+            effectiveYear: Number,
+            effectiveMonth: Number,
+            reason: String,
+            addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+            addedAt: Date,
+        }],
     },
 
     // Metadata

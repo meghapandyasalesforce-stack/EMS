@@ -2,6 +2,89 @@ import React, { useState, useEffect } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 
+const DEFAULT_LEAVE_TYPE = {
+    enabled: true,
+    type: 'casual',
+    displayName: 'Casual Leave',
+    accrual: {
+        method: 'fixed',
+        amount: 0.5,
+        frequency: 'yearly',
+        maxAccrual: 6,
+    },
+    maxDaysPerMonth: 0.5,
+    carryForward: {
+        enabled: false,
+        maxDays: null,
+    },
+    requiresApproval: true,
+    requiresDocument: false,
+    isPaid: true,
+    minDaysPerRequest: 0.5,
+    maxDaysPerRequest: null,
+    encashment: {
+        enabled: false,
+        maxDaysPerYear: 0,
+        calculationMethod: 'daily_salary',
+    },
+    probationRestrictions: {
+        enabled: false,
+        minServiceDays: 0,
+        maxDaysDuringProbation: 0,
+    },
+    noticePeriodRestrictions: {
+        enabled: false,
+        minNoticeDays: 0,
+    },
+};
+
+/** Map API policy leave type → form fields (Amount = annual, Monthly entitlement = monthly rate). */
+const mapLeaveTypeToForm = (leaveType) => {
+    if (!leaveType) return { ...DEFAULT_LEAVE_TYPE, uiAnnualAmount: 6, uiMonthlyEntitlement: 0.5 };
+    const lt = JSON.parse(JSON.stringify(leaveType));
+    lt.uiAnnualAmount = Number(lt.accrual?.maxAccrual) || 0;
+    lt.uiMonthlyEntitlement = Number(lt.accrual?.amount) || Number(lt.maxDaysPerMonth) || 0;
+    return lt;
+};
+
+/** Map form → API: Amount → maxAccrual, Monthly Entitlement → amount + maxDaysPerMonth. */
+const mapLeaveTypeToApi = (leaveType) => {
+    const lt = JSON.parse(JSON.stringify(leaveType));
+    const annual = Number(lt.uiAnnualAmount ?? lt.accrual?.maxAccrual) || 0;
+    const monthly = Number(lt.uiMonthlyEntitlement ?? lt.accrual?.amount) || 0;
+    delete lt.uiAnnualAmount;
+    delete lt.uiMonthlyEntitlement;
+
+    lt.accrual = {
+        ...(lt.accrual || {}),
+        method: lt.accrual?.method || 'fixed',
+        frequency: lt.accrual?.frequency || 'yearly',
+        maxAccrual: annual,
+        amount: monthly,
+    };
+    lt.maxDaysPerMonth = monthly > 0 ? monthly : null;
+    return lt;
+};
+
+const mapPolicyToForm = (policy) => ({
+    ...policy,
+    leaveTypes: (policy?.leaveTypes || []).map(mapLeaveTypeToForm),
+});
+
+const mapFormToApi = (formData) => ({
+    ...formData,
+    leaveTypes: (formData.leaveTypes || []).map(mapLeaveTypeToApi),
+});
+
+const monthlyEntitlementHelp = (leaveType) => {
+    const annual = Number(leaveType.uiAnnualAmount ?? leaveType.accrual?.maxAccrual) || 0;
+    const monthly = Number(leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount) || 0;
+    if (monthly <= 0) {
+        return 'Set monthly entitlement to define how many days accrue each month.';
+    }
+    return `Accrues ${monthly} day(s)/month (max ${annual}/year in balance). Unused months roll into available balance. Same value limits max days taken per calendar month.`;
+};
+
 const LeavePolicyManagement = () => {
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -20,41 +103,10 @@ const LeavePolicyManagement = () => {
         applicableEmployees: [],
         leaveTypes: [
             {
-                enabled: true,
-                type: 'casual',
-                displayName: 'Casual Leave',
-                accrual: {
-                    method: 'monthly',
-                    amount: 1.5,
-                    frequency: 'monthly',
-                    maxAccrual: 18,
-                },
-                maxDaysPerMonth: 1.5,
-                carryForward: {
-                    enabled: true,
-                    maxDays: 18
-                },
-                requiresApproval: true,
-                requiresDocument: false,
-                isPaid: true,
-                minDaysPerRequest: 0.5,
-                maxDaysPerRequest: null,
-                maxDaysPerMonth: null,
-                encashment: {
-                    enabled: false,
-                    maxDaysPerYear: 0,
-                    calculationMethod: 'daily_salary'
-                },
-                probationRestrictions: {
-                    enabled: false,
-                    minServiceDays: 0,
-                    maxDaysDuringProbation: 0
-                },
-                noticePeriodRestrictions: {
-                    enabled: false,
-                    minNoticeDays: 0
-                }
-            }
+                ...DEFAULT_LEAVE_TYPE,
+                uiAnnualAmount: 6,
+                uiMonthlyEntitlement: 0.5,
+            },
         ],
         blackoutDates: [],
         dateHandlingRules: {
@@ -90,7 +142,7 @@ const LeavePolicyManagement = () => {
                 : '/v1/admin/leave-policy';
             
             const method = editingPolicy ? 'put' : 'post';
-            await axios[method](url, formData);
+            await axios[method](url, mapFormToApi(formData));
             
             toast.success(`Policy ${editingPolicy ? 'updated' : 'created'} successfully`);
             await fetchPolicies();
@@ -157,42 +209,12 @@ const LeavePolicyManagement = () => {
             leaveTypes: [
                 ...formData.leaveTypes,
                 {
-                    enabled: true,
-                    type: 'casual',
+                    ...DEFAULT_LEAVE_TYPE,
                     displayName: '',
-                    accrual: {
-                        method: 'monthly',
-                        amount: 1.5,
-                        frequency: 'monthly',
-                        maxAccrual: 18,
-                    },
-                    maxDaysPerMonth: 1.5,
-                    carryForward: {
-                        enabled: true,
-                        maxDays: 18
-                    },
-                    requiresApproval: true,
-                    requiresDocument: false,
-                    isPaid: true,
-                    minDaysPerRequest: 0.5,
-                    maxDaysPerRequest: null,
-                    maxDaysPerMonth: null,
-                    encashment: {
-                        enabled: false,
-                        maxDaysPerYear: 0,
-                        calculationMethod: 'daily_salary'
-                    },
-                    probationRestrictions: {
-                        enabled: false,
-                        minServiceDays: 0,
-                        maxDaysDuringProbation: 0
-                    },
-                    noticePeriodRestrictions: {
-                        enabled: false,
-                        minNoticeDays: 0
-                    }
-                }
-            ]
+                    uiAnnualAmount: 6,
+                    uiMonthlyEntitlement: 0.5,
+                },
+            ],
         });
     };
 
@@ -215,15 +237,11 @@ const LeavePolicyManagement = () => {
             updated[index][field] = value;
         }
 
-        const monthlyCap = Number(updated[index].maxDaysPerMonth);
-        if (Number.isFinite(monthlyCap) && monthlyCap > 0) {
-            updated[index].accrual = {
-                ...(updated[index].accrual || {}),
-                method: 'monthly',
-                amount: monthlyCap,
-                frequency: 'monthly',
-                maxAccrual: monthlyCap * 12
-            };
+        if (field === 'accrual.method' || field === 'accrual.frequency') {
+            updated[index].uiAnnualAmount =
+                updated[index].uiAnnualAmount ?? updated[index].accrual?.maxAccrual ?? 0;
+            updated[index].uiMonthlyEntitlement =
+                updated[index].uiMonthlyEntitlement ?? updated[index].accrual?.amount ?? 0;
         }
 
         setFormData({ ...formData, leaveTypes: updated });
@@ -371,11 +389,11 @@ const LeavePolicyManagement = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Accrual Method *</label>
                                         <select
-                                            value={leaveType.accrual.method}
+                                            value={leaveType.accrual?.method || 'fixed'}
                                             onChange={(e) => updateLeaveType(index, 'accrual.method', e.target.value)}
                                             className="w-full border rounded px-3 py-2"
                                         >
@@ -390,8 +408,8 @@ const LeavePolicyManagement = () => {
                                         <label className="block text-sm font-medium mb-1">Amount *</label>
                                         <input
                                             type="number"
-                                            value={leaveType.accrual.amount}
-                                            onChange={(e) => updateLeaveType(index, 'accrual.amount', parseFloat(e.target.value))}
+                                            value={leaveType.uiAnnualAmount ?? leaveType.accrual?.maxAccrual ?? ''}
+                                            onChange={(e) => updateLeaveType(index, 'uiAnnualAmount', parseFloat(e.target.value))}
                                             className="w-full border rounded px-3 py-2"
                                             min="0"
                                             step="0.5"
@@ -401,7 +419,7 @@ const LeavePolicyManagement = () => {
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Frequency</label>
                                         <select
-                                            value={leaveType.accrual.frequency}
+                                            value={leaveType.accrual?.frequency || 'yearly'}
                                             onChange={(e) => updateLeaveType(index, 'accrual.frequency', e.target.value)}
                                             className="w-full border rounded px-3 py-2"
                                         >
@@ -413,9 +431,9 @@ const LeavePolicyManagement = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 mb-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-2">
                                     <div>
-                                        <label className="flex items-center mb-2">
+                                        <label className="flex items-center">
                                             <input
                                                 type="checkbox"
                                                 checked={leaveType.carryForward?.enabled || false}
@@ -424,18 +442,8 @@ const LeavePolicyManagement = () => {
                                             />
                                             Enable Carry Forward
                                         </label>
-                                        {leaveType.carryForward?.enabled && (
-                                            <input
-                                                type="number"
-                                                value={leaveType.carryForward.maxDays || 0}
-                                                onChange={(e) => updateLeaveType(index, 'carryForward.maxDays', parseFloat(e.target.value))}
-                                                placeholder="Max days"
-                                                className="w-full border rounded px-3 py-2"
-                                                min="0"
-                                            />
-                                        )}
                                     </div>
-                                    <div className="flex flex-col gap-2">
+                                    <div className="space-y-2">
                                         <label className="flex items-center">
                                             <input
                                                 type="checkbox"
@@ -473,169 +481,58 @@ const LeavePolicyManagement = () => {
                                             Paid Leave
                                         </label>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                            <label className="block text-sm font-medium mb-1">
                                                 Monthly entitlement (days/month)
                                             </label>
                                             <input
                                                 type="number"
-                                                value={leaveType.maxDaysPerMonth ?? ''}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    updateLeaveType(index, 'maxDaysPerMonth', v === '' ? null : parseFloat(v));
-                                                }}
-                                                placeholder="e.g. 2 → 24/year in balance"
+                                                value={leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount ?? ''}
+                                                onChange={(e) =>
+                                                    updateLeaveType(index, 'uiMonthlyEntitlement', parseFloat(e.target.value))
+                                                }
                                                 className="w-full border rounded px-3 py-2"
                                                 min="0"
                                                 step="0.5"
+                                                required
                                             />
-                                            {Number(leaveType.maxDaysPerMonth) > 0 && (
-                                                <p className="mt-1 text-[11px] text-gray-500">
-                                                    Accrues {leaveType.maxDaysPerMonth} day(s)/month (max{' '}
-                                                    {Number(leaveType.maxDaysPerMonth) * 12}/year in balance).
-                                                    Unused months roll into available balance. Same value limits
-                                                    max days taken per calendar month.
-                                                </p>
-                                            )}
+                                            <p className="mt-1 text-[11px] text-gray-500">
+                                                {monthlyEntitlementHelp(leaveType)}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Encashment Settings */}
-                                <div className="border-t pt-2 mb-2">
-                                    <label className="flex items-center mb-2">
+                                <div className="border-t pt-3 mt-3">
+                                    <label className="flex items-center">
                                         <input
                                             type="checkbox"
                                             checked={leaveType.encashment?.enabled || false}
-                                            onChange={(e) => {
-                                                const updated = [...formData.leaveTypes];
-                                                if (!updated[index].encashment) {
-                                                    updated[index].encashment = { enabled: false, maxDaysPerYear: 0, calculationMethod: 'daily_salary' };
-                                                }
-                                                updated[index].encashment.enabled = e.target.checked;
-                                                setFormData({ ...formData, leaveTypes: updated });
-                                            }}
+                                            onChange={(e) => updateLeaveType(index, 'encashment.enabled', e.target.checked)}
                                             className="mr-2"
                                         />
-                                        <span className="font-medium">Enable Leave Encashment</span>
+                                        Enable Leave Encashment
                                     </label>
-                                    {leaveType.encashment?.enabled && (
-                                        <div className="grid grid-cols-2 gap-2 ml-6">
-                                            <div>
-                                                <label className="block text-xs text-gray-600 mb-1">Max Days/Year</label>
-                                                <input
-                                                    type="number"
-                                                    value={leaveType.encashment.maxDaysPerYear || 0}
-                                                    onChange={(e) => {
-                                                        const updated = [...formData.leaveTypes];
-                                                        updated[index].encashment.maxDaysPerYear = parseFloat(e.target.value);
-                                                        setFormData({ ...formData, leaveTypes: updated });
-                                                    }}
-                                                    className="w-full border rounded px-2 py-1 text-sm"
-                                                    min="0"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs text-gray-600 mb-1">Calculation Method</label>
-                                                <select
-                                                    value={leaveType.encashment.calculationMethod || 'daily_salary'}
-                                                    onChange={(e) => {
-                                                        const updated = [...formData.leaveTypes];
-                                                        updated[index].encashment.calculationMethod = e.target.value;
-                                                        setFormData({ ...formData, leaveTypes: updated });
-                                                    }}
-                                                    className="w-full border rounded px-2 py-1 text-sm"
-                                                >
-                                                    <option value="daily_salary">Daily Salary</option>
-                                                    <option value="monthly_salary_divided_by_30">Monthly/30</option>
-                                                    <option value="custom">Custom</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* Probation & Notice Period Restrictions */}
-                                <div className="border-t pt-2 mb-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="flex items-center mb-1">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={leaveType.probationRestrictions?.enabled || false}
-                                                    onChange={(e) => {
-                                                        const updated = [...formData.leaveTypes];
-                                                        if (!updated[index].probationRestrictions) {
-                                                            updated[index].probationRestrictions = { enabled: false, minServiceDays: 0, maxDaysDuringProbation: 0 };
-                                                        }
-                                                        updated[index].probationRestrictions.enabled = e.target.checked;
-                                                        setFormData({ ...formData, leaveTypes: updated });
-                                                    }}
-                                                    className="mr-2"
-                                                />
-                                                <span className="text-xs font-medium">Probation Restrictions</span>
-                                            </label>
-                                            {leaveType.probationRestrictions?.enabled && (
-                                                <div className="ml-6 space-y-1">
-                                                    <input
-                                                        type="number"
-                                                        value={leaveType.probationRestrictions.minServiceDays || 0}
-                                                        onChange={(e) => {
-                                                            const updated = [...formData.leaveTypes];
-                                                            updated[index].probationRestrictions.minServiceDays = parseInt(e.target.value);
-                                                            setFormData({ ...formData, leaveTypes: updated });
-                                                        }}
-                                                        placeholder="Min service days"
-                                                        className="w-full border rounded px-2 py-1 text-xs"
-                                                        min="0"
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        value={leaveType.probationRestrictions.maxDaysDuringProbation || 0}
-                                                        onChange={(e) => {
-                                                            const updated = [...formData.leaveTypes];
-                                                            updated[index].probationRestrictions.maxDaysDuringProbation = parseInt(e.target.value);
-                                                            setFormData({ ...formData, leaveTypes: updated });
-                                                        }}
-                                                        placeholder="Max days during probation"
-                                                        className="w-full border rounded px-2 py-1 text-xs"
-                                                        min="0"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <label className="flex items-center mb-1">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={leaveType.noticePeriodRestrictions?.enabled || false}
-                                                    onChange={(e) => {
-                                                        const updated = [...formData.leaveTypes];
-                                                        if (!updated[index].noticePeriodRestrictions) {
-                                                            updated[index].noticePeriodRestrictions = { enabled: false, minNoticeDays: 0 };
-                                                        }
-                                                        updated[index].noticePeriodRestrictions.enabled = e.target.checked;
-                                                        setFormData({ ...formData, leaveTypes: updated });
-                                                    }}
-                                                    className="mr-2"
-                                                />
-                                                <span className="text-xs font-medium">Notice Period</span>
-                                            </label>
-                                            {leaveType.noticePeriodRestrictions?.enabled && (
-                                                <input
-                                                    type="number"
-                                                    value={leaveType.noticePeriodRestrictions.minNoticeDays || 0}
-                                                    onChange={(e) => {
-                                                        const updated = [...formData.leaveTypes];
-                                                        updated[index].noticePeriodRestrictions.minNoticeDays = parseInt(e.target.value);
-                                                        setFormData({ ...formData, leaveTypes: updated });
-                                                    }}
-                                                    placeholder="Min notice days"
-                                                    className="w-full border rounded px-2 py-1 text-xs ml-6"
-                                                    min="0"
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
+                                <div className="border-t pt-3 mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <label className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={leaveType.probationRestrictions?.enabled || false}
+                                            onChange={(e) => updateLeaveType(index, 'probationRestrictions.enabled', e.target.checked)}
+                                            className="mr-2"
+                                        />
+                                        Probation Restrictions
+                                    </label>
+                                    <label className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={leaveType.noticePeriodRestrictions?.enabled || false}
+                                            onChange={(e) => updateLeaveType(index, 'noticePeriodRestrictions.enabled', e.target.checked)}
+                                            className="mr-2"
+                                        />
+                                        Notice Period
+                                    </label>
                                 </div>
                             </div>
                         ))}
@@ -869,7 +766,7 @@ const LeavePolicyManagement = () => {
                                     <button
                                         onClick={() => {
                                             setEditingPolicy(policy);
-                                            setFormData(policy);
+                                            setFormData(mapPolicyToForm(policy));
                                             setShowForm(true);
                                         }}
                                         className="text-theme-secondary hover:text-theme-secondary mr-3"

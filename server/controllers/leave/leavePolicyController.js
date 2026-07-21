@@ -6,7 +6,10 @@ import logger from '../../helpers/logger.js';
 import { addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { buildEmployeeLeaveBalanceResponse } from '../../helpers/leaveBalanceResponseHelper.js';
-import { normalizePolicyLeaveTypes } from '../../helpers/leavePolicyAccrualHelper.js';
+import {
+    normalizePolicyLeaveTypes,
+    validateLeavePolicyAccrual,
+} from '../../helpers/leavePolicyAccrualHelper.js';
 import { resolveEmployeeLeaveBalanceAccess } from '../../helpers/leaveBalanceAccessHelper.js';
 import { writeLeaveBalanceAuditEntry, buildEmployeeLeaveHistory } from '../../helpers/leaveBalanceHistoryHelper.js';
 import { getEmployeeLeaveYearBounds, isLeaveYearAllowed } from '../../helpers/leaveYearBoundsHelper.js';
@@ -50,6 +53,15 @@ export const createLeavePolicy = async (req, res) => {
 
         if (policyData.leaveTypes) {
             policyData.leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes);
+        }
+
+        const validationErrors = validateLeavePolicyAccrual(policyData);
+        if (validationErrors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: validationErrors[0],
+                errors: validationErrors,
+            });
         }
 
         const policy = new LeavePolicy(policyData);
@@ -166,6 +178,21 @@ export const updateLeavePolicy = async (req, res) => {
         const updateBody = { ...req.body };
         if (updateBody.leaveTypes) {
             updateBody.leaveTypes = normalizePolicyLeaveTypes(updateBody.leaveTypes);
+        }
+
+        const mergedForValidation = {
+            ...policy.toObject(),
+            ...updateBody,
+            leaveTypes: updateBody.leaveTypes ?? policy.leaveTypes,
+            leaveCycle: updateBody.leaveCycle ?? policy.leaveCycle,
+        };
+        const validationErrors = validateLeavePolicyAccrual(mergedForValidation);
+        if (validationErrors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: validationErrors[0],
+                errors: validationErrors,
+            });
         }
 
         Object.assign(policy, updateBody);
@@ -760,16 +787,17 @@ export const getLeavePolicyMeta = async (req, res) => {
         const { LEAVE_TYPE_OPTIONS, LEAVE_REASON_OPTIONS, DEFAULT_LEAVE_CYCLE } = await import(
             '../../constants/leaveConstants.js'
         );
-        const { DEFAULT_LEAVE_ENTITLEMENT_DAYS, DEFAULT_MONTHLY_LEAVE_DAYS } = await import(
+        const { getLegacyDefaultAnnualEntitlement, getLegacyDefaultMonthlyAccrual } = await import(
             '../../constants/leaveDefaults.js'
         );
+        // Template values for new policy forms only — not used in balance calculations when a policy exists
         res.json({
             success: true,
             leaveTypes: LEAVE_TYPE_OPTIONS,
             leaveReasons: LEAVE_REASON_OPTIONS,
             defaults: {
-                annualEntitlement: DEFAULT_LEAVE_ENTITLEMENT_DAYS,
-                monthlyAllocation: DEFAULT_MONTHLY_LEAVE_DAYS,
+                annualEntitlement: getLegacyDefaultAnnualEntitlement(),
+                monthlyAllocation: getLegacyDefaultMonthlyAccrual(),
                 leaveCycle: DEFAULT_LEAVE_CYCLE,
             },
         });
@@ -966,6 +994,166 @@ export const addManualCarryForward = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error adding manual carry forward',
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * Reduce leave via a separate manual carry-forward reduction (does not change add flow).
+ */
+export const reduceManualCarryForward = async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        const { amount, anchorMonth, anchorYear, reason } = req.body;
+
+        const access = await resolveEmployeeLeaveBalanceAccess(req, employeeId, { forAdjust: true });
+        if (!access.ok) {
+            return res.status(access.status || 403).json({
+                success: false,
+                message: access.message,
+            });
+        }
+
+        const organizationId = access.organizationId;
+
+        if (amount === undefined || amount === null || amount === '') {
+            return res.status(400).json({
+                success: false,
+                message: 'amount is required',
+            });
+        }
+
+        const numericAmount = Number(amount);
+        if (Number.isNaN(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'amount must be a positive number',
+            });
+        }
+
+        const targetYear = anchorYear ? parseInt(anchorYear, 10) : new Date().getFullYear();
+        const targetMonth = anchorMonth ? parseInt(anchorMonth, 10) : new Date().getMonth() + 1;
+
+        if (Number.isNaN(targetYear) || targetYear < 2016 || targetYear > 2100) {
+            return res.status(400).json({ success: false, message: 'Invalid year' });
+        }
+
+        if (Number.isNaN(targetMonth) || targetMonth < 1 || targetMonth > 12) {
+            return res.status(400).json({ success: false, message: 'Invalid month' });
+        }
+
+        if (!reason || typeof reason !== 'string' || !reason.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'reason is required',
+            });
+        }
+
+        let balance = await leaveBalanceEngine.calculateBalance(employeeId, targetYear, organizationId, {
+            asOfDate: new Date(),
+        });
+        if (!balance) {
+            return res.status(404).json({
+                success: false,
+                message: 'Leave balance not found. Assign a leave policy to this employee first.',
+            });
+        }
+
+        const employeeRecord = await Employee.findById(employeeId)
+            .select('joiningDate name lastName')
+            .lean();
+
+        const balanceObj = await buildEmployeeLeaveBalanceResponse(
+            employeeId,
+            targetYear,
+            organizationId,
+            { month: targetMonth }
+        );
+        const summary = balanceObj?.leaveSummary || {};
+        const prevCarriedForward = summary.totalCarriedForward ?? 0;
+        const prevAvailable = summary.totalAvailableLeave ?? 0;
+
+        balance.accrualHistory = balance.accrualHistory || [];
+        balance.accrualHistory.push({
+            date: new Date(targetYear, targetMonth - 1, 1),
+            leaveType: 'employee',
+            amount: -numericAmount,
+            method: 'manual_carry_forward_reduce',
+            notes: `[${access.role}] Manual carry forward reduce: ${numericAmount} days effective from ${targetMonth}/${targetYear}. Reason: ${reason.trim()}`,
+        });
+
+        balance.employeeLeaveSummary = balance.employeeLeaveSummary || {};
+        if (!balance.employeeLeaveSummary.manualCarryForwardReductions) {
+            balance.employeeLeaveSummary.manualCarryForwardReductions = [];
+        }
+        balance.employeeLeaveSummary.manualCarryForwardReductions.push({
+            amount: numericAmount,
+            effectiveYear: targetYear,
+            effectiveMonth: targetMonth,
+            reason: reason.trim().slice(0, 500),
+            addedBy: req.employee?._id || req.user?._id,
+            addedAt: new Date(),
+        });
+
+        balance.markModified('employeeLeaveSummary');
+        await balance.save();
+
+        const employeeName = employeeRecord
+            ? [employeeRecord.name, employeeRecord.lastName].filter(Boolean).join(' ')
+            : undefined;
+
+        const nextAvailable = Math.max(0, roundLeaveDays(prevAvailable - numericAmount));
+        const nextCarriedForward = Math.max(0, roundLeaveDays(prevCarriedForward - numericAmount));
+
+        await writeLeaveBalanceAuditEntry({
+            organizationId,
+            employeeId,
+            employeeName,
+            action: 'manual_carry_forward_reduce',
+            leaveType: 'employee',
+            previousBalance: {
+                carriedForward: prevCarriedForward,
+                available: prevAvailable,
+            },
+            newBalance: {
+                carriedForward: nextCarriedForward,
+                available: nextAvailable,
+            },
+            performedBy: req.employee?._id || req.user?._id,
+            notes: reason.trim().slice(0, 500),
+            toYear: targetYear,
+            toMonth: targetMonth,
+        });
+
+        logger.info('Manual carry forward reduced', {
+            employeeId,
+            organizationId: String(organizationId),
+            amount: numericAmount,
+            anchorYear: targetYear,
+            anchorMonth: targetMonth,
+            adjustedBy: req.employee?._id || req.user?._id,
+            role: access.role,
+        });
+
+        const updatedBalanceObj = await buildEmployeeLeaveBalanceResponse(
+            employeeId,
+            targetYear,
+            organizationId,
+            { month: targetMonth }
+        );
+
+        res.json({
+            success: true,
+            message: 'Manual carry forward reduced successfully',
+            balance: updatedBalanceObj,
+            canAdjust: true,
+        });
+    } catch (error) {
+        logger.error('Reduce Manual Carry Forward Error', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            success: false,
+            message: 'Error reducing manual carry forward',
             error: error.message,
         });
     }

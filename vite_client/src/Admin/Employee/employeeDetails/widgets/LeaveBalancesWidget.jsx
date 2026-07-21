@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from '../../../../utils/axios';
-import { getLeaveTypeDisplayName } from '../../../../constants/leaveConstants';
+import { getLeaveTypeDisplayName, getPolicyMonthlyAccrualForType } from '../../../../constants/leaveConstants';
 
 const MONTHS = [
   { value: 1, label: 'January' },
@@ -111,12 +111,37 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
   const available = Number(typeBalance.availableDays ?? typeBalance.available ?? 0);
   const carriedForward = Number(typeBalance.carriedDays ?? typeBalance.carriedForward ?? 0);
   const pending = Number(typeBalance.pendingDays ?? typeBalance.pending ?? 0);
+  const annualEntitlement = Number(typeBalance.annualEntitlement ?? policyType?.accrual?.maxAccrual ?? 0);
+  const monthlyAccrual = Number(
+    typeBalance.monthlyRate ??
+      getPolicyMonthlyAccrualForType(policyType) ??
+      policyType?.accrual?.amount ??
+      0
+  );
+  const currentMonthAccrual = Number(
+    typeBalance.currentMonthAccrual ?? typeBalance.earnedThisMonth ?? monthlyAccrual
+  );
+  const manualAdjustment = Number(typeBalance.manualAdjustment ?? 0);
 
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
       <h4 className="text-base font-semibold text-slate-900">{displayName}</h4>
 
       <dl className="mt-4 space-y-3 text-sm">
+        <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+          <dt>Annual entitlement</dt>
+          <dd className="font-medium text-slate-700">{fmtDays(annualEntitlement)} days</dd>
+        </div>
+        <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+          <dt>Monthly accrual</dt>
+          <dd className="font-medium text-slate-700">{fmtDays(monthlyAccrual)} days</dd>
+        </div>
+        <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+          <dt>Current month accrual</dt>
+          <dd className="font-medium text-[#0d9488]">
+            {currentMonthAccrual > 0 ? `+${fmtDays(currentMonthAccrual)}` : fmtDays(currentMonthAccrual)} days
+          </dd>
+        </div>
         <div className="flex items-start justify-between gap-3">
           <dt className="font-semibold text-slate-800">Available:</dt>
           <BalanceMetricValue
@@ -144,6 +169,16 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
             <BalanceMetricValue value={pending} />
           </div>
         )}
+        {manualAdjustment !== 0 && (
+          <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-3">
+            <dt className="text-slate-600">Manual adjustment:</dt>
+            <BalanceMetricValue
+              value={manualAdjustment}
+              prefix={manualAdjustment > 0 ? '+' : ''}
+              valueClassName={manualAdjustment > 0 ? 'text-[#0d9488]' : 'text-rose-600'}
+            />
+          </div>
+        )}
       </dl>
     </div>
   );
@@ -152,12 +187,25 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
 export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
   const totals = summary || {
     totalAvailableLeave: 0,
+    totalAnnualEntitlement: 0,
     totalAccrued: 0,
     totalUsed: 0,
     totalCarriedForward: 0,
     totalPending: 0,
     earnedThisMonth: 0,
+    manualAdjustment: 0,
   };
+
+  const formatSignedDays = (value) => {
+    const n = Number(value) || 0;
+    const abs = fmtDays(Math.abs(n));
+    if (n > 0) return `+${abs}`;
+    if (n < 0) return `−${abs}`;
+    return abs;
+  };
+
+  const manualAdjustment = Number(totals.manualAdjustment) || 0;
+  const earnedThisMonth = Number(totals.earnedThisMonth) || 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[#20C997]/20 bg-gradient-to-br from-[#20C997]/10 via-white to-[#F0FDF4] shadow-md p-6">
@@ -169,14 +217,43 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
       </h2>
       {!loading && subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
       {!loading && (
-        <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
+        <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3">
           {[
-            { label: 'Current Month Accrual', value: totals.earnedThisMonth },
-            { label: 'Total used', value: totals.totalUsed, valueClassName: 'text-red-600' },
-          ].map(({ label, value, valueClassName = 'text-slate-900' }) => (
-            <div key={label} className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover:shadow-md transition-shadow">
+            {
+              label: 'Total Annual Entitlement',
+              display: fmtDays(totals.totalAnnualEntitlement),
+              valueClassName: 'text-slate-900',
+            },
+            {
+              label: 'Current Month Accrual',
+              display: formatSignedDays(earnedThisMonth),
+              valueClassName: earnedThisMonth > 0 ? 'text-[#0d9488]' : 'text-slate-900',
+            },
+            {
+              label: 'Manual Adjustment',
+              display: formatSignedDays(manualAdjustment),
+              valueClassName:
+                manualAdjustment > 0
+                  ? 'text-[#0d9488]'
+                  : manualAdjustment < 0
+                    ? 'text-rose-600'
+                    : 'text-slate-900',
+            },
+            {
+              label: 'Total used',
+              display: fmtDays(totals.totalUsed),
+              valueClassName: 'text-red-600',
+            },
+          ].map(({ label, display, valueClassName = 'text-slate-900' }) => (
+            <div
+              key={label}
+              className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
+            >
               <dt className="text-xs font-medium text-slate-500 mb-2">{label}</dt>
-              <dd className={`text-2xl font-bold ${valueClassName}`}>{fmtDays(value)} <span className="text-sm font-normal text-slate-500">days</span></dd>
+              <dd className={`text-2xl font-bold ${valueClassName}`}>
+                {display}{' '}
+                <span className="text-sm font-normal text-slate-500">days</span>
+              </dd>
             </div>
           ))}
         </dl>

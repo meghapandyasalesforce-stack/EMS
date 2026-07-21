@@ -54,6 +54,8 @@ const friendlyAction = (action) => {
     carry_forward: 'Carried to next year',
     monthly_auto: 'Monthly credit',
     manual_adjust: 'Manual correction',
+    manual_carry_forward: 'Manual carry forward added',
+    manual_carry_forward_reduce: 'Manual carry forward reduced',
     'Current balance': 'Current snapshot',
   };
   return map[action] || String(action || 'Updated').replace(/_/g, ' ');
@@ -64,7 +66,12 @@ const fmtDays = (n) => {
   return v % 1 === 0 ? String(v) : v.toFixed(1);
 };
 
-const emptyTypeForm = () => ({ available: '0', used: '0', carriedForward: '0' });
+const emptyTypeForm = () => ({
+  available: '0',
+  used: '0',
+  carriedForward: '0',
+  carryMode: 'add',
+});
 
 const ManualAdjustModal = ({
   open,
@@ -85,8 +92,7 @@ const ManualAdjustModal = ({
         <div className="border-b px-6 py-4">
           <h3 className="text-lg font-semibold text-slate-900">Balance Adjustment</h3>
           <p className="mt-1 text-sm text-slate-500">
-            {/* Current Available Leave is from the leave policy. Carry Forward starts at 0 — whatever
-            you enter is added to Available for that leave type and included in the total summary. */}
+            Choose Add or Reduce, then enter Carry Forward days for each leave type.
           </p>
         </div>
         <div className="overflow-y-auto px-6 py-4">
@@ -103,13 +109,43 @@ const ManualAdjustModal = ({
                   lt.displayName || getLeaveTypeDisplayName(typeKey, leaveTypes);
                 const currentAvailable = Number(form.available) || 0;
                 const carryForward = form.carriedForward === '' ? 0 : Number(form.carriedForward) || 0;
-                const totalAfterCarry = Math.max(0, currentAvailable + carryForward);
+                const carryMode = form.carryMode === 'reduce' ? 'reduce' : 'add';
+                const totalAfterCarry = Math.max(
+                  0,
+                  carryMode === 'reduce'
+                    ? currentAvailable - carryForward
+                    : currentAvailable + carryForward
+                );
                 return (
                   <div
                     key={typeKey}
                     className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
                   >
                     <h4 className="text-sm font-semibold text-slate-900">{label}</h4>
+                    <div className="mt-3 flex rounded-xl border border-slate-200 bg-white p-1">
+                      <button
+                        type="button"
+                        onClick={() => onChange(typeKey, 'carryMode', 'add')}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                          carryMode === 'add'
+                            ? 'bg-[#20C997] text-white'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onChange(typeKey, 'carryMode', 'reduce')}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                          carryMode === 'reduce'
+                            ? 'bg-rose-600 text-white'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        Reduce
+                      </button>
+                    </div>
                     <label className="mt-3 block text-sm">
                       <span className="mb-1 block font-medium text-slate-700">
                         Current Available Leave
@@ -125,7 +161,7 @@ const ManualAdjustModal = ({
                     </label>
                     <label className="mt-3 block text-sm">
                       <span className="mb-1 block font-medium text-slate-700">
-                        Carry Forward 
+                        {carryMode === 'reduce' ? 'Deduct' : 'Carry Forward'}
                       </span>
                       <input
                         type="number"
@@ -138,11 +174,15 @@ const ManualAdjustModal = ({
                     </label>
                     <p className="mt-2 text-xs text-slate-600">
                       After save:{' '}
-                      <span className="font-semibold text-[#0d9488]">
+                      <span
+                        className={`font-semibold ${
+                          carryMode === 'reduce' ? 'text-rose-600' : 'text-[#0d9488]'
+                        }`}
+                      >
                         {fmtDays(totalAfterCarry)} days
                       </span>
                       {carryForward > 0
-                        ? ` (${fmtDays(currentAvailable)} + ${fmtDays(carryForward)})`
+                        ? ` (${fmtDays(currentAvailable)} ${carryMode === 'reduce' ? '−' : '+'} ${fmtDays(carryForward)})`
                         : ''}
                     </p>
                   </div>
@@ -178,84 +218,6 @@ const ManualAdjustModal = ({
   );
 };
 
-const ManualCarryForwardModal = ({ open, saving, form, onChange, onClose, onSave }) => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-        <div className="border-b px-6 py-4">
-          <h3 className="text-lg font-semibold text-slate-900">Add Manual Carry Forward</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Add carry forward leave that becomes effective from the selected month/year.
-          </p>
-        </div>
-        <div className="space-y-3 px-6 py-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Carry Forward Days</span>
-            <input
-              type="number"
-              min="0"
-              step="0.5"
-              value={form.carriedForward}
-              onChange={(e) => onChange('carriedForward', e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5"
-              placeholder="e.g., 5"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Effective From (Month)</span>
-            <select
-              value={form.anchorMonth}
-              onChange={(e) => onChange('anchorMonth', e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5"
-            >
-              {MONTHS.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Effective From (Year)</span>
-            <select
-              value={form.anchorYear}
-              onChange={(e) => onChange('anchorYear', e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5"
-            >
-              {yearOptionsForModal().map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </label>
-          <div className="rounded-xl bg-blue-50 px-4 py-3">
-            <p className="text-xs text-slate-600">
-              This carry forward will be included in the balance starting from {MONTHS.find(m => m.value === Number(form.anchorMonth))?.label} {form.anchorYear} and will continue to be carried forward until fully used.
-            </p>
-          </div>
-          <input
-            placeholder="Reason (required)"
-            value={form.reason}
-            onChange={(e) => onChange('reason', e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-          />
-        </div>
-        <div className="flex justify-end gap-2 border-t px-6 py-4">
-          <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2 text-sm">Cancel</button>
-          <button type="button" onClick={onSave} disabled={saving} className="rounded-xl bg-[#20C997] px-4 py-2 text-sm font-semibold text-white">
-            {saving ? 'Saving…' : 'Add Carry Forward'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const yearOptionsForModal = () => {
-  const currentYear = new Date().getFullYear();
-  const years = [];
-  for (let y = LEAVE_MIN_YEAR; y <= currentYear + 1; y += 1) years.push(y);
-  return years;
-};
-
 const LeaveTab = ({ employeeId }) => {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
@@ -272,9 +234,6 @@ const LeaveTab = ({ employeeId }) => {
   const [adjustReason, setAdjustReason] = useState('');
   const [savingAdjust, setSavingAdjust] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
-  const [showCarryForwardModal, setShowCarryForwardModal] = useState(false);
-  const [carryForwardForm, setCarryForwardForm] = useState({ carriedForward: '', anchorMonth: currentMonth, anchorYear: currentYear, reason: '' });
-  const [savingCarryForward, setSavingCarryForward] = useState(false);
 
   const policyLeaveTypes = balance?.policy?.leaveTypes || [];
   const editableLeaveTypes = useMemo(
@@ -343,6 +302,17 @@ const LeaveTab = ({ employeeId }) => {
   useEffect(() => { loadAudit(); }, [loadAudit]);
 
   useEffect(() => {
+    const onBalanceUpdated = (event) => {
+      const updatedEmployeeId = event.detail?.employeeId;
+      if (!updatedEmployeeId || String(updatedEmployeeId) !== String(employeeId)) return;
+      loadBalance();
+      loadAudit();
+    };
+    window.addEventListener('leave-balance-updated', onBalanceUpdated);
+    return () => window.removeEventListener('leave-balance-updated', onBalanceUpdated);
+  }, [employeeId, loadBalance, loadAudit]);
+
+  useEffect(() => {
     if (viewYear === currentYear && viewMonth > currentMonth) {
       setViewMonth(currentMonth);
     }
@@ -362,11 +332,12 @@ const LeaveTab = ({ employeeId }) => {
       const row = (balance?.balances || []).find((b) => b.leaveType === lt.type);
       const available = Number(row?.availableDays ?? row?.available ?? 0) || 0;
       const used = Number(row?.usedDays ?? row?.used ?? 0) || 0;
-      // Carry Forward always starts at 0 — HR enters the amount to add to Available.
+      // Carry Forward always starts at 0 — HR enters the amount to add or reduce.
       nextForms[lt.type] = {
         available: String(available),
         used: String(used),
         carriedForward: '0',
+        carryMode: 'add',
       };
     });
     setAdjustForms(nextForms);
@@ -408,8 +379,12 @@ const LeaveTab = ({ employeeId }) => {
         const available = form.available === '' ? 0 : Number(form.available);
         const used = form.used === '' ? 0 : Number(form.used);
         const carriedForward = form.carriedForward === '' ? 0 : Number(form.carriedForward);
-        // Available after save = Current Available + Carry Forward (added for every leave type).
-        const newAvailable = Math.max(0, available + carriedForward);
+        const carryMode = form.carryMode === 'reduce' ? 'reduce' : 'add';
+        // Add: Available + Carry Forward. Reduce: Available − Carry Forward (min 0).
+        const newAvailable = Math.max(
+          0,
+          carryMode === 'reduce' ? available - carriedForward : available + carriedForward
+        );
         const accrued = Math.max(0, newAvailable + used);
         const res = await axios.patch(`/v1/admin/leave-policy/balance/${employeeId}/adjust`, {
           year: viewYear,
@@ -417,7 +392,7 @@ const LeaveTab = ({ employeeId }) => {
           leaveType: lt.type,
           accrued,
           used,
-          carriedForward,
+          carriedForward: carryMode === 'reduce' ? 0 : carriedForward,
           reason: adjustReason.trim(),
         });
         latestBalance = res.data?.balance || latestBalance;
@@ -435,42 +410,6 @@ const LeaveTab = ({ employeeId }) => {
     } finally {
       setSavingAdjust(false);
     }
-  };
-
-  const handleSaveManualCarryForward = async () => {
-    if (!employeeId || !carryForwardForm.reason.trim() || !carryForwardForm.carriedForward) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    setSavingCarryForward(true);
-    try {
-      const res = await axios.post(`/v1/admin/leave-policy/balance/${employeeId}/manual-carry-forward`, {
-        carriedForward: Number(carryForwardForm.carriedForward),
-        anchorMonth: Number(carryForwardForm.anchorMonth),
-        anchorYear: Number(carryForwardForm.anchorYear),
-        reason: carryForwardForm.reason.trim(),
-      });
-      setBalance(res.data?.balance || null);
-      setShowCarryForwardModal(false);
-      setCarryForwardForm({ carriedForward: '', anchorMonth: currentMonth, anchorYear: currentYear, reason: '' });
-      toast.success('Manual carry forward added');
-      await loadAudit();
-      await refreshAll();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to add carry forward');
-    } finally {
-      setSavingCarryForward(false);
-    }
-  };
-
-  const openCarryForwardModal = () => {
-    setCarryForwardForm({
-      carriedForward: '',
-      anchorMonth: currentMonth,
-      anchorYear: currentYear,
-      reason: '',
-    });
-    setShowCarryForwardModal(true);
   };
 
   const displayBalances = useMemo(
@@ -523,7 +462,7 @@ const LeaveTab = ({ employeeId }) => {
             <span className="text-sm text-[#0d9488]">{showTools ? 'Hide' : 'Show'}</span>
           </button>
           {showTools && (
-            <div className="border-t border-slate-100 px-5 pb-5 pt-4 space-y-2">
+            <div className="border-t border-slate-100 px-5 pb-5 pt-4">
               <button
                 type="button"
                 onClick={openEditModal}
@@ -651,14 +590,6 @@ const LeaveTab = ({ employeeId }) => {
         onReasonChange={setAdjustReason}
         onClose={() => !savingAdjust && setAdjustOpen(false)}
         onSave={handleSaveManualAdjust}
-      />
-      <ManualCarryForwardModal
-        open={showCarryForwardModal}
-        form={carryForwardForm}
-        saving={savingCarryForward}
-        onChange={(field, value) => setCarryForwardForm((p) => ({ ...p, [field]: value }))}
-        onClose={() => !savingCarryForward && setShowCarryForwardModal(false)}
-        onSave={handleSaveManualCarryForward}
       />
     </div>
   );

@@ -267,20 +267,25 @@ async function updateEntityStatus(instance) {
                     leave.status = 'approved';
                     leave.approvedBy = instance.steps[instance.steps.length - 1]?.approverId;
                     leave.approvedAt = new Date();
-                    
-                    // Update leave balance
+                }
+                await leave.save();
+
+                if (instance.status === 'Approved') {
                     try {
                         const leaveBalanceEngine = (await import('../services/leaveBalanceEngine.js')).default;
                         const year = new Date(leave.startDate).getFullYear();
-                        await leaveBalanceEngine.calculateBalance(leave.employee, year, leave.organizationId);
+                        await leaveBalanceEngine.calculateBalance(
+                            leave.employee,
+                            year,
+                            leave.organizationId
+                        );
                     } catch (balanceError) {
                         logger.warn('Error updating leave balance after timeout approval', {
                             error: balanceError.message,
-                            leaveId: leave._id
+                            leaveId: leave._id,
                         });
                     }
                 }
-                await leave.save();
             }
         }
         // Add other entity types (Expense, Document, etc.) as needed

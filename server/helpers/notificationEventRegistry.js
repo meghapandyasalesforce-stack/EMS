@@ -664,6 +664,94 @@ registerEvent({
   })
 });
 
+// ==================== ONBOARDING EVENTS ====================
+
+registerEvent({
+  type: 'onboarding_workflow_created',
+  defaultTitle: 'New Employee Onboarding',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employee, hrAssignee }) => {
+    const ids = [];
+    if (employee?._id) ids.push(employee._id.toString());
+    if (hrAssignee) ids.push(hrAssignee.toString());
+    return ids;
+  },
+  messageBuilder: ({ employee }) =>
+    `Welcome ${employee?.name || 'New joiner'}! Your onboarding workflow has been created.`,
+  metadataBuilder: ({ employee, workflow }) => ({
+    employeeId: employee?._id,
+    workflowId: workflow?._id,
+    eventType: 'onboarding_workflow_created',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_task_completed',
+  defaultTitle: 'Onboarding Task Completed',
+  defaultType: 'onboarding',
+  defaultPriority: 'low',
+  recipientResolver: async ({ workflow }) => {
+    const ids = [];
+    if (workflow?.assignedHR) ids.push(workflow.assignedHR.toString());
+    if (workflow?.employeeId) ids.push(workflow.employeeId.toString());
+    return ids;
+  },
+  messageBuilder: ({ task }) => `Onboarding task "${task?.title}" has been completed.`,
+  metadataBuilder: ({ workflow, task }) => ({
+    workflowId: workflow?._id,
+    taskId: task?._id,
+    eventType: 'onboarding_task_completed',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_document_uploaded',
+  defaultTitle: 'Document Uploaded',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow }) =>
+    workflow?.assignedHR ? [workflow.assignedHR.toString()] : [],
+  messageBuilder: ({ documentType }) =>
+    `An onboarding document (${documentType}) has been uploaded for verification.`,
+  metadataBuilder: ({ workflow, documentType }) => ({
+    workflowId: workflow?._id,
+    documentType,
+    eventType: 'onboarding_document_uploaded',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_document_verified',
+  defaultTitle: 'Document Verified',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow }) =>
+    workflow?.employeeId ? [workflow.employeeId.toString()] : [],
+  messageBuilder: ({ doc }) => `Your ${doc?.documentType} document has been verified.`,
+  metadataBuilder: ({ workflow, doc }) => ({
+    workflowId: workflow?._id,
+    documentType: doc?.documentType,
+    eventType: 'onboarding_document_verified',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_document_rejected',
+  defaultTitle: 'Document Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ workflow }) =>
+    workflow?.employeeId ? [workflow.employeeId.toString()] : [],
+  messageBuilder: ({ doc }) =>
+    `Your ${doc?.documentType} document was rejected. Please re-upload.`,
+  metadataBuilder: ({ workflow, doc }) => ({
+    workflowId: workflow?._id,
+    documentType: doc?.documentType,
+    eventType: 'onboarding_document_rejected',
+  }),
+});
+
 export default {
   // This file auto-registers events on import
 };

@@ -1,16 +1,22 @@
 import Leave from '../models/leave.model.js';
 import LeaveBalance from '../models/leaveBalance.model.js';
+import LeavePolicy from '../models/leavePolicy.model.js';
 import Employee from '../models/employee.model.js';
 import leaveBalanceEngine from '../services/leaveBalanceEngine.js';
 import { getLeaveTypeVariantsForBalance } from './leaveTypeHelper.js';
 import {
-    getEffectiveEntitlementAmount,
     getEffectiveCarryForwardConfig,
-    DEFAULT_LEAVE_ENTITLEMENT_DAYS,
 } from '../constants/leaveDefaults.js';
 import {
     getRollingAccrualMonthlyRate,
+    getAnnualEntitlementAmount,
     getDisplayYearlyAccrualCap,
+    sumPolicyAnnualEntitlement,
+    sumPolicyMonthlyAccrual,
+    sumPolicyMonthlyAccrualForViewMonth,
+    getTypeMonthlyAccrualForViewMonth,
+    roundDaysForDisplay,
+    normalizePolicyLeaveTypes,
 } from './leavePolicyAccrualHelper.js';
 import {
     getEmployeeLeaveYearBounds,
@@ -25,9 +31,8 @@ import {
 } from './leaveBalanceRulesHelper.js';
 import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
 import { resolveLeaveBalanceOrganizationId } from './leaveBalanceAccessHelper.js';
-import logger from './logger.js';
 
-function buildYearSummaries(ledgerByYear = {}, monthlyRate = 1.5) {
+function buildYearSummaries(ledgerByYear = {}, monthlyRate = 0, periodsPerYear = 12) {
     return Object.keys(ledgerByYear)
         .map((y) => Number(y))
         .filter((y) => Number.isInteger(y))
@@ -44,12 +49,69 @@ function buildYearSummaries(ledgerByYear = {}, monthlyRate = 1.5) {
                 yearUsed,
                 yearEndBalance: decRow ? roundLeaveDays(decRow.available) : 0,
                 monthlyRate,
-                fullYearCredit: roundLeaveDays(monthlyRate * 12),
+                fullYearCredit: roundLeaveDays(monthlyRate * periodsPerYear),
             };
         });
 }
 
+function getEnabledPolicyTypes(policy) {
+    return (policy?.leaveTypes || []).filter((lt) => lt?.type && lt.enabled !== false);
+}
+
+async function resolvePolicyForBalanceResponse(policyRef) {
+    if (!policyRef) {
+        return null;
+    }
+    const policyId = policyRef._id || policyRef;
+    if (policyRef.leaveTypes?.length) {
+        return policyRef;
+    }
+    if (!policyId) {
+        return policyRef;
+    }
+    return LeavePolicy.findById(policyId).select('policyName leaveTypes leaveCycle isActive').lean();
+}
+
+function sumTypeManualAdjustments(balances = []) {
+    return roundLeaveDays(
+        balances.reduce((sum, row) => {
+            if (!row.manualOverride?.active) return sum;
+            const mo = row.manualOverride;
+            const baseline = roundLeaveDays((Number(mo.accrued) || 0) - (Number(mo.used) || 0));
+            const available = roundLeaveDays(Number(row.availableDays ?? row.available) || 0);
+            return sum + (available - baseline);
+        }, 0)
+    );
+}
+
 export { manualAvailableFromOverride } from './leaveBalanceRulesHelper.js';
+
+/**
+ * Net HR manual carry-forward add/reduce through the view month (display only).
+ * Positive = added days, negative = reduced days. Does not change accrual math.
+ */
+function netManualCarryAdjustmentThroughView(adds = [], reductions = [], viewYear, viewMonth) {
+    const viewKey = calendarMonthSortKey(viewYear, viewMonth);
+    let net = 0;
+
+    for (const entry of adds) {
+        const y = Number(entry.effectiveYear);
+        const m = Number(entry.effectiveMonth);
+        if (!Number.isInteger(y) || !Number.isInteger(m)) continue;
+        if (calendarMonthSortKey(y, m) > viewKey) continue;
+        net = roundLeaveDays(net + (Number(entry.amount) || 0));
+    }
+
+    for (const entry of reductions) {
+        const y = Number(entry.effectiveYear);
+        const m = Number(entry.effectiveMonth);
+        if (!Number.isInteger(y) || !Number.isInteger(m)) continue;
+        if (calendarMonthSortKey(y, m) > viewKey) continue;
+        net = roundLeaveDays(net - (Number(entry.amount) || 0));
+    }
+
+    return net;
+}
 
 /**
  * Latest active manual override anchored at or before the view month (carry-forward safe).
@@ -164,12 +226,16 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         return null;
     }
 
-    await balance.populate('policy', 'policyName leaveTypes');
+    await balance.populate('policy', 'policyName leaveTypes leaveCycle');
 
     const monthStart = new Date(viewYear, viewMonth - 1, 1);
     const monthEnd = new Date(viewYear, viewMonth, 0, 23, 59, 59);
 
     const balanceObj = balance.toObject();
+    balanceObj.policy = await resolvePolicyForBalanceResponse(balanceObj.policy);
+    if (balanceObj.policy?.leaveTypes?.length) {
+        balanceObj.policy.leaveTypes = normalizePolicyLeaveTypes(balanceObj.policy.leaveTypes);
+    }
     balanceObj.viewPeriod = { year: viewYear, month: viewMonth };
     balanceObj.employeeContext = {
         joiningDate: bounds.joiningDate,
@@ -177,7 +243,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         joiningMonth: bounds.joiningMonth,
         minYear: bounds.minYear,
         maxYear: bounds.maxYear,
-        defaultYearlyEntitlement: DEFAULT_LEAVE_ENTITLEMENT_DAYS,
+        totalAnnualEntitlement: sumPolicyAnnualEntitlement(balanceObj.policy || {}),
+        totalMonthlyAccrual: sumPolicyMonthlyAccrual(balanceObj.policy || {}),
     };
 
     const persistedOpening = await leaveBalanceEngine.resolvePersistedOpeningLeaveBalance(
@@ -185,364 +252,247 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         resolvedOrganizationId
     );
 
-    logger.info('[OpeningLeaveBalance] buildEmployeeLeaveBalanceResponse', {
-        employeeId: String(employeeId),
-        viewYear,
-        viewMonth,
-        openingLeaveBalance: persistedOpening
-            ? {
-                  openingYear: persistedOpening.openingYear,
-                  openingMonth: persistedOpening.openingMonth,
-                  balance: persistedOpening.balance,
-              }
-            : null,
-    });
-
-    const pooledAvailable = await leaveBalanceEngine.computePooledAvailableLeave(
-        employee || { joiningDate: bounds.joiningDate, _id: employeeId },
-        balanceObj.policy,
-        resolvedOrganizationId,
-        asOfDate,
-        await leaveBalanceEngine.resolveEmployeeBalanceAnchor(
-            employeeId,
-            resolvedOrganizationId,
-            persistedOpening
-        ),
-        persistedOpening
-    );
-
-    logger.info('[OpeningLeaveBalance] buildEmployeeLeaveBalanceResponse result', {
-        employeeId: String(employeeId),
-        accrualStartYear: pooledAvailable.calculationStartYear,
-        accrualStartMonth: pooledAvailable.calculationStartMonth,
-        loopStartYear: pooledAvailable.loopStartYear,
-        loopStartMonth: pooledAvailable.loopStartMonth,
-        firstProcessedMonth: pooledAvailable.firstProcessedMonth,
-        lastProcessedMonth: pooledAvailable.lastProcessedMonth,
-        finalAvailableBalance: pooledAvailable.available,
-    });
-
-    const periodOpeningBalance = persistedOpening;
-
-    const accrualStartSortKey =
-        (pooledAvailable.calculationStartYear ?? bounds.joiningYear) * 12 +
-        ((pooledAvailable.calculationStartMonth ?? bounds.joiningMonth) - 1);
-    const viewSortKey = viewYear * 12 + (viewMonth - 1);
-    const isBeforeAccrualStart = viewSortKey < accrualStartSortKey;
-    const manualOverrideAtView = await resolveApplicableManualOverrideAtView(
+    const legacyGlobalOverride = await resolveApplicableManualOverrideAtView(
         employeeId,
         resolvedOrganizationId,
         viewYear,
         viewMonth
     );
-    const hasManualOverrideAtView = Boolean(manualOverrideAtView);
-    const zeroPreAccrualSummary = isBeforeAccrualStart && !hasManualOverrideAtView;
 
-    const pooledTypeSet = new Set(
-        leaveBalanceEngine
-            .getPooledLeaveTypeConfigs(balanceObj.policy || {})
-            .map((lt) => lt.type)
-    );
+    const enabledPolicyTypes = getEnabledPolicyTypes(balanceObj.policy);
+    const employeeForAccrual = employee || { joiningDate: bounds.joiningDate, _id: employeeId };
 
-    let totalPendingPooled = 0;
+    balanceObj.balances = await Promise.all(
+        enabledPolicyTypes.map(async (policyType) => {
+            const b =
+                balanceObj.balances.find((row) => row.leaveType === policyType.type) || {
+                    leaveType: policyType.type,
+                    accrued: 0,
+                    used: 0,
+                    available: 0,
+                    carriedForward: 0,
+                    expired: 0,
+                    pending: 0,
+                };
 
-    balanceObj.balances = await Promise.all(balanceObj.balances.map(async (b) => {
-        const types = getLeaveTypeVariantsForBalance(b.leaveType);
-        const policyType = balanceObj.policy?.leaveTypes?.find((lt) => lt.type === b.leaveType);
-        const entitlement = getEffectiveEntitlementAmount(policyType || {});
-        const monthlyRate =
-            getRollingAccrualMonthlyRate(policyType || { type: b.leaveType }) ??
-            Math.round((entitlement / 12) * 100) / 100;
-        const yearlyCap = getDisplayYearlyAccrualCap(policyType || { type: b.leaveType }) ?? entitlement;
-        const effectiveConfig = {
-            ...(policyType || { type: b.leaveType }),
-            carryForward: getEffectiveCarryForwardConfig(policyType || { type: b.leaveType }),
-        };
+            const types = getLeaveTypeVariantsForBalance(b.leaveType);
+            const annualEntitlement = getAnnualEntitlementAmount(policyType);
+            const monthlyRate = getRollingAccrualMonthlyRate(policyType);
+            const yearlyCap = getDisplayYearlyAccrualCap(policyType);
+            const effectiveConfig = {
+                ...policyType,
+                carryForward: getEffectiveCarryForwardConfig(policyType),
+            };
 
-        b.monthlyRate = monthlyRate;
-        b.yearlyCap = yearlyCap;
-        b.usedDays = Number(b.used) || 0;
-        b.pendingDays = Number(b.pending) || 0;
-        const isPooledType = pooledTypeSet.has(b.leaveType);
-        const hasTypeOverride = Boolean(b.manualOverride?.active);
-        if (hasTypeOverride) {
-            const mo = b.manualOverride;
-            b.accrued = Number(mo.accrued) || Number(b.accrued) || 0;
-            b.used = Number(mo.used) || Number(b.used) || 0;
-            b.carriedForward = Number(mo.carriedForward) || Number(b.carriedForward) || 0;
-            b.usedDays = b.used;
-            b.carriedDays = b.carriedForward;
-            b.earnedToDate = b.accrued;
-            b.isPooledCategory = false;
-            b.hasTypeManualOverride = true;
-            const overrideAvailable = Math.max(
-                0,
-                roundLeaveDays(b.accrued - b.used)
-            );
-            b.available = overrideAvailable;
-            b.availableDays = overrideAvailable;
-        } else if (isPooledType) {
-            // Shared leave wallet — per-type Available is assigned after pooledClosing is known.
-            b.isPooledCategory = true;
-            b.carriedForward = 0;
-            b.carriedDays = 0;
-            b.accrued = 0;
-            b.earnedToDate = 0;
-            totalPendingPooled += b.pendingDays;
-        } else {
-            b.carriedDays = 0;
-            b.carriedForward = 0;
-            b.earnedToDate = Number(b.accrued) || 0;
-            b.isPooledCategory = false;
-        }
+            b.annualEntitlement = annualEntitlement;
+            b.monthlyRate = monthlyRate;
+            b.yearlyCap = yearlyCap;
+            b.usedDays = Number(b.used) || 0;
+            b.pendingDays = Number(b.pending) || 0;
+            b.carriedDays = Number(b.carriedForward) || 0;
+            b.hasTypeManualOverride = Boolean(b.manualOverride?.active);
 
-        const accrualRange = getAccrualMonthRange(
-            employee || { joiningDate: bounds.joiningDate },
-            viewYear,
-            asOfDate,
-            periodOpeningBalance
-        );
-        b.monthsCompleted = accrualRange.monthsCompleted;
-        b.monthsWithCredit = accrualRange.monthsCompleted;
-
-        if (hasTypeOverride) {
-            b.monthlyLedger = [];
-            b.accrualHistoryByYear = {};
-            b.yearSummaries = [];
-        } else if (isPooledType) {
-            const pooledLedgerAtViewEarly = pooledAvailable.ledger || [];
-            const pooledLedgerFull = sortLedgerByYear(pooledAvailable.ledgerByYear || {});
-            b.monthlyLedger = pooledLedgerAtViewEarly;
-            b.accrualHistoryByYear = pooledLedgerFull;
-            b.yearSummaries = buildYearSummaries(b.accrualHistoryByYear, monthlyRate);
-        } else {
-            const rollingAtView = await leaveBalanceEngine.computeRollingMonthlyBalance(
-                effectiveConfig,
-                employee || { joiningDate: bounds.joiningDate, _id: employeeId },
-                resolvedOrganizationId,
+            const accrualRange = getAccrualMonthRange(
+                employee || { joiningDate: bounds.joiningDate },
+                viewYear,
                 asOfDate,
-                periodOpeningBalance
+                persistedOpening
             );
+            b.monthsCompleted = accrualRange.monthsCompleted;
+            b.monthsWithCredit = accrualRange.monthsCompleted;
 
-            const historyEnd = now;
-            const rollingFull = await leaveBalanceEngine.computeRollingMonthlyBalance(
-                effectiveConfig,
-                employee || { joiningDate: bounds.joiningDate, _id: employeeId },
-                resolvedOrganizationId,
-                historyEnd,
-                periodOpeningBalance
-            );
+            if (b.hasTypeManualOverride) {
+                const mo = b.manualOverride;
+                b.accrued = Number(mo.accrued) || Number(b.accrued) || 0;
+                b.used = Number(mo.used) || Number(b.used) || 0;
+                b.carriedForward = Number(mo.carriedForward) || Number(b.carriedForward) || 0;
+                b.usedDays = b.used;
+                b.carriedDays = b.carriedForward;
+                b.earnedToDate = b.accrued;
+                b.available = Math.max(0, roundLeaveDays(b.accrued + b.carriedForward - b.used - b.pendingDays));
+                b.availableDays = b.available;
+                b.manualAdjustment = roundLeaveDays(b.available - Math.max(0, b.accrued + b.carriedForward - b.used));
+                b.monthlyLedger = [];
+                b.accrualHistoryByYear = {};
+                b.yearSummaries = [];
+                b.earnedThisMonth = getTypeMonthlyAccrualForViewMonth(
+                    policyType,
+                    employeeForAccrual,
+                    viewYear,
+                    viewMonth
+                );
+                b.currentMonthAccrual = b.earnedThisMonth;
+                b.lifetimeEarned = b.earnedToDate;
+                b.lifetimeUsed = b.usedDays;
+            } else {
+                const rollingAtView = await leaveBalanceEngine.computeRollingMonthlyBalance(
+                    effectiveConfig,
+                    employee || { joiningDate: bounds.joiningDate, _id: employeeId },
+                    resolvedOrganizationId,
+                    asOfDate,
+                    null,
+                    viewYear
+                );
+                const rollingFull = await leaveBalanceEngine.computeRollingMonthlyBalance(
+                    effectiveConfig,
+                    employee || { joiningDate: bounds.joiningDate, _id: employeeId },
+                    resolvedOrganizationId,
+                    now,
+                    null,
+                    viewYear
+                );
 
-            b.monthlyLedger = rollingAtView.ledger || [];
-            b.accrualHistoryByYear = sortLedgerByYear(rollingFull.ledgerByYear || {});
-            b.yearSummaries = buildYearSummaries(b.accrualHistoryByYear, b.monthlyRate);
-        }
+                b.monthlyLedger = rollingAtView.ledger || [];
+                b.accrualHistoryByYear = sortLedgerByYear(rollingFull.ledgerByYear || {});
+                b.yearSummaries = buildYearSummaries(b.accrualHistoryByYear, b.monthlyRate, 12);
 
-        b.leaveTypeDisplayName =
-            policyType?.displayName ||
-            (b.leaveType
-                ? String(b.leaveType).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-                : 'Leave');
-
-        if (hasTypeOverride) {
-            b.earnedThisMonth = monthlyRate;
-            b.lifetimeEarned = b.earnedToDate;
-            b.lifetimeUsed = b.usedDays;
-        } else if (isPooledType) {
-            const pooledLedgerAtViewEarly = pooledAvailable.ledger || [];
-            const viewRow =
-                pooledLedgerAtViewEarly.find((row) => row.month === viewMonth) ||
-                pooledLedgerAtViewEarly[pooledLedgerAtViewEarly.length - 1];
-            // Available assigned once below from shared wallet (not per-type rolling).
-            b.availableDays = 0;
-            b.available = 0;
-            b.earnedThisMonth = monthlyRate;
-            b.lifetimeEarned = viewRow?.cumulativeEarned ?? 0;
-            b.lifetimeUsed = viewRow?.cumulativeUsed ?? b.usedDays;
-        } else {
-            const viewLedgerRow = b.monthlyLedger.find((row) => row.month === viewMonth);
-            const lastLedgerRow = b.monthlyLedger[b.monthlyLedger.length - 1];
-            const balanceAsOfView = viewLedgerRow ?? lastLedgerRow;
-
-            if (balanceAsOfView) {
+                b.earnedThisMonth = getTypeMonthlyAccrualForViewMonth(
+                    policyType,
+                    employeeForAccrual,
+                    viewYear,
+                    viewMonth
+                );
+                b.currentMonthAccrual = b.earnedThisMonth;
+                b.earnedToDate = roundLeaveDays(Number(b.accrued) || rollingAtView.totalEarned || 0);
+                b.lifetimeEarned = b.earnedToDate;
+                b.lifetimeUsed = b.usedDays;
                 b.availableDays = Math.max(
                     0,
-                    roundLeaveDays(balanceAsOfView.available) - b.pendingDays
+                    roundLeaveDays(Number(b.available) || rollingAtView.available || 0) - b.pendingDays
                 );
                 b.available = b.availableDays;
-                b.earnedThisMonth = monthlyRate;
-                b.lifetimeEarned = balanceAsOfView.cumulativeEarned ?? b.earnedToDate;
-                b.lifetimeUsed = balanceAsOfView.cumulativeUsed ?? b.usedDays;
+                b.manualAdjustment = 0;
+            }
+
+            b.leaveTypeDisplayName =
+                policyType.displayName ||
+                String(b.leaveType).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+            const monthLeaves = await Leave.find({
+                organizationId: resolvedOrganizationId,
+                employee: employeeId,
+                leaveType: { $in: types },
+                startDate: { $gte: monthStart, $lte: monthEnd },
+                status: { $in: ['approved', 'pending'] },
+            });
+            b.usedThisMonth = monthLeaves.reduce((sum, l) => sum + (l.duration || 0), 0);
+
+            const liveApprovedUsed = await leaveBalanceEngine.calculateUsedBalance(
+                employeeId,
+                b.leaveType,
+                viewYear,
+                resolvedOrganizationId,
+                asOfDate
+            );
+            b.usedDays = roundLeaveDays(liveApprovedUsed);
+            b.used = b.usedDays;
+
+            if (b.hasTypeManualOverride) {
+                b.available = Math.max(
+                    0,
+                    roundLeaveDays((Number(b.accrued) || 0) + (Number(b.carriedForward) || 0) - b.usedDays - b.pendingDays)
+                );
+                b.availableDays = b.available;
             } else {
                 b.availableDays = Math.max(0, roundLeaveDays(Number(b.available) || 0) - b.pendingDays);
                 b.available = b.availableDays;
-                b.lifetimeEarned = b.earnedToDate;
-                b.lifetimeUsed = b.usedDays;
-                b.earnedThisMonth =
-                    viewMonth - 1 >= accrualRange.startMonth && viewMonth - 1 <= accrualRange.endMonth
-                        ? monthlyRate
-                        : 0;
             }
-        }
 
-        const monthLeaves = await Leave.find({
-            organizationId: resolvedOrganizationId,
-            employee: employeeId,
-            leaveType: { $in: types },
-            startDate: { $gte: monthStart, $lte: monthEnd },
-            status: { $in: ['approved', 'pending'] },
-        });
-        b.usedThisMonth = monthLeaves.reduce((sum, l) => sum + (l.duration || 0), 0);
+            b.availableDisplay = roundDaysForDisplay(b.availableDays);
+            b.annualEntitlementDisplay = roundDaysForDisplay(annualEntitlement);
+            b.monthlyRateDisplay = roundDaysForDisplay(monthlyRate);
 
-        return b;
-    }));
-
-    // Employee Leave Summary uses the shared monthly leave wallet (1.5 for a July joiner),
-    // not the sum of every leave-type card. After per-type Balance Adjustment, sum overrides.
-    const allTypesAvailableSum = balanceObj.balances.reduce(
-        (sum, row) => sum + (Number(row.availableDays ?? row.available) || 0),
-        0
+            return b;
+        })
     );
-    const hasTypeOverrides = balanceObj.balances.some((row) => row.hasTypeManualOverride);
 
-    const overrideAnchorSortKey = hasManualOverrideAtView
-        ? calendarMonthSortKey(manualOverrideAtView.anchorYear, manualOverrideAtView.anchorMonth)
-        : null;
-    const useManualOverrideWallet =
-        hasManualOverrideAtView &&
-        (isBeforeAccrualStart || viewSortKey === overrideAnchorSortKey);
+    const totalAvailableLeave = roundLeaveDays(
+        balanceObj.balances.reduce(
+            (sum, row) => sum + (Number(row.availableDays ?? row.available) || 0),
+            0
+        )
+    );
+    const totalUsed = roundLeaveDays(
+        balanceObj.balances.reduce((sum, row) => sum + (Number(row.usedDays ?? row.used) || 0), 0)
+    );
+    const totalCarriedForward = roundLeaveDays(
+        balanceObj.balances.reduce(
+            (sum, row) => sum + (Number(row.carriedDays ?? row.carriedForward) || 0),
+            0
+        )
+    );
+    const totalPending = roundLeaveDays(
+        balanceObj.balances.reduce((sum, row) => sum + (Number(row.pendingDays ?? row.pending) || 0), 0)
+    );
+    const totalAccrued = roundLeaveDays(
+        balanceObj.balances.reduce(
+            (sum, row) => sum + (Number(row.accrued ?? row.earnedToDate ?? row.lifetimeEarned) || 0),
+            0
+        )
+    );
+    const perTypeCurrentMonthAccrual = roundLeaveDays(
+        balanceObj.balances.reduce((sum, row) => sum + (Number(row.earnedThisMonth) || 0), 0)
+    );
+    const policyEarnedThisMonth = sumPolicyMonthlyAccrualForViewMonth(
+        balanceObj.policy || {},
+        employeeForAccrual,
+        viewYear,
+        viewMonth
+    );
+    const earnedThisMonth =
+        policyEarnedThisMonth > 0 ? policyEarnedThisMonth : perTypeCurrentMonthAccrual;
+    const totalAnnualEntitlement = sumPolicyAnnualEntitlement(balanceObj.policy || {});
+    const totalMonthlyAccrual = sumPolicyMonthlyAccrual(balanceObj.policy || {});
 
-    const isOpeningMonthView =
-        periodOpeningBalance?.active &&
-        viewYear === periodOpeningBalance.openingYear &&
-        viewMonth === Number(periodOpeningBalance.openingMonth);
+    const perTypeManualAdjustment = sumTypeManualAdjustments(balanceObj.balances);
+    const legacyGlobalAdjustment = legacyGlobalOverride?.available != null
+        ? roundLeaveDays(Number(legacyGlobalOverride.available))
+        : persistedOpening?.balance != null
+          ? roundLeaveDays(Number(persistedOpening.balance))
+          : 0;
 
-    const pooledLedgerAtView = pooledAvailable.ledger || [];
-    const viewPooledRow =
-        pooledLedgerAtView.find((row) => row.month === viewMonth) ||
-        pooledLedgerAtView[pooledLedgerAtView.length - 1];
+    const [manualCarryAdds, manualCarryReductions] = await Promise.all([
+        leaveBalanceEngine.getManualCarryForwards(employeeId, resolvedOrganizationId),
+        leaveBalanceEngine.getManualCarryForwardReductions(employeeId, resolvedOrganizationId),
+    ]);
+    const netLegacyManualCarry = netManualCarryAdjustmentThroughView(
+        manualCarryAdds,
+        manualCarryReductions,
+        viewYear,
+        viewMonth
+    );
 
-    const pooledClosing = zeroPreAccrualSummary
-        ? 0
-        : useManualOverrideWallet
-          ? manualAvailableFromOverride(manualOverrideAtView)
-          : isOpeningMonthView
-            ? roundLeaveDays(periodOpeningBalance.balance)
-            : viewPooledRow
-              ? roundLeaveDays(viewPooledRow.available)
-              : roundLeaveDays(pooledAvailable.available ?? 0);
-
-    if (zeroPreAccrualSummary) {
-        balanceObj.totalAvailableLeave = 0;
-    } else if (hasTypeOverrides) {
-        balanceObj.totalAvailableLeave = Math.max(0, roundLeaveDays(allTypesAvailableSum));
-    } else if (useManualOverrideWallet) {
-        balanceObj.totalAvailableLeave = Math.max(0, roundLeaveDays(pooledClosing));
-    } else {
-        balanceObj.totalAvailableLeave = Math.max(
-            0,
-            roundLeaveDays(pooledClosing - totalPendingPooled)
-        );
-    }
-
-    // Shared wallet: split the same policy total across pooled leave cards so they sum to 1.5
-    // (not 1.5 per type). Types with a manual Balance Adjustment keep their own balance.
-    if (!zeroPreAccrualSummary && !hasTypeOverrides) {
-        const sharedForCards = balanceObj.totalAvailableLeave;
-        const pooledRows = balanceObj.balances.filter(
-            (row) => pooledTypeSet.has(row.leaveType) && !row.hasTypeManualOverride
-        );
-        const n = pooledRows.length;
-        if (n > 0) {
-            let allocated = 0;
-            pooledRows.forEach((row, idx) => {
-                const days =
-                    idx === n - 1
-                        ? roundLeaveDays(sharedForCards - allocated)
-                        : roundLeaveDays(sharedForCards / n);
-                allocated = roundLeaveDays(allocated + days);
-                row.availableDays = days;
-                row.available = days;
-                row.carriedForward = 0;
-                row.carriedDays = 0;
-            });
-        }
-    }
-
-    const totalPooledUsed = balanceObj.balances
-        .filter((row) => pooledTypeSet.has(row.leaveType))
-        .reduce((sum, row) => sum + (Number(row.usedDays ?? row.used) || 0), 0);
-
-    const manualCarriedForward =
-        manualOverrideAtView?.carriedForward != null &&
-        !Number.isNaN(Number(manualOverrideAtView.carriedForward))
-            ? roundLeaveDays(Number(manualOverrideAtView.carriedForward))
-            : null;
-
-    let totalCarriedForwardValue;
-    if (zeroPreAccrualSummary) {
-        totalCarriedForwardValue = 0;
-    } else if (hasTypeOverrides) {
-        totalCarriedForwardValue = roundLeaveDays(
-            balanceObj.balances.reduce(
-                (sum, row) => sum + (Number(row.carriedDays ?? row.carriedForward) || 0),
-                0
-            )
-        );
-    } else if (hasManualOverrideAtView && manualCarriedForward != null) {
-        totalCarriedForwardValue = manualCarriedForward;
-    } else {
-        totalCarriedForwardValue = roundLeaveDays(
-            isOpeningMonthView
-                ? periodOpeningBalance.balance
-                : viewPooledRow?.available != null
-                  ? viewPooledRow.available
-                  : pooledAvailable.yearOpeningBalance ?? 0
-        );
-    }
+    balanceObj.totalAvailableLeave = totalAvailableLeave;
+    balanceObj.legacyGlobalAdjustment = {
+        amount: roundLeaveDays(legacyGlobalAdjustment + netLegacyManualCarry),
+        note: 'Legacy pooled wallet adjustment — not distributed across leave types. HR may allocate per type manually.',
+        hasLegacyWallet: Boolean(legacyGlobalOverride || persistedOpening?.active),
+    };
 
     balanceObj.leaveSummary = {
-        totalAvailableLeave: balanceObj.totalAvailableLeave,
-        totalAccrued: zeroPreAccrualSummary
-            ? 0
-            : hasTypeOverrides
-              ? roundLeaveDays(
-                    balanceObj.balances.reduce(
-                        (sum, row) => sum + (Number(row.accrued ?? row.earnedToDate) || 0),
-                        0
-                    )
-                )
-              : useManualOverrideWallet && manualOverrideAtView.accrued != null
-                ? roundLeaveDays(Number(manualOverrideAtView.accrued) || 0)
-                : roundLeaveDays(
-                      viewPooledRow?.cumulativeEarned ??
-                          pooledAvailable.lifetimeEarned ??
-                          pooledAvailable.totalEarned ??
-                          0
-                  ),
-        totalUsed: zeroPreAccrualSummary
-            ? 0
-            : hasTypeOverrides
-              ? roundLeaveDays(
-                    balanceObj.balances.reduce(
-                        (sum, row) => sum + (Number(row.usedDays ?? row.used) || 0),
-                        0
-                    )
-                )
-              : useManualOverrideWallet
-                ? roundLeaveDays(Number(manualOverrideAtView.used) || 0)
-                : roundLeaveDays(
-                      viewPooledRow?.cumulativeUsed ?? pooledAvailable.lifetimeUsed ?? totalPooledUsed
-                  ),
-        totalCarriedForward: totalCarriedForwardValue,
-        totalPending: zeroPreAccrualSummary ? 0 : totalPendingPooled,
-        earnedThisMonth: zeroPreAccrualSummary ? 0 : DEFAULT_LEAVE_ENTITLEMENT_DAYS / 12,
+        totalAvailableLeave,
+        totalAnnualEntitlement,
+        totalMonthlyAccrual,
+        totalAccrued,
+        totalUsed,
+        totalCarriedForward,
+        totalPending,
+        earnedThisMonth,
+        perTypeCurrentMonthAccrual: earnedThisMonth,
+        manualAdjustment: roundLeaveDays(perTypeManualAdjustment + netLegacyManualCarry),
+        perTypeManualAdjustment,
+        legacyGlobalAdjustment: balanceObj.legacyGlobalAdjustment.amount,
+    };
+
+    balanceObj.policyTotals = {
+        annualEntitlement: totalAnnualEntitlement,
+        monthlyAccrual: totalMonthlyAccrual,
     };
 
     balanceObj.accrualHistoryRange = {
         fromYear: LEAVE_HISTORY_MIN_YEAR,
         toYear: bounds.maxYear,
-        monthlyRate: DEFAULT_LEAVE_ENTITLEMENT_DAYS / 12,
+        enabledLeaveTypes: enabledPolicyTypes.map((lt) => lt.type),
     };
 
     return balanceObj;

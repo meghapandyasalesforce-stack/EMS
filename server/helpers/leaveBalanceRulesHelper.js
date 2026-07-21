@@ -1,12 +1,11 @@
 /**
  * Canonical leave balance rules (monthly rolling + year-end carry forward).
  *
- * Monthly accrual: add 1.5 first, then subtract approved leave used this month.
- * Current Balance = Previous Balance + 1.5 − Leave Used (approved)
- * Each month continues from the prior month's closing balance (never reset to January).
+ * Monthly credit is always passed from the active Leave Policy (accrual.amount).
+ * No hardcoded 1.5/18 defaults — callers must supply policy-driven monthlyRate.
  */
 
-import { DEFAULT_MONTHLY_LEAVE_DAYS, LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
+import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
 
 export function roundLeaveDays(value) {
     return Math.round((Number(value) || 0) * 1000) / 1000;
@@ -65,7 +64,7 @@ export function resolveYearOpeningBalance(ledgerByYear, endYear, joinYear) {
  */
 export function applyMonthlyAccrualCredit(
     previousBalance,
-    monthlyCredit = DEFAULT_MONTHLY_LEAVE_DAYS
+    monthlyCredit = 0
 ) {
     return roundLeaveDays(roundLeaveDays(previousBalance) + roundLeaveDays(monthlyCredit));
 }
@@ -84,7 +83,7 @@ export function applyApprovedLeaveDeduction(balanceAfterAccrual, approvedLeaveUs
  */
 export function applyMonthlyLeaveBalanceUpdate(
     previousBalance,
-    monthlyCredit = DEFAULT_MONTHLY_LEAVE_DAYS,
+    monthlyCredit = 0,
     approvedLeaveUsed = 0
 ) {
     const credit = roundLeaveDays(monthlyCredit);
@@ -105,7 +104,7 @@ export function applyMonthlyLeaveBalanceUpdate(
  */
 export function applyMonthlyAccrualToBalance(
     previousBalance,
-    monthlyCredit = DEFAULT_MONTHLY_LEAVE_DAYS,
+    monthlyCredit = 0,
     usedThisMonth = 0
 ) {
     return applyMonthlyLeaveBalanceUpdate(previousBalance, monthlyCredit, usedThisMonth)
@@ -280,7 +279,7 @@ export function applyMonthlyLeaveBalanceRules({
         yearEndBalance,
         monthsCompleted: monthsWithCredit,
         ledger,
-        monthlyRate: monthlyCredits.find((c) => c > 0) || DEFAULT_MONTHLY_LEAVE_DAYS,
+        monthlyRate: monthlyCredits.find((c) => c > 0) || 0,
     };
 }
 
@@ -338,13 +337,14 @@ export function rollLeaveBalanceThroughPeriod({
     joinMonthIndex,
     endYear,
     endMonthIndex,
-    monthlyRate = DEFAULT_MONTHLY_LEAVE_DAYS,
+    monthlyRate = 0,
     getUsedForMonth = () => 0,
     shouldCreditMonth = null,
     balanceAnchor = null,
     periodOpeningBalance = null,
     initialBalance = 0,
     manualCarryForwards = [],
+    manualCarryForwardReductions = [],
 }) {
     const rollStart = resolveRollStartPeriod(periodOpeningBalance, joinYear, joinMonthIndex);
     const { rollStartYear, rollStartMonthIndex } = rollStart;
@@ -465,6 +465,33 @@ export function rollLeaveBalanceThroughPeriod({
                 ...monthUpdate,
                 balanceAfterAccrual: roundLeaveDays(monthUpdate.balanceAfterAccrual + manualCarryForwardThisMonth),
                 closingBalance: roundLeaveDays(monthUpdate.closingBalance + manualCarryForwardThisMonth),
+            };
+        }
+
+        // Apply separate manual reductions (does not change add path above)
+        let manualReductionThisMonth = 0;
+        for (const reduction of manualCarryForwardReductions) {
+            if (
+                reduction.effectiveYear === cursorYear &&
+                reduction.effectiveMonth === cursorMonth + 1
+            ) {
+                manualReductionThisMonth = roundLeaveDays(
+                    manualReductionThisMonth + (Number(reduction.amount) || 0)
+                );
+            }
+        }
+
+        if (manualReductionThisMonth > 0) {
+            monthUpdate = {
+                ...monthUpdate,
+                balanceAfterAccrual: Math.max(
+                    0,
+                    roundLeaveDays(monthUpdate.balanceAfterAccrual - manualReductionThisMonth)
+                ),
+                closingBalance: Math.max(
+                    0,
+                    roundLeaveDays(monthUpdate.closingBalance - manualReductionThisMonth)
+                ),
             };
         }
 

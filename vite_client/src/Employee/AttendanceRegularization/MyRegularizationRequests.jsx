@@ -7,8 +7,33 @@ import { FaClock, FaCheckCircle, FaTimesCircle, FaSpinner, FaPlus, FaCalendar } 
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+import { isHR as checkIsHR } from '../../utils/managerHelper';
+
+const canAccessTeamRegularization = (userObj) => {
+    const role = userObj?.role || (typeof localStorage !== 'undefined' ? localStorage.getItem('role') : '') || '';
+    const roles = Array.isArray(userObj?.functionalRoles) ? userObj.functionalRoles : [];
+    return (
+        role === 'admin' ||
+        checkIsHR(userObj) ||
+        roles.some((r) => ['manager', 'executive', 'ceo', 'cto', 'cfo', 'vp', 'hr'].includes(String(r).toLowerCase()))
+    );
+};
+
+const teamRegularizationPath = (userObj) => {
+    const roles = Array.isArray(userObj?.functionalRoles) ? userObj.functionalRoles : [];
+    const role = userObj?.role || (typeof localStorage !== 'undefined' ? localStorage.getItem('role') : '') || '';
+    const isManagerOnly =
+        role !== 'admin' &&
+        !checkIsHR(userObj) &&
+        roles.some((r) => String(r).toLowerCase() === 'manager') &&
+        !roles.some((r) => ['hr', 'executive', 'ceo', 'cto', 'cfo', 'vp'].includes(String(r).toLowerCase()));
+    return isManagerOnly ? '/manager/attendance-regularization' : '/attendance-regularization';
+};
+
 const MyRegularizationRequests = () => {
     const user = useSelector((state) => state.auth.user);
+    const employeeProfile = useSelector((state) => state.employeeDetails.employee);
+    const userObj = user || employeeProfile;
     const navigate = useNavigate();
     const location = useLocation();
     const [requests, setRequests] = useState([]);
@@ -237,7 +262,17 @@ const MyRegularizationRequests = () => {
                                 </p>
                             )}
                         </div>
-                        <button
+                        <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2 shrink-0">
+                            {canAccessTeamRegularization(userObj) && (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(teamRegularizationPath(userObj))}
+                                    className="flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                                >
+                                    Team Requests
+                                </button>
+                            )}
+                            <button
                             onClick={() => {
                                 if (!canCreateRequest) {
                                     toast.warning(getLimitBlockMessage());
@@ -251,6 +286,7 @@ const MyRegularizationRequests = () => {
                             <FaPlus />
                             New Request
                         </button>
+                        </div>
                     </div>
 
                     {/* Filter Tabs */}

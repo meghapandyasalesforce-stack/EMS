@@ -400,10 +400,10 @@ function ProfileDetails() {
                           ))}
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        {/* <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Professional Bio</p>
                           <p className="mt-1 text-sm text-slate-800">{formValues.professionalBio || 'N/A'}</p>
-                        </div>
+                        </div> */}
                       </div>
                     )}
                   </>

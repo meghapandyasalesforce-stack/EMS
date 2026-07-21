@@ -8,6 +8,7 @@ import {
     getEmployeeLeaveBalance,
     adjustEmployeeLeaveBalance,
     addManualCarryForward,
+    reduceManualCarryForward,
     recalculateBalances,
     getLeavePolicyMeta,
     getEmployeeLeaveHistory,
@@ -34,6 +35,9 @@ router.route('/balance/:employeeId/adjust')
 
 router.route('/balance/:employeeId/manual-carry-forward')
     .post(isAdminOrHROrExecutiveAuthenticated, addManualCarryForward);
+
+router.route('/balance/:employeeId/manual-carry-forward/reduce')
+    .post(isAdminOrHROrExecutiveAuthenticated, reduceManualCarryForward);
 
 router.route('/balance/:employeeId/update-leave')
     .post(isAuthenticatedBoth, updateLeaveFromPeriod);

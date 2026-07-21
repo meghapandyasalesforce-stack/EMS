@@ -85,11 +85,11 @@ const leavePolicySchema = new mongoose.Schema({
         carryForward: {
             enabled: {
                 type: Boolean,
-                default: true
+                default: false
             },
             maxDays: {
                 type: Number,
-                default: 18,
+                default: null,
                 min: 0
             },
             // Expiry after carry-forward (in days)

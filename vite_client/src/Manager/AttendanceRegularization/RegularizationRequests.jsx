@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import axios, { getUploadUrl } from '../../utils/axios';
 import { isHR as checkIsHR } from '../../utils/managerHelper';
 import { toast } from 'react-toastify';
@@ -14,6 +15,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiHome,
+  FiUser,
 } from 'react-icons/fi';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import TeamWfhRequestsPanel from './TeamWfhRequestsPanel';
@@ -167,6 +169,7 @@ function StatusPill({ status }) {
 }
 
 const RegularizationRequests = () => {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('regularization');
   const authUser = useSelector((state) => state.auth.user);
   const employeeProfile = useSelector((state) => state.employeeDetails.employee);
@@ -490,21 +493,60 @@ const RegularizationRequests = () => {
   return (
     <div className="page-shell min-h-screen bg-[#f4f7f6]">
       <div className="page-shell-inner hrms-stack">
-        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
-          <div className="shrink-0 md:max-w-[min(100%,28rem)]">
-            <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 md:whitespace-nowrap lg:text-3xl">
-              {activeSection === 'regularization' ? 'Regularization Requests' : 'Work From Home Applications'}
+        <header className="flex flex-col gap-4">
+          <div>
+            <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">
+              Regularization &amp; Work From Home
             </h1>
-            <p className="mt-1 max-w-xl text-sm text-slate-600">
-              {activeSection === 'regularization'
-                ? 'Review and approve or reject team attendance correction requests.'
-                : 'View Work From Home applications submitted by employees.'}
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              Review team attendance corrections and work from home applications.
             </p>
           </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className="flex w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex sm:w-fit"
+              role="tablist"
+              aria-label="Request type"
+            >
+              {[
+                { key: 'regularization', label: 'Regularization', icon: FiClock },
+                { key: 'wfh', label: 'Work From Home', icon: FiHome },
+              ].map(({ key, label, icon: Icon }) => {
+                const active = activeSection === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    title={key === 'wfh' ? 'Work From Home' : 'Regularization'}
+                    onClick={() => setActiveSection(key)}
+                    className={`inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-4 ${
+                      active ? 'bg-[#0a8f6c] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/my-attendance-regularization')}
+              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#0a8f6c]/30 hover:bg-[#0a8f6c]/5 hover:text-[#0a8f6c] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 sm:w-auto"
+            >
+              <FiUser className="h-4 w-4 shrink-0" />
+              My Requests
+            </button>
+          </div>
+
           {activeSection === 'regularization' ? (
-            <div className="w-full min-w-0 max-w-full touch-pan-x overflow-x-auto overscroll-x-contain px-1 pb-3 pt-1 [-webkit-overflow-scrolling:touch] md:ml-auto md:w-auto md:overflow-visible md:p-1">
+            <div className="hrms-chip-scroll">
               <div
-                className="flex w-max gap-4 pr-2 md:gap-3 md:pr-0"
+                className="hrms-chip-scroll-track"
                 role="tablist"
                 aria-label="Quick filter by status"
               >
@@ -517,57 +559,30 @@ const RegularizationRequests = () => {
                 ].map((b) => {
                   const active = statusDropdown === b.key;
                   return (
-                    <button
-                      key={b.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      title={`Show ${b.label}${b.key === 'all' ? ' statuses' : ' only'}`}
-                      onClick={() => {
-                        setPage(1);
-                        setStatusDropdown(b.key === 'all' ? 'all' : b.key);
-                      }}
-                      className={`shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-center text-xs font-bold uppercase tracking-wide shadow-sm transition hover:brightness-[0.98] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 ${
-                        active ? 'ring-2 ring-[#0a8f6c] ring-offset-2 ring-offset-[#f4f7f6]' : ''
-                      }`}
-                      style={{ borderColor: active ? TEAL : GREY_BORDER, background: b.bg, color: b.color }}
-                    >
-                      {(b.n ?? 0)} {b.label}
-                    </button>
+                    <div key={b.key} className="hrms-chip-scroll-item">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        title={`Show ${b.label}${b.key === 'all' ? ' statuses' : ' only'}`}
+                        onClick={() => {
+                          setPage(1);
+                          setStatusDropdown(b.key === 'all' ? 'all' : b.key);
+                        }}
+                        className={`whitespace-nowrap rounded-full border px-4 py-2 text-center text-xs font-bold uppercase tracking-wide transition hover:brightness-[0.98] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#0a8f6c]/35 ${
+                          active ? 'border-[#0a8f6c]' : 'border-[#e2e8f0]'
+                        }`}
+                        style={{ background: b.bg, color: b.color }}
+                      >
+                        {(b.n ?? 0)} {b.label}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
             </div>
           ) : null}
         </header>
-
-        <div
-          className="flex w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex sm:w-fit"
-          role="tablist"
-          aria-label="Request type"
-        >
-          {[
-            { key: 'regularization', label: 'Regularization', icon: FiClock },
-            { key: 'wfh', label: 'Work From Home', icon: FiHome },
-          ].map(({ key, label, icon: Icon }) => {
-            const active = activeSection === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setActiveSection(key)}
-                className={`inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-4 ${
-                  active ? 'bg-[#0a8f6c] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            );
-          })}
-        </div>
 
         <div className={activeSection === 'regularization' ? 'block' : 'hidden'}>
         <section className="mb-8 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5 lg:p-6">
