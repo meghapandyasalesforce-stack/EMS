@@ -6,6 +6,7 @@
 import { generatePayrollPDF, generateAttendancePDF, generateReportPDF } from '../../helpers/pdfGenerator.js';
 import { enrichAttendanceMetricsForPayslip } from '../../helpers/payrollGenerationHelper.js';
 import { aggregatePayrollPeriod, isValidMongoObjectId } from '../../helpers/payrollAggregationHelper.js';
+import { getCachedEffectiveTimezone } from '../../helpers/orgContextCache.js';
 import Payroll from '../../models/payroll.model.js';
 import Employee from '../../models/employee.model.js';
 import Attendance from '../../models/attendance.model.js';
@@ -36,7 +37,10 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
         const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
 
         const payroll = await Payroll.findOne({ _id: id, ...(organizationId && { organizationId }) })
-            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 gender financialDetails');
+            .populate(
+                'employeeId',
+                'name lastName email jobTitle department employeeId joiningDate lastWorkingDate terminationDate phone1 gender financialDetails'
+            );
         if (!payroll) {
             return sendNotFound(res, 'Payroll');
         }
@@ -93,6 +97,8 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             jobTitle: emp.jobTitle,
             department: emp.department,
             joiningDate: emp.joiningDate,
+            lastWorkingDate: emp.lastWorkingDate,
+            terminationDate: emp.terminationDate,
             phone: emp.phone1 || '',
             bankName: fin.bankName || '',
             accountNumber: fin.accountNo || '',
@@ -103,6 +109,10 @@ export const exportPayrollPDF = asyncHandler(async (req, res) => {
             gender: emp.gender || '',
             taxRegime: fin.taxRegime || emp.taxRegime || ''
         };
+
+        if (organizationId) {
+            orgData.timezone = await getCachedEffectiveTimezone(organizationId);
+        }
 
         const payrollObj = payroll.toObject ? payroll.toObject() : payroll;
         const adjustmentsQuery = {

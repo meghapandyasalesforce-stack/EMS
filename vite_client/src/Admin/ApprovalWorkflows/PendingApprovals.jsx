@@ -19,8 +19,26 @@ const PendingApprovals = () => {
   const fetchPendingApprovals = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/v1/admin/approvals/my-pending');
-      setApprovals(response.data?.data || []);
+      const [workflowRes, taxRegimeRes] = await Promise.all([
+        axios.get('/v1/admin/approvals/my-pending'),
+        axios.get('/v1/both/tax-regime-change/admin/pending').catch(() => ({ data: { data: [] } })),
+      ]);
+
+      const workflowApprovals = workflowRes.data?.data || [];
+      const taxRegimeApprovals = taxRegimeRes.data?.data || [];
+
+      // Prefer workflow cards when the same TaxRegimeChange is already in my-pending
+      const workflowTaxIds = new Set(
+        workflowApprovals
+          .filter((a) => a.entityType === 'TaxRegimeChange')
+          .map((a) => String(a.entityId))
+      );
+
+      const directTaxCards = taxRegimeApprovals.filter(
+        (item) => !workflowTaxIds.has(String(item.taxRegimeRequestId))
+      );
+
+      setApprovals([...directTaxCards, ...workflowApprovals]);
     } catch (error) {
       toast.error('Failed to fetch pending approvals');
     } finally {
@@ -28,13 +46,32 @@ const PendingApprovals = () => {
     }
   };
 
-  const handleAction = async (approvalId, stepNumber, action, comments = '') => {
+  const isDirectTaxRegime = (approval) =>
+    Boolean(approval?.isDirectTaxRegimeRequest || approval?.taxRegimeRequestId);
+
+  const handleAction = async (approval, stepNumber, action, comments = '') => {
     try {
-      await axios.post(`/v1/admin/approvals/process/${approvalId}`, {
-        stepNumber,
-        action,
-        comments
-      });
+      if (isDirectTaxRegime(approval) || approval?.entityType === 'TaxRegimeChange') {
+        const requestId = approval.taxRegimeRequestId || approval.entityId || approval._id;
+        if (action === 'Approve') {
+          await axios.patch(`/v1/both/tax-regime-change/admin/approve/${requestId}`, {
+            stepNumber,
+            comments,
+          });
+        } else {
+          await axios.patch(`/v1/both/tax-regime-change/admin/reject/${requestId}`, {
+            stepNumber,
+            comments,
+            rejectionReason: comments,
+          });
+        }
+      } else {
+        await axios.post(`/v1/admin/approvals/process/${approval._id}`, {
+          stepNumber,
+          action,
+          comments,
+        });
+      }
       toast.success(`Request ${action.toLowerCase()}ed successfully`);
       setRejectingId(null);
       setRejectReason('');
@@ -50,12 +87,12 @@ const PendingApprovals = () => {
     setRejectReason('');
   };
 
-  const handleRejectConfirm = (approvalId, stepNumber) => {
+  const handleRejectConfirm = (approval, stepNumber) => {
     if (!rejectReason.trim()) {
       toast.warning('Please enter a rejection reason');
       return;
     }
-    handleAction(approvalId, stepNumber, 'Reject', rejectReason.trim());
+    handleAction(approval, stepNumber, 'Reject', rejectReason.trim());
   };
 
   if (loading) {
@@ -75,14 +112,17 @@ const PendingApprovals = () => {
         <div className="grid grid-cols-1 gap-4">
           {approvals.map((approval) => {
             const pendingStep = approval.currentPendingStep;
-            const isUrgent = approval.priority === 'Urgent';
+            const isUrgent = approval.priority === 'Urgent' || approval.entityType === 'TaxRegimeChange';
             const daysPending = pendingStep?.dueDate
               ? Math.floor((new Date(pendingStep.dueDate) - new Date()) / (1000 * 60 * 60 * 24))
               : null;
+            const cardKey = approval.taxRegimeRequestId
+              ? `tax-${approval.taxRegimeRequestId}`
+              : approval._id;
 
             return (
               <div
-                key={approval._id}
+                key={cardKey}
                 className={`bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-6 ${
                   isUrgent ? 'border-l-4 border-red-500' : ''
                 }`}
@@ -91,11 +131,13 @@ const PendingApprovals = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-xl font-bold text-gray-900">
-                        {approval.entityType} Request
+                        {approval.entityType === 'TaxRegimeChange'
+                          ? 'Tax Regime Change Request'
+                          : `${approval.entityType} Request`}
                       </h3>
                       {isUrgent && (
                         <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                          Urgent
+                          {approval.entityType === 'TaxRegimeChange' ? 'High' : 'Urgent'}
                         </span>
                       )}
                       {daysPending !== null && daysPending < 1 && (
@@ -107,6 +149,15 @@ const PendingApprovals = () => {
                     <p className="text-gray-600 mb-2">
                       Requested by: <span className="font-medium">{approval.requestedBy?.name}</span>
                     </p>
+                    {approval.entityType === 'TaxRegimeChange' && (
+                      <p className="text-sm text-gray-600 mb-2">
+                        Tax regime:{' '}
+                        <span className="font-medium">
+                          {approval.metadata?.currentTaxRegime || '—'} →{' '}
+                          {approval.metadata?.requestedTaxRegime || 'N/A'}
+                        </span>
+                      </p>
+                    )}
                     {pendingStep && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <FiClock className="w-4 h-4" />
@@ -130,14 +181,14 @@ const PendingApprovals = () => {
                       <FiEye className="w-5 h-5" />
                     </button>
                     <button
-                      onClick={() => handleAction(approval._id, pendingStep?.stepNumber, 'Approve')}
+                      onClick={() => handleAction(approval, pendingStep?.stepNumber, 'Approve')}
                       className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium"
                     >
                       <FiCheckCircle className="w-4 h-4" />
                       Approve
                     </button>
                     <button
-                      onClick={() => handleRejectClick(approval._id)}
+                      onClick={() => handleRejectClick(cardKey)}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                     >
                       <FiXCircle className="w-4 h-4" />
@@ -145,7 +196,7 @@ const PendingApprovals = () => {
                     </button>
                   </div>
                 </div>
-              {rejectingId === approval._id && (
+              {rejectingId === cardKey && (
                 <div className="mt-4 border-t border-gray-100 pt-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">Rejection reason <span className="text-red-500">*</span></p>
                   <textarea
@@ -166,7 +217,7 @@ const PendingApprovals = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleRejectConfirm(approval._id, pendingStep?.stepNumber)}
+                      onClick={() => handleRejectConfirm(approval, pendingStep?.stepNumber)}
                       className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <FiXCircle className="w-4 h-4" />
@@ -198,7 +249,9 @@ const PendingApprovals = () => {
             setShowDetail(false);
             setSelectedApproval(null);
           }}
-          onAction={handleAction}
+          onAction={(approvalId, stepNumber, action, comments) =>
+            handleAction(selectedApproval, stepNumber, action, comments)
+          }
         />
       )}
     </div>
@@ -206,4 +259,3 @@ const PendingApprovals = () => {
 };
 
 export default PendingApprovals;
-

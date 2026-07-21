@@ -1,8 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
 import { getDateKeyInTimezone } from '../../helpers/timezoneHelper.js';
+import { DateTime } from 'luxon';
 import {
     DEFAULT_OVERTIME_RATE,
     countCalendarDaysInclusive,
+    countCalendarDaysInDateKeyRange,
     countWorkingDaysInclusive,
     countWorkingDaysInDateKeyRange,
     leaveWorkingDaysInRange,
@@ -13,7 +15,9 @@ import {
     buildPaidLeaveByDayMap,
     sumEffectivePresentDays,
     sumEffectivePresentDaysByKeys,
-    computePayrollProration
+    computePayrollProration,
+    resolvePayrollServiceDateKeys,
+    resolvePayslipSalaryPaidDays
 } from '../../helpers/payrollGenerationHelper.js';
 
 const TZ = 'Asia/Kolkata';
@@ -177,6 +181,30 @@ describe('payrollGenerationHelper', () => {
         });
     });
 
+    describe('resolvePayslipSalaryPaidDays', () => {
+        it('uses full calendar month minus unpaid leave', () => {
+            const paid = resolvePayslipSalaryPaidDays({
+                month: 'May',
+                year: 2026,
+                unpaidLeave: 2.39875,
+                timezone: TZ
+            });
+            expect(paid).toBeCloseTo(28.60125, 5);
+        });
+
+        it('shortens service window for mid-month join', () => {
+            const paid = resolvePayslipSalaryPaidDays({
+                month: 'May',
+                year: 2026,
+                unpaidLeave: 1,
+                joiningDate: new Date('2026-05-16T00:00:00+05:30'),
+                timezone: TZ
+            });
+            // May 16–31 = 16 calendar days − 1 unpaid
+            expect(paid).toBe(15);
+        });
+    });
+
     describe('attendance day key alignment', () => {
         it('uses attendanceDateKey when bucketing attendance rows', () => {
             const effStart = new Date(2026, 5, 1);
@@ -257,6 +285,85 @@ describe('payrollGenerationHelper', () => {
             expect(
                 countWorkingDaysInDateKeyRange('2026-06-01', '2026-06-30', TZ, isWorkingDayKeyFn)
             ).toBe(22);
+        });
+
+        it('counts 21 Mon–Fri days in May 2026 (not 22 from next-month spill)', () => {
+            const calendar = {
+                workingDays: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                holidays: []
+            };
+            const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, TZ, dayKey);
+            const monthEndKey = DateTime.fromObject(
+                { year: 2026, month: 5, day: 1 },
+                { zone: TZ }
+            )
+                .endOf('month')
+                .toFormat('yyyy-MM-dd');
+            expect(monthEndKey).toBe('2026-05-31');
+            expect(
+                countWorkingDaysInDateKeyRange('2026-05-01', monthEndKey, TZ, isWorkingDayKeyFn)
+            ).toBe(21);
+            // Legacy server-local month-end can spill into June 1 in IST → wrongly 22.
+            expect(
+                countWorkingDaysInDateKeyRange('2026-05-01', '2026-06-01', TZ, isWorkingDayKeyFn)
+            ).toBe(22);
+        });
+
+        it('counts 22 Mon–Fri days in April 2026 (not 23 from next-month spill)', () => {
+            const calendar = {
+                workingDays: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                holidays: []
+            };
+            const isWorkingDayKeyFn = buildIsWorkingDayKeyFn(calendar, TZ, dayKey);
+            expect(
+                countWorkingDaysInDateKeyRange('2026-04-01', '2026-04-30', TZ, isWorkingDayKeyFn)
+            ).toBe(22);
+        });
+    });
+
+    describe('resolvePayrollServiceDateKeys', () => {
+        it('keeps full month when no join/termination', () => {
+            expect(
+                resolvePayrollServiceDateKeys({
+                    monthStartKey: '2026-05-01',
+                    monthEndKey: '2026-05-31',
+                    timezone: TZ
+                })
+            ).toEqual({ effStartKey: '2026-05-01', effEndKey: '2026-05-31' });
+        });
+
+        it('clamps join and termination into the month', () => {
+            expect(
+                resolvePayrollServiceDateKeys({
+                    monthStartKey: '2026-05-01',
+                    monthEndKey: '2026-05-31',
+                    joiningDate: '2026-05-10T00:00:00.000Z',
+                    lastWorkingDate: '2026-05-20T00:00:00.000Z',
+                    timezone: TZ
+                })
+            ).toEqual({ effStartKey: '2026-05-10', effEndKey: '2026-05-20' });
+        });
+    });
+
+    describe('countCalendarDaysInDateKeyRange', () => {
+        it('counts 31 days in May 2026', () => {
+            expect(countCalendarDaysInDateKeyRange('2026-05-01', '2026-05-31', TZ)).toBe(31);
         });
     });
 

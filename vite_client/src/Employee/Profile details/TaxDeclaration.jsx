@@ -3,8 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchTaxDeclaration, updateTaxDeclaration } from '../../context/employeeDetailsSlice';
 import { toast } from 'react-toastify';
 
+/** Statutory employee PF ceiling for declared EPF under 80C (₹1,800 × 12). */
+const SECTION_80C_EPF_ANNUAL_CAP = 1800 * 12;
+
 const emptyForm = {
-  section80C: { ppf: '', lic: '', elss: '', tuitionFees: '', homeLoanPrincipal: '', other: '' },
+  section80C: { epf: '', ppf: '', lic: '', elss: '', tuitionFees: '', homeLoanPrincipal: '', other: '' },
   section80D: {
     selfFamilyPremium: '',
     parentsPremium: '',
@@ -29,14 +32,19 @@ const TaxDeclaration = () => {
   const isNaRegime = taxRegime === 'n/a' || taxRegime === 'na';
 
   useEffect(() => {
+    if (!isOldRegime) {
+      setIsEditing(false);
+      return;
+    }
     dispatch(fetchTaxDeclaration());
-  }, [dispatch]);
+  }, [dispatch, isOldRegime]);
 
   useEffect(() => {
-    if (!taxDeclaration?.taxDeclaration) return;
+    if (!isOldRegime || !taxDeclaration?.taxDeclaration) return;
     const d = taxDeclaration.taxDeclaration;
     setFormData({
       section80C: {
+        epf: d.section80C?.epf || '',
         ppf: d.section80C?.ppf || '',
         lic: d.section80C?.lic || '',
         elss: d.section80C?.elss || '',
@@ -58,12 +66,19 @@ const TaxDeclaration = () => {
         metroCity: Boolean(d.hra?.metroCity ?? taxDeclaration?.metroCity)
       }
     });
-  }, [taxDeclaration]);
+  }, [taxDeclaration, isOldRegime]);
 
   const handleNestedChange = (section, field, value) => {
+    let nextValue = value;
+    if (section === 'section80C' && field === 'epf' && value !== '') {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > SECTION_80C_EPF_ANNUAL_CAP) {
+        nextValue = String(SECTION_80C_EPF_ANNUAL_CAP);
+      }
+    }
     setFormData((prev) => ({
       ...prev,
-      [section]: { ...prev[section], [field]: value }
+      [section]: { ...prev[section], [field]: nextValue }
     }));
   };
 
@@ -78,13 +93,14 @@ const TaxDeclaration = () => {
     }
   };
 
-  const renderNumberField = (section, field, label, hint) => (
+  const renderNumberField = (section, field, label, hint, { max } = {}) => (
     <div key={`${section}-${field}`} className="flex flex-col gap-1">
       <label className="text-sm text-gray-700 font-medium">{label}</label>
       {hint && <span className="text-xs text-gray-400">{hint}</span>}
       <input
         type="number"
         min="0"
+        max={max}
         name={field}
         value={formData[section][field]}
         onChange={(e) => handleNestedChange(section, field, e.target.value)}
@@ -94,6 +110,19 @@ const TaxDeclaration = () => {
       />
     </div>
   );
+
+  if (!isOldRegime) {
+    return (
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <h3 className="text-lg font-semibold text-gray-800">Tax declaration</h3>
+        <p className="text-sm text-gray-500 mt-1">
+          {isNaRegime
+            ? 'Tax regime is N/A — payroll TDS is not deducted. 80C/80D/HRA declaration is not required.'
+            : 'Tax declaration (80C/80D/HRA) applies only under the Old regime. Switch to Old regime to declare investments for TDS.'}
+        </p>
+      </div>
+    );
+  }
 
   if (loadingTaxDeclaration) {
     return <p className="text-sm text-gray-500">Loading tax declaration...</p>;
@@ -105,11 +134,7 @@ const TaxDeclaration = () => {
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Tax declaration (FY {taxDeclaration?.financialYear || '—'})</h3>
           <p className="text-sm text-gray-500 mt-1">
-            {isNaRegime
-              ? 'Tax regime is N/A — payroll TDS is not deducted.'
-              : isOldRegime
-                ? 'Used for TDS under Old regime. PF is included automatically from payroll.'
-                : 'You are on New regime — 80C/80D/HRA declarations are not applied to TDS.'}
+            Used for TDS under Old regime. Declare EPF under 80C to reduce taxable income (max ₹21,600/year).
           </p>
         </div>
         {!isEditing && (
@@ -125,8 +150,15 @@ const TaxDeclaration = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Section 80C (annual, excl. PF)</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">Section 80C (annual)</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {renderNumberField(
+              'section80C',
+              'epf',
+              'EPF',
+              'Optional. Reduces taxable income only if filled. Max ₹21,600 (₹1,800 × 12).',
+              { max: SECTION_80C_EPF_ANNUAL_CAP }
+            )}
             {renderNumberField('section80C', 'ppf', 'PPF')}
             {renderNumberField('section80C', 'lic', 'LIC premium')}
             {renderNumberField('section80C', 'elss', 'ELSS')}
@@ -170,7 +202,7 @@ const TaxDeclaration = () => {
         </div>
 
         <div>
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">HRA (Old regime only)</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">HRA</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-sm text-gray-700 font-medium">Monthly rent paid</label>

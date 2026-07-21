@@ -12,6 +12,8 @@ export const TAX_REGIME = {
 
 const CESS_RATE = 0.04;
 const SECTION_80C_LIMIT = 150000;
+/** Statutory employee PF ceiling used for declared EPF under 80C (₹1,800 × 12). */
+export const SECTION_80C_EPF_ANNUAL_CAP = 1800 * 12;
 const SECTION_24B_HOME_LOAN_LIMIT = 200000;
 
 const STANDARD_DEDUCTION = {
@@ -199,11 +201,21 @@ export function computeHraExemption({
 }
 
 /**
- * Declared 80C investments (excludes PF — merged separately).
+ * Declared EPF under 80C — only what the employee submitted, capped at ₹21,600/year.
+ * Payroll PF is not auto-merged; blank EPF means no PF reduction in taxable income.
+ */
+export function resolveDeclaredEpf(section80C = {}) {
+    const src = section80C && typeof section80C === 'object' ? section80C : {};
+    return Math.min(SECTION_80C_EPF_ANNUAL_CAP, asNonNegativeNumber(src.epf));
+}
+
+/**
+ * Declared 80C investments (includes capped EPF from the declaration form).
  */
 export function sumDeclaredSection80C(section80C = {}) {
     const src = section80C && typeof section80C === 'object' ? section80C : {};
     return (
+        resolveDeclaredEpf(src) +
         asNonNegativeNumber(src.ppf) +
         asNonNegativeNumber(src.lic) +
         asNonNegativeNumber(src.elss) +
@@ -214,11 +226,12 @@ export function sumDeclaredSection80C(section80C = {}) {
 }
 
 /**
- * Total 80C including employee PF (capped at ₹1.5L).
+ * Total 80C from employee declaration only (capped at ₹1.5L).
+ * `annualPfEmployee` is ignored — EPF must be declared in section80C.epf (max ₹21,600).
  */
-export function computeSection80CTotal({ annualPfEmployee = 0, section80C = {} }) {
-    const declared = sumDeclaredSection80C(section80C);
-    return Math.min(SECTION_80C_LIMIT, asNonNegativeNumber(annualPfEmployee) + declared);
+export function computeSection80CTotal({ annualPfEmployee = 0, section80C = {} } = {}) {
+    void annualPfEmployee;
+    return Math.min(SECTION_80C_LIMIT, sumDeclaredSection80C(section80C));
 }
 
 /**

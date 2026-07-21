@@ -51,6 +51,28 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                 <span className="text-sm text-gray-500">Status</span>
                 <p className="font-medium text-gray-900">{approval.status}</p>
               </div>
+              {approval.entityType === 'TaxRegimeChange' && (
+                <>
+                  <div>
+                    <span className="text-sm text-gray-500">Current Tax Regime</span>
+                    <p className="font-medium text-gray-900">
+                      {approval.metadata?.currentTaxRegime || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Requested Tax Regime</span>
+                    <p className="font-medium text-gray-900">
+                      {approval.metadata?.requestedTaxRegime || 'N/A'}
+                    </p>
+                  </div>
+                  {approval.metadata?.reason && (
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-500">Reason</span>
+                      <p className="font-medium text-gray-900">{approval.metadata.reason}</p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
@@ -58,7 +80,12 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Approval Steps</h3>
             <div className="space-y-3">
-              {approval.steps?.map((step, index) => {
+              {(approval.steps?.length
+                ? approval.steps
+                : approval.currentPendingStep
+                  ? [approval.currentPendingStep]
+                  : []
+              ).map((step, index) => {
                 const isPending = step.status === 'Pending';
                 const isApproved = step.status === 'Approved';
                 const isRejected = step.status === 'Rejected';

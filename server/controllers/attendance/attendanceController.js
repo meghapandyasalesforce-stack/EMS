@@ -1,4 +1,5 @@
 import Attendance from "../../models/attendance.model.js";
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from "../../models/employee.model.js"
 import Leave from "../../models/leave.model.js";
 import AttendanceRule from "../../models/attendanceRule.model.js";
@@ -79,6 +80,8 @@ const DEFAULT_WORKING_DAYS = {
   sunday: false
 };
 
+const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
 const getDateKey = (value) => {
   const d = new Date(value);
   const y = d.getFullYear();
@@ -86,6 +89,47 @@ const getDateKey = (value) => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 };
+
+/**
+ * Resolve whether an attendance date key is a working day for the org calendar.
+ * Uses calendar.workingDays + active holidays; falls back to Mon–Fri.
+ */
+async function resolveWorkingDayStatus(organizationId, attendanceDateKey, timezone) {
+  const dateKey = String(attendanceDateKey || '').slice(0, 10);
+  let year;
+  let dayName;
+  try {
+    const dt = parseDateKeyInTimezone(dateKey, timezone);
+    year = dt.year;
+    // Luxon weekday: 1=Mon … 7=Sun → map to JS getDay names
+    dayName = WEEKDAY_NAMES[dt.weekday === 7 ? 0 : dt.weekday];
+  } catch {
+    const fallback = new Date(`${dateKey}T12:00:00Z`);
+    year = fallback.getUTCFullYear();
+    dayName = WEEKDAY_NAMES[fallback.getUTCDay()];
+  }
+
+  const calendar = await Calendar.findOne({ organizationId, year }).lean();
+  const workingDays = calendar?.workingDays || DEFAULT_WORKING_DAYS;
+  const isConfiguredWorkingDay = Boolean(workingDays?.[dayName]);
+
+  const holiday = (calendar?.holidays || []).find((h) => {
+    if (!h || h.isActive === false) return false;
+    return getDateKey(h.date) === dateKey;
+  });
+
+  const isHoliday = Boolean(holiday);
+  const isWorkingDay = isConfiguredWorkingDay && !isHoliday;
+
+  return {
+    isWorkingDay,
+    isHoliday,
+    isConfiguredWorkingDay,
+    dayName,
+    reason: isHoliday ? 'holiday' : (isConfiguredWorkingDay ? 'working_day' : 'non_working_day'),
+    holidayName: holiday?.name || null,
+  };
+}
 
 const getDayName = (value) => {
   const names = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -326,15 +370,38 @@ export const clockIn = async (req, res) => {
     // Work From Home punch: office geofence is NOT enforced (location captured for record only).
     // Office punches keep the existing verification flow unchanged.
     const isWfhPunch = req.body.workLocation === 'home' || req.body.workLocation === 'work_from_home';
+    const org = await Organization.findById(organizationId)
+      .select('settings.allowWorkFromHome settings.allowNonWorkingDayPunch')
+      .lean();
+
     if (isWfhPunch) {
-      const org = await Organization.findById(organizationId)
-        .select('settings.allowWorkFromHome')
-        .lean();
       if (org?.settings?.allowWorkFromHome === false) {
         return res.status(403).json({
           success: false,
           message: 'Work From Home punch-in is disabled by your organization. Please punch in from the office.',
           code: 'WFH_DISABLED'
+        });
+      }
+    }
+
+    // Block punch-in on weekends / configured off-days / holidays unless admin allows it
+    const allowNonWorkingDayPunch = org?.settings?.allowNonWorkingDayPunch === true;
+    if (!allowNonWorkingDayPunch) {
+      const workingDayStatus = await resolveWorkingDayStatus(
+        organizationId,
+        attendanceDateKey,
+        orgTimezone
+      );
+      if (!workingDayStatus.isWorkingDay) {
+        const message = workingDayStatus.isHoliday
+          ? `Cannot punch in on a holiday${workingDayStatus.holidayName ? ` (${workingDayStatus.holidayName})` : ''}.`
+          : 'Cannot punch in on a non-working day.';
+        return res.status(403).json({
+          success: false,
+          message,
+          code: 'NON_WORKING_DAY',
+          reason: workingDayStatus.reason,
+          holidayName: workingDayStatus.holidayName,
         });
       }
     }
@@ -1586,7 +1653,7 @@ export const getEmployeesOnBreak = async (req, res) => {
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees employees on break with manager="Arun Kumar" or "Arun"
-    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManager = shouldScopeDataToManagedTeam(req);
     if (isManager && req.employee) {
       const managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
       attendanceQuery.userId = { $in: managerEmployeeIds };
@@ -1652,7 +1719,7 @@ export const getTodayStatus = async (req, res) => {
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees attendance for employees with manager="Arun Kumar" or "Arun"
-    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManager = shouldScopeDataToManagedTeam(req);
     let managerEmployeeIds = [];
     if (isManager && req.employee) {
       managerEmployeeIds = await getManagerEmployeeIds(Employee, organizationId, req.employee);
@@ -1832,7 +1899,7 @@ export const getEmployeeList = async (req, res) => {
     
     // If user is a manager (not admin or HR), filter by manager field
     // Example: Manager "Arun Kumar" sees employees with manager="Arun Kumar" or "Arun"
-    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManager = shouldScopeDataToManagedTeam(req);
     if (isManager && req.employee) {
       const managerQuery = buildManagerMatchQuery(req.employee);
       if (managerQuery && managerQuery.$or) {
@@ -2091,7 +2158,7 @@ export const getEmployeeAttendanceDetails = async (req, res) => {
 
     // If user is a manager (not admin or HR), verify employee is linked to them
     // Example: Manager "Arun Kumar" can only view attendance for employees with manager="Arun Kumar" or "Arun"
-    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManager = shouldScopeDataToManagedTeam(req);
     if (isManager && req.employee) {
       const isLinked = isEmployeeLinkedToManager(employee, req.employee);
       
@@ -2333,7 +2400,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
     const query = addOrganizationFilter(req, {
       $or: [{ status: 'active' }, { active: true }]
     });
-    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+    const isManager = shouldScopeDataToManagedTeam(req);
     if (isManager && req.employee) {
       const managerQuery = buildManagerMatchQuery(req.employee);
       if (managerQuery?.$or) {
@@ -2689,17 +2756,36 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
       });
     }
 
-    // Get active attendance rule
-    const activeRule = await AttendanceRule.findOne({ 
-      isActive: true,
-      organizationId 
-    }).lean();
+    // Get active attendance rule + org day context in parallel
+    const [activeRule, dayContext, orgSettings] = await Promise.all([
+      AttendanceRule.findOne({
+        isActive: true,
+        organizationId
+      }).lean(),
+      getAttendanceDayContext(organizationId),
+      Organization.findById(organizationId)
+        .select('settings.allowWorkFromHome settings.allowNonWorkingDayPunch')
+        .lean(),
+    ]);
 
     // Org-level WFH punch availability (defaults to true when unset)
-    const orgSettings = await Organization.findById(organizationId)
-      .select('settings.allowWorkFromHome')
-      .lean();
     const allowWorkFromHome = orgSettings?.settings?.allowWorkFromHome !== false;
+    // Non-working day punch (defaults to false — blocked unless admin enables)
+    const allowNonWorkingDayPunch = orgSettings?.settings?.allowNonWorkingDayPunch === true;
+
+    const workingDayStatus = await resolveWorkingDayStatus(
+      organizationId,
+      dayContext.attendanceDateKey,
+      dayContext.timezone
+    );
+
+    const workingDayFields = {
+      allowWorkFromHome,
+      allowNonWorkingDayPunch,
+      isWorkingDay: workingDayStatus.isWorkingDay,
+      nonWorkingReason: workingDayStatus.isWorkingDay ? null : workingDayStatus.reason,
+      holidayName: workingDayStatus.holidayName,
+    };
 
     if (!activeRule) {
       // Return default values if no rule exists
@@ -2713,7 +2799,7 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
           enableSimplePunches: true, // Default to true if no rule
           locationRequired: false,
           enforceOfficeRadius: false,
-          allowWorkFromHome
+          ...workingDayFields,
         }
       });
     }
@@ -2757,7 +2843,7 @@ export const getAttendanceRuleForEmployee = async (req, res) => {
         enforceOfficeRadius,
         applicableToDepartment: appliesToDept,
         isExempt: isExempt,
-        allowWorkFromHome
+        ...workingDayFields,
       }
     });
   } catch (error) {

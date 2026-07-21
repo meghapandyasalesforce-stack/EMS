@@ -13,7 +13,7 @@ import { addOrganizationFilter, getOrganizationId } from '../../helpers/organiza
 import { parsePagination, parseSort, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 import { invalidateEmployeesCache } from '../../helpers/cacheHelper.js';
 import { buildManagerMatchQuery } from '../../helpers/managerHelper.js';
-import { getDataScope } from '../../helpers/permissionService.js';
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import { logUpdate, logDelete } from '../../helpers/auditLogger.js';
 import { canManageEmployeeLifecycle } from '../../helpers/employeeLifecycleHelper.js';
 import {
@@ -117,23 +117,14 @@ export const getAllEmployees = async (req, res) => {
         const query = addOrganizationFilter(req, {});
         const organizationId = getOrganizationId(req);
 
-        const scope = req.authContext ? getDataScope(req.authContext) : 'organization';
-        // Line managers must only see their own direct reports on My Team / employee list,
-        // even if they also have project permissions that widen dataScope elsewhere.
-        // HR Manager / HR Executive / Org Owner keep organization-wide employee lists.
-        const isLineManagerOnly =
-            Boolean(req.authContext?.isLineManager) &&
-            !req.authContext?.isHrManager &&
-            !req.authContext?.isHrExecutive &&
-            !req.authContext?.isOrgOwner;
-        const shouldApplyManagerFilter = (scope === 'team' || isLineManagerOnly) && req.employee;
-        if (shouldApplyManagerFilter) {
+        // Line managers see only direct reports. HR / org owner / pure project managers keep org lists.
+        if (shouldScopeDataToManagedTeam(req)) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
                 query.$or = managerQuery.$or;
             }
             query.status = 'active'; // Only active employees for managers
-            
+
             const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
             logger.info('Manager filtering employees by manager field', {
                 managerId: req.employee._id,

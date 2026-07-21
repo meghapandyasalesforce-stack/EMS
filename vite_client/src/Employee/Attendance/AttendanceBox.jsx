@@ -69,6 +69,23 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const wfhAllowed = attendanceRule?.allowWorkFromHome !== false;
   const isWfhSelected = wfhAllowed && workLocation === 'work_from_home';
 
+  // Non-working day punch: blocked unless admin enables allowNonWorkingDayPunch
+  const allowNonWorkingDayPunch = attendanceRule?.allowNonWorkingDayPunch === true;
+  const isWorkingDayToday = attendanceRule?.isWorkingDay !== false;
+  const punchBlockedByNonWorkingDay =
+    attendanceRule != null && !isWorkingDayToday && !allowNonWorkingDayPunch;
+  const showNonWorkingDayNotice =
+    attendanceRule != null && !isWorkingDayToday;
+
+  const nonWorkingDayLabel = (() => {
+    if (attendanceRule?.nonWorkingReason === 'holiday') {
+      return attendanceRule.holidayName
+        ? `Holiday (${attendanceRule.holidayName})`
+        : 'Holiday';
+    }
+    return 'Non-working day';
+  })();
+
   // If org disables WFH, fall back to office selection
   useEffect(() => {
     if (!wfhAllowed && workLocation !== 'office') {
@@ -302,6 +319,15 @@ const AttendanceBox = ({ variant = 'default' }) => {
 
   const handleClockIn = async () => {
     try {
+      if (punchBlockedByNonWorkingDay) {
+        toast.info(
+          attendanceRule?.nonWorkingReason === 'holiday'
+            ? `${nonWorkingDayLabel} — punch-in is not available.`
+            : 'Non-working day — punch-in is not available.'
+        );
+        return;
+      }
+
       // Check if user already has an active session
       const openSession = sessions.find(session => {
         if (session.clockOut) return false;
@@ -618,13 +644,40 @@ const AttendanceBox = ({ variant = 'default' }) => {
     );
 
     return (
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+      <div className="relative rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
         {error && (
           <div className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {typeof error === 'string' ? error : error.message}
           </div>
         )}
-        <div className="p-5 md:p-6">
+        {showNonWorkingDayNotice && !currentSession && (
+          <div
+            className={`mx-4 mt-4 rounded-xl px-4 py-3 text-sm ${
+              punchBlockedByNonWorkingDay
+                ? 'border border-slate-200 bg-slate-50 text-slate-700'
+                : 'border border-amber-200 bg-amber-50 text-amber-900'
+            }`}
+          >
+            <p className="font-semibold">{nonWorkingDayLabel}</p>
+            <p className="mt-0.5 text-xs opacity-90">
+              {punchBlockedByNonWorkingDay
+                ? "Punch-in isn't available on non-working days."
+                : 'Non-working day — punch-in is allowed by your organization.'}
+            </p>
+          </div>
+        )}
+        <div className="relative p-5 md:p-6">
+          {punchBlockedByNonWorkingDay && !currentSession && (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center rounded-b-2xl bg-white/70 backdrop-blur-[1px]"
+              aria-hidden="true"
+            >
+              <div className="mx-4 max-w-sm rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
+                <p className="text-sm font-semibold text-slate-800">{nonWorkingDayLabel}</p>
+                <p className="mt-1 text-xs text-slate-500">Can&apos;t punch in today</p>
+              </div>
+            </div>
+          )}
           {currentSession ? (
             <div className="space-y-4">
               {currentSession.clockOut ? (
@@ -773,14 +826,16 @@ const AttendanceBox = ({ variant = 'default' }) => {
                 <button
                   type="button"
                   onClick={handleClockIn}
-                  disabled={isProcessing || loading}
+                  disabled={isProcessing || loading || punchBlockedByNonWorkingDay}
                   className="rounded-full bg-[#20C997] px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1ab589] disabled:bg-slate-300 shrink-0"
                 >
                   {isProcessing || loading
                     ? 'Processing…'
-                    : isWfhSelected
-                      ? 'Punch in · WFH'
-                      : 'Punch in'}
+                    : punchBlockedByNonWorkingDay
+                      ? 'Unavailable today'
+                      : isWfhSelected
+                        ? 'Punch in · WFH'
+                        : 'Punch in'}
                 </button>
               </div>
             </div>
@@ -791,7 +846,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+    <div className="relative bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-5 bg-theme-primary" style={{ background: 'var(--color-primary)' }}>
         <div className="flex items-center justify-between">
@@ -849,7 +904,34 @@ const AttendanceBox = ({ variant = 'default' }) => {
       )}
 
       {/* Main Content */}
-      <div className="p-6">
+      <div className="relative p-6">
+          {showNonWorkingDayNotice && !currentSession && (
+            <div
+              className={`mb-4 rounded-xl px-4 py-3 text-sm ${
+                punchBlockedByNonWorkingDay
+                  ? 'border border-slate-200 bg-slate-50 text-slate-700'
+                  : 'border border-amber-200 bg-amber-50 text-amber-900'
+              }`}
+            >
+              <p className="font-semibold">{nonWorkingDayLabel}</p>
+              <p className="mt-0.5 text-xs opacity-90">
+                {punchBlockedByNonWorkingDay
+                  ? "Punch-in isn't available on non-working days."
+                  : 'Non-working day — punch-in is allowed by your organization.'}
+              </p>
+            </div>
+          )}
+          {punchBlockedByNonWorkingDay && !currentSession && (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[1px]"
+              aria-hidden="true"
+            >
+              <div className="mx-4 max-w-sm rounded-xl border border-slate-200 bg-white px-5 py-4 text-center shadow-sm">
+                <p className="text-base font-semibold text-slate-800">{nonWorkingDayLabel}</p>
+                <p className="mt-1 text-sm text-slate-500">Can&apos;t punch in on a non-working day</p>
+              </div>
+            </div>
+          )}
           {currentSession ? (
           <div className="space-y-4">
             {/* Checked In/Out Status */}
@@ -1060,9 +1142,9 @@ const AttendanceBox = ({ variant = 'default' }) => {
             {/* Punch In Button */}
               <button
                 onClick={handleClockIn}
-              disabled={isProcessing || loading}
+              disabled={isProcessing || loading || punchBlockedByNonWorkingDay}
               className={`w-full py-4 px-6 rounded-lg text-white font-semibold shadow-lg transition-all duration-200 ${
-                isProcessing || loading 
+                isProcessing || loading || punchBlockedByNonWorkingDay
                     ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-theme-primary hover:opacity-90'
                 }`}
@@ -1071,6 +1153,11 @@ const AttendanceBox = ({ variant = 'default' }) => {
                   <div className="flex items-center justify-center">
                   <FiLoader className="animate-spin w-5 h-5 mr-2" />
                     Processing...
+                  </div>
+                ) : punchBlockedByNonWorkingDay ? (
+                  <div className="flex items-center justify-center">
+                    <FiAlertCircle className="w-5 h-5 mr-2" />
+                    Unavailable today
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">

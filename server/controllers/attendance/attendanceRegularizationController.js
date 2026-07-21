@@ -1,4 +1,5 @@
 import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
@@ -492,7 +493,7 @@ export const getRegularizationRequestsForManager = async (req, res) => {
         const { status: statusFilter, startDate, endDate } = req.query;
 
         // If user is a manager (not admin or HR), filter by their department
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         let query = addOrganizationFilter(req, {});
 
         if (isManager && req.employee) {
@@ -613,7 +614,7 @@ export const approveRegularization = async (req, res) => {
             });
         }
 
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         let employeeLinked = true;
         if (isManager && req.employee) {
             const employee = await Employee.findById(regularizationRequest.employeeId?._id || regularizationRequest.employeeId)
@@ -869,7 +870,7 @@ export const rejectRegularization = async (req, res) => {
             });
         }
 
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         let employeeLinked = true;
         if (isManager && req.employee) {
             const employee = await Employee.findById(regularizationRequest.employeeId?._id || regularizationRequest.employeeId)

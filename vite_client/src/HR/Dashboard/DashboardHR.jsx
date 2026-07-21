@@ -466,7 +466,7 @@ const DashboardHR = () => {
                 const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
                 const today = format(new Date(), 'yyyy-MM-dd');
 
-                const [attendanceTrendRes, birthdaysRes, jobsRes, approvalsRes, todayStatusRes] = await Promise.allSettled([
+                const [attendanceTrendRes, birthdaysRes, jobsRes, approvalsRes, taxRegimeRes, todayStatusRes] = await Promise.allSettled([
                     axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, {
                         params: { startDate: monthStart, endDate: today },
                         withCredentials: true,
@@ -480,18 +480,36 @@ const DashboardHR = () => {
                     axios.get('/v1/admin/approvals/my-pending', {
                         withCredentials: true,
                     }),
+                    axios.get('/v1/both/tax-regime-change/admin/pending', {
+                        withCredentials: true,
+                    }),
                     axios.get('/v1/both/attendance/today-status', {
                         withCredentials: true,
                     }),
                 ]);
+
+                const workflowApprovals =
+                    approvalsRes.status === 'fulfilled' ? approvalsRes.value?.data?.data || [] : [];
+                const taxRegimeApprovals =
+                    taxRegimeRes.status === 'fulfilled' ? taxRegimeRes.value?.data?.data || [] : [];
+                const workflowTaxIds = new Set(
+                    workflowApprovals
+                        .filter((a) => a.entityType === 'TaxRegimeChange')
+                        .map((a) => String(a.entityId))
+                );
+                const mergedApprovals = [
+                    ...taxRegimeApprovals.filter(
+                        (item) => !workflowTaxIds.has(String(item.taxRegimeRequestId))
+                    ),
+                    ...workflowApprovals,
+                ];
 
                 setDashboardExtras({
                     birthdays:
                         birthdaysRes.status === 'fulfilled' ? birthdaysRes.value?.data?.birthdays || [] : [],
                     openJobs:
                         jobsRes.status === 'fulfilled' ? jobsRes.value?.data?.data || [] : [],
-                    pendingApprovals:
-                        approvalsRes.status === 'fulfilled' ? approvalsRes.value?.data?.data || [] : [],
+                    pendingApprovals: mergedApprovals,
                     attendanceDailyTrend:
                         attendanceTrendRes.status === 'fulfilled' ? attendanceTrendRes.value?.data?.dailyTrend || [] : [],
                     todayStatus:

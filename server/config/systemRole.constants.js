@@ -54,7 +54,8 @@ export const SYSTEM_ROLE_DEFINITIONS = Object.freeze({
   [SYSTEM_ROLE_IDS.LINE_MANAGER]: {
     label: 'Line Manager',
     shortLabel: 'Manager',
-    description: 'Manage direct reports: team leave approvals, team attendance, projects.',
+    description:
+      'People manager: sees only direct reports (My Team), team leave, and team attendance. Not org-wide HR.',
     functionalRoles: ['manager'],
     platformRoles: ['employee'],
     primaryBucket: ROLE_BUCKETS.LINE_MANAGER,

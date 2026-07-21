@@ -3,6 +3,7 @@ import logger from "../../helpers/logger.js";
 import { generatePayrollPDF } from "../../helpers/pdfGenerator.js";
 import { pickDisplayPayroll, enrichAttendanceMetricsForPayslip } from "../../helpers/payrollGenerationHelper.js";
 import { aggregatePayrollPeriod, attachPayrollRecordIds, isValidMongoObjectId } from "../../helpers/payrollAggregationHelper.js";
+import { getCachedEffectiveTimezone } from "../../helpers/orgContextCache.js";
 import { employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
 import fs from 'fs';
 import path from 'path';
@@ -260,7 +261,10 @@ export const downloadPayslip = async (req, res) => {
 
         const payroll = await Payroll.findOne(query)
             .sort({ updatedAt: -1, createdAt: -1 })
-            .populate('employeeId', 'name lastName email jobTitle department employeeId joiningDate phone1 gender financialDetails');
+            .populate(
+                'employeeId',
+                'name lastName email jobTitle department employeeId joiningDate lastWorkingDate terminationDate phone1 gender financialDetails'
+            );
 
         if (!payroll) {
             return res.status(404).json({ message: 'Payroll not found' });
@@ -328,6 +332,8 @@ export const downloadPayslip = async (req, res) => {
             jobTitle: emp.jobTitle,
             department: emp.department,
             joiningDate: emp.joiningDate,
+            lastWorkingDate: emp.lastWorkingDate,
+            terminationDate: emp.terminationDate,
             phone: emp.phone1 || '',
             bankName: fin.bankName || '',
             accountNumber: fin.accountNo || '',
@@ -338,6 +344,10 @@ export const downloadPayslip = async (req, res) => {
             gender: emp.gender || '',
             taxRegime: fin.taxRegime || emp.taxRegime || ''
         };
+
+        if (organizationId) {
+            orgData.timezone = await getCachedEffectiveTimezone(organizationId);
+        }
 
         // Prepare payroll data for PDF (optional: workingDays, presentDays, unpaidLeave for attendance section)
         const adjustmentsQuery = {

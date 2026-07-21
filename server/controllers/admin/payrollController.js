@@ -1,4 +1,5 @@
 import Payroll from "../../models/payroll.model.js";
+import { shouldScopeDataToManagedTeam } from '../../helpers/permissionService.js';
 import Employee from"../../models/employee.model.js"
 import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
@@ -8,9 +9,12 @@ import { computeEarningsFromGross, employeePfFromBasicWage } from "../../helpers
 import {
     pickDisplayPayroll,
     buildGeneratedPayrollPayload,
-    isFinalGenerationAllowedForPeriod
+    isFinalGenerationAllowedForPeriod,
+    getPayrollMonthUtcBounds
 } from "../../helpers/payrollGenerationHelper.js";
 import { aggregatePayrollPeriod, attachPayrollRecordIds, isValidMongoObjectId } from "../../helpers/payrollAggregationHelper.js";
+import { getCachedEffectiveTimezone } from "../../helpers/orgContextCache.js";
+import { DateTime } from "luxon";
 
 const MONTH_ORDER = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
@@ -420,7 +424,7 @@ export const getAllPayrolls = async (req, res) => {
         
         const { month, year } = req.query;
         const isAdmin = req.user?.role === 'admin';
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         
         // Build base query: only add month/year when explicitly provided
         // Dashboard calls this endpoint without params to fetch all payrolls
@@ -722,7 +726,7 @@ export const getEmployeePayrollForAdmin = async (req, res) => {
 
         // If user is a manager (not admin or HR), verify employee is linked to them
         // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const employee = await Employee.findById(employeeId).select('manager').lean();
             if (!employee) {
@@ -812,7 +816,7 @@ export const getPayrollByEmployeeMonthYear = async (req, res) => {
 
         // If user is a manager (not admin or HR), verify employee is linked to them
         // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const employee = await Employee.findById(employeeId).select('manager').lean();
             if (!employee) {
@@ -899,7 +903,7 @@ export const getPayrollById = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Payroll not found' });
         }
 
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee && payroll.employeeId) {
             const employee = await Employee.findById(payroll.employeeId._id || payroll.employeeId).select('manager').lean();
             if (employee && !isEmployeeLinkedToManager(employee, req.employee)) {
@@ -925,7 +929,7 @@ export const getCurrentMonthPayrollForAdmin = async (req, res) => {
         
         // If user is a manager (not admin or HR), verify employee is linked to them
         // Example: Manager "Arun Kumar" can only view payroll for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const employee = await Employee.findById(employeeId).select('manager').lean();
             if (!employee) {
@@ -1008,7 +1012,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
 
         // If user is a manager (not admin or HR), filter by manager field
         // Example: Manager "Arun Kumar" sees payrolls for employees with manager="Arun Kumar" or "Arun"
-        const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
+        const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
@@ -1306,12 +1310,23 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         const targetYear = parseInt(year, 10);
         const targetMonthIndex = new Date(`${month} 1, ${year}`).getMonth();
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonthIndex = now.getMonth();
 
         if (Number.isNaN(targetYear)) {
             return res.status(400).json({ success: false, message: 'Invalid year value' });
         }
+
+        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
+        if (!organizationId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Organization ID is required. Please ensure you are authenticated.'
+            });
+        }
+
+        const orgTimezone = await getCachedEffectiveTimezone(organizationId);
+        const nowInOrg = DateTime.fromJSDate(now, { zone: orgTimezone });
+        const currentYear = nowInOrg.year;
+        const currentMonthIndex = nowInOrg.month - 1;
 
         if (targetYear > currentYear || (targetYear === currentYear && targetMonthIndex > currentMonthIndex)) {
             return res.status(400).json({
@@ -1323,7 +1338,7 @@ export const generatePayrollsForMonthYear = async (req, res) => {
         if (
             mode === 'final' &&
             !forceFinalBeforePeriodEnd &&
-            !isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex)
+            !isFinalGenerationAllowedForPeriod(now, targetYear, targetMonthIndex, orgTimezone)
         ) {
             return res.status(400).json({
                 success: false,
@@ -1332,18 +1347,11 @@ export const generatePayrollsForMonthYear = async (req, res) => {
             });
         }
 
-        const organizationId = req.organizationId || req.user?.organizationId || req.employee?.organizationId;
-        if (!organizationId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Organization ID is required. Please ensure you are authenticated.'
-            });
-        }
-
-        const monthStart = new Date(targetYear, targetMonthIndex, 1);
-        monthStart.setHours(0, 0, 0, 0);
-        const endOfMonth = new Date(targetYear, targetMonthIndex + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
+        const { monthStart, monthEnd: endOfMonth } = getPayrollMonthUtcBounds(
+            targetYear,
+            targetMonthIndex,
+            orgTimezone
+        );
 
         const employees = await Employee.find({
             salary: { $exists: true, $gt: 0 },

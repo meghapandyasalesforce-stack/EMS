@@ -41,7 +41,7 @@ const resolveNavFromRbac = (permissionFlags, role, position, profile) => {
     if (permissionFlags.isPayrollAdmin) {
         return getFinanceNavigation();
     }
-    if (permissionFlags.isLineManager) {
+    if (permissionFlags.isLineManager || permissionFlags.isProjectManager) {
         return getManagerNavigation(profile);
     }
     return null;
@@ -114,6 +114,7 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
         case 'payroll_admin':
             return filterNavByPermissions(getFinanceNavigation(), permissions);
         case 'line_manager':
+        case 'project_manager':
             return filterNavByPermissions(getManagerNavigation(profile), permissions);
         case 'employee':
             return getNavigationForMePortal({ profile, permissions, permissionFlags, position });
@@ -358,6 +359,10 @@ const HR_NAV_ITEMS = [
     { path: "/calendar-management", name: "Calendar", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_POLICY_MANAGE, PERMISSIONS.ORG_SETTINGS_MANAGE] },
     { path: "/all-attendance-history", name: "Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_ALL, PERMISSIONS.ATTENDANCE_VIEW_TEAM] },
     { path: "/attendance-regularization", name: "Regularization/WFH", icon: <FaClock /> },
+    // { path: "/attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
+    { path: "/admin/pending-approvals", name: "Pending Approvals", icon: <FaClock /> },
+    // { path: "/attendance-regularization", name: "Regularization & WFH", icon: <FaClock /> },
+    { path: "/my-attendance-regularization", name: "Attendance Regularization", icon: <FaClock /> },
     { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/admin-payroll", name: "Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_ALL] },
     { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill />, permissions: [PERMISSIONS.PAYROLL_VIEW_SELF] },

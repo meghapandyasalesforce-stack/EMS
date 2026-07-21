@@ -1,4 +1,5 @@
 import { ApprovalWorkflow, ApprovalInstance } from '../models/approvalWorkflow.model.js';
+import { shouldScopeDataToManagedTeam } from './permissionService.js';
 import {
     processApprovalAction,
     adminBypassApprovalInstance,
@@ -11,9 +12,17 @@ export const EARLY_APPROVAL_CONFIRM_CODE = 'EARLY_APPROVAL_CONFIRM_REQUIRED';
  */
 export const getReviewerEmployeeId = (req) => req.employee?._id || null;
 
-export const isAdminUser = (req) => Boolean(req.user);
+/** Org owner / platform admin — not merely having a linked User record. */
+export const isAdminUser = (req) =>
+    Boolean(req.authContext?.isOrgOwner) ||
+    (req.decoded?.role === 'admin' && Boolean(req.authContext?.isOrgOwner || req.authContext?.isHrManager));
 
-export const isHrEmployee = (req) => Boolean(req.employee?.isHR && !req.user);
+export const isHrEmployee = (req) =>
+    Boolean(
+        req.authContext?.isHrManager ||
+            req.authContext?.isHrExecutive ||
+            req.employee?.isHR
+    );
 
 /**
  * First pending step in workflow order.
@@ -50,9 +59,10 @@ export const isNaturalActorForStep = (req, approverType, currentStep, employeeLi
 
     if (isAssignedApprover) return true;
 
-    const isManager = req.employee?.isManager && !req.employee?.isHR && !req.user;
-    const isHR = req.employee?.isHR && !req.user;
-    const isExecutive = req.employee?.isExecutive && !req.user;
+    const isManager = shouldScopeDataToManagedTeam(req);
+    const isHR = isHrEmployee(req);
+    const isExecutive =
+        Boolean(req.authContext?.isExecutive) || Boolean(req.employee?.isExecutive);
 
     switch (approverType) {
         case 'Manager':
@@ -257,7 +267,7 @@ export const resolveRegularizationWorkflowAction = async ({
     }
 
     const isManager =
-        req.employee?.isManager && !req.employee?.isHR && !req.user;
+        shouldScopeDataToManagedTeam(req);
     const isManagerStep = approverType === 'Manager';
     const managerTeamOverride =
         isManager && employeeLinked && isManagerStep && Boolean(reviewerEmployeeId);

@@ -29,54 +29,54 @@ const getManagerFieldText = (managerField) => {
  * @returns {boolean} - True if employee is linked to manager
  */
 export const isEmployeeLinkedToManager = (employee, manager) => {
-    if (!employee || !employee.manager || !manager || !manager.name) {
+    if (!employee || !manager) {
         return false;
     }
-    
+
+    const managerId = manager._id || manager.id;
+    if (employee.managerId && managerId && String(employee.managerId) === String(managerId)) {
+        return true;
+    }
+
+    if (!employee.manager || !manager.name) {
+        return false;
+    }
+
     const managerName = `${manager.name} ${manager.lastName || ''}`.trim();
     const managerFirstName = manager.name;
     const employeeManager = getManagerFieldText(employee.manager);
-    
-    // Check exact matches
+
     if (employeeManager === managerName || employeeManager === managerFirstName) {
         return true;
     }
-    
-    // Case-insensitive matching
+
     const employeeManagerLower = employeeManager.toLowerCase();
     const managerNameLower = managerName.toLowerCase();
     const managerFirstNameLower = managerFirstName.toLowerCase();
-    
-    if (employeeManagerLower === managerNameLower || 
+
+    if (
+        employeeManagerLower === managerNameLower ||
         employeeManagerLower === managerFirstNameLower ||
-        employeeManagerLower.startsWith(managerFirstNameLower + ' ')) {
+        employeeManagerLower.startsWith(managerFirstNameLower + ' ')
+    ) {
         return true;
     }
-    
+
     return false;
 };
 
 /**
- * Filter employees by manager field
- * Returns employees where manager field matches the manager's name
+ * Filter employees by managerId (preferred) or legacy manager name field.
  * @param {Array} employees - Array of employee objects
  * @param {Object} manager - Manager object (user object)
  * @returns {Array} - Filtered array of employees
  */
 export const filterEmployeesByManager = (employees, manager) => {
-    if (!employees || !Array.isArray(employees) || !manager || !manager.name) {
+    if (!employees || !Array.isArray(employees) || !manager) {
         return employees || [];
     }
-    
-    const managerName = `${manager.name} ${manager.lastName || ''}`.trim();
-    const managerFirstName = manager.name;
-    
-    return employees.filter(emp => {
-        const empManager = getManagerFieldText(emp.manager);
-        return empManager === managerName || 
-               empManager === managerFirstName ||
-               empManager.toLowerCase().startsWith(managerFirstName.toLowerCase());
-    });
+
+    return employees.filter((emp) => isEmployeeLinkedToManager(emp, manager));
 };
 
 /**

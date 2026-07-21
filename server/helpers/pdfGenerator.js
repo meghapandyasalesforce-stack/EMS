@@ -10,6 +10,7 @@
 import { jsPDF } from 'jspdf';
 import logger from './logger.js';
 import { employeePfFromBasicWage } from './salaryCalculation.js';
+import { resolvePayslipSalaryPaidDays } from './payrollGenerationHelper.js';
 
 // Constants
 const PDF_CONFIG = {
@@ -434,12 +435,21 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
 
         // ==================== SALARY DETAILS (Attendance) – 3 columns to avoid overlap ====================
         yPos = checkPageBreak(doc, yPos, pageHeight, margin, 35);
-        const daysInPeriodStr = formatPayslipDayCount(
-            payrollData.workingDays != null && !Number.isNaN(Number(payrollData.workingDays))
-                ? payrollData.workingDays
-                : payrollData.presentDays,
-            '21'
-        );
+        // "Salary Paid for" = calendar days in employment window minus unpaid leave (not working days).
+        const salaryPaidDays = resolvePayslipSalaryPaidDays({
+            month: payrollData.month,
+            year: payrollData.year,
+            unpaidLeave: payrollData.unpaidLeave,
+            joiningDate: employeeData?.joiningDate,
+            lastWorkingDate: employeeData?.lastWorkingDate,
+            terminationDate: employeeData?.terminationDate,
+            timezone: orgData?.timezone,
+            fallbackWorkingDays:
+                payrollData.workingDays != null && !Number.isNaN(Number(payrollData.workingDays))
+                    ? payrollData.workingDays
+                    : payrollData.presentDays
+        });
+        const daysInPeriodStr = formatPayslipDayCount(salaryPaidDays, '21');
         const salaryPaidFor = payrollData.salaryPaidFor || `${period} (${daysInPeriodStr} Days)`;
         const presentDerived =
             payrollData.presentDays != null && !Number.isNaN(Number(payrollData.presentDays))
