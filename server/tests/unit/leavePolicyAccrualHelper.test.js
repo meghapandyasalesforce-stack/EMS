@@ -103,24 +103,14 @@ describe('leavePolicyAccrualHelper', () => {
     });
 
     describe('application limits vs accrual', () => {
-        it('allows applying up to available balance when no monthly cap', () => {
-            expect(
-                getAppliableDaysThisMonth({
-                    availableBalance: 3,
-                    maxDaysPerMonth: null,
-                    usedThisMonth: 0,
-                })
-            ).toBe(3);
-        });
-
-        it('caps application by maxDaysPerMonth but not by monthly accrual', () => {
+        it('allows applying full available balance (month limit tracks available)', () => {
             expect(
                 getAppliableDaysThisMonth({
                     availableBalance: 6,
                     maxDaysPerMonth: 2,
                     usedThisMonth: 0,
                 })
-            ).toBe(2);
+            ).toBe(6);
         });
 
         it('detects monthly accrual from accrual.amount', () => {
@@ -128,7 +118,8 @@ describe('leavePolicyAccrualHelper', () => {
             expect(usesMonthlyAccrual(casualType)).toBe(true);
         });
 
-        it('computes remaining monthly take cap', () => {
+        it('computes remaining monthly take cap from available when provided', () => {
+            expect(getRemainingMonthlyTakeCap(2, 0.5, 3)).toBe(3);
             expect(getRemainingMonthlyTakeCap(2, 0.5)).toBe(1.5);
         });
     });

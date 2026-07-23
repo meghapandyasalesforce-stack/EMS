@@ -26,9 +26,9 @@ import {
 import {
     calendarMonthSortKey,
     getAccrualMonthRange,
-    manualAvailableFromOverride,
     roundLeaveDays,
 } from './leaveBalanceRulesHelper.js';
+import { getEffectiveMonthlyTakeCap } from './leaveEmployeeTakeLimitHelper.js';
 import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
 import { resolveLeaveBalanceOrganizationId } from './leaveBalanceAccessHelper.js';
 
@@ -72,19 +72,31 @@ async function resolvePolicyForBalanceResponse(policyRef) {
     return LeavePolicy.findById(policyId).select('policyName leaveTypes leaveCycle isActive').lean();
 }
 
+/**
+ * Summary "Manual Adjustment" for per-type Balance Adjustment overrides.
+ * Uses remaining manualStock (imported/manual days) so header reads:
+ * Accrual + Manual stock ≈ Available, and month take limit tracks available.
+ */
 function sumTypeManualAdjustments(balances = []) {
     return roundLeaveDays(
         balances.reduce((sum, row) => {
-            if (!row.manualOverride?.active) return sum;
-            const mo = row.manualOverride;
-            const baseline = roundLeaveDays((Number(mo.accrued) || 0) - (Number(mo.used) || 0));
-            const available = roundLeaveDays(Number(row.availableDays ?? row.available) || 0);
-            return sum + (available - baseline);
+            if (!row.manualOverride?.active && !(Number(row.manualStock) > 0)) return sum;
+            const mo = row.manualOverride || {};
+            const stock =
+                row.manualStock != null && !Number.isNaN(Number(row.manualStock))
+                    ? Number(row.manualStock)
+                    : mo.manualStock != null && !Number.isNaN(Number(mo.manualStock))
+                      ? Number(mo.manualStock)
+                      : Number(row.carriedDays ?? row.carriedForward) || 0;
+            return sum + Math.max(0, roundLeaveDays(stock));
         }, 0)
     );
 }
 
-export { manualAvailableFromOverride } from './leaveBalanceRulesHelper.js';
+export {
+    manualAvailableFromOverride,
+    typeManualOverrideAvailable,
+} from './leaveBalanceRulesHelper.js';
 
 /**
  * Net HR manual carry-forward add/reduce through the view month (display only).
@@ -276,13 +288,52 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 };
 
             const types = getLeaveTypeVariantsForBalance(b.leaveType);
-            const annualEntitlement = getAnnualEntitlementAmount(policyType);
-            const monthlyRate = getRollingAccrualMonthlyRate(policyType);
+            let annualEntitlement = getAnnualEntitlementAmount(policyType);
+            let monthlyRate = getRollingAccrualMonthlyRate(policyType);
             const yearlyCap = getDisplayYearlyAccrualCap(policyType);
             const effectiveConfig = {
                 ...policyType,
                 carryForward: getEffectiveCarryForwardConfig(policyType),
             };
+
+            if (
+                b.manualOverride?.active &&
+                b.manualOverride?.excessMode === 'future_months'
+            ) {
+                if (
+                    b.manualOverride.effectiveAnnual != null &&
+                    !Number.isNaN(Number(b.manualOverride.effectiveAnnual))
+                ) {
+                    annualEntitlement = Number(b.manualOverride.effectiveAnnual);
+                }
+                // Future months: first fundedFutureMonths keep policy monthly; later months show 0
+                const anchorY = Number(b.manualOverride.rateAnchorYear);
+                const anchorM = Number(b.manualOverride.rateAnchorMonth);
+                const funded = Number(b.manualOverride.fundedFutureMonths);
+                if (
+                    viewYear === anchorY &&
+                    viewMonth > anchorM &&
+                    Number.isFinite(funded)
+                ) {
+                    const monthsAfter = viewMonth - anchorM;
+                    if (monthsAfter >= 1 && monthsAfter <= funded) {
+                        monthlyRate =
+                            b.manualOverride.futureMonthlyRate != null &&
+                            !Number.isNaN(Number(b.manualOverride.futureMonthlyRate))
+                                ? Number(b.manualOverride.futureMonthlyRate)
+                                : monthlyRate;
+                    } else if (monthsAfter > funded) {
+                        monthlyRate = 0;
+                    }
+                } else if (
+                    b.manualOverride.futureMonthlyRate != null &&
+                    !Number.isNaN(Number(b.manualOverride.futureMonthlyRate)) &&
+                    viewYear === anchorY &&
+                    viewMonth > anchorM
+                ) {
+                    monthlyRate = Number(b.manualOverride.futureMonthlyRate);
+                }
+            }
 
             b.annualEntitlement = annualEntitlement;
             b.monthlyRate = monthlyRate;
@@ -303,15 +354,23 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
 
             if (b.hasTypeManualOverride) {
                 const mo = b.manualOverride;
-                b.accrued = Number(mo.accrued) || Number(b.accrued) || 0;
-                b.used = Number(mo.used) || Number(b.used) || 0;
+                // Engine already computed available = policy rolling + manualStock − pending.
+                // Trust those values so month take limit tracks available and accrual keeps rolling.
+                b.manualStock = Math.max(
+                    0,
+                    Number(b.manualStock ?? mo.manualStock) || 0
+                );
                 b.carriedForward = Number(mo.carriedForward) || Number(b.carriedForward) || 0;
-                b.usedDays = b.used;
+                b.usedDays = Number(b.used) || 0;
                 b.carriedDays = b.carriedForward;
-                b.earnedToDate = b.accrued;
-                b.available = Math.max(0, roundLeaveDays(b.accrued + b.carriedForward - b.used - b.pendingDays));
+                b.earnedToDate = Number(b.accrued) || 0;
+                b.available = Math.max(0, roundLeaveDays(Number(b.available) || 0));
                 b.availableDays = b.available;
-                b.manualAdjustment = roundLeaveDays(b.available - Math.max(0, b.accrued + b.carriedForward - b.used));
+                b.manualAdjustment = roundLeaveDays(Math.max(0, Number(b.manualStock) || 0));
+                b.monthlyTakeLimit = getEffectiveMonthlyTakeCap({
+                    availableBalance: b.available,
+                    usedThisMonth: 0,
+                });
                 b.monthlyLedger = [];
                 b.accrualHistoryByYear = {};
                 b.yearSummaries = [];
@@ -388,14 +447,21 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
             b.used = b.usedDays;
 
             if (b.hasTypeManualOverride) {
-                b.available = Math.max(
-                    0,
-                    roundLeaveDays((Number(b.accrued) || 0) + (Number(b.carriedForward) || 0) - b.usedDays - b.pendingDays)
-                );
-                b.availableDays = b.available;
+                // Engine already applied live used + manualStock; keep available as computed.
+                b.availableDays = Math.max(0, roundLeaveDays(Number(b.available) || 0));
+                b.available = b.availableDays;
+                b.manualAdjustment = roundLeaveDays(Math.max(0, Number(b.manualStock) || 0));
+                b.monthlyTakeLimit = getEffectiveMonthlyTakeCap({
+                    availableBalance: b.availableDays,
+                    usedThisMonth: b.usedThisMonth || 0,
+                });
             } else {
                 b.availableDays = Math.max(0, roundLeaveDays(Number(b.available) || 0) - b.pendingDays);
                 b.available = b.availableDays;
+                b.monthlyTakeLimit = getEffectiveMonthlyTakeCap({
+                    availableBalance: b.availableDays,
+                    usedThisMonth: b.usedThisMonth || 0,
+                });
             }
 
             b.availableDisplay = roundDaysForDisplay(b.availableDays);

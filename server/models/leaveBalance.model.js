@@ -67,12 +67,42 @@ const leaveBalanceSchema = new mongoose.Schema({
             default: 0,
             min: 0
         },
+        /**
+         * Remaining manual/imported days for this type (Balance Adjustment Add).
+         * Leave consumption uses policy/accrued portion first, then this stock.
+         * Employee month take limit tracks available (includes this stock + unused accrual).
+         */
+        manualStock: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        /**
+         * Days removed from current policy/available bucket by Balance Adjustment Reduce
+         * (after policy portion is consumed). Does not change annual entitlement config;
+         * subtracted from computed available so future month accruals still apply on top.
+         */
+        manualDebit: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         /** Manual correction by admin / HR / line manager — preserved across recalculation */
         manualOverride: {
             active: { type: Boolean, default: false },
             accrued: Number,
             used: Number,
             carriedForward: Number,
+            manualStock: Number,
+            manualDebit: Number,
+            /** When excess reduce uses future_months mode */
+            excessMode: { type: String, enum: ['lop', 'future_months'], default: undefined },
+            effectiveAnnual: Number,
+            futureMonthlyRate: Number,
+            /** How many months after rateAnchorMonth still receive futureMonthlyRate; later months get 0 */
+            fundedFutureMonths: Number,
+            rateAnchorYear: Number,
+            rateAnchorMonth: Number,
             reason: String,
             adjustedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
             adjustedAt: Date

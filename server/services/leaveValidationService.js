@@ -13,6 +13,7 @@ import {
     hasMonthlyEntitlement,
     roundDays
 } from '../helpers/leavePolicyAccrualHelper.js';
+import { getEffectiveMonthlyTakeCap } from '../helpers/leaveEmployeeTakeLimitHelper.js';
 
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
@@ -118,6 +119,7 @@ class LeaveValidationService {
             }
 
             // 6. Check leave balance (policy year = leave start year; LOP skips balance)
+            let typeAvailableBalance = null;
             const balanceCheck = await this.checkLeaveBalance(
                 employeeId,
                 normalizedType,
@@ -128,6 +130,9 @@ class LeaveValidationService {
             );
             if (!balanceCheck.allowed) {
                 errors.push(balanceCheck.reason);
+            }
+            if (balanceCheck.available != null) {
+                typeAvailableBalance = balanceCheck.available;
             }
 
             // 7. Check minimum/maximum days per request
@@ -140,30 +145,35 @@ class LeaveValidationService {
                 errors.push(`Maximum ${leaveTypeConfig.maxDaysPerRequest} days allowed for ${leaveTypeConfig.displayName}`);
             }
 
-            // 8. Check maximum days allowed per calendar month only when an explicit
-            // monthly take cap is configured on the leave type. Monthly accrual itself
-            // should not limit how much of an accumulated balance can be consumed.
-            const maxDaysPerMonth = Number(leaveTypeConfig.maxDaysPerMonth);
+            // 8. Employee month take limit tracks available (manual add + unused accrual).
+            // Policy maxDaysPerMonth is not a tighter ceiling than that employee's stock.
+            if (typeAvailableBalance == null && normalizedType !== 'loss_of_pay') {
+                try {
+                    const bal = await leaveBalanceEngine.calculateBalance(
+                        employeeId,
+                        startDate.getFullYear(),
+                        organizationId
+                    );
+                    const row = bal?.balances?.find((b) => b.leaveType === normalizedType);
+                    typeAvailableBalance = row?.available ?? 0;
+                } catch (e) {
+                    typeAvailableBalance = 0;
+                }
+            }
 
-            if (Number.isFinite(maxDaysPerMonth) && maxDaysPerMonth > 0) {
+            if (normalizedType !== 'loss_of_pay' && typeAvailableBalance != null) {
                 const firstMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
                 const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59, 999);
 
-                // Count pending + approved so employees can't apply multiple times and exceed the cap
-                // before the approvals are completed.
                 const candidateLeaves = await Leave.find({
                     organizationId,
                     employee: employeeId,
                     leaveType: { $in: getLeaveTypeVariantsForBalance(normalizedType) },
                     status: { $in: ['pending', 'approved'] },
-                    // IMPORTANT: monthly cap must consider the whole month window,
-                    // not only leaves overlapping the current requested dates.
                     startDate: { $lte: lastMonth },
                     endDate: { $gte: firstMonth }
                 });
 
-                // Precompute total counted working days per candidate leave.
-                // This prevents recalculating the same total repeatedly for each month segment.
                 const totalLeaveDaysCache = new Map();
                 for (const l of candidateLeaves) {
                     const lStart = new Date(l.startDate);
@@ -178,7 +188,6 @@ class LeaveValidationService {
                     totalLeaveDaysCache.set(String(l._id), totalLeaveDaysCounted);
                 }
 
-                // Split the requested leave into month segments and validate each month separately.
                 const firstMonthCursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
                 const lastMonthCursor = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
                 const monthCursor = new Date(firstMonthCursor);
@@ -192,7 +201,6 @@ class LeaveValidationService {
                     const segmentEnd = new Date(Math.min(endDate.getTime(), monthEnd.getTime()));
 
                     if (segmentStart.getTime() <= segmentEnd.getTime()) {
-                        // Requested days in this month segment (half-day requests always count as 0.5)
                         const requestedSegmentDays = leaveData.isHalfDay
                             ? 0.5
                             : await this.calculateDuration(
@@ -208,17 +216,13 @@ class LeaveValidationService {
                             const lStart = new Date(l.startDate);
                             const lEnd = new Date(l.endDate);
                             if (lEnd.getTime() < monthStart.getTime() || lStart.getTime() > monthEnd.getTime()) {
-                                continue; // no overlap with this month at all
+                                continue;
                             }
 
-                            // For monthly cap, count existing leave usage across the full month window,
-                            // not only the date segment of the current request.
                             const overlapStart = new Date(Math.max(lStart.getTime(), monthStart.getTime()));
                             const overlapEnd = new Date(Math.min(lEnd.getTime(), monthEnd.getTime()));
                             if (overlapStart.getTime() > overlapEnd.getTime()) continue;
 
-                            // Use a proportional split based on counted working days.
-                            // This keeps split logic consistent for half-day leaves too.
                             const totalLeaveDaysCounted = totalLeaveDaysCache.get(String(l._id)) ?? 0;
                             const overlapWorkingDays = await this.calculateDuration(
                                 overlapStart,
@@ -234,15 +238,21 @@ class LeaveValidationService {
                             }
                         }
 
-                        if (usedDays + requestedSegmentDays > maxDaysPerMonth + epsilon) {
+                        const effectiveCap = getEffectiveMonthlyTakeCap({
+                            availableBalance: typeAvailableBalance,
+                            usedThisMonth: usedDays,
+                        });
+
+                        if (usedDays + requestedSegmentDays > effectiveCap + epsilon) {
                             const monthName = monthStart.toLocaleString('default', { month: 'long' });
+                            const remaining = Math.max(0, roundDays(typeAvailableBalance));
                             errors.push(
-                                `Maximum ${maxDaysPerMonth} leave days allowed in ${monthName} for ${leaveTypeConfig.displayName}`
+                                `Insufficient ${leaveTypeConfig.displayName} leave for ${monthName}. ` +
+                                    `Available to take: ${remaining} days (includes manual/imported stock and unused accrual).`
                             );
                         }
                     }
 
-                    // Move to next month
                     monthCursor.setMonth(monthCursor.getMonth() + 1);
                 }
             }
@@ -497,24 +507,26 @@ class LeaveValidationService {
     async checkLeaveBalance(employeeId, leaveType, requestedDays, isHalfDay, organizationId, balanceYear) {
         try {
             if (!leaveType || String(leaveType).toLowerCase() === 'loss_of_pay') {
-                return { allowed: true };
+                return { allowed: true, available: null };
             }
             const year = Number.isFinite(balanceYear) ? balanceYear : new Date().getFullYear();
             const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
-            if (!balance) return { allowed: true }; // no policy – allow and let other checks handle
+            if (!balance) return { allowed: true, available: null };
             const typeBalance = balance.balances.find(b => b.leaveType === leaveType);
-            if (!typeBalance) return { allowed: true };
+            if (!typeBalance) return { allowed: true, available: null };
             const required = isHalfDay ? 0.5 : requestedDays;
-            if (typeBalance.available < required) {
+            const available = Number(typeBalance.available) || 0;
+            if (available < required) {
                 return {
                     allowed: false,
-                    reason: `Insufficient leave balance. Available: ${typeBalance.available} days, Requested: ${required} days`
+                    available,
+                    reason: `Insufficient leave balance. Available: ${available} days, Requested: ${required} days`
                 };
             }
-            return { allowed: true };
+            return { allowed: true, available };
         } catch (err) {
             logger.warn('Leave balance check error', { employeeId, leaveType, error: err.message });
-            return { allowed: true };
+            return { allowed: true, available: null };
         }
     }
 
@@ -694,10 +706,19 @@ class LeaveValidationService {
             const typeBalance = balanceRecord?.balances?.find((b) => b.leaveType === lt.type);
             const availableBalance = typeBalance?.available ?? 0;
             const accruedYtd = typeBalance?.accrued ?? 0;
-            const remainingTakeCap = getRemainingMonthlyTakeCap(monthlyTakeCap, usedThisMonth);
+            const manualStock = Number(typeBalance?.manualStock) || 0;
+            const monthlyTakeLimit = getEffectiveMonthlyTakeCap({
+                availableBalance,
+                usedThisMonth,
+            });
+            const remainingTakeCap = getRemainingMonthlyTakeCap(
+                monthlyTakeCap,
+                usedThisMonth,
+                availableBalance
+            );
             const appliableThisMonth = getAppliableDaysThisMonth({
                 availableBalance,
-                maxDaysPerMonth: monthlyTakeCap,
+                maxDaysPerMonth: monthlyTakeLimit,
                 usedThisMonth
             });
 
@@ -706,7 +727,9 @@ class LeaveValidationService {
                 displayName: lt.displayName || lt.type,
                 monthlyEntitlement,
                 yearlyEntitlementCap: getYearlyAccrualCap(lt),
-                maxDaysPerMonth: monthlyTakeCap,
+                maxDaysPerMonth: monthlyTakeLimit,
+                policyMaxDaysPerMonth: monthlyTakeCap,
+                manualStock: roundDays(manualStock),
                 usedThisMonth: roundDays(usedThisMonth),
                 remainingThisMonth: remainingTakeCap ?? appliableThisMonth,
                 availableBalance: roundDays(availableBalance),

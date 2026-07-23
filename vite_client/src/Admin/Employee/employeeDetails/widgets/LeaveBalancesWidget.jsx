@@ -121,7 +121,10 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
   const currentMonthAccrual = Number(
     typeBalance.currentMonthAccrual ?? typeBalance.earnedThisMonth ?? monthlyAccrual
   );
-  const manualAdjustment = Number(typeBalance.manualAdjustment ?? 0);
+  const manualAdjustment = Number(typeBalance.manualAdjustment ?? typeBalance.manualStock ?? 0);
+  const monthlyTakeLimit = Number(
+    typeBalance.monthlyTakeLimit ?? typeBalance.availableDays ?? typeBalance.available ?? 0
+  );
 
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -141,6 +144,10 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
           <dd className="font-medium text-[#0d9488]">
             {currentMonthAccrual > 0 ? `+${fmtDays(currentMonthAccrual)}` : fmtDays(currentMonthAccrual)} days
           </dd>
+        </div>
+        <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+          <dt>Can take this month</dt>
+          <dd className="font-medium text-slate-700">{fmtDays(monthlyTakeLimit)} days</dd>
         </div>
         <div className="flex items-start justify-between gap-3">
           <dt className="font-semibold text-slate-800">Available:</dt>

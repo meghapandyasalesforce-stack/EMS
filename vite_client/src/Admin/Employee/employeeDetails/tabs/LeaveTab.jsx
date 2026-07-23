@@ -48,6 +48,113 @@ const formatMonthYear = (month, year) => {
 const LEAVE_MIN_YEAR = 2016;
 const ACTIVITY_PREVIEW_COUNT = 2;
 
+const roundLeaveDays = (value) => Math.round((Number(value) || 0) * 1000) / 1000;
+
+/** Mirror server split: policy first, then stock; excess → LOP or future months. */
+const splitBalanceReduceAmount = ({ available = 0, manualStock = 0, reduceAmount = 0 } = {}) => {
+  const availableBal = Math.max(0, roundLeaveDays(available));
+  const stock = Math.max(0, roundLeaveDays(manualStock));
+  const reduce = Math.max(0, roundLeaveDays(reduceAmount));
+  const fromBalance = Math.min(reduce, availableBal);
+  const policyBucket = Math.max(0, roundLeaveDays(availableBal - stock));
+  const fromPolicy = Math.min(fromBalance, policyBucket);
+  const fromManual = Math.max(0, roundLeaveDays(fromBalance - fromPolicy));
+  const excessDays = Math.max(0, roundLeaveDays(reduce - fromBalance));
+  return {
+    fromPolicy,
+    fromManual,
+    fromBalance,
+    excessDays,
+    lopDays: excessDays,
+    availableAfter: Math.max(0, roundLeaveDays(availableBal - fromBalance)),
+  };
+};
+
+const computeFutureMonthsResplit = ({
+  policyAnnual = 0,
+  policyMonthly = 0,
+  adjustMonth = 1,
+  excessDays = 0,
+} = {}) => {
+  const month = Math.min(12, Math.max(1, Number(adjustMonth) || 1));
+  const annual = Math.max(0, roundLeaveDays(policyAnnual));
+  const monthly = Math.max(0, roundLeaveDays(policyMonthly));
+  const excess = Math.max(0, roundLeaveDays(excessDays));
+  const futureMonthCount = Math.max(0, 12 - month);
+  if (futureMonthCount <= 0) {
+    return {
+      ok: false,
+      futureMonthCount: 0,
+      futureMonthlyRate: 0,
+      fundedFutureMonths: 0,
+      zeroedFutureMonths: 0,
+      effectiveAnnual: Math.max(0, roundLeaveDays(annual - excess)),
+      message: 'No future months left; use LOP for this month',
+    };
+  }
+  if (monthly <= 0) {
+    return {
+      ok: false,
+      futureMonthCount,
+      futureMonthlyRate: 0,
+      fundedFutureMonths: 0,
+      zeroedFutureMonths: futureMonthCount,
+      effectiveAnnual: Math.max(0, roundLeaveDays(annual - excess)),
+      message: 'No monthly entitlement to re-split; use LOP instead',
+    };
+  }
+  const futurePoolBefore = roundLeaveDays(futureMonthCount * monthly);
+  const futurePoolAfter = Math.max(0, roundLeaveDays(futurePoolBefore - excess));
+  const fundedFutureMonths = Math.min(
+    futureMonthCount,
+    Math.floor((futurePoolAfter + 1e-9) / monthly)
+  );
+  const fundedPool = roundLeaveDays(fundedFutureMonths * monthly);
+  const zeroedFutureMonths = Math.max(0, futureMonthCount - fundedFutureMonths);
+  const pastAndCurrentPool = roundLeaveDays(month * monthly);
+  return {
+    ok: true,
+    futureMonthCount,
+    futurePoolBefore,
+    futurePoolAfter: fundedPool,
+    futureMonthlyRate: monthly,
+    fundedFutureMonths,
+    zeroedFutureMonths,
+    effectiveAnnual: roundLeaveDays(pastAndCurrentPool + fundedPool),
+    message: null,
+  };
+};
+
+const buildLopDaySlots = (lopDays = 0) => {
+  const total = Math.max(0, roundLeaveDays(lopDays));
+  if (total <= 0) return [];
+  const slots = [];
+  let remaining = total;
+  while (remaining >= 1 - 0.0001) {
+    slots.push({ days: 1, isHalfDay: false });
+    remaining = roundLeaveDays(remaining - 1);
+  }
+  if (remaining >= 0.5 - 0.0001) {
+    slots.push({ days: 0.5, isHalfDay: true });
+  }
+  return slots;
+};
+
+const emptyLopEntry = () => ({ date: '', halfDayType: 'first_half' });
+
+const syncLopEntriesToSlots = (prevEntries = [], slots = []) =>
+  slots.map((_, i) => ({
+    date: prevEntries[i]?.date || '',
+    halfDayType: prevEntries[i]?.halfDayType || 'first_half',
+  }));
+
+const monthDateBounds = (year, month) => {
+  const start = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { min: start, max: end };
+};
+
 const friendlyAction = (action) => {
   const map = {
     period_update: 'Balance recalculated',
@@ -69,8 +176,13 @@ const fmtDays = (n) => {
 const emptyTypeForm = () => ({
   available: '0',
   used: '0',
+  manualStock: '0',
+  annualEntitlement: '0',
+  monthlyRate: '0',
   carriedForward: '0',
   carryMode: 'add',
+  excessMode: 'lop',
+  lopEntries: [],
 });
 
 const ManualAdjustModal = ({
@@ -79,12 +191,18 @@ const ManualAdjustModal = ({
   leaveTypes,
   forms,
   onChange,
+  onLopEntryChange,
   reason,
   onReasonChange,
   onClose,
   onSave,
+  viewMonth,
+  viewYear,
 }) => {
   if (!open) return null;
+
+  const { min: dateMin, max: dateMax } = monthDateBounds(viewYear, viewMonth);
+  const futureMonthsLeft = Math.max(0, 12 - viewMonth);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
@@ -92,7 +210,8 @@ const ManualAdjustModal = ({
         <div className="border-b px-6 py-4">
           <h3 className="text-lg font-semibold text-slate-900">Balance Adjustment</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Choose Add or Reduce, then enter Carry Forward days for each leave type.
+            Add raises available. Reduce takes from this month first (policy, then imported stock).
+            Extra days: choose LOP this month, or re-budget future months.
           </p>
         </div>
         <div className="overflow-y-auto px-6 py-4">
@@ -108,14 +227,42 @@ const ManualAdjustModal = ({
                 const label =
                   lt.displayName || getLeaveTypeDisplayName(typeKey, leaveTypes);
                 const currentAvailable = Number(form.available) || 0;
+                const manualStock = Number(form.manualStock) || 0;
+                const policyAnnual = Number(form.annualEntitlement) || 0;
+                const policyMonthly = Number(form.monthlyRate) || 0;
                 const carryForward = form.carriedForward === '' ? 0 : Number(form.carriedForward) || 0;
                 const carryMode = form.carryMode === 'reduce' ? 'reduce' : 'add';
-                const totalAfterCarry = Math.max(
-                  0,
+                const excessMode = form.excessMode === 'future_months' ? 'future_months' : 'lop';
+                const reduceSplit =
                   carryMode === 'reduce'
-                    ? currentAvailable - carryForward
-                    : currentAvailable + carryForward
-                );
+                    ? splitBalanceReduceAmount({
+                        available: currentAvailable,
+                        manualStock,
+                        reduceAmount: carryForward,
+                      })
+                    : null;
+                const futurePreview =
+                  carryMode === 'reduce' &&
+                  reduceSplit?.excessDays > 0 &&
+                  excessMode === 'future_months'
+                    ? computeFutureMonthsResplit({
+                        policyAnnual,
+                        policyMonthly,
+                        adjustMonth: viewMonth,
+                        excessDays: reduceSplit.excessDays,
+                      })
+                    : null;
+                const showLopDates =
+                  carryMode === 'reduce' &&
+                  reduceSplit?.excessDays > 0 &&
+                  excessMode === 'lop';
+                const lopSlots = showLopDates
+                  ? buildLopDaySlots(reduceSplit.excessDays)
+                  : [];
+                const totalAfterCarry =
+                  carryMode === 'reduce'
+                    ? reduceSplit.availableAfter
+                    : Math.max(0, currentAvailable + carryForward);
                 return (
                   <div
                     key={typeKey}
@@ -161,7 +308,7 @@ const ManualAdjustModal = ({
                     </label>
                     <label className="mt-3 block text-sm">
                       <span className="mb-1 block font-medium text-slate-700">
-                        {carryMode === 'reduce' ? 'Deduct' : 'Carry Forward'}
+                        {carryMode === 'reduce' ? 'Deduct' : 'Days to add'}
                       </span>
                       <input
                         type="number"
@@ -181,10 +328,158 @@ const ManualAdjustModal = ({
                       >
                         {fmtDays(totalAfterCarry)} days
                       </span>
-                      {carryForward > 0
-                        ? ` (${fmtDays(currentAvailable)} ${carryMode === 'reduce' ? '−' : '+'} ${fmtDays(carryForward)})`
+                      {carryForward > 0 && carryMode === 'add'
+                        ? ` (${fmtDays(currentAvailable)} + ${fmtDays(carryForward)})`
+                        : ''}
+                      {carryForward > 0 && carryMode === 'reduce'
+                        ? ` (from balance: ${fmtDays(reduceSplit.fromBalance)})`
                         : ''}
                     </p>
+                    {carryMode === 'reduce' && reduceSplit?.excessDays > 0 && (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-sm font-semibold text-amber-900">
+                          {fmtDays(reduceSplit.excessDays)} beyond this month’s available
+                        </p>
+                        <p className="mt-2 text-xs font-medium text-amber-900">
+                          How should the extra be handled?
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-100 bg-white p-2 text-sm">
+                            <input
+                              type="radio"
+                              name={`${typeKey}-excessMode`}
+                              checked={excessMode === 'lop'}
+                              onChange={() => onChange(typeKey, 'excessMode', 'lop')}
+                              className="mt-1"
+                            />
+                            <span>
+                              <span className="font-semibold text-slate-800">
+                                Apply as LOP this month
+                              </span>
+                              <span className="mt-0.5 block text-xs text-slate-500">
+                                Create loss-of-pay leave for the extra days (pick dates).
+                              </span>
+                            </span>
+                          </label>
+                          <label
+                            className={`flex items-start gap-2 rounded-lg border border-amber-100 bg-white p-2 text-sm ${
+                              futureMonthsLeft <= 0
+                                ? 'cursor-not-allowed opacity-50'
+                                : 'cursor-pointer'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`${typeKey}-excessMode`}
+                              checked={excessMode === 'future_months'}
+                              disabled={futureMonthsLeft <= 0}
+                              onChange={() => onChange(typeKey, 'excessMode', 'future_months')}
+                              className="mt-1"
+                            />
+                            <span>
+                              <span className="font-semibold text-slate-800">
+                                Adjust future months
+                              </span>
+                              <span className="mt-0.5 block text-xs text-slate-500">
+                                {futureMonthsLeft <= 0
+                                  ? 'No months left after this one — use LOP.'
+                                  : `Cut extra from the remaining year pool. Later months keep full policy monthly entitlement until the pool runs out; months after that get 0.`}
+                              </span>
+                            </span>
+                          </label>
+                        </div>
+
+                        {excessMode === 'future_months' && futurePreview?.ok && (
+                          <p className="mt-3 text-xs text-amber-900">
+                            Preview: remaining annual ≈{' '}
+                            <strong>{fmtDays(futurePreview.effectiveAnnual)}</strong>
+                            {' · '}
+                            next{' '}
+                            <strong>{futurePreview.fundedFutureMonths}</strong> month
+                            {futurePreview.fundedFutureMonths === 1 ? '' : 's'} keep{' '}
+                            <strong>{fmtDays(futurePreview.futureMonthlyRate)}</strong> / month
+                            {futurePreview.zeroedFutureMonths > 0
+                              ? `, then ${futurePreview.zeroedFutureMonths} month${
+                                  futurePreview.zeroedFutureMonths === 1 ? '' : 's'
+                                } get 0`
+                              : ''}{' '}
+                            after {formatMonthYear(viewMonth, viewYear)}.
+                          </p>
+                        )}
+                        {excessMode === 'future_months' && futurePreview && !futurePreview.ok && (
+                          <p className="mt-3 text-xs font-medium text-rose-700">
+                            {futurePreview.message}
+                          </p>
+                        )}
+
+                        {showLopDates && (
+                          <>
+                            <p className="mt-3 text-xs text-amber-800">
+                              Choose {lopSlots.length} date
+                              {lopSlots.length === 1 ? '' : 's'} in{' '}
+                              {formatMonthYear(viewMonth, viewYear)}.
+                              {lopSlots.some((s) => s.isHalfDay)
+                                ? ' Half-day slots also need a shift.'
+                                : ''}
+                            </p>
+                            <div className="mt-3 space-y-3">
+                              {lopSlots.map((slot, idx) => {
+                                const entry = (form.lopEntries || [])[idx] || emptyLopEntry();
+                                return (
+                                  <div
+                                    key={`${typeKey}-lop-${idx}`}
+                                    className="rounded-lg border border-amber-100 bg-white p-3"
+                                  >
+                                    <label className="block text-sm">
+                                      <span className="mb-1 block font-medium text-slate-700">
+                                        LOP date {idx + 1}
+                                        {slot.isHalfDay ? ' (half day)' : ' (full day)'}
+                                      </span>
+                                      <input
+                                        type="date"
+                                        min={dateMin}
+                                        max={dateMax}
+                                        value={entry.date}
+                                        onChange={(e) =>
+                                          onLopEntryChange(typeKey, idx, 'date', e.target.value)
+                                        }
+                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                      />
+                                    </label>
+                                    {slot.isHalfDay && (
+                                      <label className="mt-2 block text-sm">
+                                        <span className="mb-1 block font-medium text-slate-700">
+                                          Shift
+                                        </span>
+                                        <select
+                                          value={entry.halfDayType || 'first_half'}
+                                          onChange={(e) =>
+                                            onLopEntryChange(
+                                              typeKey,
+                                              idx,
+                                              'halfDayType',
+                                              e.target.value
+                                            )
+                                          }
+                                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                        >
+                                          <option value="first_half">
+                                            First half (morning)
+                                          </option>
+                                          <option value="second_half">
+                                            Second half (afternoon)
+                                          </option>
+                                        </select>
+                                      </label>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -332,12 +627,22 @@ const LeaveTab = ({ employeeId }) => {
       const row = (balance?.balances || []).find((b) => b.leaveType === lt.type);
       const available = Number(row?.availableDays ?? row?.available ?? 0) || 0;
       const used = Number(row?.usedDays ?? row?.used ?? 0) || 0;
-      // Carry Forward always starts at 0 — HR enters the amount to add or reduce.
+      const manualStock = Number(row?.manualStock ?? row?.manualAdjustment ?? 0) || 0;
+      const annualEntitlement =
+        Number(row?.annualEntitlement ?? lt?.accrual?.maxAccrual ?? 0) || 0;
+      const monthlyRate =
+        Number(row?.monthlyRate ?? lt?.accrual?.amount ?? 0) ||
+        (annualEntitlement > 0 ? annualEntitlement / 12 : 0);
       nextForms[lt.type] = {
         available: String(available),
         used: String(used),
+        manualStock: String(manualStock),
+        annualEntitlement: String(annualEntitlement),
+        monthlyRate: String(monthlyRate),
         carriedForward: '0',
         carryMode: 'add',
+        excessMode: 'lop',
+        lopEntries: [],
       };
     });
     setAdjustForms(nextForms);
@@ -348,10 +653,41 @@ const LeaveTab = ({ employeeId }) => {
 
   const handleAdjustFormChange = (leaveType, field, value) => {
     if (!leaveType) return;
-    setAdjustForms((prev) => ({
-      ...prev,
-      [leaveType]: { ...(prev[leaveType] || emptyTypeForm()), [field]: value },
-    }));
+    setAdjustForms((prev) => {
+      const current = { ...(prev[leaveType] || emptyTypeForm()), [field]: value };
+      if (field === 'carriedForward' || field === 'carryMode' || field === 'excessMode') {
+        const available = Number(current.available) || 0;
+        const manualStock = Number(current.manualStock) || 0;
+        const amount = current.carriedForward === '' ? 0 : Number(current.carriedForward) || 0;
+        if (current.carryMode === 'reduce') {
+          const split = splitBalanceReduceAmount({
+            available,
+            manualStock,
+            reduceAmount: amount,
+          });
+          const useLop =
+            split.excessDays > 0 && current.excessMode !== 'future_months';
+          current.lopEntries = useLop
+            ? syncLopEntriesToSlots(current.lopEntries, buildLopDaySlots(split.excessDays))
+            : [];
+        } else {
+          current.lopEntries = [];
+          current.excessMode = 'lop';
+        }
+      }
+      return { ...prev, [leaveType]: current };
+    });
+  };
+
+  const handleLopEntryChange = (leaveType, index, field, value) => {
+    if (!leaveType) return;
+    setAdjustForms((prev) => {
+      const current = { ...(prev[leaveType] || emptyTypeForm()) };
+      const entries = [...(current.lopEntries || [])];
+      entries[index] = { ...(entries[index] || emptyLopEntry()), [field]: value };
+      current.lopEntries = entries;
+      return { ...prev, [leaveType]: current };
+    });
   };
 
   const handleSaveManualAdjust = async () => {
@@ -367,43 +703,142 @@ const LeaveTab = ({ employeeId }) => {
     });
 
     if (changedTypes.length === 0) {
-      toast.info('Enter Carry Forward for at least one leave type');
+      toast.info('Enter an amount for at least one leave type');
       return;
+    }
+
+    for (const lt of changedTypes) {
+      const form = adjustForms[lt.type] || emptyTypeForm();
+      if (form.carryMode !== 'reduce') continue;
+      const available = form.available === '' ? 0 : Number(form.available);
+      const manualStock = form.manualStock === '' ? 0 : Number(form.manualStock);
+      const amount = form.carriedForward === '' ? 0 : Number(form.carriedForward);
+      const annualEntitlement = Number(form.annualEntitlement) || 0;
+      const monthlyRate = Number(form.monthlyRate) || 0;
+      const excessMode = form.excessMode === 'future_months' ? 'future_months' : 'lop';
+      const split = splitBalanceReduceAmount({
+        available,
+        manualStock,
+        reduceAmount: amount,
+      });
+      if (split.excessDays <= 0) continue;
+
+      if (excessMode === 'future_months') {
+        const preview = computeFutureMonthsResplit({
+          policyAnnual: annualEntitlement,
+          policyMonthly: monthlyRate,
+          adjustMonth: viewMonth,
+          excessDays: split.excessDays,
+        });
+        if (!preview.ok) {
+          toast.error(
+            preview.message ||
+              `Cannot adjust future months for ${
+                lt.displayName || getLeaveTypeDisplayName(lt.type, editableLeaveTypes)
+              }`
+          );
+          return;
+        }
+        continue;
+      }
+
+      const slots = buildLopDaySlots(split.excessDays);
+      const entries = form.lopEntries || [];
+      if (entries.length !== slots.length || entries.some((e) => !e?.date)) {
+        toast.error(
+          `Select ${slots.length} LOP date${slots.length === 1 ? '' : 's'} for ${
+            lt.displayName || getLeaveTypeDisplayName(lt.type, editableLeaveTypes)
+          }`
+        );
+        return;
+      }
+      for (let i = 0; i < slots.length; i += 1) {
+        if (
+          slots[i].isHalfDay &&
+          entries[i].halfDayType !== 'first_half' &&
+          entries[i].halfDayType !== 'second_half'
+        ) {
+          toast.error('Choose a shift for each half-day LOP');
+          return;
+        }
+      }
     }
 
     setSavingAdjust(true);
     try {
       let latestBalance = null;
+      let totalLopDays = 0;
+      let usedFutureMonths = false;
       for (const lt of changedTypes) {
         const form = adjustForms[lt.type] || emptyTypeForm();
         const available = form.available === '' ? 0 : Number(form.available);
         const used = form.used === '' ? 0 : Number(form.used);
+        const manualStock = form.manualStock === '' ? 0 : Number(form.manualStock);
         const carriedForward = form.carriedForward === '' ? 0 : Number(form.carriedForward);
         const carryMode = form.carryMode === 'reduce' ? 'reduce' : 'add';
-        // Add: Available + Carry Forward. Reduce: Available − Carry Forward (min 0).
-        const newAvailable = Math.max(
-          0,
-          carryMode === 'reduce' ? available - carriedForward : available + carriedForward
-        );
-        const accrued = Math.max(0, newAvailable + used);
-        const res = await axios.patch(`/v1/admin/leave-policy/balance/${employeeId}/adjust`, {
+        const excessMode = form.excessMode === 'future_months' ? 'future_months' : 'lop';
+
+        let payload = {
           year: viewYear,
           month: viewMonth,
           leaveType: lt.type,
-          accrued,
           used,
-          carriedForward: carryMode === 'reduce' ? 0 : carriedForward,
+          adjustMode: carryMode,
+          adjustAmount: carriedForward,
           reason: adjustReason.trim(),
-        });
+        };
+
+        if (carryMode === 'reduce') {
+          const split = splitBalanceReduceAmount({
+            available,
+            manualStock,
+            reduceAmount: carriedForward,
+          });
+          if (split.excessDays > 0 && excessMode === 'lop') {
+            totalLopDays = roundLeaveDays(totalLopDays + split.excessDays);
+          }
+          if (split.excessDays > 0 && excessMode === 'future_months') {
+            usedFutureMonths = true;
+          }
+          const slots =
+            split.excessDays > 0 && excessMode === 'lop'
+              ? buildLopDaySlots(split.excessDays)
+              : [];
+          payload = {
+            ...payload,
+            accrued: Math.max(0, split.availableAfter + used),
+            carriedForward: 0,
+            excessMode: split.excessDays > 0 ? excessMode : undefined,
+            lopEntries: slots.map((slot, i) => ({
+              date: form.lopEntries[i].date,
+              halfDayType: slot.isHalfDay ? form.lopEntries[i].halfDayType : undefined,
+            })),
+          };
+        } else {
+          const newAvailable = available + carriedForward;
+          payload = {
+            ...payload,
+            accrued: Math.max(0, newAvailable + used),
+            carriedForward,
+          };
+        }
+
+        const res = await axios.patch(
+          `/v1/admin/leave-policy/balance/${employeeId}/adjust`,
+          payload
+        );
         latestBalance = res.data?.balance || latestBalance;
       }
       if (latestBalance) setBalance(latestBalance);
       setAdjustOpen(false);
-      toast.success(
+      const baseMsg =
         changedTypes.length === 1
           ? 'Leave type balance adjusted'
-          : `${changedTypes.length} leave type balances adjusted`
-      );
+          : `${changedTypes.length} leave type balances adjusted`;
+      let detail = '';
+      if (totalLopDays > 0) detail = ` ${fmtDays(totalLopDays)} day(s) applied as LOP.`;
+      else if (usedFutureMonths) detail = ' Future months re-budgeted for excess.';
+      toast.success(`${baseMsg}.${detail}`);
       await refreshAll();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Adjustment failed');
@@ -586,7 +1021,10 @@ const LeaveTab = ({ employeeId }) => {
         forms={adjustForms}
         reason={adjustReason}
         saving={savingAdjust}
+        viewMonth={viewMonth}
+        viewYear={viewYear}
         onChange={handleAdjustFormChange}
+        onLopEntryChange={handleLopEntryChange}
         onReasonChange={setAdjustReason}
         onClose={() => !savingAdjust && setAdjustOpen(false)}
         onSave={handleSaveManualAdjust}

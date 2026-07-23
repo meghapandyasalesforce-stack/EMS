@@ -1,4 +1,5 @@
 import { roundLeaveDays, getEffectiveJoiningDate, calendarMonthSortKey } from './leaveBalanceRulesHelper.js';
+import { getEmployeeAppliableDaysThisMonth } from './leaveEmployeeTakeLimitHelper.js';
 
 /**
  * Policy-driven leave accrual helpers — Leave Policy is the single source of truth.
@@ -294,26 +295,29 @@ export function validateLeavePolicyAccrual(policyData = {}) {
     return errors;
 }
 
+/**
+ * Days appliable this month for a leave type.
+ * Employee take limit tracks available balance (manual add + unused accrual roll-forward).
+ * policy maxDaysPerMonth is not a tighter ceiling than available.
+ */
 export function getAppliableDaysThisMonth({ availableBalance = 0, maxDaysPerMonth, usedThisMonth = 0 }) {
-    const available = Math.max(0, Number(availableBalance) || 0);
-    const used = Math.max(0, Number(usedThisMonth) || 0);
-    const cap = Number(maxDaysPerMonth);
-
-    if (!Number.isFinite(cap) || cap <= 0) {
-        return roundDays(available);
-    }
-
-    const remainingTakeCap = Math.max(0, cap - used);
-    return roundDays(Math.min(available, remainingTakeCap));
+    return getEmployeeAppliableDaysThisMonth({
+        availableBalance,
+        usedThisMonth,
+        policyMaxDaysPerMonth: maxDaysPerMonth,
+    });
 }
 
-export function getRemainingMonthlyTakeCap(maxDaysPerMonth, usedThisMonth = 0) {
+export function getRemainingMonthlyTakeCap(maxDaysPerMonth, usedThisMonth = 0, availableBalance = null) {
+    if (availableBalance != null && Number.isFinite(Number(availableBalance))) {
+        return roundLeaveDays(Math.max(0, Number(availableBalance) || 0));
+    }
     const cap = Number(maxDaysPerMonth);
     const used = Math.max(0, Number(usedThisMonth) || 0);
     if (!Number.isFinite(cap) || cap <= 0) {
         return null;
     }
-    return roundDays(Math.max(0, cap - used));
+    return roundLeaveDays(Math.max(0, cap - used));
 }
 
 /** @deprecated */
