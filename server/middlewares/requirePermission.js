@@ -174,10 +174,62 @@ export const requireHrOrExecutive = requireLegacyAccess('HR_OR_EXECUTIVE', {
   message: 'Access restricted to admins, HR personnel, and executives only',
 });
 
-/** Former isAdminOrManagerOrHR */
-export const requireManagerHrOrExecutive = requireLegacyAccess('MANAGER_HR_OR_EXEC', {
-  message: 'Access restricted to admins, HR personnel, managers, and executives only',
-});
+/** Former isAdminOrManagerOrHR — people-manager / HR / exec (not pure project managers). */
+export const requireManagerHrOrExecutive = composeMiddleware([
+  attachAuthContext,
+  (req, res, next) => {
+    const ctx = req.authContext;
+    const isPureProjectManager =
+      ctx?.isProjectManager &&
+      !ctx?.isLineManager &&
+      !ctx?.isHrManager &&
+      !ctx?.isHrExecutive &&
+      !ctx?.isOrgOwner &&
+      !ctx?.isExecutive &&
+      !ctx?.isPayrollAdmin;
+
+    if (isPureProjectManager) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access restricted to admins, HR personnel, managers, and executives only',
+        code: 'INSUFFICIENT_PERMISSIONS',
+      });
+    }
+
+    if (hasAnyPermission(ctx, LEGACY_ACCESS.MANAGER_HR_OR_EXEC)) {
+      return next();
+    }
+
+    logger.warn('Permission denied', {
+      path: req.path,
+      required: LEGACY_ACCESS.MANAGER_HR_OR_EXEC,
+      held: ctx?.permissions?.slice(0, 12),
+      buckets: ctx?.buckets,
+    });
+    return res.status(403).json({
+      success: false,
+      message: 'Access restricted to admins, HR personnel, managers, and executives only',
+      code: 'INSUFFICIENT_PERMISSIONS',
+    });
+  },
+]);
+
+/**
+ * Project workspace + org/team employee directory for assignment.
+ * Includes pure project managers (org-wide) and line managers (team-scoped).
+ */
+export const requireProjectWorkspaceAccess = composeMiddleware(
+  requireAnyPermission(
+    [
+      PERMISSIONS.PROJECT_ADMIN_VIEW,
+      PERMISSIONS.EMPLOYEE_VIEW_ALL,
+      PERMISSIONS.EMPLOYEE_VIEW_TEAM,
+    ],
+    {
+      message: 'Access restricted to project managers, managers, HR, and admins',
+    }
+  )
+);
 
 /** Former isAdminOrExecutive */
 export const requireExecutiveAccess = composeMiddleware(

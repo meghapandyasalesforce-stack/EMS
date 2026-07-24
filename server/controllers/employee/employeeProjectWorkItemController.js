@@ -10,8 +10,16 @@ import {
     canEmployeeEditWorkItem,
     computeWorkPlanProgress
 } from "../../helpers/projectWorkItemPermissionHelper.js";
+import { applyDueDateChange } from "../../helpers/workItemDueDateHelper.js";
 import logger from "../../helpers/logger.js";
 import { isProjectManager } from "../../helpers/projectManagerHelper.js";
+
+const WORK_ITEM_POPULATE = [
+    { path: "assignee", select: "name lastName email employeeId" },
+    { path: "assignees", select: "name lastName email employeeId" },
+    { path: "comments.author", select: "name lastName email employeeId" },
+    { path: "dueDateHistory.changedBy", select: "name lastName email employeeId" },
+];
 
 function buildTree(flat) {
     const byParent = new Map();
@@ -61,7 +69,7 @@ export const getEmployeeProjectWorkItems = async (req, res) => {
         const filter = addOrganizationFilter(req, { projectId });
         const flat = await ProjectWorkItem.find(filter)
             .sort({ sortOrder: 1, createdAt: 1 })
-            .populate("assignee", "name lastName email employeeId")
+            .populate(WORK_ITEM_POPULATE)
             .lean();
 
         const flatAnnotated = annotateFlatWithCanEdit(flat, employeeId);
@@ -86,7 +94,7 @@ export const getEmployeeProjectWorkItems = async (req, res) => {
     }
 };
 
-/** PUT /both/project-task/work-items/:workItemId — employees: status + description only */
+/** PUT /both/project-task/work-items/:workItemId — employees: status, description, due date (+ reason) */
 export const updateEmployeeProjectWorkItem = async (req, res) => {
     try {
         const { workItemId } = req.params;
@@ -108,7 +116,7 @@ export const updateEmployeeProjectWorkItem = async (req, res) => {
         }
 
         const orgFilter = addOrganizationFilter(req, { projectId: item.projectId });
-        const allFlat = await ProjectWorkItem.find(orgFilter).select("_id parentTask assignee").lean();
+        const allFlat = await ProjectWorkItem.find(orgFilter).select("_id parentTask assignee assignees").lean();
         const { ancestorAssignees } = buildAssigneeAncestorMap(allFlat);
 
         if (!canEmployeeEditWorkItem(item, employeeId, ancestorAssignees)) {
@@ -118,8 +126,8 @@ export const updateEmployeeProjectWorkItem = async (req, res) => {
             );
         }
 
-        const { status, description } = req.body;
-        const disallowed = ["title", "assignee", "dueDate", "priority", "parentTask", "sortOrder"].filter(
+        const { status, description, dueDate, dueDateChangeReason } = req.body;
+        const disallowed = ["title", "assignee", "assignees", "priority", "parentTask", "sortOrder"].filter(
             (k) => req.body[k] !== undefined
         );
         if (disallowed.length) {
@@ -140,20 +148,31 @@ export const updateEmployeeProjectWorkItem = async (req, res) => {
                 : undefined;
         }
 
-        if (status === undefined && description === undefined) {
-            return sendError(res, "No allowed fields to update (status or description)", 400);
+        if (dueDate !== undefined) {
+            const dueResult = applyDueDateChange(item, {
+                dueDate,
+                reason: dueDateChangeReason,
+                changedBy: employeeId,
+            });
+            if (!dueResult.ok) {
+                return sendError(res, dueResult.error, 400);
+            }
+        }
+
+        if (status === undefined && description === undefined && dueDate === undefined) {
+            return sendError(res, "No allowed fields to update (status, description, or due date)", 400);
         }
 
         await item.save();
 
         const populated = await ProjectWorkItem.findById(item._id)
-            .populate("assignee", "name lastName email employeeId")
+            .populate(WORK_ITEM_POPULATE)
             .lean();
 
         const flatAnnotated = annotateFlatWithCanEdit(
             await ProjectWorkItem.find(orgFilter)
                 .sort({ sortOrder: 1, createdAt: 1 })
-                .populate("assignee", "name lastName email employeeId")
+                .populate(WORK_ITEM_POPULATE)
                 .lean(),
             employeeId
         );

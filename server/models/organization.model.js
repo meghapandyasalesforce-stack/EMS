@@ -406,6 +406,30 @@ const organizationSchema = new mongoose.Schema({
         allowNonWorkingDayPunch: {
             type: Boolean,
             default: false
+        },
+        /**
+         * Payroll calculation settings.
+         * calculationMode:
+         *   'work_hours' — current behaviour: credit = hoursWorked / 8 (fractional)
+         *   'day_based'  — credit based on punch-in+out presence vs hour thresholds
+         */
+        payrollSettings: {
+            calculationMode: {
+                type: String,
+                enum: ['work_hours', 'day_based'],
+                default: 'work_hours'
+            },
+            // Only used when calculationMode === 'day_based'
+            minHoursForFullDay: {
+                type: Number,
+                default: 8,
+                min: 0
+            },
+            minHoursForHalfDay: {
+                type: Number,
+                default: 4,
+                min: 0
+            }
         }
     },
     logo: {

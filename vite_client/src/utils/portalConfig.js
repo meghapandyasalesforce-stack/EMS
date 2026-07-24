@@ -7,6 +7,7 @@ export const PORTAL_ORDER = [
   'hr_manager',
   'payroll_admin',
   'line_manager',
+  'project_manager',
   'employee',
 ];
 
@@ -16,6 +17,7 @@ export const PORTAL_META = {
   hr_manager: { label: 'HR', home: '/dashboard-hr', theme: 'admin' },
   payroll_admin: { label: 'Finance', home: '/dashboard-finance', theme: 'admin' },
   line_manager: { label: 'Manager', home: '/dashboard-manager', theme: 'admin' },
+  project_manager: { label: 'Project Manager', home: '/dashboard-manager', theme: 'admin' },
   employee: { label: 'Me', home: '/dashboard-employee', theme: 'employee' },
 };
 
@@ -57,6 +59,9 @@ const ROUTE_TO_PORTAL = [
   ['/dashboard-hr', 'hr_manager'],
   ['/dashboard-finance', 'payroll_admin'],
   ['/dashboard-manager', 'line_manager'],
+  ['/dashboard-manager', 'project_manager'],
+  ['/projects', 'project_manager'],
+  ['/add-project', 'project_manager'],
   ...EMPLOYEE_WORKSPACE_ROUTES.map((path) => [path, 'employee']),
   ...ME_PROFILE_ROUTES.map((path) => [path, 'employee']),
 ];
@@ -146,6 +151,10 @@ export const deriveEntitledPortalIds = ({
     ids.add('line_manager');
   }
 
+  if (buckets.has('project_manager') || permissionFlags.isProjectManager) {
+    ids.add('project_manager');
+  }
+
   if (employee?._id || employee?.id || user?.employeeProfileId) {
     ids.add('employee');
   }
@@ -161,12 +170,13 @@ export const deriveEntitledPortalIds = ({
   return ids;
 };
 
-/** HR / manager / finance staff — used for session and login routing (not portal tabs). */
+/** HR / manager / finance / project manager staff — used for session and login routing (not portal tabs). */
 export const isDelegatedStaff = (permissionFlags = {}) =>
   Boolean(
     permissionFlags.isHrManager ||
     permissionFlags.isHrExecutive ||
     permissionFlags.isLineManager ||
+    permissionFlags.isProjectManager ||
     permissionFlags.isPayrollAdmin
   );
 

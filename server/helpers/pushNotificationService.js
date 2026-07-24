@@ -267,6 +267,7 @@ const getNotificationTitle = (type) => {
   const titles = {
     'task_update': 'Task Updated',
     'task_created': 'New Task',
+    'task_assigned': 'Task Assigned',
     'task_completed': 'Task Completed',
     'task': 'New Task',
     'general': 'Notification',
@@ -301,6 +302,7 @@ const getNotificationUrl = (type, metadata = {}) => {
     case 'task':
     case 'task_update':
     case 'task_created':
+    case 'task_assigned':
     case 'task_completed':
       if (metadata.projectId) return `/employee/projects/${metadata.projectId}`;
       return '/employee/projects';

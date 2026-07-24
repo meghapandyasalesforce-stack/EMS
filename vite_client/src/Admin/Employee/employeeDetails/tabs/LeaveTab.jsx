@@ -353,7 +353,7 @@ const ManualAdjustModal = ({
                               className="mt-1"
                             />
                             <span>
-                              <span className="font-semibold text-slate-800">
+                              <span className="font-semibold text-slate-800">  
                                 Apply as LOP this month
                               </span>
                               <span className="mt-0.5 block text-xs text-slate-500">

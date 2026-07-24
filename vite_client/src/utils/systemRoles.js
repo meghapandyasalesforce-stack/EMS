@@ -5,6 +5,7 @@ export const SYSTEM_ROLE_IDS = {
   HR_MANAGER: 'hr_manager',
   PAYROLL_ADMIN: 'payroll_admin',
   LINE_MANAGER: 'line_manager',
+  PROJECT_MANAGER: 'project_manager',
   EXECUTIVE: 'executive',
 };
 

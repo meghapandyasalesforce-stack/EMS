@@ -25,9 +25,9 @@ import {
     updateProjectWorkItem,
     deleteProjectWorkItem
 } from "../../controllers/admin/projectWorkItemController.js";
+import { addWorkItemComment } from "../../controllers/both/workItemCommentController.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
-import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
-import isAdminOrExecutiveAuthenticated from "../../middlewares/isAdminOrExecutiveAuthenticated.js";
+import isProjectWorkspaceAuthenticated from "../../middlewares/isProjectWorkspaceAuthenticated.js";
 import { projectLimiter } from "../../middlewares/endpointRateLimiters.js";
 import { writeLimiter } from "../../middlewares/rateLimiter.js";
 import { projectValidations } from "../../middlewares/inputValidation.js";
@@ -37,26 +37,26 @@ const router = express.Router();
 // Get all projects (for dashboard - root endpoint) - with rate limiting
 // Allow managers to view projects they manage or in their department
 router.route("/")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getAllProjects);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getAllProjects);
 
 // Get all projects (alternative endpoint for backward compatibility)
 // Allow Admin, Managers, HR, and Executives (CEO) to view projects
 router.route("/get-all-project")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getAllProjects);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getAllProjects);
 
 // Built-in project templates (tasks / subtasks presets)
 router.route("/templates")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectTemplates);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectTemplates);
 
 // Create new project - write operations have stricter limits
 // Allow Admin, Managers, and HR to create projects
 router.route("/create-project")
-    .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, projectValidations.create, createProject);
+    .post(isProjectWorkspaceAuthenticated, writeLimiter, projectValidations.create, createProject);
 
 // Update project - write operations have stricter limits
 // Allow Admin, Managers, HR, and Executives (CEO) to update projects
 router.route("/update-project/:id")
-    .put(isAdminOrManagerOrHRAuthenticated, writeLimiter, projectValidations.update, updateProject);
+    .put(isProjectWorkspaceAuthenticated, writeLimiter, projectValidations.update, updateProject);
 
 // Delete project - write operations have stricter limits
 router.route("/delete-project/:id")
@@ -65,16 +65,19 @@ router.route("/delete-project/:id")
 // Get project by ID
 // Allow managers to view projects they manage or in their department
 router.route("/get-project/:id")
-    .get(isAdminOrManagerOrHRAuthenticated, projectValidations.getById, getProjectById);
+    .get(isProjectWorkspaceAuthenticated, projectValidations.getById, getProjectById);
 
 // Project work breakdown (tasks / subtasks) — register before generic :id sub-routes if any conflict
+router.route("/work-items/:workItemId/comments")
+    .post(isProjectWorkspaceAuthenticated, writeLimiter, addWorkItemComment);
+
 router.route("/work-items/:workItemId")
-    .put(isAdminOrManagerOrHRAuthenticated, writeLimiter, updateProjectWorkItem)
-    .delete(isAdminOrManagerOrHRAuthenticated, writeLimiter, deleteProjectWorkItem);
+    .put(isProjectWorkspaceAuthenticated, writeLimiter, updateProjectWorkItem)
+    .delete(isProjectWorkspaceAuthenticated, writeLimiter, deleteProjectWorkItem);
 
 router.route("/:id/work-items")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectWorkItems)
-    .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, postProjectWorkItems);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectWorkItems)
+    .post(isProjectWorkspaceAuthenticated, writeLimiter, postProjectWorkItems);
 
 // Get available managers for project assignment
 router.route("/get-managers")
@@ -83,27 +86,27 @@ router.route("/get-managers")
 // Project leader routes - status update and daily updates
 // Update project status (only by project leader)
 router.route("/:id/update-status")
-    .put(isAdminOrManagerOrHRAuthenticated, writeLimiter, updateProjectStatus);
+    .put(isProjectWorkspaceAuthenticated, writeLimiter, updateProjectStatus);
 
 // Create daily project update (only by project leader)
 router.route("/:id/updates")
-    .post(isAdminOrManagerOrHRAuthenticated, writeLimiter, createProjectUpdate)
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectUpdates);
+    .post(isProjectWorkspaceAuthenticated, writeLimiter, createProjectUpdate)
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectUpdates);
 
 // Project Dashboard routes
 router.route("/dashboard")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectDashboard);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectDashboard);
 
 router.route("/dashboard/statistics")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectStatistics);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectStatistics);
 
 router.route("/dashboard/progress")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getProjectProgress);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getProjectProgress);
 
 router.route("/dashboard/team-performance")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getTeamPerformance);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getTeamPerformance);
 
 router.route("/dashboard/budget-analysis")
-    .get(isAdminOrManagerOrHRAuthenticated, projectLimiter, getBudgetAnalysis);
+    .get(isProjectWorkspaceAuthenticated, projectLimiter, getBudgetAnalysis);
 
 export default router;

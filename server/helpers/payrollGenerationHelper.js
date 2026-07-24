@@ -3,6 +3,7 @@ import Attendance from '../models/attendance.model.js';
 import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
+import Organization from '../models/organization.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import logger from './logger.js';
 import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
@@ -287,14 +288,15 @@ export function resolvePayrollServiceDateKeys({
 /**
  * Build dateKey → attendance credit from raw rows using org date keys only.
  */
-export function buildAttendanceCreditByDay(records, { dayKey, isWorkingDayKeyFn }) {
+export function buildAttendanceCreditByDay(records, { dayKey, isWorkingDayKeyFn, creditFn }) {
     const attByDay = new Map();
+    const resolvedCreditFn = typeof creditFn === 'function' ? creditFn : attendanceDayCredit;
     for (const r of records) {
         const key = resolveAttendanceRecordDateKey(r, dayKey);
         if (!key || (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key))) {
             continue;
         }
-        const c = attendanceDayCredit(r);
+        const c = resolvedCreditFn(r);
         attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
     }
     return attByDay;
@@ -380,6 +382,24 @@ export function attendanceDayCredit(record) {
     if (h <= 0) return 0;
     if (status === 'half-day') return Math.min(0.5, h / STANDARD_FULL_DAY_HOURS);
     if (status === 'present' || status === 'loggedout') return Math.min(1, h / STANDARD_FULL_DAY_HOURS);
+    return 0;
+}
+
+/**
+ * Day-based credit: punch-in + punch-out required; credit determined by hour thresholds.
+ * @param {object} record - Attendance record
+ * @param {number} minHoursForFullDay - Hours needed for full day credit
+ * @param {number} minHoursForHalfDay - Hours needed for half day credit
+ */
+export function attendanceDayCreditDayBased(record, minHoursForFullDay = 8, minHoursForHalfDay = 4) {
+    const status = (record.status || '').toLowerCase();
+    // Must have punched out (loggedout or half-day status); pure punch-in with no checkout = 0
+    if (status !== 'loggedout' && status !== 'present' && status !== 'half-day') return 0;
+    // Must have a checkOut timestamp
+    if (!record.checkOut) return 0;
+    const h = attendanceHoursWorked(record);
+    if (h >= minHoursForFullDay) return 1;
+    if (h >= minHoursForHalfDay) return 0.5;
     return 0;
 }
 
@@ -663,6 +683,16 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     const orgTimezone = await getCachedEffectiveTimezone(orgId);
     const dayKey = createDayKeyFn(orgTimezone);
 
+    // Fetch org payroll settings to determine calculation mode
+    const orgDoc = await Organization.findById(orgId).select('settings').lean();
+    const payrollSettings = orgDoc?.settings?.payrollSettings || {};
+    const calculationMode = payrollSettings.calculationMode || 'work_hours';
+    const minHoursForFullDay = Number(payrollSettings.minHoursForFullDay) || 8;
+    const minHoursForHalfDay = Number(payrollSettings.minHoursForHalfDay) || 4;
+    const creditFn = calculationMode === 'day_based'
+        ? (r) => attendanceDayCreditDayBased(r, minHoursForFullDay, minHoursForHalfDay)
+        : attendanceDayCredit;
+
     // Month bounds in org IANA timezone (never use server-local Date month-end — UTC→IST spills +1 day).
     const monthStartDt = DateTime.fromObject(
         { year: yearNum, month: monthIndex + 1, day: 1 },
@@ -765,7 +795,8 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
     const attByDay = buildAttendanceCreditByDay(attendanceRecords, {
         dayKey,
-        isWorkingDayKeyFn
+        isWorkingDayKeyFn,
+        creditFn
     });
 
     const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);

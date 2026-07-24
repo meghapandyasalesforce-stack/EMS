@@ -104,12 +104,12 @@ export const dashboardRoutes = [
   { path: '/dashboard/cto', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading CTO dashboard...', allowedRoles: ['admin', 'executive'] },
   { path: '/dashboard/cfo', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading CFO dashboard...', allowedRoles: ['admin', 'executive'] },
   { path: '/dashboard/vp', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading VP dashboard...', allowedRoles: ['admin', 'executive'] },
-  { path: '/dashboard/manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager', 'executive'] },
+  { path: '/dashboard/manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'] },
   { path: '/dashboard/employee', component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')), message: 'Loading employee dashboard...', allowedRoles: [] },
   { path: '/dashboard-admin', component: lazy(() => import('../Admin/DashboardAdmin')), message: 'Loading admin dashboard...', allowedRoles: ['admin'], requiredPermissions: ROUTE_PERMISSIONS.adminDashboard },
   { path: '/dashboard-employee', component: lazy(() => import('../Employee/Dashboard/DashboardEmployee')), message: 'Loading employee dashboard...', allowedRoles: [] },
   { path: '/dashboard-hr', component: lazy(() => import('../HR/Dashboard/DashboardHR')), message: 'Loading HR dashboard...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.hrDashboard },
-  { path: '/dashboard-manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.managerDashboard },
+  { path: '/dashboard-manager', component: lazy(() => import('../Manager/Dashboard/DashboardManager')), message: 'Loading manager dashboard...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.managerDashboard },
   { path: '/dashboard-finance', component: lazy(() => import('../Finance/Dashboard/DashboardFinance')), message: 'Loading finance dashboard...', allowedRoles: ['admin', 'finance', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.financeDashboard },
   { path: '/dashboard-administration', component: lazy(() => import('../Administration/Dashboard/DashboardAdministration')), message: 'Loading administration dashboard...', allowedRoles: ['admin', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.executiveDashboard }
 ];

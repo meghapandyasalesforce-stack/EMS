@@ -644,6 +644,27 @@ registerEvent({
   })
 });
 
+// Task Assigned (work-plan task / subtask)
+registerEvent({
+  type: 'work_item_assigned',
+  defaultTitle: 'Task assigned',
+  defaultType: 'task_assigned',
+  defaultPriority: 'high',
+  recipientResolver: async ({ assignee }) => (assignee?._id ? [assignee._id.toString()] : []),
+  messageBuilder: ({ workItem, project }) => {
+    const title = workItem?.title || 'a task';
+    const projectName = project?.name || 'a project';
+    return `You have been assigned to "${title}" on project "${projectName}".`;
+  },
+  metadataBuilder: ({ workItem, project }) => ({
+    workItemId: workItem?._id,
+    projectId: project?._id || workItem?.projectId,
+    projectName: project?.name,
+    taskTitle: workItem?.title,
+    eventType: 'work_item_assigned',
+  }),
+});
+
 // Task Completed
 registerEvent({
   type: 'task_completed',

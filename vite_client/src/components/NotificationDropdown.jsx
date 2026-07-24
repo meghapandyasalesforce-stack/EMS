@@ -286,6 +286,7 @@ const NotificationDropdown = () => {
     const getNotificationIcon = (type) => {
         switch (type) {
             case 'task_created':
+            case 'task_assigned':
             case 'task_updated':
             case 'task_completed':
                 return '📋';
@@ -307,6 +308,7 @@ const NotificationDropdown = () => {
             case 'task_completed':
                 return 'text-theme-primary';
             case 'task_created':
+            case 'task_assigned':
                 return 'text-theme-secondary';
             case 'task_updated':
                 return 'text-yellow-600';

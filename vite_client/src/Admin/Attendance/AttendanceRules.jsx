@@ -6,13 +6,15 @@ import GoogleMapsComponent from '../../utils/GoogleMaps';
 import LeavePolicyManagement from '../../HR/Leave/LeavePolicyManagement';
 import TimezoneSelect from '../../components/TimezoneSelect';
 import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
-import { fetchOrganizationProfile } from '../../context/organizationSlice';
+import { fetchOrganizationProfile, updateOrganizationSettings } from '../../context/organizationSlice';
 import { useDispatch, useSelector } from 'react-redux';
 import { DEFAULT_TIMEZONE } from '../../utils/timezoneOptions';
 
 const AttendanceRules = () => {
     const dispatch = useDispatch();
     const orgTimezone = useSelector((state) => state.organization.profile?.timezone) || DEFAULT_TIMEZONE;
+    const orgProfile = useSelector((state) => state.organization.profile);
+    const [allowNonWorkingDayPunch, setAllowNonWorkingDayPunch] = useState(false);
     const [formData, setFormData] = useState({
         timezone: orgTimezone,
         location: '',
@@ -56,6 +58,12 @@ const AttendanceRules = () => {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [hasAddress, setHasAddress] = useState(false);
+
+    useEffect(() => {
+        if (orgProfile?.settings) {
+            setAllowNonWorkingDayPunch(orgProfile.settings.allowNonWorkingDayPunch ?? false);
+        }
+    }, [orgProfile]);
 
     // Fetch current attendance rule on component mount
     useEffect(() => {
@@ -220,12 +228,12 @@ const AttendanceRules = () => {
             );
 
             if (response.data.success) {
+                await dispatch(updateOrganizationSettings({ allowNonWorkingDayPunch })).unwrap();
                 toast.success('Attendance rules saved successfully!');
                 dispatch(fetchOrganizationTimezone());
                 fetchAttendanceRule();
             }
         } catch (error) {
-            // Removed console.error for production
             toast.error(error.response?.data?.message || 'Failed to save attendance rules');
         } finally {
             setSaving(false);
@@ -768,6 +776,27 @@ const AttendanceRules = () => {
                                     <span
                                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
                                             formData.enablePenaltyRules ? 'translate-x-6' : 'translate-x-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* Allow Punch on Non-Working Days */}
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <h4 className="font-medium text-gray-900">Allow punch on non-working days</h4>
+                                    <p className="text-sm text-gray-600">When off, employees cannot punch in on weekends, configured off-days, or holidays. Turn on to allow overtime or emergency punches on those days.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllowNonWorkingDayPunch((prev) => !prev)}
+                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                                        allowNonWorkingDayPunch ? 'bg-theme-primary' : 'bg-gray-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                            allowNonWorkingDayPunch ? 'translate-x-6' : 'translate-x-1'
                                         }`}
                                     />
                                 </button>

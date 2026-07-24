@@ -7,6 +7,7 @@ export const SYSTEM_ROLE_IDS = Object.freeze({
   HR_MANAGER: 'hr_manager',
   PAYROLL_ADMIN: 'payroll_admin',
   LINE_MANAGER: 'line_manager',
+  PROJECT_MANAGER: 'project_manager',
   EXECUTIVE: 'executive',
 });
 
@@ -59,6 +60,15 @@ export const SYSTEM_ROLE_DEFINITIONS = Object.freeze({
     functionalRoles: ['manager'],
     platformRoles: ['employee'],
     primaryBucket: ROLE_BUCKETS.LINE_MANAGER,
+  },
+  [SYSTEM_ROLE_IDS.PROJECT_MANAGER]: {
+    label: 'Project Manager',
+    shortLabel: 'Project Manager',
+    description:
+      'Org-wide project admin: create and manage projects, assign any employee. Not a people manager (no team leave/attendance).',
+    functionalRoles: ['project_manager'],
+    platformRoles: ['employee'],
+    primaryBucket: ROLE_BUCKETS.PROJECT_MANAGER,
   },
   [SYSTEM_ROLE_IDS.EXECUTIVE]: {
     label: 'Executive',

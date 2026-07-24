@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import ProjectCard from './ProjectCard';
 import useGetAllProjects from '../../Hooks/useGetAllProjects';
 import { isManager, isHR } from '../../utils/managerHelper';
+import { canManageOrganizationProjects } from '../../utils/projectManagerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
 import {
   canViewProjectFinancials,
@@ -129,7 +130,13 @@ const ProjectsPageEnhanced = () => {
     const userObj = user || employee;
     const position = (userObj?.position || '').toLowerCase().trim();
     const isCEO = position === 'ceo' || position.includes('chief executive');
-    return isManager(userObj) || isHR(userObj) || isCEO || isExecutive(position);
+    return (
+      canManageOrganizationProjects(userObj) ||
+      isManager(userObj) ||
+      isHR(userObj) ||
+      isCEO ||
+      isExecutive(position)
+    );
   }, [user, employee]);
   
   const canViewFinancials = useMemo(

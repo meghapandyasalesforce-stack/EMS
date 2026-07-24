@@ -254,6 +254,7 @@ export const updateOrganizationSettings = async (req, res) => {
             tdsCalculationMode,
             allowWorkFromHome,
             allowNonWorkingDayPunch,
+            payrollSettings,
         } = req.body;
 
         const organization = await Organization.findById(organizationId);
@@ -324,6 +325,20 @@ export const updateOrganizationSettings = async (req, res) => {
         if (allowNonWorkingDayPunch !== undefined) {
             if (!organization.settings) organization.settings = {};
             organization.settings.allowNonWorkingDayPunch = !!allowNonWorkingDayPunch;
+        }
+        if (payrollSettings !== undefined && payrollSettings && typeof payrollSettings === 'object') {
+            if (!organization.settings) organization.settings = {};
+            if (!organization.settings.payrollSettings) organization.settings.payrollSettings = {};
+            const { calculationMode, minHoursForFullDay, minHoursForHalfDay } = payrollSettings;
+            if (calculationMode !== undefined) {
+                organization.settings.payrollSettings.calculationMode = calculationMode;
+            }
+            if (minHoursForFullDay !== undefined) {
+                organization.settings.payrollSettings.minHoursForFullDay = Number(minHoursForFullDay);
+            }
+            if (minHoursForHalfDay !== undefined) {
+                organization.settings.payrollSettings.minHoursForHalfDay = Number(minHoursForHalfDay);
+            }
         }
         if (timezone !== undefined) {
             if (!isValidTimezone(timezone)) {

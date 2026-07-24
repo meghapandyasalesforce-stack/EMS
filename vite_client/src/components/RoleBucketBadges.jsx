@@ -9,6 +9,7 @@ const DISPLAY_ORDER = [
   'payroll_admin',
   'executive',
   'line_manager',
+  'project_manager',
 ];
 
 const RoleBucketBadges = ({ className = '', max = 3 }) => {

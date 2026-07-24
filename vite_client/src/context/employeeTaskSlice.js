@@ -166,6 +166,28 @@ export const updateEmployeeWorkItem = (workItemId, projectId, payload) => async 
   }
 };
 
+export const addEmployeeWorkItemComment = (workItemId, projectId, text) => async (dispatch) => {
+  try {
+    await axios.post(
+      `${BOTH_TASK_ENDPOINT}/work-items/${workItemId}/comments`,
+      { text },
+      { withCredentials: true }
+    );
+    if (projectId) {
+      await dispatch(fetchEmployeeWorkPlan(projectId));
+    }
+    toast.success('Comment posted');
+    return { success: true };
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      'Failed to post comment';
+    toast.error(message);
+    return { success: false, error: message };
+  }
+};
+
 export const updateExistingTask = (taskId, updateData) => async (dispatch) => {
   try {
     dispatch(setLoading());
