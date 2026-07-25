@@ -12,6 +12,7 @@ const PayrollSettings = () => {
         calculationMode: 'work_hours',
         minHoursForFullDay: 8,
         minHoursForHalfDay: 4,
+        markHalfDayIfLate: false,
         tdsCalculationMode: 'cumulative',
     });
     const [isSaving, setIsSaving] = useState(false);
@@ -27,6 +28,7 @@ const PayrollSettings = () => {
                 calculationMode: ps.calculationMode || 'work_hours',
                 minHoursForFullDay: ps.minHoursForFullDay ?? 8,
                 minHoursForHalfDay: ps.minHoursForHalfDay ?? 4,
+                markHalfDayIfLate: !!ps.markHalfDayIfLate,
                 tdsCalculationMode: profile.settings.tdsCalculationMode === 'independent' ? 'independent' : 'cumulative',
             });
         } else {
@@ -53,6 +55,8 @@ const PayrollSettings = () => {
                     calculationMode: settings.calculationMode,
                     minHoursForFullDay: settings.minHoursForFullDay,
                     minHoursForHalfDay: settings.minHoursForHalfDay,
+                    markHalfDayIfLate:
+                        settings.calculationMode === 'day_based' ? !!settings.markHalfDayIfLate : false,
                 },
                 tdsCalculationMode: settings.tdsCalculationMode,
             })).unwrap();
@@ -188,6 +192,32 @@ const PayrollSettings = () => {
                                     Employee gets half day credit if they work at least this many hours (must be less than full day threshold)
                                 </p>
                             </div>
+                        </div>
+
+                        <div className="mt-5 rounded-lg border border-gray-200 p-3">
+                            <label className="flex cursor-pointer items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    checked={!!settings.markHalfDayIfLate}
+                                    onChange={(e) =>
+                                        setSettings((prev) => ({
+                                            ...prev,
+                                            markHalfDayIfLate: e.target.checked,
+                                        }))
+                                    }
+                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-theme-primary focus:ring-theme-primary"
+                                />
+                                <span>
+                                    <span className="block text-sm font-medium text-gray-800">
+                                        Mark half day if late
+                                    </span>
+                                    <span className="mt-1 block text-xs text-gray-500">
+                                        If an employee clocks in after office start + check-in grace (from Attendance Rules,
+                                        e.g. 10:00 + 30 min = after 10:30), the day is marked half day and payroll credit is
+                                        capped at 0.5. Only applies in Day Based mode.
+                                    </span>
+                                </span>
+                            </label>
                         </div>
                     </div>
                 )}

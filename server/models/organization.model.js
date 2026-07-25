@@ -429,6 +429,14 @@ const organizationSchema = new mongoose.Schema({
                 type: Number,
                 default: 4,
                 min: 0
+            },
+            /**
+             * Day-based only: if employee clocks in after office start + check-in grace,
+             * attendance is half-day and payroll credit is capped at 0.5.
+             */
+            markHalfDayIfLate: {
+                type: Boolean,
+                default: false
             }
         }
     },

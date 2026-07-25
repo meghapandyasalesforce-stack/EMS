@@ -387,20 +387,35 @@ export function attendanceDayCredit(record) {
 
 /**
  * Day-based credit: punch-in + punch-out required; credit determined by hour thresholds.
+ * When markHalfDayIfLate is on and the row is a late arrival, credit is capped at 0.5.
  * @param {object} record - Attendance record
  * @param {number} minHoursForFullDay - Hours needed for full day credit
  * @param {number} minHoursForHalfDay - Hours needed for half day credit
+ * @param {{ markHalfDayIfLate?: boolean }} [options]
  */
-export function attendanceDayCreditDayBased(record, minHoursForFullDay = 8, minHoursForHalfDay = 4) {
+export function attendanceDayCreditDayBased(
+    record,
+    minHoursForFullDay = 8,
+    minHoursForHalfDay = 4,
+    options = {}
+) {
     const status = (record.status || '').toLowerCase();
     // Must have punched out (loggedout or half-day status); pure punch-in with no checkout = 0
     if (status !== 'loggedout' && status !== 'present' && status !== 'half-day') return 0;
-    // Must have a checkOut timestamp
-    if (!record.checkOut) return 0;
+    // Attendance model uses clockOut (legacy alias checkOut supported)
+    if (!record.clockOut && !record.checkOut) return 0;
     const h = attendanceHoursWorked(record);
-    if (h >= minHoursForFullDay) return 1;
-    if (h >= minHoursForHalfDay) return 0.5;
-    return 0;
+    let credit = 0;
+    if (h >= minHoursForFullDay) credit = 1;
+    else if (h >= minHoursForHalfDay) credit = 0.5;
+
+    if (status === 'half-day') {
+        credit = Math.min(credit, 0.5);
+    }
+    if (options.markHalfDayIfLate && record.isLateArrival) {
+        credit = Math.min(credit, 0.5);
+    }
+    return credit;
 }
 
 /** Sum paid-day credits over org date keys in [walkStartKey, walkEndKey]. */
@@ -689,8 +704,12 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     const calculationMode = payrollSettings.calculationMode || 'work_hours';
     const minHoursForFullDay = Number(payrollSettings.minHoursForFullDay) || 8;
     const minHoursForHalfDay = Number(payrollSettings.minHoursForHalfDay) || 4;
+    const markHalfDayIfLate = !!payrollSettings.markHalfDayIfLate;
     const creditFn = calculationMode === 'day_based'
-        ? (r) => attendanceDayCreditDayBased(r, minHoursForFullDay, minHoursForHalfDay)
+        ? (r) =>
+              attendanceDayCreditDayBased(r, minHoursForFullDay, minHoursForHalfDay, {
+                  markHalfDayIfLate
+              })
         : attendanceDayCredit;
 
     // Month bounds in org IANA timezone (never use server-local Date month-end — UTC→IST spills +1 day).

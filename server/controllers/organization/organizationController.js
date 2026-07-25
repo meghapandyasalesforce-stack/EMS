@@ -329,7 +329,7 @@ export const updateOrganizationSettings = async (req, res) => {
         if (payrollSettings !== undefined && payrollSettings && typeof payrollSettings === 'object') {
             if (!organization.settings) organization.settings = {};
             if (!organization.settings.payrollSettings) organization.settings.payrollSettings = {};
-            const { calculationMode, minHoursForFullDay, minHoursForHalfDay } = payrollSettings;
+            const { calculationMode, minHoursForFullDay, minHoursForHalfDay, markHalfDayIfLate } = payrollSettings;
             if (calculationMode !== undefined) {
                 organization.settings.payrollSettings.calculationMode = calculationMode;
             }
@@ -338,6 +338,9 @@ export const updateOrganizationSettings = async (req, res) => {
             }
             if (minHoursForHalfDay !== undefined) {
                 organization.settings.payrollSettings.minHoursForHalfDay = Number(minHoursForHalfDay);
+            }
+            if (markHalfDayIfLate !== undefined) {
+                organization.settings.payrollSettings.markHalfDayIfLate = !!markHalfDayIfLate;
             }
         }
         if (timezone !== undefined) {
