@@ -184,7 +184,7 @@ export function normalizePolicyLeaveType(leaveType) {
             frequency,
             amount,
             maxAccrual,
-            anniversaryBased: Boolean(accrual.anniversaryBased),
+            anniversaryBased: Boolean(accrual.anniversaryBased) || method === 'on_anniversary',
             accrualDay: accrual.accrualDay,
         },
         maxDaysPerMonth,
@@ -257,12 +257,31 @@ export function validateLeaveTypeAccrual(leaveTypeConfig, leaveCycle = {}) {
     const displayName = leaveTypeConfig.displayName || leaveTypeConfig.type || 'Leave type';
     const annual = getAnnualEntitlementAmount(leaveTypeConfig);
     const monthly = getPolicyMonthlyAccrualAmount(leaveTypeConfig);
+    const method = String(leaveTypeConfig?.accrual?.method || 'fixed').toLowerCase();
 
     if (annual < 0) {
         errors.push(`${displayName}: Annual entitlement must be non-negative.`);
     }
     if (monthly < 0) {
         errors.push(`${displayName}: Monthly entitlement must be non-negative.`);
+    }
+
+    // Lump-sum methods grant from Amount (maxAccrual) — require a positive annual entitlement.
+    if (
+        (method === 'on_anniversary' || method === 'yearly' || method === 'proportional') &&
+        leaveTypeConfig.type !== 'loss_of_pay' &&
+        annual <= 0
+    ) {
+        errors.push(
+            `${displayName}: Amount (annual entitlement) is required for ${method.replace(/_/g, ' ')} accrual.`
+        );
+    }
+
+    // Fixed / monthly accrual needs a positive monthly rate when annual is configured.
+    if (usesMonthlyAccrual(leaveTypeConfig) && annual > 0 && monthly <= 0) {
+        errors.push(
+            `${displayName}: Monthly entitlement is required when using Fixed/Monthly accrual.`
+        );
     }
 
     if (usesMonthlyAccrual(leaveTypeConfig) && annual > 0 && monthly > 0) {

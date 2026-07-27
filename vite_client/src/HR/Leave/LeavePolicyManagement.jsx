@@ -38,12 +38,24 @@ const DEFAULT_LEAVE_TYPE = {
     },
 };
 
+/**
+ * Mirror server usesMonthlyAccrual: Fixed/Monthly (or frequency monthly) need days/month.
+ * On Anniversary / Yearly / Proportional grant from Amount only — monthly is optional.
+ */
+const needsMonthlyEntitlement = (leaveType) => {
+    if (leaveType?.enabled === false || leaveType?.type === 'loss_of_pay') return false;
+    const method = String(leaveType?.accrual?.method || 'fixed').toLowerCase();
+    const frequency = String(leaveType?.accrual?.frequency || 'yearly').toLowerCase();
+    return method === 'monthly' || method === 'fixed' || frequency === 'monthly';
+};
+
 /** Map API policy leave type → form fields (Amount = annual, Monthly entitlement = monthly rate). */
 const mapLeaveTypeToForm = (leaveType) => {
     if (!leaveType) return { ...DEFAULT_LEAVE_TYPE, uiAnnualAmount: 6, uiMonthlyEntitlement: 0.5 };
     const lt = JSON.parse(JSON.stringify(leaveType));
     lt.uiAnnualAmount = Number(lt.accrual?.maxAccrual) || 0;
-    lt.uiMonthlyEntitlement = Number(lt.accrual?.amount) || Number(lt.maxDaysPerMonth) || 0;
+    const monthly = Number(lt.accrual?.amount) || Number(lt.maxDaysPerMonth) || 0;
+    lt.uiMonthlyEntitlement = monthly > 0 ? monthly : needsMonthlyEntitlement(lt) ? '' : 0;
     return lt;
 };
 
@@ -51,16 +63,27 @@ const mapLeaveTypeToForm = (leaveType) => {
 const mapLeaveTypeToApi = (leaveType) => {
     const lt = JSON.parse(JSON.stringify(leaveType));
     const annual = Number(lt.uiAnnualAmount ?? lt.accrual?.maxAccrual) || 0;
-    const monthly = Number(lt.uiMonthlyEntitlement ?? lt.accrual?.amount) || 0;
+    const method = lt.accrual?.method || 'fixed';
+    const frequency = lt.accrual?.frequency || 'yearly';
+    const usesMonthly = needsMonthlyEntitlement({
+        ...lt,
+        accrual: { ...(lt.accrual || {}), method, frequency },
+    });
+    const rawMonthly = Number(lt.uiMonthlyEntitlement ?? lt.accrual?.amount);
+    const monthly = usesMonthly
+        ? (Number.isFinite(rawMonthly) && rawMonthly > 0 ? rawMonthly : 0)
+        : 0;
     delete lt.uiAnnualAmount;
     delete lt.uiMonthlyEntitlement;
 
     lt.accrual = {
         ...(lt.accrual || {}),
-        method: lt.accrual?.method || 'fixed',
-        frequency: lt.accrual?.frequency || 'yearly',
+        method,
+        frequency,
         maxAccrual: annual,
+        // Schema requires amount ≥ 0; lump-sum methods store 0 (grant uses maxAccrual).
         amount: monthly,
+        anniversaryBased: method === 'on_anniversary' || frequency === 'on_anniversary',
     };
     lt.maxDaysPerMonth = monthly > 0 ? monthly : null;
     return lt;
@@ -79,10 +102,24 @@ const mapFormToApi = (formData) => ({
 const monthlyEntitlementHelp = (leaveType) => {
     const annual = Number(leaveType.uiAnnualAmount ?? leaveType.accrual?.maxAccrual) || 0;
     const monthly = Number(leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount) || 0;
-    if (monthly <= 0) {
-        return 'Set monthly entitlement to define how many days accrue each month.';
+    const method = String(leaveType?.accrual?.method || 'fixed').toLowerCase();
+
+    if (!needsMonthlyEntitlement(leaveType)) {
+        if (method === 'on_anniversary') {
+            return `Full Amount (${annual || 0} day(s)) is granted on the employee’s join anniversary. Monthly entitlement is not used.`;
+        }
+        if (method === 'yearly') {
+            return `Full Amount (${annual || 0} day(s)) is granted at the start of the leave year (once employed). Monthly entitlement is not used.`;
+        }
+        if (method === 'proportional') {
+            return `Amount (${annual || 0} day(s)) is pro-rated by months of service. Monthly entitlement is not used.`;
+        }
+        return 'Monthly entitlement is not required for this accrual method.';
     }
-    return `Accrues ${monthly} day(s)/month (max ${annual}/year in balance). Unused months roll into available balance. Same value limits max days taken per calendar month.`;
+    if (monthly <= 0) {
+        return 'Required for Fixed/Monthly accrual. Defines how many days accrue each month.';
+    }
+    return `Accrues ${monthly} day(s)/month (max ${annual}/year in balance). Unused months roll into available balance.`;
 };
 
 const LeavePolicyManagement = () => {
@@ -240,8 +277,31 @@ const LeavePolicyManagement = () => {
         if (field === 'accrual.method' || field === 'accrual.frequency') {
             updated[index].uiAnnualAmount =
                 updated[index].uiAnnualAmount ?? updated[index].accrual?.maxAccrual ?? 0;
-            updated[index].uiMonthlyEntitlement =
-                updated[index].uiMonthlyEntitlement ?? updated[index].accrual?.amount ?? 0;
+            const next = updated[index];
+
+            // Lump-sum methods pair with yearly frequency so monthly entitlement stays optional.
+            if (field === 'accrual.method') {
+                const method = String(value || '').toLowerCase();
+                if (method === 'on_anniversary' || method === 'yearly' || method === 'proportional') {
+                    if (!next.accrual) next.accrual = {};
+                    next.accrual.frequency = 'yearly';
+                }
+                if (method === 'monthly') {
+                    if (!next.accrual) next.accrual = {};
+                    next.accrual.frequency = 'monthly';
+                }
+            }
+
+            if (needsMonthlyEntitlement(next)) {
+                const currentMonthly = Number(next.uiMonthlyEntitlement ?? next.accrual?.amount);
+                if (!Number.isFinite(currentMonthly) || currentMonthly <= 0) {
+                    const annual = Number(next.uiAnnualAmount ?? next.accrual?.maxAccrual) || 0;
+                    next.uiMonthlyEntitlement = annual > 0 ? annual / 12 : 0.5;
+                }
+            } else {
+                // Lump-sum methods: clear monthly so save is not blocked / not misinterpreted
+                next.uiMonthlyEntitlement = '';
+            }
         }
 
         setFormData({ ...formData, leaveTypes: updated });
@@ -483,17 +543,33 @@ const LeavePolicyManagement = () => {
                                         <div>
                                             <label className="block text-sm font-medium mb-1">
                                                 Monthly entitlement (days/month)
+                                                {needsMonthlyEntitlement(leaveType) ? ' *' : ''}
                                             </label>
                                             <input
                                                 type="number"
-                                                value={leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount ?? ''}
-                                                onChange={(e) =>
-                                                    updateLeaveType(index, 'uiMonthlyEntitlement', parseFloat(e.target.value))
+                                                value={
+                                                    leaveType.uiMonthlyEntitlement === '' ||
+                                                    leaveType.uiMonthlyEntitlement == null
+                                                        ? ''
+                                                        : leaveType.uiMonthlyEntitlement
                                                 }
+                                                onChange={(e) => {
+                                                    const raw = e.target.value;
+                                                    updateLeaveType(
+                                                        index,
+                                                        'uiMonthlyEntitlement',
+                                                        raw === '' ? '' : parseFloat(raw)
+                                                    );
+                                                }}
                                                 className="w-full border rounded px-3 py-2"
                                                 min="0"
                                                 step="0.5"
-                                                required
+                                                required={needsMonthlyEntitlement(leaveType)}
+                                                placeholder={
+                                                    needsMonthlyEntitlement(leaveType)
+                                                        ? 'e.g. 0.5'
+                                                        : 'Not required'
+                                                }
                                             />
                                             <p className="mt-1 text-[11px] text-gray-500">
                                                 {monthlyEntitlementHelp(leaveType)}

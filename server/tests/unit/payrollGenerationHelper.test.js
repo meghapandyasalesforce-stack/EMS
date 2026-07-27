@@ -92,6 +92,28 @@ describe('payrollGenerationHelper', () => {
             expect(attendanceDayCredit({ status: 'present', effectiveHours: 8 })).toBe(1);
         });
 
+        it('uses gross hours when both gross and effective are stored', () => {
+            expect(
+                attendanceDayCredit({
+                    status: 'present',
+                    effectiveHours: 8,
+                    grossHours: 9.65
+                })
+            ).toBe(1);
+            expect(
+                attendanceDayCreditDayBased(
+                    {
+                        status: 'loggedOut',
+                        clockOut: new Date(),
+                        effectiveHours: 8.78,
+                        grossHours: 9.65
+                    },
+                    9,
+                    4
+                )
+            ).toBe(1);
+        });
+
         it('caps half-day status at 0.5', () => {
             expect(attendanceDayCredit({ status: 'half-day', effectiveHours: 6 })).toBe(0.5);
         });

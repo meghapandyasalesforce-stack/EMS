@@ -364,17 +364,18 @@ function mapLeaveTypeForPayroll(leaveType) {
 /** Full-day standard for attendance weighting (aligned with overtime divisor in this module). */
 const STANDARD_FULL_DAY_HOURS = 8;
 
+/** Hours used for payroll attendance credit: gross (in-office) first, then effective fallback. */
 function attendanceHoursWorked(record) {
-    const eff = Number(record.effectiveHours);
     const gross = Number(record.grossHours);
-    if (Number.isFinite(eff) && eff > 0) return eff;
+    const eff = Number(record.effectiveHours);
     if (Number.isFinite(gross) && gross > 0) return gross;
+    if (Number.isFinite(eff) && eff > 0) return eff;
     return 0;
 }
 
 /**
- * Paid-day credit (0–1) from one attendance row using worked hours.
- * present/loggedOut with 0 effective and 0 gross hours → 0 (treat as no paid time).
+ * Paid-day credit (0–1) from one attendance row using worked hours (gross, else effective).
+ * present/loggedOut with 0 gross and 0 effective hours → 0 (treat as no paid time).
  */
 export function attendanceDayCredit(record) {
     const status = (record.status || '').toLowerCase();

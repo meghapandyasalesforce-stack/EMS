@@ -1144,6 +1144,14 @@ class LeaveBalanceEngine {
             return 0;
         }
 
+        // Yearly lump sum: full Amount once the employee is employed in the leave year.
+        if (accrual.method === 'yearly') {
+            if (entitlementAmount <= 0) return 0;
+            if (asOfDate < yearStart || joiningDate > yearEnd) return 0;
+            if (joiningDate > asOfDate) return 0;
+            return entitlementAmount;
+        }
+
         if (accrual.method === 'proportional') {
             const totalMonths = this.calculateMonthsWorked(
                 joiningDate,
