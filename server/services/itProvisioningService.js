@@ -8,11 +8,75 @@ import { getOrCreateLifecycleSettings, isFeatureEnabled, assertFeatureEnabled, a
 import { createItTicket, listItTicketingProviders } from './itTicketingAdapter.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
 import { notify } from '../helpers/notificationManager.js';
+import { getProvisioningTemplateForSystem, listProvisioningTemplates } from '../constants/accessProvisioningCatalog.js';
 
 async function loadOnboarding(organizationId, workflowId) {
     const wf = await OnboardingWorkflow.findOne({ _id: workflowId, organizationId, isTemplate: { $ne: true } });
     if (!wf) throw new Error('Onboarding workflow not found');
     return wf;
+}
+
+function actorName(actor) {
+    if (!actor) return 'HR Admin';
+    return [actor.name, actor.lastName].filter(Boolean).join(' ').trim() || actor.email || 'HR Admin';
+}
+
+function parseSoftwareNotes(notes) {
+    if (!notes) return { legacyNotes: '', timeline: [], details: {} };
+    const [jsonPart, ...textTail] = String(notes).split(' | ');
+    try {
+        const parsed = JSON.parse(jsonPart);
+        if (parsed && parsed.__accessProvisioning === true) {
+            return {
+                legacyNotes: parsed.legacyNotes || '',
+                details: parsed.details || {},
+                timeline: Array.isArray(parsed.timeline) ? parsed.timeline : [],
+                assignedByName: parsed.assignedByName || '',
+                assignedOn: parsed.assignedOn || null,
+                approvedDate: parsed.approvedDate || null,
+                systemNote: parsed.systemNote || textTail.join(' | ') || '',
+            };
+        }
+    } catch {
+        // fall through to legacy notes shape
+    }
+    return { legacyNotes: notes, timeline: [], details: {}, systemNote: '' };
+}
+
+function serializeSoftwareNotes(payload) {
+    return JSON.stringify({
+        __accessProvisioning: true,
+        legacyNotes: payload.legacyNotes || '',
+        details: payload.details || {},
+        timeline: payload.timeline || [],
+        assignedByName: payload.assignedByName || '',
+        assignedOn: payload.assignedOn || null,
+        approvedDate: payload.approvedDate || null,
+        systemNote: payload.systemNote || '',
+    });
+}
+
+function addProvisioningTimelineEntry(reqItem, type, label, actor, extra = {}) {
+    const payload = parseSoftwareNotes(reqItem.notes);
+    payload.timeline = payload.timeline || [];
+    payload.timeline.push({
+        type,
+        label,
+        at: new Date().toISOString(),
+        by: actorName(actor),
+        ...extra,
+    });
+    reqItem.notes = serializeSoftwareNotes(payload);
+    return payload;
+}
+
+function setProvisioningDetails(reqItem, details = {}, actor) {
+    const payload = parseSoftwareNotes(reqItem.notes);
+    payload.details = details;
+    payload.assignedByName = actorName(actor);
+    payload.assignedOn = new Date().toISOString();
+    reqItem.notes = serializeSoftwareNotes(payload);
+    return payload;
 }
 
 export function buildSoftwareInventoryDashboard(workflows = []) {
@@ -54,9 +118,27 @@ export async function addSoftwareRequest(workflow, { system, category, mandatory
         system,
         category: category || 'application',
         mandatory: Boolean(mandatory),
-        notes,
+        notes: serializeSoftwareNotes({
+            legacyNotes: notes || '',
+            details: {},
+            timeline: [{
+                type: 'requested',
+                label: 'Requested',
+                at: new Date().toISOString(),
+                by: actorName(actor),
+            }],
+        }),
         status: 'Pending',
         approvalStatus: 'Pending',
+    });
+    workflow.activityFeed = workflow.activityFeed || [];
+    workflow.activityFeed.unshift({
+        action: 'software_access_requested',
+        description: `Access requested: ${system}`,
+        actor: actor?._id,
+        actorName: actorName(actor),
+        metadata: { system, category },
+        createdAt: new Date(),
     });
 
     await logLifecycleAudit({
@@ -73,15 +155,41 @@ export async function addSoftwareRequest(workflow, { system, category, mandatory
     return workflow;
 }
 
-export async function approveSoftwareRequest(workflow, requestId, { approved = true, notes }, { actor, req } = {}) {
+export async function approveSoftwareRequest(workflow, requestId, { approved = true, notes, provisioningDetails }, { actor, req } = {}) {
     await assertFeatureEnabled(workflow.organizationId, 'softwareAccessRequest', 'Software access requests');
     const reqItem = workflow.softwareRequests?.id(requestId);
     if (!reqItem) throw new Error('Software request not found');
 
+    const normalizedDetails = provisioningDetails && typeof provisioningDetails === 'object'
+        ? provisioningDetails
+        : {};
+
     reqItem.approvalStatus = approved ? 'Approved' : 'Rejected';
     reqItem.status = approved ? 'Approved' : 'Rejected';
     reqItem.approvedBy = actor?._id;
-    if (notes) reqItem.notes = notes;
+    if (approved) {
+        setProvisioningDetails(reqItem, normalizedDetails, actor);
+        const payload = addProvisioningTimelineEntry(reqItem, 'reviewed', 'Reviewed', actor);
+        payload.approvedDate = new Date().toISOString();
+        payload.legacyNotes = notes || payload.legacyNotes || '';
+        payload.timeline.push({
+            type: 'approved',
+            label: 'Approved',
+            at: new Date().toISOString(),
+            by: actorName(actor),
+        });
+        reqItem.notes = serializeSoftwareNotes(payload);
+    } else {
+        const payload = addProvisioningTimelineEntry(reqItem, 'reviewed', 'Reviewed', actor);
+        payload.legacyNotes = notes || payload.legacyNotes || '';
+        payload.timeline.push({
+            type: 'rejected',
+            label: 'Rejected',
+            at: new Date().toISOString(),
+            by: actorName(actor),
+        });
+        reqItem.notes = serializeSoftwareNotes(payload);
+    }
 
     if (approved) {
         const settings = await getOrCreateLifecycleSettings(workflow.organizationId);
@@ -98,18 +206,33 @@ export async function approveSoftwareRequest(workflow, requestId, { approved = t
             reqItem.ticketId = ticket.ticketId;
             reqItem.ticketUrl = ticket.ticketUrl;
             reqItem.status = 'Ticket Created';
-            reqItem.notes = [reqItem.notes, ticket.message].filter(Boolean).join(' | ');
+            const payload = parseSoftwareNotes(reqItem.notes);
+            payload.systemNote = ticket.message || 'Ticket created for IT provisioning';
+            reqItem.notes = serializeSoftwareNotes(payload);
         } else {
             reqItem.status = 'Approved';
             reqItem.ticketId = ticket.ticketId || undefined;
             reqItem.ticketUrl = ticket.ticketUrl || undefined;
-            reqItem.notes = [
-                reqItem.notes,
-                ticket.message || 'Manual Processing Required',
-            ].filter(Boolean).join(' | ');
+            const payload = parseSoftwareNotes(reqItem.notes);
+            payload.systemNote = ticket.message || 'Manual Processing Required';
+            reqItem.notes = serializeSoftwareNotes(payload);
         }
         reqItem.provisionedAt = undefined;
     }
+
+    workflow.activityFeed = workflow.activityFeed || [];
+    workflow.activityFeed.unshift({
+        action: approved ? 'software_access_approved' : 'software_access_rejected',
+        description: `${approved ? 'Access approved' : 'Access rejected'}: ${reqItem.system}`,
+        actor: actor?._id,
+        actorName: actorName(actor),
+        metadata: {
+            system: reqItem.system,
+            status: reqItem.status,
+            provisioningDetails: approved ? normalizedDetails : undefined,
+        },
+        createdAt: new Date(),
+    });
 
     await logLifecycleAudit({
         action: approved ? 'Approve' : 'Reject', entityType: 'SoftwareRequest',
@@ -125,6 +248,17 @@ export async function markSoftwareProvisioned(workflow, requestId, { actor, req 
     if (!reqItem) throw new Error('Software request not found');
     reqItem.status = 'Provisioned';
     reqItem.provisionedAt = new Date();
+    const payload = addProvisioningTimelineEntry(reqItem, 'provisioned', 'Provisioned', actor);
+    reqItem.notes = serializeSoftwareNotes(payload);
+    workflow.activityFeed = workflow.activityFeed || [];
+    workflow.activityFeed.unshift({
+        action: 'software_access_provisioned',
+        description: `Access provisioned: ${reqItem.system}`,
+        actor: actor?._id,
+        actorName: actorName(actor),
+        metadata: { system: reqItem.system },
+        createdAt: new Date(),
+    });
     await logLifecycleAudit({ action: 'Update', entityType: 'SoftwareRequest', entityId: requestId, entityName: reqItem.system, actor, req });
     return reqItem;
 }
@@ -180,4 +314,12 @@ export async function requestDeviceReplacement(workflow, { reason, assetType = '
     return { ticket, workflow };
 }
 
-export { listItTicketingProviders, loadOnboarding };
+export function getAccessProvisioningCatalog() {
+    return listProvisioningTemplates();
+}
+
+export function getAccessProvisioningTemplate(system) {
+    return getProvisioningTemplateForSystem(system);
+}
+
+export { listItTicketingProviders, loadOnboarding, parseSoftwareNotes };

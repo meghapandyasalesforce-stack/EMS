@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BOTH_DOCUMENTS_ENDPOINT } from '../../utils/constant';
+import { BOTH_DOCUMENTS_ENDPOINT, BOTH_PROFILE_ENDPOINT } from '../../utils/constant';
 import { getCsrfToken } from '../../utils/authHelper';
+import axios from '../../utils/axios';
 
 const MARKSHEET_LEVELS = [
     { value: '10th', label: '10th' },
@@ -127,6 +128,16 @@ const JobDetails = () => {
     useEffect(() => {
         loadUploadedDocuments();
     }, [loadUploadedDocuments]);
+
+    // Clear one-time first-login redirect after the employee views Job Details
+    useEffect(() => {
+        axios
+            .post(`${BOTH_PROFILE_ENDPOINT}/ack-offer-letter-login-redirect`, {}, { withCredentials: true })
+            .then(() => {
+                sessionStorage.removeItem('redirectToOfferLetterOnLogin');
+            })
+            .catch(() => {});
+    }, []);
 
     const handleAdditionalInfoChange = (type, field, value) => {
         setAdditionalInfo((prev) => ({

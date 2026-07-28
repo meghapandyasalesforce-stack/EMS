@@ -132,8 +132,8 @@ export default function OnboardingActivityTab({
 
     return (
         <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="cm-card xl:col-span-2">
+            <div className="hrms-main-rail">
+                <div className="cm-card">
                     <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
                         <h2 className="cm-title-sm mb-0">Recent Activity</h2>
                         <div className="relative flex items-center gap-1">
@@ -252,34 +252,6 @@ export default function OnboardingActivityTab({
                         </div>
                     )}
 
-                    {isHr && (
-                        <div className="mt-8 border-t border-[rgba(187,202,193,0.45)] pt-6">
-                            <label className="cm-label mb-2 block">Internal Notes</label>
-                            <div className="flex flex-col gap-3 sm:flex-row">
-                                <input
-                                    className="cm-input flex-1"
-                                    value={newNote}
-                                    onChange={(e) => setNewNote(e.target.value)}
-                                    placeholder="Add a note for the team..."
-                                />
-                                <CmButton variant="primary" onClick={addNote}>Post</CmButton>
-                            </div>
-                            <div className="mt-4 space-y-2">
-                                {(wf.notes || []).map((n, i) => (
-                                    <div
-                                        key={n._id || i}
-                                        className="rounded-xl border border-[rgba(255,152,106,0.28)] bg-[rgba(255,219,205,0.45)] p-3 text-sm"
-                                    >
-                                        <p>{n.note}</p>
-                                        <p className="mt-1 text-xs text-[var(--cm-muted)]">
-                                            {n.addedBy?.name || 'HR'}
-                                            {n.addedAt ? ` · ${format(new Date(n.addedAt), 'MMM dd, yyyy')}` : ''}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 <aside className="flex flex-col gap-4">
@@ -292,7 +264,7 @@ export default function OnboardingActivityTab({
                         <div className="cm-progress cm-progress--lg" role="progressbar" aria-valuenow={progressPct}>
                             <div className="cm-progress__bar" style={{ width: `${progressPct}%` }} />
                         </div>
-                        <div className="mt-4 grid grid-cols-2 gap-3">
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="cm-activity-stat">
                                 <p className="cm-label mb-1">Tasks Done</p>
                                 <p className="text-2xl font-bold text-[var(--cm-on-surface)]">
@@ -338,6 +310,35 @@ export default function OnboardingActivityTab({
                             </ul>
                         )}
                     </div>
+
+                    {isHr && (
+                        <div className="cm-card">
+                            <label className="cm-label mb-2 block">Internal Notes</label>
+                            <div className="flex flex-col gap-3">
+                                <input
+                                    className="cm-input w-full"
+                                    value={newNote}
+                                    onChange={(e) => setNewNote(e.target.value)}
+                                    placeholder="Add a note for the team..."
+                                />
+                                <CmButton variant="primary" onClick={addNote}>Post</CmButton>
+                            </div>
+                            <div className="mt-4 space-y-2">
+                                {(wf.notes || []).map((n, i) => (
+                                    <div
+                                        key={n._id || i}
+                                        className="rounded-xl border border-[rgba(255,152,106,0.28)] bg-[rgba(255,219,205,0.45)] p-3 text-sm"
+                                    >
+                                        <p>{n.note}</p>
+                                        <p className="mt-1 text-xs text-[var(--cm-muted)]">
+                                            {n.addedBy?.name || 'HR'}
+                                            {n.addedAt ? ` · ${format(new Date(n.addedAt), 'MMM dd, yyyy')}` : ''}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </aside>
             </div>
         </div>

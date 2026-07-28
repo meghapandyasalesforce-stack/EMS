@@ -63,22 +63,20 @@ const findUserAndEmployee = async (normalizedEmail, organizationId) => {
 
   let [user, employee] = await Promise.all([
     User.findOne(emailFilter).select('+password'),
-    Employee.findOne(emailFilter).select('+password userId'),
+    Employee.findOne(emailFilter).select('+password'),
   ]);
 
   if (!user) {
     user = await User.findOne({ email: normalizedEmail }).select('+password');
   }
   if (!employee) {
-    employee = await Employee.findOne({ email: normalizedEmail }).select(
-      '+password userId'
-    );
+    employee = await Employee.findOne({ email: normalizedEmail }).select('+password');
   }
 
   const linkLookups = [];
   if (user?.employeeProfileId && !employee) {
     linkLookups.push(
-      Employee.findById(user.employeeProfileId).select('+password userId').then((e) => {
+      Employee.findById(user.employeeProfileId).select('+password').then((e) => {
         employee = e;
       })
     );
@@ -346,6 +344,52 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
       }
     : null;
 
+  const authContext = await resolveAuthContext(
+    {
+      role: session.jwtRole,
+      userId: session.jwtUserId,
+      employeeProfileId: session.employeeProfileId,
+      organizationId: orgId,
+      platformRoles,
+    },
+    { user: user || undefined, employee: employee || undefined }
+  );
+
+  const permissionFlags = {
+    isOrgOwner: authContext.isOrgOwner,
+    isHrManager: authContext.isHrManager,
+    isHrExecutive: authContext.isHrExecutive,
+    isPayrollAdmin: authContext.isPayrollAdmin,
+    isLineManager: authContext.isLineManager,
+    isProjectManager: authContext.isProjectManager,
+    isExecutive: authContext.isExecutive,
+    jwtRole: session.jwtRole,
+  };
+
+  const isOrganizationLogin = !!(
+    user &&
+    isOrgOwnerUser(user) &&
+    organizationPayload &&
+    (organizationPayload.email?.toLowerCase() === normalizedEmail ||
+      normalizedEmail.endsWith('@gmail.com'))
+  );
+
+  const hasCompletedFirstLogin = employee?.hasCompletedFirstLogin !== false;
+
+  // Plain employee session only — never admin / HR / manager / executive / org login.
+  const redirectToJobDetails =
+    employee?.hasCompletedFirstLogin === false &&
+    session.jwtRole === 'employee' &&
+    !user &&
+    !isOrganizationLogin &&
+    !permissionFlags.isOrgOwner &&
+    !permissionFlags.isHrManager &&
+    !permissionFlags.isHrExecutive &&
+    !permissionFlags.isLineManager &&
+    !permissionFlags.isProjectManager &&
+    !permissionFlags.isPayrollAdmin &&
+    !permissionFlags.isExecutive;
+
   const sanitizeEmployee = employee
     ? {
         id: employee._id,
@@ -362,34 +406,16 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
         mustResetPassword: employee.mustResetPassword,
         unifiedAuth: !!employee.userId,
         organizationId: employee.organizationId,
+        hasCompletedFirstLogin,
       }
     : null;
 
-  const authContext = await resolveAuthContext(
-    {
-      role: session.jwtRole,
-      userId: session.jwtUserId,
-      employeeProfileId: session.employeeProfileId,
-      organizationId: orgId,
-      platformRoles,
-    },
-    { user: user || undefined, employee: employee || undefined }
-  );
-
   return {
     ok: true,
+    redirectToJobDetails,
     permissions: authContext.permissions,
     roleBuckets: authContext.buckets,
-    permissionFlags: {
-      isOrgOwner: authContext.isOrgOwner,
-      isHrManager: authContext.isHrManager,
-      isHrExecutive: authContext.isHrExecutive,
-      isPayrollAdmin: authContext.isPayrollAdmin,
-      isLineManager: authContext.isLineManager,
-      isProjectManager: authContext.isProjectManager,
-      isExecutive: authContext.isExecutive,
-      jwtRole: session.jwtRole,
-    },
+    permissionFlags,
     dataScope: getDataScope(authContext),
     session: {
       jwtRole: session.jwtRole,
@@ -406,12 +432,6 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
     user: sanitizeUser,
     employee: sanitizeEmployee,
     timezoneContext,
-    isOrganizationLogin: !!(
-      user &&
-      isOrgOwnerUser(user) &&
-      organizationPayload &&
-      (organizationPayload.email?.toLowerCase() === normalizedEmail ||
-        normalizedEmail.endsWith('@gmail.com'))
-    ),
+    isOrganizationLogin,
   };
 };

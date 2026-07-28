@@ -240,7 +240,7 @@ const MyRegularizationRequests = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
-            <div className="w-full max-w-[1600px] mx-auto">
+            <div className="w-full">
                 <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6 min-w-0">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                         <div>

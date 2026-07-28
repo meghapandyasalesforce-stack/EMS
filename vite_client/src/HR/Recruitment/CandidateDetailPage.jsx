@@ -48,7 +48,7 @@ const CandidateDetailPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <div className="mx-auto w-full max-w-[1200px]">
+            <div className="w-full">
                 <button
                     type="button"
                     onClick={() => navigate('/recruitment')}

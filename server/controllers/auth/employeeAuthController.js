@@ -527,6 +527,7 @@ export const registerEmployee = async (req, res) => {
             salary,
             role: 'employee',
             mustResetPassword: mustResetPassword,
+            hasCompletedFirstLogin: linkedToExistingUser ? true : false,
             employeeId: employeeId, // Set the auto-generated ID
             status: 'active', // ✅ Explicitly set status to active
             active: true // ✅ Explicitly set active to true for new employees

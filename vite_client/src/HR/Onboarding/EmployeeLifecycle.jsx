@@ -6,7 +6,7 @@ import axios from '../../utils/axios';
 import OnboardingHub from './OnboardingHub';
 import OffboardingHub from '../Offboarding/OffboardingHub';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { canAccessLifecycleEnterprise } from '../../utils/managerHelper';
+import { canAccessLifecycleEnterprise, canAccessLifecycleEnterpriseHub } from '../../utils/managerHelper';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 
 // Heavy panels lazy-loaded so a crash in Configure/Enterprise/Reports cannot blank the whole Lifecycle route
@@ -28,14 +28,15 @@ const EmployeeLifecycle = () => {
 
     const userObj = user || employee;
     const canAccessEnterprise = canAccessLifecycleEnterprise(userObj, permissionFlags, permissions);
+    const canAccessEnterpriseHub = canAccessLifecycleEnterpriseHub(userObj, permissionFlags, employee);
 
     const lifecycle = searchParams.get('lifecycle') === 'offboarding' ? 'offboarding' : 'onboarding';
     const showConfiguration = searchParams.get('configure') === '1';
     const showReports = searchParams.get('reports') === '1';
     const enterpriseRequested = searchParams.get('enterprise') === '1';
-    const restrictedView = enterpriseRequested || showConfiguration || showReports;
-    const denyRestricted = restrictedView && !canAccessEnterprise;
-    const showEnterprise = canAccessEnterprise && enterpriseRequested && !showConfiguration && !showReports;
+    const denyRestricted = (enterpriseRequested && !canAccessEnterpriseHub)
+        || ((showConfiguration || showReports) && !canAccessEnterprise);
+    const showEnterprise = canAccessEnterpriseHub && enterpriseRequested && !showConfiguration && !showReports;
 
     // Hooks must run unconditionally (before any early return)
     useEffect(() => {
@@ -73,7 +74,7 @@ const EmployeeLifecycle = () => {
     };
 
     const openEnterprise = () => {
-        if (!canAccessEnterprise) return;
+        if (!canAccessEnterpriseHub) return;
         const next = new URLSearchParams(searchParams);
         next.set('enterprise', '1');
         next.delete('configure');
@@ -117,7 +118,7 @@ const EmployeeLifecycle = () => {
                 <LifecycleConfigurationPanel />
             </Suspense>
         );
-    } else if (showEnterprise && canAccessEnterprise) {
+    } else if (showEnterprise && canAccessEnterpriseHub) {
         body = (
             <Suspense fallback={<LoadingSpinner message="Loading enterprise command center..." />}>
                 <LifecycleEnterpriseHub />
@@ -211,7 +212,7 @@ const EmployeeLifecycle = () => {
                                     </div>
                                 )}
 
-                                {canAccessEnterprise && (
+                                {canAccessEnterpriseHub && (
                                     <>
                                         <button
                                             type="button"

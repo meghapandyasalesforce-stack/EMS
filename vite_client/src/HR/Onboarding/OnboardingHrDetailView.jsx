@@ -4,7 +4,7 @@ import {
     FaArrowLeft, FaCheckCircle, FaTasks, FaFileAlt, FaClock, FaLaptop,
     FaUser, FaHistory, FaChevronDown, FaChevronUp,
     FaCalendarAlt, FaIdBadge, FaUsers, FaMoneyCheckAlt, FaBoxOpen,
-    FaExternalLinkAlt, FaPlay, FaFlag, FaComment, FaEdit,
+    FaExternalLinkAlt, FaPlay, FaFlag, FaEdit,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { getProfilePhotoUrl } from '../../utils/axios';
@@ -18,6 +18,7 @@ import OnboardingVerificationTab from './OnboardingVerificationTab';
 import OnboardingTrainingTab from './OnboardingTrainingTab';
 import OnboardingActivityTab from './OnboardingActivityTab';
 import OnboardingAccessControl from './OnboardingAccessControl';
+import OnboardingOverviewSnapshot from './OnboardingOverviewSnapshot';
 
 const DETAIL_TABS_ALL = [
     { id: 'overview', label: 'Overview' },
@@ -285,6 +286,8 @@ export default function OnboardingHrDetailView({
     const documents = (wf.documents || []).slice(0, 8);
     const assets = wf.assets || [];
     const softwareRequests = wf.softwareRequests || [];
+    const showAssetsSection = isFeatureEnabled('itAssetProvisioning') && assets.length > 0;
+    const showAccessSection = isFeatureEnabled('softwareAccessRequest');
 
     const [activityVisibleCount, setActivityVisibleCount] = useState(ACTIVITY_INITIAL_VISIBLE);
 
@@ -300,17 +303,6 @@ export default function OnboardingHrDetailView({
         () => buildOverviewMilestones(wf, progressPct),
         [wf, progressPct],
     );
-
-    const keyContacts = useMemo(() => {
-        const rows = [];
-        const hr = contactPerson(wf.assignedHR);
-        if (hr) rows.push({ ...hr, role: 'HR Specialist' });
-        const mgr = contactPerson(wf.assignedManager);
-        if (mgr) rows.push({ ...mgr, role: 'Hiring Manager' });
-        const buddy = contactPerson(wf.assignedBuddy);
-        if (buddy) rows.push({ ...buddy, role: 'Onboarding Buddy' });
-        return rows;
-    }, [wf.assignedHR, wf.assignedManager, wf.assignedBuddy]);
 
     const docTotal = wf.documentSummary?.total ?? (wf.documents?.length || 0);
     const docVerified = wf.documentSummary?.verified
@@ -338,9 +330,9 @@ export default function OnboardingHrDetailView({
                 >
                     {task.status === 'Completed' ? <FaCheckCircle className="text-sm" /> : null}
                 </button>
-                <div className="min-w-0 flex-1">
+                <div className="cm-task-row__content min-w-0 flex-1">
                     <h4 className="font-semibold text-[var(--cm-on-surface)]">{task.title}</h4>
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
+                    <div className="cm-task-row__meta mt-1 flex flex-wrap items-center gap-3 text-[11px]">
                         <span className={taskPriorityClass(task.priority)}>{priorityLabel} PRIORITY</span>
                         {task.dueDate && (
                             <span className="text-[var(--cm-muted)]">
@@ -349,7 +341,7 @@ export default function OnboardingHrDetailView({
                         )}
                     </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+                <div className="cm-task-row__actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                     <span className={pill.className}>{pill.text}</span>
                     {task.status !== 'Completed' && canActOnTask(task) && (
                         <>
@@ -539,7 +531,7 @@ export default function OnboardingHrDetailView({
             <div className="cm-card cm-profile-summary">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                        <div className="relative shrink-0">
+                        <div className="relative inline-flex shrink-0 self-start">
                             {photoUrl ? (
                                 <img src={photoUrl} alt="" className="cm-profile-summary__photo" />
                             ) : (
@@ -678,8 +670,8 @@ export default function OnboardingHrDetailView({
             </nav>
 
             {detailTab === 'overview' && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <div className="cm-card lg:col-span-2">
+                <div className="hrms-main-rail">
+                    <div className="cm-card">
                         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
                             <h2 className="cm-title-sm">Onboarding Milestones</h2>
                             <span className="text-sm font-bold text-[var(--cm-primary-deep)]">
@@ -718,44 +710,12 @@ export default function OnboardingHrDetailView({
                     </div>
 
                     <div className="flex flex-col gap-4">
-                        <div className="cm-card">
-                            <h2 className="cm-title-sm mb-4">Key Contacts</h2>
-                            <ul className="space-y-4">
-                                {keyContacts.length === 0 && (
-                                    <li className="text-sm text-[var(--cm-muted)]">No contacts assigned yet.</li>
-                                )}
-                                {keyContacts.map((c) => (
-                                    <li key={`${c.role}-${c.name}`} className="flex items-center gap-3">
-                                        {c.photo ? (
-                                            <img src={c.photo} alt="" className="h-10 w-10 rounded-full object-cover" />
-                                        ) : (
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-surface-low)] text-xs font-bold text-[var(--cm-primary-deep)]">
-                                                {cmInitials(c.name)}
-                                            </div>
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate font-semibold text-[var(--cm-on-surface)]">{c.name}</p>
-                                            <p className="text-xs text-[var(--cm-muted)]">{c.role}</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="cm-icon-btn text-[var(--cm-primary-deep)]"
-                                            aria-label={`Message ${c.name}`}
-                                            onClick={() => toast.info(`Messaging ${c.name} will open from the employee profile.`)}
-                                        >
-                                            <FaComment />
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                            <CmButton
-                                variant="primary"
-                                className="mt-6 w-full"
-                                onClick={() => toast.info('Group message to onboarding contacts coming soon.')}
-                            >
-                                Send Group Message
-                            </CmButton>
-                        </div>
+                        <OnboardingOverviewSnapshot
+                            wf={wf}
+                            progressPct={progressPct}
+                            onDetailTabChange={onDetailTabChange}
+                            isFeatureEnabled={isFeatureEnabled}
+                        />
 
                         <div className="cm-card cm-doc-summary">
                             <div className="flex items-start justify-between gap-4">
@@ -790,8 +750,8 @@ export default function OnboardingHrDetailView({
                         {renderTaskAccordions()}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        {(isFeatureEnabled('itAssetProvisioning') && assets.length > 0) && (
+                    <div className={`grid grid-cols-1 gap-4 ${showAssetsSection && showAccessSection ? 'lg:grid-cols-2' : ''}`}>
+                        {showAssetsSection && (
                             <div className="cm-card">
                                 <h3 className="cm-title-sm mb-4 flex items-center gap-2 text-base">
                                     <FaBoxOpen className="text-[var(--cm-primary-deep)]" /> Hardware &amp; Assets
@@ -822,7 +782,7 @@ export default function OnboardingHrDetailView({
                                 </ul>
                             </div>
                         )}
-                        {isFeatureEnabled('softwareAccessRequest') && (
+                        {showAccessSection && (
                             <OnboardingAccessControl
                                 workflowId={wf._id}
                                 softwareRequests={softwareRequests}

@@ -39,7 +39,7 @@ const RecruitmentPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-3 sm:p-4 transition-all duration-300">
-            <div className="w-full max-w-[1600px] mx-auto">
+            <div className="w-full">
                 {/* Header */}
                 <div className="mb-6 flex justify-between items-center">
                     <div>

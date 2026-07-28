@@ -785,7 +785,7 @@ const DashboardHR = () => {
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
             <div className="page-shell">
-            <div className="page-shell-inner max-w-6xl">
+            <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
                 <header
                     className="rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur"

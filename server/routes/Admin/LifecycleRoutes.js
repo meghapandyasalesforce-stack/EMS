@@ -220,6 +220,7 @@ import {
     getEmployeeStatutoryDocs,
     getItInventoryDashboard,
     getItTicketingProviders,
+    getAccessProvisioningCatalogHandler,
     postSoftwareRequest,
     postApproveSoftwareRequest,
     postMarkSoftwareProvisioned,
@@ -251,6 +252,7 @@ import {
     patchLifecycleBranding,
 } from '../../controllers/lifecycle/lifecyclePhaseFController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { isAdminOnly } from '../../middlewares/createAuthMiddleware.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
 import { requireLifecycleFeature } from '../../middlewares/requireLifecycleFeature.js';
 
@@ -787,14 +789,15 @@ router.route('/statutory/bulk-generate').post(isAdminOrHROrExecutiveAuthenticate
 router.route('/statutory/generate').post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, postGenerateStatutoryDoc);
 router.route('/statutory/employee/:employeeId').get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getEmployeeStatutoryDocs);
 
-router.route('/it/inventory').get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getItInventoryDashboard);
-router.route('/it/ticketing-providers').get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getItTicketingProviders);
+router.route('/it/inventory').get(isAdminOnly, readLimiter, getItInventoryDashboard);
+router.route('/it/ticketing-providers').get(isAdminOnly, readLimiter, getItTicketingProviders);
+router.route('/it/access-provisioning-catalog').get(isAdminOnly, readLimiter, getAccessProvisioningCatalogHandler);
 router.route('/onboarding/:workflowId/software-requests')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature('softwareAccessRequest', 'Software access'), postSoftwareRequest);
+    .post(isAdminOnly, writeLimiter, requireLifecycleFeature('softwareAccessRequest', 'Software access'), postSoftwareRequest);
 router.route('/onboarding/:workflowId/software-requests/:requestId/approve')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature('softwareAccessRequest', 'Software access'), postApproveSoftwareRequest);
+    .post(isAdminOnly, writeLimiter, requireLifecycleFeature('softwareAccessRequest', 'Software access'), postApproveSoftwareRequest);
 router.route('/onboarding/:workflowId/software-requests/:requestId/provision')
-    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature('softwareAccessRequest', 'Software access'), postMarkSoftwareProvisioned);
+    .post(isAdminOnly, writeLimiter, requireLifecycleFeature('softwareAccessRequest', 'Software access'), postMarkSoftwareProvisioned);
 router.route('/onboarding/:workflowId/device-replacement')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, requireLifecycleFeature(['itAssetProvisioning', 'softwareAccessRequest'], 'IT provisioning'), postDeviceReplacement);
 

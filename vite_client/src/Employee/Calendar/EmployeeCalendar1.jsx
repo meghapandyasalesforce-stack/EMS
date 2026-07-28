@@ -133,7 +133,7 @@ const EmployeeCalendar = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
-      <div className="w-full max-w-[1600px] mx-auto space-y-5">
+      <div className="w-full space-y-5">
         {/* Error Display */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">

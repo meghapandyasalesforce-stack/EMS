@@ -20,6 +20,7 @@ import {
     addSoftwareRequest,
     approveSoftwareRequest,
     markSoftwareProvisioned,
+    getAccessProvisioningCatalog,
     requestDeviceReplacement,
     loadOnboarding,
     listItTicketingProviders,
@@ -206,6 +207,9 @@ export const getItInventoryDashboard = async (req, res) => {
 
 export const getItTicketingProviders = (_req, res) =>
     res.json({ success: true, data: listItTicketingProviders() });
+
+export const getAccessProvisioningCatalogHandler = (_req, res) =>
+    res.json({ success: true, data: getAccessProvisioningCatalog() });
 
 export const postSoftwareRequest = async (req, res) => {
     try {

@@ -225,7 +225,9 @@ export const canAccessLifecycleEnterprise = (user, permissionFlags = {}, permiss
 export const canAccessLifecycleEnterpriseHub = (user, permissionFlags = {}, employee = null) => {
     if (!user && !employee) return false;
 
-    if (permissionFlags.isOrgOwner) return true;
+    const userObj = user || employee;
+    const role = (userObj?.role || '').toLowerCase();
+    if (role === 'admin') return true;
 
     const platformRoles = Array.isArray(user?.roles) ? user.roles.map((r) => String(r).toLowerCase()) : [];
     if (platformRoles.includes('super_admin')) return true;

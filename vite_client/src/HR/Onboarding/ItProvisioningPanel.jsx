@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import {
     FaComments, FaEnvelope, FaExclamationTriangle, FaGithub, FaLaptop, FaProjectDiagram, FaSync, FaTicketAlt, FaWindows,
@@ -8,6 +9,7 @@ import axios from '../../utils/axios';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { CmBadge, CmButton, CmStat, CmEmpty, statusTone } from '../../components/corporateModern';
+import { canAccessLifecycleEnterpriseHub } from '../../utils/managerHelper';
 
 const KNOWN_SYSTEMS = [
     { key: 'laptop', label: 'Laptop Assigned', match: /laptop|device|macbook|hardware/i, icon: FaLaptop },
@@ -28,6 +30,10 @@ function findSystemRow(bySystem = [], matcher) {
  * UI-only; reuses /it/inventory, ticketing providers, software-request APIs.
  */
 const ItProvisioningPanel = ({ workflowId, softwareRequests: requestsProp = [], isHRView, onUpdated }) => {
+    const user = useSelector((state) => state.auth.user);
+    const employee = useSelector((state) => state.employeeDetails.employee);
+    const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
+    const canAccessEnterpriseHub = canAccessLifecycleEnterpriseHub(user || employee, permissionFlags, employee);
     const [loading, setLoading] = useState(!requestsProp?.length);
     const [requests, setRequests] = useState(requestsProp);
     const [inventory, setInventory] = useState(null);
@@ -42,7 +48,7 @@ const ItProvisioningPanel = ({ workflowId, softwareRequests: requestsProp = [], 
     }, [requestsProp]);
 
     const loadInventory = useCallback(async () => {
-        if (!isHRView || workflowId) {
+        if (!canAccessEnterpriseHub || !isHRView || workflowId) {
             setLoading(false);
             return;
         }
@@ -62,7 +68,7 @@ const ItProvisioningPanel = ({ workflowId, softwareRequests: requestsProp = [], 
         } finally {
             setLoading(false);
         }
-    }, [isHRView, workflowId]);
+    }, [canAccessEnterpriseHub, isHRView, workflowId]);
 
     useEffect(() => { loadInventory(); }, [loadInventory]);
 
@@ -144,6 +150,8 @@ const ItProvisioningPanel = ({ workflowId, softwareRequests: requestsProp = [], 
         const bySystem = inventory?.bySystem || [];
         return bySystem.filter((s) => !KNOWN_SYSTEMS.some((k) => k.match.test(String(s.system || ''))));
     }, [inventory]);
+
+    if (!canAccessEnterpriseHub) return null;
 
     if (loading && !workflowId) {
         return <LoadingSpinner message="Loading IT provisioning..." />;

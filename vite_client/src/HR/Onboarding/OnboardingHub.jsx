@@ -754,12 +754,12 @@ const OnboardingHub = () => {
                         )}
                         {isHRView && !wf && (
                             <p className="cm-subtitle mt-2 max-w-2xl sm:text-base">
-                                Plan and track every new hire&apos;s onboarding journey in one place.
+                                Plan and track every new hire&apos;s onboarding journey in one place
                             </p>
                         )}
                         {wf && isPersonalView && (
                             <p className="mt-2 text-sm leading-relaxed text-gray-500 sm:text-base">
-                                Welcome, {wf.employeeId?.name}! Track your joining progress below.
+                                Welcome, {wf.employeeId?.name}! Track your joining progress below
                             </p>
                         )}
                     </div>
@@ -864,87 +864,158 @@ const OnboardingHub = () => {
                                         placeholder="Search by employee name or email..."
                                     />
                                 </div>
-                                <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
-                                    {['all', ...WORKFLOW_STATUSES].map((status) => (
-                                        <button key={status} type="button" onClick={() => setStatusFilter(status)}
-                                            className={`cm-chip ${statusFilter === status ? 'cm-chip--active' : ''}`}>
-                                            {status === 'all' ? 'All' : status}
-                                        </button>
-                                    ))}
+                                <div className="hrms-chip-scroll">
+                                    <div className="hrms-chip-scroll-track" aria-label="Filter workflows by status">
+                                        {['all', ...WORKFLOW_STATUSES].map((status) => (
+                                            <div key={status} className="hrms-chip-scroll-item">
+                                                <button type="button" onClick={() => setStatusFilter(status)}
+                                                    className={`cm-chip ${statusFilter === status ? 'cm-chip--active' : ''}`}>
+                                                    {status === 'all' ? 'All' : status}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
                             {filteredWorkflows.length === 0 ? (
                                 <CmEmpty title="No workflows found">Create one to get started.</CmEmpty>
                             ) : (
-                                <div className="cm-table-wrap">
-                                    <table className="cm-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Candidate</th>
-                                                <th>Status</th>
-                                                <th>Progress</th>
-                                                <th>Banking</th>
-                                                <th>Verification</th>
-                                                <th>Actions</th>
-                                                <th>Join date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredWorkflows.map((w) => {
-                                                const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
-                                                const isSelected = selectedWorkflow?._id === w._id;
-                                                const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
-                                                const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
-                                                const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
-                                                const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
-                                                const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
-                                                const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
-                                                const bgvLabel = bgvTask ? (bgvTask.status === 'Completed' ? 'Completed' : bgvTask.status) : 'Pending';
-                                                return (
-                                                    <tr
-                                                        key={w._id}
-                                                        onClick={() => openWorkflow(w)}
-                                                        className={`cursor-pointer ${isSelected ? 'bg-[rgba(28,202,155,0.06)]' : ''}`}
-                                                    >
-                                                        <td>
-                                                            <CmPerson name={fullName} meta={w.employeeId?.jobTitle || w.employeeId?.department || ''} />
-                                                        </td>
-                                                        <td>
-                                                            <CmBadge tone={statusTone(w.status)}>{w.status}</CmBadge>
-                                                        </td>
-                                                        <td>
-                                                            <div className="flex items-center gap-3">
-                                                                <CmRing value={progress} size={36} attention={w.status === 'Overdue'} />
-                                                                <span className="text-xs text-[var(--cm-muted)]">
-                                                                    {w.tasks?.filter((task) => task.status === 'Completed').length || 0}/{w.tasks?.length || 0} tasks
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td>
+                                <>
+                                    <div className="space-y-3 sm:hidden">
+                                        {filteredWorkflows.map((w) => {
+                                            const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
+                                            const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
+                                            const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
+                                            const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
+                                            const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
+                                            const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
+                                            const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
+                                            const bgvLabel = bgvTask ? (bgvTask.status === 'Completed' ? 'Completed' : bgvTask.status) : 'Pending';
+                                            const completedCount = w.tasks?.filter((task) => task.status === 'Completed').length || 0;
+                                            const totalCount = w.tasks?.length || 0;
+                                            return (
+                                                <article
+                                                    key={w._id}
+                                                    onClick={() => openWorkflow(w)}
+                                                    className="rounded-2xl border border-[rgba(187,202,193,0.35)] bg-white p-4 shadow-sm"
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <CmPerson
+                                                            name={fullName}
+                                                            meta={w.employeeId?.jobTitle || w.employeeId?.department || ''}
+                                                        />
+                                                        <CmBadge tone={statusTone(w.status)} dot={false}>{w.status}</CmBadge>
+                                                    </div>
+                                                    <div className="mt-4 flex items-center gap-3">
+                                                        <CmRing value={progress} size={42} attention={w.status === 'Overdue'} />
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-semibold text-[var(--cm-on-surface)]">Progress</p>
+                                                            <p className="text-xs text-[var(--cm-muted)]">{completedCount}/{totalCount} tasks completed</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                                        <div>
+                                                            <p className="cm-label mb-1">Banking</p>
                                                             <CmBadge tone={bankTone}>{bankLabel}</CmBadge>
-                                                        </td>
-                                                        <td>
+                                                        </div>
+                                                        <div>
+                                                            <p className="cm-label mb-1">Verification</p>
                                                             <CmBadge tone={bgvTone}>{bgvLabel}</CmBadge>
-                                                        </td>
-                                                        <td onClick={(e) => e.stopPropagation()}>
-                                                            <button type="button"
-                                                                onClick={() => deleteWorkflow(w)}
-                                                                disabled={submitting}
-                                                                aria-label={`Delete ${w.employeeId?.name || 'employee'} workflow`}
-                                                                className="cm-link cm-link--attention">
-                                                                <FaTrash />
-                                                            </button>
-                                                        </td>
-                                                        <td className="text-sm">
-                                                            {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <p className="cm-label mb-1">Join date</p>
+                                                            <p className="text-sm text-[var(--cm-on-surface)]">
+                                                                {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-4 flex items-center justify-between gap-3">
+                                                        <CmButton variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openWorkflow(w); }}>
+                                                            View details
+                                                        </CmButton>
+                                                        <button type="button"
+                                                            onClick={(e) => { e.stopPropagation(); deleteWorkflow(w); }}
+                                                            disabled={submitting}
+                                                            aria-label={`Delete ${w.employeeId?.name || 'employee'} workflow`}
+                                                            className="cm-link cm-link--attention">
+                                                            <FaTrash />
+                                                        </button>
+                                                    </div>
+                                                </article>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="hidden sm:block cm-table-wrap">
+                                        <table className="cm-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Candidate</th>
+                                                    <th>Status</th>
+                                                    <th>Progress</th>
+                                                    <th>Banking</th>
+                                                    <th>Verification</th>
+                                                    <th>Actions</th>
+                                                    <th>Join date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredWorkflows.map((w) => {
+                                                    const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
+                                                    const isSelected = selectedWorkflow?._id === w._id;
+                                                    const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
+                                                    const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
+                                                    const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
+                                                    const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
+                                                    const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
+                                                    const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
+                                                    const bgvLabel = bgvTask ? (bgvTask.status === 'Completed' ? 'Completed' : bgvTask.status) : 'Pending';
+                                                    return (
+                                                        <tr
+                                                            key={w._id}
+                                                            onClick={() => openWorkflow(w)}
+                                                            className={`cursor-pointer ${isSelected ? 'bg-[rgba(28,202,155,0.06)]' : ''}`}
+                                                        >
+                                                            <td>
+                                                                <CmPerson name={fullName} meta={w.employeeId?.jobTitle || w.employeeId?.department || ''} />
+                                                            </td>
+                                                            <td>
+                                                                <CmBadge tone={statusTone(w.status)}>{w.status}</CmBadge>
+                                                            </td>
+                                                            <td>
+                                                                <div className="flex items-center gap-3">
+                                                                    <CmRing value={progress} size={36} attention={w.status === 'Overdue'} />
+                                                                    <span className="text-xs text-[var(--cm-muted)]">
+                                                                        {w.tasks?.filter((task) => task.status === 'Completed').length || 0}/{w.tasks?.length || 0} tasks
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <CmBadge tone={bankTone}>{bankLabel}</CmBadge>
+                                                            </td>
+                                                            <td>
+                                                                <CmBadge tone={bgvTone}>{bgvLabel}</CmBadge>
+                                                            </td>
+                                                            <td onClick={(e) => e.stopPropagation()}>
+                                                                <button type="button"
+                                                                    onClick={() => deleteWorkflow(w)}
+                                                                    disabled={submitting}
+                                                                    aria-label={`Delete ${w.employeeId?.name || 'employee'} workflow`}
+                                                                    className="cm-link cm-link--attention">
+                                                                    <FaTrash />
+                                                                </button>
+                                                            </td>
+                                                            <td className="text-sm">
+                                                                {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
                             )}
 
                             {filteredWorkflows.length > 0 && (
@@ -1100,7 +1171,7 @@ const OnboardingHub = () => {
                         filterByFeature={filterByFeature}
                         refreshWorkflow={refreshWorkflow}
                         updateWorkflowSchedule={updateWorkflowSchedule}
-                        isOnboardingEmployee={isOnboardingEmployee}
+                                isOnboardingEmployee={isOnboardingEmployee}
                         completeTraining={completeTraining}
                     />
                 )}

@@ -167,8 +167,8 @@ export default function OnboardingTrainingTab({
 
     return (
         <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="xl:col-span-2 space-y-3">
+            <div className="hrms-main-rail">
+                <div className="space-y-3">
                     <div className="flex flex-wrap items-end justify-between gap-2">
                         <h2 className="cm-title-sm mb-0">Mandatory Training</h2>
                         <span className="text-sm font-medium text-[var(--cm-muted)]">

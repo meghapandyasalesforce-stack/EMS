@@ -221,13 +221,13 @@
   min-width: 0;
   margin-left: auto;
   margin-right: auto;
-  padding: 0.75rem; /* 12px → scales to 16/24 */
+  padding: 1rem;
   box-sizing: border-box;
 }
 
 .page-shell-inner {
   width: 100%;
-  max-width: 1600px;
+  max-width: 100%;
   min-width: 0;
   margin-left: auto;
   margin-right: auto;
@@ -235,13 +235,20 @@
 
 @media (min-width: 640px) {
   .page-shell {
-    padding: 1rem;
+    padding: 1rem 1.25rem;
   }
 }
 
 @media (min-width: 1024px) {
   .page-shell {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .page-shell {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
   }
 }
 
@@ -423,11 +430,36 @@ html {
   text-size-adjust: 100%;
 }
 
-html,
+html {
+  height: 100%;
+}
+
 body,
 #root {
+  min-height: 100%;
   max-width: 100%;
   overflow-x: clip;
+}
+
+/*
+ * Authenticated app shell (App.jsx .app-shell): one viewport-tall column;
+ * .main-scroll-area is the sole primary vertical scroll container beside the fixed sidebar.
+ */
+.app-shell {
+  min-height: 0;
+}
+
+.app-main-column {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main-scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 img,
@@ -439,7 +471,6 @@ canvas {
 }
 
 /* Prevent flex/grid children from forcing page-wide horizontal scroll */
-.main-scroll-area,
 .main-scroll-area > * {
   min-width: 0;
 }
@@ -512,7 +543,7 @@ canvas {
     row-gap: 0.75rem;
   }
 
-  .main-scroll-area :where(h1, h2, h3, h4, p, label, td, th, span) {
+  .main-scroll-area :where(h1, h2, h3, h4, p, label) {
     overflow-wrap: anywhere;
   }
 
@@ -547,8 +578,11 @@ canvas {
     white-space: normal;
   }
 
-  /* Legacy tables without a responsive wrapper scroll locally instead of widening the page. */
-  .main-scroll-area table {
+  /*
+   * Legacy tables without .cm-table-wrap — do not target .cm-table (onboarding HR tables).
+   * Those scroll inside .cm-table-wrap; forcing display:block on the table breaks columns.
+   */
+  .main-scroll-area table:not(.cm-table) {
     display: block;
     width: 100%;
     max-width: 100%;
@@ -556,6 +590,24 @@ canvas {
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
+  }
+
+  .main-scroll-area .cm-table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .main-scroll-area .cm-table-wrap > .cm-table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
   }
 
   /* Tabs stay on one readable row and scroll only inside their own control. */
@@ -636,7 +688,7 @@ canvas {
 
 @media (max-width: 380px) {
   .page-shell {
-    padding: 0.5rem;
+    padding: 0.75rem;
   }
 
   .main-scroll-area :where(form, [role="dialog"]) .flex.justify-end > button {

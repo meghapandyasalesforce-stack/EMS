@@ -19,7 +19,8 @@ import {
     getEmployeeInfoByEmployee,
     getUpcomingBirthdays,
     sendBirthdayWishes,
-    updateLocationPermission
+    updateLocationPermission,
+    acknowledgeOfferLetterLoginRedirect
 } from "../../controllers/employee/profileDetailsController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
 import isAuthenticatedBoth from "../../middlewares/isAuthenticatedBoth.js";
@@ -52,6 +53,7 @@ router.route("/tax-declaration").get(isAuthenticated, getTaxDeclaration);
 router.route("/tax-declaration").put(isAuthenticated, updateTaxDeclaration);
 router.route("/admin/tax-declaration/:employeeId").get(isAdminOrManagerOrHRAuthenticated, getTaxDeclarationByAdmin);
 router.route("/update-location-permission").put(isAuthenticated, updateLocationPermission);
+router.route("/ack-offer-letter-login-redirect").post(isAuthenticated, acknowledgeOfferLetterLoginRedirect);
 router.route("/upcoming-birthdays").get(isAuthenticated, getUpcomingBirthdays);
 router.route("/send-birthday-wish").post(isAdminOrHROrExecutiveAuthenticated, sendBirthdayWishes);
 

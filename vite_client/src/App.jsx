@@ -90,7 +90,13 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen max-w-[100vw] overflow-x-clip bg-[var(--color-bg-soft)] text-[var(--color-text)]">
+        <div
+            className={
+                shouldHideLayout
+                    ? 'min-h-screen max-w-[100vw] overflow-x-clip bg-[var(--color-bg-soft)] text-[var(--color-text)]'
+                    : 'app-shell flex h-dvh max-w-[100vw] flex-col overflow-hidden bg-[var(--color-bg-soft)] text-[var(--color-text)]'
+            }
+        >
             {!shouldHideLayout && <Header />}
             <InstallPrompt />
             <ReleaseNotesPopup />
@@ -101,8 +107,8 @@ function App() {
                     </Routes>
                 </div>
             ) : (
-                <div className="flex min-h-[calc(100dvh-3.5rem)] max-w-[100vw] ml-0 overflow-x-clip lg:ml-64 lg:min-h-screen">
-                    <div className="main-scroll-area flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] safe-area-x">
+                <div className="app-main-column flex min-h-0 flex-1 flex-col overflow-hidden lg:ml-64">
+                    <div className="main-scroll-area min-h-0 flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] safe-area-x">
                         <ScrollToTop />
                         <Routes>
                             {renderRoutes(authRoutes)}

@@ -1168,6 +1168,36 @@ export const updateLocationPermission = async (req, res) => {
     }
 };
 
+/** Clears one-time Job Details redirect after the employee views that page. */
+export const acknowledgeOfferLetterLoginRedirect = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        if (!employeeId) {
+            return res.status(401).json({ message: 'Unauthorized. Please log in.' });
+        }
+
+        await Employee.findByIdAndUpdate(
+            employeeId,
+            { $set: { hasCompletedFirstLogin: true } },
+            { new: false }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Offer letter login redirect acknowledged',
+        });
+    } catch (error) {
+        logger.error('Error acknowledging offer letter login redirect', {
+            error: error.message,
+            stack: error.stack,
+        });
+        return res.status(500).json({
+            message: 'Failed to acknowledge offer letter login redirect',
+            error: error.message,
+        });
+    }
+};
+
 // Get upcoming birthdays (next 10 days)
 export const getUpcomingBirthdays = async (req, res) => {
     try {
