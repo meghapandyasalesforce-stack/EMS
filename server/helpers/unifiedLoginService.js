@@ -376,15 +376,12 @@ export const performUnifiedLogin = async ({ email, password, requestId }) => {
 
   const hasCompletedFirstLogin = employee?.hasCompletedFirstLogin !== false;
 
-  // Plain employee session only — never admin / HR / manager / executive / org login.
+  // First-login Job Details for new hires (incl. HR Manager / HR Executive). Never org admin login.
   const redirectToJobDetails =
     employee?.hasCompletedFirstLogin === false &&
     session.jwtRole === 'employee' &&
-    !user &&
     !isOrganizationLogin &&
     !permissionFlags.isOrgOwner &&
-    !permissionFlags.isHrManager &&
-    !permissionFlags.isHrExecutive &&
     !permissionFlags.isLineManager &&
     !permissionFlags.isProjectManager &&
     !permissionFlags.isPayrollAdmin &&
