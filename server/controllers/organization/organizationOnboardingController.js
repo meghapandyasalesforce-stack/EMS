@@ -211,9 +211,29 @@ export const completeOrganizationOnboarding = asyncHandler(async (req, res) => {
 
     await organization.save();
 
+    // Ensure enterprise lifecycle is ready for the org (idempotent)
+    if (!organization.lifecycleEnterpriseEnabled) {
+        try {
+            const { bootstrapEnterpriseLifecycle } = await import('../../services/lifecycleEnterpriseBootstrap.js');
+            await bootstrapEnterpriseLifecycle(organizationId, { actor: req.user || req.employee, req });
+            organization.lifecycleEnterpriseEnabled = true;
+            organization.lifecycleEnterpriseBootstrappedAt = new Date();
+            await organization.save();
+        } catch (error) {
+            logger.warn('Enterprise bootstrap on org onboarding complete failed', {
+                organizationId,
+                error: error.message,
+            });
+        }
+    }
+
     logger.info('Organization onboarding completed', { organizationId });
 
-    return sendSuccess(res, { onboarding: organization.setupOnboarding }, 'Organization onboarding completed');
+    return sendSuccess(res, {
+        onboarding: organization.setupOnboarding,
+        lifecycleEnterpriseEnabled: Boolean(organization.lifecycleEnterpriseEnabled),
+        redirectTo: '/onboarding?enterprise=1',
+    }, 'Organization onboarding completed');
 });
 
 export const getOrganizationOnboardingReview = asyncHandler(async (req, res) => {

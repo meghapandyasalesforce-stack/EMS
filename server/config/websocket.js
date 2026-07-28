@@ -68,22 +68,30 @@ export const initializeWebSocket = (httpServer) => {
       let organizationId = null;
 
       if (decoded.userId) {
-        // Admin/HR user
+        // Admin/HR user first; fall back to Employee when JWT userId is an employee id
         user = await User.findById(decoded.userId).select('_id name email role organizationId isActive');
         if (user) {
           userType = 'User';
           organizationId = user.organizationId;
+        } else {
+          user = await Employee.findById(decoded.userId).select('_id name email organizationId status active userId');
+          if (user && (user.status === 'active' || user.active !== false)) {
+            userType = 'Employee';
+            organizationId = user.organizationId;
+            user.isActive = true;
+          }
         }
       } else if (decoded.employeeId) {
         // Employee
-        user = await Employee.findById(decoded.employeeId).select('_id name email organizationId isActive');
-        if (user) {
+        user = await Employee.findById(decoded.employeeId).select('_id name email organizationId status active userId');
+        if (user && (user.status === 'active' || user.active !== false)) {
           userType = 'Employee';
           organizationId = user.organizationId;
+          user.isActive = true;
         }
       }
 
-      if (!user || !user.isActive) {
+      if (!user || user.isActive === false) {
         logger.warn('WebSocket connection rejected: Invalid or inactive user', {
           socketId: socket.id,
           userId: decoded.userId || decoded.employeeId
@@ -105,13 +113,29 @@ export const initializeWebSocket = (httpServer) => {
       socket.organizationId = organizationId.toString();
       socket.userRole = decoded.role || null;
       socket.userName = user.name || user.email;
+      socket.linkedIds = [socket.userId];
+
+      if (userType === 'User') {
+        const linkedEmployee = await Employee.findOne({ userId: user._id }).select('_id').lean();
+        if (linkedEmployee?._id) {
+          socket.linkedIds.push(linkedEmployee._id.toString());
+          socket.employeeProfileId = linkedEmployee._id.toString();
+        }
+      } else if (user.userId) {
+        socket.linkedIds.push(user.userId.toString());
+      }
+      if (decoded.employeeProfileId) {
+        socket.linkedIds.push(decoded.employeeProfileId.toString());
+      }
+      socket.linkedIds = [...new Set(socket.linkedIds)];
 
       logger.info('WebSocket connection authenticated', {
         socketId: socket.id,
         userId: socket.userId,
         userType: socket.userType,
         organizationId: socket.organizationId,
-        role: socket.userRole
+        role: socket.userRole,
+        linkedIds: socket.linkedIds,
       });
 
       next();
@@ -136,8 +160,10 @@ export const initializeWebSocket = (httpServer) => {
     // Join organization room for organization-wide broadcasts
     socket.join(`org:${socket.organizationId}`);
     
-    // Join user-specific room for personal notifications
-    socket.join(`user:${socket.userId}`);
+    // Join every identity room this session can receive (User + linked Employee)
+    (socket.linkedIds || [socket.userId]).forEach((id) => {
+      socket.join(`user:${id}`);
+    });
 
     // Join role-based rooms if applicable
     if (socket.userRole) {

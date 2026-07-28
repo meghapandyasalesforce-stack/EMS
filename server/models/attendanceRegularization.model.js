@@ -80,6 +80,11 @@ const attendanceRegularizationSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Attendance'
     },
+    // Root Message-ID for regularization email conversation threading (first outbound mail)
+    emailThreadMessageId: {
+        type: String,
+        default: null
+    },
     // Optional workflow instance when routed through Approval Workflows
     approvalInstanceId: {
         type: mongoose.Schema.Types.ObjectId,

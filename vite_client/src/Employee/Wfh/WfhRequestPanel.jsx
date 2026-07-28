@@ -19,13 +19,23 @@ const formatDate = (value) => {
   return dt.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 };
 
+const formatWfhDateRange = (from, to) => {
+  if (!from) return '--';
+  const fromStr = formatDate(from);
+  if (!to || new Date(to).toDateString() === new Date(from).toDateString()) {
+    return fromStr;
+  }
+  return `${fromStr} – ${formatDate(to)}`;
+};
+
 /**
  * Work From Home request panel (informational).
  * Submits a WFH intimation that emails the reporting manager, HR, and admin.
  * Completely independent from punch-in, leave, and regularization.
  */
 const WfhRequestPanel = () => {
-  const [wfhDate, setWfhDate] = useState(toDateInput(new Date()));
+  const [wfhDateFrom, setWfhDateFrom] = useState(toDateInput(new Date()));
+  const [wfhDateTo, setWfhDateTo] = useState(toDateInput(new Date()));
   const [reason, setReason] = useState('');
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -50,8 +60,16 @@ const WfhRequestPanel = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!wfhDate) {
-      toast.error('Please select the WFH date');
+    if (!wfhDateFrom) {
+      toast.error('Please select the WFH start date');
+      return;
+    }
+    if (!wfhDateTo) {
+      toast.error('Please select the WFH end date');
+      return;
+    }
+    if (new Date(wfhDateTo) < new Date(wfhDateFrom)) {
+      toast.error('End date cannot be before start date');
       return;
     }
     if (!reason.trim()) {
@@ -63,7 +81,7 @@ const WfhRequestPanel = () => {
       setSubmitting(true);
       const res = await axios.post(
         '/v1/both/wfh-requests',
-        { wfhDate, reason: reason.trim(), remarks: remarks.trim() },
+        { wfhDateFrom, wfhDateTo, reason: reason.trim(), remarks: remarks.trim() },
         { withCredentials: true }
       );
       toast.success(res.data?.message || 'Work From Home request submitted');
@@ -95,14 +113,33 @@ const WfhRequestPanel = () => {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-[#475569]" htmlFor="wfh-date">
-              WFH Date <span className="text-red-500">*</span>
+            <label className="mb-1 block text-xs font-semibold text-[#475569]" htmlFor="wfh-date-from">
+              From Date <span className="text-red-500">*</span>
             </label>
             <input
-              id="wfh-date"
+              id="wfh-date-from"
               type="date"
-              value={wfhDate}
-              onChange={(e) => setWfhDate(e.target.value)}
+              value={wfhDateFrom}
+              onChange={(e) => {
+                setWfhDateFrom(e.target.value);
+                if (wfhDateTo && e.target.value > wfhDateTo) {
+                  setWfhDateTo(e.target.value);
+                }
+              }}
+              className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-[#475569]" htmlFor="wfh-date-to">
+              To Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="wfh-date-to"
+              type="date"
+              value={wfhDateTo}
+              min={wfhDateFrom}
+              onChange={(e) => setWfhDateTo(e.target.value)}
               className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none"
               required
             />
@@ -119,7 +156,7 @@ const WfhRequestPanel = () => {
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             maxLength={500}
-            placeholder="Why do you plan to work from home on this date?"
+            placeholder="Why do you plan to work from home during this period?"
             className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#20C997] focus:outline-none"
             required
           />
@@ -168,7 +205,7 @@ const WfhRequestPanel = () => {
             <table className="min-w-full divide-y divide-[#E2E8F0] text-sm">
               <thead className="bg-[#F8FAFC]">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">WFH Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">WFH Period</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">Reason</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">Remarks</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#475569]">Submitted</th>
@@ -178,7 +215,7 @@ const WfhRequestPanel = () => {
               <tbody className="divide-y divide-[#E2E8F0] bg-white">
                 {requests.map((r) => (
                   <tr key={r._id}>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-[#0F172A]">{formatDate(r.wfhDate)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-[#0F172A]">{formatWfhDateRange(r.wfhDate, r.wfhDateTo)}</td>
                     <td className="max-w-[240px] px-4 py-3 text-[#334155]">{r.reason}</td>
                     <td className="max-w-[200px] px-4 py-3 text-[#64748B]">{r.remarks || '--'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-[#64748B]">

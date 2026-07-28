@@ -1,6 +1,12 @@
 import Employee from '../models/employee.model.js';
 import User from '../models/user.model.js';
+import AttendanceRegularization from '../models/attendanceRegularization.model.js';
 import logger from './logger.js';
+import {
+    persistThreadRootMessageId,
+    resolveStoredThreadRootMessageId,
+    THREAD_ROOT_REPLY_LOOKUP
+} from './emailThreadPersistenceHelper.js';
 
 /**
  * Get manager email and CC email addresses for attendance regularization notifications
@@ -156,8 +162,21 @@ export const sendRegularizationRequestNotification = async (regularizationData, 
             managerName: employee.manager || 'Manager'
         };
 
-        // Send email FROM kunalpareekn@gmail.com TO manager, CC HR and Admin
-        await sendRegularizationRequestEmail(enhancedRegularizationData, managerEmail, ccEmails);
+        const recordId = regularizationData._id || regularizationData.id;
+        const threadRootMessageId = await resolveStoredThreadRootMessageId(
+            AttendanceRegularization,
+            recordId,
+            regularizationData.emailThreadMessageId
+        );
+
+        const sendResult = await sendRegularizationRequestEmail(
+            enhancedRegularizationData,
+            managerEmail,
+            ccEmails,
+            { threadRootMessageId }
+        );
+
+        await persistThreadRootMessageId(AttendanceRegularization, recordId, sendResult?.threadRootMessageId);
         
         logger.info('Attendance regularization request notification sent successfully', {
             regularizationId: regularizationData._id || regularizationData.id,
@@ -202,7 +221,26 @@ export const sendRegularizationApprovalNotification = async (regularizationData,
             employeeName: `${employee.name} ${employee.lastName || ''}`
         };
 
-        await sendRegularizationApprovalEmail(enhancedRegularizationData, employee.email, ccEmails);
+        const recordId = regularizationData._id || regularizationData.id;
+        const threadRootMessageId = await resolveStoredThreadRootMessageId(
+            AttendanceRegularization,
+            recordId,
+            regularizationData.emailThreadMessageId,
+            THREAD_ROOT_REPLY_LOOKUP
+        );
+
+        if (!threadRootMessageId) {
+            logger.warn('Regularization thread root Message-ID not found before approval email', { recordId });
+        }
+
+        const sendResult = await sendRegularizationApprovalEmail(
+            enhancedRegularizationData,
+            employee.email,
+            ccEmails,
+            { threadRootMessageId }
+        );
+
+        await persistThreadRootMessageId(AttendanceRegularization, recordId, sendResult?.threadRootMessageId);
         
         logger.info('Attendance regularization approval notification sent successfully', {
             regularizationId: regularizationData._id || regularizationData.id,
@@ -247,7 +285,26 @@ export const sendRegularizationRejectionNotification = async (regularizationData
             employeeName: `${employee.name} ${employee.lastName || ''}`
         };
 
-        await sendRegularizationRejectionEmail(enhancedRegularizationData, employee.email, ccEmails);
+        const recordId = regularizationData._id || regularizationData.id;
+        const threadRootMessageId = await resolveStoredThreadRootMessageId(
+            AttendanceRegularization,
+            recordId,
+            regularizationData.emailThreadMessageId,
+            THREAD_ROOT_REPLY_LOOKUP
+        );
+
+        if (!threadRootMessageId) {
+            logger.warn('Regularization thread root Message-ID not found before rejection email', { recordId });
+        }
+
+        const sendResult = await sendRegularizationRejectionEmail(
+            enhancedRegularizationData,
+            employee.email,
+            ccEmails,
+            { threadRootMessageId }
+        );
+
+        await persistThreadRootMessageId(AttendanceRegularization, recordId, sendResult?.threadRootMessageId);
         
         logger.info('Attendance regularization rejection notification sent successfully', {
             regularizationId: regularizationData._id || regularizationData.id,

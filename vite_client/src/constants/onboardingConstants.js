@@ -4,7 +4,7 @@ export const ONBOARDING_DOCUMENT_TYPES = [
     { key: 'PASSPORT', label: 'Passport', required: false },
     { key: 'DEGREE', label: 'Degree Certificate', required: true },
     { key: 'EXPERIENCE', label: 'Experience Certificate', required: false },
-    { key: 'RESUME', label: 'Resume', required: true },
+    { key: 'RESUME', label: 'Resume', required: false },
     { key: 'OFFER_ACK', label: 'Offer Letter Acknowledgement', required: true },
     { key: 'PHOTO', label: 'Photograph', required: true },
     { key: 'BANK_DETAILS', label: 'Bank Details', required: true },
@@ -129,6 +129,14 @@ export function getTaskCompletionBlockers(workflow, task) {
     }
 
     const rules = resolveTaskCompletionRules(task);
+
+    for (const dependencyId of task.dependencies || []) {
+        const dependency = (workflow.tasks || []).find((candidate) =>
+            candidate._id?.toString() === dependencyId?.toString());
+        if (!dependency || dependency.status !== 'Completed') {
+            blockers.push(`Complete dependency: ${dependency?.title || 'required task'}`);
+        }
+    }
 
     for (const docType of rules.requiredDocuments) {
         const doc = getWorkflowDocument(workflow, docType);

@@ -86,7 +86,11 @@ const documentSchema = new mongoose.Schema({
         uploadedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Employee'
-        }
+        },
+        fileSize: Number,
+        mimeType: String,
+        comments: String,
+        rejectionReason: String,
     }],
     tags: [String],
     expiryDate: Date,
@@ -132,7 +136,54 @@ const documentSchema = new mongoose.Schema({
         type: String,
         enum: ['OFFER_LETTER', 'AADHAR_CARD', 'PAN_CARD', 'GUARANTOR_FORM', 'DEGREE_CERTIFICATE', 'OTHER'],
         required: false
-    }
+    },
+    /** Lifecycle document hub — links to LIFECYCLE_DOCUMENT_CATALOG */
+    catalogKey: {
+        type: String,
+        index: true,
+    },
+    hubCategory: {
+        type: String,
+        enum: ['Identity', 'Education', 'Experience', 'Address', 'Employment', 'Financial', 'Compliance', 'Medical', 'Assets', 'Custom', null],
+    },
+    verificationStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected', 'Expired', 'Renewal Pending'],
+        default: 'Pending',
+    },
+    verifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+    },
+    verifiedAt: Date,
+    verificationRemarks: String,
+    renewalReminderSentAt: Date,
+    expiryReminderSentAt: Date,
+    workflowAssignment: {
+        workflowId: { type: mongoose.Schema.Types.ObjectId },
+        workflowType: { type: String, enum: ['onboarding', 'offboarding', null] },
+        stageKey: String,
+        featureKey: String,
+        templateId: { type: mongoose.Schema.Types.ObjectId },
+        departments: [String],
+        employeeTypes: [String],
+    },
+    verificationHistory: [{
+        status: String,
+        verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+        verifiedAt: { type: Date, default: Date.now },
+        remarks: String,
+        comments: String,
+    }],
+    /** OCR-ready metadata — provider integration deferred to future phase */
+    ocrMetadata: {
+        provider: { type: String, enum: ['google_vision', 'azure_ocr', 'aws_textract', 'manual', null], default: null },
+        status: { type: String, enum: ['pending', 'processed', 'failed', 'skipped', null], default: null },
+        jobId: String,
+        processedAt: Date,
+        extractedFields: mongoose.Schema.Types.Mixed,
+        confidence: Number,
+    },
 }, {
     timestamps: true
 });
@@ -189,6 +240,10 @@ const documentRequestSchema = new mongoose.Schema({
 documentSchema.index({ organizationId: 1, category: 1 });
 documentSchema.index({ organizationId: 1, relatedTo: 1, relatedId: 1 });
 documentSchema.index({ organizationId: 1, expiryDate: 1 });
+documentSchema.index({ organizationId: 1, catalogKey: 1 });
+documentSchema.index({ organizationId: 1, hubCategory: 1 });
+documentSchema.index({ organizationId: 1, verificationStatus: 1 });
+documentSchema.index({ organizationId: 1, 'workflowAssignment.stageKey': 1 });
 documentRequestSchema.index({ organizationId: 1, requestedBy: 1, status: 1 });
 documentRequestSchema.index({ organizationId: 1, status: 1 });
 

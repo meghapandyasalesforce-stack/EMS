@@ -86,7 +86,7 @@ const MyOnboardingPage = () => {
 
     const completedTasks = workflow.tasks?.filter(t => t.status === 'Completed').length || 0;
     const totalTasks = workflow.tasks?.length || 0;
-    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const progress = Number(workflow.progress) || 0;
 
     const getStatusColor = (status) => {
         switch (status) {

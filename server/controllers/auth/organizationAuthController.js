@@ -235,6 +235,25 @@ export const registerOrganization = asyncHandler(async (req, res) => {
             organizationId: organization._id 
         });
 
+        // Enable enterprise lifecycle for the new org (org-level, not employee-dependent)
+        try {
+            const { bootstrapEnterpriseLifecycle } = await import('../../services/lifecycleEnterpriseBootstrap.js');
+            const { seedDefaultLifecycleForms } = await import('../../services/lifecycleDefaultFormsService.js');
+            await seedDefaultLifecycleForms(organization._id, { actor: adminUser }).catch(() => {});
+            await bootstrapEnterpriseLifecycle(organization._id, { actor: adminUser, req });
+            organization.lifecycleEnterpriseEnabled = true;
+            organization.lifecycleEnterpriseBootstrappedAt = new Date();
+            await organization.save();
+            logger.info('Enterprise lifecycle bootstrapped for new organization', {
+                organizationId: organization._id,
+            });
+        } catch (bootstrapError) {
+            logger.warn('Enterprise lifecycle bootstrap deferred after registration', {
+                organizationId: organization._id,
+                error: bootstrapError.message,
+            });
+        }
+
         // Send welcome email
         try {
             const baseUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
@@ -261,7 +280,8 @@ export const registerOrganization = asyncHandler(async (req, res) => {
             organization: {
                 id: organization._id,
                 name: organization.name,
-                email: organization.email
+                email: organization.email,
+                lifecycleEnterpriseEnabled: Boolean(organization.lifecycleEnterpriseEnabled),
             },
             user: {
                 id: adminUser._id,

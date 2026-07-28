@@ -862,6 +862,7 @@ const LeaveAttendanceHub = () => {
                 {leaveBalanceError ? (
                   <p className="rounded-lg bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">{leaveBalanceError}</p>
                 ) : (
+                  <>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {leaveTypeCards.length === 0 ? (
                       <p className="col-span-full rounded-lg bg-[#F8FAFC] p-3 text-sm text-[#64748B]">No leave balance data available.</p>
@@ -919,6 +920,7 @@ const LeaveAttendanceHub = () => {
                       </div>
                     </div>
                   )}
+                  </>
                 )}
               </div>
 

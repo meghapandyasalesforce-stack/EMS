@@ -1,29 +1,37 @@
 /** Default employee onboarding template — used when auto-creating workflows */
 
 export const ONBOARDING_DOCUMENT_TYPES = [
-    { key: 'AADHAAR', label: 'Aadhaar Card', required: true },
-    { key: 'PAN', label: 'PAN Card', required: true },
-    { key: 'PASSPORT', label: 'Passport', required: false },
-    { key: 'DEGREE', label: 'Degree Certificate', required: true },
-    { key: 'EXPERIENCE', label: 'Experience Certificate', required: false },
-    { key: 'RESUME', label: 'Resume', required: true },
-    { key: 'OFFER_ACK', label: 'Offer Letter Acknowledgement', required: true },
-    { key: 'PHOTO', label: 'Photograph', required: true },
-    { key: 'BANK_DETAILS', label: 'Bank Details', required: true },
-    { key: 'OTHER', label: 'Other Document', required: false },
+    { key: 'AADHAAR', label: 'Aadhaar Card', required: true, featureKey: 'compliance.india.aadhaar' },
+    { key: 'PAN', label: 'PAN Card', required: true, featureKey: 'compliance.india.pan' },
+    { key: 'PASSPORT', label: 'Passport', required: false, featureKey: 'documentCollection' },
+    { key: 'DEGREE', label: 'Degree Certificate', required: true, featureKey: 'documentCollection' },
+    { key: 'EXPERIENCE', label: 'Experience Certificate', required: false, featureKey: 'documentCollection' },
+    { key: 'RESUME', label: 'Resume', required: false, featureKey: 'documentCollection' },
+    { key: 'OFFER_ACK', label: 'Offer Letter Acknowledgement', required: true, featureKey: 'offerLetter' },
+    { key: 'PHOTO', label: 'Photograph', required: true, featureKey: 'documentCollection' },
+    { key: 'BANK_DETAILS', label: 'Bank Details', required: true, featureKey: 'bankDetails' },
+    { key: 'OTHER', label: 'Other Document', required: false, featureKey: 'documentCollection' },
+];
+
+export const DEFAULT_ONBOARDING_STAGES = [
+    { key: 'pre_boarding', name: 'Pre-Boarding', order: 0, mandatory: true, featureKey: 'preBoarding', dueDaysFromStart: 0 },
+    { key: 'documentation', name: 'Documentation', order: 1, mandatory: true, featureKey: 'documentCollection', dueDaysFromStart: 7 },
+    { key: 'it_setup', name: 'IT Setup', order: 2, mandatory: true, featureKey: 'itAssetProvisioning', dueDaysFromStart: 1 },
+    { key: 'hr_setup', name: 'HR Setup', order: 3, mandatory: true, featureKey: 'payrollSetup', dueDaysFromStart: 7 },
+    { key: 'induction', name: 'Induction', order: 4, mandatory: true, featureKey: 'induction', dueDaysFromStart: 7 },
 ];
 
 export const DEFAULT_ONBOARDING_CHECKLIST = [
-    { item: 'Accept Offer Letter', category: 'HR', mandatory: true, phase: 'Day 1' },
-    { item: 'Sign NDA', category: 'HR', mandatory: true, phase: 'Day 1' },
-    { item: 'Read Company Policies', category: 'HR', mandatory: true, phase: 'Week 1' },
-    { item: 'Complete HR Forms', category: 'HR', mandatory: true, phase: 'Week 1' },
-    { item: 'Laptop Received', category: 'IT', mandatory: true, phase: 'Day 1' },
-    { item: 'Email Activated', category: 'IT', mandatory: true, phase: 'Day 1' },
-    { item: 'Payroll Added', category: 'Payroll', mandatory: true, phase: 'Week 1' },
-    { item: 'ID Card Collected', category: 'HR', mandatory: false, phase: 'Week 2' },
-    { item: 'Manager Induction Complete', category: 'Manager', mandatory: true, phase: 'Week 1' },
-    { item: 'Buddy Welcome Meeting', category: 'Buddy', mandatory: false, phase: 'Day 1' },
+    { item: 'Accept Offer Letter', category: 'HR', mandatory: true, phase: 'Day 1', featureKey: 'offerAcceptance', order: 1 },
+    { item: 'Sign NDA', category: 'HR', mandatory: true, phase: 'Day 1', featureKey: 'eSignature', order: 2 },
+    { item: 'Read Company Policies', category: 'HR', mandatory: true, phase: 'Week 1', featureKey: 'induction', order: 3 },
+    { item: 'Complete HR Forms', category: 'HR', mandatory: true, phase: 'Week 1', featureKey: 'digitalForms', order: 4 },
+    { item: 'Laptop Received', category: 'IT', mandatory: true, phase: 'Day 1', featureKey: 'itAssetProvisioning', order: 5 },
+    { item: 'Email Activated', category: 'IT', mandatory: true, phase: 'Day 1', featureKey: 'softwareAccessRequest', order: 6 },
+    { item: 'Payroll Added', category: 'Payroll', mandatory: true, phase: 'Week 1', featureKey: 'payrollSetup', order: 7 },
+    { item: 'ID Card Collected', category: 'HR', mandatory: false, phase: 'Week 2', featureKey: 'employeeIdGeneration', order: 8 },
+    { item: 'Manager Induction Complete', category: 'Manager', mandatory: true, phase: 'Week 1', featureKey: 'induction', order: 9 },
+    { item: 'Buddy Welcome Meeting', category: 'Buddy', mandatory: false, phase: 'Day 1', featureKey: 'buddyProgram', order: 10 },
 ];
 
 export const DEFAULT_ONBOARDING_TASKS = [
@@ -35,6 +43,9 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'High',
         dueDaysFromStart: 3,
         phase: 'Week 1',
+        stageKey: 'documentation',
+        featureKey: 'documentCollection',
+        order: 1,
         requiredDocuments: ['AADHAAR', 'PAN', 'PHOTO'],
     },
     {
@@ -45,6 +56,9 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'High',
         dueDaysFromStart: 5,
         phase: 'Week 1',
+        stageKey: 'documentation',
+        featureKey: 'bankDetails',
+        order: 2,
         requiredDocuments: ['BANK_DETAILS'],
     },
     {
@@ -55,16 +69,10 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'High',
         dueDaysFromStart: 7,
         phase: 'Week 1',
+        stageKey: 'documentation',
+        featureKey: 'documentApproval',
+        order: 3,
         requiresAllMandatoryDocsVerified: true,
-    },
-    {
-        title: 'Setup email and system access',
-        description: 'Create email account and grant required system access.',
-        category: 'IT Setup',
-        assigneeRole: 'it',
-        priority: 'High',
-        dueDaysFromStart: 2,
-        phase: 'Day 1',
     },
     {
         title: 'Assign laptop and equipment',
@@ -74,6 +82,9 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'Medium',
         dueDaysFromStart: 1,
         phase: 'Day 1',
+        stageKey: 'it_setup',
+        featureKey: 'itAssetProvisioning',
+        order: 4,
     },
     {
         title: 'Add employee to payroll',
@@ -83,6 +94,9 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'High',
         dueDaysFromStart: 7,
         phase: 'Week 1',
+        stageKey: 'hr_setup',
+        featureKey: 'payrollSetup',
+        order: 5,
     },
     {
         title: 'Manager induction session',
@@ -92,6 +106,9 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'Medium',
         dueDaysFromStart: 5,
         phase: 'Week 1',
+        stageKey: 'induction',
+        featureKey: 'induction',
+        order: 6,
     },
     {
         title: 'Buddy welcome meeting',
@@ -101,25 +118,10 @@ export const DEFAULT_ONBOARDING_TASKS = [
         priority: 'Medium',
         dueDaysFromStart: 3,
         phase: 'Day 1',
+        stageKey: 'induction',
+        featureKey: 'buddyProgram',
+        order: 7,
     },
-    {
-        title: 'Complete compliance training',
-        description: 'Finish mandatory company policy and compliance modules.',
-        category: 'Training',
-        assigneeRole: 'employee',
-        priority: 'Medium',
-        dueDaysFromStart: 14,
-        phase: 'Week 2',
-    },
-    // {
-    //     title: '30-day review meeting',
-    //     description: 'Schedule onboarding review with HR and manager.',
-    //     category: 'Orientation',
-    //     assigneeRole: 'hr',
-    //     priority: 'Low',
-    //     dueDaysFromStart: 30,
-    //     phase: 'Month 1',
-    // },
 ];
 
 export const ONBOARDING_TIMELINE_PHASES = ['Day 0', 'Day 1', 'Week 1', 'Week 2', 'Week 3', 'Month 1'];
@@ -129,7 +131,7 @@ export const ONBOARDING_TIMELINE_ROADMAP = [
     { phase: 'Day 0', title: 'Offer Accepted', description: 'Offer letter signed and joining confirmed' },
     { phase: 'Day 1', title: 'Joining Day', description: 'Welcome, ID setup, laptop, email access' },
     { phase: 'Week 1', title: 'Documentation', description: 'Identity docs, bank details, HR forms' },
-    { phase: 'Week 2', title: 'Training', description: 'Compliance, policies, role training' },
+    // { phase: 'Week 2', title: 'Training', description: 'Compliance, policies, role training' },
     { phase: 'Week 3', title: 'Evaluation', description: 'Manager check-in, buddy feedback' },
     { phase: 'Month 1', title: 'Review', description: '30-day onboarding review meeting' },
 ];
@@ -139,15 +141,15 @@ export const WORKFLOW_STATUSES = [
 ];
 
 export const DEFAULT_ASSET_TYPES = [
-    { assetType: 'Laptop', name: 'Laptop', mandatory: true },
-    { assetType: 'Mouse', name: 'Mouse', mandatory: false },
-    { assetType: 'Keyboard', name: 'Keyboard', mandatory: false },
-    { assetType: 'Monitor', name: 'Monitor', mandatory: false },
-    { assetType: 'ID Card', name: 'ID Card', mandatory: true },
-    { assetType: 'Access Card', name: 'Access Card', mandatory: true },
-    { assetType: 'SIM', name: 'SIM Card', mandatory: false },
-    { assetType: 'Locker', name: 'Locker', mandatory: false },
-    { assetType: 'Headphones', name: 'Headphones', mandatory: false },
+    { assetType: 'Laptop', name: 'Laptop', mandatory: true, featureKey: 'itAssetProvisioning', order: 1 },
+    { assetType: 'Mouse', name: 'Mouse', mandatory: false, featureKey: 'itAssetProvisioning', order: 2 },
+    { assetType: 'Keyboard', name: 'Keyboard', mandatory: false, featureKey: 'itAssetProvisioning', order: 3 },
+    { assetType: 'Monitor', name: 'Monitor', mandatory: false, featureKey: 'itAssetProvisioning', order: 4 },
+    { assetType: 'ID Card', name: 'ID Card', mandatory: true, featureKey: 'employeeIdGeneration', order: 5 },
+    { assetType: 'Access Card', name: 'Access Card', mandatory: true, featureKey: 'softwareAccessRequest', order: 6 },
+    { assetType: 'SIM', name: 'SIM Card', mandatory: false, featureKey: 'itAssetProvisioning', order: 7 },
+    { assetType: 'Locker', name: 'Locker', mandatory: false, featureKey: 'itAssetProvisioning', order: 8 },
+    { assetType: 'Headphones', name: 'Headphones', mandatory: false, featureKey: 'itAssetProvisioning', order: 9 },
 ];
 
 export const ASSET_STATUSES = ['Pending', 'Assigned', 'Returned', 'Lost', 'Damaged'];
@@ -180,11 +182,11 @@ export const DEFAULT_TRAINING_MODULES = [
 ];
 
 export const DEFAULT_POLICY_SIGNATURES = [
-    { documentType: 'OFFER_LETTER', title: 'Offer Letter', mandatory: true },
-    { documentType: 'NDA', title: 'Non-Disclosure Agreement', mandatory: true },
-    { documentType: 'COMPANY_POLICIES', title: 'Company Policies', mandatory: true },
-    { documentType: 'CODE_OF_CONDUCT', title: 'Code of Conduct', mandatory: true },
-    { documentType: 'SECURITY_POLICY', title: 'Security Policy', mandatory: true },
+    { documentType: 'OFFER_LETTER', title: 'Offer Letter', mandatory: true, featureKey: 'offerLetter' },
+    { documentType: 'NDA', title: 'Non-Disclosure Agreement', mandatory: true, featureKey: 'eSignature' },
+    { documentType: 'COMPANY_POLICIES', title: 'Company Policies', mandatory: true, featureKey: 'induction' },
+    { documentType: 'CODE_OF_CONDUCT', title: 'Code of Conduct', mandatory: true, featureKey: 'induction' },
+    { documentType: 'SECURITY_POLICY', title: 'Security Policy', mandatory: true, featureKey: 'mandatoryTraining' },
 ];
 
 export const TASK_GROUPS_BY_ROLE = [

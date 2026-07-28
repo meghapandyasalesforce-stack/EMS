@@ -506,8 +506,7 @@ const Header = () => {
             {/* Spacer for mobile header height (+ notch safe area) */}
             {isMobile && (
                 <div
-                    className="shrink-0"
-                    style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+                    className="mobile-header-spacer shrink-0"
                     aria-hidden="true"
                 />
             )}

@@ -1,5 +1,11 @@
 import Employee from '../models/employee.model.js';
+import Leave from '../models/leave.model.js';
 import logger from './logger.js';
+import {
+    persistThreadRootMessageId,
+    resolveStoredThreadRootMessageId,
+    THREAD_ROOT_REPLY_LOOKUP
+} from './emailThreadPersistenceHelper.js';
 
 /**
  * Get manager email and CC email addresses for leave notifications
@@ -145,8 +151,23 @@ export const sendLeaveRequestNotification = async (leaveData, employeeId, organi
             managerName: employee.manager || 'Manager'
         };
 
+        const recordId = leaveData._id || leaveData.id;
+        const threadRootMessageId = await resolveStoredThreadRootMessageId(
+            Leave,
+            recordId,
+            leaveData.emailThreadMessageId
+        );
+
         // Send email appearing FROM employee TO manager, CC HR and Admin
-        await sendLeaveRequestEmail(enhancedLeaveData, managerEmail, ccEmails, employee.email);
+        const sendResult = await sendLeaveRequestEmail(
+            enhancedLeaveData,
+            managerEmail,
+            ccEmails,
+            employee.email,
+            { threadRootMessageId }
+        );
+
+        await persistThreadRootMessageId(Leave, recordId, sendResult?.threadRootMessageId);
         
         logger.info('Leave request notification sent successfully', {
             leaveId: leaveData._id || leaveData.id,
@@ -191,7 +212,26 @@ export const sendLeaveApprovalNotification = async (leaveData, employeeId) => {
             employeeId: employee.employeeId
         };
 
-        await sendLeaveApprovalEmail(enhancedLeaveData, employee.email, ccEmails);
+        const recordId = leaveData._id || leaveData.id;
+        const threadRootMessageId = await resolveStoredThreadRootMessageId(
+            Leave,
+            recordId,
+            leaveData.emailThreadMessageId,
+            THREAD_ROOT_REPLY_LOOKUP
+        );
+
+        if (!threadRootMessageId) {
+            logger.warn('Leave thread root Message-ID not found before approval email', { recordId });
+        }
+
+        const sendResult = await sendLeaveApprovalEmail(
+            enhancedLeaveData,
+            employee.email,
+            ccEmails,
+            { threadRootMessageId }
+        );
+
+        await persistThreadRootMessageId(Leave, recordId, sendResult?.threadRootMessageId);
         
         logger.info('Leave approval notification sent successfully', {
             leaveId: leaveData._id || leaveData.id,
@@ -235,7 +275,26 @@ export const sendLeaveRejectionNotification = async (leaveData, employeeId) => {
             employeeId: employee.employeeId
         };
 
-        await sendLeaveRejectionEmail(enhancedLeaveData, employee.email, ccEmails);
+        const recordId = leaveData._id || leaveData.id;
+        const threadRootMessageId = await resolveStoredThreadRootMessageId(
+            Leave,
+            recordId,
+            leaveData.emailThreadMessageId,
+            THREAD_ROOT_REPLY_LOOKUP
+        );
+
+        if (!threadRootMessageId) {
+            logger.warn('Leave thread root Message-ID not found before rejection email', { recordId });
+        }
+
+        const sendResult = await sendLeaveRejectionEmail(
+            enhancedLeaveData,
+            employee.email,
+            ccEmails,
+            { threadRootMessageId }
+        );
+
+        await persistThreadRootMessageId(Leave, recordId, sendResult?.threadRootMessageId);
         
         logger.info('Leave rejection notification sent successfully', {
             leaveId: leaveData._id || leaveData.id,

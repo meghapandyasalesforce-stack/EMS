@@ -700,6 +700,9 @@ const updateEntityStatus = async (instance) => {
                     });
                 }
             }
+        } else if (['Offer', 'Onboarding', 'Offboarding', 'Clearance', 'ExitInterview', 'FnF', 'AssetReturn', 'LifecycleForm', 'LifecycleLetter'].includes(instance.entityType)) {
+            const { handleLifecycleApprovalOutcome } = await import('./lifecycleApprovalService.js');
+            await handleLifecycleApprovalOutcome(instance);
         }
         // Add other entity types (Document, etc.) as needed
     } catch (error) {

@@ -67,6 +67,15 @@ const organizationSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    /** Set true when enterprise lifecycle is bootstrapped at org registration */
+    lifecycleEnterpriseEnabled: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    lifecycleEnterpriseBootstrappedAt: {
+        type: Date,
+    },
     // Email verification
     emailVerified: {
         type: Boolean,

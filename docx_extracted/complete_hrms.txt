@@ -1,0 +1,982 @@
+COMPLETE HRMS FUNCTIONALITY ANALYSIS
+Enterprise MERN Stack HRMS — Functional Analysis Report
+Generated: 20 July 2026  |  Scope: Full codebase scan (server + vite_client)
+Audience: CTO, Product Manager, Business Analyst, Project Documentation
+1. Executive Brief
+This report documents business functionalities actually implemented in the EMS HRMS codebase. Findings are cross-checked across React frontend routes/pages, Express REST APIs, and MongoDB models. Code quality, security, and performance are out of scope. Status markers: ✅ Implemented (end-to-end wired), ⚠️ Partially Implemented (backend and/or UI incomplete or orphaned), ❌ Not Implemented (not present as a product feature).
+Stack: React.js (Vite) + Node.js/Express.js + MongoDB + REST APIs
+Authentication: JWT (httpOnly cookie + Bearer), refresh tokens, CSRF cookie, RBAC permissions
+Backend models scanned: 48 model files / 50+ collections
+Backend route files scanned: 71 route files
+Frontend routes scanned: ~112 path definitions
+2. Module-by-Module Analysis
+2.1 Authentication & Identity
+Purpose: Secure multi-actor login for organizations, admin/HR users, and employees with JWT session management, password recovery, and email verification.
+Status: ✅ Implemented
+Related Pages / Routes
+/, /login — Login
+/register — Register (conditional)
+/organization/register — Organization registration
+/organization/login — Organization login
+/forgot-password — Forgot password
+/reset-password/:token — Reset password
+Related APIs
+POST /api/v1/organization/auth/register|login
+GET /api/v1/organization/auth/check-email|verify-email
+POST /api/v1/organization/auth/resend-verification
+POST /api/v1/admin/auth/register|login|logout|refresh-token
+POST /api/v1/employee/auth/register|login|logout|refresh-token
+PATCH /api/v1/employee/auth/reset-password
+POST /api/v1/both/auth/login
+GET /api/v1/both/auth/permissions
+POST /api/v1/both/password/forgot-password
+POST /api/v1/both/password/reset-password/:token
+Related Database Collections
+users
+employees
+organizations
+User Roles
+Public
+Admin
+HR
+Manager
+Employee
+Finance
+Executive
+Functionalities
+2.2 Dashboard
+Purpose: Role-specific landing dashboards aggregating KPIs, tasks, attendance, leave, and payroll summaries for each portal.
+Status: ✅ Implemented
+Related Pages / Routes
+/dashboard — Role-based router
+/dashboard-admin — Admin dashboard
+/dashboard-hr — HR dashboard
+/dashboard-finance — Finance dashboard
+/dashboard-manager — Manager dashboard
+/dashboard-employee — Employee dashboard
+/dashboard-administration — Executive/Admin dashboard
+/dashboard/tech — Tech dashboard
+/dashboard/ceo|cto|cfo|vp — Executive role dashboards
+Related APIs
+GET /api/v1/organization/dashboard/*
+GET /api/v1/admin/analytics/*
+GET /api/v1/admin/executive/*
+Various leave/attendance/payroll summary endpoints used by dashboards
+Related Database Collections
+organizations
+employees
+attendances
+leaves
+payrolls
+notifications
+projects
+User Roles
+Admin
+HR
+Manager
+Employee
+Finance
+Executive
+Tech
+Functionalities
+2.3 Employee Management
+Purpose: Create, list, view, and manage employee master records including work info, lifecycle status, and detailed profile sections.
+Status: ✅ Implemented
+Related Pages / Routes
+/employees — Employee list
+/employees/:employeeId — Employee details (tabs)
+/add, /add-employee — Add employee
+/view-profile — View profile
+/profile-details and related profile paths — Self-service profile hub
+Related APIs
+GET /api/v1/admin/employee/
+GET /api/v1/admin/employee/managers|job-titles
+PUT|GET /api/v1/admin/employee/:id/work-info
+GET /api/v1/admin/employee/:id/stats
+POST /api/v1/admin/employee/:id/promote-hr-manager
+GET /api/v1/employee/ | /me
+PATCH /api/v1/both/profile-details/admin/update-status|terminate/:employeeId
+Profile section CRUD under /api/v1/both/profile-details/*
+Profile photo under /api/v1/both/profile-photo/*
+Related Database Collections
+employees
+User Roles
+Admin
+HR
+Manager
+Executive
+Employee (self)
+Functionalities
+2.4 User Management & Roles / Permissions
+Purpose: Manage custom roles, platform/system roles, hierarchy, and permission assignments for RBAC.
+Status: ✅ Implemented
+Related Pages / Routes
+/role-hierarchy — Role hierarchy
+/admin/platform-roles — Users & platform roles
+/admin-settings — Settings hub (Permissions tab is placeholder)
+Related APIs
+CRUD /api/v1/admin/roles/*
+/api/v1/admin/platform-roles/* (catalog, roster, system-role, functional-roles)
+Related Database Collections
+roles
+users
+employees
+User Roles
+Admin
+HR
+Functionalities
+2.5 Organization Management
+Purpose: Multi-tenant organization profile, branding, locale, business info, settings, subscription plan, and org setup wizard.
+Status: ✅ Implemented
+Related Pages / Routes
+/organization/dashboard
+/organization/profile
+/organization/settings
+/organization/onboarding — Setup wizard
+/organization/subscription
+/organization/verification
+/organization/analytics
+/organization/referrals
+/organization/domain
+Related APIs
+GET/PUT /api/v1/admin/organization/profile|details|business-info|locale|settings|branding|subscription
+Onboarding: status|step|complete|review
+POST/DELETE /logo
+GET statistics|analytics|users|activity
+GET /api/v1/organization/subscription/plans
+Related Database Collections
+organizations
+subscriptions
+User Roles
+Admin
+Executive
+Functionalities
+2.6 Department Management
+Purpose: Maintain organization departments as master data for employee assignment.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/organization/onboarding (wizard step)
+Related APIs
+Updated via organization onboarding step APIs (embedded on Organization)
+Related Database Collections
+organizations (orgDepartments field)
+User Roles
+Admin
+Executive
+Functionalities
+2.7 Designation Management
+Purpose: Maintain job designations/titles as organization master data.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/organization/onboarding (wizard step)
+Related APIs
+Updated via organization onboarding step APIs (orgDesignations)
+Related Database Collections
+organizations (orgDesignations field)
+User Roles
+Admin
+Executive
+Functionalities
+2.8 Branch / Office Location Management
+Purpose: Maintain office locations / branches for geo-attendance and org structure.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/organization/onboarding
+/attendance-rules
+Related APIs
+Org onboarding (officeLocations); attendance rules geo config
+Related Database Collections
+organizations (officeLocations)
+attendanceRules
+User Roles
+Admin
+HR
+Executive
+Functionalities
+2.9 Attendance
+Purpose: Employee clock-in/out, break tracking, team attendance views, PDF export, and geo-fence enforcement via attendance rules.
+Status: ✅ Implemented
+Related Pages / Routes
+/attendance — Attendance dashboard
+/today-attendance — Today status
+/all-attendance-history — Team/history
+/attendance-rules — Attendance rules
+/employee/leave-attendance — ESS hub (attendance log tab)
+/daily-report — Daily report
+Related APIs
+POST/GET /api/v1/both/attendance/clock-in|clock-out|break-in|break-out|force-end-break
+get-logs, summary, employee list/details, team history, today status, on-break, my-today, rule, export-pdf
+/api/v1/admin/attendance-rules/*
+Related Database Collections
+attendances
+attendanceRules
+attendanceRuleAudits
+User Roles
+Employee
+Manager
+HR
+Admin
+Executive
+Functionalities
+2.10 Shift Management
+Purpose: Define shift types for the organization and associate shifts with attendance rules.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/organization/onboarding
+/attendance-rules
+Related APIs
+Org onboarding (shiftTypes); attendance rules shifts[]
+Related Database Collections
+organizations (shiftTypes)
+attendanceRules
+User Roles
+Admin
+HR
+Functionalities
+2.11 Roster / Shift Scheduling
+Purpose: Employee shift roster planning and assignment.
+Status: ❌ Not Implemented
+Related Pages / Routes
+None — /platform-roles/roster is a user-roles roster, not shift roster
+Related APIs
+None for shift scheduling
+Related Database Collections
+N/A
+User Roles
+N/A
+Functionalities
+2.12 Attendance Regularization
+Purpose: Employees request corrections to attendance; managers approve/reject with workflow support.
+Status: ✅ Implemented
+Related Pages / Routes
+/my-attendance-regularization
+/attendance-regularization, /manager/attendance-regularization
+LeaveAttendanceHub regularization tab
+Related APIs
+/api/v1/both/attendance-regularization/* (limits, request, cancel, manager approve/reject)
+Related Database Collections
+attendanceregularizations
+approvalinstances
+User Roles
+Employee
+Manager
+HR
+Admin
+Executive
+Functionalities
+2.13 Work From Home (WFH)
+Purpose: Employees submit WFH requests; managers/HR review.
+Status: ✅ Implemented
+Related Pages / Routes
+LeaveAttendanceHub WFH tab
+Manager TeamWfhRequestsPanel
+Regularization/WFH hub areas
+Related APIs
+/api/v1/both/wfh-requests (create, my, all, review)
+Related Database Collections
+wfhrequests
+User Roles
+Employee
+Manager
+HR
+Admin
+Functionalities
+2.14 Leave Management
+Purpose: End-to-end leave including apply/approve, policies, balances, accrual automation, encashment, reports, and compensatory off.
+Status: ✅ Implemented
+Related Pages / Routes
+/leave — Apply leave
+/my-leave, /employee/leave-attendance — Leave summary
+/leave-management — Admin/HR/Manager queue
+/admin/leave-policy — Policy management
+/admin/leave-balance — Balance viewer
+/admin/leave-reports — Leave reports
+Related APIs
+/api/v1/employee/leave/*
+/api/v1/admin/leave/*
+/api/v1/admin/leave-policy/*
+/api/v1/admin/leave-reports/*
+/api/v1/admin|employee/leave-encashment/*
+/api/v1/admin/comp-off/*
+Employee CompOffRoutes exist but are NOT mounted
+Related Database Collections
+leaves
+leavebalances
+leavebalanceaudits
+leavepolicies
+compoffs
+User Roles
+Employee
+Manager
+HR
+Admin
+Executive
+Functionalities
+2.15 Holiday & Calendar Management
+Purpose: Organization calendar with holidays, working days/hours, imports (including Indian holidays), and employee calendar views.
+Status: ✅ Implemented
+Related Pages / Routes
+/calendar-management
+Employee calendar (within ESS / calendar pages)
+Related APIs
+/api/v1/admin/calendar/* (year, holidays CRUD, working days, upload, import-indian-holidays)
+/api/v1/employee/calendar/*
+Related Database Collections
+calendars
+User Roles
+Admin
+HR
+Executive
+Employee
+Functionalities
+2.16 Payroll
+Purpose: Create, process, disburse, void/supersede payroll; employee payslips; payroll reports. Bank disbursement uses mock provider.
+Status: ✅ Implemented
+Related Pages / Routes
+/admin-payroll
+/add-payroll
+/add-payroll/:employeeId/:month/:year
+/admin-employee-payroll/:employeeId
+/employee-payroll — My payroll / payslip
+/dashboard-finance
+Related APIs
+/api/v1/admin/payroll/* (create/update/bulk/process/void/supersede/disburse/export-pdf)
+/api/v1/employee/payroll/* (history, current, by-month, details, download)
+/api/v1/admin/payroll-reports/*
+Related Database Collections
+payrolls
+User Roles
+Admin
+HR
+Finance
+Executive
+Employee (self)
+Functionalities
+2.17 Salary Structure
+Purpose: Define salary structures, apply to employees, calculate components, and generate payroll from structure.
+Status: ✅ Implemented
+Related Pages / Routes
+/salary-structure
+Related APIs
+/api/v1/admin/salary-structure/* (CRUD, apply, generate-payroll, applicable, calculate)
+Related Database Collections
+salarystructures
+payrolls
+User Roles
+Admin
+HR
+Finance
+Executive
+Functionalities
+2.18 Loan Management
+Purpose: Employee loan requests, EMI, and recovery through payroll.
+Status: ❌ Not Implemented
+Related Pages / Routes
+None
+Related APIs
+None — only payroll.loanDeduction field and tax-declaration loan amounts
+Related Database Collections
+N/A (fields on employees/payrolls only)
+User Roles
+N/A
+Functionalities
+2.19 Advance Salary
+Purpose: Advance salary request and recovery.
+Status: ❌ Not Implemented
+Related Pages / Routes
+None
+Related APIs
+None found
+Related Database Collections
+N/A
+User Roles
+N/A
+Functionalities
+2.20 Expense Management / Reimbursement
+Purpose: Employee expense claims with approve/reject/mark-paid workflow.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+Finance dashboard links to /admin/expenses — route does NOT exist
+No dedicated Expense page components found under vite_client/src
+Related APIs
+/api/v1/both/expense/* (CRUD, statistics, approve, reject, mark-paid) — backend fully present
+Dashboard hook useDashboardData calls GET /v1/both/expense
+Related Database Collections
+expenses
+User Roles
+Employee
+Manager
+HR
+Admin
+Finance (intended)
+Functionalities
+2.21 Performance Management (Reviews / KPI / OKR / Appraisal)
+Purpose: Performance reviews, tracking, goals, review cycles, and one-on-ones.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+PerformanceTab on employee details (score fields only)
+/admin/reports/performance — Performance report page
+/one-on-one — One-on-one meetings
+No dedicated routes for performance-review, goals, review-cycle, OKR UI
+Related APIs
+/api/v1/both/performance-review/*
+/api/v1/both/performance-tracking/*
+/api/v1/both/goal/*
+/api/v1/admin/review-cycle/*
+/api/v1/both/one-on-one/*
+Related Database Collections
+performancereviews
+reviewCycles
+goals
+oneonones
+User Roles
+Admin
+HR
+Manager
+Employee
+Functionalities
+2.22 Recruitment & Candidate / Interview Management
+Purpose: Job postings, candidate pipeline, interviews, scoring, offers, and analytics (ATS).
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/recruitment — Recruitment ATS page
+Post New Job navigates to /recruitment/create-job — route does NOT exist
+Related APIs
+/api/v1/admin/recruitment/* (jobs, candidates, interview, score, offer, pipeline, analytics)
+POST /api/v1/both/recruitment/jobs/:jobPostingId/apply
+Related Database Collections
+recruitments
+candidates
+User Roles
+Admin
+HR
+Executive
+Public apply (both)
+Functionalities
+2.23 Onboarding
+Purpose: Onboarding templates and workflows with tasks, documents, checklists, buddy, training, signatures, and employee self-service progress.
+Status: ✅ Implemented
+Related Pages / Routes
+/onboarding — OnboardingHub (HR + employee via wrapper)
+Related APIs
+/api/v1/admin/onboarding/* (templates, workflows, tasks, docs, checklist, assets, training, signatures, buddy, offboarding)
+/api/v1/both/onboarding/* (my workflow/tasks, dashboard)
+Related Database Collections
+onboardingworkflows
+onboardingtemplates
+offboardingworkflows
+User Roles
+Admin
+HR
+Manager
+Employee
+Functionalities
+2.24 Offboarding
+Purpose: Employee exit workflows nested under onboarding/offboarding controllers.
+Status: ✅ Implemented
+Related Pages / Routes
+/onboarding (offboarding actions within hub/API)
+Related APIs
+/api/v1/admin/onboarding/* offboarding endpoints
+Related Database Collections
+offboardingworkflows
+User Roles
+Admin
+HR
+Functionalities
+2.25 Assets Management
+Purpose: Track company assets assigned to employees.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+Onboarding hub asset steps only
+Related APIs
+Nested assets update endpoints under /api/v1/admin/onboarding
+Related Database Collections
+onboardingworkflows (assets[] nested) — no global asset collection
+User Roles
+Admin
+HR
+Functionalities
+2.26 Inventory
+Purpose: Stock / inventory management.
+Status: ❌ Not Implemented
+Related Pages / Routes
+None
+Related APIs
+None
+Related Database Collections
+N/A
+User Roles
+N/A
+Functionalities
+2.27 Visitor Management
+Purpose: Visitor check-in/out and visitor passes.
+Status: ❌ Not Implemented
+Related Pages / Routes
+None
+Related APIs
+None — only idCard.cardType enum value 'visitor'
+Related Database Collections
+idcards (enum only)
+User Roles
+N/A
+Functionalities
+2.28 Help Desk / Ticket Management
+Purpose: Internal helpdesk tickets with comments, resolve, and analytics.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/helpdesk — HelpdeskPage
+Related APIs
+/api/v1/both/helpdesk/* (CRUD, comment, resolve, analytics)
+Related Database Collections
+helpdesktickets
+User Roles
+Admin
+HR
+Executive
+Employee (API)
+Functionalities
+2.29 Announcements / Notices
+Purpose: Broadcast announcements via the notifications subsystem.
+Status: ✅ Implemented
+Related Pages / Routes
+/sent-announcements
+Notification sender embedded in Admin
+Related APIs
+/api/v1/both/notification/* (create-notification, sent-announcements)
+Related Database Collections
+notifications
+User Roles
+Admin
+HR
+Executive
+Functionalities
+2.30 Events
+Purpose: Corporate events calendar distinct from holidays.
+Status: ❌ Not Implemented
+Related Pages / Routes
+None (special event notification job for birthdays etc. exists)
+Related APIs
+specialEventNotificationJob — not a full events module
+Related Database Collections
+N/A
+User Roles
+N/A
+Functionalities
+2.31 Documents
+Purpose: HR document library, versioning, sharing, employee my-documents, and legacy upload endpoints.
+Status: ✅ Implemented
+Related Pages / Routes
+/documents — HR library
+/documents/:id/versions
+/employee/my-documents
+/employee/documents-id — Documents & ID hub
+Related APIs
+/api/v1/admin/documents/*
+/api/v1/both/documents/*
+/api/v1/both/document + /api/v1/upload (legacy upload)
+Related Database Collections
+documents
+documentrequests
+User Roles
+Admin
+HR
+Executive
+Employee
+Manager
+Functionalities
+2.32 ID Cards
+Purpose: Generate and manage employee ID cards (cardType includes visitor enum).
+Status: ✅ Implemented
+Related Pages / Routes
+/id-card-generator
+/employee/id-card, /employee/documents-id
+Related APIs
+/api/v1/admin/id-cards/*
+Related Database Collections
+idcards
+User Roles
+Admin
+HR
+Executive
+Employee (view)
+Functionalities
+2.33 Company Policies
+Purpose: Publish company policies and track employee acknowledgments/compliance.
+Status: ✅ Implemented
+Related Pages / Routes
+/admin/policies, /admin/policies/create, /:id, /:id/edit
+/employee/policies
+Related APIs
+/api/v1/organization/policies/*
+Related Database Collections
+companypolicies
+policyacknowledgments
+User Roles
+Admin
+HR
+Executive
+Employee
+Functionalities
+2.34 Learning & Development (Custom)
+Purpose: Courses, enrollments, learning paths, skills, certificates, analytics, and team learning.
+Status: ✅ Implemented
+Related Pages / Routes
+/learning — Learning hub (role wrapper)
+/learning/courses/:courseId
+/learning/create-course, /learning/edit-course/:courseId
+/employee/benefits-learning
+/team-learning
+Related APIs
+/api/v1/admin/learning/*
+/api/v1/both/learning/*
+/api/v1/both/team-learning/*
+Related Database Collections
+courses
+enrollments
+learningpaths
+skills
+teamlearnings
+learningprogresses
+User Roles
+Admin
+HR
+Executive
+Manager
+Employee
+Functionalities
+2.35 Engagement (Surveys / Feedback / Recognition) (Custom)
+Purpose: Employee engagement via surveys, feedback, and recognition.
+Status: ✅ Implemented
+Related Pages / Routes
+/engagement
+/engagement/surveys/:surveyId
+/engagement/create-survey
+Related APIs
+/api/v1/admin/engagement/*, /api/v1/both/engagement/*
+Related Database Collections
+surveys
+surveyresponses
+feedbacks
+recognitions
+User Roles
+Admin
+HR
+Executive
+Employee
+Functionalities
+2.36 Benefits (Custom)
+Purpose: Benefit plans and employee enrollments.
+Status: ✅ Implemented
+Related Pages / Routes
+/benefits
+/benefits/:id
+/employee/benefits-learning
+Related APIs
+/api/v1/admin/benefits/*, /api/v1/both/benefits/*
+Related Database Collections
+benefitplans
+employeebenefits
+User Roles
+Admin
+HR
+Executive
+Employee
+Functionalities
+2.37 Succession Planning (Custom)
+Purpose: Succession plans and talent pools for critical roles.
+Status: ✅ Implemented
+Related Pages / Routes
+/succession
+/succession/:id
+Related APIs
+/api/v1/admin/succession/*
+Related Database Collections
+successionplans
+talentpools
+User Roles
+Admin
+HR
+Executive
+Functionalities
+2.38 Workforce Planning (Custom)
+Purpose: Workforce plans and headcount forecasts.
+Status: ✅ Implemented
+Related Pages / Routes
+/workforce
+/workforce/:id
+Related APIs
+/api/v1/admin/workforce/*
+Related Database Collections
+workforceplans
+headcountforecasts
+User Roles
+Admin
+HR
+Executive
+Functionalities
+2.39 Projects & Tasks (Custom)
+Purpose: Project management with tasks and work items for employees and managers.
+Status: ✅ Implemented
+Related Pages / Routes
+/projects
+/projects/:id
+/add-project
+/employee/projects
+/employee/projects/:projectId
+Related APIs
+/api/v1/admin/project/*
+/api/v1/both/project-task/*
+Related Database Collections
+projects
+projectUpdates
+project_work_items
+tasks
+User Roles
+Admin
+Manager
+Project Manager
+HR
+Executive
+Employee
+Functionalities
+2.40 Approval Workflows & SLA (Custom)
+Purpose: Configurable multi-step approval workflows with timeout job; SLA definitions and violations.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/admin/approval-workflows
+/admin/pending-approvals
+Admin/SLA components exist but are NOT routed/nav-linked
+Related APIs
+/api/v1/admin/approvals/*
+/api/v1/admin/sla/*
+Jobs: approvalTimeoutJob
+Related Database Collections
+approvalworkflows
+approvalinstances
+slas
+slaviolations
+User Roles
+Admin
+HR
+Manager
+Executive
+Functionalities
+2.41 Reports & Analytics
+Purpose: HR reports suite, analytics endpoints, generic reports with PDF export, payroll/leave reports.
+Status: ✅ Implemented
+Related Pages / Routes
+/admin/reports/headcount|attrition|payroll|attendance|performance|recruitment|compliance
+/hr/analytics
+/organization/analytics
+Related APIs
+/api/v1/admin/reports/*
+/api/v1/admin/analytics/*
+/api/v1/admin/leave-reports/*
+/api/v1/admin/payroll-reports/*
+/api/v1/admin/executive/*
+Related Database Collections
+reports
+employees
+attendances
+leaves
+payrolls
+recruitments
+User Roles
+Admin
+HR
+Executive
+Finance
+Functionalities
+2.42 Notifications (In-App / Push / Email)
+Purpose: In-app notifications, web push subscriptions, notification settings, email queue/templates, special event notifications.
+Status: ✅ Implemented
+Related Pages / Routes
+/notifications
+/admin-settings (Notifications / Email tabs)
+/sent-announcements
+Related APIs
+/api/v1/both/notification/*
+/api/v1/admin/notification-settings/*
+/api/v1/both/push-subscription/*
+/api/push
+/api/v1/both/email/* (test/status)
+Related Database Collections
+notifications
+notificationsettings
+pushsubscriptions
+subscriptions
+emailtemplates
+User Roles
+All authenticated; Admin for settings
+Functionalities
+2.43 Audit Logs
+Purpose: Administrative audit trail of system actions.
+Status: ✅ Implemented
+Related Pages / Routes
+Consumed via admin APIs / settings areas (AuditLogRoutes mounted)
+Related APIs
+/api/v1/admin/audit-logs/*
+Related Database Collections
+auditlogs
+User Roles
+Admin
+Functionalities
+2.44 Settings
+Purpose: Admin settings hub for attendance rules, leave policy, notifications, email, theme, and general settings.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/admin-settings
+/organization/settings
+/attendance-rules
+Related APIs
+Organization settings APIs
+Notification settings
+Attendance rules
+Leave policy
+Email test endpoints
+Related Database Collections
+organizations
+notificationsettings
+attendanceRules
+leavepolicies
+User Roles
+Admin
+HR
+Executive
+Functionalities
+2.45 Employee Self Service (ESS) Portal
+Purpose: Employee portal for profile, leave/attendance, payroll, documents, learning, benefits, onboarding, policies, and notifications.
+Status: ✅ Implemented
+Related Pages / Routes
+/dashboard-employee
+/employee/leave-attendance
+/employee-payroll
+/profile-details*
+/employee/my-documents
+/employee/policies
+/employee/benefits-learning
+/onboarding
+/notifications
+Related APIs
+Employee and Both route groups
+Related Database Collections
+Multiple ESS collections
+User Roles
+Employee (+ Me portal for all users)
+Functionalities
+2.46 Manager Portal
+Purpose: Manager workspace for team, leave/attendance approvals, regularization, team learning, one-on-ones, and projects.
+Status: ✅ Implemented
+Related Pages / Routes
+/dashboard-manager
+/employees (team)
+/leave-management
+/attendance-regularization
+/team-learning
+/one-on-one
+/projects
+Related APIs
+Manager-scoped leave/attendance/regularization/team-learning/one-on-one APIs
+Related Database Collections
+Multiple
+User Roles
+Manager
+Project Manager
+Functionalities
+2.47 HR Portal
+Purpose: HR workspace covering recruitment, onboarding, learning, engagement, documents, benefits, succession, workforce, leave, payroll, reports.
+Status: ✅ Implemented
+Related Pages / Routes
+/dashboard-hr
+Full HR_NAV_ITEMS routes (recruitment through reports)
+Related APIs
+Admin HR suite APIs
+Related Database Collections
+Multiple HR collections
+User Roles
+HR Manager
+HR Executive
+Functionalities
+2.48 Admin Portal
+Purpose: Organization owner admin workspace for org SaaS, employees, leave, projects, attendance, payroll, RBAC, workflows, calendar, salary structure, settings.
+Status: ✅ Implemented
+Related Pages / Routes
+/dashboard-admin
+/organization/dashboard
+Admin navigation routes
+Related APIs
+Admin + Organization APIs
+Related Database Collections
+Multiple
+User Roles
+Admin (Org Owner)
+Functionalities
+2.49 Finance Portal
+Purpose: Finance/payroll-admin workspace for payroll, salary structure, and financial reports.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+/dashboard-finance
+/admin-payroll
+/salary-structure
+Expense Management link goes to missing /admin/expenses
+Related APIs
+Payroll, salary-structure, payroll-reports; expense APIs exist without UI
+Related Database Collections
+payrolls
+salarystructures
+expenses
+User Roles
+Finance / Payroll Admin
+Admin
+Executive (CFO)
+Functionalities
+2.50 Integrations
+Purpose: External system integrations supporting HRMS operations.
+Status: ⚠️ Partially Implemented
+Related Pages / Routes
+Admin email/settings; push registration
+Related APIs
+Email, Web Push, Geocoding, Redis/Bull, WebSocket, Sentry, Prometheus
+Related Database Collections
+emailtemplates
+pushsubscriptions
+User Roles
+System / Admin
+Functionalities
+3. Module Summary
+4. Functionalities Missing From Standard Enterprise HRMS
+Compared only against typical enterprise HRMS capability sets. Items below are absent or not present as standalone product modules in this codebase.
+5. Overall Summary
+Custom Modules Identified
+Learning & Development
+Engagement (Surveys / Feedback / Recognition)
+Benefits
+Succession Planning
+Workforce Planning
+Projects & Tasks
+Approval Workflows & SLA
+Team Learning
+One-on-One Meetings
+ID Cards
+Compensatory Off
+WFH Requests
+Organization SaaS (subscription, branding, setup wizard)
+Executive / Multi-portal dashboards
+Coverage method: (Fully Implemented + 0.5 × Partially Implemented) ÷ Total Documented Functionalities × 100. Not Implemented standard capabilities are included in the denominator where documented as features under analyzed modules.
+6. Scan Methodology Notes
+Backend entry: server/server.js, server/config/routes.js — all mounted routers inventoried.
+Frontend entry: vite_client/src/routes/index.jsx, navigationConfig.jsx, portalConfig.js.
+Every file under server/models, server/routes, server/controllers, server/services, server/jobs reviewed via exhaustive inventory.
+Portal folders Admin, HR, Manager, Employee, Finance, Administration, Tech, Organization, Both, Auth scanned.
+Status Partial used when APIs exist without UI, UI is stubbed/orphaned, routes are unmounted, or disbursement/payment is mock.
+Ignored: code quality, security vulnerabilities, performance optimization, and defect severity (per engagement rules).
+7. Key Partial-Implementation Gaps (Actionable)
+Mount employee CompOffRoutes (imported but not app.use'd) to complete Comp-Off ESS.
+Add routed Expense Management UI at /admin/expenses (APIs already exist).
+Add /recruitment/create-job route or remove dead Post New Job navigation.
+Wire Helpdesk New Ticket / View handlers.
+Expose SLA Manager pages in router + navigation (UI already present).
+Build Performance Review / Goals UI on top of existing performance-review, goal, review-cycle APIs.
+Replace mock payroll disbursement with real bank/payment provider when required.
+Complete Admin Settings Security / Permissions / Reports placeholder tabs.

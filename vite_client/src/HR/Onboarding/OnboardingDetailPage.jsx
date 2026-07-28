@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { toast } from 'react-toastify';
 import { useEmployees } from '../../Hooks/useDashboardData';
 import { format } from 'date-fns';
+import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 
 const OnboardingDetailPage = () => {
     const { id } = useParams();
@@ -28,10 +29,36 @@ const OnboardingDetailPage = () => {
         dueDate: '',
         priority: 'Medium'
     });
+    const [bgvCase, setBgvCase] = useState(null);
+    const [bgvLoading, setBgvLoading] = useState(false);
 
     useEffect(() => {
         fetchWorkflow();
     }, [id]);
+
+    useEffect(() => {
+        if (!workflow?.backgroundVerificationCaseId) {
+            setBgvCase(null);
+            return;
+        }
+        const loadBgv = async () => {
+            setBgvLoading(true);
+            try {
+                const response = await axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/bgv`, {
+                    params: { employeeId: workflow.employeeId?._id || workflow.employeeId },
+                    withCredentials: true,
+                });
+                const cases = response.data?.data || [];
+                const match = cases.find((item) => item._id === workflow.backgroundVerificationCaseId) || cases[0];
+                setBgvCase(match || null);
+            } catch {
+                setBgvCase(null);
+            } finally {
+                setBgvLoading(false);
+            }
+        };
+        loadBgv();
+    }, [workflow?.backgroundVerificationCaseId, workflow?.employeeId]);
 
     const fetchWorkflow = async () => {
         try {
@@ -63,6 +90,41 @@ const OnboardingDetailPage = () => {
             fetchWorkflow();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to update task');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const initiateBgv = async () => {
+        try {
+            setSubmitting(true);
+            await axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/bgv`, {
+                subjectType: 'employee',
+                employeeId: workflow.employeeId?._id || workflow.employeeId,
+                onboardingWorkflowId: workflow._id,
+            }, { withCredentials: true });
+            toast.success('Background verification initiated');
+            fetchWorkflow();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to initiate BGV');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const updateBgvCheck = async (checkId, status) => {
+        if (!bgvCase?._id) return;
+        try {
+            setSubmitting(true);
+            const response = await axios.patch(
+                `${ADMIN_LIFECYCLE_ENDPOINT}/bgv/${bgvCase._id}/checks/${checkId}`,
+                { status },
+                { withCredentials: true },
+            );
+            setBgvCase(response.data?.data || null);
+            toast.success('Verification check updated');
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to update check');
         } finally {
             setSubmitting(false);
         }
@@ -121,7 +183,7 @@ const OnboardingDetailPage = () => {
 
     const completedTasks = workflow.tasks?.filter(t => t.status === 'Completed').length || 0;
     const totalTasks = workflow.tasks?.length || 0;
-    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const progress = Number(workflow.progress) || 0;
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -210,6 +272,52 @@ const OnboardingDetailPage = () => {
                             <div className="text-sm text-gray-600">Remaining</div>
                         </div>
                     </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h2 className="text-xl font-semibold">Background Verification</h2>
+                        {!bgvCase && (
+                            <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={initiateBgv}
+                                className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white hover:bg-theme-primary disabled:opacity-60"
+                            >
+                                Initiate BGV
+                            </button>
+                        )}
+                    </div>
+                    {bgvLoading ? (
+                        <p className="text-sm text-gray-500">Loading verification case...</p>
+                    ) : bgvCase ? (
+                        <div className="space-y-3">
+                            <p className="text-sm text-gray-600">
+                                Overall status: <span className="font-semibold">{bgvCase.overallStatus}</span>
+                                {bgvCase.vendor ? ` · Vendor: ${bgvCase.vendor}` : ''}
+                            </p>
+                            {(bgvCase.checks || []).map((check) => (
+                                <div key={check._id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                                    <div>
+                                        <p className="font-medium">{check.label || check.checkType}</p>
+                                        <p className="text-xs text-gray-500">{check.mandatory ? 'Mandatory' : 'Optional'}</p>
+                                    </div>
+                                    <select
+                                        value={check.status}
+                                        disabled={submitting}
+                                        onChange={(e) => updateBgvCheck(check._id, e.target.value)}
+                                        className="rounded-lg border px-2 py-1 text-sm"
+                                    >
+                                        {['Not Started', 'Initiated', 'In Progress', 'Clear', 'Discrepancy', 'Failed', 'Waived'].map((status) => (
+                                            <option key={status} value={status}>{status}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500">No background verification case yet.</p>
+                    )}
                 </div>
 
                 {/* Workflow Details */}

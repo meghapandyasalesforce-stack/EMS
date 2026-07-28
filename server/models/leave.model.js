@@ -100,6 +100,11 @@ const leaveSchema = new mongoose.Schema({
         enum: ['first_half', 'second_half'],
         default: null
     },
+    // Root Message-ID for leave email conversation threading (first outbound mail)
+    emailThreadMessageId: {
+        type: String,
+        default: null
+    },
     // Comments/notes
     comments: [{
         comment: String,

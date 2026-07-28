@@ -1,0 +1,90 @@
+EMS — Onboarding & Offboarding
+Functionality Audit & Gap Analysis
+Platform: Custom EMS (Employee Management System) — Lifecycle Module
+Environment audited: Codebase / development workspace (not live production telemetry)
+Audit date: 2026-07-23
+Scope: Enterprise (Admin/HR/IT/Manager) and Employee self-service
+Executive Summary
+This audit evaluates every checklist item against the EMS Lifecycle implementation (services, routes, models, feature registry, and HR/Employee UI). Statuses reflect actual code capability—not marketing feature flags alone. Vendor integrations that exist as adapters but require credentials are scored Partially Functional when the manual/stub path works.
+Overall health scores
+• Combined Onboarding + Offboarding: 57/100
+• Onboarding (Admin + Employee rows): 61/100
+• Offboarding (Admin + Employee rows): 51/100
+• Counts (all rows): Fully=36, Partial=58, Manual=8, Missing=22, N/A=0 (total line items = 124)
+Top 5 critical gaps
+1. No employee self-service resignation — exits are HR-initiated only; resignation feature flag does not expose a submit API.
+2. True pre-boarding portal missing — candidates get offer accept only; document/form upload requires an employee account.
+3. Day-1 email/IdP provisioning and badge deactivation are checklist/stub-driven — not reliable auto-integrations without env configuration and scheduled LWD jobs.
+4. Last working day is manual — notice period tracks against HR-entered LWD; no auto-calc or confirmation workflow.
+5. Expense clearance & PF withdrawal not in offboarding — F&F is a strong calculator but many inputs and statutory exit claims remain manual/outside the module.
+Strengths (already shipped)
+Multi-role onboarding/offboarding workflows with tasks, escalations, reminders; Document Hub & forms; offer portal + acceptance tracking; BGV case tracking; milestones/probation center; exit interviews; asset return tracking; notice period engine; relieving/experience letter automation; alumni DB; enterprise dashboards & lifecycle reports; employee self-service progress trackers (post-hire / post-exit-case creation).
+Section A: Onboarding – Enterprise Level
+Summary: Fully=13 | Partial=18 | Manual=2 | Missing=3 | Health=66/100
+Section B: Onboarding – Employee Level
+Summary: Fully=11 | Partial=16 | Manual=2 | Missing=7 | Health=57/100
+Section C: Offboarding – Enterprise Level
+Summary: Fully=8 | Partial=13 | Manual=2 | Missing=3 | Health=61/100
+Section D: Offboarding – Employee Level
+Summary: Fully=4 | Partial=11 | Manual=2 | Missing=9 | Health=41/100
+Section E: Consolidated Gap Analysis & Recommendations (Prioritized Roadmap)
+P0 — High priority (next 1–2 sprints)
+1. Employee self-service resignation → approval chain → auto-create OffboardingWorkflow.
+2. Tokenized candidate pre-boarding portal for documents, bank details, and forms before Day 1.
+3. Wire initiation approval (manager → HR) using existing lifecycleApprovalService.
+4. Auto-calculate LWD from notice policy + employee/manager confirmation.
+5. Fix access revocation: real LWD-day scheduled job; stop treating stub adapters as success without attestation.
+6. Expense clearance gate into offboarding; employee prompt to clear open expenses.
+7. Production BGV vendor credentials + join-blocking enforcement; email/IdP mailbox provisioning path.
+P1 — Medium priority (next quarter)
+1. Employment contract portal + vendor e-sign for policies/contracts.
+2. Induction calendar auto-generation; LMS role/dept auto-enrollment rules.
+3. F&F auto-pull leave/dues; PF withdrawal guidance pack; No-Dues certificate auto-issue.
+4. KT document repository; successor history; resignation acceptance letter automation.
+5. Compliance dashboard (mandatory docs %); onboarding funnel/drop-off analytics.
+6. SMS notifications; Teams/Slack webhook hardening; welcomeEmail feature enforcement.
+7. Rehire initiation → reactivate employee + onboarding workflow.
+P2 — Lower priority / polish
+1. Seating/workstation assignment.
+2. Medical/insurance enrollment pack.
+3. Buddy auto-matching algorithm; welcome-kit logistics.
+4. Org-chart team introduction fan-out.
+5. License/SaaS seat cost recovery tracking.
+6. Alumni self-service portal / social network (if required).
+7. Retire legacy AttritionReport hardcoded charts; deepen cohort attrition.
+Suggested sequencing
+Wave 1 (Exit initiation & Day-1 readiness): resignation self-service, approval chain, LWD auto-calc, candidate doc portal, access revocation job.
+Wave 2 (Compliance & money): expense gate, F&F enrichment, statutory exit pack, e-sign hardening.
+Wave 3 (Experience & analytics): induction calendar, LMS auto-enroll, funnel reports, seating/benefits packs.
+Appendix: Assumptions and Items Needing Further Clarification
+Assumptions
+• Audit is based on the EMS codebase and lifecycle documentation (docs/LIFECYCLE_*.md, feature registry, services, routes, vite_client hubs)—not production usage metrics or customer-specific feature flag states.
+• Feature keys registered with defaultEnabled=true are treated as intended product capability; defaultEnabled=false features are treated as optional/off unless code paths still work when enabled.
+• Adapters that return stub success when credentials are missing are scored Partial or Manual, not Fully Functional for enterprise production readiness.
+• Company size / live environment details were not provided; scoring is capability-based for the custom EMS platform.
+• India-centric statutory packs (Aadhaar/PAN/PF/ESI/Form 16) are assumed relevant; other countries may need country packs.
+• Separate modules (ID Card, Expenses, Engagement Surveys) count toward capability when they fulfill the checklist intent, even if not nested inside the Onboarding Hub.
+Needs clarification / verify in target environment
+• Which e-sign provider credentials are configured in staging/production (DOCUSIGN_*, Adobe, Aadhaar)?
+• Are BGV vendor API keys and IT ticketing (ServiceNow/Jira/etc.) configured, or is manual/stub in use?
+• Are Azure AD / Google Workspace / Okta tokens present for access revocation?
+• Org-level LifecycleSettings: which features are enabled per customer tenant?
+• Is offer→employee conversion automated in any environment-specific script not in the main routes?
+• Should medical/insurance enrollment be in-scope for the first commercial release or deferred?
+• Is physical badge system integration required for the first enterprise customers?
+• Legacy AttritionReport vs LifecycleReportsHub — which UI is used by HR today?
+• SMS provider preference (if SMS is a hard requirement for reminders).
+• Whether manager role should be allowed to initiate offboarding without Admin/HR.
+Primary evidence sources
+• server/constants/lifecycleFeatureRegistry.js, onboardingDefaults.js, offboardingDefaults.js
+• server/services/onboardingService.js, offboardingService.js, offerLetterService.js, noticePeriodService.js
+• server/services/backgroundVerificationService.js, esignAdapter.js, accessRevocationAdapter.js
+• server/services/fnfSettlementService.js, lifecycleExitInterviewService.js, lifecycleAlumniService.js
+• server/services/lifecycleDocumentHubService.js, lifecycleFormService.js, lifecycleLetterService.js
+• server/services/lifecycleEscalationService.js, lifecycleMilestoneService.js, lifecycleProbationService.js
+• server/services/lifecycleReportsService.js, lifecycleDashboardService.js, itProvisioningService.js
+• server/routes/Admin/OnboardingRoutes.js, Admin/LifecycleRoutes.js, Both/OnboardingRoutes.js, Public/LifecyclePortalRoutes.js
+• vite_client HR Onboarding/Offboarding hubs, OfferCandidatePortal, Enterprise Command Center
+• docs/LIFECYCLE_API.md, LIFECYCLE_INTEGRATION_GUIDE.md, LIFECYCLE_PHASE_F.md, LIFECYCLE_PHASE0_FOUNDATION.md
+
+Status legend: Fully Functional | Partially Functional / Needs Improvement | Not Available / Missing | Manual Workaround Only | N/A

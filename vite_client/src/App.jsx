@@ -41,7 +41,7 @@ function App() {
     const location = useLocation();
     const dispatch = useDispatch();
     const authChecked = useSelector((state) => state.auth.authChecked);
-    const hideHeaderRoutes = ['/', '/login', '/register', '/organization/register', '/organization/login', '/forgot-password']; // Routes where Header and Sidebar should not be shown
+    const hideHeaderRoutes = ['/', '/login', '/register', '/organization/register', '/organization/login', '/forgot-password'];
     useEffect(() => {
         let cancelled = false;
         const bootstrapSession = async () => {
@@ -81,7 +81,9 @@ function App() {
     }, [authChecked, dispatch]);
 
     // Check if pathname is in hideHeaderRoutes or starts with /reset-password (for token routes)
-    const shouldHideLayout = hideHeaderRoutes.includes(location.pathname) || location.pathname.startsWith('/reset-password');
+    const shouldHideLayout = hideHeaderRoutes.includes(location.pathname)
+        || location.pathname.startsWith('/reset-password')
+        || location.pathname.startsWith('/offer/');
     
     if (!authChecked) {
         return <LoadingSpinner message="Initializing session..." />;
@@ -100,7 +102,7 @@ function App() {
                 </div>
             ) : (
                 <div className="flex min-h-[calc(100dvh-3.5rem)] max-w-[100vw] ml-0 overflow-x-clip lg:ml-64 lg:min-h-screen">
-                    <div className="main-scroll-area flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] pt-14 sm:pt-16 lg:pt-0 safe-area-x">
+                    <div className="main-scroll-area flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden bg-[var(--color-bg)] safe-area-x">
                         <ScrollToTop />
                         <Routes>
                             {renderRoutes(authRoutes)}

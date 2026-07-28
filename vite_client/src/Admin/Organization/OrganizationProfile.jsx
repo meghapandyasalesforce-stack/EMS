@@ -169,8 +169,8 @@ const OrganizationProfile = () => {
         <div className="page-shell">
             <div className="page-shell-inner">
             <div className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center min-w-0">
                         <FaBuilding className="mr-2" />
                         Organization Profile
                     </h2>

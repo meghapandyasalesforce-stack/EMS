@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import {
     FaFileAlt,
     FaDownload,
@@ -207,6 +207,7 @@ function useDebouncedValue(value, ms) {
 
 const DocumentsPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const user = useSelector((state) => state.auth.user);
     const employee = useSelector((state) => state.employeeDetails.employee);
     const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
@@ -226,6 +227,13 @@ const DocumentsPage = () => {
     const [page, setPage] = useState(1);
     const [searchInput, setSearchInput] = useState('');
     const debouncedSearch = useDebouncedValue(searchInput, 350);
+
+    useEffect(() => {
+        const hint = location.state?.search;
+        if (typeof hint === 'string' && hint.trim()) {
+            setSearchInput(hint.trim());
+        }
+    }, [location.state?.search]);
     const [pendingNotes, setPendingNotes] = useState({});
     const [rejectingDoc, setRejectingDoc] = useState(null);
     const [docActionLoading, setDocActionLoading] = useState({});

@@ -191,15 +191,15 @@ const OrganizationOnboarding = () => {
     const handleSkip = async () => {
         await saveStep(step.id, {}, true);
         if (currentStep < ORG_ONBOARDING_STEPS.length - 1) setCurrentStep(currentStep + 1);
-        else navigate('/dashboard-admin');
+        else navigate('/onboarding?enterprise=1');
     };
 
     const handleComplete = async () => {
         try {
             setSaving(true);
             await axios.post(`${ORGANIZATION_ENDPOINT}/onboarding/complete`);
-            toast.success('Organization setup complete!');
-            navigate('/dashboard-admin');
+            toast.success('Organization setup complete! Opening Lifecycle Enterprise.');
+            navigate('/onboarding?enterprise=1');
         } catch {
             toast.error('Failed to complete onboarding');
         } finally {

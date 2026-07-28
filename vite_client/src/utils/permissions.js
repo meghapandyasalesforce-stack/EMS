@@ -30,6 +30,14 @@ export const PERMISSIONS = {
   ONBOARDING_MANAGE: 'onboarding.manage',
   ENGAGEMENT_MANAGE: 'engagement.manage',
   ID_CARD_MANAGE: 'idcard.manage',
+  LIFECYCLE_CONFIGURE: 'lifecycle.configure',
+  LIFECYCLE_TEMPLATES_MANAGE: 'lifecycle.templates.manage',
+  LIFECYCLE_WORKFLOW_CREATE: 'lifecycle.workflow.create',
+  LIFECYCLE_OFFERS_MANAGE: 'lifecycle.offers.manage',
+  LIFECYCLE_CLEARANCE_MANAGE: 'lifecycle.clearance.manage',
+  LIFECYCLE_FNF_MANAGE: 'lifecycle.fnf.manage',
+  LIFECYCLE_COMPLIANCE_MANAGE: 'lifecycle.compliance.manage',
+  LIFECYCLE_INDUSTRY_MANAGE: 'lifecycle.industry.manage',
 };
 
 /** Route → any of these permissions grants access (when permissions are loaded). */
@@ -55,6 +63,7 @@ export const ROUTE_PERMISSIONS = {
   projects: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL],
   platformRoles: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_EDIT_SENSITIVE],
   onboarding: [PERMISSIONS.ONBOARDING_MANAGE, PERMISSIONS.EMPLOYEE_VIEW_ALL],
+  lifecycleSettings: [PERMISSIONS.LIFECYCLE_CONFIGURE, PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.ONBOARDING_MANAGE],
   engagement: [PERMISSIONS.ENGAGEMENT_MANAGE],
   recruitment: [PERMISSIONS.EMPLOYEE_VIEW_ALL],
   pendingApprovals: [PERMISSIONS.LEAVE_APPROVE_ALL, PERMISSIONS.LEAVE_APPROVE_TEAM],

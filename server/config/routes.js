@@ -52,6 +52,14 @@ import healthRouter from "../routes/Health/healthRoutes.js";
 import recruitmentAdminRouter from "../routes/Admin/RecruitmentRoutes.js";
 import recruitmentBothRouter from "../routes/Both/RecruitmentRoutes.js";
 import onboardingRouter from "../routes/Admin/OnboardingRoutes.js";
+import lifecycleRouter from "../routes/Admin/LifecycleRoutes.js";
+import lifecyclePortalRouter from "../routes/Public/LifecyclePortalRoutes.js";
+import lifecycleFormBothRouter from "../routes/Both/LifecycleFormRoutes.js";
+import lifecycleExitInterviewBothRouter from "../routes/Both/LifecycleExitInterviewRoutes.js";
+import lifecycleLetterBothRouter from "../routes/Both/LifecycleLetterRoutes.js";
+import lifecycleBuddyBothRouter from "../routes/Both/LifecycleBuddyRoutes.js";
+import lifecycleManagerBothRouter from "../routes/Both/LifecycleManagerRoutes.js";
+import lifecycleEmployeeBothRouter from "../routes/Both/LifecycleEmployeeRoutes.js";
 import onboardingBothRouter from "../routes/Both/OnboardingRoutes.js";
 import learningBothRouter from "../routes/Both/LearningRoutes.js";
 import learningAdminRouter from "../routes/Admin/LearningRoutes.js";
@@ -85,6 +93,7 @@ import { setCacheHeaders } from "../middlewares/cacheHeaders.js";
 export const registerRoutes = (app) => {
   // Health check routes (public - for monitoring)
   app.use("/api/health", healthRouter);
+  app.use("/api/v1/public/lifecycle", lifecyclePortalRouter);
   
   // Organization routes (public - for registration and login)
   app.use("/api/v1/organization/auth", organizationAuthRouter);
@@ -158,6 +167,13 @@ export const registerRoutes = (app) => {
   // New HR & Manager Features - Admin Only Routes
   app.use("/api/v1/admin/recruitment", recruitmentAdminRouter);
   app.use("/api/v1/admin/onboarding", onboardingRouter);
+  app.use("/api/v1/both/lifecycle", lifecycleFormBothRouter);
+  app.use("/api/v1/both/lifecycle", lifecycleExitInterviewBothRouter);
+  app.use("/api/v1/both/lifecycle", lifecycleLetterBothRouter);
+  app.use("/api/v1/both/lifecycle", lifecycleBuddyBothRouter);
+app.use("/api/v1/both/lifecycle", lifecycleManagerBothRouter);
+app.use("/api/v1/both/lifecycle", lifecycleEmployeeBothRouter);
+  app.use("/api/v1/admin/lifecycle", lifecycleRouter);
   app.use("/api/v1/admin/comp-off", compOffAdminRouter);
   app.use("/api/v1/admin/payroll-reports", payrollReportsRouter);
   app.use("/api/v1/admin/learning", learningAdminRouter);

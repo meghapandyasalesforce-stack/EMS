@@ -88,11 +88,12 @@ export const errorHandler = (err, req, res, next) => {
 
     // Handle custom application errors
     if (err.isCustom) {
-        return res.status(err.statusCode || 400).json({
+        return res.status(err.statusCode || err.status || 400).json({
             ...errorResponse,
             message: err.message,
             code: err.code || 'CUSTOM_ERROR',
-            details: err.details
+            details: err.details,
+            featureKey: err.featureKey,
         });
     }
 

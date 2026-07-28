@@ -1,39 +1,70 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { io } from 'socket.io-client';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import {
-    ADMIN_ONBOARDING_ENDPOINT, BOTH_ONBOARDING_ENDPOINT, BOTH_DOCUMENTS_ENDPOINT,
+    ADMIN_ONBOARDING_ENDPOINT, BOTH_ONBOARDING_ENDPOINT,
 } from '../../utils/constant';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { isHR } from '../../utils/managerHelper';
 import { useEmployees } from '../../Hooks/useDashboardData';
 import {
-    ONBOARDING_DOCUMENT_TYPES, TIMELINE_PHASES, ONBOARDING_TIMELINE_ROADMAP,
-    TASK_STATUS_COLORS, DOC_STATUS_COLORS, WORKFLOW_STATUSES, TASK_GROUPS_BY_ROLE,
+    TASK_STATUS_COLORS, WORKFLOW_STATUSES, TASK_GROUPS_BY_ROLE,
     ASSET_STATUSES, getTaskCompletionBlockers, canCompleteTask,
 } from '../../constants/onboardingConstants';
+import { getTokenFromCookie } from '../../utils/authHelper';
+import { getSocketIOUrl } from '../../utils/socketUrl';
 import {
     FaUserPlus, FaCheckCircle, FaTasks, FaFileAlt, FaClock, FaLaptop,
-    FaUser, FaChartLine, FaHistory, FaStickyNote, FaUpload, FaGraduationCap,
-    FaCheck, FaTimes, FaSpinner, FaSearch, FaPen, FaCalendarAlt,
+    FaUser, FaChartLine, FaHistory, FaStickyNote, FaGraduationCap,
+    FaSpinner, FaSearch, FaPen, FaCalendarAlt, FaTrash, FaFilter, FaArrowLeft,
+    FaShieldAlt, FaFlagCheckered, FaChevronDown, FaChevronUp,
 } from 'react-icons/fa';
+import OnboardingHrDetailView from './OnboardingHrDetailView';
+import OnboardingBgvPanel from './OnboardingBgvPanel';
+import OnboardingMilestonesPanel from './OnboardingMilestonesPanel';
+import OnboardingFormsPanel from './OnboardingFormsPanel';
+import OnboardingGoalsPanel from './OnboardingGoalsPanel';
+import ItProvisioningPanel from './ItProvisioningPanel';
+import LmsDashboard from './LmsDashboard';
+import useLifecycleFeatures from '../../Hooks/useLifecycleFeatures';
+import { CmBadge, CmButton, CmSearch, CmStat, CmPerson, CmRing, CmEmpty, statusTone } from '../../components/corporateModern';
 
-const ProgressRing = ({ value, label, color = 'var(--color-primary)' }) => (
-    <div className="text-center">
-        <div className="relative w-20 h-20 mx-auto">
-            <svg className="w-20 h-20 -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-                <circle cx="18" cy="18" r="15.9" fill="none" stroke={color} strokeWidth="3"
-                    strokeDasharray={`${value} 100`} strokeLinecap="round" />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{value}%</span>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">{label}</p>
-    </div>
-);
+const PROGRESS_RING_SPECS = [
+    { key: 'overall', label: 'Overall', getValue: (wf, b) => wf?.progress || 0, color: 'var(--cm-primary)' },
+    { key: 'tasks', label: 'Tasks', getValue: (_wf, b) => b.tasks || 0, color: '#2563eb' },
+    { key: 'documents', label: 'Documents', getValue: (_wf, b) => b.documents || 0, color: '#7c3aed' },
+    { key: 'checklist', label: 'Checklist', getValue: (_wf, b) => b.checklist || 0, color: '#059669' },
+    { key: 'training', label: 'Training', getValue: (_wf, b) => b.training || 0, color: '#d97706' },
+    { key: 'policies', label: 'Policies', getValue: (_wf, b) => b.policies || 0, color: '#db2777' },
+    { key: 'assets', label: 'Assets', getValue: (_wf, b) => b.assets || 0, color: '#0891b2' },
+];
+
+const TASK_ACTION_SECTIONS = {
+    'Assign laptop and equipment': 'onboarding-assets',
+    'Manager induction session': 'onboarding-manager-actions',
+    'Buddy welcome meeting': 'onboarding-buddy-checkins',
+};
+
+const TASK_ACTION_ROUTES = {
+    'Upload identity documents': '/job-details',
+    'Upload bank details': '/financial-details',
+    'Verify employee documents': '/documents',
+};
+
+const WORKFLOW_STATUS_COLORS = {
+    Draft: 'bg-slate-100 text-slate-700',
+    Scheduled: 'bg-indigo-100 text-indigo-800',
+    'Not Started': 'bg-gray-100 text-gray-700',
+    'In Progress': 'bg-blue-100 text-blue-800',
+    Completed: 'bg-emerald-100 text-emerald-800',
+    Paused: 'bg-amber-100 text-amber-800',
+    Cancelled: 'bg-gray-200 text-gray-600',
+    Overdue: 'bg-red-100 text-red-800',
+};
 
 const OnboardingHub = () => {
     const navigate = useNavigate();
@@ -43,10 +74,10 @@ const OnboardingHub = () => {
     const userObj = user || employee;
     const isAdmin = user?.role === 'admin';
     const userIsHR = isHR(userObj);
-    const isManagerView = searchParams.get('view') === 'team';
-    const isBuddyView = searchParams.get('view') === 'buddy';
+    const viewParam = searchParams.get('view') || '';
+    const workflowIdParam = searchParams.get('id') || '';
+    const detailTab = searchParams.get('detailTab') || 'overview';
     const isHRView = isAdmin || userIsHR;
-
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [dashboard, setDashboard] = useState(null);
@@ -54,9 +85,41 @@ const OnboardingHub = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [expandedTaskGroups, setExpandedTaskGroups] = useState(() => new Set(['it']));
     const [newNote, setNewNote] = useState('');
-    const [rejectReason, setRejectReason] = useState('');
-    const [rejectDocId, setRejectDocId] = useState(null);
+    const fetchInFlightRef = React.useRef(false);
+    const hasLoadedRef = React.useRef(false);
+    const detailSectionRef = React.useRef(null);
+    const workflowIdRef = React.useRef(workflowIdParam);
+    workflowIdRef.current = workflowIdParam;
+
+    const { isEnabled: isFeatureEnabled, filterByFeature } = useLifecycleFeatures({ admin: isHRView });
+
+    const roleFromApi = dashboard?.role;
+    const myEmployeeId = (employee?._id || employee?.id || user?.employeeId || roleFromApi?.employeeId)?.toString();
+    const canViewTeam = !isHRView && Boolean(roleFromApi?.canViewTeam || roleFromApi?.hasDirectReports);
+    const showRoleToggles = canViewTeam;
+
+    const isManagerView = !isHRView && viewParam === 'team' && canViewTeam;
+    const isPersonalView = !isHRView && !isManagerView;
+    const viewerRole = isHRView ? 'hr' : isManagerView ? 'manager' : 'employee';
+
+    const setLifecycleView = (nextView) => {
+        const next = new URLSearchParams(searchParams);
+        next.delete('id');
+        if (nextView && nextView !== 'self') next.set('view', nextView);
+        else next.delete('view');
+        setSearchParams(next, { replace: false });
+        setSelectedWorkflow(null);
+    };
+
+    // Drop stale / removed view params (buddy & tasks toggles removed).
+    useEffect(() => {
+        if (isHRView || !roleFromApi) return;
+        if (viewParam === 'tasks' || viewParam === 'buddy') setLifecycleView('self');
+        else if (viewParam === 'team' && !canViewTeam) setLifecycleView('self');
+    }, [isHRView, roleFromApi, viewParam, canViewTeam]);
 
     const { data: employeeData = { employees: [] } } = useEmployees();
     const employees = employeeData?.employees ?? [];
@@ -64,108 +127,222 @@ const OnboardingHub = () => {
     const [createForm, setCreateForm] = useState({
         employeeId: '', templateId: '', assignedHR: '', assignedBuddy: '',
         assignedManager: '', welcomeMessage: '', joiningDate: '', scheduledStartDate: '',
+        expectedCompletionDate: '',
         saveAsDraft: false,
     });
 
     const templates = dashboard?.templates || [];
 
-    const apiBase = isHRView ? ADMIN_ONBOARDING_ENDPOINT : BOTH_ONBOARDING_ENDPOINT;
+    const pickWorkflow = (workflows, preferredId) => {
+        if (!workflows?.length) return null;
+        if (preferredId) {
+            const found = workflows.find((w) => w._id === preferredId);
+            if (found) return found;
+            return null;
+        }
+        return workflows[0];
+    };
 
-    const fetchDashboard = useCallback(async () => {
+    const fetchDashboard = useCallback(async ({ soft = false } = {}) => {
+        if (fetchInFlightRef.current) return;
+        fetchInFlightRef.current = true;
         try {
-            setLoading(true);
+            // Full-page spinner only on first load — soft refresh avoids blink
+            if (!soft && !hasLoadedRef.current) setLoading(true);
 
-            if (!isHRView) {
+            if (isHRView) {
+                const view = viewParam === 'team' ? 'team' : 'all';
+                const url = `${ADMIN_ONBOARDING_ENDPOINT}/onboarding/dashboard${view !== 'all' ? `?view=${view}` : ''}`;
+                const res = await axios.get(url, { withCredentials: true });
+                const data = res.data?.data;
+                const workflows = data?.workflows || [];
+                setDashboard(data || { workflows: [], stats: {}, templates: [] });
+                setSelectedWorkflow((prev) => {
+                    const preferredId = workflowIdRef.current || prev?._id;
+                    return preferredId ? pickWorkflow(workflows, preferredId) : null;
+                });
+                return;
+            }
+
+            const wantsTeam = viewParam === 'team';
+            const viewQs = wantsTeam ? '?view=team' : '';
+            const res = await axios.get(`${BOTH_ONBOARDING_ENDPOINT}/dashboard${viewQs}`, { withCredentials: true });
+            const data = res.data?.data || { workflows: [], stats: {}, role: {} };
+            const role = data.role || {};
+            let workflows = data.workflows || [];
+            const canTeam = Boolean(role.canViewTeam || role.hasDirectReports);
+            const personalMode = !(wantsTeam && canTeam);
+
+            if (personalMode) {
                 try {
-                    const res = await axios.get(`${BOTH_ONBOARDING_ENDPOINT}/my-workflow`, { withCredentials: true });
-                    if (res.data?.data) {
-                        setSelectedWorkflow(res.data.data);
-                        setDashboard({ workflows: [res.data.data], stats: {} });
-                        return;
-                    }
+                    const mine = await axios.get(`${BOTH_ONBOARDING_ENDPOINT}/my-workflow`, { withCredentials: true });
+                    if (mine.data?.data) workflows = [mine.data.data];
                 } catch (err) {
-                    if (err.response?.status === 404) {
-                        setDashboard({ workflows: [], stats: {} });
-                        setSelectedWorkflow(null);
-                        return;
-                    }
-                    throw err;
+                    if (err.response?.status !== 404) throw err;
+                    workflows = [];
                 }
             }
 
-            const view = isHRView ? (isManagerView ? 'team' : 'all') : undefined;
-            const url = isHRView
-                ? `${ADMIN_ONBOARDING_ENDPOINT}/onboarding/dashboard${view ? `?view=${view}` : ''}`
-                : `${BOTH_ONBOARDING_ENDPOINT}/dashboard`;
-            const res = await axios.get(url, { withCredentials: true });
-            const data = res.data?.data;
-            setDashboard(data);
-
-            const workflowId = searchParams.get('id');
-            if (workflowId && data?.workflows) {
-                const found = data.workflows.find((w) => w._id === workflowId);
-                if (found) setSelectedWorkflow(found);
-            } else if (!isHRView && data?.workflows?.length === 1) {
-                setSelectedWorkflow(data.workflows[0]);
-            } else if (isHRView && data?.workflows?.length && !selectedWorkflow) {
-                setSelectedWorkflow(data.workflows[0]);
-            }
+            setDashboard({ ...data, workflows, role });
+            setSelectedWorkflow((prev) => {
+                const preferredId = workflowIdRef.current || prev?._id;
+                if (!personalMode) {
+                    return preferredId ? pickWorkflow(workflows, preferredId) : null;
+                }
+                return pickWorkflow(workflows, preferredId);
+            });
         } catch (err) {
             if (!isHRView && err.response?.status === 404) {
-                setDashboard({ workflows: [], stats: {} });
+                setDashboard({ workflows: [], stats: {}, role: {} });
+                setSelectedWorkflow(null);
             } else {
                 toast.error('Failed to load onboarding data');
             }
         } finally {
+            hasLoadedRef.current = true;
             setLoading(false);
+            fetchInFlightRef.current = false;
         }
-    }, [isHRView, isManagerView, searchParams]);
+    }, [isHRView, viewParam]);
 
-    useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+    useEffect(() => {
+        fetchDashboard();
+    }, [fetchDashboard]);
 
-    const refreshWorkflow = async (id) => {
-        if (isHRView) {
-            const res = await axios.get(`${ADMIN_ONBOARDING_ENDPOINT}/onboarding/${id}`, { withCredentials: true });
+    // Selecting a chip only switches local selection — no refetch / no blink
+    useEffect(() => {
+        if (!workflowIdParam || !dashboard?.workflows?.length) return;
+        setSelectedWorkflow((prev) => {
+            if (prev?._id === workflowIdParam) return prev;
+            return dashboard.workflows.find((w) => w._id === workflowIdParam) || prev;
+        });
+    }, [workflowIdParam, dashboard]);
+
+    const refreshWorkflow = useCallback(async () => {
+        await fetchDashboard({ soft: true });
+    }, [fetchDashboard]);
+
+    const updateWorkflowSchedule = useCallback(async (workflowId, payload) => {
+        try {
+            setSubmitting(true);
+            const res = await axios.put(
+                `${ADMIN_ONBOARDING_ENDPOINT}/onboarding/${workflowId}`,
+                payload,
+                { withCredentials: true },
+            );
             if (res.data?.data) {
                 setSelectedWorkflow(res.data.data);
-                setDashboard((prev) => ({
-                    ...prev,
-                    workflows: (prev?.workflows || []).map((w) => w._id === id ? res.data.data : w),
-                }));
+                setDashboard((prev) => {
+                    if (!prev?.workflows) return prev;
+                    return {
+                        ...prev,
+                        workflows: prev.workflows.map((w) => (
+                            w._id === workflowId ? res.data.data : w
+                        )),
+                    };
+                });
+            } else {
+                await refreshWorkflow();
             }
-        } else {
-            const res = await axios.get(`${BOTH_ONBOARDING_ENDPOINT}/my-workflow`, { withCredentials: true });
-            if (res.data?.data) {
-                setSelectedWorkflow(res.data.data);
-                setDashboard({ workflows: [res.data.data], stats: {} });
-            }
+            toast.success('Schedule updated');
+            return true;
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update schedule');
+            return false;
+        } finally {
+            setSubmitting(false);
         }
-    };
+    }, [refreshWorkflow]);
 
     const wf = selectedWorkflow;
     const breakdown = wf?.progressBreakdown || {};
-    const myEmployeeId = (employee?._id || employee?.id || user?.employeeId)?.toString();
+
+    useEffect(() => {
+        const socketUrl = getSocketIOUrl();
+        if (!socketUrl) return undefined;
+
+        const token = getTokenFromCookie();
+        const socket = io(socketUrl, {
+            path: '/socket.io',
+            withCredentials: true,
+            auth: token ? { token } : {},
+            transports: ['websocket', 'polling'],
+        });
+
+        let debounceTimer;
+        const handleOnboardingChanged = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => fetchDashboard({ soft: true }), 400);
+        };
+        socket.on('onboarding:changed', handleOnboardingChanged);
+
+        return () => {
+            clearTimeout(debounceTimer);
+            socket.off('onboarding:changed', handleOnboardingChanged);
+            socket.disconnect();
+        };
+    }, [fetchDashboard]);
+
     const workflowEmployeeId = wf?.employeeId?._id?.toString() || wf?.employeeId?.toString();
     const isOnboardingEmployee = Boolean(workflowEmployeeId && myEmployeeId && workflowEmployeeId === myEmployeeId);
 
     const canActOnTask = (task) => {
         const assigneeId = task.assignedTo?._id?.toString() || task.assignedTo?.toString();
-        if (isHRView) {
-            return assigneeId && myEmployeeId && assigneeId === myEmployeeId;
+        if (isHRView) return true;
+        if (assigneeId && myEmployeeId && assigneeId === myEmployeeId) return true;
+        if (task.assigneeRole === 'employee' && isOnboardingEmployee) return true;
+        if (task.assigneeRole === 'manager') {
+            return wf?.assignedManager?._id?.toString() === myEmployeeId;
         }
-        return true;
+        if (task.assigneeRole === 'buddy') {
+            return wf?.assignedBuddy?._id?.toString() === myEmployeeId;
+        }
+        return false;
+    };
+
+    const canActOnChecklist = (item) => {
+        if (isHRView) return true;
+        const role = item.assignedRole || 'employee';
+        if (role === 'employee') return isOnboardingEmployee;
+        if (role === 'manager') {
+            return wf?.assignedManager?._id?.toString() === myEmployeeId;
+        }
+        if (role === 'buddy') {
+            return wf?.assignedBuddy?._id?.toString() === myEmployeeId;
+        }
+        return (wf?.tasks || []).some((task) => {
+            const assigneeId = task.assignedTo?._id?.toString() || task.assignedTo?.toString();
+            return task.assigneeRole === role && assigneeId === myEmployeeId;
+        });
     };
 
     const visibleTasks = useMemo(() => {
         if (!wf?.tasks) return [];
-        if (isHRView) return wf.tasks;
-        return wf.tasks.filter((t) => {
+        const gated = filterByFeature(wf.tasks);
+        if (isHRView) return gated;
+        return gated.filter((t) => {
             const assigneeId = t.assignedTo?._id?.toString() || t.assignedTo?.toString();
             return assigneeId === myEmployeeId || t.assigneeRole === 'employee';
         });
-    }, [wf, isHRView, myEmployeeId]);
+    }, [wf, isHRView, myEmployeeId, filterByFeature]);
 
     const useEmployeeOnboardingApi = !isHRView || isOnboardingEmployee;
+
+    const openTaskAction = (task) => {
+        const route = TASK_ACTION_ROUTES[task?.title];
+        if (route) {
+            navigate(route);
+            return;
+        }
+        const sectionId = TASK_ACTION_SECTIONS[task?.title];
+        if (!sectionId) return;
+        requestAnimationFrame(() => {
+            document.getElementById(sectionId)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        });
+    };
 
     const updateTask = async (taskId, status) => {
         if (!wf) return;
@@ -175,9 +352,21 @@ const OnboardingHub = () => {
             const path = useEmployeeOnboardingApi
                 ? `${base}/workflow/${wf._id}/tasks/${taskId}`
                 : `${base}/onboarding/${wf._id}/tasks/${taskId}`;
-            await axios.put(path, { status }, { withCredentials: true });
+            const response = await axios.put(path, { status }, { withCredentials: true });
+            const updatedWorkflow = response.data?.data;
+            if (updatedWorkflow) {
+                setSelectedWorkflow(updatedWorkflow);
+                setDashboard((previous) => ({
+                    ...previous,
+                    workflows: (previous?.workflows || []).map((workflow) =>
+                        workflow._id === updatedWorkflow._id ? updatedWorkflow : workflow),
+                }));
+            }
             toast.success(status === 'In Progress' ? 'Task started' : status === 'Completed' ? 'Task completed' : 'Task updated');
-            await refreshWorkflow(wf._id);
+            if (status === 'In Progress') {
+                const task = (updatedWorkflow?.tasks || wf.tasks || []).find((item) => item._id === taskId);
+                openTaskAction(task);
+            }
         } catch (err) {
             const blockers = err.response?.data?.blockers;
             if (blockers?.length) {
@@ -190,63 +379,27 @@ const OnboardingHub = () => {
         }
     };
 
-    const uploadDocument = async (documentType, file) => {
-        if (!wf || !file) return;
+    const performWorkflowAction = async (action) => {
+        if (!wf || !isHRView) return;
         try {
             setSubmitting(true);
-            const docMeta = ONBOARDING_DOCUMENT_TYPES.find((d) => d.key === documentType);
-            const fd = new FormData();
-            fd.append('document', file);
-            fd.append('name', docMeta?.label || documentType);
-            fd.append('category', 'Employee');
-            // Map onboarding keys to job-details types when supported
-            const jobTypeMap = {
-                AADHAAR: 'AADHAR_CARD',
-                PAN: 'PAN_CARD',
-                DEGREE: 'DEGREE_CERTIFICATE',
-                OFFER_ACK: 'OFFER_LETTER',
-                OTHER: 'OTHER',
-            };
-            if (jobTypeMap[documentType]) {
-                fd.append('documentType', jobTypeMap[documentType]);
-            }
-            const uploadRes = await axios.post(`${BOTH_DOCUMENTS_ENDPOINT}/upload`, fd, {
-                withCredentials: true,
-            });
-            const uploaded = uploadRes.data?.data || uploadRes.data?.document;
-            const docUrl = uploaded?.fileUrl || uploadRes.data?.fileUrl;
-            if (!docUrl) {
-                toast.error('Upload succeeded but file URL missing — contact support');
-                return;
-            }
-            const base = useEmployeeOnboardingApi ? BOTH_ONBOARDING_ENDPOINT : ADMIN_ONBOARDING_ENDPOINT;
-            const path = useEmployeeOnboardingApi
-                ? `${base}/workflow/${wf._id}/documents`
-                : `${base}/onboarding/${wf._id}/documents`;
-            await axios.post(path, { documentType, name: file.name, url: docUrl }, { withCredentials: true });
-            toast.success('Document uploaded');
-            await refreshWorkflow(wf._id);
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Upload failed');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const verifyDocument = async (docId, status, rejectionReason = '') => {
-        if (!wf) return;
-        try {
-            setSubmitting(true);
-            await axios.put(
-                `${ADMIN_ONBOARDING_ENDPOINT}/onboarding/${wf._id}/documents/${docId}/verify`,
-                { status, rejectionReason },
+            const response = await axios.post(
+                `${ADMIN_ONBOARDING_ENDPOINT}/onboarding/${wf._id}/actions/${action}`,
+                {},
                 { withCredentials: true }
             );
-            toast.success(status === 'Rejected' ? 'Document rejected' : 'Document verified');
-            setRejectDocId(null);
-            await refreshWorkflow(wf._id);
+            const updatedWorkflow = response.data?.data;
+            if (updatedWorkflow) {
+                setSelectedWorkflow(updatedWorkflow);
+                setDashboard((previous) => ({
+                    ...previous,
+                    workflows: (previous?.workflows || []).map((workflow) =>
+                        workflow._id === updatedWorkflow._id ? updatedWorkflow : workflow),
+                }));
+            }
+            toast.success(response.data?.message || `Workflow ${action}d`);
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to verify document');
+            toast.error(err.response?.data?.message || `Failed to ${action} workflow`);
         } finally {
             setSubmitting(false);
         }
@@ -261,7 +414,7 @@ const OnboardingHub = () => {
                 ? `${base}/workflow/${wf._id}/checklist/${itemId}`
                 : `${base}/onboarding/${wf._id}/checklist/${itemId}`;
             await axios.put(path, { completed }, { withCredentials: true });
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to update checklist');
         } finally {
@@ -276,7 +429,7 @@ const OnboardingHub = () => {
                 { note: newNote, visibility: 'internal' }, { withCredentials: true });
             setNewNote('');
             toast.success('Note added');
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch {
             toast.error('Failed to add note');
         }
@@ -293,6 +446,7 @@ const OnboardingHub = () => {
             setCreateForm({
                 employeeId: '', templateId: '', assignedHR: '', assignedBuddy: '',
                 assignedManager: '', welcomeMessage: '', joiningDate: '', scheduledStartDate: '',
+                expectedCompletionDate: '',
                 saveAsDraft: false,
             });
             await fetchDashboard();
@@ -314,19 +468,139 @@ const OnboardingHub = () => {
         const email = w.employeeId?.email?.toLowerCase() || '';
         const matchSearch = !searchTerm || name.includes(searchTerm.toLowerCase()) || email.includes(searchTerm.toLowerCase());
         const matchStatus = statusFilter === 'all' || w.status === statusFilter;
-        return matchSearch && matchStatus;
+        return Boolean(w.employeeId?.name) && matchSearch && matchStatus;
     });
 
-    const roleLabel = isHRView ? 'HR Dashboard' : isManagerView ? 'Manager View' : isBuddyView ? 'Buddy View' : 'My Onboarding';
+    const offerAcceptanceRate = dashboard?.stats?.totalJoinings
+        ? Math.round(((dashboard.stats.active ?? 0) / dashboard.stats.totalJoinings) * 100)
+        : 0;
+
+    const avgOnboardingDays = useMemo(() => {
+        const completed = (dashboard?.workflows || []).filter((w) =>
+            w.status === 'Completed' && w.actualCompletionDate && w.createdAt);
+        if (!completed.length) return null;
+        const totalDays = completed.reduce((sum, w) => {
+            const days = (new Date(w.actualCompletionDate) - new Date(w.createdAt)) / 86400000;
+            return sum + Math.max(days, 0);
+        }, 0);
+        return (totalDays / completed.length).toFixed(1);
+    }, [dashboard]);
+
+    const openWorkflow = (workflow) => {
+        setSelectedWorkflow(workflow);
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.set('id', workflow._id);
+            return next;
+        });
+        requestAnimationFrame(() => {
+            detailSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    };
+
+    const closeWorkflow = () => {
+        setSelectedWorkflow(null);
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.delete('id');
+            return next;
+        });
+    };
+
+    const deleteWorkflow = async (workflow) => {
+        const employeeName = [workflow.employeeId?.name, workflow.employeeId?.lastName]
+            .filter(Boolean).join(' ') || 'this employee';
+        // Confirmation prevents accidental permanent workflow deletion.
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`Delete onboarding workflow for ${employeeName}? This cannot be undone.`)) return;
+
+        try {
+            setSubmitting(true);
+            await axios.delete(
+                `${ADMIN_ONBOARDING_ENDPOINT}/onboarding/${workflow._id}`,
+                { withCredentials: true }
+            );
+
+            setDashboard((prev) => ({
+                ...prev,
+                workflows: (prev?.workflows || []).filter((item) => item._id !== workflow._id),
+            }));
+            if (selectedWorkflow?._id === workflow._id) {
+                setSelectedWorkflow(null);
+            }
+            setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                if (next.get('id') === workflow._id) next.delete('id');
+                return next;
+            });
+            toast.success('Onboarding workflow deleted');
+            await fetchDashboard({ soft: true });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to delete workflow');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const roleLabel = isHRView
+        ? 'HR Dashboard'
+        : isManagerView
+            ? 'My Team'
+            : 'My Onboarding';
+    const sectionCardClass = isHRView ? 'cm-card' : 'bg-white rounded-xl shadow-md p-6';
+    const sectionTitleClass = isHRView
+        ? 'cm-title-sm mb-4 flex items-center gap-2'
+        : 'text-lg font-bold flex items-center gap-2 mb-4';
+
+    const resolveAssigneeName = (field) => {
+        if (!field) return null;
+        if (typeof field === 'object' && field.name) {
+            return [field.name, field.lastName].filter(Boolean).join(' ').trim() || field.name;
+        }
+        const id = field._id || field;
+        const match = employees.find((e) => (e._id || e.id)?.toString() === id?.toString());
+        return match ? [match.name, match.lastName].filter(Boolean).join(' ').trim() : null;
+    };
+
+    const toggleTaskGroup = (key) => {
+        setExpandedTaskGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
+    const setDetailTab = (tabId) => {
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            if (tabId && tabId !== 'overview') next.set('detailTab', tabId);
+            else next.delete('detailTab');
+            return next;
+        });
+    };
 
     const tasksByRole = useMemo(() => {
         if (!wf?.tasks) return {};
+        const gated = filterByFeature(wf.tasks);
         const groups = {};
         for (const g of TASK_GROUPS_BY_ROLE) {
-            groups[g.key] = wf.tasks.filter((t) => (t.assigneeRole || 'employee') === g.key);
+            groups[g.key] = gated.filter((t) => (t.assigneeRole || 'employee') === g.key);
         }
         return groups;
-    }, [wf]);
+    }, [wf, filterByFeature]);
+
+    useEffect(() => {
+        if (!wf) return;
+        if (viewerRole === 'employee') {
+            setExpandedTaskGroups(new Set(['_all']));
+            return;
+        }
+        const gated = filterByFeature(wf.tasks || []);
+        const firstWithTasks = TASK_GROUPS_BY_ROLE.find((g) =>
+            gated.some((t) => (t.assigneeRole || 'employee') === g.key));
+        setExpandedTaskGroups(new Set([firstWithTasks?.key || 'employee']));
+    }, [wf?._id, viewerRole, wf?.tasks?.length, filterByFeature]);
 
     const updateAsset = async (assetId, payload) => {
         if (!wf) return;
@@ -334,7 +608,7 @@ const OnboardingHub = () => {
             setSubmitting(true);
             await axios.put(`${ADMIN_ONBOARDING_ENDPOINT}/onboarding/${wf._id}/assets/${assetId}`, payload, { withCredentials: true });
             toast.success('Asset updated');
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to update asset');
         } finally {
@@ -350,9 +624,9 @@ const OnboardingHub = () => {
             const path = useEmployeeOnboardingApi
                 ? `${base}/workflow/${wf._id}/training/${trainingId}`
                 : `${base}/onboarding/${wf._id}/training/${trainingId}`;
-            await axios.put(path, { status: 'Completed', score: 100 }, { withCredentials: true });
+            await axios.put(path, { status: 'Completed' }, { withCredentials: true });
             toast.success('Training marked complete');
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to update training');
         } finally {
@@ -368,7 +642,7 @@ const OnboardingHub = () => {
                 { acknowledgment: `Signed by ${employee?.name || user?.name || 'Employee'} on ${new Date().toISOString()}` },
                 { withCredentials: true });
             toast.success('Policy signed');
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to sign policy');
         } finally {
@@ -386,7 +660,7 @@ const OnboardingHub = () => {
                 : `${base}/workflow/${wf._id}/buddy-checkins/${checkinId}`;
             await axios.put(path, payload, { withCredentials: true });
             toast.success('Check-in updated');
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to update check-in');
         } finally {
@@ -404,7 +678,7 @@ const OnboardingHub = () => {
                 : `${base}/workflow/${wf._id}/manager-actions/${actionId}`;
             await axios.put(path, payload, { withCredentials: true });
             toast.success('Action updated');
-            await refreshWorkflow(wf._id);
+            await refreshWorkflow();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to update action');
         } finally {
@@ -415,11 +689,28 @@ const OnboardingHub = () => {
     if (loading) return <LoadingSpinner message="Loading onboarding..." />;
 
     /* ── Employee with no workflow or scheduled ── */
-    if (!isHRView && !loading && (!wf || wf?.status === 'Scheduled' || wf?.status === 'Draft')) {
+    if (!isHRView && !isManagerView
+        && !loading && (!wf || wf?.status === 'Scheduled' || wf?.status === 'Draft')) {
         const scheduledDate = wf?.scheduledStartDate || wf?.joiningDate;
         return (
             <div className="page-shell min-h-screen bg-gray-50">
-                <div className="page-shell-inner">
+                <div className="page-shell-inner space-y-4">
+                    {showRoleToggles && (
+                        <div className="flex justify-end">
+                            <div className="inline-flex flex-wrap rounded-xl bg-gray-100 p-1" role="tablist" aria-label="Onboarding view">
+                                <button type="button" role="tab" aria-selected onClick={() => setLifecycleView('self')}
+                                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-theme-primary shadow-sm sm:text-sm">
+                                    Self
+                                </button>
+                                {canViewTeam && (
+                                    <button type="button" role="tab" onClick={() => setLifecycleView('team')}
+                                        className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 sm:text-sm">
+                                        My Team
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     <div className="bg-white rounded-xl shadow-md p-10 text-center">
                         <FaCalendarAlt className="mx-auto text-6xl text-indigo-300 mb-4" />
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -441,519 +732,377 @@ const OnboardingHub = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen bg-gray-50">
+        <div className={`page-shell min-h-screen bg-gray-50 ${(isHRView || wf) ? 'cm-hrms' : ''}`}>
             <div className="page-shell-inner hrms-stack pb-10">
 
                 {/* ── Header ── */}
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                    <div>
-                        <p className="text-sm text-theme-secondary font-medium">{roleLabel}</p>
-                        <h1 className="text-3xl font-bold text-gray-800">
-                            {isHRView ? 'Employee Onboarding' : 'My Onboarding Journey'}
+                {!wf && (
+                <header className={isHRView ? 'cm-card flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between' : 'flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'}>
+                    <div className="min-w-0">
+                        <p className={isHRView ? 'cm-label' : 'text-sm font-medium text-theme-secondary'}>{roleLabel}</p>
+                        <h1 className={isHRView ? 'cm-title mt-1' : 'mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl'}>
+                            {isHRView
+                                ? 'Onboarding Hub'
+                                : isManagerView
+                                    ? 'My Team'
+                                    : 'My Onboarding Journey'}
                         </h1>
-                        {wf && !isHRView && (
-                            <p className="text-gray-500 mt-1">
+                        {isManagerView && !wf && (
+                            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
+                                Direct reports who are currently onboarding.
+                            </p>
+                        )}
+                        {isHRView && !wf && (
+                            <p className="cm-subtitle mt-2 max-w-2xl sm:text-base">
+                                Plan and track every new hire&apos;s onboarding journey in one place.
+                            </p>
+                        )}
+                        {wf && isPersonalView && (
+                            <p className="mt-2 text-sm leading-relaxed text-gray-500 sm:text-base">
                                 Welcome, {wf.employeeId?.name}! Track your joining progress below.
                             </p>
                         )}
                     </div>
-                    {isHRView && (
-                        <button onClick={() => setShowCreateModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-theme-secondary text-white rounded-lg hover:bg-theme-primary">
-                            <FaUserPlus /> Create Workflow
-                        </button>
-                    )}
-                </div>
+                    <div className="flex flex-col gap-2 sm:items-end">
+                        {!isHRView && showRoleToggles && (
+                            <div
+                                className="inline-flex flex-wrap rounded-xl bg-gray-100 p-1"
+                                role="tablist"
+                                aria-label="Onboarding view"
+                            >
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={isPersonalView}
+                                    onClick={() => setLifecycleView('self')}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
+                                        isPersonalView
+                                            ? 'bg-white text-theme-primary shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    Self
+                                </button>
+                                {canViewTeam && (
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={isManagerView}
+                                        onClick={() => setLifecycleView('team')}
+                                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm ${
+                                            isManagerView
+                                                ? 'bg-white text-theme-primary shadow-sm'
+                                                : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                    >
+                                        My Team
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        {isHRView && !wf && (
+                            <CmButton variant="inverted" onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
+                                <FaUserPlus className="shrink-0 text-base" />
+                                <span>Onboard New Employee</span>
+                            </CmButton>
+                        )}
+                    </div>
+                </header>
+                )}
 
-                {/* ── HR Enhanced Dashboard ── */}
-                {isHRView && dashboard?.stats && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                {!wf && !isHRView && isManagerView && dashboard?.stats && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {[
-                            { label: "Today's Joinings", value: dashboard.stats.todaysJoinings, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                            // { label: 'Upcoming', value: dashboard.stats.upcomingJoinings, color: 'text-purple-600', bg: 'bg-purple-50' },
-                            // { label: 'Scheduled', value: dashboard.stats.scheduled, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                            { label: 'Active', value: dashboard.stats.active, color: 'text-blue-600', bg: 'bg-blue-50' },
-                            { label: 'Pending Docs', value: dashboard.stats.pendingDocuments, color: 'text-amber-600', bg: 'bg-amber-50' },
-                            // { label: 'Pending HR', value: dashboard.stats.pendingHrTasks, color: 'text-orange-600', bg: 'bg-orange-50' },
-                            // { label: 'Pending IT', value: dashboard.stats.pendingItSetup, color: 'text-cyan-600', bg: 'bg-cyan-50' },
-                            { label: 'Delayed', value: dashboard.stats.delayedEmployees ?? dashboard.stats.delayed, color: 'text-red-600', bg: 'bg-red-50' },
-                            { label: 'Completed (Month)', value: dashboard.stats.completedThisMonth, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                        ].map((s) => (
-                            <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
-                                <div className={`text-2xl font-bold ${s.color}`}>{s.value ?? 0}</div>
-                                <div className="text-xs text-gray-600">{s.label}</div>
+                            { label: 'Assigned Employees', value: dashboard.stats.assignedEmployees },
+                            { label: 'Pending Reviews', value: dashboard.stats.pendingReviews },
+                            { label: 'Pending Induction', value: dashboard.stats.pendingInduction },
+                            { label: 'Pending Goals', value: dashboard.stats.pendingGoals },
+                            { label: 'Team Progress', value: `${dashboard.stats.teamAverageProgress ?? 0}%` },
+                        ].map((stat) => (
+                            <div key={stat.label} className="rounded-xl bg-indigo-50 p-3 text-center">
+                                <div className="text-2xl font-bold text-indigo-600">{stat.value ?? 0}</div>
+                                <div className="text-xs text-gray-600">{stat.label}</div>
                             </div>
                         ))}
                     </div>
                 )}
 
-                {/* ── HR Workflow Selector ── */}
-                {isHRView && (
-                    <div className="bg-white rounded-xl shadow-md p-4">
-                        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                {/* ── Employee Workflow Table (HR — Onboarding Hub list) ── */}
+                {!wf && isHRView && (
+                    <div className="space-y-4">
+                        {/* <div className="cm-banner cm-banner--attention">
+                            Pre-boarding portal covers offer-accept only — document/bank/forms upload requires full portal (P0 gap)
+                        </div> */}
+
+                        {dashboard?.stats && (
+                            <div className="cm-kpi-row cm-kpi-row--3">
+                                <CmStat
+                                    label="Pending Actions"
+                                    value={(dashboard.stats.pendingDocuments ?? 0) + (dashboard.stats.pendingVerifications ?? 0)}
+                                    attention={((dashboard.stats.pendingDocuments ?? 0) + (dashboard.stats.pendingVerifications ?? 0)) > 0}
+                                    meta={`${dashboard.stats.pendingDocuments ?? 0} docs · ${dashboard.stats.pendingVerifications ?? 0} verifications`}
+                                />
+                                <CmStat
+                                    label="Offer Acceptance Rate"
+                                    value={`${offerAcceptanceRate}%`}
+                                    meta={`${dashboard.stats.upcomingJoinings ?? 0} upcoming joiners`}
+                                />
+                                <CmStat
+                                    label="Avg. Onboarding Time"
+                                    value={avgOnboardingDays != null ? `${avgOnboardingDays} Days` : '—'}
+                                    meta={`${dashboard.stats.completedThisMonth ?? 0} completed this month`}
+                                />
+                            </div>
+                        )}
+
+                        <div className="cm-card">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-5">
+                                <div className="flex-1">
+                                    <CmSearch
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Search by employee name or email..."
+                                    />
+                                </div>
+                                <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+                                    {['all', ...WORKFLOW_STATUSES].map((status) => (
+                                        <button key={status} type="button" onClick={() => setStatusFilter(status)}
+                                            className={`cm-chip ${statusFilter === status ? 'cm-chip--active' : ''}`}>
+                                            {status === 'all' ? 'All' : status}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {filteredWorkflows.length === 0 ? (
+                                <CmEmpty title="No workflows found">Create one to get started.</CmEmpty>
+                            ) : (
+                                <div className="cm-table-wrap">
+                                    <table className="cm-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Candidate</th>
+                                                <th>Status</th>
+                                                <th>Progress</th>
+                                                <th>Banking</th>
+                                                <th>Verification</th>
+                                                <th>Actions</th>
+                                                <th>Join date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredWorkflows.map((w) => {
+                                                const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
+                                                const isSelected = selectedWorkflow?._id === w._id;
+                                                const fullName = `${w.employeeId?.name || ''} ${w.employeeId?.lastName || ''}`.trim();
+                                                const bankTask = (w.tasks || []).find((t) => /bank/i.test(t.title || ''));
+                                                const bgvTask = (w.tasks || []).find((t) => /bgv|background.?verif/i.test(`${t.title || ''} ${t.category || ''}`));
+                                                const bankTone = bankTask ? statusTone(bankTask.status) : 'neutral';
+                                                const bankLabel = bankTask ? (bankTask.status === 'Completed' ? 'Completed' : bankTask.status) : 'Pending';
+                                                const bgvTone = bgvTask ? statusTone(bgvTask.status) : 'neutral';
+                                                const bgvLabel = bgvTask ? (bgvTask.status === 'Completed' ? 'Completed' : bgvTask.status) : 'Pending';
+                                                return (
+                                                    <tr
+                                                        key={w._id}
+                                                        onClick={() => openWorkflow(w)}
+                                                        className={`cursor-pointer ${isSelected ? 'bg-[rgba(28,202,155,0.06)]' : ''}`}
+                                                    >
+                                                        <td>
+                                                            <CmPerson name={fullName} meta={w.employeeId?.jobTitle || w.employeeId?.department || ''} />
+                                                        </td>
+                                                        <td>
+                                                            <CmBadge tone={statusTone(w.status)}>{w.status}</CmBadge>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex items-center gap-3">
+                                                                <CmRing value={progress} size={36} attention={w.status === 'Overdue'} />
+                                                                <span className="text-xs text-[var(--cm-muted)]">
+                                                                    {w.tasks?.filter((task) => task.status === 'Completed').length || 0}/{w.tasks?.length || 0} tasks
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <CmBadge tone={bankTone}>{bankLabel}</CmBadge>
+                                                        </td>
+                                                        <td>
+                                                            <CmBadge tone={bgvTone}>{bgvLabel}</CmBadge>
+                                                        </td>
+                                                        <td onClick={(e) => e.stopPropagation()}>
+                                                            <button type="button"
+                                                                onClick={() => deleteWorkflow(w)}
+                                                                disabled={submitting}
+                                                                aria-label={`Delete ${w.employeeId?.name || 'employee'} workflow`}
+                                                                className="cm-link cm-link--attention">
+                                                                <FaTrash />
+                                                            </button>
+                                                        </td>
+                                                        <td className="text-sm">
+                                                            {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {filteredWorkflows.length > 0 && (
+                                <div className="cm-pagination">
+                                    <span>
+                                        Showing {filteredWorkflows.length} of {dashboard?.stats?.totalJoinings ?? filteredWorkflows.length} candidates
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                        <button type="button" className="cm-icon-btn" aria-label="Previous page" disabled>‹</button>
+                                        <button type="button" className="cm-icon-btn" aria-label="Next page" disabled>›</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Employee Workflow Cards (Manager team view) ── */}
+                {!wf && !isHRView && isManagerView && (
+                    <div>
+                        <div className="flex flex-col gap-3 mb-4">
                             <div className="relative flex-1">
                                 <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input placeholder="Search employee..." value={searchTerm}
+                                <input placeholder="Search by employee name or email..." value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border rounded-lg" />
+                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-white shadow-sm" />
                             </div>
-                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                                className="px-4 py-2 border rounded-lg">
-                                <option value="all">All Status</option>
-                                {WORKFLOW_STATUSES.map((s) => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                            </select>
+                            <div className="flex min-w-0 items-center gap-2">
+                                <FaFilter className="shrink-0 text-gray-400" />
+                                <div className="hrms-chip-scroll">
+                                    <div className="hrms-chip-scroll-track" aria-label="Filter workflows by status">
+                                        {['all', ...WORKFLOW_STATUSES].map((status) => (
+                                            <div key={status} className="hrms-chip-scroll-item">
+                                                <button type="button" onClick={() => setStatusFilter(status)}
+                                                    className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+                                                        statusFilter === status
+                                                            ? 'border-theme-primary bg-theme-primary text-white shadow-sm'
+                                                            : 'border-gray-200 bg-white text-gray-600 hover:border-theme-primary'
+                                                    }`}>
+                                                    {status === 'all' ? 'All' : status}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex gap-3 overflow-x-auto pb-2">
-                            {filteredWorkflows.map((w) => (
-                                <button key={w._id} onClick={() => { setSelectedWorkflow(w); setSearchParams({ id: w._id }); }}
-                                    className={`shrink-0 px-4 py-2 rounded-lg border text-sm transition ${selectedWorkflow?._id === w._id ? 'border-theme-primary bg-theme-primary/10 text-theme-primary' : 'border-gray-200 hover:border-gray-300'}`}>
-                                    <div className="font-medium">{w.employeeId?.name || 'Employee'}</div>
-                                    <div className="text-xs text-gray-500">{w.status} · {w.progress || 0}%</div>
-                                </button>
-                            ))}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {filteredWorkflows.map((w) => {
+                                const totalTasks = w.tasks?.length || 0;
+                                const completedTasks = w.tasks?.filter((task) => task.status === 'Completed').length || 0;
+                                const progress = Math.max(0, Math.min(100, Number(w.progress) || 0));
+                                const isSelected = selectedWorkflow?._id === w._id;
+                                const statusClass = w.status === 'Completed'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : w.status === 'Overdue'
+                                        ? 'bg-red-50 text-red-700'
+                                        : w.status === 'In Progress'
+                                            ? 'bg-blue-50 text-blue-700'
+                                            : w.status === 'Scheduled'
+                                                ? 'bg-indigo-50 text-indigo-700'
+                                                : 'bg-amber-50 text-amber-700';
+                                const progressBarClass = w.status === 'Completed'
+                                    ? 'bg-emerald-500'
+                                    : w.status === 'Overdue'
+                                        ? 'bg-red-500'
+                                        : 'bg-theme-primary';
+
+                                return (
+                                    <article key={w._id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => openWorkflow(w)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                openWorkflow(w);
+                                            }
+                                        }}
+                                        className={`rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md cursor-pointer ${
+                                            isSelected ? 'border-theme-primary ring-2 ring-theme-primary/20' : 'border-gray-100'
+                                        }`}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <h3 className="truncate font-semibold text-gray-800">
+                                                {w.employeeId?.name} {w.employeeId?.lastName || ''}
+                                            </h3>
+                                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${statusClass}`}>
+                                                {w.status}
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-4">
+                                            <div className="mb-1.5 flex justify-between text-xs text-gray-500">
+                                                <span>Progress</span>
+                                                <span>{progress}%</span>
+                                            </div>
+                                            <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                                                <div className={`h-full rounded-full transition-all ${progressBarClass}`}
+                                                    style={{ width: `${progress}%` }} />
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                                            <FaTasks className="text-gray-400" />
+                                            <span>{completedTasks}/{totalTasks} Tasks</span>
+                                        </div>
+
+                                        <div className="mt-4 flex gap-2">
+                                            <button type="button"
+                                                onClick={(e) => { e.stopPropagation(); openWorkflow(w); }}
+                                                className="flex-1 rounded-lg bg-theme-secondary px-3 py-2.5 text-sm font-medium text-white hover:bg-theme-primary">
+                                                View Details
+                                            </button>
+                                        </div>
+                                    </article>
+                                );
+                            })}
                             {filteredWorkflows.length === 0 && (
-                                <p className="text-gray-500 text-sm py-2">No workflows found. Create one to get started.</p>
+                                <p className="col-span-full py-10 text-center text-sm text-gray-500 bg-white rounded-xl border border-dashed border-gray-200">
+                                    No direct reports are currently onboarding.
+                                </p>
                             )}
                         </div>
                     </div>
                 )}
 
                 {wf && (
-                    <>
-                        {/* ── Welcome & Progress ── */}
-                        <div className="bg-white rounded-xl shadow-md p-6">
-                            <div className="flex flex-col lg:flex-row justify-between gap-6">
-                                <div className="flex-1">
-                                    {isHRView && (
-                                        <h2 className="text-xl font-bold text-gray-800 mb-1">
-                                            {wf.employeeId?.name} {wf.employeeId?.lastName}
-                                        </h2>
-                                    )}
-                                    {wf.welcomeMessage && (
-                                        <p className="text-gray-600 text-sm mb-4">{wf.welcomeMessage}</p>
-                                    )}
-                                    <div className="flex flex-wrap gap-4 text-sm">
-                                        <span className={`px-3 py-1 rounded-full font-medium ${wf.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                                            {wf.status}
-                                        </span>
-                                        {wf.joiningDate && (
-                                            <span className="text-gray-500 flex items-center gap-1">
-                                                <FaClock /> Joining: {format(new Date(wf.joiningDate), 'MMM dd, yyyy')}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                                        {wf.assignedHR && (
-                                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                                <FaUser className="text-theme-secondary" />
-                                                <div><div className="text-gray-500 text-xs">HR Contact</div>
-                                                    <div className="font-medium">{wf.assignedHR?.name || 'HR'}</div></div>
-                                            </div>
-                                        )}
-                                        {wf.assignedManager && (
-                                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                                <FaUser className="text-theme-secondary" />
-                                                <div><div className="text-gray-500 text-xs">Manager</div>
-                                                    <div className="font-medium">{wf.assignedManager?.name || 'Manager'}</div></div>
-                                            </div>
-                                        )}
-                                        {wf.assignedBuddy && (
-                                            <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                                                <FaUser className="text-theme-secondary" />
-                                                <div><div className="text-gray-500 text-xs">Buddy</div>
-                                                    <div className="font-medium">{wf.assignedBuddy?.name || 'Buddy'}</div></div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex gap-4 flex-wrap">
-                                    <ProgressRing value={wf.progress || 0} label="Overall" />
-                                    <ProgressRing value={breakdown.tasks || 0} label="Tasks" color="#2563eb" />
-                                    <ProgressRing value={breakdown.documents || 0} label="Documents" color="#7c3aed" />
-                                    <ProgressRing value={breakdown.checklist || 0} label="Checklist" color="#059669" />
-                                    <ProgressRing value={breakdown.training || 0} label="Training" color="#d97706" />
-                                </div>
-                                {breakdown.byRole && isHRView && (
-                                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                                        {TASK_GROUPS_BY_ROLE.map((g) => (
-                                            <div key={g.key} className="bg-gray-50 rounded-lg px-3 py-2">
-                                                <span className="text-gray-500">{g.label}</span>
-                                                <span className="float-right font-bold">{breakdown.byRole[g.key] ?? 0}%</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* ── Tasks by Role ── */}
-                        <section className="bg-white rounded-xl shadow-md p-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                <FaTasks className="text-theme-secondary" /> Tasks
-                            </h2>
-                            {(isHRView ? TASK_GROUPS_BY_ROLE : [{ key: '_all', label: 'My Tasks' }]).map((group) => {
-                                const groupTasks = isHRView
-                                    ? (tasksByRole[group.key] || [])
-                                    : visibleTasks;
-                                if (!groupTasks.length) return null;
-                                const done = groupTasks.filter((t) => t.status === 'Completed').length;
-                                return (
-                                    <div key={group.key} className="mb-6 last:mb-0">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <h3 className="font-semibold text-gray-700">{group.label}</h3>
-                                            <span className="text-sm text-gray-500">{done}/{groupTasks.length} done · {breakdown.byRole?.[group.key] ?? 0}%</span>
-                                        </div>
-                                        <div className="space-y-3">
-                                            {groupTasks.map((task) => {
-                                                const blockers = getTaskCompletionBlockers(wf, task);
-                                                const readyToComplete = canCompleteTask(wf, task);
-                                                return (
-                                                    <div key={task._id} className="border rounded-lg p-4 hover:shadow-sm transition">
-                                                        <div className="flex justify-between items-start gap-3">
-                                                            <div>
-                                                                <h4 className="font-semibold">{task.title}</h4>
-                                                                {task.description && <p className="text-sm text-gray-500 mt-1">{task.description}</p>}
-                                                                <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
-                                                                    <span>{task.category}</span>
-                                                                    <span>{task.priority} priority</span>
-                                                                    {task.phase && <span>{task.phase}</span>}
-                                                                    {task.dueDate && <span>Due: {format(new Date(task.dueDate), 'MMM dd')}</span>}
-                                                                </div>
-                                                            </div>
-                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ${TASK_STATUS_COLORS[task.status] || 'bg-gray-100'}`}>
-                                                                {task.status}
-                                                            </span>
-                                                        </div>
-                                                        {task.status !== 'Completed' && canActOnTask(task) && (
-                                                            <div className="mt-3 flex gap-2 flex-wrap items-center">
-                                                                {task.status === 'Pending' && (
-                                                                    <button type="button" onClick={() => updateTask(task._id, 'In Progress')} disabled={submitting}
-                                                                        className="px-3 py-1 bg-theme-secondary text-white rounded text-sm disabled:opacity-50">Start</button>
-                                                                )}
-                                                                {task.status === 'In Progress' && (
-                                                                    <button type="button" onClick={() => updateTask(task._id, 'Completed')}
-                                                                        disabled={submitting || !readyToComplete}
-                                                                        className="px-3 py-1 bg-theme-primary text-white rounded text-sm disabled:opacity-50 flex items-center gap-1">
-                                                                        <FaCheckCircle /> Mark Complete
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {task.status === 'In Progress' && canActOnTask(task) && blockers.length > 0 && (
-                                                            <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
-                                                                <p className="font-medium">Before you can mark this complete:</p>
-                                                                <ul className="mt-1 list-disc list-inside">{blockers.map((b) => <li key={b}>{b}</li>)}</ul>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </section>
-
-                        {/* ── Documents ── */}
-                        <section className="bg-white rounded-xl shadow-md p-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                <FaFileAlt className="text-theme-secondary" /> Documents
-                            </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(wf.documents?.length ? wf.documents : ONBOARDING_DOCUMENT_TYPES.map(d => ({
-                                    documentType: d.key, name: d.label, mandatory: d.required, status: 'Pending',
-                                }))).map((doc, idx) => {
-                                    const docId = doc._id;
-                                    const meta = ONBOARDING_DOCUMENT_TYPES.find(d => d.key === doc.documentType);
-                                    return (
-                                        <div key={docId || doc.documentType || idx} className="border rounded-lg p-4">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h3 className="font-medium">{meta?.label || doc.name || doc.documentType}</h3>
-                                                    {doc.mandatory && <span className="text-xs text-red-500">Required</span>}
-                                                </div>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs ${DOC_STATUS_COLORS[doc.status] || 'bg-gray-100'}`}>
-                                                    {doc.status}
-                                                </span>
-                                            </div>
-                                            {doc.rejectionReason && (
-                                                <p className="text-xs text-red-600 mt-1">Rejected: {doc.rejectionReason}</p>
-                                            )}
-                                            <div className="mt-3 flex gap-2 flex-wrap">
-                                                {(isOnboardingEmployee || !isHRView) && doc.status !== 'Verified' && (
-                                                    <label className="cursor-pointer px-3 py-1 bg-theme-secondary text-white rounded text-sm flex items-center gap-1">
-                                                        <FaUpload />
-                                                        <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                                            onChange={(e) => uploadDocument(doc.documentType, e.target.files[0])} />
-                                                        Upload
-                                                    </label>
-                                                )}
-                                                {doc.url && (
-                                                    <a href={doc.url} target="_blank" rel="noreferrer"
-                                                        className="px-3 py-1 border rounded text-sm hover:bg-gray-50">View</a>
-                                                )}
-                                                {isHRView && doc.status === 'Uploaded' && docId && (
-                                                    <>
-                                                        <button onClick={() => verifyDocument(docId, 'Verified')} disabled={submitting}
-                                                            className="px-3 py-1 bg-emerald-600 text-white rounded text-sm flex items-center gap-1">
-                                                            <FaCheck /> Verify
-                                                        </button>
-                                                        <button onClick={() => setRejectDocId(docId)} disabled={submitting}
-                                                            className="px-3 py-1 bg-red-500 text-white rounded text-sm flex items-center gap-1">
-                                                            <FaTimes /> Reject
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                            {rejectDocId === docId && (
-                                                <div className="mt-2 flex gap-2">
-                                                    <input placeholder="Rejection reason" value={rejectReason}
-                                                        onChange={(e) => setRejectReason(e.target.value)}
-                                                        className="flex-1 p-1 border rounded text-sm" />
-                                                    <button onClick={() => verifyDocument(docId, 'Rejected', rejectReason)}
-                                                        className="px-2 py-1 bg-red-500 text-white rounded text-sm">Confirm</button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-
-                        {/* ── Checklist ── */}
-                        <section className="bg-white rounded-xl shadow-md p-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                <FaCheckCircle className="text-theme-secondary" /> Checklist
-                            </h2>
-                            <div className="space-y-2">
-                                {(wf.checklist || []).map((item) => (
-                                    <label key={item._id} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                                        <input type="checkbox" checked={item.completed}
-                                            onChange={(e) => toggleChecklist(item._id, e.target.checked)}
-                                            disabled={submitting} className="w-4 h-4 accent-theme-primary" />
-                                        <div className="flex-1">
-                                            <span className={item.completed ? 'line-through text-gray-400' : 'font-medium'}>{item.item}</span>
-                                            <div className="text-xs text-gray-500">{item.category} · {item.phase}{item.mandatory ? ' · Required' : ''}</div>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
-                        </section>
-
-                        {/* ── Equipment / Assets ── */}
-                        {(wf.assets?.length > 0) && (
-                            <section className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                    <FaLaptop className="text-theme-secondary" /> Equipment & Assets
-                                </h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {wf.assets.map((asset) => (
-                                        <div key={asset._id} className="border rounded-lg p-4">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h4 className="font-medium">{asset.name || asset.assetType}</h4>
-                                                    {asset.serialNumber && <p className="text-xs text-gray-500">SN: {asset.serialNumber}</p>}
-                                                </div>
-                                                {isHRView ? (
-                                                    <select value={asset.status} disabled={submitting}
-                                                        onChange={(e) => updateAsset(asset._id, { status: e.target.value })}
-                                                        className="text-xs border rounded px-2 py-1">
-                                                        {ASSET_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                                                    </select>
-                                                ) : (
-                                                    <span className="text-xs px-2 py-1 bg-gray-100 rounded">{asset.status}</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-
-                        {/* ── Training ── */}
-                        {(wf.trainingModules?.length > 0) && (
-                            <section className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                    <FaGraduationCap className="text-theme-secondary" /> Training
-                                </h2>
-                                <div className="space-y-3">
-                                    {wf.trainingModules.map((mod) => (
-                                        <div key={mod._id} className="border rounded-lg p-4 flex justify-between items-center gap-3">
-                                            <div>
-                                                <h4 className="font-medium">{mod.title}</h4>
-                                                <p className="text-sm text-gray-500">{mod.description}</p>
-                                                <span className="text-xs text-gray-400">{mod.type} · {mod.phase}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-xs px-2 py-1 rounded ${mod.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100'}`}>
-                                                    {mod.status}{mod.score != null ? ` (${mod.score}%)` : ''}
-                                                </span>
-                                                {(isOnboardingEmployee || !isHRView) && mod.status !== 'Completed' && (
-                                                    <button type="button" onClick={() => completeTraining(mod._id)} disabled={submitting}
-                                                        className="px-3 py-1 bg-theme-secondary text-white rounded text-sm">Complete</button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-
-                        {/* ── Digital Signatures ── */}
-                        {(wf.policySignatures?.length > 0) && (
-                            <section className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                    <FaPen className="text-theme-secondary" /> Policy Signatures
-                                </h2>
-                                <div className="space-y-2">
-                                    {wf.policySignatures.map((sig) => (
-                                        <div key={sig._id} className="flex justify-between items-center border rounded-lg p-3">
-                                            <span className="font-medium">{sig.title}</span>
-                                            {sig.status === 'Signed' ? (
-                                                <span className="text-xs text-emerald-700 bg-emerald-50 px-2 py-1 rounded">
-                                                    Signed {sig.signedAt ? format(new Date(sig.signedAt), 'MMM dd') : ''}
-                                                </span>
-                                            ) : (isOnboardingEmployee || !isHRView) ? (
-                                                <button type="button" onClick={() => signPolicy(sig._id)} disabled={submitting}
-                                                    className="px-3 py-1 bg-theme-primary text-white rounded text-sm flex items-center gap-1">
-                                                    <FaPen /> Sign
-                                                </button>
-                                            ) : (
-                                                <span className="text-xs text-gray-500">Pending employee signature</span>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-
-                        {/* ── Buddy Dashboard ── */}
-                        {(isBuddyView || (isHRView && wf.buddyCheckins?.length)) && wf.buddyCheckins?.length > 0 && (
-                            <section className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-lg font-bold mb-4">Buddy Check-ins</h2>
-                                <div className="space-y-3">
-                                    {wf.buddyCheckins.map((c) => (
-                                        <div key={c._id} className="border rounded-lg p-4">
-                                            <div className="flex justify-between items-center">
-                                                <h4 className="font-medium">{c.title}</h4>
-                                                <select value={c.status} disabled={submitting}
-                                                    onChange={(e) => updateCheckin(c._id, { status: e.target.value, ...(e.target.value === 'Completed' ? { completedDate: new Date() } : {}) })}
-                                                    className="text-xs border rounded px-2 py-1">
-                                                    {['Pending', 'Scheduled', 'Completed'].map((s) => <option key={s} value={s}>{s}</option>)}
-                                                </select>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-
-                        {/* ── Manager Dashboard ── */}
-                        {(isManagerView || (isHRView && wf.managerActions?.length)) && wf.managerActions?.length > 0 && (
-                            <section className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-lg font-bold mb-4">Manager Actions</h2>
-                                <div className="space-y-3">
-                                    {wf.managerActions.map((a) => (
-                                        <div key={a._id} className="border rounded-lg p-4 flex justify-between items-center">
-                                            <span className="font-medium">{a.title}</span>
-                                            <select value={a.status} disabled={submitting}
-                                                onChange={(e) => updateManagerActionItem(a._id, { status: e.target.value })}
-                                                className="text-xs border rounded px-2 py-1">
-                                                {['Pending', 'In Progress', 'Completed'].map((s) => <option key={s} value={s}>{s}</option>)}
-                                            </select>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-
-                        {/* ── Timeline Roadmap ── */}
-                        <section className="bg-white rounded-xl shadow-md p-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                <FaChartLine className="text-theme-secondary" /> Onboarding Roadmap
-                            </h2>
-                            <div className="space-y-6">
-                                {ONBOARDING_TIMELINE_ROADMAP.map((milestone) => {
-                                    const phaseTasks = (wf.tasks || []).filter((t) => t.phase === milestone.phase);
-                                    const phaseChecklist = (wf.checklist || []).filter((c) => c.phase === milestone.phase);
-                                    const phaseDone = phaseTasks.filter((t) => t.status === 'Completed').length
-                                        + phaseChecklist.filter((c) => c.completed).length;
-                                    const phaseTotal = phaseTasks.length + phaseChecklist.length;
-                                    const pct = phaseTotal ? Math.round((phaseDone / phaseTotal) * 100) : 0;
-                                    return (
-                                        <div key={milestone.phase} className="relative pl-6 border-l-2 border-theme-primary/40">
-                                            <div className="absolute -left-2 top-1 w-4 h-4 rounded-full bg-theme-primary" />
-                                            <div className="flex justify-between items-start gap-4">
-                                                <div>
-                                                    <p className="text-xs text-theme-secondary font-medium">{milestone.phase}</p>
-                                                    <h3 className="font-bold text-gray-800">{milestone.title}</h3>
-                                                    <p className="text-sm text-gray-500">{milestone.description}</p>
-                                                </div>
-                                                <span className="text-sm font-bold text-theme-primary shrink-0">{pct}%</span>
-                                            </div>
-                                            {(phaseTasks.length > 0 || phaseChecklist.length > 0) && (
-                                                <div className="mt-2 space-y-1">
-                                                    {[...phaseTasks, ...phaseChecklist.map((c) => ({ title: c.item, status: c.completed ? 'Completed' : 'Pending' }))].slice(0, 5).map((item, i) => (
-                                                        <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                                                            <div className={`w-2 h-2 rounded-full ${item.status === 'Completed' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                                                            <span className={item.status === 'Completed' ? 'line-through text-gray-400' : ''}>{item.title}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-
-                        {/* ── Activity Feed ── */}
-                        <section className="bg-white rounded-xl shadow-md p-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                <FaHistory className="text-theme-secondary" /> Recent Activity
-                            </h2>
-                            <div className="space-y-3 max-h-64 overflow-y-auto">
-                                {(wf.activityFeed || []).slice(0, 20).map((act, i) => (
-                                    <div key={act._id || i} className="flex gap-3 text-sm">
-                                        <div className="w-2 h-2 rounded-full bg-theme-primary mt-1.5 shrink-0" />
-                                        <div>
-                                            <p>{act.description}</p>
-                                            <p className="text-xs text-gray-400">
-                                                {act.actorName} · {act.createdAt ? format(new Date(act.createdAt), 'MMM dd, HH:mm') : ''}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
-                                {!wf.activityFeed?.length && <p className="text-gray-500 text-sm">No activity yet.</p>}
-                            </div>
-                        </section>
-
-                        {/* ── Notes (HR only) ── */}
-                        {isHRView && (
-                            <section className="bg-white rounded-xl shadow-md p-6">
-                                <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                                    <FaStickyNote className="text-theme-secondary" /> Internal Notes
-                                </h2>
-                                <div className="flex gap-2 mb-4">
-                                    <input value={newNote} onChange={(e) => setNewNote(e.target.value)}
-                                        placeholder="Add an internal note..." className="flex-1 p-2 border rounded-lg" />
-                                    <button onClick={addNote} className="px-4 py-2 bg-theme-secondary text-white rounded-lg">Add</button>
-                                </div>
-                                <div className="space-y-2">
-                                    {(wf.notes || []).map((n, i) => (
-                                        <div key={n._id || i} className="p-3 bg-yellow-50 border border-yellow-100 rounded-lg text-sm">
-                                            <p>{n.note}</p>
-                                            <p className="text-xs text-gray-400 mt-1">
-                                                {n.addedBy?.name || 'HR'} · {n.addedAt ? format(new Date(n.addedAt), 'MMM dd, yyyy') : ''}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-                    </>
+                    <OnboardingHrDetailView
+                        wf={wf}
+                        breakdown={breakdown}
+                        tasksByRole={tasksByRole}
+                        visibleTasks={visibleTasks}
+                        viewerRole={viewerRole}
+                        isManagerView={isManagerView}
+                        detailTab={detailTab}
+                        onDetailTabChange={setDetailTab}
+                        detailSectionRef={detailSectionRef}
+                        closeWorkflow={closeWorkflow}
+                        performWorkflowAction={performWorkflowAction}
+                        setShowCancelConfirm={setShowCancelConfirm}
+                        submitting={submitting}
+                        expandedTaskGroups={expandedTaskGroups}
+                        toggleTaskGroup={toggleTaskGroup}
+                        updateTask={updateTask}
+                        canActOnTask={canActOnTask}
+                        openTaskAction={openTaskAction}
+                        updateAsset={updateAsset}
+                        newNote={newNote}
+                        setNewNote={setNewNote}
+                        addNote={addNote}
+                        navigate={navigate}
+                        isFeatureEnabled={isFeatureEnabled}
+                        filterByFeature={filterByFeature}
+                        refreshWorkflow={refreshWorkflow}
+                        updateWorkflowSchedule={updateWorkflowSchedule}
+                        isOnboardingEmployee={isOnboardingEmployee}
+                        completeTraining={completeTraining}
+                    />
                 )}
             </div>
 
@@ -991,7 +1140,22 @@ const OnboardingHub = () => {
                                     <label className="text-sm font-medium">Joining Date *</label>
                                     <input type="date" required className="w-full p-2 border rounded-lg mt-1"
                                         value={createForm.joiningDate}
-                                        onChange={(e) => setCreateForm({ ...createForm, joiningDate: e.target.value, scheduledStartDate: e.target.value })} />
+                                        onChange={(e) => {
+                                            const joiningDate = e.target.value;
+                                            const base = joiningDate ? new Date(joiningDate) : null;
+                                            let expectedCompletionDate = createForm.expectedCompletionDate;
+                                            if (base && !Number.isNaN(base.getTime())) {
+                                                const suggested = new Date(base);
+                                                suggested.setDate(suggested.getDate() + 30);
+                                                expectedCompletionDate = suggested.toISOString().slice(0, 10);
+                                            }
+                                            setCreateForm({
+                                                ...createForm,
+                                                joiningDate,
+                                                scheduledStartDate: createForm.scheduledStartDate || joiningDate,
+                                                expectedCompletionDate,
+                                            });
+                                        }} />
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium">Start Date</label>
@@ -999,6 +1163,16 @@ const OnboardingHub = () => {
                                         value={createForm.scheduledStartDate}
                                         onChange={(e) => setCreateForm({ ...createForm, scheduledStartDate: e.target.value })} />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Task completion date</label>
+                                <p className="text-xs text-gray-500 mt-0.5 mb-1">Target date for finishing all onboarding tasks.</p>
+                                <input
+                                    type="date"
+                                    className="w-full p-2 border rounded-lg"
+                                    value={createForm.expectedCompletionDate}
+                                    onChange={(e) => setCreateForm({ ...createForm, expectedCompletionDate: e.target.value })}
+                                />
                             </div>
                             <div>
                                 <label className="text-sm font-medium">Assigned Manager</label>
@@ -1050,6 +1224,28 @@ const OnboardingHub = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+            {showCancelConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+                        <h3 className="text-lg font-bold text-gray-900">Cancel onboarding workflow?</h3>
+                        <p className="mt-2 text-sm text-gray-600">
+                            This stops the workflow permanently. Completed workflows cannot be restored from this action.
+                        </p>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button type="button" onClick={() => setShowCancelConfirm(false)}
+                                className="rounded-lg border px-4 py-2 text-sm">Keep Workflow</button>
+                            <button type="button" disabled={submitting}
+                                onClick={async () => {
+                                    await performWorkflowAction('cancel');
+                                    setShowCancelConfirm(false);
+                                }}
+                                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                                Cancel Workflow
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
