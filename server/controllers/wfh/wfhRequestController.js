@@ -32,12 +32,28 @@ export const createWfhRequest = async (req, res) => {
             });
         }
 
-        const { wfhDate, reason, remarks } = req.body;
+        const { wfhDate, wfhDateFrom, wfhDateTo, reason, remarks } = req.body;
+        const fromDateRaw = wfhDateFrom || wfhDate;
+        const fromDate = fromDateRaw ? new Date(fromDateRaw) : null;
+        const toDateRaw = wfhDateTo || fromDateRaw;
+        const toDate = toDateRaw ? new Date(toDateRaw) : null;
 
-        if (!wfhDate || Number.isNaN(new Date(wfhDate).getTime())) {
+        if (!fromDate || Number.isNaN(fromDate.getTime())) {
             return res.status(400).json({
                 success: false,
-                message: 'A valid WFH date is required'
+                message: 'A valid WFH start date is required'
+            });
+        }
+        if (!toDate || Number.isNaN(toDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'A valid WFH end date is required'
+            });
+        }
+        if (toDate < fromDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'WFH end date cannot be before the start date'
             });
         }
         if (!reason || !String(reason).trim()) {
@@ -50,7 +66,8 @@ export const createWfhRequest = async (req, res) => {
         const wfhRequest = await WfhRequest.create({
             organizationId,
             employeeId: req.employee._id,
-            wfhDate: new Date(wfhDate),
+            wfhDate: fromDate,
+            wfhDateTo: toDate,
             reason: String(reason).trim(),
             remarks: remarks ? String(remarks).trim() : ''
         });
@@ -81,6 +98,7 @@ export const createWfhRequest = async (req, res) => {
                     department: employee.department,
                     designation: employee.position,
                     wfhDate: wfhRequest.wfhDate,
+                    wfhDateTo: wfhRequest.wfhDateTo,
                     reason: wfhRequest.reason,
                     remarks: wfhRequest.remarks,
                     submittedAt: wfhRequest.createdAt,
@@ -311,6 +329,7 @@ export const reviewWfhRequest = async (req, res) => {
                 employeeName,
                 employeeId: employee.employeeId,
                 wfhDate: wfhRequest.wfhDate,
+                wfhDateTo: wfhRequest.wfhDateTo,
                 managerName,
                 reviewerName: wfhRequest.reviewerName,
                 reason: wfhRequest.reason,

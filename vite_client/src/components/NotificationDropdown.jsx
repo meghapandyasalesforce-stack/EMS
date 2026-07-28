@@ -20,10 +20,12 @@ const NotificationDropdown = () => {
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
     const authUser = useSelector((state) => state?.auth?.user);
+    const employeeUser = useSelector((state) => state?.employeeDetails?.employee);
+    const sessionUser = authUser || employeeUser;
 
     useEffect(() => {
         // Only fetch when a user is available (authenticated) and password reset is not required
-        if (!authUser || authUser?.mustResetPassword) return;
+        if (!sessionUser || sessionUser?.mustResetPassword) return;
         
         // Initial fetch with delay to avoid race conditions
         const initialTimeout = setTimeout(() => {
@@ -43,9 +45,9 @@ const NotificationDropdown = () => {
                 }
             } else {
                 // Tab is visible, start polling
-                if (!interval && authUser) {
+                if (!interval && sessionUser) {
                     interval = setInterval(() => {
-                        if (authUser && !document.hidden) {
+                        if (sessionUser && !document.hidden) {
                             fetchUnreadCount();
                         }
                     }, 60000); // 60 seconds
@@ -54,9 +56,9 @@ const NotificationDropdown = () => {
         };
         
         // Start polling only if tab is visible
-        if (!document.hidden && authUser) {
+        if (!document.hidden && sessionUser) {
             interval = setInterval(() => {
-                if (authUser && !document.hidden) {
+                if (sessionUser && !document.hidden) {
                     fetchUnreadCount();
                 }
             }, 60000); // 60 seconds
@@ -69,11 +71,11 @@ const NotificationDropdown = () => {
             if (interval) clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [authUser]);
+    }, [sessionUser]);
 
     // Realtime in-app updates while the phone/laptop app is open
     useEffect(() => {
-        if (!authUser || authUser?.mustResetPassword) return;
+        if (!sessionUser || sessionUser?.mustResetPassword) return;
 
         const url = getSocketIOUrl();
         if (!url) return;
@@ -107,7 +109,7 @@ const NotificationDropdown = () => {
             socket.off('notification', onNotification);
             socket.disconnect();
         };
-    }, [authUser]);
+    }, [sessionUser]);
 
     // Calculate dropdown position when opening – panel opens to the right of the button, stays in viewport
     const DROPDOWN_MAX_HEIGHT_PX = 512;
@@ -154,7 +156,7 @@ const NotificationDropdown = () => {
     }, [isOpen]);
 
     const fetchNotifications = async () => {
-        if (!authUser || authUser?.mustResetPassword) return;
+        if (!sessionUser || sessionUser?.mustResetPassword) return;
         try {
             setLoading(true);
             const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/user-notifications?limit=10&unreadOnly=true`);
@@ -194,7 +196,7 @@ const NotificationDropdown = () => {
     };
 
     const fetchUnreadCount = async () => {
-        if (!authUser || authUser?.mustResetPassword) return;
+        if (!sessionUser || sessionUser?.mustResetPassword) return;
         try {
             const response = await axios.get(`${BOTH_NOTIFICATION_ENDPOINT}/unread-count`);
 

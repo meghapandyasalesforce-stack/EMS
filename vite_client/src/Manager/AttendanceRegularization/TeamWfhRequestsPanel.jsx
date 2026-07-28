@@ -11,6 +11,15 @@ function safeFormat(value, pattern = 'MMM d, yyyy') {
   return Number.isNaN(date.getTime()) ? '—' : format(date, pattern);
 }
 
+function formatWfhDateRange(from, to, pattern = 'MMM d, yyyy') {
+  if (!from) return '—';
+  const fromStr = safeFormat(from, pattern);
+  if (!to || new Date(to).toDateString() === new Date(from).toDateString()) {
+    return fromStr;
+  }
+  return `${fromStr} – ${safeFormat(to, pattern)}`;
+}
+
 /** Legacy records created before the approval flow have status 'submitted'. */
 function normalizeStatus(status) {
   return status === 'submitted' ? 'pending' : status || 'pending';
@@ -266,7 +275,7 @@ const TeamWfhRequestsPanel = () => {
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 font-medium text-slate-700">
-                        {safeFormat(request.wfhDate)}
+                        {formatWfhDateRange(request.wfhDate, request.wfhDateTo)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 italic text-slate-400">
                         Work From Home
@@ -396,8 +405,8 @@ const TeamWfhRequestsPanel = () => {
                 </div>
               </div>
               <section className="rounded-xl bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">WFH date</p>
-                <p className="mt-1 font-semibold text-slate-900">{safeFormat(viewTarget.wfhDate, 'EEEE, MMM d, yyyy')}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">WFH period</p>
+                <p className="mt-1 font-semibold text-slate-900">{formatWfhDateRange(viewTarget.wfhDate, viewTarget.wfhDateTo, 'EEEE, MMM d, yyyy')}</p>
               </section>
               <section className="rounded-xl border border-slate-100 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</p>
@@ -436,7 +445,7 @@ const TeamWfhRequestsPanel = () => {
             <h3 className="text-lg font-bold text-slate-900">Reject WFH request</h3>
             <p className="mt-1 text-sm text-slate-600">
               {[rejectTarget.employeeId?.name, rejectTarget.employeeId?.lastName].filter(Boolean).join(' ')} ·{' '}
-              {safeFormat(rejectTarget.wfhDate)}
+              {formatWfhDateRange(rejectTarget.wfhDate, rejectTarget.wfhDateTo)}
             </p>
             <label className="mb-2 mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Rejection reason <span className="text-red-500">*</span>

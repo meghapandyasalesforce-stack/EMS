@@ -1,17 +1,17 @@
 import React from 'react';
 
 const ReportDataTable = ({ title, subtitle, columns, rows, footer, actions }) => (
-    <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+    <div className="min-w-0 w-full rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         {(title || actions) && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-3 py-4 sm:px-5">
+                <div className="min-w-0">
                     {title && <h3 className="text-base font-semibold text-slate-900">{title}</h3>}
                     {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
                 </div>
                 {actions}
             </div>
         )}
-        <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
+        <div className="w-full max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="w-full min-w-[640px] text-left text-sm">
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/80">

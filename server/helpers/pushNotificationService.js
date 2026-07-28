@@ -289,6 +289,7 @@ const getNotificationTitle = (type) => {
     'attendance_regularization_request': 'Attendance Regularization Request',
     'attendance_regularization_approved': 'Attendance Regularization Approved',
     'attendance_regularization_rejected': 'Attendance Regularization Rejected',
+    'onboarding': 'Onboarding Update',
   };
   return titles[type] || 'Notification';
 };
@@ -327,6 +328,10 @@ const getNotificationUrl = (type, metadata = {}) => {
     case 'attendance_regularization_approved':
     case 'attendance_regularization_rejected':
       return '/employee/leave-attendance';
+    case 'onboarding':
+      return metadata.workflowId
+        ? `/onboarding?id=${metadata.workflowId}`
+        : '/onboarding';
     case 'holiday':
     case 'birthday':
     case 'anniversary':

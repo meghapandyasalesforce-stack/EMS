@@ -53,3 +53,27 @@ export const emitEmployeesOnBreakChangedAsync = (organizationId) => {
       .emit('attendance:employees_on_break_changed', {});
   });
 };
+
+export const emitOnboardingChangedAsync = (organizationId, workflowId = null) => {
+  if (!organizationId) return;
+  runInBackground('onboarding-socket-emit', async () => {
+    const { getIO } = await import('../config/websocket.js');
+    getIO()
+      .to(`org:${organizationId}`)
+      .emit('onboarding:changed', {
+        workflowId: workflowId?.toString?.() || workflowId || null,
+      });
+  });
+};
+
+export const emitOffboardingChangedAsync = (organizationId, workflowId = null) => {
+  if (!organizationId) return;
+  runInBackground('offboarding-socket-emit', async () => {
+    const { getIO } = await import('../config/websocket.js');
+    getIO()
+      .to(`org:${organizationId}`)
+      .emit('offboarding:changed', {
+        workflowId: workflowId?.toString?.() || workflowId || null,
+      });
+  });
+};

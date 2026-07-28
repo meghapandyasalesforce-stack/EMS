@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlus, FaSearch, FaFilter, FaBriefcase, FaUsers, FaCalendar } from 'react-icons/fa';
+import { FaPlus, FaBriefcase, FaUsers, FaFileContract } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import OfferTemplateManager from '../../components/recruitment/OfferTemplateManager';
 
 const RecruitmentPage = () => {
     const navigate = useNavigate();
@@ -21,7 +22,7 @@ const RecruitmentPage = () => {
             if (activeTab === 'jobs') {
                 const response = await axios.get('/v1/admin/recruitment/jobs', { withCredentials: true });
                 setJobPostings(response.data?.data || []);
-            } else {
+            } else if (activeTab === 'candidates') {
                 const response = await axios.get('/v1/admin/recruitment/candidates', { withCredentials: true });
                 setCandidates(response.data?.data || []);
             }
@@ -32,13 +33,13 @@ const RecruitmentPage = () => {
         }
     };
 
-    if (loading) {
+    if (loading && activeTab !== 'offers') {
         return <LoadingSpinner message="Loading recruitment data..." />;
     }
 
     return (
         <div className="min-h-screen bg-gray-50 p-3 sm:p-4 transition-all duration-300">
-            <div className="w-full max-w-[1600px] mx-auto">
+            <div className="w-full">
                 {/* Header */}
                 <div className="mb-6 flex justify-between items-center">
                     <div>
@@ -71,10 +72,16 @@ const RecruitmentPage = () => {
                             <FaUsers className="inline mr-2" />
                             Candidates ({candidates.length})
                         </button>
+                        <button
+                            onClick={() => setActiveTab('offers')}
+                            className={`px-6 py-3 font-medium ${activeTab === 'offers' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}
+                        >
+                            <FaFileContract className="inline mr-2" />
+                            Offer Templates
+                        </button>
                     </div>
                 </div>
 
-                {/* Content */}
                 {activeTab === 'jobs' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {jobPostings.map((job) => (
@@ -104,7 +111,7 @@ const RecruitmentPage = () => {
                             </div>
                         )}
                     </div>
-                ) : (
+                ) : activeTab === 'candidates' ? (
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
                         <div className="overflow-x-auto">
                         <table className="min-w-[640px] w-full divide-y divide-gray-200">
@@ -156,6 +163,10 @@ const RecruitmentPage = () => {
                                 <p className="text-gray-500">No candidates yet.</p>
                             </div>
                         )}
+                    </div>
+                ) : (
+                    <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
+                        <OfferTemplateManager />
                     </div>
                 )}
             </div>

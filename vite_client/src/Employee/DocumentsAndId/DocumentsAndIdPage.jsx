@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   FaSearch,
@@ -36,6 +36,8 @@ const mergeDocumentsById = (lists) => {
 
 const DocumentsAndIdPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnToOnboarding = searchParams.get('returnTo') || '';
   const user = useSelector((state) => state.auth.user);
   const employee = useSelector((state) => state.employeeDetails.employee);
   const myEmployeeId = String(employee?._id || employee?.id || user?._id || user?.id || '');
@@ -232,6 +234,20 @@ const DocumentsAndIdPage = () => {
   return (
     <div className="page-shell min-h-screen bg-[#F4F6FB] transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
+        {returnToOnboarding && (
+          <div className="cm-onboarding-return-banner">
+            <span>
+              Upload your onboarding documents here. When you are done, return to onboarding to view status and open files.
+            </span>
+            <button
+              type="button"
+              className="rounded-lg bg-[#006c51] px-4 py-2 text-sm font-semibold text-white hover:bg-[#005a44]"
+              onClick={() => navigate(returnToOnboarding)}
+            >
+              Back to onboarding
+            </button>
+          </div>
+        )}
         <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">

@@ -46,7 +46,7 @@ const Notifications = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
       <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold text-gray-800">Notifications</h1>
           <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={load} className="px-3 py-2 text-sm sm:text-base bg-gray-100 hover:bg-gray-200 rounded transition">Refresh</button>

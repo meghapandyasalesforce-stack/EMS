@@ -285,7 +285,7 @@ const CalendarManagement = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 sm:p-4 md:p-6 lg:p-6">
-      <div className="w-full max-w-[1600px] mx-auto space-y-6 lg:space-y-8">
+      <div className="w-full space-y-6 lg:space-y-8">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5 sm:p-6 lg:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">

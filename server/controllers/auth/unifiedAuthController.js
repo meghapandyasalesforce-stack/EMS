@@ -76,6 +76,7 @@ export const unifiedLogin = asyncHandler(async (req, res) => {
       dashboardRoute: result.dashboardRoute,
       employeeDashboardRoute: result.employeeDashboardRoute,
       isOrganizationLogin: result.isOrganizationLogin,
+      redirectToJobDetails: result.redirectToJobDetails,
       user: result.user,
       employee: result.employee,
       organization: result.organization,

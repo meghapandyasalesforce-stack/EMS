@@ -30,7 +30,9 @@ const auditLogSchema = new mongoose.Schema({
         enum: [
             'Employee', 'Payroll', 'Leave', 'Attendance', 'Project',
             'Task', 'Expense', 'Performance Review', 'Goal', 'Report',
-            'User', 'Organization', 'Document', 'Notification', 'Other'
+            'User', 'Organization', 'Document', 'Notification', 'Other',
+            'Onboarding', 'Offboarding', 'LifecycleSettings', 'LifecycleTemplate',
+            'LifecycleForm', 'Offer', 'Clearance', 'Exit Interview', 'F&F', 'Asset Return',
         ]
     },
     entityId: {

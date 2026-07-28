@@ -21,7 +21,11 @@ const wfhRequestSchema = new mongoose.Schema({
     },
     wfhDate: {
         type: Date,
-        required: [true, 'WFH date is required']
+        required: [true, 'WFH start date is required']
+    },
+    wfhDateTo: {
+        type: Date,
+        default: null
     },
     reason: {
         type: String,

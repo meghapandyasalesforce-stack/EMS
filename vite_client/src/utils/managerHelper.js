@@ -175,6 +175,70 @@ export const canAddEmployee = (user) => {
 };
 
 /**
+ * Lifecycle Configure / Reports access (HR + Admin).
+ * Regular employees must never see these.
+ */
+export const canAccessLifecycleEnterprise = (user, permissionFlags = {}, permissions = []) => {
+    if (!user) return false;
+
+    const role = String(user.role || '').toLowerCase();
+    if (role === 'employee') {
+        // Employee role alone is never enough — unless elevated via HR flags/permissions below
+    }
+
+    if (permissionFlags.isOrgOwner || permissionFlags.isHrManager || permissionFlags.isHrExecutive) {
+        return true;
+    }
+
+    if (role === 'admin' || role === 'executive') {
+        return true;
+    }
+
+    const platformRoles = Array.isArray(user.roles) ? user.roles.map((r) => String(r).toLowerCase()) : [];
+    if (platformRoles.some((r) => ['org_owner', 'hr_admin', 'super_admin', 'hr_manager'].includes(r))) {
+        return true;
+    }
+
+    const systemRole = String(user.systemRoleId || user.systemRole || '').toLowerCase();
+    if (['hr_manager', 'hr_executive', 'executive'].includes(systemRole)) {
+        return true;
+    }
+
+    const permList = Array.isArray(permissions) ? permissions : [];
+    if (
+        permList.includes('onboarding.manage')
+        || permList.includes('lifecycle.configure')
+        || permList.includes('org.settings.manage')
+    ) {
+        return true;
+    }
+
+    // HR staff (department / functional role) — not line managers or employees
+    if (isHR(user)) return true;
+
+    return false;
+};
+
+/**
+ * Enterprise Command Center — organization owner (platform admin) only, not HR staff.
+ */
+export const canAccessLifecycleEnterpriseHub = (user, permissionFlags = {}, employee = null) => {
+    if (!user && !employee) return false;
+
+    const userObj = user || employee;
+    const role = (userObj?.role || '').toLowerCase();
+    if (role === 'admin') return true;
+
+    const platformRoles = Array.isArray(user?.roles) ? user.roles.map((r) => String(r).toLowerCase()) : [];
+    if (platformRoles.includes('super_admin')) return true;
+
+    const systemRole = String(user?.systemRoleId || user?.systemRole || '').toLowerCase();
+    if (systemRole === 'super_admin') return true;
+
+    return false;
+};
+
+/**
  * Get user role badge info
  * @param {Object} user - User object
  * @returns {Object} - Badge info with label and color

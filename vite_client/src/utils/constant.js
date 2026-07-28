@@ -41,6 +41,11 @@ export const BOTH_DOCUMENT_ENDPOINT = `${BASE_URL}/both/document`
 export const BOTH_DOCUMENTS_ENDPOINT = `${BASE_URL}/both/documents`
 export const BOTH_ONBOARDING_ENDPOINT = `${BASE_URL}/both/onboarding`
 export const ADMIN_ONBOARDING_ENDPOINT = `${BASE_URL}/admin/onboarding`
+export const ADMIN_LIFECYCLE_ENDPOINT = `${BASE_URL}/admin/lifecycle`
+export const BOTH_LIFECYCLE_ENDPOINT = `${BASE_URL}/both/lifecycle`
+export const PUBLIC_LIFECYCLE_ENDPOINT = `${BASE_URL}/public/lifecycle`
+export const BOTH_OFFBOARDING_ENDPOINT = `${BOTH_ONBOARDING_ENDPOINT}/offboarding`
+export const ADMIN_OFFBOARDING_ENDPOINT = `${ADMIN_ONBOARDING_ENDPOINT}/offboarding`
 export const BOTH_PASSWORD_ENDPOINT = `${BASE_URL}/both/password`
 export const BOTH_TASK_ENDPOINT = `${BASE_URL}/both/project-task`
 

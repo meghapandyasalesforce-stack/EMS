@@ -1,5 +1,6 @@
 import Employee from '../models/employee.model.js';
 import Organization from '../models/organization.model.js';
+import { Document } from '../models/document.model.js';
 import { OnboardingWorkflow, OnboardingTemplate } from '../models/onboarding.model.js';
 import {
     DEFAULT_ONBOARDING_CHECKLIST,
@@ -11,12 +12,30 @@ import {
 } from '../constants/onboardingDefaults.js';
 import { notify } from '../helpers/notificationManager.js';
 import logger from '../helpers/logger.js';
-import { runInBackground } from '../helpers/backgroundTasks.js';
+import { emitOnboardingChangedAsync, runInBackground } from '../helpers/backgroundTasks.js';
+import { getOrgLifecycleOnboardingBridge, isFeatureEnabled, getOrCreateLifecycleSettings, assertModuleEnabled, isOrgFeatureEnabled } from './lifecycleConfigService.js';
+import { resolveGatedOnboardingTemplate, ensureDefaultOnboardingTemplate } from './lifecycleTemplateEngine.js';
+import { applyPackArtifactsToOnboardingWorkflow } from './lifecyclePackWorkflowService.js';
+import { seedMilestonesForWorkflow } from './lifecycleMilestoneService.js';
+import { initProbationForWorkflow } from './lifecycleProbationService.js';
+import { createBgvCase } from './backgroundVerificationService.js';
+import { syncFormGateToWorkflow } from './lifecycleFormGateService.js';
+import { syncGoalsProgressToWorkflow, autoAssignDefaultProbationGoals } from './lifecycleGoalIntegrationService.js';
+import {
+    applyOnboardingFeatureGates,
+    resolveOnboardingProgressWeights,
+    ONBOARDING_BASE_WEIGHTS,
+} from './lifecycleFeatureRuntimeService.js';
 
-const TASK_WEIGHT = 0.35;
-const DOCUMENT_WEIGHT = 0.30;
-const CHECKLIST_WEIGHT = 0.20;
-const TRAINING_WEIGHT = 0.15;
+// Every requirement group contributes to the persisted, database-derived total.
+// Keep these weights normalized so overall progress always remains 0-100.
+const PROGRESS_WEIGHTS = ONBOARDING_BASE_WEIGHTS;
+
+const RETIRED_DEFAULT_TASK_TITLES = Object.freeze([
+    'Complete compliance training',
+    '30-day review meeting',
+    'Setup email and system access',
+]);
 
 function startOfDay(d) {
     const x = new Date(d);
@@ -29,23 +48,39 @@ function isSameOrBeforeToday(date) {
     return startOfDay(date) <= startOfDay(new Date());
 }
 
+function dueDateFromPhase(baseDate, phase, fallbackDays = 7) {
+    const phaseOffsets = {
+        'Day 0': 0,
+        'Day 1': 1,
+        'Week 1': 7,
+        'Week 2': 14,
+        'Week 3': 21,
+        'Month 1': 30,
+    };
+    const dueDate = new Date(baseDate || Date.now());
+    dueDate.setDate(dueDate.getDate() + (phaseOffsets[phase] ?? fallbackDays));
+    return dueDate;
+}
+
+function localDateKey(date) {
+    const value = new Date(date);
+    return [
+        value.getFullYear(),
+        String(value.getMonth() + 1).padStart(2, '0'),
+        String(value.getDate()).padStart(2, '0'),
+    ].join('-');
+}
+
 export function resolveInitialWorkflowStatus({ joiningDate, scheduledStartDate, explicitStatus }) {
-    if (explicitStatus && ['Draft', 'Scheduled', 'Not Started', 'In Progress'].includes(explicitStatus)) {
-        return explicitStatus;
-    }
+    if (explicitStatus === 'Draft') return 'Draft';
     const effectiveStart = scheduledStartDate || joiningDate;
     if (!effectiveStart) return 'Draft';
-    if (isSameOrBeforeToday(effectiveStart)) return 'In Progress';
+    if (isSameOrBeforeToday(effectiveStart)) return 'Not Started';
     return 'Scheduled';
 }
 
 export async function getOrgOnboardingSettings(organizationId) {
-    const org = await Organization.findById(organizationId).select('onboardingSettings').lean();
-    return {
-        autoCreateOnEmployeeRegister: org?.onboardingSettings?.autoCreateOnEmployeeRegister ?? false,
-        startWorkflowOnJoiningDate: org?.onboardingSettings?.startWorkflowOnJoiningDate ?? true,
-        defaultTemplateId: org?.onboardingSettings?.defaultTemplateId || null,
-    };
+    return getOrgLifecycleOnboardingBridge(organizationId);
 }
 
 function calcRoleTaskProgress(tasks, role) {
@@ -55,43 +90,346 @@ function calcRoleTaskProgress(tasks, role) {
     return Math.round((done / roleTasks.length) * 100);
 }
 
-export function calculateProgressBreakdown(workflow) {
+const CANONICAL_DOCUMENT_TYPES = Object.freeze({
+    AADHAAR: ['AADHAR_CARD'],
+    PAN: ['PAN_CARD'],
+    DEGREE: ['DEGREE_CERTIFICATE'],
+    OFFER_ACK: ['OFFER_LETTER'],
+    OTHER: ['OTHER'],
+});
+
+const DOCUMENT_NAME_ALIASES = Object.freeze({
+    AADHAAR: ['aadhaar', 'aadhar'],
+    PAN: ['pan card', 'pan'],
+    PASSPORT: ['passport'],
+    DEGREE: ['degree', 'marksheet', 'education certificate'],
+    EXPERIENCE: ['experience certificate', 'previous employment'],
+    RESUME: ['resume', 'cv'],
+    OFFER_ACK: ['offer letter', 'offer acknowledgement', 'offer acknowledgment'],
+    PHOTO: ['photograph', 'photo'],
+    BANK_DETAILS: ['bank details', 'bank account', 'cancelled cheque', 'canceled cheque'],
+    OTHER: ['other document'],
+});
+
+function normalizeDocumentText(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function canonicalDocumentMatchesRequirement(record, requirement) {
+    const jobTypes = CANONICAL_DOCUMENT_TYPES[requirement.documentType] || [];
+    if (record.employeeJobDocumentType && jobTypes.includes(record.employeeJobDocumentType)) return true;
+
+    const haystack = normalizeDocumentText([
+        record.name,
+        record.fileName,
+        record.description,
+        ...(record.tags || []),
+    ].filter(Boolean).join(' '));
+    const words = new Set(haystack.split(' ').filter(Boolean));
+    return (DOCUMENT_NAME_ALIASES[requirement.documentType] || []).some((alias) => {
+        const normalizedAlias = normalizeDocumentText(alias);
+        return normalizedAlias.includes(' ')
+            ? haystack.includes(normalizedAlias)
+            : words.has(normalizedAlias);
+    });
+}
+
+function canonicalDocumentStatus(record) {
+    if (record.approvalStatus === 'Approved' || (!record.requiresApproval && record.approvalStatus !== 'Rejected')) {
+        return 'Verified';
+    }
+    if (record.approvalStatus === 'Rejected') return 'Rejected';
+    return 'Uploaded';
+}
+
+function applyCanonicalDocuments(workflow, records) {
+    let changed = false;
+    for (const requirement of workflow.documents || []) {
+        const record = records.find((candidate) => canonicalDocumentMatchesRequirement(candidate, requirement));
+        if (!record) {
+            if (requirement.canonicalDocumentId) {
+                requirement.canonicalDocumentId = undefined;
+                requirement.url = undefined;
+                requirement.originalFileName = undefined;
+                requirement.uploadedAt = undefined;
+                requirement.uploadedBy = undefined;
+                requirement.status = 'Pending';
+                requirement.verifiedBy = undefined;
+                requirement.verifiedAt = undefined;
+                requirement.rejectionReason = undefined;
+                changed = true;
+            }
+            continue;
+        }
+
+        const next = {
+            canonicalDocumentId: record._id,
+            url: record.fileUrl,
+            originalFileName: record.fileName,
+            uploadedAt: record.createdAt,
+            uploadedBy: record.uploadedBy,
+            status: canonicalDocumentStatus(record),
+            verifiedBy: record.approvedBy,
+            verifiedAt: record.approvedAt,
+            rejectionReason: record.rejectionReason,
+        };
+        for (const [key, value] of Object.entries(next)) {
+            if (String(requirement[key] || '') !== String(value || '')) {
+                requirement[key] = value;
+                changed = true;
+            }
+        }
+    }
+    return changed;
+}
+
+/**
+ * Treat the employee's existing profile photo as the onboarding Photograph.
+ * Profile photos are already accepted profile data, so no separate document
+ * upload or HR verification record is created.
+ */
+export function applyEmployeeProfilePhoto(workflow, employee) {
+    const requirement = (workflow.documents || []).find((doc) => doc.documentType === 'PHOTO');
+    if (!requirement || requirement.canonicalDocumentId) return false;
+
+    const profilePhoto = employee?.profilePhoto;
+    const isProfilePhotoSource = String(requirement.url || '').startsWith('/uploads/profile-photos/');
+    if (!profilePhoto?.url) {
+        if (!isProfilePhotoSource) return false;
+        requirement.url = undefined;
+        requirement.originalFileName = undefined;
+        requirement.uploadedAt = undefined;
+        requirement.uploadedBy = undefined;
+        requirement.status = 'Pending';
+        requirement.verifiedBy = undefined;
+        requirement.verifiedAt = undefined;
+        requirement.rejectionReason = undefined;
+        return true;
+    }
+
+    const next = {
+        url: profilePhoto.url,
+        originalFileName: profilePhoto.filename,
+        uploadedAt: profilePhoto.uploadedAt,
+        uploadedBy: employee._id,
+        status: 'Verified',
+        verifiedAt: profilePhoto.uploadedAt,
+        rejectionReason: undefined,
+    };
+    let changed = false;
+    for (const [key, value] of Object.entries(next)) {
+        if (String(requirement[key] || '') !== String(value || '')) {
+            requirement[key] = value;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+/**
+ * Bank details are maintained in Employee Profile > Financial Details.
+ * Mirror their completion into onboarding without creating a duplicate document.
+ */
+export function applyEmployeeFinancialDetails(workflow, employee) {
+    const requirement = (workflow.documents || []).find((doc) => doc.documentType === 'BANK_DETAILS');
+    if (!requirement || requirement.canonicalDocumentId) return false;
+
+    const financial = employee?.financialDetails || {};
+    const complete = Boolean(
+        String(financial.bankName || '').trim()
+        && String(financial.ifsc || '').trim()
+        && String(financial.accountNo || '').trim()
+        && String(financial.accountName || '').trim(),
+    );
+    const isFinancialProfileSource = requirement.url === '/financial-details';
+
+    if (!complete) {
+        if (!isFinancialProfileSource) return false;
+        requirement.url = undefined;
+        requirement.originalFileName = undefined;
+        requirement.uploadedAt = undefined;
+        requirement.uploadedBy = undefined;
+        requirement.status = 'Pending';
+        requirement.verifiedBy = undefined;
+        requirement.verifiedAt = undefined;
+        requirement.rejectionReason = undefined;
+        return true;
+    }
+
+    const next = {
+        url: '/financial-details',
+        originalFileName: 'Employee Financial Details',
+        uploadedAt: employee.updatedAt,
+        uploadedBy: employee._id,
+        status: 'Verified',
+        verifiedAt: employee.updatedAt,
+        rejectionReason: undefined,
+    };
+    let changed = false;
+    for (const [key, value] of Object.entries(next)) {
+        if (String(requirement[key] || '') !== String(value || '')) {
+            requirement[key] = value;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+/**
+ * Mirror status only from the canonical Employee Documents collection.
+ * The onboarding subdocuments remain requirement definitions, not uploaded-file storage.
+ */
+export async function synchronizeWorkflowDocuments(workflows) {
+    const list = (Array.isArray(workflows) ? workflows : [workflows]).filter(Boolean);
+    if (!list.length) return false;
+
+    const employeeIds = [...new Set(list.map((workflow) =>
+        (workflow.employeeId?._id || workflow.employeeId)?.toString()).filter(Boolean))];
+    if (!employeeIds.length) return false;
+
+    const organizationIds = [...new Set(list.map((workflow) =>
+        (workflow.organizationId?._id || workflow.organizationId)?.toString()).filter(Boolean))];
+    const documentQuery = {
+        uploadedBy: { $in: employeeIds },
+        category: 'Employee',
+        approvalStatus: { $ne: 'Withdrawn' },
+        $or: [
+            { isActive: { $ne: false } },
+            { approvalStatus: 'Rejected' },
+        ],
+    };
+    const employeeQuery = {
+        _id: { $in: employeeIds },
+    };
+    if (organizationIds.length === 1) {
+        documentQuery.organizationId = organizationIds[0];
+        employeeQuery.organizationId = organizationIds[0];
+    } else if (organizationIds.length > 1) {
+        documentQuery.organizationId = { $in: organizationIds };
+        employeeQuery.organizationId = { $in: organizationIds };
+    }
+
+    const [records, employees] = await Promise.all([
+        Document.find(documentQuery).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+        Employee.find(employeeQuery).select('_id profilePhoto financialDetails updatedAt').lean(),
+    ]);
+
+    const byEmployee = new Map();
+    for (const record of records) {
+        const key = record.uploadedBy?.toString();
+        if (!byEmployee.has(key)) byEmployee.set(key, []);
+        byEmployee.get(key).push(record);
+    }
+    const employeeById = new Map(employees.map((employee) => [employee._id.toString(), employee]));
+
+    let changed = false;
+    for (const workflow of list) {
+        const employeeId = (workflow.employeeId?._id || workflow.employeeId)?.toString();
+        const documentsChanged = applyCanonicalDocuments(
+            workflow,
+            byEmployee.get(employeeId) || [],
+        );
+        const profilePhotoChanged = applyEmployeeProfilePhoto(
+            workflow,
+            employeeById.get(employeeId),
+        );
+        const financialDetailsChanged = applyEmployeeFinancialDetails(
+            workflow,
+            employeeById.get(employeeId),
+        );
+        const resumeRequirement = (workflow.documents || [])
+            .find((doc) => doc.documentType === 'RESUME');
+        const resumeChanged = Boolean(resumeRequirement?.mandatory !== false);
+        if (resumeRequirement) resumeRequirement.mandatory = false;
+        const tasksChanged = synchronizeDocumentDrivenTasks(workflow);
+        changed = documentsChanged || profilePhotoChanged || financialDetailsChanged
+            || resumeChanged || tasksChanged || changed;
+    }
+    return changed;
+}
+
+export function hasWorkflowActivity(workflow) {
+    return (workflow.tasks || []).some((task) =>
+        ['In Progress', 'Completed'].includes(task.status) || Boolean(task.startedDate || task.completedDate))
+        || (workflow.documents || []).some((doc) => ['Uploaded', 'Verified', 'Rejected'].includes(doc.status))
+        || (workflow.checklist || []).some((item) => item.completed)
+        || (workflow.trainingModules || []).some((module) => module.status !== 'Not Started')
+        || (workflow.policySignatures || []).some((signature) => signature.status === 'Signed')
+        || (workflow.assets || []).some((asset) => asset.status !== 'Pending');
+}
+
+export function calculateProgressBreakdown(workflow, settings = null) {
     const tasks = workflow.tasks || [];
     const documents = workflow.documents || [];
     const checklist = workflow.checklist || [];
     const training = workflow.trainingModules || [];
+    const policies = workflow.policySignatures || [];
+    const assets = workflow.assets || [];
 
-    const completedTasks = tasks.filter((t) => t.status === 'Completed').length;
-    const tasksProgress = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 100;
+    const weights = settings
+        ? resolveOnboardingProgressWeights(settings)
+        : PROGRESS_WEIGHTS;
+
+    const mandatoryTasks = tasks.filter((task) => task.mandatory !== false);
+    const completedTasks = mandatoryTasks.filter((t) => t.status === 'Completed').length;
+    const tasksProgress = mandatoryTasks.length > 0
+        ? Math.round((completedTasks / mandatoryTasks.length) * 100)
+        : 100;
 
     const mandatoryDocs = documents.filter((d) => d.mandatory !== false);
-    const mandatoryUploaded = mandatoryDocs.filter((d) => ['Uploaded', 'Verified'].includes(d.status)).length;
-    const docDenominator = mandatoryDocs.length > 0 ? mandatoryDocs.length : documents.length;
-    const documentsProgress = docDenominator > 0
-        ? Math.round((mandatoryUploaded / docDenominator) * 100)
+    const mandatoryVerified = mandatoryDocs.filter((d) => d.status === 'Verified').length;
+    const documentsProgress = mandatoryDocs.length > 0
+        ? Math.round((mandatoryVerified / mandatoryDocs.length) * 100)
         : 100;
 
     const mandatoryChecklist = checklist.filter((c) => c.mandatory !== false);
     const completedChecklist = mandatoryChecklist.filter((c) => c.completed).length;
-    const checklistDenominator = mandatoryChecklist.length > 0 ? mandatoryChecklist.length : checklist.length;
-    const checklistProgress = checklistDenominator > 0
-        ? Math.round((completedChecklist / checklistDenominator) * 100)
+    const checklistProgress = mandatoryChecklist.length > 0
+        ? Math.round((completedChecklist / mandatoryChecklist.length) * 100)
         : 100;
 
-    const mandatoryTraining = training.filter((t) => t.mandatory !== false);
-    const trainingDenominator = mandatoryTraining.length > 0 ? mandatoryTraining.length : training.length;
-    const completedTraining = (mandatoryTraining.length ? mandatoryTraining : training)
-        .filter((t) => t.status === 'Completed').length;
-    const trainingProgress = trainingDenominator > 0
-        ? Math.round((completedTraining / trainingDenominator) * 100)
+    const mandatoryTraining = training.filter((t) =>
+        t.mandatory !== false && (t.videoUrl || t.documentUrl || t.quizQuestions?.length));
+    const completedTraining = mandatoryTraining.filter((t) => t.status === 'Completed').length;
+    const trainingProgress = mandatoryTraining.length > 0
+        ? Math.round((completedTraining / mandatoryTraining.length) * 100)
         : 100;
 
-    const overall = Math.round(
-        tasksProgress * TASK_WEIGHT +
-        documentsProgress * DOCUMENT_WEIGHT +
-        checklistProgress * CHECKLIST_WEIGHT +
-        trainingProgress * TRAINING_WEIGHT
-    );
+    const mandatoryPolicies = policies.filter((p) => p.mandatory !== false && p.documentUrl);
+    const policiesProgress = mandatoryPolicies.length > 0
+        ? Math.round((mandatoryPolicies.filter((p) => p.status === 'Signed').length / mandatoryPolicies.length) * 100)
+        : 100;
+
+    const mandatoryAssets = assets.filter((a) => a.mandatory !== false);
+    const assetsProgress = mandatoryAssets.length > 0
+        ? Math.round((mandatoryAssets.filter((a) => a.status === 'Assigned').length / mandatoryAssets.length) * 100)
+        : 100;
+
+    const formsProgress = workflow.formsProgress ?? 100;
+    const goalsProgress = workflow.goalsProgress ?? 100;
+    const bgvProgress = workflow.bgvStatus === 'Waived'
+        ? 100
+        : Number.isFinite(workflow.bgvProgress)
+            ? workflow.bgvProgress
+            : (workflow.backgroundVerificationCaseId ? 0 : (weights.bgv ? 0 : 100));
+    const softwareRequests = workflow.softwareRequests || [];
+    const softwareProgress = softwareRequests.length
+        ? Math.round((softwareRequests.filter((r) => ['Approved', 'Provisioned'].includes(r.approvalStatus || r.status)).length
+            / softwareRequests.length) * 100)
+        : 100;
+
+    const overall = Math.round([
+        ['tasks', tasksProgress],
+        ['documents', documentsProgress],
+        ['checklist', checklistProgress],
+        ['training', trainingProgress],
+        ['policies', policiesProgress],
+        ['assets', assetsProgress],
+        ['forms', formsProgress],
+        ['goals', goalsProgress],
+        ['bgv', bgvProgress],
+        ['software', softwareProgress],
+    ].reduce((sum, [key, value]) => sum + value * (weights[key] || 0), 0));
 
     const byRole = {
         employee: calcRoleTaskProgress(tasks, 'employee'),
@@ -102,23 +440,56 @@ export function calculateProgressBreakdown(workflow) {
         payroll: calcRoleTaskProgress(tasks, 'payroll'),
     };
 
+    let finalOverall = Math.min(100, overall);
+    if (workflow.mandatoryFormsCompleted === false) {
+        finalOverall = Math.min(finalOverall, 99);
+    }
+    if (workflow.bgvBlocksJoining && !['Clear', 'Waived'].includes(workflow.bgvStatus)) {
+        finalOverall = Math.min(finalOverall, 99);
+    }
+
     return {
         tasks: tasksProgress,
         documents: documentsProgress,
         checklist: checklistProgress,
         training: trainingProgress,
+        policies: policiesProgress,
+        assets: assetsProgress,
+        forms: formsProgress,
+        goals: goalsProgress,
+        bgv: bgvProgress,
+        software: softwareProgress,
         byRole,
-        overall: Math.min(100, overall),
+        overall: finalOverall,
+        formsGateOpen: workflow.mandatoryFormsCompleted !== false,
+        bgvGateOpen: !workflow.bgvBlocksJoining || ['Clear', 'Waived'].includes(workflow.bgvStatus),
     };
 }
 
-export function applyProgressToWorkflow(workflow) {
-    const breakdown = calculateProgressBreakdown(workflow);
+export function applyProgressToWorkflow(workflow, settings = null) {
+    if (settings) {
+        applyOnboardingFeatureGates(workflow, settings);
+        // Not initiated yet → 0% BGV (never show 100% without a case unless waived)
+        if (isFeatureEnabled(settings, 'backgroundVerification')
+            && !workflow.backgroundVerificationCaseId
+            && workflow.bgvStatus !== 'Waived') {
+            workflow.bgvProgress = 0;
+            workflow.bgvStatus = 'Not Started';
+            workflow.bgvBlocksJoining = Boolean(settings.bgvPolicy?.blockJoiningUntilClear);
+        }
+    }
+    const breakdown = calculateProgressBreakdown(workflow, settings);
     workflow.progressBreakdown = {
         tasks: breakdown.tasks,
         documents: breakdown.documents,
         checklist: breakdown.checklist,
         training: breakdown.training,
+        policies: breakdown.policies,
+        assets: breakdown.assets,
+        forms: breakdown.forms,
+        goals: breakdown.goals,
+        bgv: breakdown.bgv,
+        software: breakdown.software,
         byRole: breakdown.byRole,
     };
     workflow.progress = breakdown.overall;
@@ -128,22 +499,28 @@ export function applyProgressToWorkflow(workflow) {
         if (workflow.status === 'Completed' && workflow.progress < 100) {
             workflow.status = 'In Progress';
             workflow.actualCompletionDate = undefined;
+        } else {
+            return workflow;
         }
-        return workflow;
     }
 
-    if (workflow.expectedCompletionDate && new Date(workflow.expectedCompletionDate) < new Date()
+    if (workflow.expectedCompletionDate && startOfDay(workflow.expectedCompletionDate) < startOfDay(new Date())
         && !['Completed', 'Cancelled', 'Paused', 'Draft', 'Scheduled'].includes(workflow.status)) {
         workflow.status = 'Overdue';
     } else if (workflow.status === 'Overdue' && workflow.expectedCompletionDate
-        && new Date(workflow.expectedCompletionDate) >= new Date()) {
+        && startOfDay(workflow.expectedCompletionDate) >= startOfDay(new Date())) {
         workflow.status = 'In Progress';
     }
 
-    if (workflow.progress === 100 && workflow.status === 'In Progress') {
+    const canComplete = workflow.progress === 100
+        && workflow.mandatoryFormsCompleted !== false
+        && breakdown.bgvGateOpen !== false
+        && ['Not Started', 'In Progress', 'Overdue'].includes(workflow.status);
+
+    if (canComplete) {
         workflow.status = 'Completed';
         workflow.actualCompletionDate = new Date();
-    } else if (workflow.progress > 0 && workflow.progress < 100 && workflow.status === 'Not Started') {
+    } else if (workflow.status === 'Not Started' && hasWorkflowActivity(workflow)) {
         workflow.status = 'In Progress';
     }
 
@@ -156,13 +533,10 @@ export function addActivity(workflow, { action, description, actor, actorName, m
         action,
         description,
         actor: actor?._id || actor,
-        actorName: actorName || actor?.name || 'System',
+        actorName: actorName || actor?.name || (actor ? undefined : 'System'),
         metadata,
         createdAt: new Date(),
     });
-    if (workflow.activityFeed.length > 100) {
-        workflow.activityFeed = workflow.activityFeed.slice(0, 100);
-    }
 }
 
 async function resolveAssigneeByRole({ assigneeRole, employee, organizationId }) {
@@ -205,21 +579,8 @@ async function resolveAssigneeByRole({ assigneeRole, employee, organizationId })
 }
 
 async function getDefaultTemplate(organizationId) {
-    let template = await OnboardingTemplate.findOne({ organizationId, isDefault: true }).lean();
-    if (!template) {
-        template = {
-            name: 'Default Onboarding',
-            welcomeMessage: 'Welcome to the team! We are excited to have you join us. Please complete your onboarding tasks below.',
-            expectedDays: 30,
-            tasks: DEFAULT_ONBOARDING_TASKS,
-            checklist: DEFAULT_ONBOARDING_CHECKLIST,
-            documents: ONBOARDING_DOCUMENT_TYPES.map((d) => ({
-                documentType: d.key,
-                mandatory: d.required,
-            })),
-        };
-    }
-    return template;
+    await ensureDefaultOnboardingTemplate(organizationId);
+    return resolveGatedOnboardingTemplate(organizationId);
 }
 
 export async function createEmployeeOnboardingWorkflow({
@@ -236,16 +597,20 @@ export async function createEmployeeOnboardingWorkflow({
     welcomeMessage = null,
     asDraft = false,
 }) {
+    await assertModuleEnabled(organizationId, 'onboarding', 'Onboarding module');
     const existing = await OnboardingWorkflow.findOne({
         organizationId,
         employeeId: employee._id,
         isTemplate: { $ne: true },
     });
-    if (existing && !asDraft) return existing;
+    if (existing) return existing;
+
+    const orgSettings = await getOrgOnboardingSettings(organizationId);
 
     let template;
-    if (templateId) {
-        template = await OnboardingTemplate.findOne({ _id: templateId, organizationId }).lean();
+    const resolvedTemplateId = templateId || orgSettings.defaultTemplateId;
+    if (resolvedTemplateId) {
+        template = await resolveGatedOnboardingTemplate(organizationId, resolvedTemplateId);
     }
     if (!template) {
         template = await getDefaultTemplate(organizationId);
@@ -257,8 +622,6 @@ export async function createEmployeeOnboardingWorkflow({
     const effectiveScheduled = scheduledStartDate
         ? new Date(scheduledStartDate)
         : effectiveJoining;
-
-    const orgSettings = await getOrgOnboardingSettings(organizationId);
     let workflowStatus = asDraft
         ? 'Draft'
         : resolveInitialWorkflowStatus({
@@ -290,7 +653,7 @@ export async function createEmployeeOnboardingWorkflow({
     };
 
     const tasks = [];
-    for (const taskDef of template.tasks || DEFAULT_ONBOARDING_TASKS) {
+    for (const taskDef of template.tasks || []) {
         const taskStart = startDate || effectiveScheduled || now;
         const dueDate = new Date(taskStart);
         dueDate.setDate(dueDate.getDate() + (taskDef.dueDaysFromStart || 7));
@@ -312,67 +675,96 @@ export async function createEmployeeOnboardingWorkflow({
                 assignedTo,
                 dueDate,
                 priority: taskDef.priority || 'Medium',
+                mandatory: taskDef.mandatory !== false,
                 phase: taskDef.phase || 'Day 1',
                 status: 'Pending',
                 requiredDocuments: taskDef.requiredDocuments || [],
                 requiresAllMandatoryDocsVerified: Boolean(taskDef.requiresAllMandatoryDocsVerified),
+                featureKey: taskDef.featureKey || undefined,
             });
         }
     }
 
-    const documents = (template.documents || ONBOARDING_DOCUMENT_TYPES.map((d) => ({
-        documentType: d.key,
-        mandatory: d.required,
-    }))).map((doc) => ({
+    const documents = (template.documents || []).map((doc) => ({
         documentType: doc.documentType,
         name: doc.name || doc.documentType,
         mandatory: doc.mandatory !== false,
         status: 'Pending',
+        dueDate: dueDateFromPhase(startDate || effectiveScheduled || now, doc.phase, 7),
+        featureKey: doc.featureKey || undefined,
     }));
 
-    const checklist = (template.checklist || DEFAULT_ONBOARDING_CHECKLIST).map((item) => ({
+    const checklist = (template.checklist || []).map((item) => ({
         item: item.item,
         category: item.category,
         phase: item.phase || 'Day 1',
         mandatory: item.mandatory !== false,
+        assignedRole: item.assignedRole || ({
+            HR: 'hr',
+            IT: 'it',
+            Payroll: 'payroll',
+            Manager: 'manager',
+            Buddy: 'buddy',
+        }[item.category] || 'employee'),
         completed: false,
+        dueDate: dueDateFromPhase(startDate || effectiveScheduled || now, item.phase, 7),
+        featureKey: item.featureKey || undefined,
     }));
 
-    const assets = DEFAULT_ASSET_TYPES.map((a) => ({
+    const assets = (template.assets || []).map((a) => ({
         assetType: a.assetType,
         name: a.name,
         mandatory: a.mandatory !== false,
         status: 'Pending',
+        featureKey: a.featureKey || 'itAssetProvisioning',
     }));
 
-    const trainingModules = DEFAULT_TRAINING_MODULES.map((t) => ({
+    const trainingModules = (template.trainingModules || [])
+        .filter((t) => t.videoUrl || t.documentUrl || t.quizQuestions?.length)
+        .map((t) => ({
         title: t.title,
         description: t.description,
         type: t.type,
+        videoUrl: t.videoUrl,
+        documentUrl: t.documentUrl,
+        quizQuestions: t.quizQuestions || [],
         mandatory: t.mandatory !== false,
         passingScore: t.passingScore || 70,
         phase: t.phase || 'Week 1',
+        dueDate: dueDateFromPhase(startDate || effectiveScheduled || now, t.phase || 'Week 1', 7),
         status: 'Not Started',
-    }));
+        featureKey: t.featureKey || 'mandatoryTraining',
+        }));
 
-    const policySignatures = DEFAULT_POLICY_SIGNATURES.map((p) => ({
+    const policySignatures = (template.policySignatures || [])
+        .filter((p) => p.documentUrl)
+        .map((p) => ({
         documentType: p.documentType,
         title: p.title,
+        documentUrl: p.documentUrl,
         mandatory: p.mandatory !== false,
+        dueDate: dueDateFromPhase(startDate || effectiveScheduled || now, p.phase, 7),
         status: 'Pending',
-    }));
+        }));
 
-    const buddyCheckins = [
-        { type: 'welcome_meeting', title: 'Buddy Welcome Meeting', status: 'Pending' },
-        { type: 'first_week', title: 'First Week Check-in', status: 'Pending' },
-        { type: 'day_30', title: '30-Day Check-in', status: 'Pending' },
-    ];
+    const lifecycleSettings = await getOrCreateLifecycleSettings(organizationId);
+    const buddyCheckins = isFeatureEnabled(lifecycleSettings, 'buddyProgram')
+        ? [
+            { type: 'welcome_meeting', title: 'Buddy Welcome Meeting', status: 'Pending' },
+            { type: 'first_week', title: 'First Week Check-in', status: 'Pending' },
+            { type: 'day_30', title: '30-Day Check-in', status: 'Pending' },
+        ]
+        : [];
 
     const managerActions = [
-        { actionType: 'probation_goals', title: 'Approve Probation Goals', status: 'Pending' },
+        ...(isFeatureEnabled(lifecycleSettings, 'goalAssignment')
+            ? [{ actionType: 'probation_goals', title: 'Approve Probation Goals', status: 'Pending' }]
+            : []),
         { actionType: 'first_project', title: 'Assign First Project', status: 'Pending' },
         { actionType: 'one_on_one', title: 'Schedule 1:1 Meeting', status: 'Pending' },
-        { actionType: 'review', title: 'Review Employee Progress', status: 'Pending' },
+        ...(isFeatureEnabled(lifecycleSettings, 'managerFeedback') || isFeatureEnabled(lifecycleSettings, 'probation')
+            ? [{ actionType: 'review', title: 'Review Employee Progress', status: 'Pending' }]
+            : []),
     ];
 
     const workflow = new OnboardingWorkflow({
@@ -405,19 +797,69 @@ export async function createEmployeeOnboardingWorkflow({
             actor: initiatedBy,
             actorName: initiatedBy ? 'HR' : 'System',
             createdAt: new Date(),
-        }],
+        }, ...tasks.map((task) => ({
+            action: 'task_assigned',
+            description: `Task "${task.title}" assigned to ${task.assigneeRole}`,
+            actor: initiatedBy,
+            actorName: initiatedBy ? 'HR' : 'System',
+            metadata: { taskId: task._id, assignedTo: task.assignedTo, assigneeRole: task.assigneeRole },
+            createdAt: new Date(),
+        }))],
     });
 
-    applyProgressToWorkflow(workflow);
+    await applyPackArtifactsToOnboardingWorkflow(workflow, organizationId);
+
+    if (isFeatureEnabled(lifecycleSettings, 'milestone30_60_90')) {
+        seedMilestonesForWorkflow(workflow, effectiveJoining);
+    }
+    if (isFeatureEnabled(lifecycleSettings, 'probation')) {
+        initProbationForWorkflow(workflow, { joiningDate: effectiveJoining });
+    }
+    await syncFormGateToWorkflow(workflow, organizationId);
+    if (isFeatureEnabled(lifecycleSettings, 'goalAssignment')) {
+        await autoAssignDefaultProbationGoals(workflow, { actor: initiatedBy ? { _id: initiatedBy } : null });
+        await syncGoalsProgressToWorkflow(workflow);
+    }
+
+    applyProgressToWorkflow(workflow, lifecycleSettings);
     await workflow.save();
+
+    if (isFeatureEnabled(lifecycleSettings, 'backgroundVerification')) {
+        try {
+            const checkTypes = workflow.packBgvCheckTypes?.length
+                ? workflow.packBgvCheckTypes
+                : lifecycleSettings.bgvPolicy?.defaultChecks;
+            const bgvCase = await createBgvCase({
+                organizationId,
+                subjectType: 'employee',
+                employeeId: employee._id,
+                onboardingWorkflowId: workflow._id,
+                checkTypes,
+                actor: initiatedBy ? { _id: initiatedBy } : null,
+            });
+            workflow.backgroundVerificationCaseId = bgvCase._id;
+            await workflow.save();
+        } catch (err) {
+            logger.warn('BGV auto-create skipped', { error: err.message, employeeId: employee._id });
+        }
+    }
+
+    emitOnboardingChangedAsync(organizationId, workflow._id);
 
     if (workflowStatus !== 'Draft') {
         runInBackground('onboarding-workflow-notify', async () => {
             await notify({
-                type: 'onboarding_workflow_created',
+                type: 'onboarding_workflow_assigned',
                 organizationId,
-                data: { employee, workflow, hrAssignee },
+                data: { employee, workflow },
             });
+            await Promise.all(workflow.tasks
+                .filter((task) => task.assignedTo)
+                .map((task) => notify({
+                    type: 'onboarding_task_assigned',
+                    organizationId,
+                    data: { workflow, task },
+                })));
         });
     }
 
@@ -438,28 +880,320 @@ export async function activateScheduledWorkflows(organizationId = null) {
     let activated = 0;
 
     for (const workflow of workflows) {
-        workflow.status = 'In Progress';
+        workflow.status = 'Not Started';
         workflow.startDate = workflow.scheduledStartDate || workflow.joiningDate || now;
         addActivity(workflow, {
-            action: 'workflow_started',
-            description: `Onboarding started automatically on joining date`,
+            action: 'workflow_ready',
+            description: 'Onboarding is ready to start on the employee joining date',
             actorName: 'System',
         });
         applyProgressToWorkflow(workflow);
         await workflow.save();
+        emitOnboardingChangedAsync(workflow.organizationId, workflow._id);
         activated += 1;
 
-        runInBackground('onboarding-workflow-started', async () => {
-            const employee = await Employee.findById(workflow.employeeId).lean();
-            await notify({
-                type: 'onboarding_workflow_created',
-                organizationId: workflow.organizationId,
-                data: { employee, workflow, autoStarted: true },
-            });
-        });
     }
 
     return activated;
+}
+
+export function getOnboardingReminderStage(dueDate, now = new Date()) {
+    if (!dueDate) return null;
+    const due = startOfDay(dueDate);
+    const today = startOfDay(now);
+    const daysUntilDue = Math.round((due.getTime() - today.getTime()) / 86400000);
+    if ([3, 1, 0].includes(daysUntilDue)) {
+        return {
+            key: daysUntilDue === 0 ? 'due-today' : `due-in-${daysUntilDue}-days`,
+            wording: daysUntilDue === 0 ? 'is due today' : `is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`,
+            priority: daysUntilDue === 0 ? 'high' : 'medium',
+        };
+    }
+    if (daysUntilDue < 0) {
+        return {
+            key: `overdue-${localDateKey(today)}`,
+            wording: 'is overdue',
+            priority: 'high',
+        };
+    }
+    return null;
+}
+
+function onboardingRoleRecipient(workflow, role = 'employee') {
+    if (role === 'employee') return workflow.employeeId;
+    if (role === 'hr') return workflow.assignedHR;
+    if (role === 'manager') return workflow.assignedManager;
+    if (role === 'buddy') return workflow.assignedBuddy;
+    return (workflow.tasks || []).find((task) =>
+        task.assigneeRole === role && task.assignedTo)?.assignedTo;
+}
+
+function buildOnboardingReminderItems(workflow, now) {
+    const baseDate = workflow.startDate || workflow.scheduledStartDate
+        || workflow.joiningDate || workflow.createdAt || now;
+    const records = [];
+    const add = ({ kind, item, label, dueDate, recipient, title }) => {
+        const stage = getOnboardingReminderStage(dueDate, now);
+        if (!stage || !recipient) return;
+        records.push({
+            key: `${kind}:${item._id}:${stage.key}`,
+            eventType: 'onboarding_reminder',
+            recipient,
+            title,
+            message: `${label} ${stage.wording}. Please complete it as soon as possible.`,
+            item,
+            reminderType: kind,
+            dueDate,
+            priority: stage.priority,
+        });
+    };
+
+    for (const task of workflow.tasks || []) {
+        if (['Completed', 'Cancelled'].includes(task.status)) continue;
+        add({
+            kind: 'task', item: task, label: `Onboarding task "${task.title}"`,
+            dueDate: task.dueDate, recipient: task.assignedTo,
+            title: task.status === 'Overdue' ? 'Onboarding Task Overdue' : 'Pending Task Reminder',
+        });
+    }
+    for (const doc of workflow.documents || []) {
+        if (doc.mandatory === false || ['Uploaded', 'Verified'].includes(doc.status)) continue;
+        if (!doc.dueDate) doc.dueDate = dueDateFromPhase(baseDate, null, 7);
+        add({
+            kind: 'document', item: doc, label: `Required document "${doc.name || doc.documentType}"`,
+            dueDate: doc.dueDate, recipient: workflow.employeeId, title: 'Pending Document Reminder',
+        });
+    }
+    for (const item of workflow.checklist || []) {
+        if (item.mandatory === false || item.completed) continue;
+        if (!item.dueDate) item.dueDate = dueDateFromPhase(baseDate, item.phase, 7);
+        add({
+            kind: 'checklist', item, label: `Checklist item "${item.item}"`,
+            dueDate: item.dueDate, recipient: onboardingRoleRecipient(workflow, item.assignedRole),
+            title: 'Pending Checklist Reminder',
+        });
+    }
+    for (const module of workflow.trainingModules || []) {
+        if (module.mandatory === false || module.status === 'Completed') continue;
+        if (!module.dueDate) module.dueDate = dueDateFromPhase(baseDate, module.phase, 7);
+        add({
+            kind: 'training', item: module, label: `Training module "${module.title}"`,
+            dueDate: module.dueDate, recipient: workflow.employeeId, title: 'Pending Training Reminder',
+        });
+    }
+    for (const signature of workflow.policySignatures || []) {
+        if (signature.mandatory === false || signature.status === 'Signed') continue;
+        if (!signature.dueDate) signature.dueDate = dueDateFromPhase(baseDate, null, 7);
+        add({
+            kind: 'policy', item: signature, label: `Policy "${signature.title}"`,
+            dueDate: signature.dueDate, recipient: workflow.employeeId,
+            title: 'Pending Policy Signature Reminder',
+        });
+    }
+    return records;
+}
+
+/**
+ * Reconcile time-driven onboarding state from persisted dates and completion data.
+ * This is safe to run repeatedly: transitions are logged/notified only once.
+ */
+export async function synchronizeOnboardingWorkflows(organizationId = null) {
+    const retiredTaskScope = organizationId ? { organizationId } : {};
+    await Promise.all([
+        OnboardingWorkflow.updateMany(
+            { ...retiredTaskScope, 'tasks.title': { $in: RETIRED_DEFAULT_TASK_TITLES } },
+            { $pull: { tasks: { title: { $in: RETIRED_DEFAULT_TASK_TITLES } } } },
+        ),
+        OnboardingTemplate.updateMany(
+            { ...retiredTaskScope, 'tasks.title': { $in: RETIRED_DEFAULT_TASK_TITLES } },
+            { $pull: { tasks: { title: { $in: RETIRED_DEFAULT_TASK_TITLES } } } },
+        ),
+    ]);
+
+    await activateScheduledWorkflows(organizationId);
+
+    const now = new Date();
+    const query = {
+        isTemplate: { $ne: true },
+    };
+    if (organizationId) query.organizationId = organizationId;
+
+    const workflows = await OnboardingWorkflow.find(query)
+        .populate('employeeId', 'name lastName employeeId');
+    const result = { workflowsChecked: workflows.length, tasksOverdue: 0, remindersSent: 0, workflowsCompleted: 0, escalationsSent: 0 };
+    await synchronizeWorkflowDocuments(workflows);
+
+    const settingsByOrg = new Map();
+    const getSettings = async (orgId) => {
+        const key = String(orgId);
+        if (!settingsByOrg.has(key)) {
+            settingsByOrg.set(key, await getOrCreateLifecycleSettings(orgId));
+        }
+        return settingsByOrg.get(key);
+    };
+
+    for (const workflow of workflows) {
+        const lifecycleSettings = await getSettings(workflow.organizationId);
+        await syncFormGateToWorkflow(workflow, workflow.organizationId);
+        await syncGoalsProgressToWorkflow(workflow);
+        const overdueTasks = [];
+        const previousStatus = workflow.status;
+        if (workflow.status === 'On Hold') {
+            workflow.status = 'Paused';
+            workflow.pausedFromStatus = 'In Progress';
+        }
+        const previousProgress = workflow.progress;
+        const previousBreakdown = JSON.stringify(workflow.progressBreakdown?.toObject?.()
+            || workflow.progressBreakdown || {});
+        const automationActive = ['Not Started', 'In Progress', 'Overdue', 'Completed']
+            .includes(workflow.status);
+
+        for (const task of automationActive ? (workflow.tasks || []) : []) {
+            const isOpen = !['Completed', 'Cancelled'].includes(task.status);
+            if (!isOpen || !task.dueDate) continue;
+
+            const dueDate = new Date(task.dueDate);
+            if (startOfDay(dueDate) < startOfDay(now) && task.status !== 'Overdue') {
+                task.status = 'Overdue';
+                task.overdueAt = now;
+                overdueTasks.push(task);
+                result.tasksOverdue += 1;
+                addActivity(workflow, {
+                    action: 'task_overdue',
+                    description: (() => {
+                        const emp = workflow.employeeId;
+                        const empName = emp && typeof emp === 'object'
+                            ? `${emp.name || ''} ${emp.lastName || ''}`.trim()
+                            : '';
+                        const taskLabel = `Task "${task.title}" became overdue`;
+                        return empName ? `${empName}: ${taskLabel}` : taskLabel;
+                    })(),
+                    actorName: 'System',
+                    metadata: {
+                        taskId: task._id,
+                        dueDate: task.dueDate,
+                        employeeId: workflow.employeeId?._id || workflow.employeeId,
+                    },
+                });
+            }
+        }
+
+        const { restoreEnabledPackArtifacts, applyOnboardingFeatureGates } = await import('./lifecycleFeatureRuntimeService.js');
+        applyOnboardingFeatureGates(workflow, lifecycleSettings);
+        await restoreEnabledPackArtifacts(workflow, workflow.organizationId, lifecycleSettings, 'onboarding');
+        applyProgressToWorkflow(workflow, lifecycleSettings);
+        if (previousStatus !== 'Completed' && workflow.status === 'Completed') {
+            workflow.completionNotifiedAt = now;
+            result.workflowsCompleted += 1;
+            addActivity(workflow, {
+                action: 'workflow_completed',
+                description: (() => {
+                    const emp = workflow.employeeId;
+                    const empName = emp && typeof emp === 'object'
+                        ? `${emp.name || ''} ${emp.lastName || ''}`.trim()
+                        : '';
+                    const msg = 'All mandatory onboarding requirements completed';
+                    return empName ? `${empName}: ${msg}` : msg;
+                })(),
+                actorName: 'System',
+                metadata: {
+                    progress: workflow.progress,
+                    employeeId: workflow.employeeId?._id || workflow.employeeId,
+                },
+            });
+        }
+
+        if (!workflow.notificationHistory) workflow.notificationHistory = [];
+        const remindersEnabled = isFeatureEnabled(lifecycleSettings, 'reminders');
+        const sentReminderKeys = new Set(workflow.notificationHistory.map((entry) => entry.key));
+        const pendingNotifications = (automationActive && remindersEnabled)
+            ? buildOnboardingReminderItems(workflow, now)
+                .filter((reminder) => !sentReminderKeys.has(reminder.key))
+            : [];
+
+        const todayKey = localDateKey(startOfDay(now));
+        const workflowOverdueKey = `workflow-overdue:${todayKey}`;
+        if (remindersEnabled && automationActive && workflow.status === 'Overdue' && !sentReminderKeys.has(workflowOverdueKey)) {
+            pendingNotifications.push({
+                key: workflowOverdueKey,
+                eventType: 'onboarding_workflow_overdue',
+            });
+        }
+
+        for (const notification of pendingNotifications) {
+            workflow.notificationHistory.push({
+                key: notification.key,
+                eventType: notification.eventType,
+                sentAt: now,
+            });
+        }
+        result.remindersSent += pendingNotifications.length;
+
+        const { processLifecycleEscalations, collectOverdueOnboardingItems } = await import('./lifecycleEscalationService.js');
+        const escalationResult = await processLifecycleEscalations({
+            organizationId: workflow.organizationId,
+            workflow,
+            module: 'onboarding',
+            overdueItems: collectOverdueOnboardingItems(workflow, now),
+            now,
+        });
+        result.escalationsSent = (result.escalationsSent || 0) + escalationResult.escalationsSent;
+
+        workflow.lastAutomationRunAt = now;
+
+        const changed = overdueTasks.length || pendingNotifications.length
+            || previousStatus !== workflow.status || previousProgress !== workflow.progress
+            || workflow.isModified('tasks') || workflow.isModified('documents')
+            || workflow.isModified('checklist') || workflow.isModified('trainingModules')
+            || workflow.isModified('policySignatures')
+            || previousBreakdown !== JSON.stringify(workflow.progressBreakdown?.toObject?.()
+                || workflow.progressBreakdown || {});
+        if (!changed) continue;
+
+        try {
+            await workflow.save();
+        } catch (err) {
+            logger.error('Onboarding workflow sync save failed', {
+                workflowId: String(workflow._id),
+                organizationId: String(workflow.organizationId),
+                message: err.message,
+            });
+            continue;
+        }
+
+        // Only broadcast for real lifecycle events — not silent progress recalcs on GET
+        const shouldBroadcast = overdueTasks.length
+            || previousStatus !== workflow.status;
+        if (shouldBroadcast) emitOnboardingChangedAsync(workflow.organizationId, workflow._id);
+
+        runInBackground('onboarding-automation-notifications', async () => {
+            await Promise.all([
+                ...pendingNotifications.map((notification) => notify({
+                    type: notification.eventType,
+                    organizationId: workflow.organizationId,
+                    title: notification.title,
+                    message: notification.message,
+                    priority: notification.priority,
+                    data: {
+                        workflow,
+                        recipient: notification.recipient,
+                        item: notification.item,
+                        reminderType: notification.reminderType,
+                        dueDate: notification.dueDate,
+                    },
+                })),
+                ...(previousStatus !== 'Completed' && workflow.status === 'Completed'
+                    ? [notify({
+                        type: 'onboarding_workflow_completed',
+                        organizationId: workflow.organizationId,
+                        data: { workflow },
+                    })]
+                    : []),
+            ]);
+        });
+    }
+
+    return result;
 }
 
 export async function buildEnhancedDashboardStats(organizationId) {
@@ -470,7 +1204,13 @@ export async function buildEnhancedDashboardStats(organizationId) {
     const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
 
     const base = { organizationId, isTemplate: { $ne: true } };
-    const workflows = await OnboardingWorkflow.find(base).lean();
+    const workflowRecords = await OnboardingWorkflow.find(base)
+        .populate('employeeId', '_id')
+        .lean();
+    const workflows = workflowRecords.filter((workflow) => workflow.employeeId);
+    const uniqueEmployeeCount = (rows) => new Set(rows
+        .map((workflow) => (workflow.employeeId?._id || workflow.employeeId)?.toString())
+        .filter(Boolean)).size;
 
     const countPendingDocs = (w) => (w.documents || []).filter((d) =>
         d.mandatory !== false && !['Verified'].includes(d.status)).length;
@@ -484,36 +1224,89 @@ export async function buildEnhancedDashboardStats(organizationId) {
     const pendingManagerTasks = (w) => (w.tasks || []).filter((t) =>
         t.assigneeRole === 'manager' && t.status !== 'Completed').length;
 
+    const pendingPayrollTasks = (w) => (w.tasks || []).filter((t) =>
+        t.assigneeRole === 'payroll' && t.status !== 'Completed').length;
+
     const isDelayed = (w) => w.status === 'Overdue'
         || (w.expectedCompletionDate && new Date(w.expectedCompletionDate) < new Date()
             && !['Completed', 'Cancelled', 'Draft', 'Scheduled', 'Paused'].includes(w.status));
 
     return {
+        totalJoinings: uniqueEmployeeCount(workflows),
         active: workflows.filter((w) => w.status === 'In Progress').length,
         completed: workflows.filter((w) => w.status === 'Completed').length,
         delayed: workflows.filter(isDelayed).length,
         notStarted: workflows.filter((w) => ['Not Started', 'Draft'].includes(w.status)).length,
         scheduled: workflows.filter((w) => w.status === 'Scheduled').length,
         paused: workflows.filter((w) => ['Paused', 'On Hold'].includes(w.status)).length,
-        todaysJoinings: workflows.filter((w) => {
+        todaysJoinings: uniqueEmployeeCount(workflows.filter((w) => {
             if (!w.joiningDate) return false;
             const jd = startOfDay(new Date(w.joiningDate));
             return jd.getTime() === today.getTime();
-        }).length,
-        upcomingJoinings: workflows.filter((w) => {
+        })),
+        upcomingJoinings: uniqueEmployeeCount(workflows.filter((w) => {
             if (!w.joiningDate) return false;
             const jd = startOfDay(new Date(w.joiningDate));
             return jd > today && jd <= new Date(today.getTime() + 30 * 86400000);
-        }).length,
+        })),
         pendingDocuments: workflows.reduce((sum, w) => sum + countPendingDocs(w), 0),
         pendingHrTasks: workflows.reduce((sum, w) => sum + pendingHrTasks(w), 0),
         pendingItSetup: workflows.reduce((sum, w) => sum + pendingItTasks(w), 0),
+        pendingPayrollTasks: workflows.reduce((sum, w) => sum + pendingPayrollTasks(w), 0),
         pendingManagerReviews: workflows.reduce((sum, w) => sum + pendingManagerTasks(w), 0),
+        pendingVerifications: workflows.reduce((sum, w) =>
+            sum + (w.documents || []).filter((d) => d.status === 'Uploaded').length, 0),
         delayedEmployees: workflows.filter(isDelayed).length,
         completedThisMonth: workflows.filter((w) =>
             w.status === 'Completed' && w.actualCompletionDate
             && new Date(w.actualCompletionDate) >= monthStart
             && new Date(w.actualCompletionDate) <= monthEnd).length,
+    };
+}
+
+export function buildRoleDashboardStats(workflows, roleCtx, view = '') {
+    const rows = (workflows || []).filter((workflow) => workflow.employeeId);
+    const openTasks = rows.flatMap((workflow) =>
+        (workflow.tasks || []).filter((task) => !['Completed', 'Cancelled'].includes(task.status)));
+
+    const preferBuddy = view === 'buddy'
+        || (roleCtx.hasBuddyAssignments && view !== 'team' && view !== 'tasks' && !roleCtx.hasTeamOnboarding && !roleCtx.canViewTasks);
+    const preferManager = view === 'team' || view === 'tasks'
+        || ((roleCtx.hasTeamOnboarding || roleCtx.canViewTasks || roleCtx.hasDirectReports)
+            && view !== 'buddy' && !preferBuddy);
+
+    if (preferManager) {
+        const managerTasks = openTasks.filter((task) => task.assigneeRole === 'manager');
+        return {
+            assignedEmployees: rows.length,
+            pendingReviews: rows.reduce((sum, workflow) =>
+                sum + (workflow.managerActions || []).filter((action) => action.status !== 'Completed').length, 0),
+            pendingInduction: managerTasks.filter((task) => task.category === 'Orientation').length,
+            pendingGoals: rows.reduce((sum, workflow) =>
+                sum + (workflow.managerActions || []).filter((action) =>
+                    action.actionType === 'probation_goals' && action.status !== 'Completed').length, 0),
+            teamAverageProgress: rows.length
+                ? Math.round(rows.reduce((sum, workflow) => sum + (workflow.progress || 0), 0) / rows.length)
+                : 0,
+        };
+    }
+
+    if (preferBuddy || roleCtx.hasBuddyAssignments || roleCtx.isBuddy) {
+        const pendingCheckins = (type) => rows.reduce((sum, workflow) =>
+            sum + (workflow.buddyCheckins || []).filter((checkin) =>
+                checkin.type === type && checkin.status !== 'Completed').length, 0);
+        return {
+            assignedEmployees: rows.length,
+            welcomeMeetings: pendingCheckins('welcome_meeting'),
+            firstWeekCheckins: pendingCheckins('first_week'),
+            day30Followups: pendingCheckins('day_30'),
+        };
+    }
+
+    return {
+        pendingTasks: openTasks.length,
+        progress: rows[0]?.progress || 0,
+        upcomingTasks: openTasks.filter((task) => task.dueDate && new Date(task.dueDate) >= new Date()).length,
     };
 }
 
@@ -553,6 +1346,79 @@ function isDocVerified(doc) {
 }
 
 /**
+ * Keep document-dependent tasks aligned with canonical Employee Documents.
+ * Upload tasks complete when all of their required documents are uploaded,
+ * while verification tasks complete only after every mandatory document is verified.
+ */
+export function synchronizeDocumentDrivenTasks(workflow, now = new Date()) {
+    let changed = false;
+
+    for (const task of workflow.tasks || []) {
+        if (task.status === 'Cancelled') continue;
+
+        const rules = resolveTaskCompletionRules(task);
+        const isDocumentTask = rules.requiredDocuments.length > 0
+            || rules.requiresAllMandatoryDocsVerified;
+        if (!isDocumentTask) continue;
+
+        const requiredDocs = rules.requiresAllMandatoryDocsVerified
+            ? (workflow.documents || []).filter((doc) => doc.mandatory !== false)
+            : rules.requiredDocuments.map((type) => getWorkflowDocument(workflow, type));
+        const dependenciesComplete = (task.dependencies || []).every((dependencyId) => {
+            const dependency = (workflow.tasks || []).find((candidate) =>
+                candidate._id?.toString() === dependencyId?.toString());
+            return dependency?.status === 'Completed';
+        });
+        const requirementsComplete = requiredDocs.length > 0 && (
+            rules.requiresAllMandatoryDocsVerified
+                ? requiredDocs.every(isDocVerified)
+                : requiredDocs.every(isDocUploaded)
+        );
+        const hasDocumentActivity = requiredDocs.some((doc) =>
+            doc?.url || ['Uploaded', 'Verified', 'Rejected'].includes(doc?.status));
+        const isPastDue = task.dueDate && startOfDay(task.dueDate) < startOfDay(now);
+
+        const nextStatus = requirementsComplete && dependenciesComplete
+            ? 'Completed'
+            : isPastDue
+                ? 'Overdue'
+                : hasDocumentActivity
+                    ? 'In Progress'
+                    : 'Pending';
+
+        if (task.status === nextStatus) continue;
+
+        const previousStatus = task.status;
+        task.status = nextStatus;
+        if (nextStatus === 'Completed') {
+            if (!task.startedDate) task.startedDate = now;
+            task.completedDate = now;
+            task.overdueAt = undefined;
+        } else {
+            task.completedDate = undefined;
+            if (nextStatus === 'Pending') {
+                task.startedDate = undefined;
+                task.overdueAt = undefined;
+            } else {
+                if (!task.startedDate) task.startedDate = now;
+                if (nextStatus === 'Overdue' && !task.overdueAt) task.overdueAt = now;
+                if (nextStatus !== 'Overdue') task.overdueAt = undefined;
+            }
+        }
+
+        addActivity(workflow, {
+            action: 'document_task_status_changed',
+            description: `Task "${task.title}" automatically changed from ${previousStatus} to ${nextStatus}`,
+            actorName: 'System',
+            metadata: { taskId: task._id, previousStatus, status: nextStatus },
+        });
+        changed = true;
+    }
+
+    return changed;
+}
+
+/**
  * Returns human-readable blockers preventing task completion.
  * Empty array means the task can be marked complete.
  */
@@ -567,6 +1433,14 @@ export function getTaskCompletionBlockers(workflow, task) {
     }
 
     const rules = resolveTaskCompletionRules(task);
+
+    for (const dependencyId of task.dependencies || []) {
+        const dependency = (workflow.tasks || []).find((candidate) =>
+            candidate._id?.toString() === dependencyId?.toString());
+        if (!dependency || dependency.status !== 'Completed') {
+            blockers.push(`Complete dependency: ${dependency?.title || 'required task'}`);
+        }
+    }
 
     for (const docType of rules.requiredDocuments) {
         const doc = getWorkflowDocument(workflow, docType);
@@ -638,22 +1512,53 @@ export async function getOnboardingRoleContext(req) {
 
     let isManager = false;
     let isBuddy = false;
+    let hasTeamOnboarding = false;
+    let hasBuddyAssignments = false;
+    const isLineManager = Boolean(req.authContext?.isLineManager);
 
     if (employeeId) {
+        const buddyIds = [employeeId];
+        if (userId && String(userId) !== String(employeeId)) buddyIds.push(userId);
+
         const buddyWorkflows = await OnboardingWorkflow.countDocuments({
             organizationId,
-            assignedBuddy: employeeId,
             isTemplate: { $ne: true },
+            status: { $nin: ['Cancelled'] },
+            $or: [
+                { assignedBuddy: { $in: buddyIds } },
+                {
+                    tasks: {
+                        $elemMatch: {
+                            assigneeRole: 'buddy',
+                            assignedTo: { $in: buddyIds },
+                        },
+                    },
+                },
+            ],
         });
-        isBuddy = buddyWorkflows > 0;
+        hasBuddyAssignments = buddyWorkflows > 0;
+        isBuddy = hasBuddyAssignments;
 
         const managerWorkflows = await OnboardingWorkflow.countDocuments({
             organizationId,
-            assignedManager: employeeId,
+            assignedManager: { $in: buddyIds },
             isTemplate: { $ne: true },
+            status: { $nin: ['Cancelled'] },
         });
-        isManager = managerWorkflows > 0 || req.authContext?.isLineManager;
+        hasTeamOnboarding = managerWorkflows > 0;
+        isManager = hasTeamOnboarding || isLineManager;
     }
 
-    return { employeeId, userId, organizationId, isAdmin, isHR, isManager, isBuddy };
+    return {
+        employeeId,
+        userId,
+        organizationId,
+        isAdmin,
+        isHR,
+        isManager,
+        isBuddy,
+        isLineManager,
+        hasTeamOnboarding,
+        hasBuddyAssignments,
+    };
 }

@@ -48,21 +48,21 @@ const EmployeePayroll = () => {
 
   if (loading)
     return (
-      <div className="w-full max-w-[1600px] mx-auto p-3 sm:p-4 lg:p-6">
+      <div className="w-full p-3 sm:p-4 lg:p-6">
         <p className="text-gray-700">Loading...</p>
       </div>
     );
 
   if (error)
     return (
-      <div className="w-full max-w-[1600px] mx-auto p-3 sm:p-4 lg:p-6">
+      <div className="w-full p-3 sm:p-4 lg:p-6">
         <div className="bg-red-100 text-red-700 p-4 rounded">{error}</div>
       </div>
     );
 
   if (!payrollData || !employeeData)
     return (
-      <div className="w-full max-w-[1600px] mx-auto p-3 sm:p-4 lg:p-6">
+      <div className="w-full p-3 sm:p-4 lg:p-6">
         <div className="bg-theme-secondary/10 text-theme-secondary p-4 rounded">
           No payroll data available
         </div>
@@ -70,7 +70,7 @@ const EmployeePayroll = () => {
     );
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto p-3 sm:p-4 lg:p-6 bg-gray-100 min-h-screen">
+    <div className="w-full p-3 sm:p-4 lg:p-6 bg-gray-100 min-h-screen">
       {/* Header */}
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow mb-8">
         <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center">

@@ -91,6 +91,11 @@ export const authRoutes = [
     path: '/reset-password/:token',
     component: lazy(() => import('../Both/ResetPassword')),
     message: 'Loading password reset...'
+  },
+  {
+    path: '/offer/:token',
+    component: lazy(() => import('../Public/OfferCandidatePortal')),
+    message: 'Loading offer letter...'
   }
 ];
 
@@ -238,6 +243,7 @@ export const adminRoutes = [
 // HR Feature routes - admin and HR
 export const hrRoutes = [
   { path: '/recruitment', component: lazy(() => import('../HR/Recruitment/RecruitmentPage')), message: 'Loading recruitment...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/candidates/:id', component: lazy(() => import('../HR/Recruitment/CandidateDetailPage')), message: 'Loading candidate...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
   { path: '/onboarding', component: lazy(() => import('../components/OnboardingRouteWrapper')), message: 'Loading onboarding...', allowedRoles: [] },
   { path: '/learning', component: lazy(() => import('../components/LearningRouteWrapper')), message: 'Loading learning & development...', allowedRoles: [] },
   { path: '/learning/courses/:courseId', component: lazy(() => import('../Employee/Learning/CourseDetailsPage')), message: 'Loading course details...', allowedRoles: [] },

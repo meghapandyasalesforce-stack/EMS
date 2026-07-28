@@ -166,7 +166,13 @@ const payrollSchema = new mongoose.Schema({
         status: { type: String, enum: ['Success', 'Failed', 'Pending'] },
         processedAt: { type: Date },
         error: { type: String }
-    }
+    },
+    /** Linked offboarding workflow for F&F off-cycle runs */
+    offboardingWorkflowId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OffboardingWorkflow',
+        index: true,
+    },
 }, {
     timestamps: true
 });

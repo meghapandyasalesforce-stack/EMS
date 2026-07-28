@@ -90,7 +90,7 @@ const StatCard = ({
 
   return (
     <div 
-      className={`modern-card p-5 md:p-6 border-l-4 ${isHighlighted ? 'border-purple-500 border-2 ring-2 ring-purple-200' : colors.border} ${onClick ? 'cursor-pointer hover:scale-[1.02]' : ''} ${className} ${isHighlighted ? 'relative' : ''} animate-fadeIn`}
+      className={`modern-card h-full w-full min-w-0 p-4 sm:p-5 md:p-6 border-l-4 ${isHighlighted ? 'border-purple-500 border-2 ring-2 ring-purple-200' : colors.border} ${onClick ? 'cursor-pointer hover:scale-[1.02]' : ''} ${className} ${isHighlighted ? 'relative' : ''} animate-fadeIn`}
       onClick={onClick}
       style={{
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',

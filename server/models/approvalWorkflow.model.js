@@ -23,7 +23,7 @@ const approvalWorkflowSchema = new mongoose.Schema({
     entityType: {
         type: String,
         required: true,
-        enum: ['Leave', 'Expense', 'Document', 'WorkforcePlan', 'Project', 'AttendanceRegularization', 'TaxRegimeChange', 'Other'],
+        enum: ['Leave', 'Expense', 'Document', 'WorkforcePlan', 'Project', 'AttendanceRegularization', 'TaxRegimeChange', 'Offer', 'Onboarding', 'Offboarding', 'Clearance', 'ExitInterview', 'FnF', 'AssetReturn', 'LifecycleForm', 'LifecycleLetter', 'Other'],
         index: true
     },
     isActive: {

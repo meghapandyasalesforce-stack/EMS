@@ -3,6 +3,17 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Document } from '../models/document.model.js';
 import { persistDocumentBinary, requireUploadFileBuffer } from './documentFileStorageHelper.js';
+import { applyHubMetadataToDocument } from '../services/lifecycleDocumentHubService.js';
+import { getCatalogDocument } from '../constants/lifecycleDocumentCatalog.js';
+
+const JOB_TYPE_TO_CATALOG = {
+    AADHAR_CARD: 'AADHAAR',
+    PAN_CARD: 'PAN',
+    DEGREE_CERTIFICATE: 'DEGREE',
+    OFFER_LETTER: 'OFFER_LETTER',
+    GUARANTOR_FORM: 'OTHER',
+    OTHER: 'OTHER',
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -208,6 +219,9 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             },
         });
         await doc.save();
+        const catalogKey = body.catalogKey || JOB_TYPE_TO_CATALOG[documentType];
+        applyHubMetadataToDocument(doc, { catalogKey, orgCatalogEntry: getCatalogDocument(catalogKey) });
+        if (catalogKey) await doc.save();
         await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id, parsedInfo);
         await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
         return doc;
@@ -238,6 +252,11 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         approvalStatus: 'Pending',
         accessLevel: 'Private',
         isActive: true,
+    });
+    applyHubMetadataToDocument(doc, {
+        catalogKey: body.catalogKey,
+        orgCatalogEntry: body.catalogKey ? getCatalogDocument(body.catalogKey) : null,
+        workflowAssignment: body.workflowAssignment ? JSON.parse(body.workflowAssignment) : undefined,
     });
     await doc.save();
     await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);

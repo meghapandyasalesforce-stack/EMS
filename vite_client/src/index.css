@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/corporateModern.css";
 
 /* Modern Design System - Color Variables */
 :root {
@@ -220,13 +221,13 @@
   min-width: 0;
   margin-left: auto;
   margin-right: auto;
-  padding: 0.75rem; /* 12px → scales to 16/24 */
+  padding: 1rem;
   box-sizing: border-box;
 }
 
 .page-shell-inner {
   width: 100%;
-  max-width: 1600px;
+  max-width: 100%;
   min-width: 0;
   margin-left: auto;
   margin-right: auto;
@@ -234,13 +235,20 @@
 
 @media (min-width: 640px) {
   .page-shell {
-    padding: 1rem;
+    padding: 1rem 1.25rem;
   }
 }
 
 @media (min-width: 1024px) {
   .page-shell {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .page-shell {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
   }
 }
 
@@ -367,6 +375,13 @@
   padding-left: 0;
 }
 
+/* Chips must never wrap, shrink, or get inflated mid-scroll by global mobile button rules */
+.hrms-chip-scroll .hrms-chip-scroll-item :where(button, a) {
+  white-space: nowrap !important;
+  min-height: 2rem !important;
+  line-height: 1.25;
+}
+
 /* Stack section spacing */
 .hrms-stack {
   display: flex;
@@ -415,11 +430,36 @@ html {
   text-size-adjust: 100%;
 }
 
-html,
+html {
+  height: 100%;
+}
+
 body,
 #root {
+  min-height: 100%;
   max-width: 100%;
   overflow-x: clip;
+}
+
+/*
+ * Authenticated app shell (App.jsx .app-shell): one viewport-tall column;
+ * .main-scroll-area is the sole primary vertical scroll container beside the fixed sidebar.
+ */
+.app-shell {
+  min-height: 0;
+}
+
+.app-main-column {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main-scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 img,
@@ -431,7 +471,6 @@ canvas {
 }
 
 /* Prevent flex/grid children from forcing page-wide horizontal scroll */
-.main-scroll-area,
 .main-scroll-area > * {
   min-width: 0;
 }
@@ -476,6 +515,186 @@ canvas {
   select {
     font-size: 16px; /* Prevents zoom on iOS */
     max-width: 100%;
+  }
+
+  /* The fixed mobile header owns its height; one spacer prevents both overlap and double padding. */
+  .mobile-header-spacer {
+    height: calc(3.75rem + env(safe-area-inset-top, 0px));
+  }
+
+  /* Keep every routed page inside the viewport without touching desktop layout. */
+  .main-scroll-area,
+  .main-scroll-area > *,
+  .main-scroll-area :where(section, article, form, fieldset) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .main-scroll-area .grid > *,
+  .main-scroll-area .flex > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .main-scroll-area .flex.justify-between,
+  .main-scroll-area .flex.justify-end {
+    flex-wrap: wrap;
+    row-gap: 0.75rem;
+  }
+
+  .main-scroll-area :where(h1, h2, h3, h4, p, label) {
+    overflow-wrap: anywhere;
+  }
+
+  /* Forms remain usable at 320px and iOS does not zoom focused controls. */
+  .main-scroll-area form
+    :where(
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+      select,
+      textarea
+    ) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .main-scroll-area input[type="file"] {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .main-scroll-area :where(button, a) {
+    max-width: 100%;
+  }
+
+  button[aria-label] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .main-scroll-area button {
+    white-space: normal;
+  }
+
+  /*
+   * Legacy tables without .cm-table-wrap — do not target .cm-table (onboarding HR tables).
+   * Those scroll inside .cm-table-wrap; forcing display:block on the table breaks columns.
+   */
+  .main-scroll-area table:not(.cm-table) {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .main-scroll-area .cm-table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .main-scroll-area .cm-table-wrap > .cm-table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+  }
+
+  /* Tabs stay on one readable row and scroll only inside their own control. */
+  .main-scroll-area [role="tablist"] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .main-scroll-area [role="tablist"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  .main-scroll-area [role="tablist"] > * {
+    flex: 0 0 auto;
+  }
+
+  /* Charts respect their card width on phones and portrait tablets. */
+  .main-scroll-area
+    :where(.recharts-responsive-container, .recharts-wrapper, .chart-container) {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .main-scroll-area .recharts-wrapper svg {
+    max-width: 100%;
+  }
+
+  /* Normalize the many existing dialog implementations without changing their markup. */
+  .fixed.inset-0.flex.items-center.justify-center {
+    max-width: 100vw;
+    padding: 0.75rem;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .fixed.inset-0.flex.items-center.justify-center
+    > :where(div, section, article, form):not(.fixed) {
+    width: 100%;
+    max-width: min(100%, 42rem);
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main-scroll-area :where(form, [role="dialog"]) .flex.justify-end {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  /* Toasts no longer exceed narrow phone widths. */
+  .Toastify__toast-container {
+    width: calc(100vw - 1rem);
+    max-width: calc(100vw - 1rem);
+    left: 0.5rem;
+    right: 0.5rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .modern-card:hover {
+    transform: none;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .mobile-header-spacer {
+    height: calc(4.25rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (max-width: 380px) {
+  .page-shell {
+    padding: 0.75rem;
+  }
+
+  .main-scroll-area :where(form, [role="dialog"]) .flex.justify-end > button {
+    flex: 1 1 100%;
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -549,4 +768,27 @@ canvas {
 
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* First-login Job Details — subtle Offer Letter section highlight */
+@keyframes job-details-offer-letter-glow {
+  0%,
+  100% {
+    border-color: rgb(226 232 240);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    background-color: #ffffff;
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, rgb(226 232 240));
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent),
+      0 4px 14px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    background-color: color-mix(in srgb, var(--color-primary) 6%, #ffffff);
+  }
+}
+
+.job-details-offer-letter-highlight {
+  animation: job-details-offer-letter-glow 2s ease-in-out 3;
+  border-width: 2px;
+  border-style: solid;
 }

@@ -6,6 +6,34 @@ import jwt from "jsonwebtoken";
 import logger from "../../helpers/logger.js";
 import { sendSuccess, sendError, sendNotFound, sendValidationError, sendInternalError, sendUnauthorized } from "../../helpers/responseHelper.js";
 
+/** Resolve all IDs that may own notifications for the current session (User and/or Employee). */
+const resolveNotificationRecipientIds = async (req) => {
+  const ids = new Set();
+  const primaryId = req.user?._id || req.employee?._id;
+  if (primaryId) ids.add(primaryId.toString());
+  if (req.employee?._id) ids.add(req.employee._id.toString());
+  if (req.employeeProfileId) ids.add(req.employeeProfileId.toString());
+
+  try {
+    if (req.user?._id) {
+      const linkedEmployee = await Employee.findOne({ userId: req.user._id })
+        .select('_id')
+        .lean();
+      if (linkedEmployee?._id) ids.add(linkedEmployee._id.toString());
+    }
+    if (req.employee?.userId) {
+      ids.add(req.employee.userId.toString());
+    } else if (req.employee?._id) {
+      const employee = await Employee.findById(req.employee._id).select('userId').lean();
+      if (employee?.userId) ids.add(employee.userId.toString());
+    }
+  } catch (error) {
+    logger.warn('Failed to expand notification recipient IDs', { error: error.message });
+  }
+
+  return [...ids];
+};
+
 export const createNotification = async (req, res) => {
   try {
     const { message, type = 'announcement', priority = 'medium' } = req.body;
@@ -264,9 +292,9 @@ const getAllowedOrigins = () => {
 // Get notifications for current user (regular API endpoint)
 export const getUserNotifications = async (req, res) => {
   try {
-    const userId = req.user?._id || req.employee?._id;
+    const recipientIds = await resolveNotificationRecipientIds(req);
     
-    if (!userId) {
+    if (!recipientIds.length) {
       return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
     }
 
@@ -305,7 +333,7 @@ export const getUserNotifications = async (req, res) => {
       } catch (dbError) {
         logger.error('Error loading organizationId from database', { 
           error: dbError.message, 
-          userId 
+          recipientIds 
         });
       }
     }
@@ -317,7 +345,7 @@ export const getUserNotifications = async (req, res) => {
     const filter = {
       organizationId,
       $or: [
-        { recipient: userId },
+        { recipient: { $in: recipientIds } },
         { isBroadcast: true }
       ]
     };
@@ -389,9 +417,9 @@ export const markAllAsRead = async (req, res) => {
 // Get unread notification count
 export const getUnreadCount = async (req, res) => {
   try {
-    const userId = req.user?._id || req.employee?._id;
+    const recipientIds = await resolveNotificationRecipientIds(req);
     
-    if (!userId) {
+    if (!recipientIds.length) {
       return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
     }
 
@@ -411,7 +439,7 @@ export const getUnreadCount = async (req, res) => {
       } catch (dbError) {
         logger.error('Error loading organizationId from database', { 
           error: dbError.message, 
-          userId 
+          recipientIds 
         });
       }
     }
@@ -420,7 +448,14 @@ export const getUnreadCount = async (req, res) => {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
 
-    const count = await getUnreadNotificationCount(userId, organizationId);
+    const count = await Notification.countDocuments({
+      organizationId,
+      isRead: false,
+      $or: [
+        { recipient: { $in: recipientIds } },
+        { isBroadcast: true },
+      ],
+    });
 
     return sendSuccess(res, { unreadCount: count }, 'Unread count retrieved successfully');
   } catch (error) {

@@ -687,41 +687,154 @@ registerEvent({
 
 // ==================== ONBOARDING EVENTS ====================
 
+const onboardingId = (value) => value?._id?.toString?.() || value?.toString?.() || null;
+const onboardingName = (employee) => {
+  const name = `${employee?.name || ''} ${employee?.lastName || ''}`.trim();
+  return name || 'The employee';
+};
+const uniqueOnboardingIds = (values) => [...new Set(values.map(onboardingId).filter(Boolean))];
+
+/** HR often logs in as User while tasks store Employee IDs — notify both. */
+const expandOnboardingRecipients = async (recipientIds, organizationId, { includeAdmins = false } = {}) => {
+  const ids = new Set(uniqueOnboardingIds(recipientIds));
+  if (!ids.size && !includeAdmins) return [];
+
+  if (ids.size) {
+    const employees = await Employee.find({ _id: { $in: [...ids] } })
+      .select('_id userId')
+      .lean();
+    employees.forEach((employee) => {
+      if (employee?.userId) ids.add(employee.userId.toString());
+    });
+  }
+
+  if (includeAdmins && organizationId) {
+    const admins = await User.find({
+      organizationId,
+      role: 'admin',
+      isActive: true,
+    }).select('_id').lean();
+    admins.forEach((admin) => ids.add(admin._id.toString()));
+  }
+
+  return [...ids];
+};
+
+const getOnboardingRoleRecipients = async (organizationId, role) => {
+  const roleQueries = {
+    hr: [
+      { functionalRoles: { $in: ['hr', 'HR'] } },
+      { department: { $regex: /human resource|^hr$/i } },
+      { jobTitle: { $regex: /\bhr\b|human resource/i } },
+      { position: { $regex: /\bhr\b|human resource/i } },
+    ],
+    it: [
+      { functionalRoles: { $in: ['it', 'IT'] } },
+      { department: { $regex: /^it$|information technology/i } },
+      { jobTitle: { $regex: /\bit\b|information technology|system admin/i } },
+      { position: { $regex: /\bit\b|information technology|system admin/i } },
+    ],
+  };
+  const conditions = roleQueries[role];
+  if (!conditions) return [];
+  const employees = await Employee.find({
+    organizationId,
+    status: 'active',
+    $or: conditions,
+  }).select('_id userId').lean();
+  return employees.flatMap((employee) => [
+    employee._id.toString(),
+    ...(employee.userId ? [employee.userId.toString()] : []),
+  ]);
+};
+
+const getOnboardingHrRecipients = async (workflow, organizationId) => expandOnboardingRecipients([
+  workflow?.assignedHR,
+  ...(await getOnboardingRoleRecipients(organizationId, 'hr')),
+], organizationId, { includeAdmins: true });
+
+const getOnboardingProgressRecipients = async (
+  workflow,
+  organizationId,
+  { employee = false, hr = false, manager = false, buddy = false, it = false } = {},
+) => {
+  const ids = [];
+  if (employee) ids.push(workflow?.employeeId);
+  if (hr) ids.push(...await getOnboardingHrRecipients(workflow, organizationId));
+  if (manager) ids.push(workflow?.assignedManager);
+  if (buddy) ids.push(workflow?.assignedBuddy);
+  if (it) {
+    ids.push(
+      ...(workflow?.tasks || [])
+        .filter((task) => task.assigneeRole === 'it')
+        .map((task) => task.assignedTo),
+      ...await getOnboardingRoleRecipients(organizationId, 'it'),
+    );
+  }
+  return expandOnboardingRecipients(ids, organizationId, { includeAdmins: hr });
+};
+
 registerEvent({
-  type: 'onboarding_workflow_created',
-  defaultTitle: 'New Employee Onboarding',
+  type: 'onboarding_workflow_assigned',
+  defaultTitle: 'New Onboarding Assigned',
   defaultType: 'onboarding',
   defaultPriority: 'medium',
-  recipientResolver: async ({ employee, hrAssignee }) => {
-    const ids = [];
-    if (employee?._id) ids.push(employee._id.toString());
-    if (hrAssignee) ids.push(hrAssignee.toString());
-    return ids;
-  },
-  messageBuilder: ({ employee }) =>
-    `Welcome ${employee?.name || 'New joiner'}! Your onboarding workflow has been created.`,
+  recipientResolver: async ({ workflow, employee, organizationId }) =>
+    expandOnboardingRecipients([employee?._id, workflow?.employeeId], organizationId),
+  messageBuilder: () =>
+    'Welcome! Your onboarding process has been assigned. Please log in and start completing your onboarding tasks.',
   metadataBuilder: ({ employee, workflow }) => ({
     employeeId: employee?._id,
     workflowId: workflow?._id,
-    eventType: 'onboarding_workflow_created',
+    eventType: 'onboarding_workflow_assigned',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_task_assigned',
+  defaultTitle: 'New Onboarding Task',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ task, organizationId }) =>
+    expandOnboardingRecipients([task?.assignedTo], organizationId),
+  messageBuilder: () => 'A new onboarding task has been assigned to you.',
+  metadataBuilder: ({ workflow, task }) => ({
+    workflowId: workflow?._id,
+    taskId: task?._id,
+    eventType: 'onboarding_task_assigned',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_task_started',
+  defaultTitle: 'Task Started',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true, manager: true }),
+  messageBuilder: ({ employee, task }) =>
+    `${onboardingName(employee)} has started the task "${task?.title}".`,
+  metadataBuilder: ({ workflow, task, employee }) => ({
+    workflowId: workflow?._id,
+    taskId: task?._id,
+    employeeId: employee?._id || workflow?.employeeId,
+    eventType: 'onboarding_task_started',
   }),
 });
 
 registerEvent({
   type: 'onboarding_task_completed',
-  defaultTitle: 'Onboarding Task Completed',
+  defaultTitle: 'Task Completed',
   defaultType: 'onboarding',
-  defaultPriority: 'low',
-  recipientResolver: async ({ workflow }) => {
-    const ids = [];
-    if (workflow?.assignedHR) ids.push(workflow.assignedHR.toString());
-    if (workflow?.employeeId) ids.push(workflow.employeeId.toString());
-    return ids;
-  },
-  messageBuilder: ({ task }) => `Onboarding task "${task?.title}" has been completed.`,
-  metadataBuilder: ({ workflow, task }) => ({
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true, manager: true, buddy: true }),
+  messageBuilder: ({ employee, task }) =>
+    `${onboardingName(employee)} has completed the task "${task?.title}".`,
+  metadataBuilder: ({ workflow, task, employee }) => ({
     workflowId: workflow?._id,
     taskId: task?._id,
+    employeeId: employee?._id || workflow?.employeeId,
     eventType: 'onboarding_task_completed',
   }),
 });
@@ -731,29 +844,33 @@ registerEvent({
   defaultTitle: 'Document Uploaded',
   defaultType: 'onboarding',
   defaultPriority: 'medium',
-  recipientResolver: async ({ workflow }) =>
-    workflow?.assignedHR ? [workflow.assignedHR.toString()] : [],
-  messageBuilder: ({ documentType }) =>
-    `An onboarding document (${documentType}) has been uploaded for verification.`,
-  metadataBuilder: ({ workflow, documentType }) => ({
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingHrRecipients(workflow, organizationId),
+  messageBuilder: ({ employee, documentName, documentType }) =>
+    `${onboardingName(employee)} uploaded ${documentName || documentType}. Please verify the document.`,
+  metadataBuilder: ({ workflow, doc, documentType, employee }) => ({
     workflowId: workflow?._id,
-    documentType,
+    documentId: doc?._id,
+    documentType: doc?.documentType || documentType,
+    employeeId: employee?._id || workflow?.employeeId,
     eventType: 'onboarding_document_uploaded',
   }),
 });
 
 registerEvent({
-  type: 'onboarding_document_verified',
-  defaultTitle: 'Document Verified',
+  type: 'onboarding_document_approved',
+  defaultTitle: 'Document Approved',
   defaultType: 'onboarding',
   defaultPriority: 'medium',
-  recipientResolver: async ({ workflow }) =>
-    workflow?.employeeId ? [workflow.employeeId.toString()] : [],
-  messageBuilder: ({ doc }) => `Your ${doc?.documentType} document has been verified.`,
+  recipientResolver: async ({ workflow, organizationId }) =>
+    expandOnboardingRecipients([workflow?.employeeId], organizationId),
+  messageBuilder: ({ documentName, doc }) =>
+    `Your ${documentName || doc?.name || doc?.documentType} has been verified successfully.`,
   metadataBuilder: ({ workflow, doc }) => ({
     workflowId: workflow?._id,
+    documentId: doc?._id,
     documentType: doc?.documentType,
-    eventType: 'onboarding_document_verified',
+    eventType: 'onboarding_document_approved',
   }),
 });
 
@@ -762,15 +879,1151 @@ registerEvent({
   defaultTitle: 'Document Rejected',
   defaultType: 'onboarding',
   defaultPriority: 'high',
-  recipientResolver: async ({ workflow }) =>
-    workflow?.employeeId ? [workflow.employeeId.toString()] : [],
-  messageBuilder: ({ doc }) =>
-    `Your ${doc?.documentType} document was rejected. Please re-upload.`,
+  recipientResolver: async ({ workflow, organizationId }) =>
+    expandOnboardingRecipients([workflow?.employeeId], organizationId),
+  messageBuilder: ({ documentName, doc }) =>
+    `Your ${documentName || doc?.name || doc?.documentType} was rejected. Please upload the correct document after reviewing the comments.`,
   metadataBuilder: ({ workflow, doc }) => ({
     workflowId: workflow?._id,
+    documentId: doc?._id,
     documentType: doc?.documentType,
+    rejectionReason: doc?.rejectionReason,
     eventType: 'onboarding_document_rejected',
   }),
+});
+
+registerEvent({
+  type: 'onboarding_checklist_completed',
+  defaultTitle: 'Checklist Updated',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingHrRecipients(workflow, organizationId),
+  messageBuilder: ({ employee, item }) =>
+    `${onboardingName(employee)} completed the checklist item "${item?.item}".`,
+  metadataBuilder: ({ workflow, item, employee }) => ({
+    workflowId: workflow?._id,
+    checklistItemId: item?._id,
+    employeeId: employee?._id || workflow?.employeeId,
+    eventType: 'onboarding_checklist_completed',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_asset_assigned',
+  defaultTitle: 'Asset Assigned',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    expandOnboardingRecipients([workflow?.employeeId], organizationId),
+  messageBuilder: ({ asset }) =>
+    `A ${asset?.name || asset?.assetType || 'company asset'} has been assigned to you as part of your onboarding.`,
+  metadataBuilder: ({ workflow, asset }) => ({
+    workflowId: workflow?._id,
+    assetId: asset?._id,
+    eventType: 'onboarding_asset_assigned',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_asset_returned',
+  defaultTitle: 'Asset Returned',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true, it: true }),
+  messageBuilder: ({ employee, asset }) =>
+    `${onboardingName(employee)} has returned the assigned ${asset?.name || asset?.assetType || 'asset'}.`,
+  metadataBuilder: ({ workflow, asset, employee }) => ({
+    workflowId: workflow?._id,
+    assetId: asset?._id,
+    employeeId: employee?._id || workflow?.employeeId,
+    eventType: 'onboarding_asset_returned',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_training_completed',
+  defaultTitle: 'Training Completed',
+  defaultType: 'onboarding',
+  defaultPriority: 'low',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true, manager: true }),
+  messageBuilder: ({ employee, module }) =>
+    `${onboardingName(employee)} has successfully completed the assigned training module${module?.title ? ` "${module.title}"` : ''}.`,
+  metadataBuilder: ({ workflow, module, employee }) => ({
+    workflowId: workflow?._id,
+    trainingId: module?._id,
+    employeeId: employee?._id || workflow?.employeeId,
+    eventType: 'onboarding_training_completed',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_policy_signed',
+  defaultTitle: 'Policy Signed',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingHrRecipients(workflow, organizationId),
+  messageBuilder: ({ employee, signature }) =>
+    `${onboardingName(employee)} has signed the ${signature?.title || 'required company policy'}.`,
+  metadataBuilder: ({ workflow, signature, employee }) => ({
+    workflowId: workflow?._id,
+    signatureId: signature?._id,
+    employeeId: employee?._id || workflow?.employeeId,
+    eventType: 'onboarding_policy_signed',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_workflow_completed',
+  defaultTitle: 'Onboarding Completed',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, {
+      employee: true, hr: true, manager: true, buddy: true,
+    }),
+  messageBuilder: () => 'Congratulations! The onboarding process has been completed successfully.',
+  metadataBuilder: ({ workflow }) => ({
+    workflowId: workflow?._id,
+    eventType: 'onboarding_workflow_completed',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_workflow_overdue',
+  defaultTitle: 'Onboarding Overdue',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, {
+      employee: true, hr: true, manager: true,
+    }),
+  messageBuilder: () =>
+    'The onboarding process is overdue. Please complete the remaining activities.',
+  metadataBuilder: ({ workflow }) => ({
+    workflowId: workflow?._id,
+    employeeId: onboardingId(workflow?.employeeId),
+    eventType: 'onboarding_workflow_overdue',
+  }),
+});
+
+registerEvent({
+  type: 'onboarding_reminder',
+  defaultTitle: 'Onboarding Reminder',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ recipient, organizationId }) =>
+    expandOnboardingRecipients([recipient], organizationId),
+  messageBuilder: ({ message }) => message || 'An onboarding activity requires your attention.',
+  metadataBuilder: ({ workflow, item, reminderType, dueDate }) => ({
+    workflowId: workflow?._id,
+    itemId: item?._id,
+    reminderType,
+    dueDate,
+    eventType: 'onboarding_reminder',
+  }),
+});
+
+// ==================== BGV EVENTS ====================
+
+// BGV Verification Assigned to Employee
+registerEvent({
+  type: 'bgv_verification_assigned',
+  defaultTitle: 'Background Verification Assigned',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Background verification for ${checkLabel || 'your profile'} has been assigned. Please complete the required document uploads.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_verification_assigned',
+  }),
+});
+
+// BGV Documents Required
+registerEvent({
+  type: 'bgv_documents_required',
+  defaultTitle: 'Documents Required for BGV',
+  defaultType: 'bgv',
+  defaultPriority: 'high',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Please upload the required documents for ${checkLabel || 'background verification'}.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_documents_required',
+  }),
+});
+
+// BGV Submission Successful
+registerEvent({
+  type: 'bgv_submission_successful',
+  defaultTitle: 'BGV Documents Submitted',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Your documents for ${checkLabel || 'background verification'} have been submitted successfully. Waiting for HR review.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_submission_successful',
+  }),
+});
+
+// BGV Additional Information Requested
+registerEvent({
+  type: 'bgv_additional_info_requested',
+  defaultTitle: 'Additional Information Required',
+  defaultType: 'bgv',
+  defaultPriority: 'high',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel, request }) =>
+    `HR has requested additional information for ${checkLabel || 'background verification'}. ${request || 'Please provide the requested details.'}`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId, request }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    request,
+    eventType: 'bgv_additional_info_requested',
+  }),
+});
+
+// BGV Verification Approved
+registerEvent({
+  type: 'bgv_verification_approved',
+  defaultTitle: 'BGV Verification Approved',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Your ${checkLabel || 'background verification'} has been approved successfully.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_verification_approved',
+  }),
+});
+
+// BGV Verification Rejected
+registerEvent({
+  type: 'bgv_verification_rejected',
+  defaultTitle: 'BGV Verification Rejected',
+  defaultType: 'bgv',
+  defaultPriority: 'high',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Your ${checkLabel || 'background verification'} has been rejected. Please review the feedback and resubmit.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_verification_rejected',
+  }),
+});
+
+// BGV Employee Submitted (HR notification)
+registerEvent({
+  type: 'bgv_employee_submitted',
+  defaultTitle: 'Employee Submitted BGV Documents',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) =>
+    getHrAdminCeoRecipients(organizationId),
+  messageBuilder: ({ employeeName, checkLabel }) =>
+    `${employeeName || 'An employee'} has submitted documents for ${checkLabel || 'background verification'}. Please review.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_employee_submitted',
+  }),
+});
+
+// BGV Employee Resubmitted (HR notification)
+registerEvent({
+  type: 'bgv_employee_resubmitted',
+  defaultTitle: 'Employee Resubmitted BGV Documents',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) =>
+    getHrAdminCeoRecipients(organizationId),
+  messageBuilder: ({ employeeName, checkLabel }) =>
+    `${employeeName || 'An employee'} has resubmitted documents for ${checkLabel || 'background verification'}. Please review.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_employee_resubmitted',
+  }),
+});
+
+// BGV Verification Pending (HR notification)
+registerEvent({
+  type: 'bgv_verification_pending',
+  defaultTitle: 'BGV Verification Pending',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) =>
+    getHrAdminCeoRecipients(organizationId),
+  messageBuilder: ({ employeeName, checkLabel }) =>
+    `${checkLabel || 'Background verification'} for ${employeeName || 'an employee'} is pending HR review.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_verification_pending',
+  }),
+});
+
+// BGV Verification Overdue (HR notification)
+registerEvent({
+  type: 'bgv_verification_overdue',
+  defaultTitle: 'BGV Verification Overdue',
+  defaultType: 'bgv',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) =>
+    getHrAdminCeoRecipients(organizationId),
+  messageBuilder: ({ employeeName, checkLabel }) =>
+    `${checkLabel || 'Background verification'} for ${employeeName || 'an employee'} is overdue.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_verification_overdue',
+  }),
+});
+
+// BGV Check Submitted
+registerEvent({
+  type: 'bgv_check_submitted',
+  defaultTitle: 'BGV Check Submitted',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId, employeeId }) =>
+    getHrAdminCeoRecipients(organizationId),
+  messageBuilder: ({ employeeName, checkLabel }) =>
+    `${employeeName || 'An employee'} has submitted ${checkLabel || 'background verification check'} for review.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_check_submitted',
+  }),
+});
+
+// BGV Check Verified
+registerEvent({
+  type: 'bgv_check_verified',
+  defaultTitle: 'BGV Check Verified',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Your ${checkLabel || 'background verification check'} has been verified successfully.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_check_verified',
+  }),
+});
+
+// BGV Check Rejected
+registerEvent({
+  type: 'bgv_check_rejected',
+  defaultTitle: 'BGV Check Rejected',
+  defaultType: 'bgv',
+  defaultPriority: 'high',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `Your ${checkLabel || 'background verification check'} has been rejected. Please review and resubmit.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_check_rejected',
+  }),
+});
+
+// BGV Info Requested
+registerEvent({
+  type: 'bgv_info_requested',
+  defaultTitle: 'Additional Information Requested',
+  defaultType: 'bgv',
+  defaultPriority: 'high',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel, request }) =>
+    `HR has requested additional information for ${checkLabel || 'background verification'}. ${request || ''}`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId, request }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    request,
+    eventType: 'bgv_info_requested',
+  }),
+});
+
+// BGV Info Response
+registerEvent({
+  type: 'bgv_info_response',
+  defaultTitle: 'Information Response Submitted',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) =>
+    getHrAdminCeoRecipients(organizationId),
+  messageBuilder: ({ employeeName, checkLabel }) =>
+    `${employeeName || 'An employee'} has provided additional information for ${checkLabel || 'background verification'}.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_info_response',
+  }),
+});
+
+// BGV HR Remarks
+registerEvent({
+  type: 'bgv_hr_remarks',
+  defaultTitle: 'HR Remarks Added',
+  defaultType: 'bgv',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId, organizationId }) =>
+    expandOnboardingRecipients([employeeId], organizationId),
+  messageBuilder: ({ checkLabel }) =>
+    `HR has added remarks for your ${checkLabel || 'background verification'}. Please review.`,
+  metadataBuilder: ({ bgvCaseId, checkId, checkLabel, employeeId }) => ({
+    bgvCaseId,
+    checkId,
+    checkLabel,
+    employeeId,
+    eventType: 'bgv_hr_remarks',
+  }),
+});
+
+const offboardingUrl = (workflow) =>
+  `/onboarding?lifecycle=offboarding${workflow?._id ? `&id=${workflow._id}` : ''}`;
+
+registerEvent({
+  type: 'offboarding_workflow_initiated',
+  defaultTitle: 'Offboarding Workflow Initiated',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, {
+      employee: true, hr: true, manager: true,
+    }),
+  messageBuilder: ({ employee }) =>
+    `${onboardingName(employee)}'s offboarding workflow has been initiated.`,
+  metadataBuilder: ({ workflow, employee }) => ({
+    workflowId: workflow?._id,
+    employeeId: employee?._id || workflow?.employeeId,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_workflow_initiated',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_task_assigned',
+  defaultTitle: 'New Offboarding Task',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ task, organizationId }) =>
+    expandOnboardingRecipients([task?.assignedTo], organizationId),
+  messageBuilder: ({ task }) =>
+    `The offboarding task "${task?.title || 'Task'}" has been assigned to you.`,
+  metadataBuilder: ({ workflow, task }) => ({
+    workflowId: workflow?._id,
+    taskId: task?._id,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_task_assigned',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_task_completed',
+  defaultTitle: 'Offboarding Task Completed',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true, manager: true }),
+  messageBuilder: ({ task }) =>
+    `The offboarding task "${task?.title || 'Task'}" has been completed.`,
+  metadataBuilder: ({ workflow, task }) => ({
+    workflowId: workflow?._id,
+    taskId: task?._id,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_task_completed',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_asset_returned',
+  defaultTitle: 'Company Asset Returned',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { employee: true, hr: true, it: true }),
+  messageBuilder: ({ asset }) =>
+    `${asset?.assetName || asset?.assetType || 'A company asset'} has been marked as returned.`,
+  metadataBuilder: ({ workflow, asset }) => ({
+    workflowId: workflow?._id,
+    assetId: asset?._id,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_asset_returned',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_experience_letter_issued',
+  defaultTitle: 'Experience Letter Issued',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    expandOnboardingRecipients([workflow?.employeeId], organizationId),
+  messageBuilder: () =>
+    'HR has issued your experience letter. You can view it in your offboarding workflow.',
+  metadataBuilder: ({ workflow, document }) => ({
+    workflowId: workflow?._id,
+    documentId: document?._id,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_experience_letter_issued',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_workflow_completed',
+  defaultTitle: 'Offboarding Completed',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, {
+      employee: true, hr: true, manager: true, it: true,
+    }),
+  messageBuilder: () => 'All mandatory offboarding clearances have been completed.',
+  metadataBuilder: ({ workflow }) => ({
+    workflowId: workflow?._id,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_workflow_completed',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_workflow_overdue',
+  defaultTitle: 'Offboarding Overdue',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, {
+      employee: true, hr: true, manager: true, it: true,
+    }),
+  messageBuilder: () => 'The offboarding workflow is overdue and has pending mandatory clearances.',
+  metadataBuilder: ({ workflow }) => ({
+    workflowId: workflow?._id,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_workflow_overdue',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+registerEvent({
+  type: 'offboarding_reminder',
+  defaultTitle: 'Offboarding Reminder',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, {
+      employee: true, hr: true, manager: true,
+    }),
+  messageBuilder: ({ remainingDays }) => remainingDays === 0
+    ? 'The employee’s final working day is today. Please complete all remaining clearances.'
+    : `The employee’s final working day is in ${remainingDays} day${remainingDays === 1 ? '' : 's'}.`,
+  metadataBuilder: ({ workflow, remainingDays }) => ({
+    workflowId: workflow?._id,
+    remainingDays,
+    lifecycle: 'offboarding',
+    eventType: 'offboarding_reminder',
+    url: offboardingUrl(workflow),
+  }),
+});
+
+const getHrRecipients = async (organizationId) => {
+  const employees = await Employee.find({ organizationId, status: 'active' }).select('_id department jobTitle position functionalRoles').lean();
+  return employees.filter(isHrEmployee).map((e) => e._id.toString());
+};
+
+registerEvent({
+  type: 'lifecycle_offer_sent',
+  defaultTitle: 'Offer Letter Sent',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ offer, candidate }) => {
+    const name = candidate ? [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') : 'Candidate';
+    return `Offer letter sent to ${name} for ${offer?.position || 'position'}.`;
+  },
+  metadataBuilder: ({ offer }) => ({ offerId: offer?._id, lifecycle: 'offer' }),
+});
+
+registerEvent({
+  type: 'lifecycle_offer_accepted',
+  defaultTitle: 'Offer Accepted',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ offer }) => `Candidate accepted the offer for ${offer?.position || 'position'}.`,
+  metadataBuilder: ({ offer }) => ({ offerId: offer?._id, lifecycle: 'offer' }),
+});
+
+registerEvent({
+  type: 'lifecycle_offer_declined',
+  defaultTitle: 'Offer Declined',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ offer }) => `Candidate declined the offer for ${offer?.position || 'position'}.`,
+  metadataBuilder: ({ offer }) => ({ offerId: offer?._id, lifecycle: 'offer' }),
+});
+
+registerEvent({
+  type: 'lifecycle_offer_approved',
+  defaultTitle: 'Offer Approved',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ offer }) => `Offer letter approved for ${offer?.position || 'position'}.`,
+  metadataBuilder: ({ offer }) => ({ offerId: offer?._id, lifecycle: 'offer' }),
+});
+
+registerEvent({
+  type: 'lifecycle_offer_rejected',
+  defaultTitle: 'Offer Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'An offer letter was rejected during approval.',
+  metadataBuilder: ({ offer }) => ({ offerId: offer?._id, lifecycle: 'offer' }),
+});
+
+registerEvent({
+  type: 'lifecycle_bgv_initiated',
+  defaultTitle: 'Background Verification Started',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'A background verification case has been initiated.',
+  metadataBuilder: ({ bgvCase }) => ({ bgvCaseId: bgvCase?._id, lifecycle: 'bgv' }),
+});
+
+registerEvent({
+  type: 'lifecycle_bgv_cleared',
+  defaultTitle: 'Background Verification Cleared',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'Background verification has been cleared.',
+  metadataBuilder: ({ bgvCase }) => ({ bgvCaseId: bgvCase?._id, lifecycle: 'bgv' }),
+});
+
+registerEvent({
+  type: 'lifecycle_bgv_failed',
+  defaultTitle: 'Background Verification Failed',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'Background verification reported a failure or discrepancy requiring review.',
+  metadataBuilder: ({ bgvCase }) => ({ bgvCaseId: bgvCase?._id, lifecycle: 'bgv' }),
+});
+
+registerEvent({
+  type: 'lifecycle_fnf_approved',
+  defaultTitle: 'F&F Settlement Approved',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true }),
+  messageBuilder: ({ workflow }) => 'Full & Final settlement has been approved.',
+  metadataBuilder: ({ workflow }) => ({ workflowId: workflow?._id, lifecycle: 'fnf', url: offboardingUrl(workflow) }),
+});
+
+registerEvent({
+  type: 'lifecycle_fnf_rejected',
+  defaultTitle: 'F&F Settlement Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ workflow, organizationId }) =>
+    getOnboardingProgressRecipients(workflow, organizationId, { hr: true }),
+  messageBuilder: () => 'Full & Final settlement was rejected and needs revision.',
+  metadataBuilder: ({ workflow }) => ({ workflowId: workflow?._id, lifecycle: 'fnf', url: offboardingUrl(workflow) }),
+});
+
+registerEvent({
+  type: 'lifecycle_onboarding_escalation',
+  defaultTitle: 'Onboarding Escalation',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ recipient, organizationId }) => {
+    if (recipient) return [recipient.toString()];
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: ({ message }) => message || 'An onboarding item is overdue and has been escalated.',
+  metadataBuilder: ({ workflow, item }) => ({ workflowId: workflow?._id, itemKind: item?.kind, lifecycle: 'escalation' }),
+});
+
+registerEvent({
+  type: 'lifecycle_offboarding_escalation',
+  defaultTitle: 'Offboarding Escalation',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ recipient, organizationId }) => {
+    if (recipient) return [recipient.toString()];
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: ({ message }) => message || 'An offboarding item is overdue and has been escalated.',
+  metadataBuilder: ({ workflow, item }) => ({ workflowId: workflow?._id, itemKind: item?.kind, lifecycle: 'escalation', url: offboardingUrl(workflow) }),
+});
+
+registerEvent({
+  type: 'lifecycle_form_assigned',
+  defaultTitle: 'Form Assigned',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data, organizationId }) => {
+    const employeeId = data?.employeeId || data?.response?.employeeId;
+    if (employeeId) return [employeeId.toString()];
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: ({ data }) => `Please complete the form: ${data?.form?.name || 'HR Form'}.`,
+  metadataBuilder: ({ data }) => ({ formId: data?.form?._id, lifecycle: 'form' }),
+});
+
+registerEvent({
+  type: 'lifecycle_form_submitted',
+  defaultTitle: 'Form Submitted',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `${data?.form?.name || 'A form'} was submitted.`,
+  metadataBuilder: ({ data }) => ({ formId: data?.form?._id, responseId: data?.response?._id, lifecycle: 'form' }),
+});
+
+registerEvent({
+  type: 'lifecycle_form_pending_approval',
+  defaultTitle: 'Form Pending Approval',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `${data?.form?.name || 'A form'} is pending your approval.`,
+  metadataBuilder: ({ data }) => ({ formId: data?.form?._id, responseId: data?.response?._id, lifecycle: 'form' }),
+});
+
+registerEvent({
+  type: 'lifecycle_form_approved',
+  defaultTitle: 'Form Approved',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.response?.submittedBy || data?.response?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Your form submission was approved.`,
+  metadataBuilder: ({ data }) => ({ responseId: data?.response?._id, lifecycle: 'form' }),
+});
+
+registerEvent({
+  type: 'lifecycle_form_rejected',
+  defaultTitle: 'Form Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ data }) => {
+    const id = data?.response?.submittedBy || data?.response?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => data?.response?.rejectionReason || 'Your form submission was rejected. Please revise and resubmit.',
+  metadataBuilder: ({ data }) => ({ responseId: data?.response?._id, lifecycle: 'form' }),
+});
+
+registerEvent({
+  type: 'lifecycle_form_reminder',
+  defaultTitle: 'Form Reminder',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data, organizationId }) => {
+    const employeeId = data?.employeeId;
+    if (employeeId) return [employeeId.toString()];
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: ({ data }) => `Reminder: please complete ${data?.form?.name || 'your assigned form'}.`,
+  metadataBuilder: ({ data }) => ({ formId: data?.form?._id, lifecycle: 'form' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_uploaded',
+  defaultTitle: 'Document Uploaded',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `${data?.document?.name || 'A document'} was uploaded and needs verification.`,
+  metadataBuilder: ({ data }) => ({ documentId: data?.document?._id, catalogKey: data?.document?.catalogKey, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_approved',
+  defaultTitle: 'Document Approved',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.document?.uploadedBy;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Your document "${data?.document?.name || 'upload'}" was approved.`,
+  metadataBuilder: ({ data }) => ({ documentId: data?.document?._id, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_rejected',
+  defaultTitle: 'Document Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.document?.uploadedBy;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => data?.rejectionReason || `Your document "${data?.document?.name || 'upload'}" was rejected. Please re-upload.`,
+  metadataBuilder: ({ data }) => ({ documentId: data?.document?._id, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_expiring',
+  defaultTitle: 'Document Expiring Soon',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.document?.uploadedBy;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Your ${data?.document?.name || 'document'} expires in ${data?.daysUntil ?? 'soon'} days. Please renew.`,
+  metadataBuilder: ({ data }) => ({ documentId: data?.document?._id, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_expired',
+  defaultTitle: 'Document Expired',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ data, organizationId }) => {
+    const id = data?.employeeId || data?.document?.uploadedBy;
+    if (id) return [id.toString()];
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: ({ data }) => `${data?.document?.name || 'A document'} has expired and requires renewal.`,
+  metadataBuilder: ({ data }) => ({ documentId: data?.document?._id, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_reminder',
+  defaultTitle: 'Document Reminder',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.document?.uploadedBy;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Reminder: please upload or renew ${data?.document?.name || 'your required document'}.`,
+  metadataBuilder: ({ data }) => ({ documentId: data?.document?._id, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_document_requested',
+  defaultTitle: 'Document Requested',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Please upload: ${data?.catalogLabel || data?.catalogKey || 'required document'}.`,
+  metadataBuilder: ({ data }) => ({ catalogKey: data?.catalogKey, lifecycle: 'document' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_assigned',
+  defaultTitle: 'Exit Interview Assigned',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const ids = [data?.employeeId, data?.conductorId].filter(Boolean).map(String);
+    return ids;
+  },
+  messageBuilder: ({ data }) => `An exit interview (${data?.session?.interviewType || 'interview'}) has been assigned.`,
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_scheduled',
+  defaultTitle: 'Exit Interview Scheduled',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.session?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => 'Your exit interview has been scheduled.',
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_reminder',
+  defaultTitle: 'Exit Interview Reminder',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.session?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Reminder: exit interview in ${data?.daysUntil ?? 'soon'} days.`,
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_completed',
+  defaultTitle: 'Exit Interview Completed',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'An exit interview was submitted.',
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_pending_approval',
+  defaultTitle: 'Exit Interview Pending Approval',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'An exit interview is pending approval.',
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_approved',
+  defaultTitle: 'Exit Interview Approved',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.session?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: () => 'Your exit interview was approved.',
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_rejected',
+  defaultTitle: 'Exit Interview Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.session?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: () => 'Your exit interview needs revision. Please resubmit.',
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_exit_interview_overdue',
+  defaultTitle: 'Exit Interview Overdue',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ data, organizationId }) => {
+    const ids = [data?.employeeId, data?.session?.conductorId].filter(Boolean).map(String);
+    if (ids.length) return ids;
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: () => 'An exit interview is overdue.',
+  metadataBuilder: ({ data }) => ({ sessionId: data?.session?._id, lifecycle: 'exit_interview' }),
+});
+
+registerEvent({
+  type: 'lifecycle_letter_generated',
+  defaultTitle: 'Letter Generated',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `${data?.letter?.title || 'A letter'} was generated.`,
+  metadataBuilder: ({ data }) => ({ letterId: data?.letter?._id, lifecycle: 'letter' }),
+});
+
+registerEvent({
+  type: 'lifecycle_letter_pending_approval',
+  defaultTitle: 'Letter Pending Approval',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `${data?.letter?.title || 'A letter'} requires approval.`,
+  metadataBuilder: ({ data }) => ({ letterId: data?.letter?._id, lifecycle: 'letter' }),
+});
+
+registerEvent({
+  type: 'lifecycle_letter_approved',
+  defaultTitle: 'Letter Approved',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data, organizationId }) => {
+    const id = data?.employeeId || data?.letter?.employeeId;
+    if (id) return [id.toString()];
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: () => 'Your letter was approved.',
+  metadataBuilder: ({ data }) => ({ letterId: data?.letter?._id, lifecycle: 'letter' }),
+});
+
+registerEvent({
+  type: 'lifecycle_letter_rejected',
+  defaultTitle: 'Letter Rejected',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'A letter was rejected and needs revision.',
+  metadataBuilder: ({ data }) => ({ letterId: data?.letter?._id, lifecycle: 'letter' }),
+});
+
+registerEvent({
+  type: 'lifecycle_letter_sent',
+  defaultTitle: 'Letter Sent',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId || data?.letter?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `You have a new letter: ${data?.letter?.title || 'HR Document'}.`,
+  metadataBuilder: ({ data }) => ({ letterId: data?.letter?._id, lifecycle: 'letter' }),
+});
+
+registerEvent({
+  type: 'lifecycle_letter_viewed',
+  defaultTitle: 'Letter Viewed',
+  defaultType: 'onboarding',
+  defaultPriority: 'low',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'An employee viewed their letter.',
+  metadataBuilder: ({ data }) => ({ letterId: data?.letter?._id, lifecycle: 'letter' }),
+});
+
+registerEvent({
+  type: 'lifecycle_report_ready',
+  defaultTitle: 'Scheduled Report Ready',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `Scheduled lifecycle report "${data?.report?.name || 'Report'}" is ready (${data?.format || 'csv'}).`,
+  metadataBuilder: ({ data }) => ({
+    reportId: data?.report?._id,
+    category: data?.category,
+    fileName: data?.fileName,
+    lifecycle: 'reports',
+  }),
+});
+
+registerEvent({
+  type: 'lifecycle_probation_review',
+  defaultTitle: 'Probation Review',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `Probation ${data?.reviewType || ''} review submitted${data?.decision ? ` — ${data.decision}` : ''}.`,
+  metadataBuilder: ({ data }) => ({ workflowId: data?.workflowId, lifecycle: 'probation' }),
+});
+
+registerEvent({
+  type: 'lifecycle_probation_ending',
+  defaultTitle: 'Probation Ending Soon',
+  defaultType: 'onboarding',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: () => 'An employee probation period is ending within 30 days.',
+  metadataBuilder: ({ data }) => ({ workflowId: data?.workflowId, lifecycle: 'probation' }),
+});
+
+registerEvent({
+  type: 'lifecycle_software_request',
+  defaultTitle: 'Software Access Request',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getHrRecipients(organizationId),
+  messageBuilder: ({ data }) => `New software access request: ${data?.system || 'application'}.`,
+  metadataBuilder: ({ data }) => ({ workflowId: data?.workflowId, system: data?.system, lifecycle: 'it' }),
+});
+
+registerEvent({
+  type: 'lifecycle_lms_enrolled',
+  defaultTitle: 'Training Assigned',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => `You have been enrolled in training: ${data?.course || 'course'}.`,
+  metadataBuilder: ({ data }) => ({ workflowId: data?.workflowId, lifecycle: 'lms' }),
+});
+
+registerEvent({
+  type: 'lifecycle_bulk_notification',
+  defaultTitle: 'HR Notice',
+  defaultType: 'onboarding',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ data }) => {
+    const id = data?.employeeId;
+    return id ? [id.toString()] : [];
+  },
+  messageBuilder: ({ data }) => data?.message || data?.title || 'You have a new HR notification.',
+  metadataBuilder: ({ data }) => ({ lifecycle: 'bulk', channels: data?.channels }),
 });
 
 export default {

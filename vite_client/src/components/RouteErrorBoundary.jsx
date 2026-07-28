@@ -18,13 +18,18 @@ const RouteErrorBoundary = ({ children, fallback }) => {
       }
     : (error, handleReset) => (
         <div className="min-h-screen flex items-center justify-center bg-gray-100">
-          <div className="text-center">
+          <div className="text-center max-w-lg px-4">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
               Something went wrong
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 mb-2">
               An error occurred while loading this page.
             </p>
+            {error?.message && (
+              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-left text-xs font-mono text-red-800 break-all">
+                {String(error.message)}
+              </p>
+            )}
             <div className="flex gap-2 justify-center">
               <button
                 onClick={handleReset}

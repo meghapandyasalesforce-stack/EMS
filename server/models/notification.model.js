@@ -59,7 +59,8 @@ const notificationSchema = new mongoose.Schema({
       'payroll',
       'holiday',
       'birthday',
-      'anniversary'
+      'anniversary',
+      'onboarding'
     ],
     default: 'general'
   },

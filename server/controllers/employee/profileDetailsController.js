@@ -16,10 +16,27 @@ import { isEmployeeLinkedToManager } from '../../helpers/managerHelper.js';
 import { sanitizeTaxDeclarationInput } from '../../helpers/taxDeclarationHelper.js';
 import { getIndianFinancialYear } from '../../helpers/incomeTaxCalculation.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { OnboardingWorkflow } from '../../models/onboarding.model.js';
+import { emitOnboardingChangedAsync, runInBackground } from '../../helpers/backgroundTasks.js';
+import { synchronizeOnboardingWorkflows } from '../../services/onboardingService.js';
 import {
     createTaxRegimeChangeRequestForEmployee,
     isNaRegime,
 } from './taxRegimeChangeController.js';
+
+const synchronizeFinancialDetailsWithOnboarding = (employeeId, organizationId) => {
+  if (!employeeId || !organizationId) return;
+  runInBackground('onboarding-financial-details-sync', async () => {
+    await synchronizeOnboardingWorkflows(organizationId);
+    const workflowIds = await OnboardingWorkflow.find({
+      organizationId,
+      employeeId,
+      isTemplate: { $ne: true },
+    }).distinct('_id');
+    workflowIds.forEach((workflowId) =>
+      emitOnboardingChangedAsync(organizationId, workflowId));
+  });
+};
 
 /** Only HR staff may view another employee's uploaded documents (not admin/manager). */
 const isRequesterHrStaff = async (req) => {
@@ -718,6 +735,7 @@ export const updateFinancialDetails = async (req, res) => {
             { financialDetails },
             { new: true }
         ).select('financialDetails');
+        synchronizeFinancialDetailsWithOnboarding(employeeId, organizationId);
 
         let taxRegimeRequest = null;
         if (requestingNaRegime) {
@@ -1146,6 +1164,36 @@ export const updateLocationPermission = async (req, res) => {
         res.status(500).json({ 
             message: 'Failed to update location permission',
             error: error.message
+        });
+    }
+};
+
+/** Clears one-time Job Details redirect after the employee views that page. */
+export const acknowledgeOfferLetterLoginRedirect = async (req, res) => {
+    try {
+        const employeeId = req.employee?._id;
+        if (!employeeId) {
+            return res.status(401).json({ message: 'Unauthorized. Please log in.' });
+        }
+
+        await Employee.findByIdAndUpdate(
+            employeeId,
+            { $set: { hasCompletedFirstLogin: true } },
+            { new: false }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Offer letter login redirect acknowledged',
+        });
+    } catch (error) {
+        logger.error('Error acknowledging offer letter login redirect', {
+            error: error.message,
+            stack: error.stack,
+        });
+        return res.status(500).json({
+            message: 'Failed to acknowledge offer letter login redirect',
+            error: error.message,
         });
     }
 };

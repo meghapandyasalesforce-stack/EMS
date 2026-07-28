@@ -1,0 +1,35 @@
+HRMS Functionality Reality-Check Audit Report
+Generated: July 15, 2026
+Codebase: EMS (server + vite_client)
+Executive Summary
+Method: Code-path tracing only (UI -> route -> controller -> model/DB write). No live HTTP/DB/SMTP runs were performed. Where runtime proof is required, features are marked as needing manual testing.
+Verdict: Core operations (auth, employees, leave, attendance punches, payroll generation) are real end-to-end systems. A large outer layer (HR Reports, Settings->Permissions, recruitment create UX, appraisal UI, SMS, bank payout) is incomplete, cosmetic, or fabricated.
+Whole-product rough estimate: 55-60% production-ready for an HRMS that claims full suite coverage. Treat Leave / Attendance punch / Employee core / Auth as the trustworthy spine; treat Reports, mock payroll payout, Settings permissions, Recruitment create, Appraisal, and SMS as not decision-safe.
+Feature Audit Table
+Critical Bugs
+Mock bank marks payroll Paid — server/helpers/paymentService.js always succeeds with provider: mock-bank. Operators can treat salaries as disbursed when no money moved.
+Payroll data leak — GET /api/v1/admin/payroll/get-all-payroll uses only isAuthenticated. Non-manager employees get all isVisible: true payrolls with amounts and employee salary fields.
+Hard employee delete — deleteEmployee uses findOneAndDelete; only payroll is cleaned. Attendance, leave, documents, and related records orphan/lose referential integrity; audit trail destroyed.
+Leave apply soft-fails balance check — if leaveBalanceEngine.calculateBalance throws, leave is still created (leaveEmployeeController.js ~192-199).
+HR Reports look real but fabricate numbers — Compliance/Attendance/Performance/Recruitment/Attrition pages use hardcoded charts/KPIs — high risk of bad HR decisions.
+Dual RBAC illusion — Platform permissions enforce APIs; Admin Settings Permissions + unused rbac.js pretend to. False sense of security.
+Plaintext password in sessionStorage — orgAdminCredentials.js stores org-admin password for Add Employee autofill (XSS/session exposure).
+Dummy / Mock Data Still in Use
+Broken API / Wiring Connections
+Missing Error Handling
+Dashboard hooks: errors collapse to []/{} -> silent zeros.
+RecruitmentPage fetch: quiet empty UI on failure.
+HR report pages: empty analytics -> show fake charts instead of no data.
+Leave create: balance-engine errors logged, flow continues.
+Workflow init failure on leave create: leave can exist without workflow (logged).
+Attendance window violations: soft warnings, not hard blocks.
+Payroll controllers: some raw error.message returned to clients.
+Many placeholder Settings buttons: no loading, toast, or navigation.
+Security Issues
+Overall Completion % per Module
+What This Audit Did Not Prove
+Live Mongo persistence under concurrent users, SMTP delivery, Capacitor mobile punch flows, geofence in real offices, tax filing compliance, and multi-tenant isolation under adversarial org IDs all need manual/staging tests before a go-live sign-off.
+Status Legend
+✅ Fully Working — full chain (UI -> API -> DB) verified, handles errors/edge cases.
+⚠️ Partially Working — happy path only, UI without backend, or missing validation/error handling.
+❌ Not Working — broken, dummy/hardcoded data, missing handler, or UI-only with no backend.

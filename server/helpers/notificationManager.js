@@ -165,6 +165,25 @@ export const notify = async (params) => {
       throw new Error('OrganizationId is required for notifications');
     }
 
+    // Configure SSOT — skip lifecycle notifications when the related feature is disabled
+    try {
+      const { resolveNotificationFeatureKey } = await import('../constants/lifecycleNotificationFeatureMap.js');
+      const featureKey = resolveNotificationFeatureKey(type, data);
+      if (featureKey) {
+        const { isOrgFeatureEnabled } = await import('../services/lifecycleConfigService.js');
+        const enabled = await isOrgFeatureEnabled(organizationId, featureKey);
+        if (!enabled) {
+          logger.info('Skipping notification — feature disabled in Configure', { type, featureKey, organizationId });
+          return { success: true, notified: 0, skipped: true, reason: 'FEATURE_DISABLED', featureKey };
+        }
+      }
+    } catch (gateError) {
+      logger.warn('Lifecycle notification feature gate check failed; continuing', {
+        type,
+        error: gateError.message,
+      });
+    }
+
     logger.info('Processing notification event', { type, organizationId, hasData: !!data, dataKeys: Object.keys(data) });
 
     // Resolve recipients

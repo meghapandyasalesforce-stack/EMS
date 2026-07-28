@@ -114,7 +114,12 @@ export const createEmployeeService = async (employeeData, organizationId) => {
             organizationId,
             // Explicitly set status and active if not provided
             status: employeeData.status || 'active',
-            active: employeeData.active !== undefined ? employeeData.active : (employeeData.status === 'active' || !employeeData.status)
+            active: employeeData.active !== undefined ? employeeData.active : (employeeData.status === 'active' || !employeeData.status),
+            // New hires only — existing docs without this field stay falsy (no redirect)
+            hasCompletedFirstLogin:
+                employeeData.hasCompletedFirstLogin !== undefined
+                    ? employeeData.hasCompletedFirstLogin
+                    : false,
         });
 
         await employee.save();

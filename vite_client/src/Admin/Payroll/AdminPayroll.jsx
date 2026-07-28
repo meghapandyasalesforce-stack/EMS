@@ -369,7 +369,7 @@ const AdminPayroll = () => {
                 <h2 className="text-xl font-semibold text-gray-800">Employee Payroll</h2>
             </div>
 
-            <div className="flex justify-between items-center mb-5">
+            <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-2xl font-semibold text-gray-800 hidden sm:hidden lg:block">Employee Payroll</h2>
                 <div className="flex flex-wrap gap-2">
                     <button
@@ -574,8 +574,8 @@ const AdminPayroll = () => {
                 {loading ? (
                     <div className="text-center text-gray-500 py-6">Loading payroll data...</div>
                 ) : payrollData.length > 0 ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full table-auto border-collapse">
+                    <div className="overflow-x-auto overscroll-x-contain">
+                        <table className="w-full min-w-[720px] table-auto border-collapse">
                             <thead>
                                 <tr className="bg-gray-100">
                                     <th className="text-left py-2 sm:py-3 px-2 sm:px-4 font-semibold text-xs sm:text-sm">Name</th>
@@ -601,7 +601,7 @@ const AdminPayroll = () => {
                                                 </span>
                                             </td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">
-                                                <div className="flex space-x-2">
+                                                <div className="flex flex-col gap-1 sm:flex-row sm:space-x-2">
                                                     <button
                                                         className="bg-theme-primary text-white px-3 py-1 rounded hover:opacity-90 text-sm"
                                                         onClick={() => handleViewDetails(employee)}

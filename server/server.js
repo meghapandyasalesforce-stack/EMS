@@ -106,7 +106,15 @@ app.use(compression({
 }));
 
 // ✅ Basic middleware
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, _res, buf) => {
+    // Preserve raw body for HMAC webhook verification (DocuSign Connect, etc.)
+    if (req.originalUrl?.includes('/webhooks/esign/') || req.url?.includes('/webhooks/esign/')) {
+      req.rawBody = Buffer.from(buf);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 

@@ -1,0 +1,19 @@
+HRMS Product / QA Audit Report
+Onboarding & Offboarding Module — Completeness Across Industries & Global Compliance
+Product: EMS (Employee Management System)  |  Audit Date: 22 July 2026  |  Scope: Employee Lifecycle (Onboarding + Offboarding + Lifecycle Platform)
+Executive Summary
+EMS has evolved into a configurable lifecycle platform (feature registry, industry/compliance packs, form builder, letter generator, BGV/F&F/notice-period services, exit interviews) layered on top of workflow engines in OnboardingHub and OffboardingHub. Core India onboarding (docs, tasks, buddy, induction) and offboarding (clearance, assets, KT, notice period, F&F calc) are strong. Gaps remain in production-grade e-sign, LMS integration, 30-60-90 milestones, KRA/KPI linkage, automated access revoke, non-India compliance packs (US/UK/EU/ME), and industry packs that are mostly configuration flags without dedicated workflow implementations. Several advanced features exist in Lifecycle Configuration but are disabled by default or not surfaced in the primary Hub UI.
+Legend:  ✅ Covered  |  ⚠️ Partially Covered  |  ❌ Not Covered  |  ⬜ Not Applicable
+Coverage Scorecard
+Priority Recommendations (Top Gaps)
+1. High / Large — Non-India compliance packs (US I-9/W-4, UK P45/RTW, EU GDPR employee consent, ME visa/labour card) + auto country detection (items 15, 33–37).
+2. High / Large — Production e-sign integration + offer-to-onboarding handoff in primary Hub (item 1).
+3. High / Medium — Surface BGV in OnboardingHub; enable for regulated industries; vendor integrations (items 3, 32).
+4. High / Large — F&F engine bridged to Payroll off-cycle; statutory gratuity/TDS (item 21).
+5. High / Large — Automated access revocation via IdP/SSO on LWD (item 23).
+6. High / Medium — Full probation lifecycle + wire Letter Generator into offboarding for experience/relieving (items 12, 24).
+7. Medium — 30-60-90 milestones; LMS SSO; industry pack workflow implementations (items 10, 11, 26–31).
+8. UX — Enable exit interview + BGV by default for enterprise tier; consolidate advanced features from Lifecycle Config into Hub UI.
+Methodology
+Audit based on source inspection of lifecycle platform (lifecycleFeatureRegistry, lifecycleCompliancePacks, lifecycleIndustryPacks, lifecycleDocumentCatalog, offerLetterService, backgroundVerificationService, noticePeriodService, fnfSettlementService, lifecycleExitInterviewService, lifecycleLetterService, lifecycleConfigService, lifecycleFormEngine), workflow engines (onboardingService, offboardingService), and UI (OnboardingHub, OffboardingHub, EmployeeLifecycle, LifecycleConfigurationPanel, LetterGeneratorHub, FormBuilderHub, ExitInterviewHub). Status reflects end-user capability in production paths — features that exist only in unrouted pages or disabled-by-default config are rated Partial or Not Covered.
+Confidential — Internal Product / QA Use

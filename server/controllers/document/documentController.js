@@ -2,8 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { Document, DocumentRequest } from '../../models/document.model.js';
 import Employee from '../../models/employee.model.js';
+import { OffboardingWorkflow, OnboardingWorkflow } from '../../models/onboarding.model.js';
 import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
 import logger from '../../helpers/logger.js';
+import { notify } from '../../helpers/notificationManager.js';
+import { emitOffboardingChangedAsync, emitOnboardingChangedAsync, runInBackground } from '../../helpers/backgroundTasks.js';
+import { synchronizeOnboardingWorkflows } from '../../services/onboardingService.js';
+import {
+    addOffboardingActivity,
+    saveOffboardingWorkflow,
+    synchronizeOffboardingDocuments,
+} from '../../services/offboardingService.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
 import { createEmployeeJobOrGenericDocument, mimeToDocumentTypeEnum } from '../../helpers/employeeDocumentUploadHelper.js';
 import { isHrStaffEmployee, loadRequesterHrStaff } from '../../helpers/functionalRolesHelper.js';
@@ -18,6 +27,37 @@ import {
 
 const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certificate',
   'Training', 'Compliance', 'Financial', 'Legal', 'Other'];
+
+const synchronizeEmployeeOnboardingDocuments = (document) => {
+    const organizationId = document?.organizationId;
+    const employeeId = document?.uploadedBy?._id || document?.uploadedBy;
+    const offboardingEmployeeId = document?.relatedTo === 'Employee' && document?.relatedId
+        ? document.relatedId
+        : employeeId;
+    if (!organizationId || !employeeId || document?.category !== 'Employee') return;
+
+    runInBackground('onboarding-document-sync', async () => {
+        await synchronizeOnboardingWorkflows(organizationId);
+        const workflowIds = await OnboardingWorkflow.find({
+            organizationId,
+            employeeId,
+            isTemplate: { $ne: true },
+        }).distinct('_id');
+        workflowIds.forEach((workflowId) => emitOnboardingChangedAsync(organizationId, workflowId));
+
+        const offboardingWorkflows = await OffboardingWorkflow.find({
+            organizationId,
+            employeeId: offboardingEmployeeId,
+        });
+        for (const workflow of offboardingWorkflows) {
+            const changed = await synchronizeOffboardingDocuments(workflow);
+            if (changed) {
+                await workflow.save();
+                emitOffboardingChangedAsync(organizationId, workflow._id);
+            }
+        }
+    });
+};
 
 const loadEmployeeDocumentContext = async (req) => {
     const isAdminUser =
@@ -57,9 +97,18 @@ const buildEmployeeDocumentQuery = (employeeId, employee) => ({
     $or: [
         { uploadedBy: employeeId },
         {
+            relatedTo: 'Employee',
+            relatedId: employeeId,
+            accessLevel: 'Specific',
+            allowedEmployees: employeeId,
+            requiresApproval: false,
+            approvalStatus: 'Approved',
+        },
+        {
             uploadedBy: { $ne: employeeId },
             requiresApproval: false,
             approvalStatus: { $in: ['Approved', null] },
+            'metadata.additionalInfo.documentPurpose': { $ne: 'EXPERIENCE_LETTER' },
         },
         {
             uploadedBy: { $ne: employeeId },
@@ -90,10 +139,19 @@ const buildEmployeeDownloadQuery = (employeeId, employee) => ({
     $or: [
         { uploadedBy: employeeId },
         {
+            relatedTo: 'Employee',
+            relatedId: employeeId,
+            accessLevel: 'Specific',
+            allowedEmployees: employeeId,
+            requiresApproval: false,
+            approvalStatus: 'Approved',
+        },
+        {
             uploadedBy: { $ne: employeeId },
             isActive: { $ne: false },
             requiresApproval: false,
             approvalStatus: { $in: ['Approved', null] },
+            'metadata.additionalInfo.documentPurpose': { $ne: 'EXPERIENCE_LETTER' },
         },
         {
             uploadedBy: { $ne: employeeId },
@@ -343,6 +401,120 @@ export const uploadDocument = asyncHandler(async (req, res) => {
 });
 
 /**
+ * HR issues an experience letter from an employee's offboarding workflow.
+ * The file remains in the canonical Document collection and is shared only
+ * with the workflow employee.
+ */
+export const uploadOffboardingExperienceLetter = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
+    const organizationId = getOrganizationId(req);
+    const workflow = await OffboardingWorkflow.findOne({
+        _id: req.params.id,
+        organizationId,
+    });
+    if (!workflow) {
+        return res.status(404).json({ success: false, message: 'Offboarding workflow not found' });
+    }
+
+    const file = req.file || req.files?.[0];
+    if (!file) {
+        return res.status(400).json({ success: false, message: 'Please choose an experience letter file' });
+    }
+
+    const uploadedBy = req.employee?._id || workflow.assignedHR;
+    if (!uploadedBy) {
+        return res.status(400).json({
+            success: false,
+            message: 'Assign an HR employee before uploading the experience letter',
+        });
+    }
+
+    const employeeId = workflow.employeeId?._id || workflow.employeeId;
+    const relFileUrl = `/uploads/documents/${file.filename}`;
+    assertUploadedFileExists(file, relFileUrl);
+    const fileBinary = requireUploadFileBuffer(file);
+
+    await Document.updateMany(
+        {
+            organizationId,
+            relatedTo: 'Employee',
+            relatedId: employeeId,
+            'metadata.additionalInfo.documentPurpose': 'EXPERIENCE_LETTER',
+            isActive: true,
+        },
+        { $set: { isActive: false } },
+    );
+
+    const document = new Document({
+        organizationId,
+        uploadedBy,
+        name: 'Experience Letter',
+        description: req.body.description != null
+            ? String(req.body.description)
+            : 'Experience letter issued during employee offboarding',
+        category: 'Employee',
+        type: mimeToDocumentTypeEnum(file.mimetype),
+        fileUrl: relFileUrl,
+        fileName: file.originalname || file.name || 'experience-letter.pdf',
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        fileBinary,
+        relatedTo: 'Employee',
+        relatedId: employeeId,
+        relatedToModel: 'Employee',
+        accessLevel: 'Specific',
+        allowedEmployees: [employeeId],
+        requiresApproval: false,
+        approvalStatus: 'Approved',
+        isActive: true,
+        tags: ['EXPERIENCE_LETTER', 'OFFBOARDING'],
+        metadata: {
+            additionalInfo: {
+                documentPurpose: 'EXPERIENCE_LETTER',
+                offboardingWorkflowId: workflow._id.toString(),
+            },
+        },
+    });
+    await document.save();
+    await persistDocumentBinary(document._id, fileBinary?.length ? fileBinary : file);
+
+    workflow.experienceLetter = {
+        canonicalDocumentId: document._id,
+        name: document.name,
+        fileName: document.fileName,
+        fileUrl: document.fileUrl,
+        mimeType: document.mimeType,
+        uploadedAt: document.createdAt,
+        uploadedBy,
+        status: 'Issued',
+    };
+    addOffboardingActivity(workflow, {
+        action: 'experience_letter_issued',
+        description: 'Experience letter uploaded and issued to the employee',
+        actor: uploadedBy,
+        metadata: { documentId: document._id },
+    });
+    await saveOffboardingWorkflow(workflow, organizationId, { actor: uploadedBy });
+    notify({
+        type: 'offboarding_experience_letter_issued',
+        organizationId,
+        data: { workflow, document },
+    }).catch((error) => {
+        logger.error('Experience letter notification failed', {
+            workflowId: workflow._id,
+            error: error.message,
+        });
+    });
+
+    res.status(201).json({
+        success: true,
+        message: 'Experience letter uploaded successfully',
+        data: workflow,
+    });
+});
+
+/**
  * Employee uploads document (requires HR approval)
  */
 export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
@@ -371,6 +543,13 @@ export const uploadEmployeeDocument = asyncHandler(async (req, res) => {
             file,
             body: req.body,
         });
+        synchronizeEmployeeOnboardingDocuments(document);
+
+        await notify({
+            type: 'lifecycle_document_uploaded',
+            organizationId,
+            data: { document, employeeId: uploadedBy },
+        }).catch(() => {});
 
         res.status(201).json({
             success: true,
@@ -728,8 +907,20 @@ export const approveDocument = asyncHandler(async (req, res) => {
     document.approvedBy = approvedBy;
     document.approvedAt = new Date();
     document.isActive = true;
+    document.verificationStatus = 'Approved';
+    document.verifiedBy = approvedBy;
+    document.verifiedAt = new Date();
+    document.verificationHistory = document.verificationHistory || [];
+    document.verificationHistory.push({ status: 'Approved', verifiedBy: approvedBy, verifiedAt: new Date() });
 
     await document.save();
+    synchronizeEmployeeOnboardingDocuments(document);
+
+    await notify({
+        type: 'lifecycle_document_approved',
+        organizationId,
+        data: { document, employeeId: document.uploadedBy },
+    }).catch(() => {});
 
     res.json({
         success: true,
@@ -766,8 +957,21 @@ export const rejectDocument = asyncHandler(async (req, res) => {
     document.approvedAt = new Date();
     document.rejectionReason = rejectionReason;
     document.isActive = false;
+    document.verificationStatus = 'Rejected';
+    document.verifiedBy = rejectedBy;
+    document.verifiedAt = new Date();
+    document.verificationRemarks = rejectionReason;
+    document.verificationHistory = document.verificationHistory || [];
+    document.verificationHistory.push({ status: 'Rejected', verifiedBy: rejectedBy, verifiedAt: new Date(), remarks: rejectionReason });
 
     await document.save();
+    synchronizeEmployeeOnboardingDocuments(document);
+
+    await notify({
+        type: 'lifecycle_document_rejected',
+        organizationId,
+        data: { document, employeeId: document.uploadedBy, rejectionReason },
+    }).catch(() => {});
 
     res.json({
         success: true,
@@ -870,6 +1074,7 @@ export const uploadDocumentVersion = asyncHandler(async (req, res) => {
     document.uploadedBy = uploadedBy;
 
     await document.save();
+    synchronizeEmployeeOnboardingDocuments(document);
 
     res.json({
         success: true,
@@ -1180,6 +1385,7 @@ export const updateMyDocument = asyncHandler(async (req, res) => {
     }
 
     await document.save();
+    synchronizeEmployeeOnboardingDocuments(document);
 
     res.json({
         success: true,
@@ -1222,6 +1428,7 @@ export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
 
     await document.save();
     await persistDocumentBinary(document._id, fileBinary);
+    synchronizeEmployeeOnboardingDocuments(document);
 
     res.json({
         success: true,
@@ -1245,6 +1452,7 @@ export const deleteMyDocument = asyncHandler(async (req, res) => {
         document.rejectionReason = 'Removed by employee';
     }
     await document.save();
+    synchronizeEmployeeOnboardingDocuments(document);
 
     res.json({
         success: true,

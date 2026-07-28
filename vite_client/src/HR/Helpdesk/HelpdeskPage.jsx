@@ -34,7 +34,7 @@ const HelpdeskPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-3 sm:p-4 transition-all duration-300">
-            <div className="w-full max-w-[1600px] mx-auto">
+            <div className="w-full">
                 <div className="mb-6 flex justify-between items-center">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">HR Helpdesk</h1>

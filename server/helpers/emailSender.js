@@ -1,5 +1,12 @@
 import logger from './logger.js';
 import { createEmailTransporter, getEmailFrom, detectEmailProvider, getEmailConfig } from '../config/email.config.js';
+import {
+  buildConversationMailOptions,
+  resolveThreadRootAfterSend,
+  LEAVE_EMAIL_THREAD_MODULE,
+  REGULARIZATION_EMAIL_THREAD_MODULE,
+} from './emailConversationHelper.js';
+import { sendMailWithSentCopy, verifyEmailTransporter } from './emailSentMailboxHelper.js';
 
 const LEAVE_EMAIL_SENDER_NAME = 'Paarsiv Technologies Private Limited';
 const LOGO_URL_LIGHT = 'https://www.paarsiv.com/wp-content/uploads/2024/08/paarsiv-1.png';
@@ -13,6 +20,22 @@ const getLeaveEmailFrom = () => {
 const getRegularizationEmailFrom = () => {
   // Same display name as leave / other HR mails so inbox shows "Paarsiv Technologies..."
   return getLeaveEmailFrom();
+};
+
+const buildLeaveRequestSubject = (leaveData) =>
+  `Leave Request - ${leaveData.employeeName || 'Employee'}`;
+
+const buildRegularizationRequestSubject = (regularizationData) =>
+  `Attendance Regularization Request - ${regularizationData.employeeName || 'Employee'}`;
+
+const buildThreadReplySubject = (requestSubject, threadRootMessageId, fallbackSubject) => {
+  if (!threadRootMessageId) {
+    return fallbackSubject;
+  }
+  if (requestSubject.startsWith('Re: ')) {
+    return requestSubject;
+  }
+  return `Re: ${requestSubject}`;
 };
 
 const buildLeaveCcList = (ccEmails = [], ...excludeEmails) => {
@@ -1247,7 +1270,7 @@ const generateLeaveRequestEmailTemplate = (data) => {
  *@param {string} employeeEmail - Employee email address (used for reply-to)
  * @returns {Promise<void>}
  */
-export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails = [], employeeEmail = null) => {
+export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails = [], employeeEmail = null, threadOptions = {}) => {
   const emailConfig = getEmailConfig();
   const transporter = createEmailTransporter();
   const emailFrom = getLeaveEmailFrom();
@@ -1257,42 +1280,48 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
   }
 
   const ccList = buildLeaveCcList(ccEmails, approverEmail);
+  const recordId = leaveData._id || leaveData.id;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || leaveData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: LEAVE_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'initial',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: approverEmail,
     cc: ccList.length > 0 ? ccList : undefined,
     subject: `Leave Request - ${leaveData.employeeName || 'Employee'}`,
-    html: generateLeaveRequestEmailTemplate(leaveData)
+    html: generateLeaveRequestEmailTemplate(leaveData),
+    ...conversationOptions,
   };
-
-  // // For transactional email services (SendGrid, Mailgun, SES, Brevo), set from to employee's email directly
-  // // These services support custom sender addresses without exposing the system email
-  // if (employeeEmail && provider.isTransactional) {
-  //   mailOptions.from = `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>`;
-  //   mailOptions.replyTo = employeeEmail;
-  // } 
-  // // For traditional SMTP (Gmail, Outlook), use sender field to minimize system email exposure
-  // else if (employeeEmail) {
-  //   mailOptions.from = `"${leaveData.employeeName || 'Employee'}" <${employeeEmail}>`;
-  //   mailOptions.sender = emailFrom;
-  //   mailOptions.replyTo = employeeEmail;
-  // }
 
   // Always send from system SMTP account; allow manager to reply to the employee
   if (employeeEmail) {
     mailOptions.replyTo = employeeEmail;
   }
+
   try {
-    await transporter.verify();
-    const info = await transporter.sendMail(mailOptions);
-    logger.info('Leave request email sent', { 
+    await verifyEmailTransporter(transporter);
+    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const threadRootMessageId = resolveThreadRootAfterSend(
+      threadOptions.threadRootMessageId || leaveData.emailThreadMessageId,
+      conversationOptions,
+      info.messageId,
+      'initial'
+    );
+    logger.info('Leave request email sent', {
       from: emailFrom,
       replyTo: employeeEmail,
-      to: approverEmail, 
+      to: approverEmail,
       cc: ccList,
-      messageId: info.messageId 
+      messageId: info.messageId,
+      threadRootMessageId,
     });
+    return { messageId: info.messageId, threadRootMessageId };
   } catch (error) {
     logger.error('Error sending leave request email', { 
       from: emailFrom,
@@ -1304,13 +1333,6 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
   }
 };
 
-/**
- * Send leave approval email to employee
- * @param {Object} leaveData - Leave request data
- * @param {string} employeeEmail - Employee email address
- * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
- * @returns {Promise<void>}
- */
  const generateLeaveEmailTemplate = (data, status) => {
   const startDate = data.startDate
     ? new Date(data.startDate).toLocaleDateString('en-US', {
@@ -1514,7 +1536,7 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
 </body>
 </html>`;
 };
-export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails = []) => {
+export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails = [], threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getLeaveEmailFrom();
   
@@ -1523,24 +1545,46 @@ export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails 
   }
 
   const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+  const recordId = leaveData._id || leaveData.id;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || leaveData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: LEAVE_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'reply',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
     cc: ccList.length > 0 ? ccList : undefined,
-    subject: `Leave Request Approved - ${leaveData.employeeName || 'Employee'}`,
-    html: generateLeaveEmailTemplate(leaveData, 'approved', 'employee')
+    subject: buildThreadReplySubject(
+      buildLeaveRequestSubject(leaveData),
+      threadRootMessageId,
+      `Leave Request Approved - ${leaveData.employeeName || 'Employee'}`
+    ),
+    html: generateLeaveEmailTemplate(leaveData, 'approved', 'employee'),
+    ...conversationOptions
   };
 
   try {
-    await transporter.verify();
-    const info = await transporter.sendMail(mailOptions);
+    await verifyEmailTransporter(transporter);
+    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const threadRootMessageId = resolveThreadRootAfterSend(
+      threadOptions.threadRootMessageId || leaveData.emailThreadMessageId,
+      conversationOptions,
+      info.messageId,
+      'reply'
+    );
     logger.info('Leave approval email sent', { 
       from: emailFrom,
       to: employeeEmail,
       cc: ccList,
-      messageId: info.messageId 
+      messageId: info.messageId,
+      threadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId };
   } catch (error) {
     logger.error('Error sending leave approval email', { 
       from: emailFrom,
@@ -1559,7 +1603,7 @@ export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails 
  * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
  * @returns {Promise<void>}
  */
-export const sendLeaveRejectionEmail = async (leaveData, employeeEmail, ccEmails = []) => {
+export const sendLeaveRejectionEmail = async (leaveData, employeeEmail, ccEmails = [], threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getLeaveEmailFrom();
   
@@ -1568,24 +1612,46 @@ export const sendLeaveRejectionEmail = async (leaveData, employeeEmail, ccEmails
   }
 
   const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+  const recordId = leaveData._id || leaveData.id;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || leaveData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: LEAVE_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'reply',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
     cc: ccList.length > 0 ? ccList : undefined,
-    subject: `Leave Request Rejected - ${leaveData.employeeName || 'Employee'}`,
-    html: generateLeaveEmailTemplate(leaveData, 'rejected', 'employee')
+    subject: buildThreadReplySubject(
+      buildLeaveRequestSubject(leaveData),
+      threadRootMessageId,
+      `Leave Request Rejected - ${leaveData.employeeName || 'Employee'}`
+    ),
+    html: generateLeaveEmailTemplate(leaveData, 'rejected', 'employee'),
+    ...conversationOptions
   };
 
   try {
-    await transporter.verify();
-    const info = await transporter.sendMail(mailOptions);
+    await verifyEmailTransporter(transporter);
+    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const threadRootMessageId = resolveThreadRootAfterSend(
+      threadOptions.threadRootMessageId || leaveData.emailThreadMessageId,
+      conversationOptions,
+      info.messageId,
+      'reply'
+    );
     logger.info('Leave rejection email sent', { 
       from: emailFrom,
       to: employeeEmail,
       cc: ccList,
-      messageId: info.messageId 
+      messageId: info.messageId,
+      threadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId };
   } catch (error) {
     logger.error('Error sending leave rejection email', { 
       from: emailFrom,
@@ -1604,7 +1670,7 @@ export const sendLeaveRejectionEmail = async (leaveData, employeeEmail, ccEmails
  * @param {Array} ccEmails - CC email addresses (HR, Admin)
  * @returns {Promise<void>}
  */
-export const sendRegularizationRequestEmail = async (regularizationData, approverEmail, ccEmails = []) => {
+export const sendRegularizationRequestEmail = async (regularizationData, approverEmail, ccEmails = [], threadOptions = {}) => {
   const emailConfig = getEmailConfig();
   const transporter = createEmailTransporter();
   const emailFrom = getRegularizationEmailFrom();
@@ -1614,24 +1680,42 @@ export const sendRegularizationRequestEmail = async (regularizationData, approve
   }
 
   const ccList = buildLeaveCcList(ccEmails, approverEmail);
+  const recordId = regularizationData._id || regularizationData.id;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: REGULARIZATION_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'initial',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: approverEmail,
     cc: ccList.length > 0 ? ccList : undefined,
     subject: `Attendance Regularization Request - ${regularizationData.employeeName || 'Employee'}`,
-    html: generateRegularizationRequestEmailTemplate(regularizationData)
+    html: generateRegularizationRequestEmailTemplate(regularizationData),
+    ...conversationOptions
   };
 
   try {
-    await transporter.verify();
-    const info = await transporter.sendMail(mailOptions);
+    await verifyEmailTransporter(transporter);
+    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const threadRootMessageId = resolveThreadRootAfterSend(
+      threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId,
+      conversationOptions,
+      info.messageId,
+      'initial'
+    );
     logger.info('Attendance regularization request email sent', { 
       from: emailFrom,
       to: approverEmail, 
       cc: ccList,
-      messageId: info.messageId 
+      messageId: info.messageId,
+      threadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId };
   } catch (error) {
     logger.error('Error sending attendance regularization request email', { 
       from: emailFrom,
@@ -1649,7 +1733,7 @@ export const sendRegularizationRequestEmail = async (regularizationData, approve
  * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
  * @returns {Promise<void>}
  */
-export const sendRegularizationApprovalEmail = async (regularizationData, employeeEmail, ccEmails = []) => {
+export const sendRegularizationApprovalEmail = async (regularizationData, employeeEmail, ccEmails = [], threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getRegularizationEmailFrom();
   
@@ -1658,24 +1742,46 @@ export const sendRegularizationApprovalEmail = async (regularizationData, employ
   }
 
   const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+  const recordId = regularizationData._id || regularizationData.id;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: REGULARIZATION_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'reply',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
     cc: ccList.length > 0 ? ccList : undefined,
-    subject: 'Attendance Regularization Approved',
-    html: generateRegularizationEmailTemplate(regularizationData, 'approved')
+    subject: buildThreadReplySubject(
+      buildRegularizationRequestSubject(regularizationData),
+      threadRootMessageId,
+      'Attendance Regularization Approved'
+    ),
+    html: generateRegularizationEmailTemplate(regularizationData, 'approved'),
+    ...conversationOptions
   };
 
   try {
-    await transporter.verify();
-    const info = await transporter.sendMail(mailOptions);
+    await verifyEmailTransporter(transporter);
+    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const threadRootMessageId = resolveThreadRootAfterSend(
+      threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId,
+      conversationOptions,
+      info.messageId,
+      'reply'
+    );
     logger.info('Attendance regularization approval email sent', { 
       from: emailFrom,
       to: employeeEmail,
       cc: ccList,
-      messageId: info.messageId 
+      messageId: info.messageId,
+      threadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId };
   } catch (error) {
     logger.error('Error sending attendance regularization approval email', { 
       from: emailFrom,
@@ -1694,7 +1800,7 @@ export const sendRegularizationApprovalEmail = async (regularizationData, employ
  * @param {Array} ccEmails - CC email addresses (Manager, HR, Admin)
  * @returns {Promise<void>}
  */
-export const sendRegularizationRejectionEmail = async (regularizationData, employeeEmail, ccEmails = []) => {
+export const sendRegularizationRejectionEmail = async (regularizationData, employeeEmail, ccEmails = [], threadOptions = {}) => {
   const transporter = createEmailTransporter();
   const emailFrom = getRegularizationEmailFrom();
   
@@ -1703,24 +1809,46 @@ export const sendRegularizationRejectionEmail = async (regularizationData, emplo
   }
 
   const ccList = buildLeaveCcList(ccEmails, employeeEmail);
+  const recordId = regularizationData._id || regularizationData.id;
+  const threadRootMessageId =
+    threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId;
+  const conversationOptions = buildConversationMailOptions({
+    module: REGULARIZATION_EMAIL_THREAD_MODULE,
+    recordId,
+    threadRootMessageId,
+    threadRole: 'reply',
+  });
 
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
     cc: ccList.length > 0 ? ccList : undefined,
-    subject: 'Attendance Regularization Rejected',
-    html: generateRegularizationEmailTemplate(regularizationData, 'rejected')
+    subject: buildThreadReplySubject(
+      buildRegularizationRequestSubject(regularizationData),
+      threadRootMessageId,
+      'Attendance Regularization Rejected'
+    ),
+    html: generateRegularizationEmailTemplate(regularizationData, 'rejected'),
+    ...conversationOptions
   };
 
   try {
-    await transporter.verify();
-    const info = await transporter.sendMail(mailOptions);
+    await verifyEmailTransporter(transporter);
+    const info = await sendMailWithSentCopy(transporter, mailOptions);
+    const threadRootMessageId = resolveThreadRootAfterSend(
+      threadOptions.threadRootMessageId || regularizationData.emailThreadMessageId,
+      conversationOptions,
+      info.messageId,
+      'reply'
+    );
     logger.info('Attendance regularization rejection email sent', { 
       from: emailFrom,
       to: employeeEmail,
       cc: ccList,
-      messageId: info.messageId 
+      messageId: info.messageId,
+      threadRootMessageId
     });
+    return { messageId: info.messageId, threadRootMessageId };
   } catch (error) {
     logger.error('Error sending attendance regularization rejection email', { 
       from: emailFrom,
@@ -1733,14 +1861,35 @@ export const sendRegularizationRejectionEmail = async (regularizationData, emplo
 };
 
 /**
+ * Format WFH date or date range for emails.
+ */
+const formatWfhDateRange = (fromDate, toDate) => {
+  const fmt = (d) => new Date(d).toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+  if (!fromDate) return 'N/A';
+  const from = fmt(fromDate);
+  if (!toDate || new Date(toDate).toDateString() === new Date(fromDate).toDateString()) {
+    return from;
+  }
+  return `${from} – ${fmt(toDate)}`;
+};
+
+/**
  * Generate Work From Home request email template (same branding as leave emails)
  * @param {Object} data - WFH request data
  * @returns {string} HTML content
  */
 const generateWfhRequestEmailTemplate = (data) => {
-  const wfhDate = data.wfhDate
-    ? new Date(data.wfhDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
-    : 'N/A';
+  const wfhDate = formatWfhDateRange(data.wfhDate, data.wfhDateTo);
+  const isRange = data.wfhDateTo
+    && new Date(data.wfhDateTo).toDateString() !== new Date(data.wfhDate).toDateString();
+  const wfhMessage = isRange
+    ? `I would like to inform you that I plan to work from home from <strong>${wfhDate.split(' – ')[0]}</strong> to <strong>${wfhDate.split(' – ')[1]}</strong>.`
+    : `I would like to inform you that I plan to work from home on <strong>${wfhDate}</strong>.`;
   const submittedAt = data.submittedAt
     ? new Date(data.submittedAt).toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : new Date().toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1877,7 +2026,7 @@ const generateWfhRequestEmailTemplate = (data) => {
     <h1 class="heading">Work From Home Request</h1>
     <p class="message">Dear ${managerName},</p>
     <p class="message">I hope you are doing well.</p>
-    <p class="message">I would like to inform you that I plan to work from home on <strong>${wfhDate}</strong>.</p>
+    <p class="message">${wfhMessage}</p>
     
     <table class="info-table">
       <tr>
@@ -1897,7 +2046,7 @@ const generateWfhRequestEmailTemplate = (data) => {
         <td class="info-value">${data.designation || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">WFH Date</td>
+        <td class="info-label">WFH Period</td>
         <td class="info-value">${wfhDate}</td>
       </tr>
       <tr>
@@ -2000,14 +2149,7 @@ const generateWfhDecisionEmailTemplate = (data, status) => {
   const statusText = isApproved ? 'Approved' : 'Rejected';
   const remarksLabel = isApproved ? 'Remarks' : 'Rejection Reason';
   const remarks = data.reviewNote || data.remarks || data.reason || 'N/A';
-  const wfhDate = data.wfhDate
-    ? new Date(data.wfhDate).toLocaleDateString('en-US', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      })
-    : 'N/A';
+  const wfhDate = formatWfhDateRange(data.wfhDate, data.wfhDateTo);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -2151,7 +2293,7 @@ const generateWfhDecisionEmailTemplate = (data, status) => {
         <td class="info-value">${data.employeeId || 'N/A'}</td>
       </tr>
       <tr>
-        <td class="info-label">WFH Date</td>
+        <td class="info-label">WFH Period</td>
         <td class="info-value">${wfhDate}</td>
       </tr>
       <tr>

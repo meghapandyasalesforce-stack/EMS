@@ -36,6 +36,11 @@ function Login() {
 
     useEffect(() => {
         if (authChecked && user) {
+            // Preserve one-time Job Details redirect for newly created employees
+            if (sessionStorage.getItem('redirectToOfferLetterOnLogin') === '1') {
+                navigate('/job-details', { replace: true });
+                return;
+            }
             // Navigate to /dashboard which will automatically determine the correct dashboard
             // based on Position and Department via RoleBasedDashboard component
             navigate('/dashboard');
@@ -244,6 +249,11 @@ function Login() {
             const homeRoute =
                 portals.find((p) => p.id === activePortal)?.home || dashboardRoute;
 
+            const needsOfferLetterRedirect = Boolean(data.redirectToJobDetails);
+            if (needsOfferLetterRedirect) {
+                sessionStorage.setItem('redirectToOfferLetterOnLogin', '1');
+            }
+
             // Hydrate full profile (name, jobTitle, etc.) before dashboard renders
             try {
                 const session = await dispatch(checkAuthSession()).unwrap();
@@ -254,6 +264,12 @@ function Login() {
                 }
             } catch {
                 // Login cookies are set; proceed with partial profile from login response
+            }
+
+            // New plain employees only: one-time redirect to Job Details / Offer Letter
+            if (needsOfferLetterRedirect) {
+                navigate('/job-details', { replace: true });
+                return;
             }
 
             navigate(homeRoute, { replace: true });

@@ -19,6 +19,12 @@ const RoleBasedDashboard = () => {
     const userRole = profile?.role;
     
     useEffect(() => {
+        // Honor one-time Job Details redirect if login sent user to /dashboard first
+        if (sessionStorage.getItem('redirectToOfferLetterOnLogin') === '1') {
+            navigate('/job-details', { replace: true });
+            return;
+        }
+
         const fetchDashboardRoute = async () => {
             // Wait for user data to be available
             // If userRole is missing but user/employee exists, wait a bit for Redux to update

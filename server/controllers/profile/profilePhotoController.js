@@ -7,6 +7,9 @@ import { fileURLToPath } from 'url';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound, sendInternalError } from '../../helpers/responseHelper.js';
 import { processProfilePhoto, normalizeProfilePhotoForAvatar } from '../../helpers/imageOptimizer.js';
+import { OnboardingWorkflow } from '../../models/onboarding.model.js';
+import { emitOnboardingChangedAsync, runInBackground } from '../../helpers/backgroundTasks.js';
+import { synchronizeOnboardingWorkflows } from '../../services/onboardingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,6 +95,21 @@ function buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResul
     };
 }
 
+function synchronizeProfilePhotoWithOnboarding(employee) {
+    if (!employee?._id || !employee?.organizationId) return;
+
+    runInBackground('onboarding-profile-photo-sync', async () => {
+        await synchronizeOnboardingWorkflows(employee.organizationId);
+        const workflowIds = await OnboardingWorkflow.find({
+            organizationId: employee.organizationId,
+            employeeId: employee._id,
+            isTemplate: { $ne: true },
+        }).distinct('_id');
+        workflowIds.forEach((workflowId) =>
+            emitOnboardingChangedAsync(employee.organizationId, workflowId));
+    });
+}
+
 // Upload profile photo for employee
 export const uploadEmployeePhoto = async (req, res) => {
     try {
@@ -140,6 +158,7 @@ export const uploadEmployeePhoto = async (req, res) => {
         employee.profilePhoto = buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResult);
 
         await employee.save();
+        synchronizeProfilePhotoWithOnboarding(employee);
 
         return sendSuccess(res, {
             profilePhoto: employee.profilePhoto,
@@ -198,6 +217,7 @@ export const uploadEmployeePhotoByAdmin = async (req, res) => {
 
         employee.profilePhoto = buildProfilePhotoRecord(storedFilename, thumbnailUrl, optimizationResult);
         await employee.save();
+        synchronizeProfilePhotoWithOnboarding(employee);
 
         return sendSuccess(res, {
             profilePhoto: employee.profilePhoto,
@@ -348,6 +368,7 @@ export const deleteProfilePhoto = async (req, res) => {
         // Remove photo reference from user
         user.profilePhoto = undefined;
         await user.save();
+        if (userType === 'employee') synchronizeProfilePhotoWithOnboarding(user);
 
         res.json({ message: 'Profile photo deleted successfully' });
     } catch (error) {

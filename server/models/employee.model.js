@@ -434,6 +434,11 @@ const employeeSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    /** false only for new hires — one-time /job-details redirect on first login */
+    hasCompletedFirstLogin: {
+        type: Boolean,
+        default: true
+    },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
     active: { type: Boolean, default: true },

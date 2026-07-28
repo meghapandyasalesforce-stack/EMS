@@ -785,7 +785,7 @@ const DashboardHR = () => {
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
             <div className="page-shell">
-            <div className="page-shell-inner max-w-6xl">
+            <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
                 <header
                     className="rounded-2xl border bg-white/95 p-4 shadow-sm backdrop-blur"
@@ -1148,7 +1148,8 @@ const DashboardHR = () => {
                             </button>
                         </div>
 
-                        <div className="overflow-hidden rounded-3xl border border-slate-100">
+                        <div className="overflow-x-auto overscroll-x-contain rounded-3xl border border-slate-100">
+                            <div className="min-w-[640px]">
                             <div className="grid grid-cols-[1.4fr_1fr_1fr_0.8fr] gap-3 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                                 <span>Employee</span>
                                 <span>Role</span>
@@ -1201,6 +1202,7 @@ const DashboardHR = () => {
                                     No hires matched your current search.
                                 </div>
                             )}
+                            </div>
                         </div>
                     </Panel>
 
