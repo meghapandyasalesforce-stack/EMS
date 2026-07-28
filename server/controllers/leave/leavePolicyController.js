@@ -11,6 +11,10 @@ import {
     normalizePolicyLeaveTypes,
     validateLeavePolicyAccrual,
 } from '../../helpers/leavePolicyAccrualHelper.js';
+import {
+    validateLeavePolicyApplicability,
+    normalizeLeavePolicyApplicability,
+} from '../../helpers/leavePolicyApplicabilityHelper.js';
 import { resolveEmployeeLeaveBalanceAccess } from '../../helpers/leaveBalanceAccessHelper.js';
 import { writeLeaveBalanceAuditEntry, buildEmployeeLeaveHistory } from '../../helpers/leaveBalanceHistoryHelper.js';
 import { getEmployeeLeaveYearBounds, isLeaveYearAllowed } from '../../helpers/leaveYearBoundsHelper.js';
@@ -133,6 +137,17 @@ export const createLeavePolicy = async (req, res) => {
             policyData.leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes);
         }
 
+        Object.assign(policyData, normalizeLeavePolicyApplicability(policyData));
+
+        const applicabilityErrors = validateLeavePolicyApplicability(policyData);
+        if (applicabilityErrors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: applicabilityErrors[0],
+                errors: applicabilityErrors,
+            });
+        }
+
         const validationErrors = validateLeavePolicyAccrual(policyData);
         if (validationErrors.length > 0) {
             return res.status(400).json({
@@ -179,6 +194,7 @@ export const getAllLeavePolicies = async (req, res) => {
 
         const policies = await LeavePolicy.find(query)
             .populate('applicableRoles', 'name')
+            .populate('applicableEmployees', 'name email employeeId department')
             .populate('createdBy', 'name email')
             .sort({ createdAt: -1 });
 
@@ -256,6 +272,34 @@ export const updateLeavePolicy = async (req, res) => {
         const updateBody = { ...req.body };
         if (updateBody.leaveTypes) {
             updateBody.leaveTypes = normalizePolicyLeaveTypes(updateBody.leaveTypes);
+        }
+
+        // Only normalize/validate applicability when the client sends scope fields
+        // (toggle-active updates send { isActive } only).
+        const touchesApplicability =
+            updateBody.applicableTo != null ||
+            updateBody.applicableDepartments != null ||
+            updateBody.applicableRoles != null ||
+            updateBody.applicableEmployees != null;
+
+        if (touchesApplicability) {
+            const applicabilitySource = {
+                applicableTo: updateBody.applicableTo ?? policy.applicableTo,
+                applicableDepartments:
+                    updateBody.applicableDepartments ?? policy.applicableDepartments,
+                applicableRoles: updateBody.applicableRoles ?? policy.applicableRoles,
+                applicableEmployees:
+                    updateBody.applicableEmployees ?? policy.applicableEmployees,
+            };
+            Object.assign(updateBody, normalizeLeavePolicyApplicability(applicabilitySource));
+            const applicabilityErrors = validateLeavePolicyApplicability(updateBody);
+            if (applicabilityErrors.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: applicabilityErrors[0],
+                    errors: applicabilityErrors,
+                });
+            }
         }
 
         const mergedForValidation = {

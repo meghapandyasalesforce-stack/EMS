@@ -26,6 +26,7 @@ import {
 import { consumeLeaveBuckets } from '../helpers/leaveEmployeeTakeLimitHelper.js';
 import { chooseCanonicalOpening as pickCanonicalOpening } from '../helpers/openingLeaveBalanceHelper.js';
 import { resolveLeaveBalanceOrganizationId } from '../helpers/leaveBalanceAccessHelper.js';
+import { isLeavePolicyApplicableToEmployee } from '../helpers/leavePolicyApplicabilityHelper.js';
 
 class LeaveBalanceEngine {
     /**
@@ -1376,38 +1377,10 @@ class LeaveBalanceEngine {
     }
 
     /**
-     * Check if policy is applicable to employee
+     * Check if policy is applicable to employee (department / assignedRole / employee list).
      */
     isPolicyApplicable(policy, employee) {
-        const employeeDepartment = (employee.department || '').toLowerCase().trim();
-        const policyDepartments = (policy.applicableDepartments || [])
-            .map((d) => (d || '').toLowerCase().trim())
-            .filter(Boolean);
-        const employeeRoleId = employee.role?.toString();
-        const applicableRoleIds = (policy.applicableRoles || []).map((role) => role.toString());
-        const employeeId = employee._id?.toString();
-        const applicableEmployeeIds = (policy.applicableEmployees || []).map((emp) => emp.toString());
-
-        switch (policy.applicableTo) {
-            case 'all':
-                return true;
-            case 'department':
-                return policyDepartments.includes(employeeDepartment);
-            case 'role':
-                return Boolean(employeeRoleId) && applicableRoleIds.includes(employeeRoleId);
-            case 'employee':
-                return Boolean(employeeId) && applicableEmployeeIds.includes(employeeId);
-            case 'custom':
-                // For custom policies, apply if employee matches any configured scope.
-                // This keeps custom flexible and avoids false "no policy" results.
-                return (
-                    (Boolean(employeeId) && applicableEmployeeIds.includes(employeeId)) ||
-                    (Boolean(employeeRoleId) && applicableRoleIds.includes(employeeRoleId)) ||
-                    policyDepartments.includes(employeeDepartment)
-                );
-            default:
-                return false;
-        }
+        return isLeavePolicyApplicableToEmployee(policy, employee);
     }
 
     /**

@@ -14,6 +14,7 @@ import {
     roundDays
 } from '../helpers/leavePolicyAccrualHelper.js';
 import { getEffectiveMonthlyTakeCap } from '../helpers/leaveEmployeeTakeLimitHelper.js';
+import { isLeavePolicyApplicableToEmployee } from '../helpers/leavePolicyApplicabilityHelper.js';
 
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
@@ -763,22 +764,7 @@ class LeaveValidationService {
      * Check if policy is applicable to employee
      */
     isPolicyApplicable(policy, employee) {
-        switch (policy.applicableTo) {
-            case 'all':
-                return true;
-            case 'department':
-                return policy.applicableDepartments.includes(employee.department);
-            case 'role':
-                return policy.applicableRoles.some(role => 
-                    role.toString() === employee.role?.toString()
-                );
-            case 'employee':
-                return policy.applicableEmployees.some(emp => 
-                    emp.toString() === employee._id.toString()
-                );
-            default:
-                return false;
-        }
+        return isLeavePolicyApplicableToEmployee(policy, employee);
     }
 }
 
