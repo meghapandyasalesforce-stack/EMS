@@ -11,10 +11,14 @@ import {
     getRemainingMonthlyTakeCap,
     getYearlyAccrualCap,
     hasMonthlyEntitlement,
+    normalizePolicyLeaveTypes,
     roundDays
 } from '../helpers/leavePolicyAccrualHelper.js';
 import { getEffectiveMonthlyTakeCap } from '../helpers/leaveEmployeeTakeLimitHelper.js';
-import { isLeavePolicyApplicableToEmployee } from '../helpers/leavePolicyApplicabilityHelper.js';
+import {
+    isLeavePolicyApplicableToEmployee,
+    selectApplicableLeavePolicy,
+} from '../helpers/leavePolicyApplicabilityHelper.js';
 
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
@@ -49,7 +53,12 @@ class LeaveValidationService {
                 return { valid: false, errors: ['Employee not found'] };
             }
 
-            const policy = await this.getApplicablePolicy(employee, organizationId);
+            const startDateEarly = this.parseLeaveDate(leaveData.startDate);
+            const policy = await this.getApplicablePolicy(
+                employee,
+                organizationId,
+                startDateEarly || new Date()
+            );
             if (!policy) {
                 return { valid: false, errors: ['No leave policy found for employee'] };
             }
@@ -667,12 +676,12 @@ class LeaveValidationService {
         if (!employee) {
             return { year, month, monthLabel: '', types: [] };
         }
-        const policy = await this.getApplicablePolicy(employee, organizationId);
+        const monthStart = new Date(year, month - 1, 1);
+        const policy = await this.getApplicablePolicy(employee, organizationId, monthStart);
         if (!policy) {
             return { year, month, monthLabel: '', types: [] };
         }
 
-        const monthStart = new Date(year, month - 1, 1);
         const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
         const monthLabel = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
@@ -743,21 +752,23 @@ class LeaveValidationService {
     }
 
     /**
-     * Get applicable policy for employee
+     * Get applicable policy for employee on asOfDate (effectiveDate / expiryDate window).
      */
-    async getApplicablePolicy(employee, organizationId) {
+    async getApplicablePolicy(employee, organizationId, asOfDate = new Date()) {
         const policies = await LeavePolicy.find({
             organizationId,
-            isActive: true
+            isActive: true,
         }).sort({ effectiveDate: -1 });
 
-        for (const policy of policies) {
-            if (this.isPolicyApplicable(policy, employee)) {
-                return policy;
-            }
-        }
+        const normalized = policies.map((policy) => {
+            const plain = typeof policy.toObject === 'function' ? policy.toObject() : { ...policy };
+            return {
+                ...plain,
+                leaveTypes: normalizePolicyLeaveTypes(plain.leaveTypes),
+            };
+        });
 
-        return null;
+        return selectApplicableLeavePolicy(normalized, employee, asOfDate || new Date());
     }
 
     /**

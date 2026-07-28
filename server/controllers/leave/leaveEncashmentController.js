@@ -1,6 +1,5 @@
 import Leave from '../../models/leave.model.js';
 import LeaveBalance from '../../models/leaveBalance.model.js';
-import LeavePolicy from '../../models/leavePolicy.model.js';
 import Employee from '../../models/employee.model.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError, sendNotFound } from '../../helpers/responseHelper.js';
@@ -28,8 +27,8 @@ export const requestLeaveEncashment = async (req, res) => {
             return sendNotFound(res, 'Employee');
         }
 
-        // Get applicable policy
-        const policy = await getApplicablePolicy(employee, organizationId);
+        // Get applicable policy (effective on today)
+        const policy = await leaveBalanceEngine.getApplicablePolicy(employee, organizationId);
         if (!policy) {
             return sendError(res, 'No leave policy found for employee', 404, 'NO_POLICY');
         }
@@ -231,46 +230,6 @@ async function calculateEncashmentAmount(employee, days, method) {
 
         default:
             return Math.round((salary / 30) * days);
-    }
-}
-
-/**
- * Get applicable policy for employee
- */
-async function getApplicablePolicy(employee, organizationId) {
-    const policies = await LeavePolicy.find({
-        organizationId,
-        isActive: true
-    }).sort({ effectiveDate: -1 });
-
-    for (const policy of policies) {
-        if (isPolicyApplicable(policy, employee)) {
-            return policy;
-        }
-    }
-
-    return null;
-}
-
-/**
- * Check if policy is applicable to employee
- */
-function isPolicyApplicable(policy, employee) {
-    switch (policy.applicableTo) {
-        case 'all':
-            return true;
-        case 'department':
-            return policy.applicableDepartments.includes(employee.department);
-        case 'role':
-            return policy.applicableRoles.some(role =>
-                role.toString() === employee.role?.toString()
-            );
-        case 'employee':
-            return policy.applicableEmployees.some(emp =>
-                emp.toString() === employee._id.toString()
-            );
-        default:
-            return false;
     }
 }
 

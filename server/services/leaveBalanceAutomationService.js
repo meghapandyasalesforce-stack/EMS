@@ -258,7 +258,8 @@ class LeaveBalanceAutomationService {
                 const policyForMonth = await leaveBalanceEngine.getApplicablePolicy(
                     employee,
                     organizationId,
-                    y
+                    y,
+                    leaveBalanceEngine.endOfMonthDate(y, m)
                 );
                 const usesPooledWallet =
                     (leaveBalanceEngine.getPooledLeaveTypeConfigs(policyForMonth || {}) || []).length > 0;
@@ -286,7 +287,12 @@ class LeaveBalanceAutomationService {
                 });
 
                 const asOfDate = leaveBalanceEngine.endOfMonthDate(y, m);
-                const policy = await leaveBalanceEngine.getApplicablePolicy(employee, organizationId, y);
+                const policy = await leaveBalanceEngine.getApplicablePolicy(
+                    employee,
+                    organizationId,
+                    y,
+                    asOfDate
+                );
                 if (policy) {
                     for (const lt of policy.leaveTypes) {
                         if (lt.enabled === false) continue;

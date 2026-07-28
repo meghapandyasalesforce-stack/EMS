@@ -790,18 +790,32 @@ const LeavePolicyManagement = () => {
                         />
                     </div>
 
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium mb-1">Effective Date *</label>
-                        <input
-                            type="date"
-                            value={formData.effectiveDate}
-                            onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
-                            required
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                            This policy will apply to all years once set. It's a one-time configuration.
-                        </p>
+                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Effective Date *</label>
+                            <input
+                                type="date"
+                                value={formData.effectiveDate}
+                                onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
+                                className="w-full border rounded px-3 py-2"
+                                required
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Policy applies from this date. Accrual before this date uses any prior policy.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                            <input
+                                type="date"
+                                value={formData.expiryDate || ''}
+                                onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                                className="w-full border rounded px-3 py-2"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Optional. Set when replacing a policy mid-year (day before the new policy starts).
+                            </p>
+                        </div>
                     </div>
 
                     <div className="mb-4">
