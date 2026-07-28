@@ -769,3 +769,26 @@ canvas {
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* First-login Job Details — subtle Offer Letter section highlight */
+@keyframes job-details-offer-letter-glow {
+  0%,
+  100% {
+    border-color: rgb(226 232 240);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    background-color: #ffffff;
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, rgb(226 232 240));
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent),
+      0 4px 14px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    background-color: color-mix(in srgb, var(--color-primary) 6%, #ffffff);
+  }
+}
+
+.job-details-offer-letter-highlight {
+  animation: job-details-offer-letter-glow 2s ease-in-out 3;
+  border-width: 2px;
+  border-style: solid;
+}

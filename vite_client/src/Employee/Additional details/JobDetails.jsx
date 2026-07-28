@@ -80,7 +80,9 @@ const JobDetails = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDocs, setLoadingDocs] = useState(true);
     const [uploadedByType, setUploadedByType] = useState({});
+    const [highlightOfferLetter, setHighlightOfferLetter] = useState(false);
     const fileRefs = useRef({});
+    const offerLetterRef = useRef(null);
 
     const loadUploadedDocuments = useCallback(async () => {
         try {
@@ -129,14 +131,29 @@ const JobDetails = () => {
         loadUploadedDocuments();
     }, [loadUploadedDocuments]);
 
-    // Clear one-time first-login redirect after the employee views Job Details
+    // Clear one-time first-login redirect; highlight Offer Letter when opened from that flow
     useEffect(() => {
+        const fromFirstLogin = sessionStorage.getItem('redirectToOfferLetterOnLogin') === '1';
+        let stopHighlightTimer;
+
+        if (fromFirstLogin) {
+            setHighlightOfferLetter(true);
+            stopHighlightTimer = window.setTimeout(() => setHighlightOfferLetter(false), 6200);
+            requestAnimationFrame(() => {
+                offerLetterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        }
+
         axios
             .post(`${BOTH_PROFILE_ENDPOINT}/ack-offer-letter-login-redirect`, {}, { withCredentials: true })
             .then(() => {
                 sessionStorage.removeItem('redirectToOfferLetterOnLogin');
             })
             .catch(() => {});
+
+        return () => {
+            if (stopHighlightTimer) window.clearTimeout(stopHighlightTimer);
+        };
     }, []);
 
     const handleAdditionalInfoChange = (type, field, value) => {
@@ -396,7 +413,15 @@ const JobDetails = () => {
                         const isRejected = uploadedDoc?.approvalStatus === 'Rejected';
                         const showUploadForm = !uploadedDoc || isRejected;
                         return (
-                            <div key={section.type} className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
+                            <div
+                                key={section.type}
+                                ref={section.type === 'OFFER_LETTER' ? offerLetterRef : undefined}
+                                className={`border p-3 md:p-4 rounded-lg bg-white shadow-sm ${
+                                    section.type === 'OFFER_LETTER' && highlightOfferLetter
+                                        ? 'job-details-offer-letter-highlight'
+                                        : ''
+                                }`}
+                            >
                                 <h3 className="font-semibold text-base md:text-lg mb-2 md:mb-3">{section.title}</h3>
                                 {loadingDocs ? (
                                     <p className="text-sm text-gray-500">Loading…</p>
