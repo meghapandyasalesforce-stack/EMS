@@ -21,9 +21,12 @@ import {
     roundLeaveDays,
     calendarMonthSortKey,
     manualAvailableFromOverride,
+    typeManualOverrideAvailable,
 } from '../helpers/leaveBalanceRulesHelper.js';
+import { consumeLeaveBuckets } from '../helpers/leaveEmployeeTakeLimitHelper.js';
 import { chooseCanonicalOpening as pickCanonicalOpening } from '../helpers/openingLeaveBalanceHelper.js';
 import { resolveLeaveBalanceOrganizationId } from '../helpers/leaveBalanceAccessHelper.js';
+import { isLeavePolicyApplicableToEmployee } from '../helpers/leavePolicyApplicabilityHelper.js';
 
 class LeaveBalanceEngine {
     /**
@@ -177,13 +180,20 @@ class LeaveBalanceEngine {
                 available: 0,
                 carriedForward: 0,
                 expired: 0,
-                pending: 0
+                pending: 0,
+                manualStock: 0,
             };
             balance.balances.push(typeBalance);
         }
 
+        if (typeBalance.manualStock == null || Number.isNaN(Number(typeBalance.manualStock))) {
+            typeBalance.manualStock = 0;
+        }
+
         if (clearManualOverride && typeBalance.manualOverride?.active) {
             typeBalance.manualOverride = { active: false };
+            typeBalance.manualStock = 0;
+            typeBalance.manualDebit = 0;
         }
 
         const carryForwardConfig = effectiveConfig.carryForward;
@@ -191,6 +201,30 @@ class LeaveBalanceEngine {
             typeBalance.manualOverride?.active &&
             typeBalance.manualOverride?.carriedForward != null &&
             !Number.isNaN(Number(typeBalance.manualOverride.carriedForward));
+
+        const existingMo = typeBalance.manualOverride;
+        const rateSchedule =
+            existingMo?.active &&
+            existingMo.excessMode === 'future_months' &&
+            existingMo.futureMonthlyRate != null &&
+            !Number.isNaN(Number(existingMo.futureMonthlyRate))
+                ? {
+                      anchorYear: existingMo.rateAnchorYear ?? year,
+                      anchorMonth: existingMo.rateAnchorMonth ?? 1,
+                      beforeRate: getRollingAccrualMonthlyRate(effectiveConfig),
+                      afterRate: Number(existingMo.futureMonthlyRate),
+                      fundedFutureMonths:
+                          existingMo.fundedFutureMonths != null &&
+                          !Number.isNaN(Number(existingMo.fundedFutureMonths))
+                              ? Math.max(0, Number(existingMo.fundedFutureMonths))
+                              : null,
+                      annualCap:
+                          existingMo.effectiveAnnual != null &&
+                          !Number.isNaN(Number(existingMo.effectiveAnnual))
+                              ? Number(existingMo.effectiveAnnual)
+                              : undefined,
+                  }
+                : null;
 
         let rollingAvailable = null;
 
@@ -201,7 +235,8 @@ class LeaveBalanceEngine {
                 organizationId,
                 asOfDate,
                 null,
-                year
+                year,
+                rateSchedule
             );
             typeBalance.accrued = computed.totalEarned;
             typeBalance.used = computed.totalUsed;
@@ -285,22 +320,88 @@ class LeaveBalanceEngine {
             typeBalance.expired = expired;
         }
 
-        // Preserve manual corrections from admin / HR / manager (per leave type — independent of pool)
+        // Manual Balance Adjustment: preserve manualStock + manualDebit; keep monthly accrual rolling.
+        // available = policy rolling + manualStock − manualDebit − pending/expired.
+        // Leave usage consumes policy bucket first, then manualStock.
+        // Reduce excess beyond available is LOP (created in adjust controller) — never cuts annual.
         if (typeBalance.manualOverride?.active) {
             const mo = typeBalance.manualOverride;
-            if (mo.accrued != null && !Number.isNaN(Number(mo.accrued))) {
-                typeBalance.accrued = Number(mo.accrued);
-            }
-            if (mo.used != null && !Number.isNaN(Number(mo.used))) {
-                typeBalance.used = Number(mo.used);
-            }
+            let stock =
+                mo.manualStock != null && !Number.isNaN(Number(mo.manualStock))
+                    ? Math.max(0, Number(mo.manualStock))
+                    : Math.max(0, Number(typeBalance.manualStock) || 0);
+            let debit =
+                mo.manualDebit != null && !Number.isNaN(Number(mo.manualDebit))
+                    ? Math.max(0, Number(mo.manualDebit))
+                    : Math.max(0, Number(typeBalance.manualDebit) || 0);
+
             if (mo.carriedForward != null && !Number.isNaN(Number(mo.carriedForward))) {
                 typeBalance.carriedForward = Number(mo.carriedForward);
             }
+
+            const liveUsed = await this.calculateUsedBalance(
+                employee._id,
+                leaveType,
+                year,
+                organizationId,
+                asOfDate
+            );
+            const usedBaseline =
+                mo.used != null && !Number.isNaN(Number(mo.used))
+                    ? Number(mo.used)
+                    : liveUsed;
+            const usedDelta = roundLeaveDays(liveUsed - usedBaseline);
+
+            // Policy-only earned (set by rolling path above — before we add manual stock to accrued)
+            const policyEarned = Number(typeBalance.accrued) || 0;
+            const carried = Number(typeBalance.carriedForward) || 0;
+            const expired = Number(typeBalance.expired) || 0;
+            const policyAvailableBefore = Math.max(
+                0,
+                roundLeaveDays(policyEarned + carried - usedBaseline - expired - debit)
+            );
+            const policyAvailableAfter =
+                rollingAvailable != null
+                    ? Math.max(0, roundLeaveDays(rollingAvailable - debit))
+                    : Math.max(
+                          0,
+                          roundLeaveDays(policyEarned + carried - liveUsed - expired - debit)
+                      );
+
+            if (usedDelta > 0) {
+                const availableBefore = roundLeaveDays(policyAvailableBefore + stock);
+                const consumed = consumeLeaveBuckets({
+                    manualStock: stock,
+                    availableBefore,
+                    days: usedDelta,
+                });
+                stock = consumed.manualStock;
+            }
+
+            typeBalance.used = liveUsed;
+            typeBalance.manualStock = stock;
+            typeBalance.manualDebit = debit;
             typeBalance.available = Math.max(
                 0,
-                roundLeaveDays((typeBalance.accrued || 0) - (typeBalance.used || 0))
+                roundLeaveDays(
+                    policyAvailableAfter +
+                        stock -
+                        (Number(typeBalance.pending) || 0) -
+                        expired
+                )
             );
+            // Accrued display includes manual stock so annual/type totals move with add/reduce
+            typeBalance.accrued = roundLeaveDays(policyEarned + stock);
+
+            typeBalance.manualOverride = {
+                ...mo,
+                active: true,
+                accrued: typeBalance.accrued,
+                used: typeBalance.used,
+                carriedForward: typeBalance.carriedForward,
+                manualStock: typeBalance.manualStock,
+                manualDebit: typeBalance.manualDebit,
+            };
             return;
         }
 
@@ -875,11 +976,17 @@ class LeaveBalanceEngine {
         organizationId,
         asOfDate,
         periodOpeningBalance = null,
-        viewYear = null
+        viewYear = null,
+        rateSchedule = null
     ) {
         const leaveType = leaveTypeConfig.type;
-        const monthlyRate = getRollingAccrualMonthlyRate(leaveTypeConfig);
-        const annualCap = getAnnualEntitlementAmount(leaveTypeConfig);
+        const policyMonthlyRate = getRollingAccrualMonthlyRate(leaveTypeConfig);
+        const policyAnnualCap = getAnnualEntitlementAmount(leaveTypeConfig);
+        const monthlyRate = policyMonthlyRate;
+        const annualCap =
+            rateSchedule?.annualCap != null && !Number.isNaN(Number(rateSchedule.annualCap))
+                ? Math.max(0, Number(rateSchedule.annualCap))
+                : policyAnnualCap;
         const joiningDate = getEffectiveJoiningDate(employee);
         const employeeId = employee._id;
 
@@ -900,14 +1007,46 @@ class LeaveBalanceEngine {
 
         const yearEarnedTracker = new Map();
 
+        const resolveMonthRate = (year, monthIndex) => {
+            if (
+                rateSchedule &&
+                Number(rateSchedule.anchorYear) === Number(year) &&
+                monthIndex > Number(rateSchedule.anchorMonth) - 1
+            ) {
+                const monthsAfterAnchor = monthIndex - (Number(rateSchedule.anchorMonth) - 1);
+                const funded =
+                    rateSchedule.fundedFutureMonths != null
+                        ? Number(rateSchedule.fundedFutureMonths)
+                        : null;
+                // Funded window: policy monthly chunks; months after that get 0
+                if (funded != null) {
+                    if (monthsAfterAnchor >= 1 && monthsAfterAnchor <= funded) {
+                        return Math.max(0, Number(rateSchedule.afterRate) || 0);
+                    }
+                    return 0;
+                }
+                if (rateSchedule.afterRate != null && !Number.isNaN(Number(rateSchedule.afterRate))) {
+                    return Math.max(0, Number(rateSchedule.afterRate));
+                }
+            }
+            if (
+                rateSchedule?.beforeRate != null &&
+                !Number.isNaN(Number(rateSchedule.beforeRate))
+            ) {
+                return Math.max(0, Number(rateSchedule.beforeRate));
+            }
+            return monthlyRate;
+        };
+
         const creditWithAnnualCap = (year, monthIndex) => {
-            if (monthlyRate <= 0) return 0;
+            const rate = resolveMonthRate(year, monthIndex);
+            if (rate <= 0) return 0;
             const y = Number(year);
             const earnedSoFar = yearEarnedTracker.get(y) || 0;
             if (annualCap > 0 && earnedSoFar >= annualCap) {
                 return 0;
             }
-            let credit = roundLeaveDays(monthlyRate);
+            let credit = roundLeaveDays(rate);
             if (annualCap > 0) {
                 credit = Math.min(credit, roundLeaveDays(annualCap - earnedSoFar));
             }
@@ -1004,6 +1143,14 @@ class LeaveBalanceEngine {
                 return entitlementAmount;
             }
             return 0;
+        }
+
+        // Yearly lump sum: full Amount once the employee is employed in the leave year.
+        if (accrual.method === 'yearly') {
+            if (entitlementAmount <= 0) return 0;
+            if (asOfDate < yearStart || joiningDate > yearEnd) return 0;
+            if (joiningDate > asOfDate) return 0;
+            return entitlementAmount;
         }
 
         if (accrual.method === 'proportional') {
@@ -1230,38 +1377,10 @@ class LeaveBalanceEngine {
     }
 
     /**
-     * Check if policy is applicable to employee
+     * Check if policy is applicable to employee (department / assignedRole / employee list).
      */
     isPolicyApplicable(policy, employee) {
-        const employeeDepartment = (employee.department || '').toLowerCase().trim();
-        const policyDepartments = (policy.applicableDepartments || [])
-            .map((d) => (d || '').toLowerCase().trim())
-            .filter(Boolean);
-        const employeeRoleId = employee.role?.toString();
-        const applicableRoleIds = (policy.applicableRoles || []).map((role) => role.toString());
-        const employeeId = employee._id?.toString();
-        const applicableEmployeeIds = (policy.applicableEmployees || []).map((emp) => emp.toString());
-
-        switch (policy.applicableTo) {
-            case 'all':
-                return true;
-            case 'department':
-                return policyDepartments.includes(employeeDepartment);
-            case 'role':
-                return Boolean(employeeRoleId) && applicableRoleIds.includes(employeeRoleId);
-            case 'employee':
-                return Boolean(employeeId) && applicableEmployeeIds.includes(employeeId);
-            case 'custom':
-                // For custom policies, apply if employee matches any configured scope.
-                // This keeps custom flexible and avoids false "no policy" results.
-                return (
-                    (Boolean(employeeId) && applicableEmployeeIds.includes(employeeId)) ||
-                    (Boolean(employeeRoleId) && applicableRoleIds.includes(employeeRoleId)) ||
-                    policyDepartments.includes(employeeDepartment)
-                );
-            default:
-                return false;
-        }
+        return isLeavePolicyApplicableToEmployee(policy, employee);
     }
 
     /**

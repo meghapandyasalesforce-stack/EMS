@@ -108,12 +108,23 @@ export const resolveRoleBuckets = async (decoded, req = {}) => {
     buckets.add(ROLE_BUCKETS.HR_EXECUTIVE);
   }
 
-  // Line manager (people manager) vs project manager are separate buckets
-  if (functionalRoles.includes('manager')) {
-    buckets.add(ROLE_BUCKETS.LINE_MANAGER);
-  }
-  if (functionalRoles.includes('project_manager')) {
+  // Line manager (people manager) vs project manager are separate buckets.
+  // Job title "Project Manager" with a stale LINE_MANAGER functional role is treated as PM.
+  const hasProjectManagerRole = functionalRoles.includes('project_manager');
+  const hasLineManagerRole = functionalRoles.includes('manager');
+  const isProjectManagerTitle = jobTitle === 'project manager';
+
+  if (hasProjectManagerRole || isProjectManagerTitle) {
     buckets.add(ROLE_BUCKETS.PROJECT_MANAGER);
+  }
+
+  if (hasLineManagerRole) {
+    // Mis-inferred: Project Manager title stored as manager-only → PM bucket only
+    if (isProjectManagerTitle && !hasProjectManagerRole) {
+      buckets.add(ROLE_BUCKETS.PROJECT_MANAGER);
+    } else {
+      buckets.add(ROLE_BUCKETS.LINE_MANAGER);
+    }
   }
 
   if (functionalRoles.includes('finance')) {

@@ -56,9 +56,13 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
                 dashboardRoute = '/dashboard-administration';
                 logger.debug('Executive Dashboard matched', { userId, position });
             }
-            // PRIORITY 3: Project Manager / Manager / Director → Manager Dashboard
+            // PRIORITY 3: Project Manager → Projects workspace
+            else if (jobTitle === 'project manager') {
+                dashboardRoute = '/dashboard-manager';
+                logger.debug('Project Manager dashboard matched', { userId, jobTitle });
+            }
+            // PRIORITY 4: Manager / Director → Manager Dashboard
             else if (
-                jobTitle === 'project manager' ||
                 position === 'manager' ||
                 position === 'director'
             ) {
@@ -109,6 +113,8 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
                         dashboardRoute = '/dashboard/hr';
                     } else if (position === 'ceo' || position === 'cto' || position === 'cfo' || position === 'vp') {
                         dashboardRoute = '/dashboard-administration';
+                    } else if (jobTitle === 'project manager') {
+                        dashboardRoute = '/dashboard-manager';
                     } else if (position === 'manager' || position === 'director') {
                         dashboardRoute = '/dashboard/manager';
                     } else if (

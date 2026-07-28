@@ -158,8 +158,17 @@ const RoleBasedDashboard = () => {
         ) {
             return '/dashboard-finance';
         }
+
+        // PRIORITY 7: Project Manager → Projects workspace
+        if (
+            userJobTitle === 'project manager' ||
+            (Array.isArray(profile?.functionalRoles) &&
+                profile.functionalRoles.some((r) => String(r).toLowerCase() === 'project_manager'))
+        ) {
+            return '/dashboard-manager';
+        }
         
-        // PRIORITY 7: Check Manager/Director Position
+        // PRIORITY 8: Check Manager/Director Position
         if (
             userPosition === 'manager' || 
             userPosition === 'director'
@@ -167,12 +176,12 @@ const RoleBasedDashboard = () => {
             return '/dashboard-manager';
         }
         
-        // PRIORITY 8: Check Admin Role
+        // PRIORITY 9: Check Admin Role
         if (fallbackRole === 'admin') {
             return '/dashboard-admin';
         }
         
-        // PRIORITY 9: Default → Employee Dashboard
+        // PRIORITY 10: Default → Employee Dashboard
         return '/dashboard-employee';
     };
     

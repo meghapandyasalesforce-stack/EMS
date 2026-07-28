@@ -57,7 +57,7 @@ export const ROUTE_PERMISSIONS = {
   executiveDashboard: [PERMISSIONS.EXECUTIVE_DASHBOARD],
   adminDashboard: [PERMISSIONS.ORG_SETTINGS_MANAGE, PERMISSIONS.EMPLOYEE_CREATE],
   hrDashboard: [PERMISSIONS.EMPLOYEE_VIEW_ALL, PERMISSIONS.LEAVE_VIEW_ALL],
-  managerDashboard: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.LEAVE_VIEW_TEAM],
+  managerDashboard: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.LEAVE_VIEW_TEAM, PERMISSIONS.PROJECT_ADMIN_VIEW],
   financeDashboard: [PERMISSIONS.PAYROLL_VIEW_ALL],
   idCards: [PERMISSIONS.ID_CARD_MANAGE],
   projects: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL],
@@ -111,6 +111,7 @@ export const roleBucketLabel = (bucket) => {
     hr_executive: 'HR Executive',
     payroll_admin: 'Payroll Admin',
     line_manager: 'Line Manager',
+    project_manager: 'Project Manager',
     executive: 'Executive',
     employee: 'Employee',
   };

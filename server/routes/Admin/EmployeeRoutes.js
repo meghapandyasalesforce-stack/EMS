@@ -14,7 +14,7 @@ import {
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import { requireOrgOwnerOnly } from '../../middlewares/requirePermission.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
-import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
+import isProjectWorkspaceAuthenticated from '../../middlewares/isProjectWorkspaceAuthenticated.js';
 import { employeeListLimiter } from '../../middlewares/endpointRateLimiters.js';
 import { writeLimiter as generalWriteLimiter } from '../../middlewares/rateLimiter.js';
 import { cacheMiddleware } from '../../helpers/cache.js';
@@ -22,11 +22,10 @@ import { cacheMiddleware } from '../../helpers/cache.js';
 const router = express.Router();
 
 // Get all employees (for dashboard) - with rate limiting and caching
-// Allow HR and Managers to access this endpoint for viewing employees
-// Managers will see employees in their department only
-// Cache for 5 minutes
+// Allow HR, managers, and project managers (org roster for project assignment)
+// Managers will see team-scoped lists; pure PMs see org-wide
 router.route('/')
-  .get(isAdminOrManagerOrHRAuthenticated, employeeListLimiter, getAllEmployees);
+  .get(isProjectWorkspaceAuthenticated, employeeListLimiter, getAllEmployees);
 
 // Get managers (employees with management positions) - no cache so dropdown always shows current list
 router.route('/managers')

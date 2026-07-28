@@ -18,6 +18,7 @@ import { reverseGeocode, isGeocodingAvailable } from "../../helpers/geocodingSer
 import {
   getExpectedWorkingHoursFromRule,
   getEffectiveOfficeEndForEarlyDeparture,
+  getEffectiveOfficeStartForLate,
 } from "../../helpers/attendanceSecurityHelper.js";
 import {
   getEffectiveTimezone,
@@ -69,6 +70,19 @@ const getClientIP = (req) => {
          req.socket?.remoteAddress ||
          'unknown';
 };
+
+/** Restore status after break: keep half-day when day-based late rule applies. */
+async function resolvePostBreakAttendanceStatus(organizationId, attendance) {
+  if (!attendance?.isLateArrival || !organizationId) return 'present';
+  const org = await Organization.findById(organizationId)
+    .select('settings.payrollSettings')
+    .lean();
+  const ps = org?.settings?.payrollSettings || {};
+  if (ps.calculationMode === 'day_based' && ps.markHalfDayIfLate) {
+    return 'half-day';
+  }
+  return 'present';
+}
 
 const DEFAULT_WORKING_DAYS = {
   monday: true,
@@ -442,17 +456,21 @@ export const clockIn = async (req, res) => {
       }
     }
 
-    // Determine late arrival: only flag when penalty rules are active
+    // Determine late arrival: penalty rules and/or day-based "half day if late"
     let isLateArrival = false;
-    if (activeRule?.enablePenaltyRules) {
-      const graceMinutes = Number(
-        (activeRule.penaltyRules?.lateArrival?.enabled && activeRule.penaltyRules?.lateArrival?.gracePeriod) ||
-        activeRule.checkInOutTimes?.checkInGracePeriod ||
-        0
-      );
-      const effectiveStartTime = new Date(officeStartTime.getTime() + graceMinutes * 60 * 1000);
+    const orgPayrollSettings = await Organization.findById(organizationId)
+      .select('settings.payrollSettings')
+      .lean();
+    const payrollSettings = orgPayrollSettings?.settings?.payrollSettings || {};
+    const markHalfDayIfLate =
+      payrollSettings.calculationMode === 'day_based' && !!payrollSettings.markHalfDayIfLate;
+
+    if (activeRule?.enablePenaltyRules || markHalfDayIfLate) {
+      const effectiveStartTime = getEffectiveOfficeStartForLate(activeRule, startOfDay, orgTimezone);
       isLateArrival = clockInTime > effectiveStartTime;
     }
+
+    const initialStatus = markHalfDayIfLate && isLateArrival ? 'half-day' : 'present';
 
     // Get real IP address
     const clientIP = getClientIP(req);
@@ -686,7 +704,7 @@ export const clockIn = async (req, res) => {
       timezoneUsed: orgTimezone,
       clockIn: clockInTime,
       breaks: [],
-      status: "present",
+      status: initialStatus,
       isLateArrival,
       isOnTime: !isLateArrival,
       // Normalize workLocation: accept 'home' as 'work_from_home' for backward compatibility
@@ -744,6 +762,8 @@ export const clockIn = async (req, res) => {
       success: true,
       message: checkInWindowWarning 
         ? `Checked in successfully. ${checkInWindowWarning}` 
+        : isLateArrival && markHalfDayIfLate
+          ? 'Checked in late — marked as half day'
         : isLateArrival 
           ? 'Checked in (late arrival noted)' 
           : 'Checked in successfully',
@@ -859,7 +879,7 @@ export const breakIn = async (req, res) => {
     if (cleanedBreaks) {
       const remainingActiveBreaks = attendance.breaks.filter(b => b.breakIn && !b.breakOut);
       if (remainingActiveBreaks.length === 0) {
-        attendance.status = "present";
+        attendance.status = await resolvePostBreakAttendanceStatus(organizationId, attendance);
       }
       await attendance.save();
     }
@@ -938,10 +958,10 @@ export const breakOut = async (req, res) => {
     const breakDuration = new Date(currentBreak.breakOut) - new Date(currentBreak.breakIn);
     attendance.totalBreakDuration = (attendance.totalBreakDuration || 0) + breakDuration;
     
-    // Only set status back to "present" if there are no other active breaks
+    // Only set status back when there are no other active breaks
     const hasActiveBreak = attendance.breaks.some(b => b.breakIn && !b.breakOut);
     if (!hasActiveBreak) {
-      attendance.status = "present";
+      attendance.status = await resolvePostBreakAttendanceStatus(organizationId, attendance);
     }
 
     await attendance.save();
@@ -1351,7 +1371,17 @@ export const clockOut = async (req, res) => {
     }
 
     const halfDayThreshold = expectedHours / 2;
+    const orgPayrollDoc = await Organization.findById(organizationId)
+      .select('settings.payrollSettings')
+      .lean();
+    const payrollSettingsOut = orgPayrollDoc?.settings?.payrollSettings || {};
+    const markHalfDayIfLateOut =
+      payrollSettingsOut.calculationMode === 'day_based' && !!payrollSettingsOut.markHalfDayIfLate;
+
     if (attendance.effectiveHours < halfDayThreshold) {
+      attendance.status = "half-day";
+    } else if (markHalfDayIfLateOut && attendance.isLateArrival) {
+      // Preserve late → half-day even when worked hours would otherwise be a full day
       attendance.status = "half-day";
     }
 
@@ -1966,13 +1996,13 @@ export const forceEndBreak = async (req, res) => {
       return res.status(400).json({ message: "No active breaks to end" });
     }
 
-    attendance.status = "present";
+    attendance.status = await resolvePostBreakAttendanceStatus(organizationId, attendance);
     await attendance.save();
 
-    res.json({ 
+    res.json({
       success: true,
       message: "All active breaks have been ended",
-      attendance 
+      attendance
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

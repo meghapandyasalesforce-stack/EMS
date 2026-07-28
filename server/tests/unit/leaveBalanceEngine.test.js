@@ -81,4 +81,80 @@ describe('leaveBalanceEngine', () => {
             expect(total).toBe(6);
         });
     });
+
+    describe('calculateAccruedBalance lump-sum methods', () => {
+        it('grants full Amount on/after join anniversary', async () => {
+            const leaveTypeConfig = {
+                type: 'sick',
+                enabled: true,
+                accrual: {
+                    method: 'on_anniversary',
+                    frequency: 'yearly',
+                    amount: 0,
+                    maxAccrual: 5,
+                },
+            };
+            const employee = { joiningDate: new Date(2024, 2, 15) }; // 15 Mar
+            const before = await leaveBalanceEngine.calculateAccruedBalance(
+                leaveTypeConfig,
+                employee,
+                2026,
+                null,
+                new Date(2026, 2, 14)
+            );
+            const after = await leaveBalanceEngine.calculateAccruedBalance(
+                leaveTypeConfig,
+                employee,
+                2026,
+                null,
+                new Date(2026, 2, 15)
+            );
+            expect(before).toBe(0);
+            expect(after).toBe(5);
+        });
+
+        it('grants full Amount for yearly method once employed in the year', async () => {
+            const leaveTypeConfig = {
+                type: 'vacation',
+                enabled: true,
+                accrual: {
+                    method: 'yearly',
+                    frequency: 'yearly',
+                    amount: 0,
+                    maxAccrual: 6,
+                },
+            };
+            const employee = { joiningDate: new Date(2025, 5, 1) };
+            const total = await leaveBalanceEngine.calculateAccruedBalance(
+                leaveTypeConfig,
+                employee,
+                2026,
+                null,
+                new Date(2026, 0, 15)
+            );
+            expect(total).toBe(6);
+        });
+
+        it('does not grant yearly Amount before the employee joins', async () => {
+            const leaveTypeConfig = {
+                type: 'vacation',
+                enabled: true,
+                accrual: {
+                    method: 'yearly',
+                    frequency: 'yearly',
+                    amount: 0,
+                    maxAccrual: 6,
+                },
+            };
+            const employee = { joiningDate: new Date(2026, 5, 1) };
+            const total = await leaveBalanceEngine.calculateAccruedBalance(
+                leaveTypeConfig,
+                employee,
+                2026,
+                null,
+                new Date(2026, 2, 1)
+            );
+            expect(total).toBe(0);
+        });
+    });
 });

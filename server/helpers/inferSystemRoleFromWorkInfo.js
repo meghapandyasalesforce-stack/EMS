@@ -51,7 +51,7 @@ export const inferSystemRoleFromWorkInfo = ({ department, jobTitle, position } =
 
   if (title === 'project manager') {
     return {
-      systemRoleId: SYSTEM_ROLE_IDS.LINE_MANAGER,
+      systemRoleId: SYSTEM_ROLE_IDS.PROJECT_MANAGER,
       reason: 'Job title: Project Manager',
     };
   }

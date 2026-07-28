@@ -3,7 +3,10 @@
  * - Direct assignee on item → can edit that item
  * - Assignee on any ancestor task → can edit that item and all descendants
  *   (parent task owner can edit all subtasks under that task)
+ * Supports multi-assignee (assignees[]) and legacy single assignee.
  */
+
+import { getWorkItemAssigneeIds } from './workItemAssigneeHelper.js';
 
 export function buildAssigneeAncestorMap(flatItems) {
     const byId = new Map();
@@ -23,15 +26,17 @@ export function buildAssigneeAncestorMap(flatItems) {
             chain.push(parent);
             current = parent;
         }
-        ancestorAssignees.set(
-            id,
-            chain
-                .map((p) => {
-                    if (!p.assignee) return null;
-                    return p.assignee._id?.toString() || p.assignee.toString();
-                })
-                .filter(Boolean)
-        );
+        const ancestorIds = [];
+        const seen = new Set();
+        for (const p of chain) {
+            for (const aid of getWorkItemAssigneeIds(p)) {
+                if (!seen.has(aid)) {
+                    seen.add(aid);
+                    ancestorIds.push(aid);
+                }
+            }
+        }
+        ancestorAssignees.set(id, ancestorIds);
     }
 
     return { byId, ancestorAssignees };
@@ -45,10 +50,8 @@ export function buildAssigneeAncestorMap(flatItems) {
 export function canEmployeeEditWorkItem(item, employeeId, ancestorAssignees) {
     if (!employeeId || !item) return false;
     const eid = employeeId.toString();
-    const assigneeId = item.assignee
-        ? item.assignee._id?.toString() || item.assignee.toString()
-        : null;
-    if (assigneeId && assigneeId === eid) return true;
+    const assigneeIds = getWorkItemAssigneeIds(item);
+    if (assigneeIds.includes(eid)) return true;
 
     const ancestors = ancestorAssignees?.get(item._id.toString()) || [];
     return ancestors.some((aid) => aid === eid);

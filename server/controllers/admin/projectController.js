@@ -8,6 +8,10 @@ import logger from "../../helpers/logger.js";
 import { getOrganizationId } from "../../helpers/organizationHelper.js";
 import { getManagerEmployeeIds } from "../../helpers/managerHelper.js";
 import { shouldApplyLineManagerScope } from "../../helpers/projectManagerHelper.js";
+import {
+    canPostProjectUpdates,
+    getRequesterEmployeeId,
+} from "../../helpers/projectMembershipHelper.js";
 
 // Helper function to get employees with Manager role
 const getManagersOnly = async () => {
@@ -506,14 +510,14 @@ export const getProjectById = async (req, res) => {
     }
 };
 
-// Update project status (only by project leader)
+// Update project status (project leader or project manager)
 export const updateProjectStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        const userId = req.user?._id || req.employee?._id;
+        const employeeId = getRequesterEmployeeId(req);
         
-        if (!userId) {
+        if (!employeeId && !req.authContext?.isOrgOwner && !req.authContext?.isProjectManager) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
@@ -529,11 +533,9 @@ export const updateProjectStatus = async (req, res) => {
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        // Check if user is the project leader
-        const isProjectLeader = project.projectLeader?.toString() === userId.toString();
-        if (!isProjectLeader) {
+        if (!canPostProjectUpdates(project, req)) {
             return res.status(403).json({ 
-                error: 'Only the project leader can update the project status' 
+                error: 'Only the project leader or a project manager can update the project status' 
             });
         }
 
@@ -547,10 +549,10 @@ export const updateProjectStatus = async (req, res) => {
             .populate('projectLeader', 'name email position department employeeId')
             .populate('projectMembers', 'name email position department employeeId');
 
-        logger.info('Project status updated by leader', {
+        logger.info('Project status updated', {
             projectId: id,
             newStatus: status,
-            leaderId: userId
+            actorEmployeeId: employeeId
         });
 
         res.status(200).json({
@@ -567,16 +569,18 @@ export const updateProjectStatus = async (req, res) => {
     }
 };
 
-// Create a daily project update (only by project leader)
+// Create a daily project update (project leader or project manager)
 export const createProjectUpdate = async (req, res) => {
     try {
         const { id } = req.params;
         const { update, updateDate, status, progress, blockers, nextSteps } = req.body;
-        const userId = req.user?._id || req.employee?._id;
+        const employeeId = getRequesterEmployeeId(req);
         const organizationId = getOrganizationId(req);
         
-        if (!userId) {
-            return res.status(401).json({ error: 'Unauthorized' });
+        if (!employeeId) {
+            return res.status(401).json({
+                error: 'Employee profile required to post daily updates'
+            });
         }
 
         if (!update || !update.trim()) {
@@ -589,11 +593,9 @@ export const createProjectUpdate = async (req, res) => {
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        // Check if user is the project leader
-        const isProjectLeader = project.projectLeader?.toString() === userId.toString();
-        if (!isProjectLeader) {
+        if (!canPostProjectUpdates(project, req)) {
             return res.status(403).json({ 
-                error: 'Only the project leader can post daily updates' 
+                error: 'Only the project leader or a project manager can post daily updates' 
             });
         }
 
@@ -610,11 +612,11 @@ export const createProjectUpdate = async (req, res) => {
             }
         }
 
-        // Create project update
+        // Create project update (postedBy must be Employee id)
         const projectUpdate = new ProjectUpdate({
             organizationId,
             projectId: id,
-            postedBy: userId,
+            postedBy: employeeId,
             update: update.trim(),
             updateDate: updateDate ? new Date(updateDate) : new Date(),
             status: status || project.status,
@@ -633,7 +635,7 @@ export const createProjectUpdate = async (req, res) => {
         logger.info('Project daily update created', {
             projectId: id,
             updateId: projectUpdate._id,
-            leaderId: userId
+            postedBy: employeeId
         });
 
         res.status(201).json({

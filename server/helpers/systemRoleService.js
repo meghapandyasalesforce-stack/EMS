@@ -73,7 +73,10 @@ export const resolveSystemRoleFromRecords = (employee, user = null) => {
   ) {
     return SYSTEM_ROLE_IDS.EXECUTIVE;
   }
-  if (functional.has('manager') || functional.has('project_manager')) {
+  if (functional.has('project_manager')) {
+    return SYSTEM_ROLE_IDS.PROJECT_MANAGER;
+  }
+  if (functional.has('manager')) {
     return SYSTEM_ROLE_IDS.LINE_MANAGER;
   }
 
@@ -162,6 +165,11 @@ export const applyJobProfileForSystemRole = (employee, systemRoleId) => {
       employee.position = 'Manager';
     }
   } else if (systemRoleId === SYSTEM_ROLE_IDS.LINE_MANAGER) {
+    if (!isLeadershipPos) {
+      employee.position = 'Manager';
+    }
+  } else if (systemRoleId === SYSTEM_ROLE_IDS.PROJECT_MANAGER) {
+    employee.jobTitle = 'Project Manager';
     if (!isLeadershipPos) {
       employee.position = 'Manager';
     }

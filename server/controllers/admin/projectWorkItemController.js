@@ -3,25 +3,41 @@ import Project from "../../models/project.model.js";
 import ProjectWorkItem from "../../models/projectWorkItem.model.js";
 import Employee from "../../models/employee.model.js";
 import { addOrganizationFilter, getOrganizationId } from "../../helpers/organizationHelper.js";
+import { handleWorkItemAssigneeChange } from "../../helpers/workItemAssignmentHelper.js";
+import {
+    applyAssigneesToWorkItem,
+    getWorkItemAssigneeIds,
+    normalizeAssigneeInput,
+} from "../../helpers/workItemAssigneeHelper.js";
+import { applyDueDateChange } from "../../helpers/workItemDueDateHelper.js";
 import logger from "../../helpers/logger.js";
 
 const MAX_ITEMS_PER_REQUEST = 80;
 const MAX_TITLE_LEN = 500;
+const WORK_ITEM_POPULATE = [
+    { path: "assignee", select: "name lastName email employeeId" },
+    { path: "assignees", select: "name lastName email employeeId" },
+    { path: "comments.author", select: "name lastName email employeeId" },
+    { path: "dueDateHistory.changedBy", select: "name lastName email employeeId" },
+];
 
 async function findProjectInOrg(req, projectId) {
     const query = addOrganizationFilter(req, { _id: projectId });
     return Project.findOne(query).select("_id organizationId").lean();
 }
 
-async function validateAssignee(req, assigneeId) {
-    if (!assigneeId) return { ok: true };
+async function validateAssignees(req, assigneeIds) {
+    if (!assigneeIds?.length) return { ok: true };
     const organizationId = getOrganizationId(req);
-    const emp = await Employee.findOne({
-        _id: assigneeId,
+    const emps = await Employee.find({
+        _id: { $in: assigneeIds },
         ...(organizationId ? { organizationId } : {}),
         $or: [{ status: "active" }, { active: true }]
     }).select("_id").lean();
-    return emp ? { ok: true } : { ok: false, error: "Assignee not found or inactive in this organization" };
+    if (emps.length !== assigneeIds.length) {
+        return { ok: false, error: "One or more assignees not found or inactive in this organization" };
+    }
+    return { ok: true };
 }
 
 function countWorkItemNodes(items, depth = 0) {
@@ -46,7 +62,11 @@ async function insertWorkItemTree(req, projectId, organizationId, items, parentI
         const title = typeof raw.title === "string" ? raw.title.trim() : "";
         if (!title) continue;
 
-        const assigneeCheck = await validateAssignee(req, raw.assignee);
+        const assigneeIds = normalizeAssigneeInput({
+            assignees: raw.assignees,
+            assignee: raw.assignee,
+        });
+        const assigneeCheck = await validateAssignees(req, assigneeIds);
         if (!assigneeCheck.ok) {
             throw new Error(assigneeCheck.error);
         }
@@ -65,19 +85,30 @@ async function insertWorkItemTree(req, projectId, organizationId, items, parentI
             resolvedParent = parentDoc._id;
         }
 
-        const doc = await ProjectWorkItem.create({
+        const doc = new ProjectWorkItem({
             organizationId,
             projectId,
             parentTask: resolvedParent,
             title: title.slice(0, MAX_TITLE_LEN),
             description: typeof raw.description === "string" ? raw.description.trim().slice(0, 2000) : undefined,
-            assignee: raw.assignee || undefined,
             dueDate: raw.dueDate ? new Date(raw.dueDate) : undefined,
             priority: ["low", "medium", "high", "critical"].includes(raw.priority) ? raw.priority : "medium",
             status: ["todo", "in-progress", "completed", "on-hold"].includes(raw.status) ? raw.status : "todo",
             sortOrder: sortBase + idx
         });
+        applyAssigneesToWorkItem(doc, assigneeIds);
+        await doc.save();
         idx += 1;
+
+        if (assigneeIds.length) {
+            await handleWorkItemAssigneeChange({
+                workItem: doc,
+                previousAssigneeIds: [],
+                organizationId,
+                notify: true,
+                addAsMember: raw.addAsMember !== false,
+            });
+        }
 
         if (raw.subtasks?.length) {
             await insertWorkItemTree(req, projectId, organizationId, raw.subtasks, doc._id, 0);
@@ -129,7 +160,7 @@ export const getProjectWorkItems = async (req, res) => {
         const filter = addOrganizationFilter(req, { projectId });
         const flat = await ProjectWorkItem.find(filter)
             .sort({ sortOrder: 1, createdAt: 1 })
-            .populate("assignee", "name lastName email employeeId")
+            .populate(WORK_ITEM_POPULATE)
             .lean();
 
         const tree = buildTree(flat);
@@ -165,9 +196,9 @@ export const postProjectWorkItems = async (req, res) => {
         const organizationId = project.organizationId || getOrganizationId(req);
         let payload = req.body.items || req.body.workItems;
         if (!payload) {
-            const { title, description, assignee, dueDate, priority, status, parentTask, subtasks } = req.body;
+            const { title, description, assignee, assignees, dueDate, priority, status, parentTask, subtasks } = req.body;
             if (title) {
-                payload = [{ title, description, assignee, dueDate, priority, status, parentTask, subtasks }];
+                payload = [{ title, description, assignee, assignees, dueDate, priority, status, parentTask, subtasks }];
             }
         }
         if (!payload?.length) {
@@ -179,7 +210,7 @@ export const postProjectWorkItems = async (req, res) => {
         const filter = addOrganizationFilter(req, { projectId });
         const flat = await ProjectWorkItem.find(filter)
             .sort({ sortOrder: 1, createdAt: 1 })
-            .populate("assignee", "name lastName email employeeId")
+            .populate(WORK_ITEM_POPULATE)
             .lean();
         const tree = buildTree(flat);
 
@@ -224,11 +255,16 @@ export const updateProjectWorkItem = async (req, res) => {
             title,
             description,
             assignee,
+            assignees,
             dueDate,
+            dueDateChangeReason,
             priority,
             status,
             sortOrder
         } = req.body;
+
+        const previousAssigneeIds = getWorkItemAssigneeIds(item);
+        let assigneeChanged = false;
 
         if (title !== undefined) {
             const t = String(title).trim();
@@ -238,19 +274,27 @@ export const updateProjectWorkItem = async (req, res) => {
         if (description !== undefined) {
             item.description = description ? String(description).trim().slice(0, 2000) : undefined;
         }
-        if (assignee !== undefined) {
-            if (assignee === null || assignee === "") {
-                item.assignee = undefined;
-            } else {
-                const assigneeCheck = await validateAssignee(req, assignee);
-                if (!assigneeCheck.ok) {
-                    return res.status(400).json({ success: false, error: assigneeCheck.error });
-                }
-                item.assignee = assignee;
+        if (assignees !== undefined || assignee !== undefined) {
+            const nextIds = normalizeAssigneeInput({ assignees, assignee });
+            const assigneeCheck = await validateAssignees(req, nextIds);
+            if (!assigneeCheck.ok) {
+                return res.status(400).json({ success: false, error: assigneeCheck.error });
             }
+            const prevKey = previousAssigneeIds.slice().sort().join(",");
+            const nextKey = nextIds.slice().sort().join(",");
+            assigneeChanged = prevKey !== nextKey;
+            applyAssigneesToWorkItem(item, nextIds);
         }
         if (dueDate !== undefined) {
-            item.dueDate = dueDate ? new Date(dueDate) : undefined;
+            const changedBy = req.employee?._id;
+            const dueResult = applyDueDateChange(item, {
+                dueDate,
+                reason: dueDateChangeReason,
+                changedBy,
+            });
+            if (!dueResult.ok) {
+                return res.status(400).json({ success: false, error: dueResult.error });
+            }
         }
         if (priority !== undefined && ["low", "medium", "high", "critical"].includes(priority)) {
             item.priority = priority;
@@ -264,14 +308,30 @@ export const updateProjectWorkItem = async (req, res) => {
 
         await item.save();
 
+        let assignmentMeta = { notified: false, memberAdded: false, notifiedCount: 0, membersAdded: 0 };
+        if (assigneeChanged && getWorkItemAssigneeIds(item).length) {
+            assignmentMeta = await handleWorkItemAssigneeChange({
+                workItem: item,
+                previousAssigneeIds,
+                organizationId: getOrganizationId(req) || project.organizationId,
+                notify: true,
+                addAsMember: req.body.addAsMember !== false,
+            });
+        }
+
         const populated = await ProjectWorkItem.findById(item._id)
-            .populate("assignee", "name lastName email employeeId")
+            .populate(WORK_ITEM_POPULATE)
             .lean();
 
         res.json({
             success: true,
-            message: "Work item updated",
-            workItem: populated
+            message: assignmentMeta.membersAdded
+                ? "Work item updated — assignees added to project and notified"
+                : assignmentMeta.notified
+                  ? "Work item updated — new assignees notified"
+                  : "Work item updated",
+            workItem: populated,
+            assignment: assignmentMeta,
         });
     } catch (error) {
         logger.error("updateProjectWorkItem", { error: error.message, stack: error.stack });

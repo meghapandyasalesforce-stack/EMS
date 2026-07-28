@@ -1,5 +1,6 @@
 import LeavePolicy from '../../models/leavePolicy.model.js';
 import LeaveBalance from '../../models/leaveBalance.model.js';
+import Leave from '../../models/leave.model.js';
 import Employee from '../../models/employee.model.js';
 import leaveBalanceEngine from '../../services/leaveBalanceEngine.js';
 import logger from '../../helpers/logger.js';
@@ -10,15 +11,96 @@ import {
     normalizePolicyLeaveTypes,
     validateLeavePolicyAccrual,
 } from '../../helpers/leavePolicyAccrualHelper.js';
+import {
+    validateLeavePolicyApplicability,
+    normalizeLeavePolicyApplicability,
+} from '../../helpers/leavePolicyApplicabilityHelper.js';
 import { resolveEmployeeLeaveBalanceAccess } from '../../helpers/leaveBalanceAccessHelper.js';
 import { writeLeaveBalanceAuditEntry, buildEmployeeLeaveHistory } from '../../helpers/leaveBalanceHistoryHelper.js';
 import { getEmployeeLeaveYearBounds, isLeaveYearAllowed } from '../../helpers/leaveYearBoundsHelper.js';
-import { roundLeaveDays } from '../../helpers/leaveBalanceRulesHelper.js';
+import { roundLeaveDays, typeManualOverrideAvailable } from '../../helpers/leaveBalanceRulesHelper.js';
+import {
+    manualStockAfterBalanceAdjust,
+    splitBalanceReduceAmount,
+    buildLopDaySlots,
+    computeFutureMonthsResplit,
+} from '../../helpers/leaveEmployeeTakeLimitHelper.js';
+import {
+    getAnnualEntitlementAmount,
+    getRollingAccrualMonthlyRate,
+} from '../../helpers/leavePolicyAccrualHelper.js';
 import {
     isOpeningRelocate,
     resolveManualCorrectionSaveKind,
 } from '../../helpers/openingLeaveBalanceHelper.js';
 
+function parseLocalDateOnly(value) {
+    if (!value) return null;
+    const raw = String(value).trim();
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+        const y = Number(m[1]);
+        const mo = Number(m[2]);
+        const d = Number(m[3]);
+        const dt = new Date(y, mo - 1, d, 12, 0, 0, 0);
+        return Number.isNaN(dt.getTime()) ? null : dt;
+    }
+    const dt = new Date(raw);
+    if (Number.isNaN(dt.getTime())) return null;
+    return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 12, 0, 0, 0);
+}
+
+function validateAndNormalizeLopEntries(lopEntries, expectedSlots, targetYear, targetMonth) {
+    const entries = Array.isArray(lopEntries) ? lopEntries : [];
+    if (expectedSlots.length === 0) {
+        if (entries.length > 0) {
+            throw new Error('LOP dates are not required when reduce does not exceed available');
+        }
+        return [];
+    }
+    if (entries.length !== expectedSlots.length) {
+        throw new Error(
+            `Provide ${expectedSlots.length} LOP date${expectedSlots.length === 1 ? '' : 's'} for the excess reduce`
+        );
+    }
+
+    const normalized = [];
+    const seen = new Set();
+    for (let i = 0; i < expectedSlots.length; i += 1) {
+        const slot = expectedSlots[i];
+        const entry = entries[i] || {};
+        const date = parseLocalDateOnly(entry.date);
+        if (!date) {
+            throw new Error(`LOP date ${i + 1} is required`);
+        }
+        if (date.getFullYear() !== targetYear || date.getMonth() + 1 !== targetMonth) {
+            throw new Error(
+                `LOP date ${i + 1} must fall in ${targetYear}-${String(targetMonth).padStart(2, '0')}`
+            );
+        }
+        const isHalfDay = Boolean(slot.isHalfDay);
+        let halfDayType = null;
+        if (isHalfDay) {
+            const t = String(entry.halfDayType || '').toLowerCase();
+            if (t !== 'first_half' && t !== 'second_half') {
+                throw new Error(`LOP date ${i + 1}: choose first half or second half`);
+            }
+            halfDayType = t;
+        }
+        const key = `${date.toISOString().slice(0, 10)}:${isHalfDay ? halfDayType : 'full'}`;
+        if (seen.has(key)) {
+            throw new Error('Duplicate LOP date/shift selected');
+        }
+        seen.add(key);
+        normalized.push({
+            date,
+            days: slot.days,
+            isHalfDay,
+            halfDayType,
+        });
+    }
+    return normalized;
+}
 async function recalculateOrgLeaveBalances(organizationId) {
     if (!organizationId) return;
     try {
@@ -53,6 +135,17 @@ export const createLeavePolicy = async (req, res) => {
 
         if (policyData.leaveTypes) {
             policyData.leaveTypes = normalizePolicyLeaveTypes(policyData.leaveTypes);
+        }
+
+        Object.assign(policyData, normalizeLeavePolicyApplicability(policyData));
+
+        const applicabilityErrors = validateLeavePolicyApplicability(policyData);
+        if (applicabilityErrors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: applicabilityErrors[0],
+                errors: applicabilityErrors,
+            });
         }
 
         const validationErrors = validateLeavePolicyAccrual(policyData);
@@ -101,6 +194,7 @@ export const getAllLeavePolicies = async (req, res) => {
 
         const policies = await LeavePolicy.find(query)
             .populate('applicableRoles', 'name')
+            .populate('applicableEmployees', 'name email employeeId department')
             .populate('createdBy', 'name email')
             .sort({ createdAt: -1 });
 
@@ -178,6 +272,34 @@ export const updateLeavePolicy = async (req, res) => {
         const updateBody = { ...req.body };
         if (updateBody.leaveTypes) {
             updateBody.leaveTypes = normalizePolicyLeaveTypes(updateBody.leaveTypes);
+        }
+
+        // Only normalize/validate applicability when the client sends scope fields
+        // (toggle-active updates send { isActive } only).
+        const touchesApplicability =
+            updateBody.applicableTo != null ||
+            updateBody.applicableDepartments != null ||
+            updateBody.applicableRoles != null ||
+            updateBody.applicableEmployees != null;
+
+        if (touchesApplicability) {
+            const applicabilitySource = {
+                applicableTo: updateBody.applicableTo ?? policy.applicableTo,
+                applicableDepartments:
+                    updateBody.applicableDepartments ?? policy.applicableDepartments,
+                applicableRoles: updateBody.applicableRoles ?? policy.applicableRoles,
+                applicableEmployees:
+                    updateBody.applicableEmployees ?? policy.applicableEmployees,
+            };
+            Object.assign(updateBody, normalizeLeavePolicyApplicability(applicabilitySource));
+            const applicabilityErrors = validateLeavePolicyApplicability(updateBody);
+            if (applicabilityErrors.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: applicabilityErrors[0],
+                    errors: applicabilityErrors,
+                });
+            }
         }
 
         const mergedForValidation = {
@@ -333,7 +455,20 @@ export const getEmployeeLeaveBalance = async (req, res) => {
 export const adjustEmployeeLeaveBalance = async (req, res) => {
     try {
         const { employeeId } = req.params;
-        const { year, leaveType, accrued, used, carriedForward, reason, remarks, month } = req.body;
+        const {
+            year,
+            leaveType,
+            accrued,
+            used,
+            carriedForward,
+            reason,
+            remarks,
+            month,
+            adjustAmount,
+            adjustMode,
+            lopEntries,
+            excessMode,
+        } = req.body;
 
         const access = await resolveEmployeeLeaveBalanceAccess(req, employeeId, { forAdjust: true });
         if (!access.ok) {
@@ -679,30 +814,193 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                     used: typeBalance.used,
                     carriedForward: typeBalance.carriedForward,
                     available: typeBalance.available,
+                    manualStock: typeBalance.manualStock || 0,
+                    manualDebit: typeBalance.manualDebit || 0,
                 };
 
-                // Overwrite this leave type only — Available = max(0, Earned − Used).
-                // Carry forward is stored as the auto value for display; it is not added again.
-                if (nextAccrued !== undefined) typeBalance.accrued = nextAccrued;
-                if (nextUsed !== undefined) typeBalance.used = nextUsed;
-                typeBalance.available = Math.max(
-                    0,
-                    roundLeaveDays((typeBalance.accrued || 0) - (typeBalance.used || 0))
-                );
-                typeBalance.carriedForward =
-                    nextCarried !== undefined
-                        ? Math.max(0, roundLeaveDays(nextCarried))
-                        : typeBalance.available;
+                const mode = String(adjustMode || '').toLowerCase();
+                const explicitAmount = Number(adjustAmount);
+                const isReduce =
+                    mode === 'reduce' && Number.isFinite(explicitAmount) && explicitAmount > 0;
 
-                typeBalance.manualOverride = {
-                    active: true,
-                    accrued: typeBalance.accrued,
-                    used: typeBalance.used,
-                    carriedForward: typeBalance.carriedForward,
-                    reason: reason ? String(reason).trim().slice(0, 500) : '',
-                    adjustedBy: req.employee?._id || req.user?._id,
-                    adjustedAt: new Date(),
-                };
+                let createdLopLeaves = [];
+                let reduceSplit = null;
+
+                if (isReduce) {
+                    // Current-month: policy portion first, then manualStock.
+                    // Excess: excessMode `lop` (default) or `future_months` (re-split remaining year).
+                    reduceSplit = splitBalanceReduceAmount({
+                        available: prevSnapshot.available,
+                        manualStock: prevSnapshot.manualStock,
+                        reduceAmount: explicitAmount,
+                    });
+
+                    const resolvedExcessMode =
+                        String(excessMode || 'lop').toLowerCase() === 'future_months'
+                            ? 'future_months'
+                            : 'lop';
+
+                    let futureResplit = null;
+                    if (reduceSplit.excessDays > 0 && resolvedExcessMode === 'future_months') {
+                        const policyType = (balance.policy?.leaveTypes || []).find(
+                            (lt) => lt?.type === normalizedType
+                        );
+                        futureResplit = computeFutureMonthsResplit({
+                            policyAnnual: getAnnualEntitlementAmount(policyType),
+                            policyMonthly: getRollingAccrualMonthlyRate(policyType),
+                            adjustMonth: targetMonth,
+                            excessDays: reduceSplit.excessDays,
+                        });
+                        if (!futureResplit.ok) {
+                            throw new Error(futureResplit.message);
+                        }
+                    }
+
+                    const expectedSlots =
+                        reduceSplit.excessDays > 0 && resolvedExcessMode === 'lop'
+                            ? buildLopDaySlots(reduceSplit.excessDays)
+                            : [];
+                    const normalizedLop = validateAndNormalizeLopEntries(
+                        lopEntries,
+                        expectedSlots,
+                        targetYear,
+                        targetMonth
+                    );
+
+                    typeBalance.manualStock = reduceSplit.manualStock;
+                    typeBalance.manualDebit = roundLeaveDays(
+                        (Number(prevSnapshot.manualDebit) || 0) + reduceSplit.fromPolicy
+                    );
+                    typeBalance.available = reduceSplit.availableAfter;
+                    if (nextUsed !== undefined) typeBalance.used = nextUsed;
+                    typeBalance.accrued = roundLeaveDays(
+                        reduceSplit.availableAfter + (Number(typeBalance.used) || 0)
+                    );
+                    typeBalance.carriedForward = Number(prevSnapshot.carriedForward) || 0;
+
+                    const prevMo = typeBalance.manualOverride || {};
+                    typeBalance.manualOverride = {
+                        active: true,
+                        accrued: typeBalance.accrued,
+                        used: typeBalance.used,
+                        carriedForward: typeBalance.carriedForward,
+                        manualStock: typeBalance.manualStock,
+                        manualDebit: typeBalance.manualDebit,
+                        reason: reason ? String(reason).trim().slice(0, 500) : '',
+                        adjustedBy: req.employee?._id || req.user?._id,
+                        adjustedAt: new Date(),
+                    };
+
+                    if (reduceSplit.excessDays > 0 && resolvedExcessMode === 'future_months' && futureResplit) {
+                        typeBalance.manualOverride.excessMode = 'future_months';
+                        typeBalance.manualOverride.effectiveAnnual = futureResplit.effectiveAnnual;
+                        typeBalance.manualOverride.futureMonthlyRate = futureResplit.futureMonthlyRate;
+                        typeBalance.manualOverride.fundedFutureMonths = futureResplit.fundedFutureMonths;
+                        typeBalance.manualOverride.rateAnchorYear = targetYear;
+                        typeBalance.manualOverride.rateAnchorMonth = targetMonth;
+                    } else if (reduceSplit.excessDays > 0 && resolvedExcessMode === 'lop') {
+                        typeBalance.manualOverride.excessMode = 'lop';
+                        // LOP path clears any prior future-months re-budget
+                    } else if (prevMo.excessMode === 'future_months') {
+                        // No new excess — keep existing future-months schedule
+                        typeBalance.manualOverride.excessMode = prevMo.excessMode;
+                        typeBalance.manualOverride.effectiveAnnual = prevMo.effectiveAnnual;
+                        typeBalance.manualOverride.futureMonthlyRate = prevMo.futureMonthlyRate;
+                        typeBalance.manualOverride.fundedFutureMonths = prevMo.fundedFutureMonths;
+                        typeBalance.manualOverride.rateAnchorYear = prevMo.rateAnchorYear;
+                        typeBalance.manualOverride.rateAnchorMonth = prevMo.rateAnchorMonth;
+                    }
+
+                    if (normalizedLop.length > 0) {
+                        const employeeDocForLop = await Employee.findById(employeeId)
+                            .select('name lastName')
+                            .lean();
+                        const employeeNameForLop = employeeDocForLop
+                            ? [employeeDocForLop.name, employeeDocForLop.lastName]
+                                  .filter(Boolean)
+                                  .join(' ')
+                            : 'Employee';
+                        const actorId = req.employee?._id || req.user?._id;
+                        const lopReasonBase = reason
+                            ? String(reason).trim().slice(0, 400)
+                            : 'Balance adjustment excess';
+
+                        createdLopLeaves = await Leave.insertMany(
+                            normalizedLop.map((entry) => {
+                                const doc = {
+                                    organizationId,
+                                    employee: employeeId,
+                                    employeeName: employeeNameForLop,
+                                    leaveType: 'loss_of_pay',
+                                    startDate: entry.date,
+                                    endDate: entry.date,
+                                    duration: entry.days,
+                                    workingDays: entry.days,
+                                    isHalfDay: entry.isHalfDay,
+                                    reason: `${lopReasonBase} (LOP from ${normalizedType} reduce)`,
+                                    resumptionDate: entry.date,
+                                    year: entry.date.getFullYear(),
+                                    status: 'approved',
+                                    approvedBy: actorId,
+                                    approvedAt: new Date(),
+                                };
+                                if (entry.isHalfDay) {
+                                    doc.halfDayType = entry.halfDayType;
+                                }
+                                return doc;
+                            })
+                        );
+                    }
+                } else {
+                    // Add / legacy overwrite — Available = max(0, Earned − Used).
+                    // Add moves manualStock up so month take limit tracks available.
+                    if (nextAccrued !== undefined) typeBalance.accrued = nextAccrued;
+                    if (nextUsed !== undefined) typeBalance.used = nextUsed;
+                    typeBalance.available = typeManualOverrideAvailable({
+                        accrued: typeBalance.accrued,
+                        used: typeBalance.used,
+                    });
+                    typeBalance.carriedForward =
+                        nextCarried !== undefined
+                            ? Math.max(0, roundLeaveDays(nextCarried))
+                            : typeBalance.available;
+
+                    if (Number.isFinite(explicitAmount) && explicitAmount > 0) {
+                        typeBalance.manualStock = manualStockAfterBalanceAdjust({
+                            previousAvailable: 0,
+                            nextAvailable: explicitAmount,
+                            previousManualStock: prevSnapshot.manualStock,
+                        });
+                    } else {
+                        typeBalance.manualStock = manualStockAfterBalanceAdjust({
+                            previousAvailable: prevSnapshot.available,
+                            nextAvailable: typeBalance.available,
+                            previousManualStock: prevSnapshot.manualStock,
+                        });
+                    }
+                    typeBalance.manualDebit = Math.max(0, Number(prevSnapshot.manualDebit) || 0);
+
+                    const prevMoAdd = typeBalance.manualOverride || {};
+                    typeBalance.manualOverride = {
+                        active: true,
+                        accrued: typeBalance.accrued,
+                        used: typeBalance.used,
+                        carriedForward: typeBalance.carriedForward,
+                        manualStock: typeBalance.manualStock,
+                        manualDebit: typeBalance.manualDebit,
+                        reason: reason ? String(reason).trim().slice(0, 500) : '',
+                        adjustedBy: req.employee?._id || req.user?._id,
+                        adjustedAt: new Date(),
+                    };
+                    if (prevMoAdd.excessMode === 'future_months') {
+                        typeBalance.manualOverride.excessMode = prevMoAdd.excessMode;
+                        typeBalance.manualOverride.effectiveAnnual = prevMoAdd.effectiveAnnual;
+                        typeBalance.manualOverride.futureMonthlyRate = prevMoAdd.futureMonthlyRate;
+                        typeBalance.manualOverride.fundedFutureMonths = prevMoAdd.fundedFutureMonths;
+                        typeBalance.manualOverride.rateAnchorYear = prevMoAdd.rateAnchorYear;
+                        typeBalance.manualOverride.rateAnchorMonth = prevMoAdd.rateAnchorMonth;
+                    }
+                }
 
                 balance.accrualHistory = balance.accrualHistory || [];
                 balance.accrualHistory.push({
@@ -733,6 +1031,17 @@ export const adjustEmployeeLeaveBalance = async (req, res) => {
                         used: typeBalance.used,
                         carriedForward: typeBalance.carriedForward,
                         available: typeBalance.available,
+                        manualStock: typeBalance.manualStock,
+                        manualDebit: typeBalance.manualDebit,
+                        lopDays:
+                            typeBalance.manualOverride?.excessMode === 'future_months'
+                                ? 0
+                                : reduceSplit?.lopDays || reduceSplit?.excessDays || 0,
+                        lopLeaveIds: createdLopLeaves.map((l) => l._id),
+                        excessMode: typeBalance.manualOverride?.excessMode,
+                        effectiveAnnual: typeBalance.manualOverride?.effectiveAnnual,
+                        futureMonthlyRate: typeBalance.manualOverride?.futureMonthlyRate,
+                        fundedFutureMonths: typeBalance.manualOverride?.fundedFutureMonths,
                     },
                     performedBy: req.employee?._id || req.user?._id,
                     notes: reason ? String(reason).trim().slice(0, 500) : 'Manual balance adjustment',

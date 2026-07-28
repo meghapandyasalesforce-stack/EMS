@@ -16,6 +16,9 @@ export function getDefaultDashboardRoute(user, employee) {
   const jobTitle = (userObj.jobTitle || '').toLowerCase().trim();
   const userRole = userObj.role;
   const assignedRole = userObj.assignedRole;
+  const functionalRoles = Array.isArray(userObj.functionalRoles)
+    ? userObj.functionalRoles.map((r) => String(r).toLowerCase().trim())
+    : [];
 
   if (assignedRole?.dashboardRoute) return assignedRole.dashboardRoute;
 
@@ -27,10 +30,11 @@ export function getDefaultDashboardRoute(user, employee) {
   if (position === 'ceo' || position === 'cto' || position === 'cfo' || position === 'vp') return '/dashboard-administration';
   if (department === 'hr' || department.includes('hr') || department.includes('human resource') ||
       jobTitle.includes('hr manager') || jobTitle.includes('human resource') || jobTitle.includes('hr')) return '/dashboard-hr';
+  if (functionalRoles.includes('project_manager') || jobTitle === 'project manager') return '/dashboard-manager';
   if (department === 'technology' || department === 'tech' || department.includes('technology') ||
       department === 'it' || (department.includes('it') && !department.includes('support'))) return '/dashboard/tech';
   if (department === 'finance' || department.includes('finance')) return '/dashboard-finance';
-  if (position === 'manager' || position === 'director') return '/dashboard-manager';
+  if (position === 'manager' || position === 'director' || functionalRoles.includes('manager')) return '/dashboard-manager';
   if (userRole === 'admin') return '/dashboard-admin';
 
   return '/dashboard-employee';

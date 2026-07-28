@@ -38,12 +38,24 @@ const DEFAULT_LEAVE_TYPE = {
     },
 };
 
+/**
+ * Mirror server usesMonthlyAccrual: Fixed/Monthly (or frequency monthly) need days/month.
+ * On Anniversary / Yearly / Proportional grant from Amount only — monthly is optional.
+ */
+const needsMonthlyEntitlement = (leaveType) => {
+    if (leaveType?.enabled === false || leaveType?.type === 'loss_of_pay') return false;
+    const method = String(leaveType?.accrual?.method || 'fixed').toLowerCase();
+    const frequency = String(leaveType?.accrual?.frequency || 'yearly').toLowerCase();
+    return method === 'monthly' || method === 'fixed' || frequency === 'monthly';
+};
+
 /** Map API policy leave type → form fields (Amount = annual, Monthly entitlement = monthly rate). */
 const mapLeaveTypeToForm = (leaveType) => {
     if (!leaveType) return { ...DEFAULT_LEAVE_TYPE, uiAnnualAmount: 6, uiMonthlyEntitlement: 0.5 };
     const lt = JSON.parse(JSON.stringify(leaveType));
     lt.uiAnnualAmount = Number(lt.accrual?.maxAccrual) || 0;
-    lt.uiMonthlyEntitlement = Number(lt.accrual?.amount) || Number(lt.maxDaysPerMonth) || 0;
+    const monthly = Number(lt.accrual?.amount) || Number(lt.maxDaysPerMonth) || 0;
+    lt.uiMonthlyEntitlement = monthly > 0 ? monthly : needsMonthlyEntitlement(lt) ? '' : 0;
     return lt;
 };
 
@@ -51,38 +63,171 @@ const mapLeaveTypeToForm = (leaveType) => {
 const mapLeaveTypeToApi = (leaveType) => {
     const lt = JSON.parse(JSON.stringify(leaveType));
     const annual = Number(lt.uiAnnualAmount ?? lt.accrual?.maxAccrual) || 0;
-    const monthly = Number(lt.uiMonthlyEntitlement ?? lt.accrual?.amount) || 0;
+    const method = lt.accrual?.method || 'fixed';
+    const frequency = lt.accrual?.frequency || 'yearly';
+    const usesMonthly = needsMonthlyEntitlement({
+        ...lt,
+        accrual: { ...(lt.accrual || {}), method, frequency },
+    });
+    const rawMonthly = Number(lt.uiMonthlyEntitlement ?? lt.accrual?.amount);
+    const monthly = usesMonthly
+        ? (Number.isFinite(rawMonthly) && rawMonthly > 0 ? rawMonthly : 0)
+        : 0;
     delete lt.uiAnnualAmount;
     delete lt.uiMonthlyEntitlement;
 
     lt.accrual = {
         ...(lt.accrual || {}),
-        method: lt.accrual?.method || 'fixed',
-        frequency: lt.accrual?.frequency || 'yearly',
+        method,
+        frequency,
         maxAccrual: annual,
+        // Schema requires amount ≥ 0; lump-sum methods store 0 (grant uses maxAccrual).
         amount: monthly,
+        anniversaryBased: method === 'on_anniversary' || frequency === 'on_anniversary',
     };
     lt.maxDaysPerMonth = monthly > 0 ? monthly : null;
     return lt;
 };
 
+const toIdString = (value) => {
+    if (value == null || value === '') return '';
+    if (typeof value === 'object') {
+        if (value._id != null) return String(value._id);
+        return '';
+    }
+    return String(value);
+};
+
+const formatDateInput = (value) => {
+    if (!value) return new Date().toISOString().split('T')[0];
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return new Date().toISOString().split('T')[0];
+    return d.toISOString().split('T')[0];
+};
+
+const emptyPolicyForm = () => ({
+    policyName: '',
+    description: '',
+    effectiveDate: new Date().toISOString().split('T')[0],
+    expiryDate: '',
+    isActive: true,
+    applicableTo: 'all',
+    applicableDepartments: [],
+    applicableRoles: [],
+    applicableEmployees: [],
+    leaveTypes: [
+        {
+            ...DEFAULT_LEAVE_TYPE,
+            uiAnnualAmount: 6,
+            uiMonthlyEntitlement: 0.5,
+        },
+    ],
+    blackoutDates: [],
+    dateHandlingRules: {
+        countWeekends: false,
+        countHolidays: false,
+        autoAdjustDates: false,
+    },
+});
+
 const mapPolicyToForm = (policy) => ({
+    ...emptyPolicyForm(),
     ...policy,
+    effectiveDate: formatDateInput(policy?.effectiveDate),
+    expiryDate: policy?.expiryDate ? formatDateInput(policy.expiryDate) : '',
+    applicableTo: policy?.applicableTo || 'all',
+    applicableDepartments: (policy?.applicableDepartments || [])
+        .map((d) => String(d || '').trim())
+        .filter(Boolean),
+    applicableRoles: (policy?.applicableRoles || []).map(toIdString).filter(Boolean),
+    applicableEmployees: (policy?.applicableEmployees || []).map(toIdString).filter(Boolean),
     leaveTypes: (policy?.leaveTypes || []).map(mapLeaveTypeToForm),
 });
 
-const mapFormToApi = (formData) => ({
-    ...formData,
-    leaveTypes: (formData.leaveTypes || []).map(mapLeaveTypeToApi),
-});
+const mapFormToApi = (formData) => {
+    const applicableTo = formData.applicableTo || 'all';
+    const payload = {
+        ...formData,
+        leaveTypes: (formData.leaveTypes || []).map(mapLeaveTypeToApi),
+        applicableTo,
+        applicableDepartments:
+            applicableTo === 'department'
+                ? [...new Set((formData.applicableDepartments || []).map((d) => String(d).trim()).filter(Boolean))]
+                : [],
+        applicableRoles:
+            applicableTo === 'role'
+                ? [...new Set((formData.applicableRoles || []).map(toIdString).filter(Boolean))]
+                : [],
+        applicableEmployees:
+            applicableTo === 'employee'
+                ? [...new Set((formData.applicableEmployees || []).map(toIdString).filter(Boolean))]
+                : [],
+    };
+    if (!payload.expiryDate) {
+        delete payload.expiryDate;
+    }
+    return payload;
+};
+
+const validateApplicabilityClient = (formData) => {
+    const applicableTo = formData.applicableTo || 'all';
+    if (applicableTo === 'department' && !(formData.applicableDepartments || []).length) {
+        return 'Select at least one department for this policy.';
+    }
+    if (applicableTo === 'role' && !(formData.applicableRoles || []).length) {
+        return 'Select at least one role for this policy.';
+    }
+    if (applicableTo === 'employee' && !(formData.applicableEmployees || []).length) {
+        return 'Select at least one employee for this policy.';
+    }
+    return null;
+};
+
+const formatApplicabilitySummary = (policy) => {
+    const applicableTo = policy?.applicableTo || 'all';
+    if (applicableTo === 'all') return 'All employees';
+    if (applicableTo === 'department') {
+        const depts = policy.applicableDepartments || [];
+        return depts.length ? `Dept: ${depts.join(', ')}` : 'Department (none selected)';
+    }
+    if (applicableTo === 'role') {
+        const roles = (policy.applicableRoles || []).map((r) =>
+            typeof r === 'object' ? r.name || toIdString(r) : String(r)
+        );
+        return roles.length ? `Role: ${roles.join(', ')}` : 'Role (none selected)';
+    }
+    if (applicableTo === 'employee') {
+        const people = (policy.applicableEmployees || []).map((e) =>
+            typeof e === 'object' ? e.name || e.employeeId || toIdString(e) : String(e)
+        );
+        return people.length
+            ? `Employees: ${people.slice(0, 3).join(', ')}${people.length > 3 ? ` +${people.length - 3}` : ''}`
+            : 'Employees (none selected)';
+    }
+    return applicableTo;
+};
 
 const monthlyEntitlementHelp = (leaveType) => {
     const annual = Number(leaveType.uiAnnualAmount ?? leaveType.accrual?.maxAccrual) || 0;
     const monthly = Number(leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount) || 0;
-    if (monthly <= 0) {
-        return 'Set monthly entitlement to define how many days accrue each month.';
+    const method = String(leaveType?.accrual?.method || 'fixed').toLowerCase();
+
+    if (!needsMonthlyEntitlement(leaveType)) {
+        if (method === 'on_anniversary') {
+            return `Full Amount (${annual || 0} day(s)) is granted on the employee’s join anniversary. Monthly entitlement is not used.`;
+        }
+        if (method === 'yearly') {
+            return `Full Amount (${annual || 0} day(s)) is granted at the start of the leave year (once employed). Monthly entitlement is not used.`;
+        }
+        if (method === 'proportional') {
+            return `Amount (${annual || 0} day(s)) is pro-rated by months of service. Monthly entitlement is not used.`;
+        }
+        return 'Monthly entitlement is not required for this accrual method.';
     }
-    return `Accrues ${monthly} day(s)/month (max ${annual}/year in balance). Unused months roll into available balance. Same value limits max days taken per calendar month.`;
+    if (monthly <= 0) {
+        return 'Required for Fixed/Monthly accrual. Defines how many days accrue each month.';
+    }
+    return `Accrues ${monthly} day(s)/month (max ${annual}/year in balance). Unused months roll into available balance.`;
 };
 
 const LeavePolicyManagement = () => {
@@ -91,34 +236,32 @@ const LeavePolicyManagement = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingPolicy, setEditingPolicy] = useState(null);
     const [togglingPolicyId, setTogglingPolicyId] = useState(null);
-    const [formData, setFormData] = useState({
-        policyName: '',
-        description: '',
-        effectiveDate: new Date().toISOString().split('T')[0],
-        expiryDate: '',
-        isActive: true,
-        applicableTo: 'all',
-        applicableDepartments: [],
-        applicableRoles: [],
-        applicableEmployees: [],
-        leaveTypes: [
-            {
-                ...DEFAULT_LEAVE_TYPE,
-                uiAnnualAmount: 6,
-                uiMonthlyEntitlement: 0.5,
-            },
-        ],
-        blackoutDates: [],
-        dateHandlingRules: {
-            countWeekends: false,
-            countHolidays: false,
-            autoAdjustDates: false
-        }
-    });
+    const [formData, setFormData] = useState(emptyPolicyForm);
+    const [departmentOptions, setDepartmentOptions] = useState([]);
+    const [roleOptions, setRoleOptions] = useState([]);
+    const [employeeOptions, setEmployeeOptions] = useState([]);
+    const [employeeSearch, setEmployeeSearch] = useState('');
+    const [customDepartment, setCustomDepartment] = useState('');
+    const [loadingApplicability, setLoadingApplicability] = useState(false);
 
     useEffect(() => {
         fetchPolicies();
     }, []);
+
+    useEffect(() => {
+        if (!showForm) return;
+        loadApplicabilityOptions(employeeSearch);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showForm]);
+
+    useEffect(() => {
+        if (!showForm || formData.applicableTo !== 'employee') return;
+        const timer = setTimeout(() => {
+            loadApplicabilityOptions(employeeSearch);
+        }, 300);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [employeeSearch, formData.applicableTo, showForm]);
 
     const fetchPolicies = async () => {
         setLoading(true);
@@ -132,18 +275,164 @@ const LeavePolicyManagement = () => {
         }
     };
 
+    const loadApplicabilityOptions = async (search = '') => {
+        setLoadingApplicability(true);
+        try {
+            const deptSet = new Set();
+
+            // Org-configured departments (admin); ignore 403 for HR.
+            try {
+                const orgRes = await axios.get('/v1/admin/organization/profile');
+                const orgDepts = orgRes.data?.organization?.orgDepartments || [];
+                orgDepts.forEach((d) => {
+                    const name = typeof d === 'object' ? d.name : d;
+                    if (name && String(name).trim()) deptSet.add(String(name).trim());
+                });
+            } catch {
+                /* optional for non-admin */
+            }
+
+            // Roles (admin/HR/executive)
+            try {
+                const rolesRes = await axios.get('/v1/admin/roles');
+                const roles = Array.isArray(rolesRes.data)
+                    ? rolesRes.data
+                    : rolesRes.data?.roles || [];
+                setRoleOptions(
+                    roles
+                        .filter((r) => r && r._id && r.isActive !== false)
+                        .map((r) => ({ _id: String(r._id), name: r.name || 'Untitled role' }))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                );
+            } catch {
+                setRoleOptions([]);
+            }
+
+            // Employees — departments + employee picker
+            let employees = [];
+            try {
+                const empRes = await axios.get('/v1/admin/employee', {
+                    params: {
+                        page: 1,
+                        limit: 100,
+                        ...(search.trim() ? { search: search.trim() } : {}),
+                    },
+                });
+                employees = Array.isArray(empRes.data?.data)
+                    ? empRes.data.data
+                    : Array.isArray(empRes.data?.employees)
+                      ? empRes.data.employees
+                      : [];
+            } catch {
+                try {
+                    const empRes = await axios.get('/v1/employee/auth/get-all-employees');
+                    employees = Array.isArray(empRes.data)
+                        ? empRes.data
+                        : empRes.data?.employees || [];
+                    if (search.trim()) {
+                        const q = search.trim().toLowerCase();
+                        employees = employees.filter((e) => {
+                            const hay = `${e.name || ''} ${e.email || ''} ${e.employeeId || ''} ${e.department || ''}`.toLowerCase();
+                            return hay.includes(q);
+                        });
+                    }
+                } catch {
+                    employees = [];
+                }
+            }
+
+            employees.forEach((e) => {
+                if (e?.department && String(e.department).trim()) {
+                    deptSet.add(String(e.department).trim());
+                }
+            });
+
+            // Keep currently selected departments even if not in live options
+            (formData.applicableDepartments || []).forEach((d) => {
+                if (d && String(d).trim()) deptSet.add(String(d).trim());
+            });
+
+            setDepartmentOptions([...deptSet].sort((a, b) => a.localeCompare(b)));
+            setEmployeeOptions((prev) => {
+                const mapped = employees.map((e) => ({
+                    _id: String(e._id),
+                    name: e.name || 'Unnamed',
+                    email: e.email || '',
+                    employeeId: e.employeeId || '',
+                    department: e.department || '',
+                }));
+                // Preserve previously selected rows so checkboxes stay labeled after search.
+                const byId = new Map(mapped.map((p) => [p._id, p]));
+                prev.forEach((p) => {
+                    if ((formData.applicableEmployees || []).includes(p._id) && !byId.has(p._id)) {
+                        byId.set(p._id, p);
+                    }
+                });
+                return [...byId.values()];
+            });
+        } finally {
+            setLoadingApplicability(false);
+        }
+    };
+
+    const toggleListValue = (field, value) => {
+        setFormData((prev) => {
+            const list = prev[field] || [];
+            const exists = list.includes(value);
+            return {
+                ...prev,
+                [field]: exists ? list.filter((v) => v !== value) : [...list, value],
+            };
+        });
+    };
+
+    const handleApplicableToChange = (value) => {
+        setFormData((prev) => ({
+            ...prev,
+            applicableTo: value,
+            // Keep selections so switching back doesn't wipe work; API clears unused scopes.
+        }));
+        if (value === 'employee') {
+            loadApplicabilityOptions(employeeSearch);
+        }
+    };
+
+    const addCustomDepartment = () => {
+        const name = customDepartment.trim();
+        if (!name) return;
+        setDepartmentOptions((prev) =>
+            prev.includes(name) ? prev : [...prev, name].sort((a, b) => a.localeCompare(b))
+        );
+        setFormData((prev) => ({
+            ...prev,
+            applicableDepartments: prev.applicableDepartments.includes(name)
+                ? prev.applicableDepartments
+                : [...prev.applicableDepartments, name],
+        }));
+        setCustomDepartment('');
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-        e.stopPropagation(); // Prevent bubbling to parent form
+        e.stopPropagation();
+        const applicabilityError = validateApplicabilityClient(formData);
+        if (applicabilityError) {
+            toast.error(applicabilityError);
+            return;
+        }
+        if (!(formData.leaveTypes || []).length) {
+            toast.error('Add at least one leave type');
+            return;
+        }
         setLoading(true);
         try {
             const url = editingPolicy
                 ? `/v1/admin/leave-policy/${editingPolicy._id}`
                 : '/v1/admin/leave-policy';
-            
+
             const method = editingPolicy ? 'put' : 'post';
             await axios[method](url, mapFormToApi(formData));
-            
+
             toast.success(`Policy ${editingPolicy ? 'updated' : 'created'} successfully`);
             await fetchPolicies();
             setShowForm(false);
@@ -189,18 +478,9 @@ const LeavePolicyManagement = () => {
     };
 
     const resetForm = () => {
-        setFormData({
-            policyName: '',
-            description: '',
-            effectiveDate: new Date().toISOString().split('T')[0],
-            expiryDate: '',
-            isActive: true,
-            applicableTo: 'all',
-            applicableDepartments: [],
-            applicableRoles: [],
-            applicableEmployees: [],
-            leaveTypes: []
-        });
+        setFormData(emptyPolicyForm());
+        setEmployeeSearch('');
+        setCustomDepartment('');
     };
 
     const addLeaveType = () => {
@@ -240,8 +520,31 @@ const LeavePolicyManagement = () => {
         if (field === 'accrual.method' || field === 'accrual.frequency') {
             updated[index].uiAnnualAmount =
                 updated[index].uiAnnualAmount ?? updated[index].accrual?.maxAccrual ?? 0;
-            updated[index].uiMonthlyEntitlement =
-                updated[index].uiMonthlyEntitlement ?? updated[index].accrual?.amount ?? 0;
+            const next = updated[index];
+
+            // Lump-sum methods pair with yearly frequency so monthly entitlement stays optional.
+            if (field === 'accrual.method') {
+                const method = String(value || '').toLowerCase();
+                if (method === 'on_anniversary' || method === 'yearly' || method === 'proportional') {
+                    if (!next.accrual) next.accrual = {};
+                    next.accrual.frequency = 'yearly';
+                }
+                if (method === 'monthly') {
+                    if (!next.accrual) next.accrual = {};
+                    next.accrual.frequency = 'monthly';
+                }
+            }
+
+            if (needsMonthlyEntitlement(next)) {
+                const currentMonthly = Number(next.uiMonthlyEntitlement ?? next.accrual?.amount);
+                if (!Number.isFinite(currentMonthly) || currentMonthly <= 0) {
+                    const annual = Number(next.uiAnnualAmount ?? next.accrual?.maxAccrual) || 0;
+                    next.uiMonthlyEntitlement = annual > 0 ? annual / 12 : 0.5;
+                }
+            } else {
+                // Lump-sum methods: clear monthly so save is not blocked / not misinterpreted
+                next.uiMonthlyEntitlement = '';
+            }
         }
 
         setFormData({ ...formData, leaveTypes: updated });
@@ -295,7 +598,7 @@ const LeavePolicyManagement = () => {
                             <label className="block text-sm font-medium mb-1">Applicable To</label>
                             <select
                                 value={formData.applicableTo}
-                                onChange={(e) => setFormData({ ...formData, applicableTo: e.target.value })}
+                                onChange={(e) => handleApplicableToChange(e.target.value)}
                                 className="w-full border rounded px-3 py-2"
                             >
                                 <option value="all">All Employees</option>
@@ -305,6 +608,177 @@ const LeavePolicyManagement = () => {
                             </select>
                         </div>
                     </div>
+
+                    {formData.applicableTo === 'department' && (
+                        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+                            <label className="block text-sm font-medium mb-1">
+                                Departments *
+                            </label>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Policy applies only to employees in the selected department(s).
+                                Names must match the employee’s department field.
+                            </p>
+                            {loadingApplicability && departmentOptions.length === 0 ? (
+                                <p className="text-sm text-gray-500">Loading departments…</p>
+                            ) : departmentOptions.length === 0 ? (
+                                <p className="text-sm text-amber-700 mb-2">
+                                    No departments found yet. Add one below (must match employee
+                                    records).
+                                </p>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white p-3">
+                                    {departmentOptions.map((dept) => (
+                                        <label
+                                            key={dept}
+                                            className="flex items-center gap-2 cursor-pointer text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.applicableDepartments.includes(
+                                                    dept
+                                                )}
+                                                onChange={() =>
+                                                    toggleListValue('applicableDepartments', dept)
+                                                }
+                                                className="rounded"
+                                            />
+                                            <span>{dept}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                                <input
+                                    type="text"
+                                    value={customDepartment}
+                                    onChange={(e) => setCustomDepartment(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            addCustomDepartment();
+                                        }
+                                    }}
+                                    placeholder="Add department name"
+                                    className="flex-1 border rounded px-3 py-2 text-sm"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={addCustomDepartment}
+                                    className="px-4 py-2 text-sm rounded bg-slate-800 text-white hover:bg-slate-700"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                            {formData.applicableDepartments.length > 0 && (
+                                <p className="mt-2 text-xs text-slate-600">
+                                    Selected: {formData.applicableDepartments.join(', ')}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {formData.applicableTo === 'role' && (
+                        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+                            <label className="block text-sm font-medium mb-1">Roles *</label>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Policy applies to employees with the selected hierarchy role
+                                (assigned role on the employee profile).
+                            </p>
+                            {loadingApplicability && roleOptions.length === 0 ? (
+                                <p className="text-sm text-gray-500">Loading roles…</p>
+                            ) : roleOptions.length === 0 ? (
+                                <p className="text-sm text-amber-700">
+                                    No roles found. Create roles under Users &amp; Roles first, then
+                                    assign them to employees.
+                                </p>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white p-3">
+                                    {roleOptions.map((role) => (
+                                        <label
+                                            key={role._id}
+                                            className="flex items-center gap-2 cursor-pointer text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.applicableRoles.includes(
+                                                    role._id
+                                                )}
+                                                onChange={() =>
+                                                    toggleListValue('applicableRoles', role._id)
+                                                }
+                                                className="rounded"
+                                            />
+                                            <span>{role.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {formData.applicableTo === 'employee' && (
+                        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+                            <label className="block text-sm font-medium mb-1">
+                                Specific Employees *
+                            </label>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Policy applies only to the employees you select.
+                            </p>
+                            <input
+                                type="search"
+                                value={employeeSearch}
+                                onChange={(e) => setEmployeeSearch(e.target.value)}
+                                placeholder="Search by name, email, or employee ID"
+                                className="w-full border rounded px-3 py-2 text-sm mb-2"
+                            />
+                            {loadingApplicability && employeeOptions.length === 0 ? (
+                                <p className="text-sm text-gray-500">Loading employees…</p>
+                            ) : (
+                                <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg bg-white divide-y">
+                                    {employeeOptions.length === 0 ? (
+                                        <p className="p-3 text-sm text-gray-500">No employees found.</p>
+                                    ) : (
+                                        employeeOptions.map((emp) => (
+                                            <label
+                                                key={emp._id}
+                                                className="flex items-start gap-2 cursor-pointer p-3 text-sm hover:bg-slate-50"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="mt-1 rounded"
+                                                    checked={formData.applicableEmployees.includes(
+                                                        emp._id
+                                                    )}
+                                                    onChange={() =>
+                                                        toggleListValue(
+                                                            'applicableEmployees',
+                                                            emp._id
+                                                        )
+                                                    }
+                                                />
+                                                <span>
+                                                    <span className="font-medium text-slate-800">
+                                                        {emp.name}
+                                                    </span>
+                                                    <span className="block text-xs text-slate-500">
+                                                        {[emp.employeeId, emp.email, emp.department]
+                                                            .filter(Boolean)
+                                                            .join(' · ')}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                            {formData.applicableEmployees.length > 0 && (
+                                <p className="mt-2 text-xs text-slate-600">
+                                    {formData.applicableEmployees.length} employee
+                                    {formData.applicableEmployees.length === 1 ? '' : 's'} selected
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     <div className="mb-4">
                         <label className="block text-sm font-medium mb-1">Description</label>
@@ -483,17 +957,33 @@ const LeavePolicyManagement = () => {
                                         <div>
                                             <label className="block text-sm font-medium mb-1">
                                                 Monthly entitlement (days/month)
+                                                {needsMonthlyEntitlement(leaveType) ? ' *' : ''}
                                             </label>
                                             <input
                                                 type="number"
-                                                value={leaveType.uiMonthlyEntitlement ?? leaveType.accrual?.amount ?? ''}
-                                                onChange={(e) =>
-                                                    updateLeaveType(index, 'uiMonthlyEntitlement', parseFloat(e.target.value))
+                                                value={
+                                                    leaveType.uiMonthlyEntitlement === '' ||
+                                                    leaveType.uiMonthlyEntitlement == null
+                                                        ? ''
+                                                        : leaveType.uiMonthlyEntitlement
                                                 }
+                                                onChange={(e) => {
+                                                    const raw = e.target.value;
+                                                    updateLeaveType(
+                                                        index,
+                                                        'uiMonthlyEntitlement',
+                                                        raw === '' ? '' : parseFloat(raw)
+                                                    );
+                                                }}
                                                 className="w-full border rounded px-3 py-2"
                                                 min="0"
                                                 step="0.5"
-                                                required
+                                                required={needsMonthlyEntitlement(leaveType)}
+                                                placeholder={
+                                                    needsMonthlyEntitlement(leaveType)
+                                                        ? 'e.g. 0.5'
+                                                        : 'Not required'
+                                                }
                                             />
                                             <p className="mt-1 text-[11px] text-gray-500">
                                                 {monthlyEntitlementHelp(leaveType)}
@@ -732,7 +1222,9 @@ const LeavePolicyManagement = () => {
                                 <td className="px-6 py-4">
                                     {policy.leaveTypes?.map(lt => lt.displayName).join(', ')}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap capitalize">{policy.applicableTo}</td>
+                                <td className="px-6 py-4 text-sm text-slate-700 max-w-xs">
+                                    {formatApplicabilitySummary(policy)}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center gap-3">
                                         <span
@@ -766,7 +1258,25 @@ const LeavePolicyManagement = () => {
                                     <button
                                         onClick={() => {
                                             setEditingPolicy(policy);
-                                            setFormData(mapPolicyToForm(policy));
+                                            const mapped = mapPolicyToForm(policy);
+                                            setFormData(mapped);
+                                            // Seed picker with already-selected people (may be outside first page / search).
+                                            const selectedPeople = (policy.applicableEmployees || [])
+                                                .filter((e) => e && typeof e === 'object' && e._id)
+                                                .map((e) => ({
+                                                    _id: String(e._id),
+                                                    name: e.name || 'Unnamed',
+                                                    email: e.email || '',
+                                                    employeeId: e.employeeId || '',
+                                                    department: e.department || '',
+                                                }));
+                                            if (selectedPeople.length) {
+                                                setEmployeeOptions((prev) => {
+                                                    const byId = new Map(prev.map((p) => [p._id, p]));
+                                                    selectedPeople.forEach((p) => byId.set(p._id, p));
+                                                    return [...byId.values()];
+                                                });
+                                            }
                                             setShowForm(true);
                                         }}
                                         className="text-theme-secondary hover:text-theme-secondary mr-3"

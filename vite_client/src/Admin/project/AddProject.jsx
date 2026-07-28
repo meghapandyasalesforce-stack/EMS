@@ -25,6 +25,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { fetchEmployees } from '../../context/employeeSlice';
 import useAddProject from '../../Hooks/useAddProject';
 import { isManager, isHR } from '../../utils/managerHelper';
+import { canManageOrganizationProjects } from '../../utils/projectManagerHelper';
 import { isExecutive } from '../../utils/navigationConfig';
 import {
   canViewProjectFinancials,
@@ -32,7 +33,7 @@ import {
 } from '../../utils/projectFinancialsHelper';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 
-/** @typedef {{ title: string, description: string, assignee: string|null, dueDate: string, priority: string, subtasks: { title: string, description: string }[] }} WorkPlanRow */
+/** @typedef {{ title: string, description: string, assignees: string[], dueDate: string, priority: string, subtasks: { title: string, description: string }[] }} WorkPlanRow */
 
 function buildWorkItemsPayload(rows) {
     return rows
@@ -40,7 +41,7 @@ function buildWorkItemsPayload(rows) {
         .map((t) => ({
             title: t.title.trim(),
             description: t.description?.trim() || undefined,
-            assignee: t.assignee || undefined,
+            assignees: Array.isArray(t.assignees) && t.assignees.length ? t.assignees : undefined,
             dueDate: t.dueDate || undefined,
             priority: t.priority || 'medium',
             subtasks: (t.subtasks || [])
@@ -49,6 +50,7 @@ function buildWorkItemsPayload(rows) {
                     title: s.title.trim(),
                     description: s.description?.trim() || undefined,
                     priority: s.priority || 'medium',
+                    assignees: Array.isArray(s.assignees) && s.assignees.length ? s.assignees : undefined,
                 })),
         }));
 }
@@ -80,7 +82,13 @@ function AddProject() {
         const userObj = user || employee;
         const position = (userObj?.position || '').toLowerCase().trim();
         const isCEO = position === 'ceo' || position.includes('chief executive');
-        return isManager(userObj) || isHR(userObj) || isCEO || isExecutive(position);
+        return (
+            canManageOrganizationProjects(userObj) ||
+            isManager(userObj) ||
+            isHR(userObj) ||
+            isCEO ||
+            isExecutive(position)
+        );
     }, [user, employee]);
 
     const canViewFinancials = useMemo(
@@ -106,7 +114,6 @@ function AddProject() {
     });
     
     const [error, setError] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
 
     /** @type {[WorkPlanRow[], function]} */
     const [workPlanRows, setWorkPlanRows] = useState([]);
@@ -193,6 +200,19 @@ function AddProject() {
         const workItems = buildWorkItemsPayload(workPlanRows);
         if (workItems.length) {
             projectData.workItems = workItems;
+            // Include work-plan assignees in project members so they can open the project
+            const memberSet = new Set((form.projectMembers || []).map(String));
+            const collectAssignees = (items) => {
+                (items || []).forEach((item) => {
+                    (item.assignees || []).forEach((id) => memberSet.add(String(id)));
+                    if (item.assignee) memberSet.add(String(item.assignee));
+                    if (item.subtasks?.length) collectAssignees(item.subtasks);
+                });
+            };
+            collectAssignees(workItems);
+            // Do not duplicate the leader in members list unnecessarily
+            if (form.projectLeader) memberSet.delete(String(form.projectLeader));
+            projectData.projectMembers = [...memberSet];
         }
 
         const result = await addProject(projectData);
@@ -229,14 +249,6 @@ function AddProject() {
             ),
         [employees]
     );
-
-    const matchesEmployeeSearch = (employee) =>
-        `${employee.name} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const filteredEmployees = activeEmployees.filter(matchesEmployeeSearch);
-    const filteredActiveEmployees = activeEmployees.filter(matchesEmployeeSearch);
-
-    // Removed console.log statements for production
 
     if (!hasPermission) {
         return (
@@ -436,8 +448,9 @@ function AddProject() {
                                 </Box>
                             )}
                             <Autocomplete
-                                options={filteredEmployees}
-                                getOptionLabel={(employee) => `${employee.name} ${employee.lastName}`}
+                                options={activeEmployees}
+                                getOptionLabel={(employee) => `${employee.name} ${employee.lastName || ''}`.trim()}
+                                isOptionEqualToValue={(opt, val) => String(opt._id) === String(val._id)}
                                 value={selectedLeader || null}
                                 onChange={handleLeaderChange}
                                 fullWidth
@@ -453,8 +466,8 @@ function AddProject() {
                                 renderOption={(props, employee) => (
                                     <MenuItem {...props} key={employee._id}>
                                         <ListItemText
-                                            primary={`${employee.name} ${employee.lastName}`}
-                                            secondary={`${employee.position} - ${employee.department}`}
+                                            primary={`${employee.name} ${employee.lastName || ''}`.trim()}
+                                            secondary={`${employee.position || ''} - ${employee.department || ''}`.replace(/^ - | - $/g, '')}
                                             sx={{
                                                 '& .MuiListItemText-primary': { fontSize: isMobile ? '0.875rem' : '1rem' },
                                                 '& .MuiListItemText-secondary': { fontSize: isMobile ? '0.75rem' : '0.875rem' },
@@ -502,8 +515,9 @@ function AddProject() {
                             )}
                             <Autocomplete
                                 multiple
-                                options={filteredActiveEmployees}
-                                getOptionLabel={(employee) => `${employee.name} ${employee.lastName}`}
+                                options={activeEmployees}
+                                getOptionLabel={(employee) => `${employee.name} ${employee.lastName || ''}`.trim()}
+                                isOptionEqualToValue={(opt, val) => String(opt._id) === String(val._id)}
                                 value={activeEmployees.filter((emp) => form.projectMembers.includes(emp._id))}
                                 onChange={(event, newValue) => {
                                     setForm({
@@ -512,24 +526,24 @@ function AddProject() {
                                     });
                                 }}
                                 fullWidth
+                                filterSelectedOptions
                                 renderInput={(params) => (
                                     <TextField
                                         {...params}
                                         label="Search and select members"
                                         placeholder="Type to search employees"
-                                        onChange={(e) => setSearchTerm(e.target.value)}
                                         size={isMobile ? 'small' : 'medium'}
                                     />
                                 )}
-                                renderOption={(props, employee, { selected }) => (
+                                renderOption={(props, employee) => (
                                     <MenuItem {...props} key={employee._id}>
                                         <Checkbox
                                             checked={form.projectMembers.includes(employee._id)}
                                             size={isMobile ? 'small' : 'medium'}
                                         />
                                         <ListItemText
-                                            primary={`${employee.name} ${employee.lastName}`}
-                                            secondary={`${employee.position} - ${employee.department}`}
+                                            primary={`${employee.name} ${employee.lastName || ''}`.trim()}
+                                            secondary={`${employee.position || ''} - ${employee.department || ''}`.replace(/^ - | - $/g, '')}
                                             sx={{
                                                 '& .MuiListItemText-primary': { fontSize: isMobile ? '0.875rem' : '1rem' },
                                                 '& .MuiListItemText-secondary': { fontSize: isMobile ? '0.75rem' : '0.875rem' },
@@ -542,7 +556,7 @@ function AddProject() {
                                         <Chip
                                             {...getTagProps({ index })}
                                             key={employee._id}
-                                            label={`${employee.name} ${employee.lastName}`}
+                                            label={`${employee.name} ${employee.lastName || ''}`.trim()}
                                             size={isMobile ? 'small' : 'medium'}
                                         />
                                     ))
@@ -676,7 +690,7 @@ function AddProject() {
                                         {
                                             title: '',
                                             description: '',
-                                            assignee: null,
+                                            assignees: [],
                                             dueDate: '',
                                             priority: 'medium',
                                             subtasks: [],
@@ -793,28 +807,51 @@ function AddProject() {
                                         </Grid>
                                     </Grid>
                                     <Autocomplete
+                                        multiple
                                         size="small"
-                                        options={filteredActiveEmployees}
+                                        options={activeEmployees}
                                         getOptionLabel={(emp) => `${emp.name} ${emp.lastName || ''}`}
-                                        value={
-                                            row.assignee
-                                                ? activeEmployees.find((e) => e._id === row.assignee) || null
-                                                : null
-                                        }
-                                        onChange={(_, newVal) => {
+                                        isOptionEqualToValue={(opt, val) => String(opt._id) === String(val._id)}
+                                        value={activeEmployees.filter((e) =>
+                                            (row.assignees || []).some((id) => String(id) === String(e._id))
+                                        )}
+                                        onChange={(_, newVals) => {
                                             setWorkPlanRows((prev) =>
                                                 prev.map((r, i) =>
                                                     i === rowIdx
-                                                        ? { ...r, assignee: newVal ? newVal._id : null }
+                                                        ? {
+                                                              ...r,
+                                                              assignees: (newVals || []).map((e) => e._id),
+                                                          }
                                                         : r
                                                 )
                                             );
                                         }}
                                         fullWidth
+                                        renderTags={(value, getTagProps) =>
+                                            value.map((option, index) => (
+                                                <Chip
+                                                    {...getTagProps({ index })}
+                                                    key={option._id}
+                                                    size="small"
+                                                    label={`${option.name} ${option.lastName || ''}`.trim()}
+                                                />
+                                            ))
+                                        }
                                         renderInput={(params) => (
-                                            <TextField {...params} label="Assignee (optional)" margin="dense" />
+                                            <TextField
+                                                {...params}
+                                                label="Assignees (optional)"
+                                                placeholder="Add people"
+                                                margin="dense"
+                                            />
                                         )}
                                     />
+                                    {row.assignees?.length ? (
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                            Assignees are added as project members and notified when the project is created.
+                                        </Typography>
+                                    ) : null}
                                     <Box mt={2}>
                                         <Typography
                                             variant="caption"

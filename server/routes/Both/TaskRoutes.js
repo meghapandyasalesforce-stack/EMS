@@ -10,9 +10,9 @@ import {
     getEmployeeProjectWorkItems,
     updateEmployeeProjectWorkItem
 } from "../../controllers/employee/employeeProjectWorkItemController.js";
+import { addWorkItemComment } from "../../controllers/both/workItemCommentController.js";
 import isAuthenticated from './../../middlewares/isAuthenticated.js';
-import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
-import isAdminOrManagerOrHRAuthenticated from './../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
+import isProjectWorkspaceAuthenticated from './../../middlewares/isProjectWorkspaceAuthenticated.js';
 
 const router = express.Router();
 
@@ -29,8 +29,9 @@ router.get("/all-tasks", isAuthenticated, getMyTasks);
 // Employee work plan (project_work_items) — read + limited update
 router.get("/projects/:projectId/work-items", isAuthenticated, getEmployeeProjectWorkItems);
 router.put("/work-items/:workItemId", isAuthenticated, updateEmployeeProjectWorkItem);
+router.post("/work-items/:workItemId/comments", isAuthenticated, addWorkItemComment);
 
-// Admin routes - Allow Admin, Managers, HR, and Executives (CEO) to view project tasks
-router.get("/admin/projects/:projectId/tasks", isAdminOrManagerOrHRAuthenticated, getProjectTasks);
+// Admin routes — project managers, managers, HR, admins
+router.get("/admin/projects/:projectId/tasks", isProjectWorkspaceAuthenticated, getProjectTasks);
 
 export default router;

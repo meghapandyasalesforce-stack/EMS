@@ -21,7 +21,15 @@ export function computeRemainingPreJoinCarryForward(initialCarry, usedSinceJoinS
     return Math.max(0, roundLeaveDays(carry - Math.min(used, carry)));
 }
 
-/** Available balance from an active manual override (accrued + carried forward − used). */
+/**
+ * Available balance from a legacy / employee-wallet manual override.
+ * Wallet seeds may keep earned and carry as separate addends: accrued + carriedForward − used.
+ * Prefer an explicit `available` when present.
+ *
+ * Do NOT use this for per-leave-type Balance Adjustment overrides — those bake the
+ * new balance into `accrued` and treat `carriedForward` as display/audit only.
+ * Use {@link typeManualOverrideAvailable} for that path.
+ */
 export function manualAvailableFromOverride(override) {
     if (!override) {
         return 0;
@@ -36,6 +44,25 @@ export function manualAvailableFromOverride(override) {
                 (Number(override.carriedForward) || 0) -
                 (Number(override.used) || 0)
         )
+    );
+}
+
+/**
+ * Available days for a per-leave-type manual override (Balance Adjustment).
+ *
+ * Contract (SaaS / multi-tenant safe):
+ * - On adjust, the client folds the new remaining balance into `accrued`
+ *   (accrued = desiredAvailable + used). `carriedForward` is the last CF add
+ *   amount for display/audit only — it must NOT be added again here.
+ * - available = max(0, accrued − used − pending)
+ *
+ * Matching writers: leavePolicyController per-type adjust, leaveBalanceEngine
+ * when typeBalance.manualOverride.active.
+ */
+export function typeManualOverrideAvailable({ accrued = 0, used = 0, pending = 0 } = {}) {
+    return Math.max(
+        0,
+        roundLeaveDays((Number(accrued) || 0) - (Number(used) || 0) - (Number(pending) || 0))
     );
 }
 

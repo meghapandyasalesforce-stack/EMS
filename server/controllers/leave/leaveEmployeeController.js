@@ -403,8 +403,10 @@ export const getMyLeaves = async (req, res) => {
                         casual: { accrued: summary.totalAccrued, available: summary.totalAvailableLeave, used: summary.totalUsed, pending: summary.totalPending },
                     };
                 } else if (balanceResponse?.balances?.length) {
+                    // Accrued already includes Balance Adjustment CF (folded in on save).
+                    // Do not add carriedForward again — that double-counts manual CF.
                     totalLeaves = balanceResponse.balances.reduce(
-                        (sum, b) => sum + (b.accrued || 0) + (b.carriedForward || 0),
+                        (sum, b) => sum + (b.accrued || 0),
                         0
                     );
                     remainingLeaves = Number(balanceResponse.totalAvailableLeave) ||
@@ -418,7 +420,7 @@ export const getMyLeaves = async (req, res) => {
                         const typeKey = b.leaveType === 'paid' ? 'annual' : b.leaveType;
                         if (!balanceByType[typeKey]) continue;
                         balanceByType[typeKey] = {
-                            accrued: (b.accrued || 0) + (b.carriedForward || 0),
+                            accrued: b.accrued || 0,
                             available: b.available || 0,
                             used: b.used || 0,
                             pending: b.pending || 0,

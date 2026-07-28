@@ -41,6 +41,9 @@ const resolveNavFromRbac = (permissionFlags, role, position, profile) => {
     if (permissionFlags.isPayrollAdmin) {
         return getFinanceNavigation();
     }
+    if (permissionFlags.isProjectManager && !permissionFlags.isLineManager) {
+        return getProjectManagerNavigation();
+    }
     if (permissionFlags.isLineManager || permissionFlags.isProjectManager) {
         return getManagerNavigation(profile);
     }
@@ -71,7 +74,10 @@ export const resolveMePortalSystemRole = (profile = {}) => {
     if (functional.has('hr')) {
         return SYSTEM_ROLE_IDS.HR_EXECUTIVE;
     }
-    if (functional.has('manager') || functional.has('project_manager')) {
+    if (functional.has('project_manager')) {
+        return SYSTEM_ROLE_IDS.PROJECT_MANAGER;
+    }
+    if (functional.has('manager')) {
         return SYSTEM_ROLE_IDS.LINE_MANAGER;
     }
     if (profile?.systemRoleId) {
@@ -83,6 +89,8 @@ export const resolveMePortalSystemRole = (profile = {}) => {
 /** Default route when opening the Me portal tab. */
 export const getMePortalHomePath = (profile = {}) => {
     switch (resolveMePortalSystemRole(profile)) {
+        case SYSTEM_ROLE_IDS.PROJECT_MANAGER:
+            return '/dashboard-manager';
         case SYSTEM_ROLE_IDS.LINE_MANAGER:
             return '/dashboard-manager';
         case SYSTEM_ROLE_IDS.PAYROLL_ADMIN:
@@ -114,8 +122,9 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
         case 'payroll_admin':
             return filterNavByPermissions(getFinanceNavigation(), permissions);
         case 'line_manager':
-        case 'project_manager':
             return filterNavByPermissions(getManagerNavigation(profile), permissions);
+        case 'project_manager':
+            return filterNavByPermissions(getProjectManagerNavigation(), permissions);
         case 'employee':
             return getNavigationForMePortal({ profile, permissions, permissionFlags, position });
         default:
@@ -126,9 +135,16 @@ const getNavigationForPortal = (portalId, { position, department, jobTitle, prof
         return filterNavByPermissions(getExecutiveNavigation(position), permissions);
     }
     const isHRRole = isHR(department, jobTitle, position);
+    const isPureProjectManager =
+        isProjectManager(profile) &&
+        !(permissionFlags.isLineManager || (Array.isArray(profile?.functionalRoles) &&
+            profile.functionalRoles.some((r) => String(r).toLowerCase() === 'manager')));
     const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
     if (isHRRole) {
         return filterNavByPermissions(getHrPortalNavigation(permissionFlags), permissions);
+    }
+    if (isPureProjectManager) {
+        return filterNavByPermissions(getProjectManagerNavigation(), permissions);
     }
     if (isManagerRole) {
         return filterNavByPermissions(getManagerNavigation(profile), permissions);
@@ -178,9 +194,15 @@ export const getNavigationItems = (
             items = getExecutiveNavigation(position);
         } else {
             const isHRRole = isHR(department, jobTitle, position);
+            const isPurePm =
+                isProjectManager(profile) &&
+                !(Array.isArray(profile?.functionalRoles) &&
+                    profile.functionalRoles.some((r) => String(r).toLowerCase() === 'manager'));
             const isManagerRole = isManager(position, jobTitle) || isProjectManager(profile);
             if (isHRRole) {
                 items = getHrPortalNavigation(permissionFlags);
+            } else if (isPurePm) {
+                items = getProjectManagerNavigation();
             } else if (isManagerRole) {
                 items = getManagerNavigation(profile);
             } else if (isFinance(department)) {
@@ -313,6 +335,20 @@ const getExecutiveNavigation = (position) => {
 };
 
 /**
+ * Project Manager Navigation — dashboard + org projects; no people-manager team HR.
+ */
+const getProjectManagerNavigation = () => [
+    { path: "/dashboard-manager", name: "Dashboard", icon: <FaUserTie /> },
+    { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
+    { path: "/employee/leave-attendance", name: "Leave & Attendance", icon: <FaChartLine /> },
+    { path: "/my-attendance-regularization", name: "Regularization", icon: <FaClock /> },
+    { path: "/employee/calendar", name: "Calendar", icon: <FaCalendarAlt /> },
+    { path: "/employee-payroll", name: "My Payroll", icon: <FaMoneyBill /> },
+    { path: "/employee/documents-id", name: "Documents & ID", icon: <FaFolderOpen /> },
+    { path: "/profile-details", name: "Profile", icon: <CgProfile /> },
+];
+
+/**
  * Manager Navigation Items
  * Comprehensive list of all manager functions and features.
  * Project Managers do not get "My Team" — they manage via Projects, not direct reports.
@@ -321,7 +357,7 @@ const getManagerNavigation = (profile) => {
     const items = [
     { path: "/dashboard-manager", name: "Dashboard", icon: <FaUserTie /> },
     { path: "/employees", name: "My Team", icon: <FaUsers />, permissions: [PERMISSIONS.EMPLOYEE_VIEW_TEAM, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
-    { path: "/projects", name: "Projects", icon: <FaProjectDiagram /> },
+    { path: "/projects", name: "Projects", icon: <FaProjectDiagram />, permissions: [PERMISSIONS.PROJECT_ADMIN_VIEW, PERMISSIONS.EMPLOYEE_VIEW_ALL] },
     { path: "/leave-management", name: "Leave Management", icon: <FaCalendarAlt />, permissions: [PERMISSIONS.LEAVE_VIEW_TEAM, PERMISSIONS.LEAVE_VIEW_ALL] },
     { path: "/employee/leave-attendance", name: "Leave & Attendance", icon: <FaChartLine /> },
     { path: "/all-attendance-history", name: "Team Attendance", icon: <IoBookmarks />, permissions: [PERMISSIONS.ATTENDANCE_VIEW_TEAM, PERMISSIONS.ATTENDANCE_VIEW_ALL] },
@@ -337,6 +373,8 @@ const getManagerNavigation = (profile) => {
     
 
     if (isProjectManager(profile)) {
+        // Hybrid PM+line manager keeps team nav minus "My Team" directory;
+        // pure PM uses getProjectManagerNavigation instead.
         return items.filter((item) => item.path !== '/employees');
     }
     return items;

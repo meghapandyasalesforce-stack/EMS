@@ -100,27 +100,71 @@ describe('leavePolicyAccrualHelper', () => {
             expect(errors).toEqual([]);
             expect(sumPolicyAnnualEntitlement({ leaveTypes: [casualType, sickType] })).toBe(18);
         });
+
+        it('accepts on_anniversary with Amount only (no monthly entitlement)', () => {
+            const anniversarySick = {
+                type: 'sick',
+                enabled: true,
+                displayName: 'Sick',
+                accrual: {
+                    method: 'on_anniversary',
+                    frequency: 'yearly',
+                    maxAccrual: 5,
+                    amount: 0,
+                },
+            };
+            expect(validateLeaveTypeAccrual(anniversarySick)).toEqual([]);
+            expect(usesMonthlyAccrual(anniversarySick)).toBe(false);
+            const normalized = normalizePolicyLeaveTypes([anniversarySick])[0];
+            expect(normalized.accrual.maxAccrual).toBe(5);
+            expect(normalized.accrual.amount).toBe(0);
+            expect(normalized.accrual.anniversaryBased).toBe(true);
+            expect(normalized.maxDaysPerMonth).toBeUndefined();
+        });
+
+        it('accepts yearly lump-sum with Amount only', () => {
+            const yearlyType = {
+                type: 'vacation',
+                enabled: true,
+                displayName: 'Vacation',
+                accrual: {
+                    method: 'yearly',
+                    frequency: 'yearly',
+                    maxAccrual: 6,
+                    amount: 0,
+                },
+            };
+            expect(validateLeaveTypeAccrual(yearlyType)).toEqual([]);
+            expect(usesMonthlyAccrual(yearlyType)).toBe(false);
+        });
+
+        it('rejects on_anniversary without annual Amount', () => {
+            const invalid = {
+                type: 'sick',
+                enabled: true,
+                displayName: 'Sick',
+                accrual: {
+                    method: 'on_anniversary',
+                    frequency: 'yearly',
+                    maxAccrual: 0,
+                    amount: 0,
+                },
+            };
+            const errors = validateLeaveTypeAccrual(invalid);
+            expect(errors.length).toBeGreaterThan(0);
+            expect(errors[0]).toMatch(/Amount \(annual entitlement\) is required/i);
+        });
     });
 
     describe('application limits vs accrual', () => {
-        it('allows applying up to available balance when no monthly cap', () => {
-            expect(
-                getAppliableDaysThisMonth({
-                    availableBalance: 3,
-                    maxDaysPerMonth: null,
-                    usedThisMonth: 0,
-                })
-            ).toBe(3);
-        });
-
-        it('caps application by maxDaysPerMonth but not by monthly accrual', () => {
+        it('allows applying full available balance (month limit tracks available)', () => {
             expect(
                 getAppliableDaysThisMonth({
                     availableBalance: 6,
                     maxDaysPerMonth: 2,
                     usedThisMonth: 0,
                 })
-            ).toBe(2);
+            ).toBe(6);
         });
 
         it('detects monthly accrual from accrual.amount', () => {
@@ -128,7 +172,8 @@ describe('leavePolicyAccrualHelper', () => {
             expect(usesMonthlyAccrual(casualType)).toBe(true);
         });
 
-        it('computes remaining monthly take cap', () => {
+        it('computes remaining monthly take cap from available when provided', () => {
+            expect(getRemainingMonthlyTakeCap(2, 0.5, 3)).toBe(3);
             expect(getRemainingMonthlyTakeCap(2, 0.5)).toBe(1.5);
         });
     });

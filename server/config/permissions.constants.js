@@ -139,7 +139,7 @@ const PAYROLL_ADMIN_PERMS = [
   PERMISSIONS.LEAVE_APPLY_SELF,
 ];
 
-/** Line managers — team-scoped people management only (no org-wide employee lists). */
+/** Line managers — team-scoped people management + team-scoped projects. */
 const LINE_MANAGER_PERMS = [
   PERMISSIONS.EMPLOYEE_VIEW_TEAM,
   PERMISSIONS.LEAVE_VIEW_TEAM,
@@ -149,6 +149,7 @@ const LINE_MANAGER_PERMS = [
   PERMISSIONS.ATTENDANCE_REGULARIZATION_APPROVE,
   PERMISSIONS.LEAVE_APPLY_SELF,
   PERMISSIONS.PAYROLL_VIEW_SELF,
+  PERMISSIONS.PROJECT_ADMIN_VIEW,
 ];
 
 /** Project managers — org roster for project membership; not direct-report team HR. */

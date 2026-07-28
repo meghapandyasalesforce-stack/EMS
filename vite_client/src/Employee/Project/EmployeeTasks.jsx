@@ -22,6 +22,7 @@ import {
   updateExistingTask,
   fetchEmployeeWorkPlan,
   updateEmployeeWorkItem,
+  addEmployeeWorkItemComment,
 } from '../../context/employeeTaskSlice';
 
 const projectStatusDisplay = (status) => {
@@ -58,6 +59,7 @@ const EmployeeTasks = () => {
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [comments, setComments] = useState('');
   const [updatingWorkItemId, setUpdatingWorkItemId] = useState(null);
+  const [commentingWorkItemId, setCommentingWorkItemId] = useState(null);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
 
   const currentProject = useMemo(
@@ -89,6 +91,31 @@ const EmployeeTasks = () => {
       setUpdatingWorkItemId(workItemId);
       await dispatch(updateEmployeeWorkItem(workItemId, projectId, { status: newStatus }));
       setUpdatingWorkItemId(null);
+    },
+    [dispatch, projectId]
+  );
+
+  const handleWorkItemDueDateChange = useCallback(
+    async (workItemId, dueDate, dueDateChangeReason) => {
+      setUpdatingWorkItemId(workItemId);
+      const result = await dispatch(
+        updateEmployeeWorkItem(workItemId, projectId, {
+          dueDate,
+          dueDateChangeReason,
+        })
+      );
+      setUpdatingWorkItemId(null);
+      return result?.success;
+    },
+    [dispatch, projectId]
+  );
+
+  const handleWorkItemComment = useCallback(
+    async (workItemId, text) => {
+      setCommentingWorkItemId(workItemId);
+      const result = await dispatch(addEmployeeWorkItemComment(workItemId, projectId, text));
+      setCommentingWorkItemId(null);
+      return result?.success;
     },
     [dispatch, projectId]
   );
@@ -266,7 +293,11 @@ const EmployeeTasks = () => {
             workPlanError={workPlanError}
             currentEmployeeId={employee?._id}
             onStatusChange={handleWorkItemStatusChange}
+            onDueDateChange={handleWorkItemDueDateChange}
             updatingId={updatingWorkItemId}
+            onAddComment={handleWorkItemComment}
+            commentingId={commentingWorkItemId}
+            canComment={Boolean(employee?._id)}
           />
         </div>
       )}

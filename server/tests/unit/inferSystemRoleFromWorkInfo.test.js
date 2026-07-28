@@ -39,14 +39,14 @@ describe('inferSystemRoleFromWorkInfo', () => {
     ).toBe(SYSTEM_ROLE_IDS.PAYROLL_ADMIN);
   });
 
-  it('suggests line manager for project managers', () => {
+  it('suggests project manager for Project Manager job title', () => {
     expect(
       inferSystemRoleFromWorkInfo({
         department: 'Operations',
         jobTitle: 'Project Manager',
         position: 'Manager',
       }).systemRoleId
-    ).toBe(SYSTEM_ROLE_IDS.LINE_MANAGER);
+    ).toBe(SYSTEM_ROLE_IDS.PROJECT_MANAGER);
   });
 
   it('defaults to employee for standard ICs', () => {

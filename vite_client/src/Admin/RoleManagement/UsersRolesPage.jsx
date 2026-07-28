@@ -13,6 +13,7 @@ const ROLE_BADGE_COLORS = {
   hr_executive: 'bg-sky-100 text-sky-800',
   payroll_admin: 'bg-amber-100 text-amber-800',
   line_manager: 'bg-indigo-100 text-indigo-800',
+  project_manager: 'bg-teal-100 text-teal-800',
   executive: 'bg-rose-100 text-rose-800',
   employee: 'bg-slate-100 text-slate-700',
 };

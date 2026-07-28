@@ -6,6 +6,14 @@ const balanceSnapshotSchema = new mongoose.Schema(
         used: { type: Number, default: 0 },
         carriedForward: { type: Number, default: 0 },
         available: { type: Number, default: 0 },
+        manualStock: { type: Number, default: 0 },
+        manualDebit: { type: Number, default: 0 },
+        lopDays: { type: Number, default: 0 },
+        lopLeaveIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Leave' }],
+        excessMode: { type: String },
+        effectiveAnnual: { type: Number },
+        futureMonthlyRate: { type: Number },
+        fundedFutureMonths: { type: Number },
     },
     { _id: false }
 );

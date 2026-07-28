@@ -17,7 +17,8 @@ import {
     sumEffectivePresentDaysByKeys,
     computePayrollProration,
     resolvePayrollServiceDateKeys,
-    resolvePayslipSalaryPaidDays
+    resolvePayslipSalaryPaidDays,
+    attendanceDayCreditDayBased
 } from '../../helpers/payrollGenerationHelper.js';
 
 const TZ = 'Asia/Kolkata';
@@ -91,8 +92,91 @@ describe('payrollGenerationHelper', () => {
             expect(attendanceDayCredit({ status: 'present', effectiveHours: 8 })).toBe(1);
         });
 
+        it('uses gross hours when both gross and effective are stored', () => {
+            expect(
+                attendanceDayCredit({
+                    status: 'present',
+                    effectiveHours: 8,
+                    grossHours: 9.65
+                })
+            ).toBe(1);
+            expect(
+                attendanceDayCreditDayBased(
+                    {
+                        status: 'loggedOut',
+                        clockOut: new Date(),
+                        effectiveHours: 8.78,
+                        grossHours: 9.65
+                    },
+                    9,
+                    4
+                )
+            ).toBe(1);
+        });
+
         it('caps half-day status at 0.5', () => {
             expect(attendanceDayCredit({ status: 'half-day', effectiveHours: 6 })).toBe(0.5);
+        });
+    });
+
+    describe('attendanceDayCreditDayBased', () => {
+        it('requires clockOut and meets full-day hours', () => {
+            expect(
+                attendanceDayCreditDayBased(
+                    { status: 'loggedOut', effectiveHours: 8 },
+                    8,
+                    4
+                )
+            ).toBe(0);
+            expect(
+                attendanceDayCreditDayBased(
+                    { status: 'loggedOut', clockOut: new Date(), effectiveHours: 8 },
+                    8,
+                    4
+                )
+            ).toBe(1);
+        });
+
+        it('returns half day for partial hours', () => {
+            expect(
+                attendanceDayCreditDayBased(
+                    { status: 'loggedOut', clockOut: new Date(), effectiveHours: 5 },
+                    8,
+                    4
+                )
+            ).toBe(0.5);
+        });
+
+        it('caps late arrival at 0.5 when markHalfDayIfLate is enabled', () => {
+            expect(
+                attendanceDayCreditDayBased(
+                    {
+                        status: 'loggedOut',
+                        clockOut: new Date(),
+                        effectiveHours: 9,
+                        isLateArrival: true
+                    },
+                    8,
+                    4,
+                    { markHalfDayIfLate: true }
+                )
+            ).toBe(0.5);
+        });
+
+        it('does not cap late arrival when markHalfDayIfLate is off', () => {
+            expect(
+                attendanceDayCreditDayBased(
+                    {
+                        status: 'loggedOut',
+                        clockOut: new Date(),
+                        effectiveHours: 9,
+                        isLateArrival: true
+                    },
+                    8,
+                    4,
+                    { markHalfDayIfLate: false }
+                )
+            ).toBe(1);
         });
     });
 

@@ -13,6 +13,7 @@ import {
   CircularProgress,
   Alert,
   Checkbox,
+  FormControlLabel,
   ListItemText,
   Divider,
   Tabs,
@@ -48,6 +49,14 @@ import {
 } from '../../utils/projectFinancialsHelper';
 import { format } from 'date-fns';
 import { isExecutive } from '../../utils/navigationConfig';
+import WorkItemComments from '../../components/project/WorkItemComments';
+import WorkItemDueDateHistory from '../../components/project/WorkItemDueDateHistory';
+import { isProjectManager } from '../../utils/projectManagerHelper';
+
+const resolveEmployeeId = (user, employee) =>
+  employee?._id ||
+  user?.employeeProfileId ||
+  (user?.role === 'employee' ? user?._id : null);
 
 const ProjectDetailPage = () => {
   const { id } = useParams();
@@ -79,11 +88,26 @@ const ProjectDetailPage = () => {
   // Get current user for project leader check
   const user = useSelector((state) => state.auth.user);
   const employee = useSelector((state) => state.employeeDetails.employee);
+  const permissionFlags = useSelector((state) => state.auth.permissionFlags) || {};
 
   const canViewFinancials = useMemo(
     () => canViewProjectFinancials(user, employee),
     [user, employee]
   );
+
+  const canCommentOnWorkPlan = useMemo(() => {
+    const me = resolveEmployeeId(user, employee);
+    if (!project) return false;
+    if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner || user?.role === 'admin') {
+      return Boolean(me);
+    }
+    if (!me) return false;
+    const leaderId = project.projectLeader?._id || project.projectLeader;
+    if (String(leaderId) === String(me)) return true;
+    return (project.projectMembers || []).some(
+      (m) => String(m._id || m) === String(me)
+    );
+  }, [project, employee, user, permissionFlags]);
 
   // Filter active employees for project members - memoized
   const activeEmployees = useMemo(() => 
@@ -140,20 +164,34 @@ const ProjectDetailPage = () => {
     _id: '',
     title: '',
     description: '',
-    assignee: null,
+    assignees: [],
     dueDate: '',
+    originalDueDate: '',
+    dueDateChangeReason: '',
+    dueDateHistory: [],
     priority: 'medium',
     status: 'todo',
+    addAsMember: true,
   });
   const [subtaskParentId, setSubtaskParentId] = useState(null);
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [subtaskSaving, setSubtaskSaving] = useState(false);
+  const [commentingWorkItemId, setCommentingWorkItemId] = useState(null);
 
-  // Check if current user is project leader
+  // Project leader uses Employee id; PMs / org owners can also post updates
   const isProjectLeader = useMemo(() => {
-    const currentUserId = user?._id || employee?._id;
-    return project?.projectLeader?._id?.toString() === currentUserId?.toString();
+    const currentEmployeeId = resolveEmployeeId(user, employee);
+    if (!currentEmployeeId || !project?.projectLeader) return false;
+    const leaderId = project.projectLeader._id || project.projectLeader;
+    return String(leaderId) === String(currentEmployeeId);
   }, [project, user, employee]);
+
+  const canPostDailyUpdates = useMemo(() => {
+    if (isProjectLeader) return true;
+    if (permissionFlags.isProjectManager || permissionFlags.isOrgOwner) return true;
+    if (isProjectManager(user || employee)) return true;
+    return false;
+  }, [isProjectLeader, permissionFlags, user, employee]);
 
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
@@ -187,28 +225,38 @@ const ProjectDetailPage = () => {
     });
   }, []);
 
-  // Map backend status to frontend status format
+  // Map backend project status to display label
   const mapStatusToFrontend = useCallback((backendStatus) => {
     if (!backendStatus) return '';
     const statusMap = {
-      'pending': 'Not Started',
+      pending: 'Pending',
       'in-progress': 'In Progress',
-      'completed': 'Completed',
-      'on-hold': 'On Hold'
+      completed: 'Completed',
+      'on-hold': 'On Hold',
+      // Daily-log Title Case values (pass through)
+      'Not Started': 'Not Started',
+      'In Progress': 'In Progress',
+      Completed: 'Completed',
+      'On Hold': 'On Hold',
     };
-    return statusMap[backendStatus.toLowerCase()] || backendStatus;
+    return statusMap[backendStatus] || statusMap[String(backendStatus).toLowerCase()] || backendStatus;
   }, []);
 
-  // Map frontend status to backend status format
+  // Map UI / legacy labels to backend project status
   const mapStatusToBackend = useCallback((frontendStatus) => {
     if (!frontendStatus) return '';
     const statusMap = {
-      'Not Started': 'pending',
+      Pending: 'pending',
+      'Not Started': 'pending', // legacy label
       'In Progress': 'in-progress',
-      'Completed': 'completed',
-      'On Hold': 'on-hold'
+      Completed: 'completed',
+      'On Hold': 'on-hold',
+      pending: 'pending',
+      'in-progress': 'in-progress',
+      completed: 'completed',
+      'on-hold': 'on-hold',
     };
-    return statusMap[frontendStatus] || frontendStatus.toLowerCase();
+    return statusMap[frontendStatus] || String(frontendStatus).toLowerCase();
   }, []);
 
   const handleUpdate = useCallback(async () => {
@@ -312,7 +360,7 @@ const ProjectDetailPage = () => {
     if (project) {
       setEditedProject({
         name: project.name,
-        status: mapStatusToFrontend(project.status),
+        status: project.status || 'pending',
         projectLeader: project.projectLeader?._id || '',
         projectMembers: project.projectMembers?.map(m => m._id) || [],
         budget: project.budget || '',
@@ -327,7 +375,7 @@ const ProjectDetailPage = () => {
     }
     
     dispatch(fetchEmployees({ fetchAllPages: true }));
-  }, [project, dispatch, mapStatusToFrontend, loadWorkPlan]);
+  }, [project, dispatch, loadWorkPlan]);
 
   useEffect(() => {
     if (location.state?.startEditing && project) {
@@ -394,47 +442,83 @@ const ProjectDetailPage = () => {
     }
   }, []);
 
+  const resolveItemAssigneePeople = useCallback((item) => {
+    if (Array.isArray(item?.assignees) && item.assignees.length) return item.assignees;
+    if (item?.assignee) return [item.assignee];
+    return [];
+  }, []);
+
   const openWorkItemEdit = useCallback((item) => {
+    const people = resolveItemAssigneePeople(item);
+    const due = formatDueDateInput(item.dueDate);
     setWorkItemEditForm({
       _id: item._id,
       title: item.title || '',
       description: item.description || '',
-      assignee: item.assignee?._id || null,
-      dueDate: formatDueDateInput(item.dueDate),
+      assignees: people.map((p) => p._id || p).filter(Boolean),
+      dueDate: due,
+      originalDueDate: due,
+      dueDateChangeReason: '',
+      dueDateHistory: item.dueDateHistory || [],
       priority: item.priority || 'medium',
       status: item.status || 'todo',
+      addAsMember: true,
     });
     setWorkItemEditOpen(true);
-  }, [formatDueDateInput]);
+  }, [formatDueDateInput, resolveItemAssigneePeople]);
+
+  const dueDateChanged =
+    (workItemEditForm.dueDate || '') !== (workItemEditForm.originalDueDate || '');
 
   const handleSaveWorkItemEdit = useCallback(async () => {
     if (!workItemEditForm.title.trim()) {
       toast.error('Title is required');
       return;
     }
+    if (dueDateChanged && !workItemEditForm.dueDateChangeReason?.trim()) {
+      toast.error('Please provide a reason for changing the due date');
+      return;
+    }
     setWorkItemEditSaving(true);
     try {
-      await axios.put(
+      const response = await axios.put(
         `${ADMIN_PROJECT_ENDPOINT}/work-items/${workItemEditForm._id}`,
         {
           title: workItemEditForm.title.trim(),
           description: workItemEditForm.description.trim() || '',
-          assignee: workItemEditForm.assignee || null,
+          assignees: workItemEditForm.assignees || [],
           dueDate: workItemEditForm.dueDate || null,
+          ...(dueDateChanged
+            ? { dueDateChangeReason: workItemEditForm.dueDateChangeReason.trim() }
+            : {}),
           priority: workItemEditForm.priority,
           status: workItemEditForm.status,
+          addAsMember: workItemEditForm.addAsMember !== false,
         },
         { withCredentials: true }
       );
-      toast.success('Task updated');
+      const assignment = response.data?.assignment;
+      if (dueDateChanged) {
+        toast.success('Due date updated with reason');
+      } else if (assignment?.notified && assignment?.memberAdded) {
+        toast.success('Assigned — people added to project and notified');
+      } else if (assignment?.notified) {
+        toast.success('Assigned — new assignees notified');
+      } else if (assignment?.memberAdded) {
+        toast.success('Task saved — people added to project');
+      } else {
+        toast.success(response.data?.message || 'Task updated');
+      }
       setWorkItemEditOpen(false);
       loadWorkPlan();
+      // Refresh project list so member chips stay in sync
+      dispatch(fetchEmployees({ fetchAllPages: true }));
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update task');
     } finally {
       setWorkItemEditSaving(false);
     }
-  }, [workItemEditForm, loadWorkPlan]);
+  }, [workItemEditForm, dueDateChanged, loadWorkPlan, dispatch]);
 
   const handleAddSubtask = useCallback(async () => {
     if (!subtaskTitle.trim() || !subtaskParentId || !project?._id) return;
@@ -460,6 +544,28 @@ const ProjectDetailPage = () => {
       setSubtaskSaving(false);
     }
   }, [subtaskTitle, subtaskParentId, project?._id, loadWorkPlan]);
+
+  const handleAddWorkItemComment = useCallback(
+    async (workItemId, text) => {
+      setCommentingWorkItemId(workItemId);
+      try {
+        await axios.post(
+          `${ADMIN_PROJECT_ENDPOINT}/work-items/${workItemId}/comments`,
+          { text },
+          { withCredentials: true }
+        );
+        toast.success('Comment posted');
+        loadWorkPlan();
+        return true;
+      } catch (err) {
+        toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to post comment');
+        return false;
+      } finally {
+        setCommentingWorkItemId(null);
+      }
+    },
+    [loadWorkPlan]
+  );
 
   const workItemStatusLabel = useCallback((s) => {
     const map = { todo: 'To do', 'in-progress': 'In progress', completed: 'Completed', 'on-hold': 'On hold' };
@@ -494,14 +600,19 @@ const ProjectDetailPage = () => {
               ) : null}
               <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
                 <Chip size="small" label={`Priority: ${item.priority || 'medium'}`} variant="outlined" />
-                {item.assignee ? (
-                  <Chip
-                    size="small"
-                    icon={<FiUser size={14} />}
-                    label={`${item.assignee.name || ''} ${item.assignee.lastName || ''}`.trim()}
-                    variant="outlined"
-                  />
-                ) : null}
+                {resolveItemAssigneePeople(item).map((person) => {
+                  const pid = person._id || person;
+                  const label = `${person.name || ''} ${person.lastName || ''}`.trim() || 'Assignee';
+                  return (
+                    <Chip
+                      key={String(pid)}
+                      size="small"
+                      icon={<FiUser size={14} />}
+                      label={label}
+                      variant="outlined"
+                    />
+                  );
+                })}
                 {item.dueDate ? (
                   <Chip
                     size="small"
@@ -584,6 +695,16 @@ const ProjectDetailPage = () => {
               Add subtask
             </Button>
           )}
+          <Box sx={{ mt: 1 }}>
+            <WorkItemDueDateHistory history={item.dueDateHistory} compact />
+            <WorkItemComments
+              comments={item.comments}
+              canComment={canCommentOnWorkPlan}
+              submitting={commentingWorkItemId === item._id}
+              onSubmit={(text) => handleAddWorkItemComment(item._id, text)}
+              compact
+            />
+          </Box>
         </Paper>
         {(item.subtasks || []).map((st) => renderWorkItem(st, depth + 1))}
       </Box>
@@ -594,10 +715,14 @@ const ProjectDetailPage = () => {
       handleDeleteWorkItem,
       workItemStatusLabel,
       openWorkItemEdit,
+      resolveItemAssigneePeople,
       subtaskParentId,
       subtaskTitle,
       subtaskSaving,
       handleAddSubtask,
+      canCommentOnWorkPlan,
+      commentingWorkItemId,
+      handleAddWorkItemComment,
     ]
   );
 
@@ -726,7 +851,7 @@ const ProjectDetailPage = () => {
         <Box display="flex" gap={2} flexWrap="wrap">
           {!isEditing ? (
             <>
-              {isProjectLeader && (
+              {canPostDailyUpdates && (
                 <>
                   <Button 
                     onClick={() => {
@@ -839,10 +964,10 @@ const ProjectDetailPage = () => {
                     label="Status"
                     required
                   >
-                    <MenuItem value="Not Started">Not Started</MenuItem>
-                    <MenuItem value="In Progress">In Progress</MenuItem>
-                    <MenuItem value="Completed">Completed</MenuItem>
-                    <MenuItem value="On Hold">On Hold</MenuItem>
+                    <MenuItem value="pending">Pending</MenuItem>
+                    <MenuItem value="in-progress">In Progress</MenuItem>
+                    <MenuItem value="completed">Completed</MenuItem>
+                    <MenuItem value="on-hold">On Hold</MenuItem>
                   </Select>
                 </FormControl>
 
@@ -1215,7 +1340,7 @@ const ProjectDetailPage = () => {
         <Paper elevation={3} sx={{ padding: isMobile ? 2 : 3, mb: 4 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Typography variant="h6">Daily Updates</Typography>
-            {isProjectLeader && (
+            {canPostDailyUpdates && (
               <Button
                 variant="contained"
                 color="primary"
@@ -1244,7 +1369,7 @@ const ProjectDetailPage = () => {
               <Typography variant="body1" color="text.secondary" mb={2}>
                 No daily updates posted yet.
               </Typography>
-              {isProjectLeader && (
+              {canPostDailyUpdates && (
                 <Button
                   variant="outlined"
                   startIcon={<FiMessageSquare />}
@@ -1530,25 +1655,87 @@ const ProjectDetailPage = () => {
               label="Due date"
               type="date"
               value={workItemEditForm.dueDate}
-              onChange={(e) => setWorkItemEditForm((f) => ({ ...f, dueDate: e.target.value }))}
+              onChange={(e) =>
+                setWorkItemEditForm((f) => ({
+                  ...f,
+                  dueDate: e.target.value,
+                  ...(e.target.value === f.originalDueDate ? { dueDateChangeReason: '' } : {}),
+                }))
+              }
               InputLabelProps={{ shrink: true }}
               fullWidth
             />
+            {dueDateChanged ? (
+              <TextField
+                label="Reason for due date change"
+                value={workItemEditForm.dueDateChangeReason}
+                onChange={(e) =>
+                  setWorkItemEditForm((f) => ({ ...f, dueDateChangeReason: e.target.value }))
+                }
+                required
+                multiline
+                minRows={2}
+                fullWidth
+                helperText="Required when changing the due date. This is visible to the project team."
+              />
+            ) : null}
+            <WorkItemDueDateHistory history={workItemEditForm.dueDateHistory} compact />
             <Autocomplete
+              multiple
               options={activeEmployees}
               getOptionLabel={(emp) => `${emp.name} ${emp.lastName || ''}`.trim()}
-              value={
-                workItemEditForm.assignee
-                  ? activeEmployees.find((e) => e._id === workItemEditForm.assignee) || null
-                  : null
+              isOptionEqualToValue={(opt, val) => String(opt._id) === String(val._id)}
+              value={activeEmployees.filter((e) =>
+                (workItemEditForm.assignees || []).some((id) => String(id) === String(e._id))
+              )}
+              onChange={(_, newVals) =>
+                setWorkItemEditForm((f) => ({
+                  ...f,
+                  assignees: (newVals || []).map((e) => e._id),
+                }))
               }
-              onChange={(_, newVal) =>
-                setWorkItemEditForm((f) => ({ ...f, assignee: newVal ? newVal._id : null }))
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option._id}
+                    size="small"
+                    label={`${option.name} ${option.lastName || ''}`.trim()}
+                  />
+                ))
               }
               renderInput={(params) => (
-                <TextField {...params} label="Assignee (optional)" />
+                <TextField {...params} label="Assignees (optional)" placeholder="Add people" />
               )}
             />
+            {workItemEditForm.assignees?.length ? (
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  bgcolor: 'action.hover',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  Assigning always notifies new assignees (in-app + email). Optionally add them as
+                  project members so they can open it under Projects.
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={workItemEditForm.addAsMember !== false}
+                      onChange={(e) =>
+                        setWorkItemEditForm((f) => ({ ...f, addAsMember: e.target.checked }))
+                      }
+                      size="small"
+                    />
+                  }
+                  label="Add assignees as project members"
+                />
+              </Box>
+            ) : null}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -1557,10 +1744,20 @@ const ProjectDetailPage = () => {
           </Button>
           <Button
             variant="contained"
+            color={workItemEditForm.assignees?.length ? 'success' : 'primary'}
             onClick={handleSaveWorkItemEdit}
-            disabled={workItemEditSaving || !workItemEditForm.title.trim()}
+            disabled={
+              workItemEditSaving ||
+              !workItemEditForm.title.trim() ||
+              (dueDateChanged && !workItemEditForm.dueDateChangeReason?.trim())
+            }
+            startIcon={workItemEditForm.assignees?.length ? <FiUser /> : <FiSave />}
           >
-            {workItemEditSaving ? 'Saving…' : 'Save'}
+            {workItemEditSaving
+              ? 'Saving…'
+              : workItemEditForm.assignees?.length
+                ? 'Assign & save'
+                : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>

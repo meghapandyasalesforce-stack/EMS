@@ -3,6 +3,7 @@ import Attendance from '../models/attendance.model.js';
 import Leave from '../models/leave.model.js';
 import Calendar from '../models/calendar.model.js';
 import Employee from '../models/employee.model.js';
+import Organization from '../models/organization.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import logger from './logger.js';
 import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
@@ -287,14 +288,15 @@ export function resolvePayrollServiceDateKeys({
 /**
  * Build dateKey → attendance credit from raw rows using org date keys only.
  */
-export function buildAttendanceCreditByDay(records, { dayKey, isWorkingDayKeyFn }) {
+export function buildAttendanceCreditByDay(records, { dayKey, isWorkingDayKeyFn, creditFn }) {
     const attByDay = new Map();
+    const resolvedCreditFn = typeof creditFn === 'function' ? creditFn : attendanceDayCredit;
     for (const r of records) {
         const key = resolveAttendanceRecordDateKey(r, dayKey);
         if (!key || (typeof isWorkingDayKeyFn === 'function' && !isWorkingDayKeyFn(key))) {
             continue;
         }
-        const c = attendanceDayCredit(r);
+        const c = resolvedCreditFn(r);
         attByDay.set(key, Math.min(1, Math.max(attByDay.get(key) || 0, c)));
     }
     return attByDay;
@@ -362,17 +364,18 @@ function mapLeaveTypeForPayroll(leaveType) {
 /** Full-day standard for attendance weighting (aligned with overtime divisor in this module). */
 const STANDARD_FULL_DAY_HOURS = 8;
 
+/** Hours used for payroll attendance credit: gross (in-office) first, then effective fallback. */
 function attendanceHoursWorked(record) {
-    const eff = Number(record.effectiveHours);
     const gross = Number(record.grossHours);
-    if (Number.isFinite(eff) && eff > 0) return eff;
+    const eff = Number(record.effectiveHours);
     if (Number.isFinite(gross) && gross > 0) return gross;
+    if (Number.isFinite(eff) && eff > 0) return eff;
     return 0;
 }
 
 /**
- * Paid-day credit (0–1) from one attendance row using worked hours.
- * present/loggedOut with 0 effective and 0 gross hours → 0 (treat as no paid time).
+ * Paid-day credit (0–1) from one attendance row using worked hours (gross, else effective).
+ * present/loggedOut with 0 gross and 0 effective hours → 0 (treat as no paid time).
  */
 export function attendanceDayCredit(record) {
     const status = (record.status || '').toLowerCase();
@@ -381,6 +384,39 @@ export function attendanceDayCredit(record) {
     if (status === 'half-day') return Math.min(0.5, h / STANDARD_FULL_DAY_HOURS);
     if (status === 'present' || status === 'loggedout') return Math.min(1, h / STANDARD_FULL_DAY_HOURS);
     return 0;
+}
+
+/**
+ * Day-based credit: punch-in + punch-out required; credit determined by hour thresholds.
+ * When markHalfDayIfLate is on and the row is a late arrival, credit is capped at 0.5.
+ * @param {object} record - Attendance record
+ * @param {number} minHoursForFullDay - Hours needed for full day credit
+ * @param {number} minHoursForHalfDay - Hours needed for half day credit
+ * @param {{ markHalfDayIfLate?: boolean }} [options]
+ */
+export function attendanceDayCreditDayBased(
+    record,
+    minHoursForFullDay = 8,
+    minHoursForHalfDay = 4,
+    options = {}
+) {
+    const status = (record.status || '').toLowerCase();
+    // Must have punched out (loggedout or half-day status); pure punch-in with no checkout = 0
+    if (status !== 'loggedout' && status !== 'present' && status !== 'half-day') return 0;
+    // Attendance model uses clockOut (legacy alias checkOut supported)
+    if (!record.clockOut && !record.checkOut) return 0;
+    const h = attendanceHoursWorked(record);
+    let credit = 0;
+    if (h >= minHoursForFullDay) credit = 1;
+    else if (h >= minHoursForHalfDay) credit = 0.5;
+
+    if (status === 'half-day') {
+        credit = Math.min(credit, 0.5);
+    }
+    if (options.markHalfDayIfLate && record.isLateArrival) {
+        credit = Math.min(credit, 0.5);
+    }
+    return credit;
 }
 
 /** Sum paid-day credits over org date keys in [walkStartKey, walkEndKey]. */
@@ -663,6 +699,20 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     const orgTimezone = await getCachedEffectiveTimezone(orgId);
     const dayKey = createDayKeyFn(orgTimezone);
 
+    // Fetch org payroll settings to determine calculation mode
+    const orgDoc = await Organization.findById(orgId).select('settings').lean();
+    const payrollSettings = orgDoc?.settings?.payrollSettings || {};
+    const calculationMode = payrollSettings.calculationMode || 'work_hours';
+    const minHoursForFullDay = Number(payrollSettings.minHoursForFullDay) || 8;
+    const minHoursForHalfDay = Number(payrollSettings.minHoursForHalfDay) || 4;
+    const markHalfDayIfLate = !!payrollSettings.markHalfDayIfLate;
+    const creditFn = calculationMode === 'day_based'
+        ? (r) =>
+              attendanceDayCreditDayBased(r, minHoursForFullDay, minHoursForHalfDay, {
+                  markHalfDayIfLate
+              })
+        : attendanceDayCredit;
+
     // Month bounds in org IANA timezone (never use server-local Date month-end — UTC→IST spills +1 day).
     const monthStartDt = DateTime.fromObject(
         { year: yearNum, month: monthIndex + 1, day: 1 },
@@ -765,7 +815,8 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
     const attByDay = buildAttendanceCreditByDay(attendanceRecords, {
         dayKey,
-        isWorkingDayKeyFn
+        isWorkingDayKeyFn,
+        creditFn
     });
 
     const totalOvertimeHours = attendanceRecords.reduce((sum, r) => sum + (r.overtimeHours || 0), 0);

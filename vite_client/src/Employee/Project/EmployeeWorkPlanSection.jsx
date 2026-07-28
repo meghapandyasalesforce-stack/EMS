@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FiCalendar, FiLock, FiUser } from 'react-icons/fi';
+import WorkItemComments from '../../components/project/WorkItemComments';
+import WorkItemDueDateHistory from '../../components/project/WorkItemDueDateHistory';
 
 const STATUS_OPTIONS = [
   { value: 'todo', label: 'To do' },
@@ -17,13 +19,72 @@ function formatDue(d) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function WorkPlanNode({ item, depth, currentEmployeeId, onStatusChange, updatingId }) {
-  const assigneeName = item.assignee
-    ? `${item.assignee.name || ''} ${item.assignee.lastName || ''}`.trim()
-    : null;
+function toDateInputValue(d) {
+  if (!d) return '';
+  try {
+    const date = new Date(d);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+  } catch {
+    return '';
+  }
+}
+
+function resolveAssignees(item) {
+  if (Array.isArray(item?.assignees) && item.assignees.length) return item.assignees;
+  if (item?.assignee) return [item.assignee];
+  return [];
+}
+
+function WorkPlanNode({
+  item,
+  depth,
+  currentEmployeeId,
+  onStatusChange,
+  onDueDateChange,
+  updatingId,
+  onAddComment,
+  commentingId,
+  canComment,
+}) {
+  const assignees = resolveAssignees(item);
   const isMine =
     currentEmployeeId &&
-    item.assignee?._id?.toString() === currentEmployeeId.toString();
+    assignees.some((a) => (a._id || a)?.toString() === currentEmployeeId.toString());
+
+  const [editingDue, setEditingDue] = useState(false);
+  const [dueDraft, setDueDraft] = useState('');
+  const [reasonDraft, setReasonDraft] = useState('');
+  const [dueError, setDueError] = useState('');
+
+  const openDueEditor = () => {
+    setDueDraft(toDateInputValue(item.dueDate));
+    setReasonDraft('');
+    setDueError('');
+    setEditingDue(true);
+  };
+
+  const cancelDueEditor = () => {
+    setEditingDue(false);
+    setDueError('');
+  };
+
+  const submitDueChange = async () => {
+    const original = toDateInputValue(item.dueDate);
+    if (dueDraft === original) {
+      setEditingDue(false);
+      return;
+    }
+    if (!reasonDraft.trim()) {
+      setDueError('Reason is required when changing the due date');
+      return;
+    }
+    setDueError('');
+    const ok = await onDueDateChange?.(item._id, dueDraft || null, reasonDraft.trim());
+    if (ok !== false) {
+      setEditingDue(false);
+    }
+  };
 
   return (
     <div
@@ -64,11 +125,20 @@ function WorkPlanNode({ item, depth, currentEmployeeId, onStatusChange, updating
               <span className="px-2 py-0.5 rounded bg-gray-100">
                 Priority: {item.priority || 'medium'}
               </span>
-              {assigneeName ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100">
-                  <FiUser size={12} />
-                  {assigneeName}
-                </span>
+              {assignees.length ? (
+                assignees.map((person) => {
+                  const pid = person._id || person;
+                  const name = `${person.name || ''} ${person.lastName || ''}`.trim() || 'Assignee';
+                  return (
+                    <span
+                      key={String(pid)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100"
+                    >
+                      <FiUser size={12} />
+                      {name}
+                    </span>
+                  );
+                })
               ) : (
                 <span className="px-2 py-0.5 rounded bg-gray-100">Unassigned</span>
               )}
@@ -77,8 +147,62 @@ function WorkPlanNode({ item, depth, currentEmployeeId, onStatusChange, updating
                   <FiCalendar size={12} />
                   Due {formatDue(item.dueDate)}
                 </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-gray-100">No due date</span>
+              )}
+              {item.canEdit && onDueDateChange && !editingDue ? (
+                <button
+                  type="button"
+                  onClick={openDueEditor}
+                  className="text-xs text-theme-secondary hover:underline"
+                >
+                  Change due date
+                </button>
               ) : null}
             </div>
+
+            {editingDue ? (
+              <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50/50 space-y-2">
+                <label className="block text-xs font-medium text-gray-700">
+                  New due date
+                  <input
+                    type="date"
+                    value={dueDraft}
+                    onChange={(e) => setDueDraft(e.target.value)}
+                    className="mt-1 block w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-gray-700">
+                  Reason for change
+                  <textarea
+                    value={reasonDraft}
+                    onChange={(e) => setReasonDraft(e.target.value)}
+                    rows={2}
+                    placeholder="Why is the due date changing?"
+                    className="mt-1 block w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                </label>
+                {dueError ? <p className="text-xs text-red-600">{dueError}</p> : null}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={updatingId === item._id}
+                    onClick={submitDueChange}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-theme-secondary text-white disabled:opacity-60"
+                  >
+                    {updatingId === item._id ? 'Saving…' : 'Save due date'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={updatingId === item._id}
+                    onClick={cancelDueEditor}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="flex-shrink-0">
             {item.canEdit ? (
@@ -109,6 +233,14 @@ function WorkPlanNode({ item, depth, currentEmployeeId, onStatusChange, updating
             )}
           </div>
         </div>
+        <WorkItemDueDateHistory history={item.dueDateHistory} compact />
+        <WorkItemComments
+          comments={item.comments}
+          canComment={canComment}
+          submitting={commentingId === item._id}
+          onSubmit={(text) => onAddComment?.(item._id, text)}
+          compact
+        />
       </div>
       {(item.subtasks || []).map((st) => (
         <WorkPlanNode
@@ -117,7 +249,11 @@ function WorkPlanNode({ item, depth, currentEmployeeId, onStatusChange, updating
           depth={depth + 1}
           currentEmployeeId={currentEmployeeId}
           onStatusChange={onStatusChange}
+          onDueDateChange={onDueDateChange}
           updatingId={updatingId}
+          onAddComment={onAddComment}
+          commentingId={commentingId}
+          canComment={canComment}
         />
       ))}
     </div>
@@ -131,7 +267,11 @@ export default function EmployeeWorkPlanSection({
   workPlanError,
   currentEmployeeId,
   onStatusChange,
+  onDueDateChange,
   updatingId,
+  onAddComment,
+  commentingId,
+  canComment = true,
 }) {
   if (workPlanStatus === 'loading') {
     return (
@@ -178,8 +318,8 @@ export default function EmployeeWorkPlanSection({
         </div>
       )}
       <p className="text-xs text-gray-500 mb-4">
-        If you are assigned to a main task, you can update that task and all its subtasks. If you
-        are only assigned to a subtask, you can update that subtask only.
+        If you are assigned to a main task, you can update that task and all its subtasks. Changing a
+        due date requires a reason, which is saved in the task history for the team to see.
       </p>
       {workPlan.map((node) => (
         <WorkPlanNode
@@ -188,7 +328,11 @@ export default function EmployeeWorkPlanSection({
           depth={0}
           currentEmployeeId={currentEmployeeId}
           onStatusChange={onStatusChange}
+          onDueDateChange={onDueDateChange}
           updatingId={updatingId}
+          onAddComment={onAddComment}
+          commentingId={commentingId}
+          canComment={canComment}
         />
       ))}
     </div>
