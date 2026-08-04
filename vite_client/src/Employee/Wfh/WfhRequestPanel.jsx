@@ -97,12 +97,12 @@ const WfhRequestPanel = () => {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-3 text-sm text-[#0C4A6E]">
-        <p className="font-semibold">Work From Home intimation</p>
+      <div className="">
+        {/* <p className="font-semibold">Work From Home intimation</p>
         <p className="mt-1">
           Use this form to formally inform your reporting manager, HR, and admin that you plan to work from home.
           An email will be sent on your behalf. This does not block or approve your punch-in.
-        </p>
+        </p> */}
       </div>
 
       <form onSubmit={handleSubmit} className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-4">
