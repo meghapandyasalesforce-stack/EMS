@@ -83,7 +83,9 @@ function App() {
     // Check if pathname is in hideHeaderRoutes or starts with /reset-password (for token routes)
     const shouldHideLayout = hideHeaderRoutes.includes(location.pathname)
         || location.pathname.startsWith('/reset-password')
-        || location.pathname.startsWith('/offer/');
+        || location.pathname.startsWith('/offer/')
+        || location.pathname.startsWith('/careers/')
+        || location.pathname.startsWith('/application/');
     
     if (!authChecked) {
         return <LoadingSpinner message="Initializing session..." />;

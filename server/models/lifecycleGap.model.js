@@ -72,7 +72,7 @@ const offerLetterSchema = new mongoose.Schema({
     pdfFileName: String,
     status: {
         type: String,
-        enum: ['Draft', 'PendingApproval', 'Approved', 'Sent', 'Viewed', 'Accepted', 'Declined', 'Expired', 'Cancelled'],
+        enum: ['Draft', 'PendingApproval', 'Approved', 'Sent', 'Viewed', 'Accepted', 'Declined', 'Countered', 'Expired', 'Cancelled'],
         default: 'Draft',
         index: true,
     },

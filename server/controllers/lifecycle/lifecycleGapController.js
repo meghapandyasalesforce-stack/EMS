@@ -9,6 +9,7 @@ import {
     listOffersForCandidate,
     getOfferByPortalToken,
     respondToOfferPortal,
+    reviseCounteredOffer,
 } from '../../services/offerLetterService.js';
 import {
     createBgvCase,
@@ -150,6 +151,15 @@ export const postOfferSend = async (req, res) => {
     }
 };
 
+export const postOfferRevise = async (req, res) => {
+    try {
+        const offer = await reviseCounteredOffer(orgId(req), req.params.id, req.body, actor(req));
+        return res.json({ success: true, data: offer, message: 'Offer revised — submit for approval again' });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // —— Candidate portal (public) ——
 
 export const getOfferPortal = async (req, res) => {
@@ -179,9 +189,9 @@ export const getOfferPortal = async (req, res) => {
 
 export const postOfferPortalRespond = async (req, res) => {
     try {
-        const { action, signatureData, notes } = req.body;
-        if (!['accept', 'decline'].includes(action)) {
-            return res.status(400).json({ success: false, message: 'action must be accept or decline' });
+        const { action, signatureData, notes, counterOffer } = req.body;
+        if (!['accept', 'decline', 'counter'].includes(action)) {
+            return res.status(400).json({ success: false, message: 'action must be accept, decline, or counter' });
         }
         const offer = await respondToOfferPortal({
             token: req.params.token,
@@ -189,11 +199,17 @@ export const postOfferPortalRespond = async (req, res) => {
             signatureData,
             ipAddress: req.ip,
             notes,
+            counterOffer,
         });
+        const messages = {
+            accept: 'Offer accepted',
+            decline: 'Offer declined',
+            counter: 'Counter-offer submitted',
+        };
         return res.json({
             success: true,
             data: { status: offer.status },
-            message: action === 'accept' ? 'Offer accepted' : 'Offer declined',
+            message: messages[action] || 'Response recorded',
         });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

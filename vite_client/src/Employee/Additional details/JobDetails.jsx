@@ -7,6 +7,7 @@ const MARKSHEET_LEVELS = [
     { value: '10th', label: '10th' },
     { value: '12th', label: '12th' },
     { value: 'Graduation', label: 'Graduation' },
+    { value: 'Post Graduation', label: 'Post Graduation' },
 ];
 
 const DOCUMENT_SECTIONS = [
@@ -173,7 +174,7 @@ const JobDetails = () => {
         }
 
         if (documentType === 'DEGREE_CERTIFICATE' && !marksheetLevel) {
-            alert('Please select a marksheet level (10th, 12th, or Graduation) before uploading.');
+            alert('Please select a marksheet level (10th, 12th, Graduation, or Post Graduation) before uploading.');
             return;
         }
 

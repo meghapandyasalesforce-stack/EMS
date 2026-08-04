@@ -1,6 +1,9 @@
 import { ApprovalWorkflow } from '../models/approvalWorkflow.model.js';
 import { shouldScopeDataToManagedTeam } from './permissionService.js';
-import { processApprovalAction } from '../services/approvalWorkflowService.js';
+import {
+    processApprovalAction,
+    hrOverrideFinalizeApproval,
+} from '../services/approvalWorkflowService.js';
 import {
     attachWorkflowSummariesToRequests,
     getCurrentPendingStep,
@@ -35,7 +38,7 @@ const DEFAULT_LEAVE_WORKFLOW = {
         },
     ],
     autoApprove: { enabled: false },
-    escalation: { enabled: true, escalateAfterHours: 48, escalateTo: 'HR' },
+    escalation: { enabled: true, escalateAfterHours: 12, escalateTo: 'HR' },
 };
 
 /** Ensure every org has an active Leave workflow: Manager → HR. */
@@ -62,10 +65,30 @@ export const attachWorkflowSummariesToLeaves = attachWorkflowSummariesToRequests
 
 export { getCurrentPendingStep };
 
-export const getLeaveApprovalStageLabel = (leave = {}) => {
+/**
+ * @param {object} leave
+ * @param {{ includeHrOverrideHint?: boolean }} [options]
+ *   includeHrOverrideHint — HR/Admin UIs show override availability; employees see plain pending.
+ */
+export const getLeaveApprovalStageLabel = (leave = {}, options = {}) => {
+    const { includeHrOverrideHint = true } = options;
     const status = (leave.status || '').toLowerCase();
-    if (status === 'approved') return 'Approved';
-    if (status === 'rejected') return 'Rejected';
+    if (status === 'approved') {
+        if (leave.workflowSummary?.hrOverrideUsed) {
+            return leave.workflowSummary.hrOverrideByName
+                ? `Approved by ${leave.workflowSummary.hrOverrideByName}`
+                : 'Approved by HR Manager';
+        }
+        return 'Approved';
+    }
+    if (status === 'rejected') {
+        if (leave.workflowSummary?.hrOverrideUsed) {
+            return leave.workflowSummary.hrOverrideByName
+                ? `Rejected by ${leave.workflowSummary.hrOverrideByName}`
+                : 'Rejected by HR Executive';
+        }
+        return 'Rejected';
+    }
     if (status === 'cancelled') return 'Cancelled';
 
     const summary = leave.workflowSummary;
@@ -77,9 +100,15 @@ export const getLeaveApprovalStageLabel = (leave = {}) => {
     }
 
     if (pending.approverType === 'Manager') {
-        return pending.approverName
-            ? `Awaiting Manager (${pending.approverName})`
-            : 'Awaiting Manager';
+        const base = pending.approverName
+            ? `Pending Manager (${pending.approverName})`
+            : 'Pending Manager';
+        if (summary.slaEscalated) {
+            return includeHrOverrideHint
+                ? `${base} · SLA Breached (HR Override Available)`
+                : `${base} · SLA Breached`;
+        }
+        return includeHrOverrideHint ? `${base} (HR Override Available)` : base;
     }
     if (pending.approverType === 'HR') {
         return 'Awaiting HR approval';
@@ -89,7 +118,9 @@ export const getLeaveApprovalStageLabel = (leave = {}) => {
 };
 
 /**
- * Strict leave workflow: manager must approve before HR; no skipping steps.
+ * Leave workflow action resolver.
+ * Additive: HR Manager / HR Executive may override while Manager step is still pending.
+ * Manager / natural HR step behaviour is unchanged.
  */
 export const resolveLeaveWorkflowAction = async ({
     req,
@@ -109,6 +140,7 @@ export const resolveLeaveWorkflowAction = async ({
             reviewerEmployeeId,
             overrideLabel: 'Admin',
             approverType,
+            useHrOverrideFinalize: false,
         };
     }
 
@@ -119,8 +151,7 @@ export const resolveLeaveWorkflowAction = async ({
         employeeLinked
     );
 
-    const isManager =
-        shouldScopeDataToManagedTeam(req);
+    const isManager = shouldScopeDataToManagedTeam(req);
     const isManagerStep = approverType === 'Manager';
     const managerTeamOverride =
         isManager && employeeLinked && isManagerStep && Boolean(reviewerEmployeeId);
@@ -138,12 +169,19 @@ export const resolveLeaveWorkflowAction = async ({
         throw err;
     }
 
-    if (approverType === 'Manager' && isHrEmployee(req) && !naturalActor && !isAssignedApprover) {
-        const err = new Error(
-            'This leave must be approved by the employee manager first before HR can verify it.'
-        );
-        err.statusCode = 403;
-        throw err;
+    /** Additive HR override: HR may act while Manager step is still pending */
+    const hrOverrideOnManagerStep =
+        isManagerStep && isHrEmployee(req) && !naturalActor && !isAssignedApprover;
+
+    if (hrOverrideOnManagerStep) {
+        return {
+            approverIdForAction: reviewerEmployeeId || assignedApproverId,
+            performedByEmployeeId: reviewerEmployeeId || assignedApproverId,
+            reviewerEmployeeId,
+            overrideLabel: 'HR',
+            approverType,
+            useHrOverrideFinalize: true,
+        };
     }
 
     const mayAct = Boolean(naturalActor || managerTeamOverride || isAssignedApprover);
@@ -166,6 +204,7 @@ export const resolveLeaveWorkflowAction = async ({
         reviewerEmployeeId,
         overrideLabel,
         approverType,
+        useHrOverrideFinalize: false,
     };
 };
 
@@ -184,6 +223,26 @@ export const executeLeaveWorkflowAction = async ({
         currentStep,
         employeeLinked,
     });
+
+    if (params.useHrOverrideFinalize) {
+        const actor = req.employee;
+        const performedByName = actor
+            ? [actor.name, actor.lastName].filter(Boolean).join(' ').trim()
+            : 'HR';
+        return hrOverrideFinalizeApproval({
+            approvalInstanceId: approvalInstance._id,
+            action,
+            performedByEmployeeId: params.performedByEmployeeId,
+            performedByName,
+            comments: prefixWorkflowComment(comments, params.overrideLabel),
+            metadata: {
+                leaveId: leave._id,
+                leaveType: leave.leaveType,
+                duration: leave.duration,
+                overrideRole: params.overrideLabel,
+            },
+        });
+    }
 
     return processApprovalAction({
         approvalInstanceId: approvalInstance._id,

@@ -89,7 +89,7 @@ const approvalWorkflowSchema = new mongoose.Schema({
         },
         escalateAfterHours: {
             type: Number,
-            default: 24
+            default: 12
         },
         escalateTo: {
             type: String,
@@ -199,6 +199,32 @@ const approvalInstanceSchema = new mongoose.Schema({
         ref: 'Employee'
     },
     rejectionReason: String,
+    /** Additive SLA escalation (12h default) — does not replace step.escalated */
+    slaEscalated: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    slaEscalatedAt: Date,
+    /** Additive HR override audit when HR finalizes before/without manager action */
+    hrOverride: {
+        used: { type: Boolean, default: false },
+        action: { type: String, enum: ['Approve', 'Reject'] },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+        byName: String,
+        at: Date,
+        skippedManager: { type: Boolean, default: false },
+        comments: String
+    },
+    /** Append-only timeline / audit events (additive — does not replace steps) */
+    auditTrail: [{
+        at: { type: Date, default: Date.now },
+        action: { type: String, required: true },
+        actorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+        actorName: String,
+        actorRole: String,
+        note: String
+    }],
     metadata: {
         type: mongoose.Schema.Types.Mixed
     },
@@ -216,6 +242,7 @@ approvalWorkflowSchema.index({ organizationId: 1, entityType: 1, isActive: 1 });
 approvalInstanceSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 approvalInstanceSchema.index({ requestedBy: 1, status: 1 });
 approvalInstanceSchema.index({ 'steps.approverId': 1, 'steps.status': 1 });
+approvalInstanceSchema.index({ organizationId: 1, slaEscalated: 1, status: 1, createdAt: 1 });
 
 export const ApprovalWorkflow = mongoose.model('ApprovalWorkflow', approvalWorkflowSchema);
 export const ApprovalInstance = mongoose.model('ApprovalInstance', approvalInstanceSchema);

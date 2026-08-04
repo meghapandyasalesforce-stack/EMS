@@ -254,6 +254,7 @@ export const updateOrganizationSettings = async (req, res) => {
             tdsCalculationMode,
             allowWorkFromHome,
             allowNonWorkingDayPunch,
+            approvalSlaHours,
             payrollSettings,
         } = req.body;
 
@@ -325,6 +326,10 @@ export const updateOrganizationSettings = async (req, res) => {
         if (allowNonWorkingDayPunch !== undefined) {
             if (!organization.settings) organization.settings = {};
             organization.settings.allowNonWorkingDayPunch = !!allowNonWorkingDayPunch;
+        }
+        if (approvalSlaHours !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.approvalSlaHours = Number(approvalSlaHours);
         }
         if (payrollSettings !== undefined && payrollSettings && typeof payrollSettings === 'object') {
             if (!organization.settings) organization.settings = {};

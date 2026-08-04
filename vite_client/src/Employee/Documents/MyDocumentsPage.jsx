@@ -12,6 +12,7 @@ import {
 import { toast } from 'react-toastify';
 import axios, { openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { canEmployeeDeleteOwnDocument } from '../../utils/documentDeleteRules';
 
 const UPLOAD_CATEGORIES = [
   { value: 'Employee', label: 'Employee' },
@@ -380,6 +381,7 @@ const MyDocumentsPage = () => {
                           <FaSyncAlt />
                           Replace file
                         </button>
+                        {canEmployeeDeleteOwnDocument(doc) ? (
                         <button
                           type="button"
                           disabled={busy}
@@ -389,6 +391,7 @@ const MyDocumentsPage = () => {
                           <FaTrash />
                           Delete
                         </button>
+                        ) : null}
                       </div>
                     </div>
                   </li>

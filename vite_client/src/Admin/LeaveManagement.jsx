@@ -11,6 +11,7 @@ import {
   FiClock,
   FiUser,
   FiPaperclip,
+  FiEye,
 } from 'react-icons/fi';
 import { getAllLeaves, updateLeave } from '../context/leaveSlice';
 import { toast } from 'react-toastify';
@@ -18,10 +19,35 @@ import axios, { getUploadUrl } from '../utils/axios';
 import { ADMIN_LEAVE_ENDPOINT } from '../utils/constant';
 import useAuthPermissions from '../Hooks/useAuthPermissions';
 import { isHR } from '../utils/managerHelper';
+import {
+  formatAuditTimelineEvent,
+  formatCapitalRequestStatus,
+  formatLeaveApprovalStageDisplay,
+  getWorkflowWaitingLabel,
+} from '../utils/approvalStatusDisplay';
 import 'react-toastify/dist/ReactToastify.css';
 
 const TEAL = '#20C997';
 const TEAL_DARK = '#0a8f6c';
+
+function leaveStatusPillStyle(status) {
+  const st = (status || '').toLowerCase();
+  if (st === 'approved') {
+    return { background: `${TEAL}14`, color: TEAL_DARK, border: `1px solid ${TEAL}44` };
+  }
+  if (st === 'rejected') {
+    return { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' };
+  }
+  if (st === 'cancelled') {
+    return { background: '#fafafa', color: '#737373', border: '1px solid #e5e5e5' };
+  }
+  return { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' };
+}
+
+function closeLeavePanel(setSelectedId, setRejectReason) {
+  setSelectedId(null);
+  setRejectReason('');
+}
 
 const LEAVE_TYPE_META = {
   sick: { label: 'SICK LEAVE', className: 'bg-rose-50 text-rose-700 border border-rose-100' },
@@ -338,11 +364,7 @@ const LeaveManagement = () => {
 
   return (
     <div className="page-shell min-h-screen bg-[#F4F6FB] pb-10 transition-all duration-300 lg:mt-0">
-      <div
-        className={`page-shell-inner ${
-          selectedLeave ? 'hrms-main-rail' : 'hrms-stack'
-        }`}
-      >
+      <div className="page-shell-inner hrms-stack">
         <div className="min-w-0 space-y-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -376,7 +398,7 @@ const LeaveManagement = () => {
             </div>
           )}
 
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex min-w-0 max-w-full flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
               <div className="relative min-w-0 w-full sm:min-w-[200px] flex-1 lg:max-w-md">
                 <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -470,7 +492,7 @@ const LeaveManagement = () => {
               ))}
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-slate-100">
+            <div className="min-w-0 max-w-full rounded-xl border border-slate-100 lg:overflow-hidden">
               {clientFiltered.length === 0 ? (
                 <div className="bg-white px-6 py-8 sm:py-10 text-center">
                   <FiCalendar className="mx-auto mb-3 h-10 w-10 text-slate-300" />
@@ -480,8 +502,12 @@ const LeaveManagement = () => {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto bg-white">
-                  <table className="w-full min-w-[760px] text-left text-sm">
+                <div
+                  className="table-scroll-container leave-requests-table-scroll bg-white"
+                  role="region"
+                  aria-label="Leave requests table"
+                >
+                  <table className="leave-requests-table text-left text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                         <th className="w-10 px-3 py-3" aria-hidden />
@@ -562,14 +588,14 @@ const LeaveManagement = () => {
                               {leave.duration ?? '—'}
                             </td>
                             <td className="px-3 py-3">
-                              <span
-                                className={`inline-flex items-center gap-1.5 font-semibold capitalize ${statusBg}`}
-                              >
-                                <span className={`h-2 w-2 rounded-full ${statusDot}`} />
-                                {st === 'pending' && leave.approvalStage
-                                  ? leave.approvalStage
-                                  : leave.status || '—'}
-                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 font-semibold capitalize ${statusBg}`}
+                                >
+                                  <span className={`h-2 w-2 rounded-full ${statusDot}`} />
+                                  {formatLeaveApprovalStageDisplay(leave)}
+                                </span>
+                              </div>
                             </td>
                             {showManagerColumn && (
                               <td className="px-3 py-3 text-slate-700">
@@ -580,7 +606,7 @@ const LeaveManagement = () => {
                             )}
                             <td className="px-3 py-3 text-right">
                               <div
-                                className="flex justify-end gap-1"
+                                className="inline-flex items-center justify-end gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {st === 'pending' && (
@@ -606,6 +632,17 @@ const LeaveManagement = () => {
                                     </button>
                                   </>
                                 )}
+                                <button
+                                  type="button"
+                                  title="View"
+                                  onClick={() => {
+                                    setSelectedId(id);
+                                    setRejectReason('');
+                                  }}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                >
+                                  <FiEye className="h-4 w-4" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -656,41 +693,56 @@ const LeaveManagement = () => {
             + New Request
           </button>
         </div>
+      </div>
 
-        {selectedLeave && (
+      {selectedLeave ? (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Leave request details"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            aria-label="Close panel"
+            onClick={() => closeLeavePanel(setSelectedId, setRejectReason)}
+          />
           <aside
-            className="fixed inset-0 z-40 flex justify-end lg:static lg:inset-auto lg:z-0 lg:block lg:h-auto lg:min-w-0 lg:overflow-visible"
-            aria-label="Request details"
+            className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-white shadow-2xl"
+            style={{ boxShadow: '-8px 0 32px rgba(0,0,0,.12)' }}
           >
-            <button
-              type="button"
-              className="absolute inset-0 bg-slate-900/40 lg:hidden"
-              aria-label="Close panel"
-              onClick={() => {
-                setSelectedId(null);
-                setRejectReason('');
-              }}
-            />
-            <div className="relative z-10 mt-auto flex max-h-[90vh] w-full max-w-[440px] flex-col overflow-hidden rounded-t-3xl border border-slate-100 bg-white shadow-2xl lg:sticky lg:top-6 lg:mt-0 lg:max-h-[calc(100vh-5rem)] lg:max-w-none lg:rounded-2xl lg:shadow-sm">
-              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+            <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Request Details</h2>
-                  <p className="text-xs text-slate-500">{filterYear}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Leave request</p>
+                  <div className="mt-2">
+                    <span
+                      className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                      style={leaveStatusPillStyle(selectedLeave.status)}
+                    >
+                      {formatCapitalRequestStatus(selectedLeave.status)}
+                    </span>
+                  </div>
+                  {(selectedLeave.status || '').toLowerCase() === 'pending' ? (
+                    <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                      {getWorkflowWaitingLabel(selectedLeave.workflowSummary) ||
+                        formatLeaveApprovalStageDisplay(selectedLeave)}
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedId(null);
-                    setRejectReason('');
-                  }}
+                  onClick={() => closeLeavePanel(setSelectedId, setRejectReason)}
                   className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   aria-label="Close"
                 >
                   <FiX className="h-5 w-5" />
                 </button>
               </div>
+            </div>
 
-              <div className="max-h-[min(70vh,720px)] flex-1 overflow-y-auto px-5 py-4 lg:max-h-none">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
                   <div className="flex gap-4">
                     <RowAvatar
@@ -810,38 +862,66 @@ const LeaveManagement = () => {
                     Activity
                   </p>
                   <ul className="relative space-y-4 border-l-2 border-slate-100 pl-4">
-                    <li className="relative">
-                      <span
-                        className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#20C997]"
-                        aria-hidden
-                      />
-                      <p className="text-xs font-bold text-slate-800">Request submitted</p>
-                      <p className="text-xs text-slate-500">
-                        {selectedLeave.createdAt
-                          ? new Date(selectedLeave.createdAt).toLocaleString()
-                          : '—'}
-                      </p>
-                    </li>
-                    {(selectedLeave.status || '').toLowerCase() !== 'pending' && (
-                      <li className="relative">
-                        <span
-                          className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-500"
-                          aria-hidden
-                        />
-                        <p className="text-xs font-bold text-slate-800">
-                          {(selectedLeave.status || '').toLowerCase() === 'approved'
-                            ? 'Approved'
-                            : (selectedLeave.status || '').toLowerCase() === 'rejected'
-                              ? 'Rejected'
-                              : selectedLeave.status}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {selectedLeave.updatedAt
-                            ? new Date(selectedLeave.updatedAt).toLocaleString()
-                            : '—'}
-                        </p>
-                      </li>
-                    )}
+                    {(Array.isArray(selectedLeave.workflowSummary?.auditTrail) &&
+                    selectedLeave.workflowSummary.auditTrail.length > 0
+                      ? selectedLeave.workflowSummary.auditTrail.map((event, idx) => {
+                          const label = formatAuditTimelineEvent(event);
+                          if (!label) return null;
+                          return (
+                            <li key={`${event.action}-${idx}`} className="relative">
+                              <span
+                                className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#20C997]"
+                                aria-hidden
+                              />
+                              <p className="text-xs font-bold text-slate-800">{label}</p>
+                              <p className="text-xs text-slate-500">
+                                {event.at ? new Date(event.at).toLocaleString() : '—'}
+                              </p>
+                            </li>
+                          );
+                        }).filter(Boolean)
+                      : [
+                          <li key="submitted" className="relative">
+                            <span
+                              className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-[#20C997]"
+                              aria-hidden
+                            />
+                            <p className="text-xs font-bold text-slate-800">Request submitted</p>
+                            <p className="text-xs text-slate-500">
+                              {selectedLeave.createdAt
+                                ? new Date(selectedLeave.createdAt).toLocaleString()
+                                : '—'}
+                            </p>
+                          </li>,
+                          (selectedLeave.status || '').toLowerCase() === 'pending' &&
+                          selectedLeave.approvalStage ? (
+                            <li key="stage" className="relative">
+                              <span
+                                className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-400"
+                                aria-hidden
+                              />
+                              <p className="text-xs font-bold text-slate-800">
+                                {formatLeaveApprovalStageDisplay(selectedLeave)}
+                              </p>
+                            </li>
+                          ) : null,
+                          (selectedLeave.status || '').toLowerCase() !== 'pending' ? (
+                            <li key="final" className="relative">
+                              <span
+                                className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-500"
+                                aria-hidden
+                              />
+                              <p className="text-xs font-bold text-slate-800">
+                                {formatLeaveApprovalStageDisplay(selectedLeave)}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {selectedLeave.updatedAt
+                                  ? new Date(selectedLeave.updatedAt).toLocaleString()
+                                  : '—'}
+                              </p>
+                            </li>
+                          ) : null,
+                        ].filter(Boolean))}
                   </ul>
                 </div>
 
@@ -866,28 +946,27 @@ const LeaveManagement = () => {
               </div>
 
               {(selectedLeave.status || '').toLowerCase() === 'pending' && (
-                <div className="flex gap-3 border-t border-slate-100 bg-slate-50/80 px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={() => handleReject(selectedLeave._id)}
-                    className="flex-1 rounded-xl border border-slate-200 bg-white py-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-                  >
-                    Reject
-                  </button>
+                <div className="flex gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:px-6">
                   <button
                     type="button"
                     onClick={() => handleApprove(selectedLeave._id)}
                     className="flex-1 rounded-xl py-3 text-sm font-bold text-white shadow-md"
-                    style={{ background: `linear-gradient(90deg, ${TEAL}, ${TEAL_DARK})` }}
+                    style={{ background: TEAL_DARK }}
                   >
                     Approve
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handleReject(selectedLeave._id)}
+                    className="flex-1 rounded-xl border-2 border-red-400 py-3 text-sm font-bold text-red-600"
+                  >
+                    Reject
+                  </button>
                 </div>
               )}
-            </div>
           </aside>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       <div className="pointer-events-none fixed bottom-8 right-8 z-30 hidden lg:block">
         <button

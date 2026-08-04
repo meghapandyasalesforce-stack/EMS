@@ -71,10 +71,23 @@ function localDateKey(date) {
     ].join('-');
 }
 
-export function resolveInitialWorkflowStatus({ joiningDate, scheduledStartDate, explicitStatus }) {
+export function resolveInitialWorkflowStatus({
+    joiningDate,
+    scheduledStartDate,
+    explicitStatus,
+    startOnJoiningDate = true,
+}) {
     if (explicitStatus === 'Draft') return 'Draft';
+    // When org does not delay until joining date, make the workflow visible immediately.
+    if (!startOnJoiningDate) {
+        const effectiveStart = scheduledStartDate || joiningDate || new Date();
+        return isSameOrBeforeToday(effectiveStart) || !scheduledStartDate
+            ? 'Not Started'
+            : 'Scheduled';
+    }
     const effectiveStart = scheduledStartDate || joiningDate;
-    if (!effectiveStart) return 'Draft';
+    // Missing dates should still be employee-visible after create (not stuck as Draft).
+    if (!effectiveStart) return 'Not Started';
     if (isSameOrBeforeToday(effectiveStart)) return 'Not Started';
     return 'Scheduled';
 }
@@ -494,7 +507,7 @@ export function applyProgressToWorkflow(workflow, settings = null) {
     };
     workflow.progress = breakdown.overall;
 
-    const terminal = ['Completed', 'Cancelled', 'Draft', 'Scheduled', 'Paused'];
+    const terminal = ['Completed', 'Cancelled', 'Draft', 'Paused'];
     if (terminal.includes(workflow.status)) {
         if (workflow.status === 'Completed' && workflow.progress < 100) {
             workflow.status = 'In Progress';
@@ -515,13 +528,15 @@ export function applyProgressToWorkflow(workflow, settings = null) {
     const canComplete = workflow.progress === 100
         && workflow.mandatoryFormsCompleted !== false
         && breakdown.bgvGateOpen !== false
-        && ['Not Started', 'In Progress', 'Overdue'].includes(workflow.status);
+        && ['Not Started', 'In Progress', 'Overdue', 'Scheduled'].includes(workflow.status);
 
     if (canComplete) {
         workflow.status = 'Completed';
         workflow.actualCompletionDate = new Date();
-    } else if (workflow.status === 'Not Started' && hasWorkflowActivity(workflow)) {
+    } else if (['Not Started', 'Scheduled'].includes(workflow.status) && hasWorkflowActivity(workflow)) {
+        // Pre-joining Scheduled workflows become active once work starts.
         workflow.status = 'In Progress';
+        if (!workflow.startDate) workflow.startDate = new Date();
     }
 
     return workflow;
@@ -622,12 +637,14 @@ export async function createEmployeeOnboardingWorkflow({
     const effectiveScheduled = scheduledStartDate
         ? new Date(scheduledStartDate)
         : effectiveJoining;
+    const startOnJoiningDate = Boolean(orgSettings.startWorkflowOnJoiningDate);
     let workflowStatus = asDraft
         ? 'Draft'
         : resolveInitialWorkflowStatus({
             joiningDate: effectiveJoining,
-            scheduledStartDate: orgSettings.startWorkflowOnJoiningDate ? effectiveScheduled : null,
+            scheduledStartDate: startOnJoiningDate ? effectiveScheduled : null,
             explicitStatus: status,
+            startOnJoiningDate,
         });
 
     const now = new Date();
@@ -773,7 +790,7 @@ export async function createEmployeeOnboardingWorkflow({
         templateId: template._id || templateId,
         startDate,
         joiningDate: effectiveJoining,
-        scheduledStartDate: orgSettings.startWorkflowOnJoiningDate ? effectiveScheduled : null,
+        scheduledStartDate: startOnJoiningDate ? effectiveScheduled : null,
         expectedCompletionDate,
         status: workflowStatus,
         welcomeMessage: welcomeMessage || template.welcomeMessage ||
@@ -869,10 +886,16 @@ export async function createEmployeeOnboardingWorkflow({
 /** Activate workflows whose scheduled start date has arrived */
 export async function activateScheduledWorkflows(organizationId = null) {
     const now = new Date();
+    // Include joiningDate fallback and stuck Scheduled rows with no start date.
     const query = {
         status: 'Scheduled',
         isTemplate: { $ne: true },
-        scheduledStartDate: { $lte: now },
+        $or: [
+            { scheduledStartDate: { $lte: now } },
+            { scheduledStartDate: null, joiningDate: { $lte: now } },
+            { scheduledStartDate: null, joiningDate: null },
+            { scheduledStartDate: { $exists: false } },
+        ],
     };
     if (organizationId) query.organizationId = organizationId;
 
@@ -880,8 +903,12 @@ export async function activateScheduledWorkflows(organizationId = null) {
     let activated = 0;
 
     for (const workflow of workflows) {
+        const start = workflow.scheduledStartDate || workflow.joiningDate;
+        // Keep truly future-dated schedules waiting when only joiningDate is set.
+        if (start && !isSameOrBeforeToday(start)) continue;
+
         workflow.status = 'Not Started';
-        workflow.startDate = workflow.scheduledStartDate || workflow.joiningDate || now;
+        workflow.startDate = start || now;
         addActivity(workflow, {
             action: 'workflow_ready',
             description: 'Onboarding is ready to start on the employee joining date',
@@ -891,7 +918,6 @@ export async function activateScheduledWorkflows(organizationId = null) {
         await workflow.save();
         emitOnboardingChangedAsync(workflow.organizationId, workflow._id);
         activated += 1;
-
     }
 
     return activated;
@@ -1081,6 +1107,8 @@ export async function synchronizeOnboardingWorkflows(organizationId = null) {
         const { restoreEnabledPackArtifacts, applyOnboardingFeatureGates } = await import('./lifecycleFeatureRuntimeService.js');
         applyOnboardingFeatureGates(workflow, lifecycleSettings);
         await restoreEnabledPackArtifacts(workflow, workflow.organizationId, lifecycleSettings, 'onboarding');
+        // Re-apply after pack restore so Configure document overrides stay in effect
+        applyOnboardingFeatureGates(workflow, lifecycleSettings);
         applyProgressToWorkflow(workflow, lifecycleSettings);
         if (previousStatus !== 'Completed' && workflow.status === 'Completed') {
             workflow.completionNotifiedAt = now;
@@ -1491,11 +1519,18 @@ export async function resolveEmployeeIdFromRequest(req) {
     if (req.employee?._id) return req.employee._id;
     if (req.user?.employeeId) return req.user.employeeId;
     if (req.user?._id && organizationId) {
-        const emp = await Employee.findOne({
+        // Prefer active, but still resolve onboarding for probation/inactive joiners.
+        let emp = await Employee.findOne({
             userId: req.user._id,
             organizationId,
             status: 'active',
         }).select('_id').lean();
+        if (!emp) {
+            emp = await Employee.findOne({
+                userId: req.user._id,
+                organizationId,
+            }).select('_id').lean();
+        }
         if (emp?._id) return emp._id;
     }
     return null;

@@ -60,8 +60,8 @@ export const patchLifecycleSettings = async (req, res) => {
             actor: req.employee,
         });
 
-        // Immediately propagate Configure toggles to active workflows
-        if (req.body.enabledFeatures || req.body.modules) {
+        // Immediately propagate Configure toggles (features + document overrides) to active workflows
+        if (req.body.enabledFeatures || req.body.modules || req.body.documentOverrides) {
             const { queueFeatureGateSync } = await import('../../services/lifecycleFeatureRuntimeService.js');
             await queueFeatureGateSync(orgId(req));
         }

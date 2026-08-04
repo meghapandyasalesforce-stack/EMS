@@ -208,8 +208,8 @@ export async function sendOfferToCandidate(organizationId, offerId, actor) {
     await assertFeatureEnabled(organizationId, 'offerLetter', 'Offer letter');
     const offer = await OfferLetter.findOne({ _id: offerId, organizationId });
     if (!offer) throw new Error('Offer not found');
-    const resend = ['Sent', 'Viewed'].includes(offer.status);
-    if (!['Approved', 'Draft', 'Sent', 'Viewed'].includes(offer.status)) {
+    const resend = ['Sent', 'Viewed', 'Countered'].includes(offer.status);
+    if (!['Approved', 'Draft', 'Sent', 'Viewed', 'Countered'].includes(offer.status)) {
         throw new Error(`Cannot send offer in status: ${offer.status}`);
     }
 
@@ -238,6 +238,23 @@ export async function sendOfferToCandidate(organizationId, offerId, actor) {
         await candidate.save();
     }
 
+    const frontendBase = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
+    const portalUrl = `${frontendBase.replace(/\/$/, '')}/offer/${offer.portalToken}`;
+
+    if (candidate?.email) {
+        try {
+            const { sendOfferLinkEmail } = await import('./recruitmentEmailService.js');
+            await sendOfferLinkEmail({
+                candidate,
+                offer,
+                portalUrl,
+                actorId: actor?._id,
+            });
+        } catch (e) {
+            logger.warn('Auto offer email failed (portal link still generated)', { error: e.message });
+        }
+    }
+
     await notify({
         type: 'lifecycle_offer_sent',
         organizationId,
@@ -262,7 +279,7 @@ export async function getOfferByPortalToken(token) {
     return offer;
 }
 
-export async function respondToOfferPortal({ token, action, signatureData, ipAddress, notes }) {
+export async function respondToOfferPortal({ token, action, signatureData, ipAddress, notes, counterOffer }) {
     const offer = await OfferLetter.findOne({ portalToken: token, portalTokenExpiresAt: { $gt: new Date() } });
     if (!offer) throw new Error('Invalid or expired offer link');
     if (!['Sent', 'Viewed'].includes(offer.status)) throw new Error('Offer already responded');
@@ -273,6 +290,44 @@ export async function respondToOfferPortal({ token, action, signatureData, ipAdd
     }
     const settings = await getOrCreateLifecycleSettings(offer.organizationId);
     const provider = settings.esignProvider || 'internal';
+
+    if (action === 'counter') {
+        offer.versionHistory = offer.versionHistory || [];
+        offer.versionHistory.push({
+            version: offer.version,
+            bodyHtml: offer.bodyHtml,
+            changedBy: null,
+            changedAt: new Date(),
+            changeNotes: 'Candidate counter-offer',
+        });
+        if (counterOffer?.salary != null) offer.salary = Number(counterOffer.salary);
+        if (counterOffer?.startDate) offer.startDate = new Date(counterOffer.startDate);
+        if (counterOffer?.benefits) offer.benefits = counterOffer.benefits;
+        offer.status = 'Countered';
+        offer.respondedAt = new Date();
+        offer.responseNotes = notes || counterOffer?.notes || 'Candidate submitted a counter-offer';
+        offer.activityFeed.push({
+            action: 'offer_countered',
+            description: offer.responseNotes,
+            metadata: counterOffer || {},
+        });
+        await offer.save();
+
+        const candidate = await Candidate.findById(offer.candidateId);
+        if (candidate) {
+            candidate.offerDetails = candidate.offerDetails || {};
+            candidate.offerDetails.status = 'Countered';
+            await candidate.save();
+        }
+
+        await notify({
+            type: 'lifecycle_offer_declined',
+            organizationId: offer.organizationId,
+            data: { offer, counter: true },
+        }).catch(() => {});
+
+        return offer;
+    }
 
     if (action === 'accept') {
         const signature = await captureSignature({
@@ -313,6 +368,44 @@ export async function respondToOfferPortal({ token, action, signatureData, ipAdd
         data: { offer },
     }).catch(() => {});
 
+    return offer;
+}
+
+/**
+ * HR revises a countered offer → new version, back to Draft for re-approval
+ */
+export async function reviseCounteredOffer(organizationId, offerId, payload, actor) {
+    const offer = await OfferLetter.findOne({ _id: offerId, organizationId });
+    if (!offer) throw new Error('Offer not found');
+    if (offer.status !== 'Countered' && offer.status !== 'Draft') {
+        throw new Error('Only Countered or Draft offers can be revised this way');
+    }
+
+    offer.versionHistory = offer.versionHistory || [];
+    offer.versionHistory.push({
+        version: offer.version,
+        bodyHtml: offer.bodyHtml,
+        changedBy: actor?._id,
+        changedAt: new Date(),
+    });
+    offer.version = (offer.version || 1) + 1;
+
+    if (payload.salary != null) offer.salary = Number(payload.salary);
+    if (payload.startDate) offer.startDate = new Date(payload.startDate);
+    if (payload.position) offer.position = payload.position;
+    if (payload.benefits) offer.benefits = payload.benefits;
+    if (payload.bodyHtml) offer.bodyHtml = payload.bodyHtml;
+    if (payload.expiryDate) offer.expiryDate = new Date(payload.expiryDate);
+
+    offer.status = 'Draft';
+    offer.portalToken = undefined;
+    offer.portalTokenExpiresAt = undefined;
+    offer.activityFeed.push({
+        action: 'offer_revised',
+        description: payload.notes || 'Offer revised after counter',
+        actor: actor?._id,
+    });
+    await offer.save();
     return offer;
 }
 

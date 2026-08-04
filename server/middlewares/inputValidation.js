@@ -640,6 +640,9 @@ export const organizationValidations = {
         body('allowNonWorkingDayPunch')
             .optional()
             .isBoolean().withMessage('allowNonWorkingDayPunch must be a boolean'),
+        body('approvalSlaHours')
+            .optional()
+            .isIn([6, 12, 24, 48]).withMessage('approvalSlaHours must be one of 6, 12, 24, or 48'),
         handleValidationErrors
     ],
 

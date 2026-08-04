@@ -10,6 +10,7 @@ import axios from '../../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
 import { toast } from 'react-toastify';
 import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
+import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
 
 const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
@@ -216,6 +217,7 @@ const MyLeavePage = () => {
           ? leave.status.charAt(0).toUpperCase() + leave.status.slice(1)
           : 'Unknown',
         approvalStage: leave.approvalStage || (leave.status === 'pending' ? 'Pending' : leave.status),
+        workflowSummary: leave.workflowSummary,
         days: leave.duration ?? 0
       };
     })
@@ -502,9 +504,11 @@ const MyLeavePage = () => {
                               leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                               leave.status === 'Cancelled' ? 'bg-gray-100 text-gray-600' :
                                 'bg-red-100 text-red-800'}`}>
-                            {leave.rawStatus === 'pending' && leave.approvalStage
-                              ? leave.approvalStage
-                              : leave.status}
+                            {formatLeaveApprovalStageDisplay({
+                              status: leave.rawStatus,
+                              approvalStage: leave.approvalStage,
+                              workflowSummary: leave.workflowSummary,
+                            })}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs md:text-sm">

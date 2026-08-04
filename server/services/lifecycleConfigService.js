@@ -294,7 +294,10 @@ export async function updateLifecycleSettings(organizationId, updates, { req = n
     if (updates.reminders) settings.reminders = updates.reminders;
     if (updates.escalations) settings.escalations = updates.escalations;
     if (updates.approvals) settings.approvals = updates.approvals;
-    if (updates.documentOverrides) settings.documentOverrides = updates.documentOverrides;
+    if (updates.documentOverrides) {
+        settings.documentOverrides = updates.documentOverrides;
+        settings.markModified('documentOverrides');
+    }
     if (updates.noticePeriodPolicy) {
         settings.noticePeriodPolicy = {
             ...settings.noticePeriodPolicy?.toObject?.() || settings.noticePeriodPolicy || {},
@@ -493,7 +496,7 @@ export async function uninstallCompliancePack(organizationId, packKey, { req = n
     return getLifecycleSettingsForOrg(organizationId);
 }
 
-export async function getResolvedDocumentCatalog(organizationId, module = 'onboarding') {
+export async function getResolvedDocumentCatalog(organizationId, module = 'onboarding', { includeDisabled = false } = {}) {
     const settings = await getOrCreateLifecycleSettings(organizationId);
     const enabledFeatures = resolveEnabledFeatureSet(settings);
     const orgEntries = await LifecycleDocumentCatalogEntry.find({ organizationId }).lean();
@@ -504,14 +507,16 @@ export async function getResolvedDocumentCatalog(organizationId, module = 'onboa
             const override = orgMap.get(systemDoc.key);
             const docOverride = (settings.documentOverrides || []).find((d) => d.catalogKey === systemDoc.key);
             const enabled = override?.enabled ?? docOverride?.enabled ?? true;
-            if (!enabled) return null;
+            if (!includeDisabled && !enabled) return null;
             if (systemDoc.featureKey && !enabledFeatures.has(systemDoc.featureKey)) return null;
             return {
                 ...systemDoc,
                 ...override,
+                catalogKey: systemDoc.key,
                 hubCategory: override?.hubCategory || systemDoc.hubCategory,
                 mandatory: docOverride?.mandatory ?? override?.mandatory ?? systemDoc.mandatory,
                 approvalRequired: docOverride?.approvalRequired ?? override?.approvalRequired ?? systemDoc.approvalRequired,
+                enabled: enabled !== false,
             };
         })
         .filter(Boolean);
@@ -536,8 +541,8 @@ export function getLifecycleConfigurationSnapshot(organizationId) {
     return Promise.all([
         getLifecycleSettingsForOrg(organizationId),
         listFormDefinitions(organizationId),
-        getResolvedDocumentCatalog(organizationId, 'onboarding'),
-        getResolvedDocumentCatalog(organizationId, 'offboarding'),
+        getResolvedDocumentCatalog(organizationId, 'onboarding', { includeDisabled: true }),
+        getResolvedDocumentCatalog(organizationId, 'offboarding', { includeDisabled: true }),
     ]).then(([settings, forms, onboardingDocs, offboardingDocs]) => ({
         registry: {
             features: getFullFeatureRegistry(),

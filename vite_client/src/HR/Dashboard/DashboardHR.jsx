@@ -48,6 +48,7 @@ import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
 import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
+import LeaveBalanceCard from '../../components/LeaveBalanceCard';
 
 const WS = {
     bg: '#F5F7FB',
@@ -301,8 +302,24 @@ const getEventToneClasses = (tone) => {
     return 'bg-emerald-100 text-emerald-700';
 };
 
-const StatCard = ({ label, value, subtext, badge, badgeClassName, icon, iconClassName }) => (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md" style={{ borderColor: WS.border }}>
+const StatCard = ({ label, value, subtext, badge, badgeClassName, icon, iconClassName, onClick }) => (
+    <div
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onClick={onClick}
+        onKeyDown={
+            onClick
+                ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onClick(e);
+                      }
+                  }
+                : undefined
+        }
+        className={`rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md ${onClick ? 'cursor-pointer' : ''}`}
+        style={{ borderColor: WS.border }}
+    >
         <div className="mb-3 flex items-start justify-between gap-3">
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconClassName}`}>{icon}</div>
             {badge ? (
@@ -361,6 +378,7 @@ const DashboardHR = () => {
         birthdays: [],
         openJobs: [],
         pendingApprovals: [],
+        escalatedApprovalsCount: 0,
         attendanceDailyTrend: [],
         todayStatus: [],
     });
@@ -466,7 +484,7 @@ const DashboardHR = () => {
                 const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
                 const today = format(new Date(), 'yyyy-MM-dd');
 
-                const [attendanceTrendRes, birthdaysRes, jobsRes, approvalsRes, taxRegimeRes, todayStatusRes] = await Promise.allSettled([
+                const [attendanceTrendRes, birthdaysRes, jobsRes, approvalsRes, taxRegimeRes, todayStatusRes, escalatedRes] = await Promise.allSettled([
                     axios.get(`${BOTH_ATTENDANCE_ENDPOINT}/team-attendance-history`, {
                         params: { startDate: monthStart, endDate: today },
                         withCredentials: true,
@@ -484,6 +502,9 @@ const DashboardHR = () => {
                         withCredentials: true,
                     }),
                     axios.get('/v1/both/attendance/today-status', {
+                        withCredentials: true,
+                    }),
+                    axios.get('/v1/admin/approvals/escalated-count', {
                         withCredentials: true,
                     }),
                 ]);
@@ -504,12 +525,19 @@ const DashboardHR = () => {
                     ...workflowApprovals,
                 ];
 
+                const escalatedFromApi =
+                    escalatedRes.status === 'fulfilled'
+                        ? Number(escalatedRes.value?.data?.data?.count ?? 0)
+                        : 0;
+                const escalatedFromList = workflowApprovals.filter((a) => a.slaEscalated).length;
+
                 setDashboardExtras({
                     birthdays:
                         birthdaysRes.status === 'fulfilled' ? birthdaysRes.value?.data?.birthdays || [] : [],
                     openJobs:
                         jobsRes.status === 'fulfilled' ? jobsRes.value?.data?.data || [] : [],
                     pendingApprovals: mergedApprovals,
+                    escalatedApprovalsCount: Math.max(escalatedFromApi, escalatedFromList),
                     attendanceDailyTrend:
                         attendanceTrendRes.status === 'fulfilled' ? attendanceTrendRes.value?.data?.dailyTrend || [] : [],
                     todayStatus:
@@ -520,6 +548,7 @@ const DashboardHR = () => {
                     birthdays: [],
                     openJobs: [],
                     pendingApprovals: [],
+                    escalatedApprovalsCount: 0,
                     attendanceDailyTrend: [],
                     todayStatus: [],
                 });
@@ -868,7 +897,7 @@ const DashboardHR = () => {
 
                 <PersonalDashboardKpiRow compact />
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                     <StatCard
                         label="Total Employees"
                         value={formatNumber(orgEmployeeTotal)}
@@ -908,6 +937,22 @@ const DashboardHR = () => {
                         }
                         icon={<FiCheckCircle className="h-5 w-5" />}
                         iconClassName="bg-teal-100 text-teal-700"
+                    />
+                    <StatCard
+                        label="Overdue Approvals"
+                        value={formatNumber(dashboardExtras.escalatedApprovalsCount || 0)}
+                        subtext="Pending beyond review window"
+                        badge={
+                            (dashboardExtras.escalatedApprovalsCount || 0) > 0 ? 'Needs follow-up' : 'Clear'
+                        }
+                        badgeClassName={
+                            (dashboardExtras.escalatedApprovalsCount || 0) > 0
+                                ? 'bg-orange-100 text-orange-800'
+                                : 'bg-emerald-50 text-emerald-700'
+                        }
+                        icon={<FiClock className="h-5 w-5" />}
+                        iconClassName="bg-orange-100 text-orange-600"
+                        onClick={() => navigate('/admin/pending-approvals?escalated=1')}
                     />
                 </div>
 
@@ -1206,14 +1251,27 @@ const DashboardHR = () => {
                         </div>
                     </Panel>
 
-                    <Panel title="Quick Actions">
-                        <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-4 content-start">
+                        <LeaveBalanceCard />
+                    </div>
+                </div>
+
+                <Panel title="Quick Actions">
+                    <div
+                        className="w-full overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                        onWheel={(event) => {
+                            if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                                event.currentTarget.scrollLeft += event.deltaY;
+                            }
+                        }}
+                    >
+                        <div className="flex flex-nowrap gap-3">
                             {quickActions.map((action) => (
                                 <button
                                     key={action.label}
                                     type="button"
                                     onClick={action.onClick}
-                                    className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left transition hover:border-emerald-200 hover:bg-white hover:shadow-sm"
+                                    className="min-w-[180px] max-w-[180px] flex-[0_0_180px] rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left transition hover:border-emerald-200 hover:bg-white hover:shadow-sm"
                                 >
                                     <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
                                         {action.icon}
@@ -1223,27 +1281,27 @@ const DashboardHR = () => {
                                 </button>
                             ))}
                         </div>
+                    </div>
 
-                        <div className="mt-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-4 text-white">
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <p className="text-sm font-semibold">Need a deeper review?</p>
-                                    <p className="mt-1 text-xs text-emerald-50/90">
-                                        Open analytics to drill into workforce, leave, and hiring patterns.
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/hr/analytics')}
-                                    className="rounded-full bg-white/15 p-2 transition hover:bg-white/20"
-                                    aria-label="Open analytics"
-                                >
-                                    <FiArrowUpRight className="h-4 w-4" />
-                                </button>
-                            </div>
+                    <div className="mt-4 flex min-h-[80px] max-h-[90px] items-center justify-between gap-4 rounded-[18px] border border-emerald-600/20 bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2.5 shadow-sm">
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold leading-tight text-white">
+                                Need a deeper review?
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-emerald-50/95">
+                                Open analytics to drill into workforce, leave, and hiring patterns.
+                            </p>
                         </div>
-                    </Panel>
-                </div>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/hr/analytics')}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30"
+                            aria-label="Open analytics"
+                        >
+                            <FiArrowUpRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                </Panel>
 
                 {extrasLoading ? (
                     <div className="flex items-center justify-center py-2 text-sm text-slate-400">

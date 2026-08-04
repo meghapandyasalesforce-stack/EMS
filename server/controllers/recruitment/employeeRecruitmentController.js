@@ -1,0 +1,194 @@
+/**
+ * Authenticated employee / manager recruitment endpoints.
+ */
+import asyncHandler from '../../middlewares/asyncHandler.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import {
+    listInternalJobs,
+    getInternalJob,
+    employeeApplyOrRefer,
+    listMyReferrals,
+    listMyInternalApplications,
+} from '../../services/internalJobsService.js';
+import {
+    createRequisition,
+} from './recruitmentP1Controller.js';
+import { JobRequisition, Candidate } from '../../models/recruitment.model.js';
+
+function requireEmployee(req, res) {
+    if (!req.employee?._id) {
+        res.status(403).json({ success: false, message: 'Employee profile required' });
+        return null;
+    }
+    return req.employee;
+}
+
+export const getInternalJobs = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const jobs = await listInternalJobs(organizationId);
+    res.json({ success: true, data: jobs });
+});
+
+export const getInternalJobById = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    const job = await getInternalJob(organizationId, req.params.id);
+    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+    res.json({ success: true, data: job });
+});
+
+export const postInternalApply = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    try {
+        const result = await employeeApplyOrRefer({
+            organizationId,
+            jobPostingId: req.params.id,
+            employee,
+            mode: 'apply',
+            candidatePayload: req.body,
+        });
+        res.status(201).json({ success: true, message: 'Application submitted', data: result.candidate });
+    } catch (err) {
+        res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+});
+
+export const postInternalRefer = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    try {
+        const result = await employeeApplyOrRefer({
+            organizationId,
+            jobPostingId: req.params.id,
+            employee,
+            mode: 'refer',
+            candidatePayload: req.body,
+        });
+        res.status(201).json({
+            success: true,
+            message: 'Referral submitted — candidate invited by email',
+            data: result.candidate,
+        });
+    } catch (err) {
+        res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+});
+
+export const getMyReferrals = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    const data = await listMyReferrals(organizationId, employee._id);
+    res.json({ success: true, data });
+});
+
+export const getMyApplications = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    const data = await listMyInternalApplications(organizationId, employee._id, employee.email);
+    res.json({ success: true, data });
+});
+
+/** Interviews assigned to the logged-in employee as interviewer */
+export const getMyAssignedInterviews = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+
+    const candidates = await Candidate.find({
+        organizationId,
+        archivedAt: null,
+        'interviewSchedule.interviewer': employee._id,
+    })
+        .populate('jobPostingId', 'jobTitle department location')
+        .select('firstName lastName email phone status stage interviewSchedule jobPostingId')
+        .sort({ updatedAt: -1 })
+        .lean();
+
+    const interviews = [];
+    for (const c of candidates) {
+        for (const iv of c.interviewSchedule || []) {
+            if (String(iv.interviewer) !== String(employee._id)) continue;
+            interviews.push({
+                interviewId: iv._id,
+                interviewType: iv.interviewType,
+                scheduledDate: iv.scheduledDate,
+                scheduledTime: iv.scheduledTime,
+                location: iv.location,
+                meetingLink: iv.meetingLink,
+                status: iv.status,
+                feedback: iv.feedback,
+                candidate: {
+                    id: c._id,
+                    name: [c.firstName, c.lastName].filter(Boolean).join(' '),
+                    email: c.email,
+                    phone: c.phone,
+                    status: c.status,
+                    stage: c.stage,
+                },
+                job: c.jobPostingId
+                    ? {
+                        id: c.jobPostingId._id,
+                        jobTitle: c.jobPostingId.jobTitle,
+                        department: c.jobPostingId.department,
+                        location: c.jobPostingId.location,
+                    }
+                    : null,
+            });
+        }
+    }
+
+    interviews.sort((a, b) => {
+        const da = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+        const db = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+        return db - da;
+    });
+
+    res.json({ success: true, data: interviews });
+});
+
+/** Managers create hiring need (requisition) — same model as HR */
+export const managerCreateRequisition = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    // Reuse create by setting body requestedBy
+    req.body.requestedBy = employee._id;
+    req.body.hiringManager = req.body.hiringManager || employee._id;
+    return createRequisition(req, res);
+});
+
+export const managerListMyRequisitions = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    const items = await JobRequisition.find({
+        organizationId,
+        $or: [{ requestedBy: employee._id }, { hiringManager: employee._id }],
+    })
+        .sort({ createdAt: -1 })
+        .lean();
+    res.json({ success: true, data: items });
+});
+
+export const managerSubmitRequisition = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    const item = await JobRequisition.findOne({
+        _id: req.params.id,
+        organizationId,
+        requestedBy: employee._id,
+    });
+    if (!item) return res.status(404).json({ success: false, message: 'Requisition not found' });
+    if (!['Draft', 'Rejected'].includes(item.status)) {
+        return res.status(400).json({ success: false, message: 'Cannot submit in current status' });
+    }
+    item.status = 'PendingApproval';
+    if (!Array.isArray(item.notes)) item.notes = [];
+    item.notes.push({ note: 'Submitted by manager', addedBy: employee._id, addedAt: new Date() });
+    await item.save();
+    res.json({ success: true, message: 'Submitted for HR approval', data: item });
+});

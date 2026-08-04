@@ -117,6 +117,7 @@ import {
     getOffersForCandidate,
     postOfferSubmitApproval,
     postOfferSend,
+    postOfferRevise,
     getBgvCases,
     postBgvCase,
     patchBgvCheck,
@@ -654,6 +655,9 @@ router.route('/offers/:id/submit-approval')
 
 router.route('/offers/:id/send')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, postOfferSend);
+
+router.route('/offers/:id/revise')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, postOfferRevise);
 
 // Phase 1 — Background verification (Configure toggle gates API + UI)
 router.route('/bgv')

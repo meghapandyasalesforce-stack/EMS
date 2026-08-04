@@ -256,6 +256,68 @@ export function applyOnboardingFeatureGates(workflow, settings) {
         if (before) changed = true;
     }
 
+    // Retired: Sign IP Assignment Agreement — strip from live workflows
+    {
+        const beforeTasks = (workflow.tasks || []).length;
+        workflow.tasks = (workflow.tasks || []).filter((t) => (
+            t.featureKey !== 'industry.it.ipAgreement'
+            && !/^sign\s+ip\s+assignment\s+agreement$/i.test(String(t.title || '').trim())
+        ));
+        if ((workflow.tasks || []).length !== beforeTasks) changed = true;
+
+        const beforeChecklist = (workflow.checklist || []).length;
+        workflow.checklist = (workflow.checklist || []).filter((c) => (
+            c.featureKey !== 'industry.it.ipAgreement'
+            && !/^ip\s+agreement\s+signed$/i.test(String(c.item || '').trim())
+        ));
+        if ((workflow.checklist || []).length !== beforeChecklist) changed = true;
+    }
+
+    // Configure → Documents overrides (Enabled / Required)
+    {
+        const overrides = Array.isArray(settings.documentOverrides) ? settings.documentOverrides : [];
+        if (overrides.length) {
+            const byKey = new Map(overrides
+                .filter((row) => row?.catalogKey)
+                .map((row) => [String(row.catalogKey), row]));
+
+            const before = (workflow.documents || []).length;
+            workflow.documents = (workflow.documents || []).filter((doc) => {
+                const key = String(doc.catalogKey || doc.documentType || '');
+                const override = byKey.get(key);
+                return !(override && override.enabled === false);
+            });
+            if ((workflow.documents || []).length !== before) {
+                changed = true;
+                if (typeof workflow.markModified === 'function') workflow.markModified('documents');
+            }
+
+            for (const doc of workflow.documents || []) {
+                const key = String(doc.catalogKey || doc.documentType || '');
+                const override = byKey.get(key);
+                if (!override) continue;
+                if (typeof override.mandatory === 'boolean' && doc.mandatory !== override.mandatory) {
+                    doc.mandatory = override.mandatory;
+                    changed = true;
+                }
+                if (typeof override.approvalRequired === 'boolean'
+                    && doc.approvalRequired !== override.approvalRequired) {
+                    doc.approvalRequired = override.approvalRequired;
+                    changed = true;
+                }
+            }
+
+            // Policy signatures that mirror disabled document types (e.g. NDA)
+            const beforeSig = (workflow.policySignatures || []).length;
+            workflow.policySignatures = (workflow.policySignatures || []).filter((sig) => {
+                const key = String(sig.documentType || sig.catalogKey || '');
+                const override = byKey.get(key);
+                return !(override && override.enabled === false);
+            });
+            if ((workflow.policySignatures || []).length !== beforeSig) changed = true;
+        }
+    }
+
     // Drop template/pack items whose featureKey is disabled
     for (const field of ['tasks', 'documents', 'checklist', 'assets', 'trainingModules', 'policySignatures', 'softwareRequests']) {
         const before = (workflow[field] || []).length;

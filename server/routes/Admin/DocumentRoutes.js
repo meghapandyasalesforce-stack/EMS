@@ -8,6 +8,7 @@ import {
     getDocumentVersions,
     shareDocument,
     downloadDocumentById,
+    deleteDocumentByHr,
 } from '../../controllers/document/documentController.js';
 import { requireHrDocumentAccess } from '../../middlewares/requirePermission.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
@@ -45,6 +46,10 @@ router.route('/:id/approve')
 
 router.route('/:id/reject')
     .post(requireHrDocumentAccess, writeLimiter, rejectDocument);
+
+// Delete document (HR/Admin)
+router.route('/:id')
+    .delete(requireHrDocumentAccess, writeLimiter, deleteDocumentByHr);
 
 // Share document
 router.route('/:id/share')

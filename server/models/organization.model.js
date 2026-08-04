@@ -416,6 +416,11 @@ const organizationSchema = new mongoose.Schema({
             type: Boolean,
             default: false
         },
+        approvalSlaHours: {
+            type: Number,
+            enum: [6, 12, 24, 48],
+            default: 12
+        },
         /**
          * Payroll calculation settings.
          * calculationMode:
@@ -447,6 +452,41 @@ const organizationSchema = new mongoose.Schema({
                 type: Boolean,
                 default: false
             }
+        },
+        /**
+         * Resume Inbox — inbound recruitment mailbox (IMAP).
+         * Password is stored encrypted; never returned by APIs in plaintext.
+         */
+        resumeInbox: {
+            enabled: { type: Boolean, default: false },
+            provider: {
+                type: String,
+                enum: ['gmail', 'outlook', 'imap', ''],
+                default: '',
+            },
+            host: { type: String, trim: true, default: '' },
+            port: { type: Number, default: 993 },
+            secure: { type: Boolean, default: true },
+            user: { type: String, trim: true, lowercase: true, default: '' },
+            /** AES-encrypted mailbox password — strip before API responses */
+            passwordEncrypted: { type: String, default: '' },
+            folder: { type: String, trim: true, default: 'INBOX' },
+            lastPolledAt: { type: Date, default: null },
+            lastPollError: { type: String, default: null },
+        },
+        /**
+         * Automatic Resume Screening (org-wide defaults).
+         * Job-level screeningCriteria still applies per posting.
+         */
+        resumeScreening: {
+            enabled: { type: Boolean, default: true },
+            defaultMinimumMatchPercent: { type: Number, default: 70, min: 0, max: 100 },
+            retentionDays: { type: Number, default: 7, min: 1, max: 365 },
+            requiredKeywordWeight: { type: Number, default: 1, min: 0 },
+            optionalKeywordWeight: { type: Number, default: 0.5, min: 0 },
+            autoDeleteEnabled: { type: Boolean, default: true },
+            /** Lifetime count of auto-deleted failed-screening candidates */
+            autoDeletedCount: { type: Number, default: 0 },
         }
     },
     logo: {
