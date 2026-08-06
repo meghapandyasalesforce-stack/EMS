@@ -582,7 +582,7 @@ canvas {
    * Legacy tables without .cm-table-wrap — do not target .cm-table (onboarding HR tables).
    * Those scroll inside .cm-table-wrap; forcing display:block on the table breaks columns.
    */
-  .main-scroll-area table:not(.cm-table) {
+  .main-scroll-area table:not(.cm-table):not(.leave-requests-table) {
     display: block;
     width: 100%;
     max-width: 100%;
@@ -683,6 +683,40 @@ canvas {
 @media (min-width: 640px) and (max-width: 1023px) {
   .mobile-header-spacer {
     height: calc(4.25rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Leave Management table — swipe scroll inside wrapper (mobile / tablet); desktop unchanged */
+@media (max-width: 1023px) {
+  .main-scroll-area .table-scroll-container.leave-requests-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .main-scroll-area .table-scroll-container.leave-requests-table-scroll > .leave-requests-table {
+    display: table;
+    width: max-content;
+    min-width: 900px;
+    max-width: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .main-scroll-area .table-scroll-container.leave-requests-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .main-scroll-area .table-scroll-container.leave-requests-table-scroll > .leave-requests-table {
+    display: table;
+    width: 100%;
+    min-width: 760px;
   }
 }
 

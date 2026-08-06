@@ -11,6 +11,9 @@ import { startCompOffExpiryWorker, scheduleCompOffExpiry } from './compOffExpiry
 import { startAutoCheckOutWorker, scheduleAutoCheckOut, processAutoCheckOut, sendPreCheckOutNotifications } from './autoCheckOutJob.js';
 import { scheduleLeaveBalanceJobs } from './leaveBalanceJob.js';
 import { startApprovalTimeoutWorker, scheduleApprovalTimeout } from './approvalTimeoutJob.js';
+import { scheduleApprovalSlaEscalationJobs } from './approvalSlaEscalationJob.js';
+import { scheduleResumeInboxPollJobs } from './resumeInboxPollJob.js';
+import { scheduleScreeningRetentionJobs } from './screeningRetentionJob.js';
 import logger from '../helpers/logger.js';
 import { schedulePayrollRunJobs } from './payrollRunJob.js';
 import { scheduleSpecialEventNotificationJobs } from './specialEventNotificationJob.js';
@@ -69,6 +72,27 @@ export const initializeWorkers = async () => {
                 logger.info('Onboarding scheduled jobs registered (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule onboarding jobs', { error: error.message });
+            }
+
+            try {
+                scheduleApprovalSlaEscalationJobs();
+                logger.info('Approval SLA escalation jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule approval SLA escalation jobs', { error: error.message });
+            }
+
+            try {
+                scheduleResumeInboxPollJobs();
+                logger.info('Resume Inbox poll jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule Resume Inbox poll jobs', { error: error.message });
+            }
+
+            try {
+                scheduleScreeningRetentionJobs();
+                logger.info('Resume screening retention jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule screening retention jobs', { error: error.message });
             }
 
             return;
@@ -149,6 +173,27 @@ export const initializeWorkers = async () => {
             logger.info('Onboarding scheduled jobs registered');
         } catch (error) {
             logger.error('Failed to schedule onboarding jobs', { error: error.message });
+        }
+
+        try {
+            scheduleApprovalSlaEscalationJobs();
+            logger.info('Approval SLA escalation jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule approval SLA escalation jobs', { error: error.message });
+        }
+
+        try {
+            scheduleResumeInboxPollJobs();
+            logger.info('Resume Inbox poll jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule Resume Inbox poll jobs', { error: error.message });
+        }
+
+        try {
+            scheduleScreeningRetentionJobs();
+            logger.info('Resume screening retention jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule screening retention jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {

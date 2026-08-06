@@ -14,7 +14,7 @@ export const ENTERPRISE_ENABLED_FEATURES = Object.freeze([
     'trainingLms', 'milestone30_60_90', 'probation', 'managerFeedback', 'employeeFeedback', 'goalAssignment',
     'exitInterview', 'leaveEncashment', 'bonusRecovery', 'serviceCertificate', 'alumniManagement', 'rehireEligibility',
     'candidatePortal', 'eSignature', 'digitalForms', 'emergencyContact', 'familyNominee',
-    'industry.it.nda', 'industry.it.ipAgreement', 'industry.it.repositoryAccess',
+    'industry.it.nda', 'industry.it.repositoryAccess',
     'compliance.india.aadhaar', 'compliance.india.pan', 'compliance.india.uan',
     'compliance.india.epf', 'compliance.india.esi', 'compliance.india.nomination',
     'indiaStatutoryCompliance', 'lmsDashboard', 'probationCenter', 'enterpriseDashboards',

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { FiX, FiCheckCircle, FiXCircle, FiClock, FiUser } from 'react-icons/fi';
+import { auditActionLabel, formatAuditTimelineEvent } from '../../utils/approvalStatusDisplay';
 
 const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
   const [comments, setComments] = useState('');
   const [action, setAction] = useState(null);
 
   const pendingStep = approval.currentPendingStep;
+  const auditTrail = Array.isArray(approval.auditTrail) ? approval.auditTrail : [];
 
   const handleSubmit = () => {
     if (!action) return;
@@ -76,6 +78,33 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
             </div>
           </div>
 
+          {/* Request timeline from audit trail */}
+          {auditTrail.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Request Timeline</h3>
+              <ul className="relative space-y-4 border-l-2 border-gray-100 pl-4">
+                {auditTrail
+                  .map((event, index) => {
+                    const label = formatAuditTimelineEvent(event) || auditActionLabel(event);
+                    if (!label) return null;
+                    return (
+                      <li key={`${event.action}-${index}`} className="relative">
+                        <span
+                          className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-theme-primary"
+                          aria-hidden
+                        />
+                        <p className="text-sm font-semibold text-gray-900">{label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {event.at ? new Date(event.at).toLocaleString() : '—'}
+                        </p>
+                      </li>
+                    );
+                  })
+                  .filter(Boolean)}
+              </ul>
+            </div>
+          )}
+
           {/* Steps Timeline */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Approval Steps</h3>
@@ -89,6 +118,7 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                 const isPending = step.status === 'Pending';
                 const isApproved = step.status === 'Approved';
                 const isRejected = step.status === 'Rejected';
+                const isSkipped = step.status === 'Skipped';
 
                 return (
                   <div
@@ -104,6 +134,7 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                       {isApproved && <FiCheckCircle className="w-5 h-5 text-theme-primary" />}
                       {isRejected && <FiXCircle className="w-5 h-5 text-red-600" />}
                       {isPending && <FiClock className="w-5 h-5 text-theme-secondary" />}
+                      {isSkipped && <FiUser className="w-5 h-5 text-gray-400" />}
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900">{step.stepName}</h4>
                         <p className="text-sm text-gray-600">Approver: {step.approverName || 'N/A'}</p>
@@ -111,6 +142,7 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         isApproved ? 'bg-theme-primary/10 text-theme-primary' :
                         isRejected ? 'bg-red-100 text-red-800' :
+                        isSkipped ? 'bg-gray-100 text-gray-600' :
                         'bg-theme-secondary/10 text-theme-secondary'
                       }`}>
                         {step.status}
@@ -189,4 +221,3 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
 };
 
 export default ApprovalDetailModal;
-

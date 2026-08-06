@@ -12,8 +12,14 @@ export const errorHandler = (err, req, res, next) => {
         path: req.path,
         method: req.method,
         ip: req.ip,
-        user: req.user || req.employee || 'anonymous'
+        user: req.user || req.employee || 'anonymous',
+        headersSent: !!res.headersSent,
     });
+
+    // Response already written (client abort, double-send, etc.) — do not crash again.
+    if (res.headersSent) {
+        return next(err);
+    }
 
     // Standard error response structure
     const errorResponse = {
@@ -23,10 +29,15 @@ export const errorHandler = (err, req, res, next) => {
         message: err.message || 'An unexpected error occurred'
     };
 
+    const sendJson = (status, body) => {
+        if (res.headersSent) return;
+        return res.status(status).json(body);
+    };
+
     // Handle specific error types
     if (err.name === 'ValidationError') {
         const errors = Object.values(err.errors || {}).map(e => e.message);
-        return res.status(400).json({
+        return sendJson(400, {
             ...errorResponse,
             message: 'Validation Error',
             errors
@@ -34,7 +45,7 @@ export const errorHandler = (err, req, res, next) => {
     }
 
     if (err.name === 'JsonWebTokenError') {
-        return res.status(401).json({
+        return sendJson(401, {
             ...errorResponse,
             message: 'Invalid authentication token',
             code: 'INVALID_TOKEN'
@@ -42,7 +53,7 @@ export const errorHandler = (err, req, res, next) => {
     }
 
     if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({
+        return sendJson(401, {
             ...errorResponse,
             message: 'Authentication token expired',
             code: 'TOKEN_EXPIRED'
@@ -51,10 +62,10 @@ export const errorHandler = (err, req, res, next) => {
 
     // Handle mongoose duplicate key error
     if (err.code === 11000) {
-        return res.status(400).json({
+        return sendJson(400, {
             ...errorResponse,
             message: 'Duplicate field value entered',
-            field: Object.keys(err.keyValue)[0],
+            field: Object.keys(err.keyValue || {})[0],
             code: 'DUPLICATE_VALUE'
         });
     }
@@ -62,14 +73,14 @@ export const errorHandler = (err, req, res, next) => {
     // Handle multer file upload errors
     if (err.name === 'MulterError') {
         if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({
+            return sendJson(400, {
                 ...errorResponse,
                 message: 'File size exceeds the maximum allowed limit',
                 code: 'FILE_TOO_LARGE'
             });
         }
         if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-            return res.status(400).json({
+            return sendJson(400, {
                 ...errorResponse,
                 message: 'Unexpected file field',
                 code: 'UNEXPECTED_FILE'
@@ -79,7 +90,7 @@ export const errorHandler = (err, req, res, next) => {
 
     // Handle cast errors (invalid ObjectId)
     if (err.name === 'CastError') {
-        return res.status(400).json({
+        return sendJson(400, {
             ...errorResponse,
             message: 'Invalid ID format',
             code: 'INVALID_ID'
@@ -88,7 +99,7 @@ export const errorHandler = (err, req, res, next) => {
 
     // Handle custom application errors
     if (err.isCustom) {
-        return res.status(err.statusCode || err.status || 400).json({
+        return sendJson(err.statusCode || err.status || 400, {
             ...errorResponse,
             message: err.message,
             code: err.code || 'CUSTOM_ERROR',
@@ -198,7 +209,7 @@ export const errorHandler = (err, req, res, next) => {
         });
     }
 
-    res.status(statusCode).json(response);
+    return sendJson(statusCode, response);
 };
 
 /**

@@ -15,6 +15,7 @@ import {
     FaFilePdf,
     FaFileWord,
     FaTimes,
+    FaTrash,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios, { fetchDocumentWithFallback, getDocumentDownloadUrl, saveDocumentDownload } from '../../utils/axios';
@@ -171,29 +172,28 @@ function DocumentFileIcon({ doc, className = 'w-5 h-5' }) {
 
 function categoryPillClass(cat) {
     const c = String(cat || '');
-    if (c === 'Policy') return 'bg-emerald-50 text-emerald-800 border border-emerald-100';
-    if (c === 'Contract') return 'bg-violet-50 text-violet-800 border border-violet-100';
-    if (c === 'Certificate') return 'bg-amber-50 text-amber-900 border border-amber-100';
-    if (c === 'Other') return 'bg-slate-100 text-slate-800 border border-slate-200';
-    return 'bg-gray-100 text-gray-800 border border-gray-200';
+    if (c === 'Policy') return 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/70';
+    if (c === 'Contract') return 'bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-200/70';
+    if (c === 'Certificate') return 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200/70';
+    if (c === 'Other') return 'bg-slate-100 text-slate-800 ring-1 ring-inset ring-slate-200';
+    return 'bg-gray-100 text-gray-800 ring-1 ring-inset ring-gray-200';
 }
 
 function statusPill(doc) {
     if (doc.requiresApproval && doc.approvalStatus === 'Pending') {
-        return { label: 'Pending approval', className: 'bg-amber-50 text-amber-800 border border-amber-200' };
+        return { label: 'Pending approval', className: 'bg-amber-100 text-amber-900 ring-1 ring-inset ring-amber-200/80' };
     }
-    // Employee delete (new status, or older rows saved as Rejected + this reason)
     const removedByEmployee =
         doc.approvalStatus === 'Withdrawn' ||
         (doc.approvalStatus === 'Rejected' &&
             String(doc.rejectionReason || '').toLowerCase().includes('removed by employee'));
     if (removedByEmployee) {
-        return { label: 'Withdrawn by employee', className: 'bg-slate-100 text-slate-700 border border-slate-200' };
+        return { label: 'Withdrawn by employee', className: 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200' };
     }
     if (doc.approvalStatus === 'Rejected') {
-        return { label: 'Rejected', className: 'bg-red-50 text-red-800 border border-red-100' };
+        return { label: 'Rejected', className: 'bg-red-50 text-red-800 ring-1 ring-inset ring-red-200/80' };
     }
-    return { label: 'Active', className: 'bg-emerald-50 text-emerald-800 border border-emerald-100' };
+    return { label: 'Active', className: 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/80' };
 }
 
 function useDebouncedValue(value, ms) {
@@ -238,6 +238,7 @@ const DocumentsPage = () => {
     const [rejectingDoc, setRejectingDoc] = useState(null);
     const [docActionLoading, setDocActionLoading] = useState({});
     const [previewDoc, setPreviewDoc] = useState(null);
+    const [deleteDoc, setDeleteDoc] = useState(null);
 
     const closePreview = useCallback(() => {
         setPreviewDoc((current) => {
@@ -486,6 +487,24 @@ const DocumentsPage = () => {
         }
     };
 
+    const handleDeleteDocument = async () => {
+        if (!deleteDoc?._id) return;
+        const docId = deleteDoc._id;
+        setDocActionLoading((prev) => ({ ...prev, [docId]: 'delete' }));
+        try {
+            await axios.delete(`${ADMIN_DOCUMENTS_ENDPOINT}/${docId}`, { withCredentials: true });
+            toast.success('Document deleted successfully');
+            setDeleteDoc(null);
+            await fetchDocuments();
+            if (isHRUser) await fetchPendingDocuments();
+        } catch (error) {
+            logger.error('Error deleting document:', error);
+            toast.error(error.response?.data?.message || 'Failed to delete document');
+        } finally {
+            setDocActionLoading((prev) => ({ ...prev, [docId]: null }));
+        }
+    };
+
     const pendingCount = pendingDocuments.length;
     const { page: curPage, total, pages } = pagination;
     const rangeStart = total === 0 ? 0 : (curPage - 1) * PAGE_SIZE + 1;
@@ -500,146 +519,178 @@ const DocumentsPage = () => {
     }
 
     return (
-        <div className="page-shell min-h-screen bg-[#f4f6f8] transition-all duration-300">
-            <div className="page-shell-inner hrms-split">
-                {/* Sidebar */}
-                <aside className="min-w-0 space-y-6">
-                    <div className="rounded-xl border border-gray-200/80 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Categories</p>
-                        <nav className="space-y-1">
-                            {CATEGORY_NAV.map((item) => {
-                                const active = sidebarCategoryKey === item.key;
-                                return (
-                                    <button
-                                        key={item.key}
-                                        type="button"
-                                        onClick={() => {
-                                            setSidebarCategoryKey(item.key);
-                                            setPage(1);
-                                        }}
-                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-medium transition ${
-                                            active
-                                                ? 'bg-theme-secondary/12 text-theme-secondary'
-                                                : 'text-gray-700 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <FaFolder className={`w-4 h-4 shrink-0 ${active ? 'text-theme-secondary' : 'text-gray-400'}`} />
-                                        {item.label}
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200/80 bg-white p-4 shadow-sm">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Access level</p>
-                        <div className="space-y-2 text-sm">
-                            <label className="flex items-center gap-2 cursor-pointer text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    checked={accessPublic}
-                                    onChange={(e) => setAccessPublic(e.target.checked)}
-                                    className="rounded border-gray-300 text-theme-secondary focus:ring-theme-secondary"
-                                />
-                                Public
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    checked={accessRestricted}
-                                    onChange={(e) => setAccessRestricted(e.target.checked)}
-                                    className="rounded border-gray-300 text-theme-secondary focus:ring-theme-secondary"
-                                />
-                                Restricted
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    checked={accessConfidential}
-                                    onChange={(e) => setAccessConfidential(e.target.checked)}
-                                    className="rounded border-gray-300 text-theme-secondary focus:ring-theme-secondary"
-                                />
-                                Confidential
-                            </label>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-3">
-                            Leave unchecked to show all access levels.
+        <div className="page-shell min-h-screen bg-slate-50 transition-all duration-300">
+            <div className="page-shell-inner mx-auto max-w-[1600px] space-y-5">
+                <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Document management
+                        </p>
+                        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                            Documents
+                        </h1>
+                        <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                            Manage, approve, and track organization-wide records.
                         </p>
                     </div>
-
                     {isHRUser && (
                         <button
                             type="button"
                             onClick={openUploadModal}
-                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-theme-secondary text-white font-medium shadow-sm hover:bg-theme-primary transition"
+                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-theme-secondary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-theme-primary"
                         >
-                            <FaPlus className="w-4 h-4" />
-                            Upload Document
+                            <FaUpload className="h-4 w-4" />
+                            Upload document
                         </button>
                     )}
-                </aside>
+                </header>
 
-                {/* Main */}
-                <main className="min-w-0 space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Documents</h1>
-                            <p className="text-gray-600 mt-1">
-                                Manage, approve, and track organization-wide records.
-                            </p>
+                {/* Sticky filters + quick upload */}
+                <div className="sticky top-2 z-20 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                            <div className="relative min-w-0 flex-1">
+                                <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="search"
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    placeholder="Search by name, employee, or ID…"
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                />
+                            </div>
+                            {isHRUser && (
+                                <button
+                                    type="button"
+                                    onClick={openUploadModal}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-200 hover:text-theme-secondary lg:hidden"
+                                >
+                                    <FaPlus className="h-4 w-4" />
+                                    Upload
+                                </button>
+                            )}
                         </div>
-                        {isHRUser && (
-                            <button
-                                type="button"
-                                onClick={openUploadModal}
-                                className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-secondary text-white font-medium hover:bg-theme-primary transition shadow-sm"
+
+                        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                            <div
+                                className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                                role="tablist"
+                                aria-label="Document categories"
                             >
-                                <FaPlus className="w-4 h-4" />
-                                Upload Document
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Search */}
-                    <div className="relative max-w-xl">
-                        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-                        <input
-                            type="search"
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            placeholder="Search documents…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
-                        />
-                    </div>
-
-                    {/* Pending approvals */}
-                    {isHRUser && (
-                        <section className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                    <FaFileAlt className="w-5 h-5 text-gray-600" />
-                                    <h2 className="text-lg font-semibold text-gray-900">Pending Approvals</h2>
-                                    {pendingCount > 0 ? (
-                                        <span className="text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-orange-50 text-orange-800 border border-orange-100">
-                                            {pendingCount} action required
-                                        </span>
-                                    ) : (
-                                        <span className="text-xs text-gray-500">All caught up</span>
-                                    )}
-                                </div>
+                                {CATEGORY_NAV.map((item) => {
+                                    const active = sidebarCategoryKey === item.key;
+                                    return (
+                                        <button
+                                            key={item.key}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={active}
+                                            onClick={() => {
+                                                setSidebarCategoryKey(item.key);
+                                                setPage(1);
+                                            }}
+                                            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                                                active
+                                                    ? 'bg-theme-secondary text-white shadow-sm'
+                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+                                            }`}
+                                        >
+                                            <FaFolder className={`h-3 w-3 ${active ? 'text-white/90' : 'text-slate-500'}`} />
+                                            {item.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
-                            <div className="p-4 space-y-4">
-                                {pendingDocuments.length === 0 ? (
-                                    <p className="text-sm text-gray-500 text-center py-8">
-                                        No documents pending HR approval.
-                                    </p>
-                                ) : (
-                                    pendingDocuments.map((doc) => (
-                                        <div
-                                            key={doc._id}
-                                            className="flex flex-col xl:flex-row xl:items-stretch gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition"
-                                        >
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Access
+                                </span>
+                                <label
+                                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                                        accessPublic
+                                            ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
+                                            : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={accessPublic}
+                                        onChange={(e) => setAccessPublic(e.target.checked)}
+                                    />
+                                    Public
+                                </label>
+                                <label
+                                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                                        accessRestricted
+                                            ? 'bg-violet-50 text-violet-800 ring-1 ring-violet-200'
+                                            : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={accessRestricted}
+                                        onChange={(e) => setAccessRestricted(e.target.checked)}
+                                    />
+                                    Restricted
+                                </label>
+                                <label
+                                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                                        accessConfidential
+                                            ? 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
+                                            : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={accessConfidential}
+                                        onChange={(e) => setAccessConfidential(e.target.checked)}
+                                    />
+                                    Confidential
+                                </label>
+                                <span className="hidden text-[10px] text-slate-400 sm:inline">
+                                    (none = all levels)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {isHRUser && (
+                    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
+                            <div className="flex items-center gap-2">
+                                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                                    <FaFileAlt className="h-4 w-4" />
+                                </span>
+                                <div>
+                                    <h2 className="text-base font-semibold text-slate-900">Pending approvals</h2>
+                                    <p className="text-xs text-slate-500">Review employee submissions</p>
+                                </div>
+                            </div>
+                            {pendingCount > 0 ? (
+                                <span className="rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-orange-800">
+                                    {pendingCount} pending
+                                </span>
+                            ) : (
+                                <span className="text-xs font-medium text-emerald-600">All caught up</span>
+                            )}
+                        </div>
+
+                        <div className="space-y-3 p-4 sm:p-5">
+                            {pendingDocuments.length === 0 ? (
+                                <p className="py-6 text-center text-sm text-slate-500">
+                                    No documents pending HR approval.
+                                </p>
+                            ) : (
+                                pendingDocuments.map((doc) => (
+                                    <div
+                                        key={doc._id}
+                                        className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-4 transition hover:border-slate-200 hover:bg-slate-50 xl:flex-row xl:items-stretch"
+                                    >
                                             <div className="flex items-start gap-3 min-w-0 flex-1">
                                                 <div className="shrink-0 p-3 rounded-xl bg-white border border-gray-100 shadow-sm">
                                                     <DocumentFileIcon doc={doc} className="w-8 h-8 text-theme-secondary" />
@@ -732,94 +783,105 @@ const DocumentsPage = () => {
                                             </div>
                                         </div>
                                     ))
-                                )}
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Recent documents table */}
-                    <section className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-gray-900">Recent Documents</h2>
-                            <FaFilter className="w-4 h-4 text-gray-400" title="Filtered by sidebar" />
+                            )}
                         </div>
+                    </section>
+                )}
 
-                        <div className="overflow-x-auto">
-                            <table className="min-w-[720px] w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50/80">
-                                        <th className="px-5 py-3">Employee</th>
-                                        <th className="px-5 py-3">Document</th>
-                                        <th className="px-5 py-3">Category</th>
-                                        <th className="px-5 py-3">Version</th>
-                                        <th className="px-5 py-3">Status</th>
-                                        <th className="px-5 py-3">Last Modified</th>
-                                        <th className="px-5 py-3 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {documents.map((doc) => {
-                                        const st = statusPill(doc);
-                                        const Icon = fileIcon(doc);
-                                        const owner = resolveDocumentEmployee(doc);
-                                        return (
-                                            <tr key={doc._id} className="hover:bg-gray-50/80 transition-colors">
-                                                <td className="px-5 py-3.5 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2 min-w-0 max-w-[220px]">
-                                                        <span className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold flex items-center justify-center shrink-0">
-                                                            {owner.isOrganizationDoc ? 'ORG' : initialsFromPerson(owner.person)}
-                                                        </span>
-                                                        <div className="min-w-0">
-                                                            <div className="font-semibold text-gray-900 truncate">
-                                                                {owner.name}
-                                                            </div>
-                                                            {owner.code ? (
-                                                                <div className="text-xs text-gray-500 truncate">{owner.code}</div>
-                                                            ) : owner.department ? (
-                                                                <div className="text-xs text-gray-500 truncate">{owner.department}</div>
-                                                            ) : null}
+                <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
+                        <div>
+                            <h2 className="text-base font-semibold text-slate-900">Recent documents</h2>
+                            <p className="text-xs text-slate-500">
+                                {total > 0
+                                    ? `${total.toLocaleString()} record${total === 1 ? '' : 's'}`
+                                    : 'Filtered list'}
+                            </p>
+                        </div>
+                        <FaFilter className="h-4 w-4 text-slate-400" title="Filters applied above" />
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="min-w-[720px] w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                    <th className="px-4 py-3 sm:px-5">Employee</th>
+                                    <th className="px-4 py-3 sm:px-5">Document</th>
+                                    <th className="px-4 py-3 sm:px-5">Category</th>
+                                    <th className="px-4 py-3 sm:px-5">Version</th>
+                                    <th className="px-4 py-3 sm:px-5">Status</th>
+                                    <th className="px-4 py-3 sm:px-5">Last modified</th>
+                                    <th className="px-4 py-3 text-right sm:px-5">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {documents.map((doc) => {
+                                    const st = statusPill(doc);
+                                    const Icon = fileIcon(doc);
+                                    const owner = resolveDocumentEmployee(doc);
+                                    return (
+                                        <tr
+                                            key={doc._id}
+                                            className="group transition-colors hover:bg-emerald-50/30"
+                                        >
+                                            <td className="whitespace-nowrap px-4 py-3.5 sm:px-5">
+                                                <div className="flex max-w-[220px] min-w-0 items-center gap-2.5">
+                                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200 text-[10px] font-bold text-slate-700">
+                                                        {owner.isOrganizationDoc ? 'ORG' : initialsFromPerson(owner.person)}
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-semibold text-slate-900">
+                                                            {owner.name}
                                                         </div>
+                                                        {owner.code ? (
+                                                            <div className="truncate text-xs text-slate-500">{owner.code}</div>
+                                                        ) : owner.department ? (
+                                                            <div className="truncate text-xs text-slate-500">{owner.department}</div>
+                                                        ) : null}
                                                     </div>
-                                                </td>
-                                                <td className="px-5 py-3.5">
-                                                    <div className="flex items-center gap-2 min-w-0 max-w-xs sm:max-w-md">
-                                                        <span className="shrink-0 p-2 rounded-lg bg-theme-secondary/10 text-theme-secondary">
-                                                            <Icon className="w-4 h-4" />
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3.5 sm:px-5">
+                                                <div className="flex max-w-xs min-w-0 items-center gap-2.5 sm:max-w-md">
+                                                    <span className="shrink-0 rounded-xl bg-theme-secondary/10 p-2.5 text-theme-secondary ring-1 ring-theme-secondary/10">
+                                                        <Icon className="h-4 w-4" />
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <span className="block truncate font-medium text-slate-900">
+                                                            {documentDisplayTitle(doc)}
                                                         </span>
-                                                        <div className="min-w-0">
-                                                            <span className="font-medium text-gray-900 block truncate">
-                                                                {documentDisplayTitle(doc)}
+                                                        {documentDisplaySubtitle(doc) ? (
+                                                            <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                                                {documentDisplaySubtitle(doc)}
                                                             </span>
-                                                            {documentDisplaySubtitle(doc) ? (
-                                                                <span className="text-xs text-gray-500 block truncate mt-0.5">
-                                                                    {documentDisplaySubtitle(doc)}
-                                                                </span>
-                                                            ) : null}
-                                                        </div>
+                                                        ) : null}
                                                     </div>
-                                                </td>
-                                                <td className="px-5 py-3.5 whitespace-nowrap">
-                                                    <span
-                                                        className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${categoryPillClass(doc.category)}`}
-                                                    >
-                                                        {doc.category || 'Other'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3.5 whitespace-nowrap text-gray-700">
-                                                    v{doc.version ?? 1}
-                                                </td>
-                                                <td className="px-5 py-3.5 whitespace-nowrap">
-                                                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${st.className}`}>
-                                                        {st.label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3.5 whitespace-nowrap text-gray-600">
-                                                    {doc.updatedAt
-                                                        ? `${new Date(doc.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} (${formatRelativeTime(doc.updatedAt)})`
-                                                        : formatRelativeTime(doc.createdAt)}
-                                                </td>
-                                                <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                                                    <div className="inline-flex items-center gap-1 justify-end">
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3.5 sm:px-5">
+                                                <span
+                                                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryPillClass(doc.category)}`}
+                                                >
+                                                    {doc.category || 'Other'}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3.5 font-medium text-slate-700 sm:px-5">
+                                                v{doc.version ?? 1}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3.5 sm:px-5">
+                                                <span
+                                                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.className}`}
+                                                >
+                                                    {st.label}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3.5 text-slate-600 sm:px-5">
+                                                {doc.updatedAt
+                                                    ? `${new Date(doc.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} (${formatRelativeTime(doc.updatedAt)})`
+                                                    : formatRelativeTime(doc.createdAt)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3.5 text-right sm:px-5">
+                                                <div className="inline-flex items-center justify-end gap-0.5 opacity-90 transition group-hover:opacity-100">
                                                         <button
                                                             type="button"
                                                             onClick={() => handlePreviewDocument(doc)}
@@ -844,6 +906,17 @@ const DocumentsPage = () => {
                                                                 title="Copy link"
                                                             >
                                                                 <FaShareAlt className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {isHRUser && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setDeleteDoc(doc)}
+                                                                disabled={docActionLoading[doc._id] === 'delete'}
+                                                                className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition"
+                                                                title="Delete"
+                                                            >
+                                                                <FaTrash className="w-4 h-4" />
                                                             </button>
                                                         )}
                                                         {doc.version > 1 && (
@@ -884,14 +957,15 @@ const DocumentsPage = () => {
                         </div>
 
                         {documents.length === 0 && !loading && (
-                            <div className="text-center py-16">
-                                <FaFolder className="mx-auto text-gray-300 text-5xl mb-3" />
-                                <p className="text-gray-500">No documents match your filters.</p>
+                            <div className="py-16 text-center">
+                                <FaFolder className="mx-auto mb-3 text-5xl text-slate-300" />
+                                <p className="text-sm font-medium text-slate-600">No documents match your filters.</p>
+                                <p className="mt-1 text-xs text-slate-400">Try another category or clear access filters.</p>
                             </div>
                         )}
 
                         {total > 0 && (
-                            <div className="px-5 py-3 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-600">
+                            <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:px-5">
                                 <span>
                                     Showing {rangeStart}–{rangeEnd} of {total} documents
                                 </span>
@@ -900,33 +974,32 @@ const DocumentsPage = () => {
                                         type="button"
                                         disabled={curPage <= 1}
                                         onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                        className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                                        className="rounded-lg border border-slate-200 px-3 py-1.5 transition hover:bg-slate-50 disabled:opacity-40"
                                     >
                                         Previous
                                     </button>
-                                    <span className="text-gray-500 px-2">
+                                    <span className="px-2 text-slate-500">
                                         Page {curPage} of {Math.max(1, pages || 1)}
                                     </span>
                                     <button
                                         type="button"
                                         disabled={curPage >= (pages || 1)}
                                         onClick={() => setPage((p) => p + 1)}
-                                        className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                                        className="rounded-lg border border-slate-200 px-3 py-1.5 transition hover:bg-slate-50 disabled:opacity-40"
                                     >
                                         Next
                                     </button>
                                 </div>
                             </div>
                         )}
-                    </section>
-                </main>
+                </section>
             </div>
 
             {/* Upload modal */}
             {showUploadModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Upload document</h3>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]">
+                    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+                        <h3 className="text-lg font-semibold text-slate-900">Upload document</h3>
                         <p className="text-sm text-gray-600 mb-4">
                             PDF, Word, PNG or JPEG up to 5 MB. HR uploads are approved automatically.
                         </p>
@@ -1048,6 +1121,35 @@ const DocumentsPage = () => {
                                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                             >
                                 Reject
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete confirmation modal */}
+            {deleteDoc && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete document?</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Are you sure you want to delete <strong>{deleteDoc.name || deleteDoc.fileName}</strong>? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteDoc(null)}
+                                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm font-medium text-gray-700"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteDocument}
+                                disabled={docActionLoading[deleteDoc._id] === 'delete'}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold disabled:opacity-50"
+                            >
+                                Delete
                             </button>
                         </div>
                     </div>

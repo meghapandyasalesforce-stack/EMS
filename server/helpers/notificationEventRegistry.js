@@ -2026,6 +2026,100 @@ registerEvent({
   metadataBuilder: ({ data }) => ({ lifecycle: 'bulk', channels: data?.channels }),
 });
 
+registerEvent({
+  type: 'internal_job_posted',
+  defaultTitle: 'New Internal Job Opening',
+  defaultType: 'announcement',
+  defaultPriority: 'high',
+  isBroadcast: true,
+  recipientResolver: async () => [],
+  messageBuilder: ({ job, internalUrl }) => {
+    const title = job?.jobTitle || 'a role';
+    const dept = job?.department ? ` (${job.department})` : '';
+    return `New internal opening: ${title}${dept}. View & apply${internalUrl ? `: ${internalUrl}` : ''}`;
+  },
+  metadataBuilder: ({ job, internalUrl }) => ({
+    jobId: job?._id,
+    jobTitle: job?.jobTitle,
+    department: job?.department,
+    location: job?.location,
+    link: internalUrl || `/employee/internal-jobs/${job?._id}`,
+  }),
+});
+
+registerEvent({
+  type: 'recruitment_interview_assigned',
+  defaultTitle: 'Interview assigned to you',
+  defaultType: 'announcement',
+  defaultPriority: 'high',
+  recipientResolver: async ({ interviewerId, recipients }) => {
+    if (Array.isArray(recipients) && recipients.length) {
+      return recipients.map((id) => id.toString());
+    }
+    return interviewerId ? [interviewerId.toString()] : [];
+  },
+  messageBuilder: ({ candidate, interview, jobTitle }) => {
+    const name = candidate
+      ? [candidate.firstName, candidate.lastName].filter(Boolean).join(' ')
+      : 'a candidate';
+    const role = jobTitle || 'open role';
+    const type = interview?.interviewType || 'Interview';
+    const when = [
+      interview?.scheduledDate
+        ? new Date(interview.scheduledDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : null,
+      interview?.scheduledTime || null,
+    ].filter(Boolean).join(' ');
+    const place = interview?.location ? ` · ${interview.location}` : '';
+    const link = interview?.meetingLink ? ` · Join: ${interview.meetingLink}` : '';
+    return `You need to take the ${type} interview for ${name} (${role})${when ? ` on ${when}` : ''}${place}${link}.`;
+  },
+  metadataBuilder: ({ candidate, interview, jobTitle }) => ({
+    candidateId: candidate?._id,
+    interviewId: interview?._id,
+    interviewType: interview?.interviewType,
+    scheduledDate: interview?.scheduledDate,
+    scheduledTime: interview?.scheduledTime,
+    location: interview?.location,
+    meetingLink: interview?.meetingLink,
+    jobTitle,
+    link: candidate?._id ? `/employee/internal-jobs?tab=interviews` : '/employee/internal-jobs?tab=interviews',
+  }),
+});
+
+registerEvent({
+  type: 'resume_inbox_imported',
+  defaultTitle: 'New Resume Imported',
+  defaultType: 'announcement',
+  defaultPriority: 'high',
+  recipientResolver: async ({ organizationId, recipients }) => {
+    // Prefer explicit recipients (e.g. assigned recruiter); otherwise notify HR.
+    if (Array.isArray(recipients) && recipients.length > 0) {
+      const hr = await getHrRecipients(organizationId);
+      return [...new Set([...recipients.map((id) => id.toString()), ...hr])];
+    }
+    return getHrRecipients(organizationId);
+  },
+  messageBuilder: ({ candidate, job, wasDuplicate, message }) => {
+    if (message) return message;
+    const name = candidate
+      ? [candidate.firstName, candidate.lastName].filter(Boolean).join(' ')
+      : 'Candidate';
+    const position = job?.jobTitle || 'Unassigned';
+    return wasDuplicate
+      ? `Duplicate resume via Email for ${name} (${position}).`
+      : `New resume imported via Email: ${name} — Source: Email — ${position}.`;
+  },
+  metadataBuilder: ({ candidate, job, candidateId }) => ({
+    candidateId: candidateId || candidate?._id,
+    jobId: job?._id,
+    source: 'Email',
+    link: candidateId || candidate?._id
+      ? `/recruitment/candidates/${candidateId || candidate._id}`
+      : '/recruitment/inbox',
+  }),
+});
+
 export default {
   // This file auto-registers events on import
 };

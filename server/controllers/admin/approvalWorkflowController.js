@@ -1,11 +1,19 @@
 import { ApprovalWorkflow, ApprovalInstance } from '../../models/approvalWorkflow.model.js';
-import { initiateApproval, processApprovalAction, getPendingApprovals, delegateApproval } from '../../services/approvalWorkflowService.js';
+import {
+    initiateApproval,
+    processApprovalAction,
+    getPendingApprovals,
+    getEscalatedApprovalsCount,
+    delegateApproval,
+    hrOverrideFinalizeApproval,
+} from '../../services/approvalWorkflowService.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
 import { getOrganizationId } from '../../helpers/organizationHelper.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
 import AttendanceRegularization from '../../models/attendanceRegularization.model.js';
 import { applyRegularizationApproval } from '../../services/attendanceRegularizationWorkflowService.js';
+import { isHrEmployee } from '../../helpers/regularizationWorkflowActionHelper.js';
 
 /**
  * Create approval workflow
@@ -215,9 +223,23 @@ export const getMyPendingApprovals = asyncHandler(async (req, res) => {
         return sendError(res, 'Organization ID and approver ID are required', 400);
     }
 
-    const approvals = await getPendingApprovals(approverId, organizationId);
+    const approvals = await getPendingApprovals(approverId, organizationId, {
+        includeHrOverrides: isHrEmployee(req),
+    });
 
     return sendSuccess(res, approvals, 'Pending approvals retrieved successfully');
+});
+
+/**
+ * Escalated (SLA) approvals count for HR/Admin dashboards — additive metric only.
+ */
+export const getEscalatedApprovalsMetric = asyncHandler(async (req, res) => {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+        return sendError(res, 'Organization ID is required', 400);
+    }
+    const count = await getEscalatedApprovalsCount(organizationId);
+    return sendSuccess(res, { count }, 'Escalated approvals count retrieved');
 });
 
 /**
@@ -225,7 +247,7 @@ export const getMyPendingApprovals = asyncHandler(async (req, res) => {
  */
 export const processApproval = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { stepNumber, action, comments, metadata } = req.body;
+    const { stepNumber, action, comments, metadata, hrOverride } = req.body;
     const approverId = req.user?._id || req.employee?._id;
 
     if (!approverId) {
@@ -234,6 +256,23 @@ export const processApproval = asyncHandler(async (req, res) => {
 
     if (!['Approve', 'Reject', 'Request Changes'].includes(action)) {
         return sendError(res, 'Invalid action', 400);
+    }
+
+    // Additive HR override path: finalize without waiting for manager
+    if (hrOverride && isHrEmployee(req) && ['Approve', 'Reject'].includes(action)) {
+        const actor = req.employee;
+        const performedByName = actor
+            ? [actor.name, actor.lastName].filter(Boolean).join(' ').trim()
+            : 'HR';
+        const result = await hrOverrideFinalizeApproval({
+            approvalInstanceId: id,
+            action,
+            performedByEmployeeId: req.employee?._id || approverId,
+            performedByName,
+            comments,
+            metadata: { ...(metadata || {}), hrOverride: true },
+        });
+        return sendSuccess(res, result, 'Approval processed via HR override successfully');
     }
 
     const result = await processApprovalAction({

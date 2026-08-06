@@ -96,6 +96,21 @@ export const authRoutes = [
     path: '/offer/:token',
     component: lazy(() => import('../Public/OfferCandidatePortal')),
     message: 'Loading offer letter...'
+  },
+  {
+    path: '/careers/:organizationId',
+    component: lazy(() => import('../Public/CareerPortal')),
+    message: 'Loading careers...'
+  },
+  {
+    path: '/careers/:organizationId/jobs/:jobId',
+    component: lazy(() => import('../Public/CareerJobApply')),
+    message: 'Loading job application...'
+  },
+  {
+    path: '/application/:token',
+    component: lazy(() => import('../Public/ApplicationSelfServicePortal')),
+    message: 'Loading application portal...'
   }
 ];
 
@@ -243,7 +258,17 @@ export const adminRoutes = [
 // HR Feature routes - admin and HR
 export const hrRoutes = [
   { path: '/recruitment', component: lazy(() => import('../HR/Recruitment/RecruitmentPage')), message: 'Loading recruitment...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/create-job', component: lazy(() => import('../HR/Recruitment/CreateJobPage')), message: 'Loading job form...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/jobs/:id', component: lazy(() => import('../HR/Recruitment/JobDetailPage')), message: 'Loading job...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/pipeline', component: lazy(() => import('../HR/Recruitment/PipelinePage')), message: 'Loading pipeline...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+    { path: '/recruitment/workspace', component: lazy(() => import('../HR/Recruitment/WorkspacePage')), message: 'Loading workspace...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/requisitions', component: lazy(() => import('../HR/Recruitment/RequisitionsPage')), message: 'Loading requisitions...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/calendar', component: lazy(() => import('../HR/Recruitment/RecruitmentCalendarPage')), message: 'Loading calendar...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/inbox', component: lazy(() => import('../HR/Recruitment/ResumeInboxPage')), message: 'Loading resume inbox...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
   { path: '/recruitment/candidates/:id', component: lazy(() => import('../HR/Recruitment/CandidateDetailPage')), message: 'Loading candidate...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/employee/internal-jobs', component: lazy(() => import('../Employee/Recruitment/InternalJobsPage')), message: 'Loading internal jobs...', allowedRoles: [] },
+  { path: '/employee/internal-jobs/:id', component: lazy(() => import('../Employee/Recruitment/InternalJobDetailPage')), message: 'Loading internal job...', allowedRoles: [] },
+  { path: '/manager/hiring-requests', component: lazy(() => import('../Manager/Recruitment/ManagerHiringRequestsPage')), message: 'Loading hiring requests...', allowedRoles: ['admin', 'hr', 'manager', 'project_manager', 'executive'] },
   { path: '/onboarding', component: lazy(() => import('../components/OnboardingRouteWrapper')), message: 'Loading onboarding...', allowedRoles: [] },
   { path: '/learning', component: lazy(() => import('../components/LearningRouteWrapper')), message: 'Loading learning & development...', allowedRoles: [] },
   { path: '/learning/courses/:courseId', component: lazy(() => import('../Employee/Learning/CourseDetailsPage')), message: 'Loading course details...', allowedRoles: [] },

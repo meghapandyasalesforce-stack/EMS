@@ -12,9 +12,11 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
 import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
+import LeaveBalanceCard from '../../components/LeaveBalanceCard';
 import PasswordResetPopup from '../../Employee/PasswordResetPopup';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { updateLeave } from '../../context/leaveSlice';
+import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
 import { format } from 'date-fns';
 import axios from '../../utils/axios';
 import { 
@@ -657,18 +659,6 @@ const DashboardManager = () => {
         );
     }
     
-    const leaveBreakdown = teamPendingLeaves.reduce(
-        (acc, leave) => {
-            const leaveType = (leave?.leaveType || '').toLowerCase();
-            const days = getLeaveDurationDays(leave);
-            if (leaveType.includes('annual')) acc.annual += days;
-            else if (leaveType.includes('sick')) acc.sick += days;
-            else acc.casual += days;
-            return acc;
-        },
-        { annual: 0, sick: 0, casual: 0 }
-    );
-    const totalLeaveDays = Math.round(leaveBreakdown.annual + leaveBreakdown.sick + leaveBreakdown.casual + Number.EPSILON);
     const lateTasks = teamTasks.filter((task) => {
         if (!task?.dueDate) return false;
         const dueDate = new Date(task.dueDate);
@@ -678,9 +668,9 @@ const DashboardManager = () => {
         <div className="min-h-screen bg-[#f6f8fb] transition-all duration-300">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
-            <div className="page-shell">
-            <div className="page-shell-inner">
-            <div className="hrms-stack">
+            <div className="page-shell !px-3 sm:!px-4 lg:!px-5">
+            <div className="page-shell-inner w-full min-w-0">
+            <div className="hrms-stack w-full min-w-0">
                 <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm md:px-6">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -752,92 +742,148 @@ const DashboardManager = () => {
                     </div>
                 </div>
 
-                <div className="hrms-main-rail items-stretch">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h3 className="text-2xl font-semibold text-slate-900">Attendance Health</h3>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
-                                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
-                                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">On-time score</p>
-                                <p className="mt-2 text-3xl font-bold text-emerald-700">{attendanceHealth.onTimeScore}%</p>
-                                <div className="mt-3 h-2 rounded-full bg-slate-200">
-                                    <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${attendanceHealth.onTimeScore}%` }}></div>
+                <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
+                    <div className="flex w-full min-w-0 flex-col gap-4">
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h3 className="text-2xl font-semibold text-slate-900">Attendance Health</h3>
+                                <div className="flex items-center gap-4 text-xs text-slate-500">
+                                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600"></span>Good</span>
+                                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Needs attention</span>
                                 </div>
                             </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absence risk</p>
-                                <p className="mt-2 text-3xl font-bold text-orange-500">{attendanceHealth.absenceRisk}%</p>
-                                <div className="mt-3 h-2 rounded-full bg-slate-200">
-                                    <div className="h-2 rounded-full bg-orange-400" style={{ width: `${attendanceHealth.absenceRisk}%` }}></div>
-                                </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avg Check-In Time</p>
-                                <p className="mt-2 text-2xl font-bold text-slate-900">{attendanceHealth.avgCheckInTime}</p>
-                                <p className="text-xs text-slate-500">Estimated team median</p>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overdue Team Tasks</p>
-                                <p className="mt-2 text-2xl font-bold text-slate-900">{lateTasks}</p>
-                                <p className="text-xs text-slate-500">Attendance impact indicator</p>
-                            </div>
-                        </div>
-                        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                            <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Attention Needed</h4>
-                            <div className="space-y-2">
-                                {attentionLoading && attentionMembers.length === 0 ? (
-                                    <div className="text-sm text-slate-500">Calculating real attendance scores...</div>
-                                ) : attentionMembers.length > 0 ? attentionMembers.map((member, index) => (
-                                    <div key={`${member.name}-${index}`} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                                        <div>
-                                            <p className="text-sm font-medium text-slate-900">{member.name}</p>
-                                            <p className="text-xs text-slate-500">{member.issue}</p>
-                                        </div>
-                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${member.score >= 75 ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                                            {member.score}%
-                                        </span>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">On-time score</p>
+                                    <p className="mt-2 text-3xl font-bold text-emerald-700">{attendanceHealth.onTimeScore}%</p>
+                                    <div className="mt-3 h-2 rounded-full bg-slate-200">
+                                        <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${attendanceHealth.onTimeScore}%` }}></div>
                                     </div>
-                                )) : (
-                                    <div className="text-sm text-slate-500">No attention flags right now.</div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absence risk</p>
+                                    <p className="mt-2 text-3xl font-bold text-orange-500">{attendanceHealth.absenceRisk}%</p>
+                                    <div className="mt-3 h-2 rounded-full bg-slate-200">
+                                        <div className="h-2 rounded-full bg-orange-400" style={{ width: `${attendanceHealth.absenceRisk}%` }}></div>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avg Check-In Time</p>
+                                    <p className="mt-2 text-2xl font-bold text-slate-900">{attendanceHealth.avgCheckInTime}</p>
+                                    <p className="text-xs text-slate-500">Estimated team median</p>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overdue Team Tasks</p>
+                                    <p className="mt-2 text-2xl font-bold text-slate-900">{lateTasks}</p>
+                                    <p className="text-xs text-slate-500">Attendance impact indicator</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                                <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Attention Needed</h4>
+                                <div className="space-y-2">
+                                    {attentionLoading && attentionMembers.length === 0 ? (
+                                        <div className="text-sm text-slate-500">Calculating real attendance scores...</div>
+                                    ) : attentionMembers.length > 0 ? attentionMembers.map((member, index) => (
+                                        <div key={`${member.name}-${index}`} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                                            <div>
+                                                <p className="text-sm font-medium text-slate-900">{member.name}</p>
+                                                <p className="text-xs text-slate-500">{member.issue}</p>
+                                            </div>
+                                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${member.score >= 75 ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                {member.score}%
+                                            </span>
+                                        </div>
+                                    )) : (
+                                        <div className="text-sm text-slate-500">No attention flags right now.</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Team Approvals</h3>
+                            <div className="space-y-4">
+                                {teamPendingLeaves.slice(0, 2).map((leave, index) => (
+                                    <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <h4 className="font-semibold text-slate-900">{leave?.leaveType || 'Leave Request'}</h4>
+                                            <span className="text-xs text-slate-500">{leave?.createdAt ? format(new Date(leave.createdAt), 'd MMM') : 'Now'}</span>
+                                        </div>
+                                        <p className="mb-3 text-sm text-slate-600">
+                                            {(leave?.employee?.name || leave?.employeeId?.name || leave?.employeeName || 'Team Member')} requested approval
+                                            ({getLeaveDurationDays(leave)} day{getLeaveDurationDays(leave) === 1 ? '' : 's'}).
+                                        </p>
+                                        {leave?.workflowSummary?.hrOverrideUsed ? (
+                                            <div className="mb-3 flex flex-wrap gap-2">
+                                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-200">
+                                                    {formatLeaveApprovalStageDisplay(leave)}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                        {rejectDraft.id === leave._id && (
+                                            <div className="mb-3">
+                                                <textarea
+                                                    value={rejectDraft.reason}
+                                                    onChange={(e) => setRejectDraft((d) => ({ ...d, reason: e.target.value }))}
+                                                    placeholder="Reason for rejection"
+                                                    rows={2}
+                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500/30 focus:border-emerald-500 focus:ring-2"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={leaveUpdating || !leave?._id}
+                                                onClick={() => handleApproveLeave(leave._id)}
+                                                className="rounded-full bg-emerald-700 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                Approve
+                                            </button>
+                                            {rejectDraft.id === leave._id ? (
+                                                <button
+                                                    type="button"
+                                                    disabled={leaveUpdating || !leave?._id}
+                                                    onClick={() => handleRejectLeaveConfirm(leave._id)}
+                                                    className="rounded-full border border-red-300 bg-red-50 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    Confirm reject
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    disabled={leaveUpdating}
+                                                    onClick={() => setRejectDraft({ id: leave._id, reason: '' })}
+                                                    className="rounded-full border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                                >
+                                                    Reject
+                                                </button>
+                                            )}
+                                        </div>
+                                        {rejectDraft.id === leave._id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setRejectDraft({ id: null, reason: '' })}
+                                                className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-700"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                {teamPendingLeaves.length === 0 && (
+                                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
+                                        No pending approvals right now.
+                                    </div>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid gap-6 grid-rows-[auto_1fr] h-full">
-                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm h-fit">
-                            <h3 className="text-2xl font-semibold text-slate-900">Leave Overview</h3>
-                            <p className="mb-4 text-xs text-slate-500">Pending team requests by type</p>
-                            <div className="mb-6 flex justify-center">
-                                <div
-                                    className="relative h-36 w-36 rounded-full"
-                                    style={{
-                                        background: totalLeaveDays
-                                            ? `conic-gradient(#22c55e 0 ${Math.round((leaveBreakdown.annual / totalLeaveDays) * 360)}deg, #fb923c ${Math.round((leaveBreakdown.annual / totalLeaveDays) * 360)}deg ${Math.round(((leaveBreakdown.annual + leaveBreakdown.sick) / totalLeaveDays) * 360)}deg, #14b8a6 ${Math.round(((leaveBreakdown.annual + leaveBreakdown.sick) / totalLeaveDays) * 360)}deg 360deg)`
-                                            : '#e2e8f0'
-                                    }}
-                                >
-                                    <div className="absolute inset-4 flex items-center justify-center rounded-full bg-white text-center">
-                                        <div>
-                                            <p className="text-3xl font-bold text-slate-900">{totalLeaveDays}</p>
-                                            <p className="text-xs text-slate-500">pending days</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-2 text-sm">
-                                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-green-500"></span>Annual</span><span>{leaveBreakdown.annual.toFixed(1)} Days</span></div>
-                                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-orange-400"></span>Sick</span><span>{leaveBreakdown.sick.toFixed(1)} Days</span></div>
-                                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-teal-500"></span>Casual</span><span>{leaveBreakdown.casual.toFixed(1)} Days</span></div>
-                            </div>
-                        </div>
+                    <div className="flex w-full min-w-0 flex-col gap-4">
+                        <LeaveBalanceCard />
 
-                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm h-full">
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming Meetings</h3>
                             <div className="space-y-3">
                                 {meetingsLoading ? (
@@ -849,7 +895,7 @@ const DashboardManager = () => {
                                         {meetingsError}
                                     </div>
                                 ) : upcomingMeetings.length === 0 ? (
-                                    <div className="rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500">
+                                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
                                         No upcoming meetings scheduled.
                                     </div>
                                 ) : (
@@ -896,107 +942,33 @@ const DashboardManager = () => {
                                 )}
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <div className="hrms-main-rail">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Team Approvals</h3>
-                        <div className="space-y-4">
-                            {teamPendingLeaves.slice(0, 2).map((leave, index) => (
-                                <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <h4 className="font-semibold text-slate-900">{leave?.leaveType || 'Leave Request'}</h4>
-                                        <span className="text-xs text-slate-500">{leave?.createdAt ? format(new Date(leave.createdAt), 'd MMM') : 'Now'}</span>
-                                    </div>
-                                    <p className="mb-3 text-sm text-slate-600">
-                                        {(leave?.employee?.name || leave?.employeeId?.name || leave?.employeeName || 'Team Member')} requested approval
-                                        ({getLeaveDurationDays(leave)} day{getLeaveDurationDays(leave) === 1 ? '' : 's'}).
-                                    </p>
-                                    {rejectDraft.id === leave._id && (
-                                        <div className="mb-3">
-                                            <textarea
-                                                value={rejectDraft.reason}
-                                                onChange={(e) => setRejectDraft((d) => ({ ...d, reason: e.target.value }))}
-                                                placeholder="Reason for rejection"
-                                                rows={2}
-                                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500/30 focus:border-emerald-500 focus:ring-2"
-                                            />
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Active Projects</h3>
+                            <div className="space-y-4">
+                                {managerProjects.slice(0, 2).map((project, index) => {
+                                    const progress = Number(project?.progress || project?.completion || 40 + index * 25);
+                                    const clampedProgress = Math.max(10, Math.min(100, progress));
+                                    return (
+                                        <div key={project?._id || index} className="rounded-xl border border-slate-200 p-4">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <p className="font-semibold text-slate-900">{project?.name || 'Project'}</p>
+                                                <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700">
+                                                    {clampedProgress >= 70 ? 'On Track' : 'At Risk'}
+                                                </span>
+                                            </div>
+                                            <div className="h-2 rounded-full bg-slate-200">
+                                                <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${clampedProgress}%` }}></div>
+                                            </div>
                                         </div>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            disabled={leaveUpdating || !leave?._id}
-                                            onClick={() => handleApproveLeave(leave._id)}
-                                            className="rounded-full bg-emerald-700 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            Approve
-                                        </button>
-                                        {rejectDraft.id === leave._id ? (
-                                            <button
-                                                type="button"
-                                                disabled={leaveUpdating || !leave?._id}
-                                                onClick={() => handleRejectLeaveConfirm(leave._id)}
-                                                className="rounded-full border border-red-300 bg-red-50 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                            >
-                                                Confirm reject
-                                            </button>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                disabled={leaveUpdating}
-                                                onClick={() => setRejectDraft({ id: leave._id, reason: '' })}
-                                                className="rounded-full border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                                            >
-                                                Reject
-                                            </button>
-                                        )}
+                                    );
+                                })}
+                                {managerProjects.length === 0 && (
+                                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">
+                                        No active projects found.
                                     </div>
-                                    {rejectDraft.id === leave._id && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setRejectDraft({ id: null, reason: '' })}
-                                            className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-700"
-                                        >
-                                            Cancel
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                            {teamPendingLeaves.length === 0 && (
-                                <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                                    No pending approvals right now.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Active Projects</h3>
-                        <div className="space-y-4">
-                            {managerProjects.slice(0, 2).map((project, index) => {
-                                const progress = Number(project?.progress || project?.completion || 40 + index * 25);
-                                const clampedProgress = Math.max(10, Math.min(100, progress));
-                                return (
-                                    <div key={project?._id || index} className="rounded-xl border border-slate-200 p-4">
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <p className="font-semibold text-slate-900">{project?.name || 'Project'}</p>
-                                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700">
-                                                {clampedProgress >= 70 ? 'On Track' : 'At Risk'}
-                                            </span>
-                                        </div>
-                                        <div className="h-2 rounded-full bg-slate-200">
-                                            <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${clampedProgress}%` }}></div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {managerProjects.length === 0 && (
-                                <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                                    No active projects found.
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

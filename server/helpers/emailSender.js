@@ -1333,7 +1333,7 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
   }
 };
 
- const generateLeaveEmailTemplate = (data, status) => {
+ const generateLeaveEmailTemplate = (data, status, options = {}) => {
   const startDate = data.startDate
     ? new Date(data.startDate).toLocaleDateString('en-US', {
         weekday: 'short',
@@ -1357,6 +1357,11 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
   const remarks = data.rejectionReason || data.remarks || data.reason || 'N/A';
   const statusText = isApproved ? 'Approved' : 'Rejected';
   const remarksLabel = isApproved ? 'Remarks' : 'Rejection Reason';
+  const logoCid = typeof options === 'object' && options?.logoCid ? options.logoCid : null;
+  const logoHtml = logoCid
+    ? `<img src="cid:${logoCid}" alt="Organization Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />`
+    : `<img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1485,8 +1490,7 @@ export const sendLeaveRequestEmail = async (leaveData, approverEmail, ccEmails =
 <body>
   <div class="container">
        <div class="header">
-      <img class="logo-light" src="${LOGO_URL_LIGHT}" alt="Paarsiv Logo" width="180" style="display:none;margin:0 auto 16px auto;max-width:180px;height:auto;" />
-      <img class="logo-dark" src="${LOGO_URL_DARK}" alt="Paarsiv Logo" width="180" style="display:block;margin:0 auto 16px auto;max-width:180px;height:auto;" />
+      ${logoHtml}
       <hr class="divider" />
       <div class="company-name"></div>
     </div>
@@ -1555,6 +1559,9 @@ export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails 
     threadRole: 'reply',
   });
 
+  const logoAttachment = threadOptions.logoAttachment || null;
+  const logoCid = logoAttachment ? 'org-logo' : null;
+
   const mailOptions = {
     from: emailFrom,
     to: employeeEmail,
@@ -1564,7 +1571,19 @@ export const sendLeaveApprovalEmail = async (leaveData, employeeEmail, ccEmails 
       threadRootMessageId,
       `Leave Request Approved - ${leaveData.employeeName || 'Employee'}`
     ),
-    html: generateLeaveEmailTemplate(leaveData, 'approved', 'employee'),
+    html: generateLeaveEmailTemplate(leaveData, 'approved', { logoCid }),
+    ...(logoAttachment
+      ? {
+          attachments: [
+            {
+              filename: logoAttachment.filename,
+              content: logoAttachment.content,
+              contentType: logoAttachment.contentType,
+              cid: logoCid,
+            },
+          ],
+        }
+      : {}),
     ...conversationOptions
   };
 

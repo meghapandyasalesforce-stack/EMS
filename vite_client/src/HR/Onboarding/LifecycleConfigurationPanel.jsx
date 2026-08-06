@@ -87,6 +87,7 @@ const LifecycleConfigurationPanel = () => {
     const [escalations, setEscalations] = useState([]);
     const [approvals, setApprovals] = useState([]);
     const [defaults, setDefaults] = useState({});
+    const [documentOverrides, setDocumentOverrides] = useState([]);
     const [approvalWorkflows, setApprovalWorkflows] = useState([]);
     const [onboardingTemplates, setOnboardingTemplates] = useState([]);
     const [offboardingTemplates, setOffboardingTemplates] = useState([]);
@@ -117,6 +118,7 @@ const LifecycleConfigurationPanel = () => {
             setEscalations(settings.escalations || []);
             setApprovals(settings.approvals || []);
             setDefaults(settings.defaults || {});
+            setDocumentOverrides(settings.documentOverrides || []);
             setApprovalWorkflows(workflowsRes.data?.data || workflowsRes.data?.workflows || []);
             setOnboardingTemplates(onbTplRes.data?.data || []);
             setOffboardingTemplates(offTplRes.data?.data || []);
@@ -177,6 +179,7 @@ const LifecycleConfigurationPanel = () => {
                 escalations,
                 approvals,
                 defaults,
+                documentOverrides,
             }, { withCredentials: true });
             if (!data.success) throw new Error(data.message);
             clearLifecycleFeaturesCache();
@@ -184,6 +187,7 @@ const LifecycleConfigurationPanel = () => {
             const registryFeatures = snapshot?.registry?.features || [];
             setEnabledFeatures(normalizeFeatureMap(saved.enabledFeatures || enabledFeatures, registryFeatures));
             if (saved.modules) setModules(saved.modules);
+            if (saved.documentOverrides) setDocumentOverrides(saved.documentOverrides);
             toast.success('Configuration saved — feature status updated for your organization');
             // Soft refresh registry snapshot without blanking the toggles
             const registryRes = await axios.get(`${ADMIN_LIFECYCLE_ENDPOINT}/registry`, { withCredentials: true });
@@ -194,6 +198,7 @@ const LifecycleConfigurationPanel = () => {
                     settings.enabledFeatures || {},
                     registryRes.data.data?.registry?.features || registryFeatures,
                 ));
+                setDocumentOverrides(settings.documentOverrides || []);
             }
         } catch (error) {
             toast.error(error.response?.data?.message || error.message || 'Save failed');
@@ -553,9 +558,27 @@ const LifecycleConfigurationPanel = () => {
                     )}
 
                     {activeSection === 'documents' && (
-                        <div className="grid sm:grid-cols-2 gap-6">
-                            <DocumentList title="Onboarding Documents" docs={snapshot?.documentCatalog?.onboarding || []} />
-                            <DocumentList title="Offboarding Documents" docs={snapshot?.documentCatalog?.offboarding || []} />
+                        <div className="space-y-6">
+                            <p className="text-sm text-gray-500">
+                                Enable or require onboarding documents for your organization. Passport, Non-Disclosure Agreement,
+                                Offer Acknowledgement, and Other are available under Document Collection.
+                            </p>
+                            <div className="grid sm:grid-cols-2 gap-6">
+                                <ConfigurableDocumentList
+                                    title="Onboarding Documents"
+                                    docs={snapshot?.documentCatalog?.onboarding || []}
+                                    preferredKeys={['PASSPORT', 'NDA', 'OFFER_ACK', 'OTHER']}
+                                    overrides={documentOverrides}
+                                    onChange={setDocumentOverrides}
+                                />
+                                <ConfigurableDocumentList
+                                    title="Offboarding Documents"
+                                    docs={snapshot?.documentCatalog?.offboarding || []}
+                                    preferredKeys={[]}
+                                    overrides={documentOverrides}
+                                    onChange={setDocumentOverrides}
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -644,21 +667,78 @@ function ToggleRow({ label, checked, onChange }) {
 }
 
 
-function DocumentList({ title, docs }) {
+function ConfigurableDocumentList({ title, docs, preferredKeys = [], overrides, onChange }) {
+    const preferredSet = new Set(preferredKeys);
+    const overrideMap = useMemo(() => {
+        const map = new Map();
+        for (const row of overrides || []) {
+            if (row?.catalogKey) map.set(row.catalogKey, row);
+        }
+        return map;
+    }, [overrides]);
+
+    const sortedDocs = useMemo(() => {
+        const list = [...(docs || [])];
+        list.sort((a, b) => {
+            const aKey = a.key || a.catalogKey;
+            const bKey = b.key || b.catalogKey;
+            const aPref = preferredSet.has(aKey) ? 0 : 1;
+            const bPref = preferredSet.has(bKey) ? 0 : 1;
+            if (aPref !== bPref) return aPref - bPref;
+            return String(a.label || aKey).localeCompare(String(b.label || bKey));
+        });
+        return list;
+    }, [docs, preferredKeys]);
+
+    const upsertOverride = (catalogKey, patch) => {
+        const existing = overrideMap.get(catalogKey) || { catalogKey };
+        const nextRow = { ...existing, catalogKey, ...patch };
+        const without = (overrides || []).filter((row) => row.catalogKey !== catalogKey);
+        onChange([...without, nextRow]);
+    };
+
     return (
         <div>
             <h3 className="font-semibold text-sm mb-3">{title}</h3>
             <div className="space-y-2">
-                {docs.map((doc) => (
-                    <div key={doc.key || doc.catalogKey} className="p-3 border border-gray-200 rounded-lg flex justify-between gap-2">
-                        <div className="min-w-0">
-                            <p className="font-medium text-sm">{doc.label}</p>
-                            <p className="text-xs text-gray-500 truncate">{doc.key || doc.catalogKey}</p>
+                {sortedDocs.map((doc) => {
+                    const key = doc.key || doc.catalogKey;
+                    const override = overrideMap.get(key);
+                    const enabled = override?.enabled ?? doc.enabled ?? true;
+                    const mandatory = override?.mandatory ?? doc.mandatory ?? false;
+                    const isPreferred = preferredSet.has(key);
+                    return (
+                        <div
+                            key={key}
+                            className={`p-3 border rounded-lg space-y-2 ${isPreferred ? 'border-theme-secondary/40 bg-theme-secondary/5' : 'border-gray-200'}`}
+                        >
+                            <div className="flex justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="font-medium text-sm">{doc.label}</p>
+                                    <p className="text-xs text-gray-500 truncate">{key}</p>
+                                </div>
+                                {isPreferred && (
+                                    <span className="text-[10px] uppercase tracking-wide text-theme-secondary shrink-0 font-semibold">
+                                        Core
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap gap-4">
+                                <ToggleRow
+                                    label="Enabled"
+                                    checked={enabled !== false}
+                                    onChange={(v) => upsertOverride(key, { enabled: v })}
+                                />
+                                <ToggleRow
+                                    label="Required"
+                                    checked={!!mandatory}
+                                    onChange={(v) => upsertOverride(key, { mandatory: v, enabled: enabled !== false })}
+                                />
+                            </div>
                         </div>
-                        <span className="text-xs text-gray-500 shrink-0">{doc.mandatory ? 'Required' : 'Optional'}</span>
-                    </div>
-                ))}
-                {!docs.length && <p className="text-sm text-gray-500">No documents for enabled features.</p>}
+                    );
+                })}
+                {!sortedDocs.length && <p className="text-sm text-gray-500">No documents for enabled features.</p>}
             </div>
         </div>
     );

@@ -12,11 +12,13 @@ import {
   FaClock,
   FaClipboardList,
   FaHeadset,
-  FaUpload
+  FaUpload,
+  FaTrash,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios, { getUploadUrl, openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { canEmployeeDeleteOwnDocument } from '../../utils/documentDeleteRules';
 
 const formatBytes = (bytes) => {
   const size = Number(bytes || 0);
@@ -46,6 +48,8 @@ const DocumentsAndIdPage = () => {
   const [documents, setDocuments] = useState([]);
   const [idCard, setIdCard] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [deleteDoc, setDeleteDoc] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const uploadInputRef = useRef(null);
   const companyDocsRef = useRef(null);
 
@@ -114,12 +118,6 @@ const DocumentsAndIdPage = () => {
       .filter((doc) => isHrSharedDocument(doc))
       .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
   }, [documents, isHrSharedDocument]);
-
-  const contractDocs = useMemo(() => {
-    return myUploadedDocs
-      .filter((doc) => ['Employee', 'Contract', 'Legal'].includes(doc?.category))
-      .slice(0, 6);
-  }, [myUploadedDocs]);
 
   const recentlyUpdatedDocs = useMemo(() => {
     return [...myUploadedDocs, ...policyDocs]
@@ -227,6 +225,21 @@ const DocumentsAndIdPage = () => {
     }
   };
 
+  const handleDeleteDocument = async () => {
+    if (!deleteDoc?._id) return;
+    try {
+      setDeleting(true);
+      await axios.delete(`/v1/both/documents/${deleteDoc._id}`, { withCredentials: true });
+      toast.success('Document deleted successfully');
+      setDeleteDoc(null);
+      await loadPageData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete document');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner message="Loading documents & ID card..." />;
   }
@@ -328,21 +341,18 @@ const DocumentsAndIdPage = () => {
                         <p className="mt-1 text-xs text-slate-500">
                           {formatBytes(doc.fileSize)} • Updated {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString()}
                         </p>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handlePreviewDocument(doc)}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-                          >
-                            <FaEye className="text-xs" /> Preview
+                        <div className="mt-3 flex gap-1 justify-end">
+                          <button type="button" onClick={() => handlePreviewDocument(doc)} title="Preview" className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-[#0a8f6c] transition">
+                            <FaEye className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadDocument(doc)}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-100 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-                          >
-                            <FaDownload className="text-xs" /> Download
+                          <button type="button" onClick={() => handleDownloadDocument(doc)} title="Download" className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-[#0a8f6c] transition">
+                            <FaDownload className="w-4 h-4" />
                           </button>
+                          {isOwnDocument(doc) && canEmployeeDeleteOwnDocument(doc) && (
+                            <button type="button" onClick={() => setDeleteDoc(doc)} title="Delete" className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition">
+                              <FaTrash className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -479,22 +489,12 @@ const DocumentsAndIdPage = () => {
                       {statusLabel(doc)}
                     </span>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handlePreviewDocument(doc)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      title="Preview"
-                    >
-                      <FaEye /> Preview
+                  <div className="flex shrink-0 gap-1">
+                    <button type="button" onClick={() => handlePreviewDocument(doc)} title="Preview" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
+                      <FaEye className="w-4 h-4" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadDocument(doc)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      title="Download"
-                    >
-                      <FaDownload /> Download
+                    <button type="button" onClick={() => handleDownloadDocument(doc)} title="Download" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
+                      <FaDownload className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -520,75 +520,21 @@ const DocumentsAndIdPage = () => {
                       {statusLabel(doc)}
                     </span>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handlePreviewDocument(doc)}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
-                    >
-                      <FaEye className="text-xs" /> Preview
+                  <div className="flex shrink-0 gap-1">
+                    <button type="button" onClick={() => handlePreviewDocument(doc)} title="Preview" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
+                      <FaEye className="w-4 h-4" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadDocument(doc)}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-[#0a8f6c] hover:underline"
-                    >
-                      <FaDownload className="text-xs" /> Download
+                    <button type="button" onClick={() => handleDownloadDocument(doc)} title="Download" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">
+                      <FaDownload className="w-4 h-4" />
                     </button>
+                    {canEmployeeDeleteOwnDocument(doc) ? (
+                    <button type="button" onClick={() => setDeleteDoc(doc)} title="Delete" className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition">
+                      <FaTrash className="w-4 h-4" />
+                    </button>
+                    ) : null}
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-xl font-semibold text-slate-900">My Contracts & Letters</h2>
-          {contractDocs.length === 0 ? (
-            <p className="text-sm text-slate-500">No contracts or letters available.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="border-b text-left text-slate-500">
-                  <tr>
-                    <th className="py-2 pr-3">Document Name</th>
-                    <th className="py-2 pr-3">Date Signed</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contractDocs.map((doc) => (
-                    <tr key={doc._id} className="border-b last:border-b-0">
-                      <td className="py-3 pr-3 text-slate-800">{doc.name}</td>
-                      <td className="py-3 pr-3 text-slate-600">{new Date(doc.createdAt).toLocaleDateString()}</td>
-                      <td className="py-3 pr-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
-                          {statusLabel(doc)}
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <div className="inline-flex items-center gap-3 justify-end">
-                          <button
-                            type="button"
-                            onClick={() => handlePreviewDocument(doc)}
-                            className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
-                          >
-                            <FaEye className="text-xs" /> Preview
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadDocument(doc)}
-                            className="inline-flex items-center gap-1 text-[#0a8f6c] hover:underline"
-                          >
-                            <FaDownload className="text-xs" /> Download
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
         </div>
@@ -630,6 +576,35 @@ const DocumentsAndIdPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900">Delete document?</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Are you sure you want to delete <strong>{deleteDoc.name || deleteDoc.fileName}</strong>? This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteDoc(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteDocument}
+                disabled={deleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -7,7 +7,15 @@ import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
 import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
-import { getLeaveTypeDisplayName, getLeaveDisplayLabel, getLeaveWidgetStats, getLeaveTypeCards, formatLeaveDurationDisplay, isHalfDayLeaveRecord } from '../../constants/leaveConstants';
+import {
+  getLeaveTypeDisplayName,
+  getLeaveDisplayLabel,
+  getLeaveWidgetStats,
+  getLeaveTypeCards,
+  formatLeaveDurationDisplay,
+  isHalfDayLeaveRecord,
+} from '../../constants/leaveConstants';
+import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
 import WfhRequestPanel from '../Wfh/WfhRequestPanel';
 
 const toDateInput = (d) => {
@@ -105,14 +113,7 @@ const leaveStatusPill = (displayStatus) => {
   return 'bg-[#E5E7EB] text-[#374151]';
 };
 
-const getLeaveDisplayStatus = (leave) => {
-  const status = String(leave?.status || 'pending').toLowerCase();
-  if (status === 'pending' && leave?.approvalStage) return leave.approvalStage;
-  if (status === 'approved') return 'Approved';
-  if (status === 'rejected') return 'Rejected';
-  if (status === 'cancelled') return 'Cancelled';
-  return leave?.approvalStage || 'Pending';
-};
+const getLeaveDisplayStatus = (leave) => formatLeaveApprovalStageDisplay(leave);
 
 const heatmapCellClass = (status) => {
   const s = String(status || '').toLowerCase();

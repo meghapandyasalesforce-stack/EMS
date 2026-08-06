@@ -5,6 +5,7 @@
 
 import logger from '../helpers/logger.js';
 import { ApprovalWorkflow, ApprovalInstance } from '../models/approvalWorkflow.model.js';
+import Organization from '../models/organization.model.js';
 import Employee from '../models/employee.model.js';
 import { notify } from '../helpers/notificationManager.js';
 import '../helpers/notificationEventRegistry.js';
@@ -23,6 +24,123 @@ const normalizeText = (value = '') => String(value).trim().toLowerCase();
 
 const formatEmployeeName = (employee) =>
     [employee?.name, employee?.lastName].filter(Boolean).join(' ').trim() || employee?.name || 'Employee';
+
+const buildAlreadyProcessedError = (message = 'Request has already been processed') => {
+    const err = new Error(message);
+    err.statusCode = 409;
+    err.code = 'APPROVAL_ALREADY_PROCESSED';
+    return err;
+};
+
+const DEFAULT_APPROVAL_SLA_HOURS = 12;
+
+const resolveApprovalSlaHours = async (organizationId, workflow = null) => {
+    const org = organizationId
+        ? await Organization.findById(organizationId).select('settings.approvalSlaHours').lean()
+        : null;
+    const orgHours = Number(org?.settings?.approvalSlaHours);
+    if (orgHours > 0) return orgHours;
+    const workflowHours = Number(workflow?.escalation?.escalateAfterHours);
+    if (workflowHours > 0) return workflowHours;
+    return DEFAULT_APPROVAL_SLA_HOURS;
+};
+
+const uniqueEmployeeIds = (ids) => [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+
+const findOrgAdminEmployeeIds = async (organizationId) => {
+    const orgEmployees = await Employee.find({
+        organizationId,
+        status: 'active',
+    })
+        .select('functionalRoles position')
+        .lean();
+    return orgEmployees
+        .filter((e) => {
+            const roles = (e.functionalRoles || []).map((r) => String(r).toLowerCase());
+            return roles.includes('admin') || String(e.position || '').toLowerCase() === 'admin';
+        })
+        .map((e) => e._id);
+};
+
+/**
+ * Push-only notifications after HR override (no email).
+ */
+const notifyHrOverrideStakeholders = async ({
+    instance,
+    action,
+    actorName,
+    managerApproverId = null,
+}) => {
+    const bodyMessage =
+        action === 'Approve'
+            ? `This request has been approved by ${actorName || 'HR Manager'}.`
+            : `This request has been rejected by ${actorName || 'HR Executive'}.`;
+    const title = action === 'Approve' ? 'Approved by HR' : 'Rejected by HR';
+
+    const adminIds = await findOrgAdminEmployeeIds(instance.organizationId);
+    const recipientIds = uniqueEmployeeIds([
+        instance.requestedBy,
+        managerApproverId,
+        ...adminIds,
+    ]);
+
+    const metadata = {
+        approvalInstanceId: instance._id,
+        entityType: instance.entityType,
+        entityId: instance.entityId,
+        hrOverride: true,
+    };
+
+    let sent = 0;
+    for (const userId of recipientIds) {
+        try {
+            await sendNotification({
+                userId,
+                title,
+                message: bodyMessage,
+                type: 'approval_hr_override',
+                priority: 'high',
+                metadata,
+            });
+            sent += 1;
+        } catch (err) {
+            logger.warn('HR override push notification failed', {
+                error: err.message,
+                userId,
+                approvalInstanceId: instance._id,
+            });
+        }
+    }
+
+    if (sent > 0) {
+        await pushAuditEvent(instance._id, {
+            action: 'push_notifications_sent',
+            note: `HR override push notifications sent (${sent})`,
+        });
+    }
+};
+
+const pushAuditEvent = async (
+    approvalInstanceId,
+    { action, actorId = null, actorName = '', actorRole = '', note = '' }
+) => {
+    if (!approvalInstanceId || !action) return;
+    await ApprovalInstance.updateOne(
+        { _id: approvalInstanceId },
+        {
+            $push: {
+                auditTrail: {
+                    at: new Date(),
+                    action,
+                    actorId: actorId || undefined,
+                    actorName: actorName || undefined,
+                    actorRole: actorRole || undefined,
+                    note: note || undefined,
+                },
+            },
+        }
+    );
+};
 
 const getEffectiveFunctionalRoles = (employee) => {
     const explicitRoles = Array.isArray(employee?.functionalRoles)
@@ -174,7 +292,21 @@ export const initiateApproval = async ({
             currentStep: 0,
             steps,
             metadata,
-            priority
+            priority,
+            auditTrail: [
+                {
+                    at: new Date(),
+                    action: 'request_submitted',
+                    actorId: requestedBy,
+                    note: 'Request Submitted',
+                },
+            ],
+        });
+
+        const slaHours = await resolveApprovalSlaHours(organizationId, workflow);
+        await pushAuditEvent(approvalInstance._id, {
+            action: 'sla_timer_started',
+            note: `SLA timer started (${slaHours} hours)`,
         });
 
         // Start first step
@@ -210,45 +342,68 @@ export const processApprovalAction = async ({
     performedByEmployeeId = null
 }) => {
     try {
-        const instance = await ApprovalInstance.findById(approvalInstanceId);
+        const stepFilter = {
+            stepNumber,
+            status: 'Pending',
+        };
+        if (!skipApproverValidation) {
+            stepFilter.approverId = approverId;
+        }
+
+        const now = new Date();
+        let instance = await ApprovalInstance.findOneAndUpdate(
+            {
+                _id: approvalInstanceId,
+                status: 'In Progress',
+                steps: { $elemMatch: stepFilter },
+            },
+            {
+                $set: {
+                    'steps.$.status': action === 'Approve' ? 'Approved' : 'Rejected',
+                    'steps.$.action': action,
+                    'steps.$.comments': comments,
+                    'steps.$.actionDate': now,
+                },
+            },
+            { new: true }
+        );
         if (!instance) {
-            throw new Error('Approval instance not found');
+            const latest = await ApprovalInstance.findById(approvalInstanceId).select('status steps');
+            if (!latest) {
+                throw new Error('Approval instance not found');
+            }
+            if (latest.status !== 'In Progress') {
+                throw buildAlreadyProcessedError();
+            }
+            const latestStep = latest.steps.find((s) => s.stepNumber === stepNumber);
+            if (!latestStep) {
+                throw new Error('Step not found');
+            }
+            if (
+                !skipApproverValidation &&
+                latestStep.approverId?.toString() !== approverId?.toString()
+            ) {
+                const err = new Error(
+                    'Unauthorized: You are not the assigned approver for this step'
+                );
+                err.statusCode = 403;
+                throw err;
+            }
+            throw buildAlreadyProcessedError();
         }
 
-        if (instance.status !== 'In Progress') {
-            throw new Error(`Cannot process action. Current status: ${instance.status}`);
-        }
-
-        const step = instance.steps.find(s => s.stepNumber === stepNumber);
-        if (!step) {
-            throw new Error('Step not found');
-        }
-
-        if (
-            !skipApproverValidation &&
-            step.approverId?.toString() !== approverId?.toString()
-        ) {
-            const err = new Error(
-                'Unauthorized: You are not the assigned approver for this step'
-            );
-            err.statusCode = 403;
-            throw err;
-        }
-
-        if (step.status !== 'Pending') {
-            throw new Error(`Step already ${step.status}`);
-        }
-
-        // Update step
-        step.status = action === 'Approve' ? 'Approved' : 'Rejected';
-        step.action = action;
-        step.comments = comments;
-        step.actionDate = new Date();
+        const step = instance.steps.find((s) => s.stepNumber === stepNumber);
+        await pushAuditEvent(approvalInstanceId, {
+            action: action === 'Approve' ? 'step_approved' : 'step_rejected',
+            actorId: performedByEmployeeId || approverId || step?.approverId,
+            actorName: step?.approverName || '',
+            note: comments || `${action === 'Approve' ? 'Approved' : 'Rejected'} at step ${stepNumber}`,
+        });
 
         // If rejected, reject entire workflow
         if (action === 'Reject') {
             instance.status = 'Rejected';
-            instance.rejectedAt = new Date();
+            instance.rejectedAt = now;
             instance.rejectedBy = performedByEmployeeId || approverId || step.approverId;
             instance.rejectionReason = comments;
             await instance.save();
@@ -269,7 +424,7 @@ export const processApprovalAction = async ({
         const allApproved = checkAllStepsApproved(instance);
         if (allApproved) {
             instance.status = 'Approved';
-            instance.approvedAt = new Date();
+            instance.approvedAt = now;
             instance.currentStep = instance.steps.length;
             await instance.save();
 
@@ -333,6 +488,24 @@ export const processApprovalAction = async ({
 };
 
 /**
+ * Append an audit trail event (mutates instance; caller must save).
+ */
+export const appendAuditEvent = (instance, { action, actorId = null, actorName = '', actorRole = '', note = '' }) => {
+    if (!instance) return;
+    if (!Array.isArray(instance.auditTrail)) {
+        instance.auditTrail = [];
+    }
+    instance.auditTrail.push({
+        at: new Date(),
+        action,
+        actorId: actorId || undefined,
+        actorName: actorName || undefined,
+        actorRole: actorRole || undefined,
+        note: note || undefined,
+    });
+};
+
+/**
  * Admin bypass: mark all pending steps approved and finalize the entity.
  */
 export const adminBypassApprovalInstance = async ({
@@ -367,6 +540,10 @@ export const adminBypassApprovalInstance = async ({
     if (metadata && Object.keys(metadata).length) {
         instance.metadata = { ...(instance.metadata || {}), ...metadata };
     }
+    appendAuditEvent(instance, {
+        action: 'admin_bypass_approved',
+        note: bypassComment,
+    });
     await instance.save();
 
     await updateEntityStatus(instance);
@@ -377,6 +554,168 @@ export const adminBypassApprovalInstance = async ({
     return {
         status: 'Approved',
         message: 'Request approved by admin (all workflow steps completed)',
+    };
+};
+
+/**
+ * HR Manager / HR Executive override: finalize the request immediately
+ * without waiting for the Reporting Manager (or any remaining pending steps).
+ * Existing manager-step behaviour is unchanged when HR does not override.
+ */
+export const hrOverrideFinalizeApproval = async ({
+    approvalInstanceId,
+    action,
+    performedByEmployeeId,
+    performedByName = '',
+    comments = '',
+    metadata = {},
+}) => {
+    if (!['Approve', 'Reject'].includes(action)) {
+        throw new Error('Invalid HR override action');
+    }
+
+    const instance = await ApprovalInstance.findById(approvalInstanceId);
+    if (!instance) {
+        throw new Error('Approval instance not found');
+    }
+
+    if (instance.status !== 'In Progress') {
+        throw buildAlreadyProcessedError();
+    }
+
+    const now = new Date();
+    const pendingSteps = instance.steps.filter((s) => s.status === 'Pending');
+    if (pendingSteps.length === 0) {
+        throw buildAlreadyProcessedError();
+    }
+
+    const workflow = await ApprovalWorkflow.findById(instance.workflowId)
+        .select('steps.stepNumber steps.approverType')
+        .lean();
+    const typeByNumber = new Map(
+        (workflow?.steps || []).map((s) => [s.stepNumber, s.approverType])
+    );
+    const skippedManager = pendingSteps.some(
+        (s) => typeByNumber.get(s.stepNumber) === 'Manager'
+    );
+
+    const actorName =
+        performedByName ||
+        (await Employee.findById(performedByEmployeeId).select('name lastName').lean().then((e) =>
+            e ? formatEmployeeName(e) : 'HR'
+        ));
+
+    const overrideComment =
+        String(comments || '').trim() ||
+        (action === 'Approve'
+            ? 'Approved by HR (manager step skipped via HR override)'
+            : 'Rejected by HR (manager step skipped via HR override)');
+
+    const primary = pendingSteps[0];
+    const primaryIndex = instance.steps.findIndex(
+        (step) => step.stepNumber === primary.stepNumber && step.status === 'Pending'
+    );
+    if (primaryIndex === -1) {
+        throw buildAlreadyProcessedError();
+    }
+
+    const updateSet = {
+        [`steps.${primaryIndex}.status`]: action === 'Approve' ? 'Approved' : 'Rejected',
+        [`steps.${primaryIndex}.action`]: action,
+        [`steps.${primaryIndex}.comments`]: `[HR override] ${overrideComment}`,
+        [`steps.${primaryIndex}.actionDate`]: now,
+        hrOverride: {
+            used: true,
+            action,
+            by: performedByEmployeeId || undefined,
+            byName: actorName,
+            at: now,
+            skippedManager: Boolean(skippedManager),
+            comments: overrideComment,
+        },
+        status: action === 'Approve' ? 'Approved' : 'Rejected',
+        currentStep: instance.steps.length,
+        metadata: {
+            ...(instance.metadata || {}),
+            ...(metadata && Object.keys(metadata).length ? metadata : {}),
+            hrOverride: true,
+        },
+    };
+    if (performedByEmployeeId) {
+        updateSet[`steps.${primaryIndex}.approverId`] = performedByEmployeeId;
+        updateSet[`steps.${primaryIndex}.approverName`] = actorName;
+    }
+    if (action === 'Approve') {
+        updateSet.approvedAt = now;
+    } else {
+        updateSet.rejectedAt = now;
+        updateSet.rejectedBy = performedByEmployeeId || primary.approverId;
+        updateSet.rejectionReason = overrideComment;
+    }
+
+    pendingSteps.slice(1).forEach((step) => {
+        const idx = instance.steps.findIndex(
+            (candidate) => candidate.stepNumber === step.stepNumber && candidate.status === 'Pending'
+        );
+        if (idx >= 0) {
+            updateSet[`steps.${idx}.status`] = 'Skipped';
+            updateSet[`steps.${idx}.comments`] = 'Skipped - HR override finalized the request';
+            updateSet[`steps.${idx}.actionDate`] = now;
+        }
+    });
+
+    const updated = await ApprovalInstance.findOneAndUpdate(
+        {
+            _id: approvalInstanceId,
+            status: 'In Progress',
+            [`steps.${primaryIndex}.status`]: 'Pending',
+        },
+        { $set: updateSet },
+        { new: true }
+    );
+
+    if (!updated) {
+        throw buildAlreadyProcessedError();
+    }
+
+    await pushAuditEvent(approvalInstanceId, {
+        action: action === 'Approve' ? 'hr_override_approved' : 'hr_override_rejected',
+        actorId: performedByEmployeeId,
+        actorName,
+        actorRole: 'HR',
+        note: overrideComment,
+    });
+
+    if (skippedManager) {
+        await pushAuditEvent(approvalInstanceId, {
+            action: 'manager_step_skipped',
+            note: 'Manager step automatically skipped',
+        });
+    }
+
+    await updateEntityStatus(updated);
+
+    const managerStep = pendingSteps.find(
+        (step) => typeByNumber.get(step.stepNumber) === 'Manager' && step.approverId
+    );
+
+    await notifyHrOverrideStakeholders({
+        instance: updated,
+        action,
+        actorName,
+        managerApproverId: managerStep?.approverId || null,
+    });
+
+    // Leave module keeps existing notification pipeline via updateEntityStatus above.
+
+    return {
+        status: updated.status,
+        hrOverride: true,
+        skippedManager: Boolean(skippedManager),
+        message:
+            action === 'Approve'
+                ? 'Request approved by HR (override)'
+                : 'Request rejected by HR (override)',
     };
 };
 
@@ -401,12 +740,25 @@ const processNextStep = async (approvalInstanceId) => {
         // Notify approver
         await notifyApprover(instance, nextStep, workflowStep);
 
-        // Set up escalation if enabled
-        if (workflow.escalation?.enabled) {
-            setTimeout(async () => {
-                await checkAndEscalate(approvalInstanceId, nextStep.stepNumber);
-            }, (workflow.escalation.escalateAfterHours || 24) * 60 * 60 * 1000);
+        try {
+            const fresh = await ApprovalInstance.findById(approvalInstanceId);
+            if (fresh) {
+                appendAuditEvent(fresh, {
+                    action: 'manager_notified',
+                    actorId: nextStep.approverId || undefined,
+                    actorName: nextStep.approverName || undefined,
+                    actorRole: workflowStep?.approverType || undefined,
+                    note:
+                        workflowStep?.approverType === 'Manager'
+                            ? 'Manager Notified'
+                            : `${nextStep.stepName || 'Approver'} notified`,
+                });
+                await fresh.save();
+            }
+        } catch (_) {
+            /* audit is best-effort; do not block workflow */
         }
+
     } catch (error) {
         logger.error('Error processing next step', {
             error: error.message,
@@ -604,7 +956,10 @@ const updateEntityStatus = async (instance) => {
                     .lean();
                 if (instance.status === 'Approved') {
                     leave.status = 'approved';
-                    leave.approvedBy = instance.steps[instance.steps.length - 1]?.approverId;
+                    leave.approvedBy =
+                        instance.hrOverride?.by ||
+                        instance.steps.find((s) => s.status === 'Approved')?.approverId ||
+                        instance.steps[instance.steps.length - 1]?.approverId;
                     leave.approvedAt = new Date();
                 } else if (instance.status === 'Rejected') {
                     leave.status = 'rejected';
@@ -734,6 +1089,15 @@ const notifyRequester = async (instance, status, reason = '') => {
                 entityId: instance.entityId
             }
         });
+        await pushAuditEvent(instance._id, {
+            action: status === 'approved' ? 'requester_notified_approved' : 'requester_notified_rejected',
+            actorId: instance.requestedBy,
+            actorRole: 'Employee',
+            note:
+                status === 'approved'
+                    ? 'Employee notified'
+                    : `Employee notified${reason ? `: ${reason}` : ''}`,
+        });
     } catch (error) {
         logger.error('Error notifying requester', { error: error.message });
     }
@@ -753,19 +1117,28 @@ const checkAndEscalate = async (approvalInstanceId, stepNumber) => {
         const workflow = await ApprovalWorkflow.findById(instance.workflowId);
         if (!workflow?.escalation?.enabled) return;
 
-        // Mark as escalated
+        // Legacy step flag only — full SLA (slaEscalated + multi-recipient notify/email)
+        // is owned by approvalSlaEscalationJob so it runs once with complete fan-out.
+        // Do not reassign the Reporting Manager; they keep Approve/Reject until HR override.
         step.escalated = true;
         step.escalatedAt = new Date();
         await instance.save();
 
-        // Determine escalation approver
         const escalationApprover = await determineEscalationApprover(workflow, instance);
-        if (escalationApprover) {
-            step.approverId = escalationApprover.id;
-            step.approverName = escalationApprover.name;
-            await instance.save();
-
-            await notifyApprover(instance, step, workflow.steps.find(s => s.stepNumber === stepNumber));
+        if (escalationApprover?.id) {
+            await sendNotification({
+                userId: escalationApprover.id,
+                title: `Approval Escalated: ${instance.entityType}`,
+                message: `A ${instance.entityType} request has exceeded the approval window. HR may approve or reject directly.`,
+                type: 'approval_escalation',
+                priority: 'high',
+                metadata: {
+                    approvalInstanceId: instance._id,
+                    entityType: instance.entityType,
+                    entityId: instance.entityId,
+                    stepNumber,
+                },
+            });
         }
     } catch (error) {
         logger.error('Error escalating approval', { error: error.message });
@@ -925,10 +1298,14 @@ export const delegateApproval = async ({
 };
 
 /**
- * Get pending approvals for an employee
+ * Get pending approvals for an employee.
+ * Additive: when includeHrOverrides is true, also return In-Progress instances
+ * still waiting on a Manager step so HR can override without being the assigned approver.
  */
-export const getPendingApprovals = async (employeeId, organizationId) => {
+export const getPendingApprovals = async (employeeId, organizationId, options = {}) => {
     try {
+        const { includeHrOverrides = false } = options;
+
         const approvals = await ApprovalInstance.find({
             organizationId,
             'steps.approverId': employeeId,
@@ -936,23 +1313,81 @@ export const getPendingApprovals = async (employeeId, organizationId) => {
             status: 'In Progress'
         })
             .populate('requestedBy', 'name email')
-            .populate('workflowId', 'name')
+            .populate('workflowId', 'name steps.stepNumber steps.stepName steps.approverType escalation')
             .sort({ createdAt: -1 })
             .lean();
 
-        return approvals.map(approval => {
+        const mapped = approvals.map(approval => {
             const pendingStep = approval.steps.find(s => 
                 s.approverId?.toString() === employeeId?.toString() && s.status === 'Pending'
             );
             return {
                 ...approval,
-                currentPendingStep: pendingStep
+                currentPendingStep: pendingStep,
+                hrOverrideAvailable: false,
+                slaEscalated: Boolean(approval.slaEscalated),
             };
         });
+
+        if (!includeHrOverrides) {
+            return mapped;
+        }
+
+        const overrideCandidates = await ApprovalInstance.find({
+            organizationId,
+            status: 'In Progress',
+            'steps.status': 'Pending',
+        })
+            .populate('requestedBy', 'name email')
+            .populate('workflowId', 'name steps.stepNumber steps.stepName steps.approverType escalation')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const seen = new Set(mapped.map((a) => String(a._id)));
+        for (const approval of overrideCandidates) {
+            if (seen.has(String(approval._id))) continue;
+
+            const workflowSteps = approval.workflowId?.steps || [];
+            const typeByNumber = new Map(
+                workflowSteps.map((s) => [s.stepNumber, s.approverType])
+            );
+            const sorted = [...(approval.steps || [])].sort(
+                (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
+            );
+            const pendingStep = sorted.find((s) => s.status === 'Pending') || null;
+            if (!pendingStep) continue;
+
+            const pendingType = typeByNumber.get(pendingStep.stepNumber);
+            // HR override is for steps that are not naturally HR's own turn
+            if (pendingType === 'HR') continue;
+
+            mapped.push({
+                ...approval,
+                currentPendingStep: pendingStep,
+                hrOverrideAvailable: true,
+                pendingManager: pendingType === 'Manager',
+                slaEscalated: Boolean(approval.slaEscalated),
+            });
+            seen.add(String(approval._id));
+        }
+
+        return mapped;
     } catch (error) {
         logger.error('Error getting pending approvals', { error: error.message });
         return [];
     }
+};
+
+/**
+ * Count In-Progress approvals that have been SLA-escalated (pending > escalate window).
+ */
+export const getEscalatedApprovalsCount = async (organizationId) => {
+    if (!organizationId) return 0;
+    return ApprovalInstance.countDocuments({
+        organizationId,
+        status: 'In Progress',
+        slaEscalated: true,
+    });
 };
 
 /**
@@ -975,6 +1410,8 @@ export const cancelApprovalInstance = async ({
     instance.status = 'Cancelled';
     instance.rejectionReason = reason;
     instance.rejectedAt = new Date();
+    instance.slaEscalated = false;
+    instance.slaEscalatedAt = undefined;
     if (cancelledBy) {
         instance.rejectedBy = cancelledBy;
     }
@@ -984,6 +1421,12 @@ export const cancelApprovalInstance = async ({
             step.status = 'Skipped';
         }
     }
+
+    appendAuditEvent(instance, {
+        action: 'request_cancelled',
+        actorId: cancelledBy,
+        note: reason,
+    });
 
     await instance.save();
 

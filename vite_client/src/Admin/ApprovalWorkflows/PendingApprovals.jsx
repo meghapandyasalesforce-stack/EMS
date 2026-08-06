@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FiCheckCircle, FiXCircle, FiClock, FiEye } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
@@ -11,6 +12,14 @@ const PendingApprovals = () => {
   const [showDetail, setShowDetail] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [showEscalatedOnly, setShowEscalatedOnly] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('escalated') === '1') {
+      setShowEscalatedOnly(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchPendingApprovals();
@@ -70,6 +79,7 @@ const PendingApprovals = () => {
           stepNumber,
           action,
           comments,
+          ...(approval.hrOverrideAvailable ? { hrOverride: true } : {}),
         });
       }
       toast.success(`Request ${action.toLowerCase()}ed successfully`);
@@ -78,7 +88,12 @@ const PendingApprovals = () => {
       fetchPendingApprovals();
       setShowDetail(false);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to process approval');
+      if (error.response?.status === 409) {
+        toast.warning(error.response?.data?.message || 'Request has already been processed');
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to process approval');
+      }
+      fetchPendingApprovals();
     }
   };
 
@@ -95,6 +110,10 @@ const PendingApprovals = () => {
     handleAction(approval, stepNumber, 'Reject', rejectReason.trim());
   };
 
+  const filteredApprovals = showEscalatedOnly
+    ? approvals.filter((approval) => approval.slaEscalated)
+    : approvals;
+
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading...</div>;
   }
@@ -109,8 +128,33 @@ const PendingApprovals = () => {
           <p className="text-lg text-gray-600">Review and approve pending requests</p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowEscalatedOnly(false)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              !showEscalatedOnly
+                ? 'bg-theme-primary text-white'
+                : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            All Requests
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowEscalatedOnly(true)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              showEscalatedOnly
+                ? 'bg-orange-600 text-white'
+                : 'bg-white text-orange-700 ring-1 ring-orange-200 hover:bg-orange-50'
+            }`}
+          >
+            Overdue Approvals
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 gap-4">
-          {approvals.map((approval) => {
+          {filteredApprovals.map((approval) => {
             const pendingStep = approval.currentPendingStep;
             const isUrgent = approval.priority === 'Urgent' || approval.entityType === 'TaxRegimeChange';
             const daysPending = pendingStep?.dueDate
@@ -159,7 +203,7 @@ const PendingApprovals = () => {
                       </p>
                     )}
                     {pendingStep && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
                         <FiClock className="w-4 h-4" />
                         <span>Step: {pendingStep.stepName}</span>
                         {pendingStep.dueDate && (
@@ -170,16 +214,6 @@ const PendingApprovals = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedApproval(approval);
-                        setShowDetail(true);
-                      }}
-                      className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
-                      title="View Details"
-                    >
-                      <FiEye className="w-5 h-5" />
-                    </button>
                     <button
                       onClick={() => handleAction(approval, pendingStep?.stepNumber, 'Approve')}
                       className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium"
@@ -193,6 +227,16 @@ const PendingApprovals = () => {
                     >
                       <FiXCircle className="w-4 h-4" />
                       Reject
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedApproval(approval);
+                        setShowDetail(true);
+                      }}
+                      className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
+                      title="View Details"
+                    >
+                      <FiEye className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -231,11 +275,15 @@ const PendingApprovals = () => {
           })}
         </div>
 
-        {approvals.length === 0 && !loading && (
+        {filteredApprovals.length === 0 && !loading && (
           <div className="text-center py-12 bg-white rounded-xl shadow-md">
             <FiCheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-            <p className="text-gray-600 text-lg">No pending approvals</p>
-            <p className="text-gray-500 text-sm mt-2">You're all caught up!</p>
+            <p className="text-gray-600 text-lg">
+              {showEscalatedOnly ? 'No overdue approvals' : 'No pending approvals'}
+            </p>
+            <p className="text-gray-500 text-sm mt-2">
+              {showEscalatedOnly ? 'No requests are currently past the review window.' : "You're all caught up!"}
+            </p>
           </div>
         )}
       </div>

@@ -15,7 +15,8 @@ import {
 } from '../../services/offboardingService.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
 import { createEmployeeJobOrGenericDocument, mimeToDocumentTypeEnum } from '../../helpers/employeeDocumentUploadHelper.js';
-import { isHrStaffEmployee, loadRequesterHrStaff } from '../../helpers/functionalRolesHelper.js';
+import { canAccessHrDocumentManagement } from '../../helpers/functionalRolesHelper.js';
+import { resolveAuthContext } from '../../helpers/permissionService.js';
 import { resolveDocumentFilePath, relativeDocumentFileUrl } from '../../helpers/documentFilePathHelper.js';
 import {
     requireUploadFileBuffer,
@@ -59,16 +60,26 @@ const synchronizeEmployeeOnboardingDocuments = (document) => {
     });
 };
 
+const ensureAuthContext = async (req) => {
+    if (req.authContext || !req.decoded) return;
+    req.authContext = await resolveAuthContext(req.decoded, req);
+};
+
+/** Same gate as requireHrDocumentAccess — org admin, HR manager/executive, or HR staff. */
+const canRequesterAccessHrDocuments = async (req) => {
+    await ensureAuthContext(req);
+    return canAccessHrDocumentManagement(req);
+};
+
 const loadEmployeeDocumentContext = async (req) => {
-    const isAdminUser =
-        (req.user?.role || '').toLowerCase() === 'admin' ||
-        (req.decoded?.role || '').toLowerCase() === 'admin';
+    const canManageAllEmployeeDocuments = await canRequesterAccessHrDocuments(req);
 
     if (!req.employee?._id) {
-        if (isAdminUser) {
-            return { isHr: true, employeeId: null, employee: null };
-        }
-        return { isHr: false, employeeId: null, employee: null };
+        return {
+            isHr: canManageAllEmployeeDocuments,
+            employeeId: null,
+            employee: null,
+        };
     }
 
     const employee = await Employee.findById(req.employee._id)
@@ -77,20 +88,29 @@ const loadEmployeeDocumentContext = async (req) => {
         .lean();
 
     if (!employee) {
-        if (isAdminUser) {
-            return { isHr: true, employeeId: req.employee._id, employee: null };
-        }
-        return { isHr: false, employeeId: req.employee._id, employee: null };
+        return {
+            isHr: canManageAllEmployeeDocuments,
+            employeeId: req.employee._id,
+            employee: null,
+        };
     }
 
     return {
-        isHr: isAdminUser || isHrStaffEmployee(employee),
+        isHr: canManageAllEmployeeDocuments,
         employeeId: req.employee._id,
         employee,
     };
 };
 
-const HR_POLICY_CATEGORIES = ['Policy', 'Company', 'Training', 'Compliance'];
+/** HR-uploaded company-wide docs (Public, not employee-confidential). */
+const buildHrPublicCompanyDocumentCriteria = (employeeId) => ({
+    uploadedBy: { $ne: employeeId },
+    requiresApproval: false,
+    approvalStatus: { $in: ['Approved', null] },
+    accessLevel: 'Public',
+    category: { $ne: 'Employee' },
+    'metadata.additionalInfo.documentPurpose': { $ne: 'EXPERIENCE_LETTER' },
+});
 
 /** Documents an employee may list and download (own uploads + HR/org shared). */
 const buildEmployeeDocumentQuery = (employeeId, employee) => ({
@@ -104,18 +124,7 @@ const buildEmployeeDocumentQuery = (employeeId, employee) => ({
             requiresApproval: false,
             approvalStatus: 'Approved',
         },
-        {
-            uploadedBy: { $ne: employeeId },
-            requiresApproval: false,
-            approvalStatus: { $in: ['Approved', null] },
-            'metadata.additionalInfo.documentPurpose': { $ne: 'EXPERIENCE_LETTER' },
-        },
-        {
-            uploadedBy: { $ne: employeeId },
-            accessLevel: 'Public',
-            approvalStatus: 'Approved',
-            category: { $in: HR_POLICY_CATEGORIES },
-        },
+        buildHrPublicCompanyDocumentCriteria(employeeId),
         {
             accessLevel: 'Department',
             allowedDepartments: { $in: [employee.department] },
@@ -147,18 +156,8 @@ const buildEmployeeDownloadQuery = (employeeId, employee) => ({
             approvalStatus: 'Approved',
         },
         {
-            uploadedBy: { $ne: employeeId },
+            ...buildHrPublicCompanyDocumentCriteria(employeeId),
             isActive: { $ne: false },
-            requiresApproval: false,
-            approvalStatus: { $in: ['Approved', null] },
-            'metadata.additionalInfo.documentPurpose': { $ne: 'EXPERIENCE_LETTER' },
-        },
-        {
-            uploadedBy: { $ne: employeeId },
-            isActive: { $ne: false },
-            accessLevel: 'Public',
-            approvalStatus: 'Approved',
-            category: { $in: HR_POLICY_CATEGORIES },
         },
         {
             isActive: { $ne: false },
@@ -182,8 +181,7 @@ const buildEmployeeDownloadQuery = (employeeId, employee) => ({
 });
 
 const assertHrDocumentAccess = async (req, res) => {
-    const ctx = await loadEmployeeDocumentContext(req);
-    if (!ctx.isHr) {
+    if (!(await canRequesterAccessHrDocuments(req))) {
         res.status(403).json({
             success: false,
             message: 'Only HR can access all employee documents',
@@ -224,6 +222,19 @@ const findOwnDocument = async (req, res, documentId) => {
 };
 
 const EMPLOYEE_UPLOAD_CATEGORIES = ['Employee', 'Certificate', 'Contract', 'Legal', 'Other'];
+
+/** Employee self-delete: only while HR has not yet approved or rejected. */
+const employeeMayDeleteOwnDocument = (document) => {
+    if (!document || document.isActive === false) return false;
+    if (document.approvalStatus === 'Withdrawn') return false;
+    if (document.approvalStatus === 'Approved' || document.approvalStatus === 'Rejected') return false;
+    if (document.approvalStatus === 'Pending') return true;
+    // Legacy rows still awaiting HR (requiresApproval, no final status yet)
+    if (document.requiresApproval && (document.approvalStatus == null || document.approvalStatus === undefined)) {
+        return true;
+    }
+    return false;
+};
 
 async function findLegacyEmbeddedDocument(req, documentId, { employeeIdOnly = null } = {}) {
     const orgFilter = addOrganizationFilter(req, {});
@@ -365,9 +376,41 @@ export const uploadDocument = asyncHandler(async (req, res) => {
     assertUploadedFileExists(file, relFileUrl);
     const fileBinary = requireUploadFileBuffer(file);
 
-    const accessLevel = req.body.accessLevel && ['Public', 'Department', 'Role', 'Specific', 'Private'].includes(req.body.accessLevel)
-        ? req.body.accessLevel
-        : 'Public';
+    const validAccessLevels = ['Public', 'Department', 'Role', 'Specific', 'Private'];
+    let accessLevel = 'Public';
+    let relatedTo = req.body.relatedTo && ['Employee', 'Department', 'Project', 'Policy', 'Course', 'General'].includes(req.body.relatedTo)
+        ? req.body.relatedTo
+        : 'General';
+    let relatedId;
+    let relatedToModel;
+    let allowedEmployees;
+
+    if (category === 'Employee') {
+        const rawTargetEmployeeId = req.body.relatedId || req.body.employeeId;
+        if (rawTargetEmployeeId) {
+            const targetEmployee = await Employee.findOne(
+                addOrganizationFilter(req, { _id: rawTargetEmployeeId })
+            )
+                .select('_id')
+                .lean();
+            if (!targetEmployee) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Selected employee not found in this organization',
+                });
+            }
+            relatedTo = 'Employee';
+            relatedId = targetEmployee._id;
+            relatedToModel = 'Employee';
+            accessLevel = 'Specific';
+            allowedEmployees = [targetEmployee._id];
+        } else {
+            relatedTo = 'Employee';
+            accessLevel = 'Private';
+        }
+    } else if (req.body.accessLevel && validAccessLevels.includes(req.body.accessLevel)) {
+        accessLevel = req.body.accessLevel;
+    }
 
     const document = new Document({
         name,
@@ -381,10 +424,10 @@ export const uploadDocument = asyncHandler(async (req, res) => {
         fileSize: file.size,
         mimeType: file.mimetype,
         fileBinary,
-        relatedTo: req.body.relatedTo && ['Employee', 'Department', 'Project', 'Policy', 'Course', 'General'].includes(req.body.relatedTo)
-            ? req.body.relatedTo
-            : 'General',
+        relatedTo,
+        ...(relatedId ? { relatedId, relatedToModel } : {}),
         accessLevel,
+        ...(allowedEmployees?.length ? { allowedEmployees } : {}),
         requiresApproval: false,
         approvalStatus: 'Approved',
         isActive: true
@@ -698,7 +741,7 @@ export const downloadDocumentById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const docCtx = await loadEmployeeDocumentContext(req);
-    const isHr = docCtx.isHr || (await loadRequesterHrStaff(req));
+    const isHr = docCtx.isHr;
     const versionParam = req.query.version != null ? parseInt(String(req.query.version), 10) : null;
     const inline = req.query.inline === '1' || req.query.inline === 'true';
 
@@ -1267,8 +1310,13 @@ export const getSharedDocuments = asyncHandler(async (req, res) => {
         approvalStatus: { $in: ['Approved', null] },
         uploadedBy: { $ne: employeeId },
         $or: [
-            { requiresApproval: false, approvalStatus: { $in: ['Approved', null] } },
-            { accessLevel: 'Public' },
+            {
+                requiresApproval: false,
+                approvalStatus: { $in: ['Approved', null] },
+                accessLevel: 'Public',
+                category: { $ne: 'Employee' },
+                'metadata.additionalInfo.documentPurpose': { $ne: 'EXPERIENCE_LETTER' },
+            },
             {
                 accessLevel: 'Department',
                 allowedDepartments: { $in: [employee.department] },
@@ -1440,19 +1488,90 @@ export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
 });
 
 /**
- * Employee — soft-delete own document (hidden from employee; HR audit trail retained).
+ * Employee — soft-delete own document only while approvalStatus is Pending.
+ * After HR approval/rejection, only HR/Admin may delete (deleteDocumentByHr).
  */
 export const deleteMyDocument = asyncHandler(async (req, res) => {
-    const document = await findOwnDocument(req, res, req.params.id);
-    if (!document) return;
+    const employeeId = req.employee?._id;
+    if (!employeeId) {
+        return res.status(401).json({
+            success: false,
+            message: 'Employee authentication required',
+        });
+    }
+
+    const document = await Document.findOne(
+        addOrganizationFilter(req, {
+            _id: req.params.id,
+            uploadedBy: employeeId,
+        })
+    );
+
+    if (!document) {
+        return res.status(404).json({
+            success: false,
+            message: 'Document not found or you do not have access',
+        });
+    }
+
+    if (!employeeMayDeleteOwnDocument(document)) {
+        return res.status(403).json({
+            success: false,
+            message: 'You can only delete documents that are still pending HR approval. Approved or rejected documents cannot be removed.',
+            code: 'DOCUMENT_NOT_DELETABLE',
+        });
+    }
 
     document.isActive = false;
-    if (document.requiresApproval) {
-        document.approvalStatus = 'Withdrawn';
-        document.rejectionReason = 'Removed by employee';
-    }
+    document.approvalStatus = 'Withdrawn';
+    document.rejectionReason = 'Removed by employee';
     await document.save();
     synchronizeEmployeeOnboardingDocuments(document);
+
+    res.json({
+        success: true,
+        message: 'Document deleted successfully',
+    });
+});
+
+/**
+ * HR/Admin — soft-delete any document (own or any employee's).
+ */
+export const deleteDocumentByHr = asyncHandler(async (req, res) => {
+    if (!(await assertHrDocumentAccess(req, res))) return;
+
+    const { id } = req.params;
+    const organizationId = getOrganizationId(req);
+    const deletedBy = req.employee?._id || req.user?._id;
+
+    const document = await Document.findOne({
+        _id: id,
+        organizationId,
+    });
+
+    if (!document) {
+        return res.status(404).json({
+            success: false,
+            message: 'Document not found',
+        });
+    }
+
+    document.isActive = false;
+    document.approvalStatus = 'Withdrawn';
+    document.rejectionReason = `Deleted by HR/Admin`;
+    if (deletedBy) {
+        document.approvedBy = deletedBy;
+        document.approvedAt = new Date();
+    }
+
+    await document.save();
+    synchronizeEmployeeOnboardingDocuments(document);
+
+    logger.info('Document deleted by HR', {
+        documentId: id,
+        deletedBy,
+        organizationId,
+    });
 
     res.json({
         success: true,

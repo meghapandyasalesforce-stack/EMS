@@ -173,6 +173,17 @@ export const createOnboardingWorkflow = asyncHandler(async (req, res) => {
         if (scheduledStartDate) existing.scheduledStartDate = new Date(scheduledStartDate);
         if (expectedCompletionDate) existing.expectedCompletionDate = new Date(expectedCompletionDate);
         if (templateId) existing.templateId = templateId;
+
+        // Re-creating without "save as draft" should publish a stuck Draft so the employee can see it.
+        if (existing.status === 'Draft' && !saveAsDraft) {
+            const effectiveStart = existing.scheduledStartDate || existing.joiningDate;
+            const now = new Date();
+            existing.status = effectiveStart && new Date(effectiveStart) > now ? 'Scheduled' : 'Not Started';
+            if (existing.status === 'Not Started' && !existing.startDate) {
+                existing.startDate = effectiveStart || now;
+            }
+        }
+
         addActivity(existing, {
             action: 'workflow_updated',
             description: 'Onboarding workflow settings updated by HR',

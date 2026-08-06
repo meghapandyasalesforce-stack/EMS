@@ -32,6 +32,7 @@ function DashboardAdmin() {
   const [todayStatus, setTodayStatus] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [escalatedApprovalsCount, setEscalatedApprovalsCount] = useState(0);
 
   const {
     data: employeeData = { employees: [], total: 0 },
@@ -66,18 +67,22 @@ function DashboardAdmin() {
   useEffect(() => {
     const loadDashboardExtras = async () => {
       try {
-        const [todayRes, announcementsRes] = await Promise.all([
+        const [todayRes, announcementsRes, escalatedRes] = await Promise.all([
           axios.get("/v1/both/attendance/today-status", { withCredentials: true }),
           axios.get("/v1/both/notification/sent-announcements", {
             params: { scope: "organization", page: 1, limit: 3 },
             withCredentials: true
-          })
+          }),
+          axios.get("/v1/admin/approvals/escalated-count", { withCredentials: true }).catch(() => null)
         ]);
 
         const todayList = todayRes?.data?.data || [];
         const recentAnnouncements = announcementsRes?.data?.announcements || [];
         setTodayStatus(Array.isArray(todayList) ? todayList : []);
         setAnnouncements(Array.isArray(recentAnnouncements) ? recentAnnouncements : []);
+        setEscalatedApprovalsCount(
+          Number(escalatedRes?.data?.data?.count ?? 0)
+        );
       } catch {
         // Keep dashboard functional when optional sections fail.
       }
@@ -217,6 +222,13 @@ function DashboardAdmin() {
       icon: <FiCalendar className="h-5 w-5" />
     },
     {
+      label: "Overdue Approvals",
+      value: escalatedApprovalsCount.toLocaleString("en-IN"),
+      sub: escalatedApprovalsCount > 0 ? "Pending beyond review window" : "Clear",
+      icon: <FiClock className="h-5 w-5" />,
+      onClick: () => navigate("/admin/pending-approvals?escalated=1")
+    },
+    {
       label: "Payroll This Month",
       value: formatCurrency(monthlyPayrollTotal),
       sub: `${payrolls.length} payroll records`,
@@ -306,9 +318,25 @@ function DashboardAdmin() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-5">
           {statCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div
+              key={card.label}
+              role={card.onClick ? "button" : undefined}
+              tabIndex={card.onClick ? 0 : undefined}
+              onClick={card.onClick}
+              onKeyDown={
+                card.onClick
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        card.onClick(e);
+                      }
+                    }
+                  : undefined
+              }
+              className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${card.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+            >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <p className="text-sm text-slate-500">{card.label}</p>
                 <span className="rounded-lg bg-slate-100 p-2 text-slate-600">{card.icon}</span>

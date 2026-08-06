@@ -7,11 +7,10 @@ export const LIFECYCLE_INDUSTRY_PACKS = Object.freeze([
     {
         key: 'industry.it',
         label: 'IT & Software',
-        description: 'NDA, IP agreements, GitHub/GitLab access, laptop & software allocation.',
+        description: 'NDA, GitHub/GitLab access, laptop & software allocation.',
         industry: 'IT',
         features: [
             'industry.it.nda',
-            'industry.it.ipAgreement',
             'industry.it.repositoryAccess',
             'industry.it.laptopAllocation',
             'industry.it.softwareAllocation',

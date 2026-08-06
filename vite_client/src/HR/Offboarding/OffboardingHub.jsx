@@ -1278,7 +1278,31 @@ const OffboardingHub = () => {
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
                             <label className="text-sm">Employee *
-                                <select required value={createForm.employeeId} onChange={(event) => setCreateForm({ ...createForm, employeeId: event.target.value })} className="mt-1 w-full rounded-lg border p-2">
+                                <select
+                                    required
+                                    value={createForm.employeeId}
+                                    onChange={(event) => {
+                                        const employeeId = event.target.value;
+                                        const emp = employees.find((row) => String(row._id) === String(employeeId));
+                                        const managerId = emp?.managerId?._id || emp?.managerId || '';
+                                        let assignedManager = managerId ? String(managerId) : '';
+                                        if (!assignedManager && emp?.manager) {
+                                            const managerName = String(emp.manager).trim().toLowerCase();
+                                            const matched = employees.find((row) => {
+                                                const full = `${row.name || ''} ${row.lastName || ''}`.trim().toLowerCase();
+                                                const first = String(row.name || '').trim().toLowerCase();
+                                                return full === managerName || first === managerName;
+                                            });
+                                            if (matched) assignedManager = String(matched._id);
+                                        }
+                                        setCreateForm((prev) => ({
+                                            ...prev,
+                                            employeeId,
+                                            assignedManager,
+                                        }));
+                                    }}
+                                    className="mt-1 w-full rounded-lg border p-2"
+                                >
                                     <option value="">Select employee</option>
                                     {employees.map((item) => <option key={item._id} value={item._id}>{item.name} {item.lastName} ({item.email})</option>)}
                                 </select>

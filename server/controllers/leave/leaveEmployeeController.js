@@ -376,7 +376,7 @@ export const getMyLeaves = async (req, res) => {
         const leavesWithWorkflow = await attachWorkflowSummariesToLeaves(leavesRaw);
         const leaves = leavesWithWorkflow.map((leave) => ({
             ...leave,
-            approvalStage: getLeaveApprovalStageLabel(leave),
+            approvalStage: getLeaveApprovalStageLabel(leave, { includeHrOverrideHint: false }),
         }));
 
         const currentYearLeaves = leaves.filter(leave =>

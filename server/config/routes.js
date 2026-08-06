@@ -51,6 +51,8 @@ import healthRouter from "../routes/Health/healthRoutes.js";
 // New HR & Manager Features
 import recruitmentAdminRouter from "../routes/Admin/RecruitmentRoutes.js";
 import recruitmentBothRouter from "../routes/Both/RecruitmentRoutes.js";
+import recruitmentPortalRouter from "../routes/Public/RecruitmentPortalRoutes.js";
+import candidateSelfServiceRouter from "../routes/Public/CandidateSelfServiceRoutes.js";
 import onboardingRouter from "../routes/Admin/OnboardingRoutes.js";
 import lifecycleRouter from "../routes/Admin/LifecycleRoutes.js";
 import lifecyclePortalRouter from "../routes/Public/LifecyclePortalRoutes.js";
@@ -94,6 +96,8 @@ export const registerRoutes = (app) => {
   // Health check routes (public - for monitoring)
   app.use("/api/health", healthRouter);
   app.use("/api/v1/public/lifecycle", lifecyclePortalRouter);
+  app.use("/api/v1/public/recruitment", recruitmentPortalRouter);
+  app.use("/api/v1/public/recruitment", candidateSelfServiceRouter);
   
   // Organization routes (public - for registration and login)
   app.use("/api/v1/organization/auth", organizationAuthRouter);

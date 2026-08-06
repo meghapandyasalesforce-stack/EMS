@@ -1,11 +1,68 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Employee from '../models/employee.model.js';
 import Leave from '../models/leave.model.js';
+import Organization from '../models/organization.model.js';
 import logger from './logger.js';
 import {
     persistThreadRootMessageId,
     resolveStoredThreadRootMessageId,
     THREAD_ROOT_REPLY_LOOKUP
 } from './emailThreadPersistenceHelper.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Load organization profile logo from disk for CID email attachment.
+ * @param {string|null|undefined} organizationId
+ * @returns {Promise<{ filename: string, content: Buffer, contentType: string }|null>}
+ */
+const getOrganizationLogoAttachment = async (organizationId) => {
+    if (!organizationId) return null;
+
+    try {
+        const org = await Organization.findById(organizationId).select('logo').lean();
+        if (!org?.logo?.url && !org?.logo?.filename) return null;
+
+        const filename = org.logo.filename || path.basename(org.logo.url);
+        if (!filename) return null;
+
+        const logosDir = path.join(__dirname, '../uploads/logos');
+        const uploadsDir = path.join(__dirname, '../uploads');
+        let filePath = path.join(logosDir, filename);
+        if (!fs.existsSync(filePath)) {
+            filePath = path.join(uploadsDir, filename);
+        }
+        if (!fs.existsSync(filePath)) {
+            logger.warn('Organization logo file not found for leave approval email', {
+                organizationId: String(organizationId),
+                filename
+            });
+            return null;
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        const contentType =
+            ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+            : ext === '.svg' ? 'image/svg+xml'
+            : ext === '.webp' ? 'image/webp'
+            : ext === '.gif' ? 'image/gif'
+            : 'image/png';
+
+        return {
+            filename,
+            content: fs.readFileSync(filePath),
+            contentType
+        };
+    } catch (error) {
+        logger.warn('Could not load organization logo for leave approval email', {
+            organizationId: String(organizationId),
+            error: error.message
+        });
+        return null;
+    }
+};
 
 /**
  * Get manager email and CC email addresses for leave notifications
@@ -205,6 +262,8 @@ export const sendLeaveApprovalNotification = async (leaveData, employeeId) => {
             ? await getApprovalRejectionCcEmails(employee, organizationId)
             : [];
 
+        const logoAttachment = await getOrganizationLogoAttachment(organizationId);
+
         const { sendLeaveApprovalEmail } = await import('./emailSender.js');
         
         const enhancedLeaveData = {
@@ -228,7 +287,7 @@ export const sendLeaveApprovalNotification = async (leaveData, employeeId) => {
             enhancedLeaveData,
             employee.email,
             ccEmails,
-            { threadRootMessageId }
+            { threadRootMessageId, logoAttachment }
         );
 
         await persistThreadRootMessageId(Leave, recordId, sendResult?.threadRootMessageId);

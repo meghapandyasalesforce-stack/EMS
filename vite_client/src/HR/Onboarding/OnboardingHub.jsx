@@ -9,7 +9,7 @@ import {
     ADMIN_ONBOARDING_ENDPOINT, BOTH_ONBOARDING_ENDPOINT,
 } from '../../utils/constant';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { isHR } from '../../utils/managerHelper';
+import { canAccessLifecycleEnterprise } from '../../utils/managerHelper';
 import { useEmployees } from '../../Hooks/useDashboardData';
 import {
     TASK_STATUS_COLORS, WORKFLOW_STATUSES, TASK_GROUPS_BY_ROLE,
@@ -71,9 +71,13 @@ const OnboardingHub = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const user = useSelector((s) => s.auth.user);
     const employee = useSelector((s) => s.employeeDetails.employee);
+    const permissionFlags = useSelector((s) => s.auth.permissionFlags) || {};
+    const permissions = useSelector((s) => s.auth.permissions) || [];
     const userObj = user || employee;
     const isAdmin = user?.role === 'admin';
-    const userIsHR = isHR(userObj);
+    // Use enterprise lifecycle access (HR flags/permissions), not loose department/title matching,
+    // so regular employees are never routed to the admin onboarding API.
+    const userIsHR = canAccessLifecycleEnterprise(userObj, permissionFlags, permissions);
     const viewParam = searchParams.get('view') || '';
     const workflowIdParam = searchParams.get('id') || '';
     const detailTab = searchParams.get('detailTab') || 'overview';
@@ -133,12 +137,12 @@ const OnboardingHub = () => {
 
     const templates = dashboard?.templates || [];
 
-    const pickWorkflow = (workflows, preferredId) => {
+    const pickWorkflow = (workflows, preferredId, { fallbackToFirst = false } = {}) => {
         if (!workflows?.length) return null;
         if (preferredId) {
             const found = workflows.find((w) => w._id === preferredId);
             if (found) return found;
-            return null;
+            if (!fallbackToFirst) return null;
         }
         return workflows[0];
     };
@@ -189,7 +193,8 @@ const OnboardingHub = () => {
                 if (!personalMode) {
                     return preferredId ? pickWorkflow(workflows, preferredId) : null;
                 }
-                return pickWorkflow(workflows, preferredId);
+                // Always show the employee's own workflow even if URL id is stale.
+                return pickWorkflow(workflows, preferredId, { fallbackToFirst: true });
             });
         } catch (err) {
             if (!isHRView && err.response?.status === 404) {
@@ -688,10 +693,8 @@ const OnboardingHub = () => {
 
     if (loading) return <LoadingSpinner message="Loading onboarding..." />;
 
-    /* ── Employee with no workflow or scheduled ── */
-    if (!isHRView && !isManagerView
-        && !loading && (!wf || wf?.status === 'Scheduled' || wf?.status === 'Draft')) {
-        const scheduledDate = wf?.scheduledStartDate || wf?.joiningDate;
+    /* ── Employee with no workflow, or unpublished draft only ── */
+    if (!isHRView && !isManagerView && !loading && (!wf || wf?.status === 'Draft')) {
         return (
             <div className="page-shell min-h-screen bg-gray-50">
                 <div className="page-shell-inner space-y-4">
@@ -714,14 +717,12 @@ const OnboardingHub = () => {
                     <div className="bg-white rounded-xl shadow-md p-10 text-center">
                         <FaCalendarAlt className="mx-auto text-6xl text-indigo-300 mb-4" />
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                            {!wf ? 'No Onboarding Workflow' : 'Onboarding Scheduled'}
+                            {!wf ? 'No Onboarding Workflow' : 'Onboarding Being Prepared'}
                         </h2>
                         <p className="text-gray-500 mb-6">
                             {!wf
                                 ? 'Your HR team will set up onboarding before your joining date. Contact HR if you have questions.'
-                                : scheduledDate
-                                    ? `Your onboarding will begin on ${format(new Date(scheduledDate), 'MMMM dd, yyyy')}.`
-                                    : 'Your onboarding is scheduled and will begin on your joining date.'}
+                                : 'HR is still preparing your onboarding. It will appear here once published.'}
                         </p>
                         <button onClick={() => navigate('/dashboard-employee')}
                             className="px-6 py-2 bg-theme-secondary text-white rounded-lg">Go to Dashboard</button>
@@ -1187,7 +1188,36 @@ const OnboardingHub = () => {
                             <div>
                                 <label className="text-sm font-medium">Employee *</label>
                                 <select required className="w-full p-2 border rounded-lg mt-1" value={createForm.employeeId}
-                                    onChange={(e) => setCreateForm({ ...createForm, employeeId: e.target.value })}>
+                                    onChange={(e) => {
+                                        const employeeId = e.target.value;
+                                        const emp = employees.find((row) => String(row._id || row.id) === String(employeeId));
+                                        const rawJoin = emp?.joiningDate || emp?.dateOfJoining || null;
+                                        let joiningDate = '';
+                                        if (rawJoin) {
+                                            const parsed = new Date(rawJoin);
+                                            if (!Number.isNaN(parsed.getTime())) {
+                                                joiningDate = format(parsed, 'yyyy-MM-dd');
+                                            }
+                                        }
+                                        const managerId = emp?.managerId?._id || emp?.managerId || '';
+                                        let assignedManager = managerId ? String(managerId) : '';
+                                        if (!assignedManager && emp?.manager) {
+                                            const managerName = String(emp.manager).trim().toLowerCase();
+                                            const matched = employees.find((row) => {
+                                                const full = `${row.name || ''} ${row.lastName || ''}`.trim().toLowerCase();
+                                                const first = String(row.name || '').trim().toLowerCase();
+                                                return full === managerName || first === managerName;
+                                            });
+                                            if (matched) assignedManager = String(matched._id || matched.id);
+                                        }
+                                        setCreateForm((prev) => ({
+                                            ...prev,
+                                            employeeId,
+                                            // Autofill only joining date + manager from employee profile
+                                            joiningDate,
+                                            assignedManager,
+                                        }));
+                                    }}>
                                     <option value="">Select employee</option>
                                     {employees.map((emp) => (
                                         <option key={emp._id || emp.id} value={emp._id || emp.id}>

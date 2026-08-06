@@ -11,14 +11,12 @@ export const LIFECYCLE_PACK_WORKFLOW_ARTIFACTS = Object.freeze({
     // ── IT & Software ──
     'industry.it': {
         tasks: [
-            task({ title: 'Sign IP Assignment Agreement', category: 'HR Paperwork', assigneeRole: 'employee', featureKey: 'industry.it.ipAgreement', mandatory: true, phase: 'Day 1', order: 10 }),
             task({ title: 'Provision GitHub/GitLab access', category: 'Access', assigneeRole: 'it', featureKey: 'industry.it.repositoryAccess', mandatory: true, phase: 'Day 1', order: 11 }),
             task({ title: 'Allocate development laptop', category: 'Equipment', assigneeRole: 'it', featureKey: 'industry.it.laptopAllocation', mandatory: true, phase: 'Day 1', order: 12 }),
             task({ title: 'Install required software stack', category: 'IT Setup', assigneeRole: 'it', featureKey: 'industry.it.softwareAllocation', mandatory: true, phase: 'Week 1', order: 13 }),
         ],
         checklist: [
             check({ item: 'NDA signed', category: 'HR', mandatory: true, phase: 'Day 1', featureKey: 'industry.it.nda' }),
-            check({ item: 'IP agreement signed', category: 'HR', mandatory: true, phase: 'Day 1', featureKey: 'industry.it.ipAgreement' }),
             check({ item: 'Repository access granted', category: 'IT', mandatory: true, phase: 'Day 1', featureKey: 'industry.it.repositoryAccess' }),
         ],
         softwareRequests: [

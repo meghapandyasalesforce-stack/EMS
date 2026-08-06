@@ -3,6 +3,7 @@ import { shouldScopeDataToManagedTeam } from './permissionService.js';
 import {
     processApprovalAction,
     adminBypassApprovalInstance,
+    hrOverrideFinalizeApproval,
 } from '../services/approvalWorkflowService.js';
 
 export const EARLY_APPROVAL_CONFIRM_CODE = 'EARLY_APPROVAL_CONFIRM_REQUIRED';
@@ -125,6 +126,12 @@ export const buildWorkflowSummary = async (approvalInstanceId) => {
     return {
         hasWorkflow: true,
         instanceStatus: instance.status,
+        slaEscalated: Boolean(instance.slaEscalated),
+        slaEscalatedAt: instance.slaEscalatedAt || null,
+        hrOverrideUsed: Boolean(instance.hrOverride?.used),
+        hrOverrideAction: instance.hrOverride?.action || null,
+        hrOverrideByName: instance.hrOverride?.byName || null,
+        auditTrail: Array.isArray(instance.auditTrail) ? instance.auditTrail : [],
         pendingStep: pendingStep
             ? {
                   stepNumber: pendingStep.stepNumber,
@@ -135,6 +142,7 @@ export const buildWorkflowSummary = async (approvalInstanceId) => {
                   approverType: pendingApproverType,
                   approverName: pendingStep.approverName || null,
                   status: pendingStep.status,
+                  escalated: Boolean(pendingStep.escalated),
               }
             : null,
         steps: sortedSteps.map((s) => ({
@@ -199,6 +207,12 @@ export const attachWorkflowSummariesToRequests = async (requests) => {
             workflowSummary: {
                 hasWorkflow: true,
                 instanceStatus: instance.status,
+                slaEscalated: Boolean(instance.slaEscalated),
+                slaEscalatedAt: instance.slaEscalatedAt || null,
+                hrOverrideUsed: Boolean(instance.hrOverride?.used),
+                hrOverrideAction: instance.hrOverride?.action || null,
+                hrOverrideByName: instance.hrOverride?.byName || null,
+                auditTrail: Array.isArray(instance.auditTrail) ? instance.auditTrail : [],
                 pendingStep: pendingStep
                     ? {
                           stepNumber: pendingStep.stepNumber,
@@ -210,6 +224,7 @@ export const attachWorkflowSummariesToRequests = async (requests) => {
                               stepTypeByNumber.get(pendingStep.stepNumber) || null,
                           approverName: pendingStep.approverName || null,
                           status: pendingStep.status,
+                          escalated: Boolean(pendingStep.escalated),
                       }
                     : null,
                 steps: sortedSteps.map((s) => ({
@@ -256,7 +271,18 @@ export const resolveRegularizationWorkflowAction = async ({
         employeeLinked
     );
 
-    if (earlyConfirmNeeded && !confirmEarlyApproval) {
+    /**
+     * Additive HR override: HR may finalize immediately while Manager (or other
+     * non-HR) step is pending — no confirm dialog required.
+     * Legacy confirmEarlyApproval path remains for non-finalize early step use.
+     */
+    const hrImmediateOverride =
+        isHrEmployee(req) &&
+        Boolean(approverType) &&
+        approverType !== 'HR' &&
+        !naturalActor;
+
+    if (earlyConfirmNeeded && !confirmEarlyApproval && !hrImmediateOverride) {
         const stepLabel = workflowStep?.stepName || approverType || 'current';
         const err = new Error(
             `The ${stepLabel} step has not been completed by the assigned approver yet. Confirm to proceed on this step only.`
@@ -277,7 +303,9 @@ export const resolveRegularizationWorkflowAction = async ({
         assignedApproverId &&
         String(assignedApproverId) === String(reviewerEmployeeId);
 
-    const hrEarlyOverride = earlyConfirmNeeded && confirmEarlyApproval && isHrEmployee(req);
+    const hrEarlyOverride =
+        hrImmediateOverride ||
+        (earlyConfirmNeeded && confirmEarlyApproval && isHrEmployee(req));
 
     const mayAct = Boolean(
         naturalActor || managerTeamOverride || isAssignedApprover || hrEarlyOverride
@@ -331,6 +359,26 @@ export const executeRegularizationWorkflowAction = async ({
         employeeLinked,
         confirmEarlyApproval,
     });
+
+    // Additive: when HR overrides a Manager (or other non-HR) pending step, finalize immediately
+    if (params.overrideLabel === 'HR' && params.approverType && params.approverType !== 'HR') {
+        const actor = req.employee;
+        const performedByName = actor
+            ? [actor.name, actor.lastName].filter(Boolean).join(' ').trim()
+            : 'HR';
+        return hrOverrideFinalizeApproval({
+            approvalInstanceId: approvalInstance._id,
+            action,
+            performedByEmployeeId: params.performedByEmployeeId,
+            performedByName,
+            comments: prefixWorkflowComment(comments, params.overrideLabel),
+            metadata: {
+                regularizationId: regularizationRequest._id,
+                regularizationType: regularizationRequest.regularizationType,
+                overrideRole: params.overrideLabel,
+            },
+        });
+    }
 
     return processApprovalAction({
         approvalInstanceId: approvalInstance._id,

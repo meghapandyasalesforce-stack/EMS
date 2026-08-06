@@ -158,7 +158,7 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
     const pipelineColumns = [
         { key: 'draft', label: 'Draft', statuses: ['Draft', 'PendingApproval'] },
         { key: 'sent', label: 'Sent', statuses: ['Approved', 'Sent'] },
-        { key: 'viewed', label: 'Viewed', statuses: ['Viewed', 'Accepted', 'Declined', 'Expired', 'Cancelled'] },
+        { key: 'viewed', label: 'Viewed / Countered', statuses: ['Viewed', 'Accepted', 'Declined', 'Countered', 'Expired', 'Cancelled'] },
     ].map((col) => ({ ...col, offers: offers.filter((o) => col.statuses.includes(o.status)) }));
 
     return (
@@ -239,13 +239,33 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                                     Submit for approval
                                                 </CmButton>
                                             )}
-                                            {['Approved', 'Draft', 'Sent', 'Viewed'].includes(offer.status) && (
+                                            {['Approved', 'Draft', 'Sent', 'Viewed', 'Countered'].includes(offer.status) && (
                                                 <CmButton
                                                     size="sm"
                                                     disabled={submitting}
                                                     onClick={() => runAction(() => axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/${offer._id}/send`, {}, { withCredentials: true }), offer.status === 'Sent' || offer.status === 'Viewed' ? 'Offer resent' : 'Offer sent')}
                                                 >
                                                     {offer.status === 'Sent' || offer.status === 'Viewed' ? <><FaRedo className="text-xs" /> Resend</> : <><FaPaperPlane className="text-xs" /> Send</>}
+                                                </CmButton>
+                                            )}
+                                            {offer.status === 'Countered' && (
+                                                <CmButton
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={submitting}
+                                                    onClick={() => {
+                                                        const salary = window.prompt('Revised salary', offer.salary || '');
+                                                        if (salary == null) return;
+                                                        runAction(
+                                                            () => axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/${offer._id}/revise`, {
+                                                                salary: Number(salary),
+                                                                notes: 'Revised after candidate counter',
+                                                            }, { withCredentials: true }),
+                                                            'Offer revised — submit for approval'
+                                                        );
+                                                    }}
+                                                >
+                                                    Revise after counter
                                                 </CmButton>
                                             )}
                                             {portalUrl(offer) && (

@@ -8,6 +8,7 @@ import {
     getApprovalInstances,
     getApprovalInstanceById,
     getMyPendingApprovals,
+    getEscalatedApprovalsMetric,
     processApproval,
     initiateApprovalRequest,
     delegateApprovalRequest,
@@ -39,6 +40,9 @@ router.route('/instances/:id')
 router.route('/my-pending')
     .get(isAdminOrHROrExecutiveAuthenticated, getMyPendingApprovals);
 
+router.route('/escalated-count')
+    .get(isAdminOrHROrExecutiveAuthenticated, getEscalatedApprovalsMetric);
+
 router.route('/process/:id')
     .post(isAdminOrHROrExecutiveAuthenticated, processApproval);
 
@@ -55,4 +59,3 @@ router.route('/backfill/attendance-regularization')
     .post(isAdminAuthenticated, backfillAttendanceRegularizationApprovals);
 
 export default router;
-
