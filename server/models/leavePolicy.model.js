@@ -26,6 +26,10 @@ const leavePolicySchema = new mongoose.Schema({
         default: Date.now
     },
     expiryDate: Date,
+    isolateUsageFromPriorPolicies: {
+        type: Boolean,
+        default: false,
+    },
 
     /** Leave cycle — default January to December (calendar year) */
     leaveCycle: {
@@ -146,13 +150,15 @@ const leavePolicySchema = new mongoose.Schema({
                 default: 'daily_salary'
             }
         },
-        // Probation period restrictions
+        // Probation period restrictions (hybrid: tenure + Lifecycle Active/Extended)
         probationRestrictions: {
             enabled: {
                 type: Boolean,
                 default: false
             },
-            minServiceDays: Number, // Minimum days of service before eligible
+            // Days from joiningDate before tenure gate ends (leave-policy clock)
+            minServiceDays: Number,
+            // Total days of this leave type allowed while tenure or Lifecycle probation applies (0 = none)
             maxDaysDuringProbation: Number
         },
         // Notice period restrictions
@@ -211,10 +217,12 @@ const leavePolicySchema = new mongoose.Schema({
     // Applicability rules
     applicableTo: {
         type: String,
-        enum: ['all', 'department', 'role', 'employee', 'custom'],
+        enum: ['all', 'department', 'position', 'role', 'employee', 'custom'],
         default: 'all'
     },
     applicableDepartments: [String],
+    // Matches employee.position (e.g. Intern, Junior) — not jobTitle
+    applicablePositions: [String],
     applicableRoles: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Role'

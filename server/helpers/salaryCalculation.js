@@ -75,6 +75,15 @@ export function computeEarningsFromGross(gross) {
 
 export const PF_WAGE_CAP = 15000;
 
+/** ESI wage ceiling (₹21,000) — applied to statutory ESI wages, not payroll gross. */
+export const ESI_GROSS_WAGE_LIMIT = 21000;
+/** @deprecated Use ESI_GROSS_WAGE_LIMIT — same ₹21,000 statutory-wage ceiling. */
+export const ESI_STATUTORY_WAGE_LIMIT = ESI_GROSS_WAGE_LIMIT;
+
+/** Default ESI contribution rates when salary structure % is not used (fallback path). */
+export const ESI_EMPLOYEE_RATE = 0.0075;
+export const ESI_EMPLOYER_RATE = 0.0325;
+
 export function pfWageFromBasicWage(basicWage) {
     const basic = Math.max(0, Number(basicWage) || 0);
     return Math.min(basic, PF_WAGE_CAP);
@@ -88,4 +97,86 @@ export function employeePfFromBasicWage(basicWage) {
 /** Employer PF contribution: 12% of capped PF wage (rounded). */
 export function employerPfFromBasicWage(basicWage) {
     return Math.round(pfWageFromBasicWage(basicWage) * 0.12);
+}
+
+/**
+ * ESI statutory wages under Code on Social Security wage definition + 50% rule.
+ *
+ * Included (start): Basic + DA + Retaining Allowance.
+ * Excluded (initially): HRA, conveyance/transport, medical, special allowance,
+ * overtime, bonuses, etc. Employer PF/ESI are not part of employee remuneration.
+ *
+ * If excluded > 50% of total remuneration, the excess is added back into wages.
+ *
+ * @param {object} components
+ * @returns {{
+ *   includedWages: number,
+ *   excludedWages: number,
+ *   fiftyPercentCap: number,
+ *   fiftyPercentAddBack: number,
+ *   totalRemuneration: number,
+ *   statutoryWages: number
+ * }}
+ */
+export function computeEsiStatutoryWages(components = {}) {
+    const basicWage = Math.max(0, asNumber(components.basicWage, 0));
+    const dearnessAllowance = Math.max(0, asNumber(components.dearnessAllowance, 0));
+    const retainingAllowance = Math.max(0, asNumber(components.retainingAllowance, 0));
+
+    const houseRentAllowance = Math.max(0, asNumber(components.houseRentAllowance, 0));
+    const transportAllowance = Math.max(0, asNumber(components.transportAllowance, 0));
+    const medicalAllowance = Math.max(0, asNumber(components.medicalAllowance, 0));
+    const specialAllowance = Math.max(0, asNumber(components.specialAllowance, 0));
+    const overtime = Math.max(0, asNumber(components.overtime, 0));
+    const performanceBonus = Math.max(0, asNumber(components.performanceBonus, 0));
+    const projectBonus = Math.max(0, asNumber(components.projectBonus, 0));
+    const attendanceBonus = Math.max(0, asNumber(components.attendanceBonus, 0));
+    const otherExcluded = Math.max(0, asNumber(components.otherExcluded, 0));
+
+    const includedWages = Math.round(basicWage + dearnessAllowance + retainingAllowance);
+    const excludedWages = Math.round(
+        houseRentAllowance +
+            transportAllowance +
+            medicalAllowance +
+            specialAllowance +
+            overtime +
+            performanceBonus +
+            projectBonus +
+            attendanceBonus +
+            otherExcluded
+    );
+
+    const explicitGross = components.gross != null ? asNumber(components.gross, NaN) : NaN;
+    const totalRemuneration = Number.isFinite(explicitGross) && explicitGross >= 0
+        ? Math.round(explicitGross)
+        : Math.round(includedWages + excludedWages);
+
+    const fiftyPercentCap = Math.round(totalRemuneration * 0.5);
+    const fiftyPercentAddBack = Math.max(0, Math.round(excludedWages - fiftyPercentCap));
+    const statutoryWages = Math.max(0, Math.round(includedWages + fiftyPercentAddBack));
+
+    return {
+        includedWages,
+        excludedWages,
+        fiftyPercentCap,
+        fiftyPercentAddBack,
+        totalRemuneration,
+        statutoryWages,
+    };
+}
+
+/**
+ * True when ESI statutory wages are within the ₹21,000 ceiling.
+ * Eligibility uses the Code wage definition (after 50% rule), not payroll gross.
+ */
+export function isEsiEligibleByStatutoryWages(statutoryWages) {
+    return Math.max(0, asNumber(statutoryWages, 0)) <= ESI_GROSS_WAGE_LIMIT;
+}
+
+/**
+ * @deprecated Use {@link isEsiEligibleByStatutoryWages}. Kept for older call sites;
+ * argument is treated as statutory wages (not gross).
+ */
+export function isEsiEligibleByGross(wagesOrGross) {
+    return isEsiEligibleByStatutoryWages(wagesOrGross);
 }

@@ -1,5 +1,11 @@
 import mongoose from "mongoose";
-import { computeSalaryStructureCoreEarnings, computeConfiguredComponent, pfWageFromBasicWage } from '../helpers/salaryCalculation.js';
+import {
+    computeSalaryStructureCoreEarnings,
+    computeConfiguredComponent,
+    computeEsiStatutoryWages,
+    pfWageFromBasicWage,
+    isEsiEligibleByStatutoryWages,
+} from '../helpers/salaryCalculation.js';
 
 const salaryStructureSchema = new mongoose.Schema({
     // Organization reference (multi-tenancy)
@@ -134,6 +140,15 @@ salaryStructureSchema.methods.calculateSalary = function(baseSalary) {
     const gross = Math.max(0, Number(baseSalary) || 0);
     const core = computeSalaryStructureCoreEarnings(this, gross);
     const pfWageBase = pfWageFromBasicWage(core.basicWage);
+    const esiWageInfo = computeEsiStatutoryWages({
+        basicWage: core.basicWage,
+        houseRentAllowance: core.houseRentAllowance,
+        transportAllowance: core.transportAllowance,
+        medicalAllowance: core.medicalAllowance,
+        specialAllowance: core.specialAllowance,
+    });
+    const esiEligible = isEsiEligibleByStatutoryWages(esiWageInfo.statutoryWages);
+    const esiWageBase = esiWageInfo.statutoryWages;
 
     const result = {
         earnings: {
@@ -143,14 +158,19 @@ salaryStructureSchema.methods.calculateSalary = function(baseSalary) {
             medicalAllowance: core.medicalAllowance,
             specialAllowance: core.specialAllowance,
             pfEmployer: computeConfiguredComponent(this.earnings?.pfEmployer, pfWageBase),
-            esiEmployer: computeConfiguredComponent(this.earnings?.esiEmployer, core.basicWage)
+            esiEmployer: esiEligible
+                ? computeConfiguredComponent(this.earnings?.esiEmployer, esiWageBase)
+                : 0
         },
         deductions: {
             pfEmployee: computeConfiguredComponent(this.deductions?.pfEmployee, pfWageBase),
-            esiEmployee: computeConfiguredComponent(this.deductions?.esiEmployee, core.basicWage),
+            esiEmployee: esiEligible
+                ? computeConfiguredComponent(this.deductions?.esiEmployee, esiWageBase)
+                : 0,
             professionalTax: computeConfiguredComponent(this.deductions?.professionalTax, gross),
             incomeTax: 0
         },
+        esiStatutoryWages: esiEligible ? esiWageInfo : { ...esiWageInfo, statutoryWages: 0 },
         totalEarnings: 0,
         totalDeductions: 0,
         netSalary: 0

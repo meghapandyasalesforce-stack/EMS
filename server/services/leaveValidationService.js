@@ -19,6 +19,8 @@ import {
     isLeavePolicyApplicableToEmployee,
     selectApplicableLeavePolicy,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
+import { evaluateLeaveProbationRestriction } from '../helpers/leaveProbationHelper.js';
+import { OnboardingWorkflow } from '../models/onboarding.model.js';
 
 class LeaveValidationService {
     /** Parse YYYY-MM-DD as local calendar date (avoids UTC timezone shifting weekdays). */
@@ -75,15 +77,19 @@ class LeaveValidationService {
                 return { valid: false, errors: ['Invalid start or end date'] };
             }
 
-            // 1. Check probation period restrictions
-            if (leaveTypeConfig.probationRestrictions?.enabled) {
-                const probationCheck = this.checkProbationPeriod(employee, leaveTypeConfig.probationRestrictions);
-                if (!probationCheck.allowed) {
-                    errors.push(probationCheck.reason);
+            if (leaveData.isHalfDay) {
+                const sameCalendarDay =
+                    startDate.getFullYear() === endDate.getFullYear() &&
+                    startDate.getMonth() === endDate.getMonth() &&
+                    startDate.getDate() === endDate.getDate();
+                if (!sameCalendarDay) {
+                    errors.push(
+                        'Half-day leave must be on a single day. Use the same start and end date.'
+                    );
                 }
             }
 
-            // 2. Check notice period restrictions
+            // 1. Check notice period restrictions
             if (leaveTypeConfig.noticePeriodRestrictions?.enabled) {
                 const noticeCheck = this.checkNoticePeriod(startDate, leaveTypeConfig.noticePeriodRestrictions);
                 if (!noticeCheck.allowed) {
@@ -91,7 +97,7 @@ class LeaveValidationService {
                 }
             }
 
-            // 3. Check blackout dates
+            // 2. Check blackout dates
             const blackoutCheck = await this.checkBlackoutDates(
                 startDate, 
                 endDate, 
@@ -103,7 +109,7 @@ class LeaveValidationService {
                 errors.push(blackoutCheck.reason);
             }
 
-            // 4. Check weekends and holidays
+            // 3. Check weekends and holidays
             const calendar = await Calendar.findOne({ 
                 organizationId, 
                 year: startDate.getFullYear() 
@@ -120,12 +126,32 @@ class LeaveValidationService {
                 warnings.push(...dateHandlingCheck.warnings);
             }
 
-            // 5. Calculate duration (used for balance check and min/max)
+            // 4. Calculate duration (used for balance check and min/max)
             let duration = await this.calculateDuration(startDate, endDate, policy.dateHandlingRules, calendar, organizationId);
             const workingDays = dateHandlingCheck.workingDays ?? duration;
 
             if (leaveData.isHalfDay && workingDays > 0) {
                 duration = 0.5;
+            }
+
+            // 5. Probation restrictions (after duration so maxDaysDuringProbation can be enforced)
+            if (leaveTypeConfig.probationRestrictions?.enabled) {
+                const probationCheck = await this.checkProbationPeriod(
+                    employee,
+                    leaveTypeConfig.probationRestrictions,
+                    {
+                        employeeId,
+                        organizationId,
+                        leaveType: normalizedType,
+                        requestedDays: duration,
+                        leaveTypeLabel:
+                            leaveTypeConfig.displayName || normalizedType || 'leave',
+                        excludeLeaveId: leaveData._id || leaveData.leaveId || null,
+                    }
+                );
+                if (!probationCheck.allowed) {
+                    errors.push(probationCheck.reason);
+                }
             }
 
             // 6. Check leave balance (policy year = leave start year; LOP skips balance)
@@ -136,7 +162,8 @@ class LeaveValidationService {
                 duration,
                 leaveData.isHalfDay,
                 organizationId,
-                startDate.getFullYear()
+                startDate.getFullYear(),
+                startDate
             );
             if (!balanceCheck.allowed) {
                 errors.push(balanceCheck.reason);
@@ -389,25 +416,70 @@ class LeaveValidationService {
     }
 
     /**
-     * Check probation period restrictions
+     * Hybrid probation check:
+     * - Tenure: days since joining < minServiceDays
+     * - Lifecycle: Active/Extended onboarding probation (missing workflow ignored)
+     * While either applies, enforce maxDaysDuringProbation total for this leave type.
      */
-    checkProbationPeriod(employee, restrictions) {
-        if (!employee.joiningDate) {
-            return { allowed: false, reason: 'Joining date not set for employee' };
+    async checkProbationPeriod(employee, restrictions, context = {}) {
+        const {
+            employeeId,
+            organizationId,
+            leaveType,
+            requestedDays = 0,
+            leaveTypeLabel = 'leave',
+            excludeLeaveId = null,
+            asOfDate = new Date(),
+        } = context;
+
+        let lifecycleProbationStatus = null;
+        try {
+            const empRef = employeeId || employee?._id;
+            if (organizationId && empRef) {
+                const activeWorkflow = await OnboardingWorkflow.findOne({
+                    organizationId,
+                    employeeId: empRef,
+                    isTemplate: { $ne: true },
+                    'probation.status': { $in: ['Active', 'Extended'] },
+                })
+                    .select('probation.status')
+                    .lean();
+                lifecycleProbationStatus = activeWorkflow?.probation?.status || null;
+            }
+        } catch (err) {
+            logger.warn('Lifecycle probation lookup failed during leave validation', {
+                error: err?.message,
+                employeeId: employeeId || employee?._id,
+                organizationId,
+            });
         }
 
-        const joiningDate = new Date(employee.joiningDate);
-        const today = new Date();
-        const daysSinceJoining = Math.floor((today - joiningDate) / (1000 * 60 * 60 * 24));
-
-        if (daysSinceJoining < restrictions.minServiceDays) {
-            return { 
-                allowed: false, 
-                reason: `Minimum ${restrictions.minServiceDays} days of service required. You have ${daysSinceJoining} days.` 
+        let usedDays = 0;
+        const normalizedType = leaveType ? normalizeLeaveTypeForPolicy(leaveType) : null;
+        if (organizationId && (employeeId || employee?._id) && normalizedType) {
+            const query = {
+                organizationId,
+                employee: employeeId || employee._id,
+                leaveType: { $in: getLeaveTypeVariantsForBalance(normalizedType) },
+                status: { $in: ['pending', 'approved'] },
             };
+            if (excludeLeaveId) {
+                query._id = { $ne: excludeLeaveId };
+            }
+            const existing = await Leave.find(query).select('duration').lean();
+            usedDays = existing.reduce((sum, row) => sum + (Number(row.duration) || 0), 0);
         }
 
-        return { allowed: true };
+        return evaluateLeaveProbationRestriction({
+            joiningDate: employee?.joiningDate,
+            minServiceDays: restrictions?.minServiceDays,
+            maxDaysDuringProbation: restrictions?.maxDaysDuringProbation,
+            lifecycleProbationStatus,
+            usedDays,
+            requestedDays,
+            asOfDate,
+            leaveTypeLabel,
+        });
     }
 
     /**
@@ -514,13 +586,13 @@ class LeaveValidationService {
      * Check leave balance (leaveType should be normalized, e.g. paid not annual)
      * @param {number} [balanceYear] - accrual year for the leave (defaults to current calendar year)
      */
-    async checkLeaveBalance(employeeId, leaveType, requestedDays, isHalfDay, organizationId, balanceYear) {
+    async checkLeaveBalance(employeeId, leaveType, requestedDays, isHalfDay, organizationId, balanceYear, asOfDate = new Date()) {
         try {
             if (!leaveType || String(leaveType).toLowerCase() === 'loss_of_pay') {
                 return { allowed: true, available: null };
             }
             const year = Number.isFinite(balanceYear) ? balanceYear : new Date().getFullYear();
-            const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId);
+            const balance = await leaveBalanceEngine.calculateBalance(employeeId, year, organizationId, { asOfDate });
             if (!balance) return { allowed: true, available: null };
             const typeBalance = balance.balances.find(b => b.leaveType === leaveType);
             if (!typeBalance) return { allowed: true, available: null };

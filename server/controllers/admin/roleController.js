@@ -6,7 +6,17 @@ import logger from '../../helpers/logger.js';
 // Create a new role
 export const createRole = async (req, res) => {
     try {
-        const { name, description, level, permissions, canManageRoles, canAccessReports, canManageSystem, parentRole } = req.body;
+        const {
+            name,
+            description,
+            level,
+            permissions,
+            canManageRoles,
+            canAccessReports,
+            canManageSystem,
+            parentRole,
+            dashboardRoute,
+        } = req.body;
         
         // SECURITY: Get organizationId from authenticated user (multi-tenancy)
         const organizationId = req.organizationId || req.user?.organizationId;
@@ -56,6 +66,7 @@ export const createRole = async (req, res) => {
             canAccessReports: canAccessReports || false,
             canManageSystem: canManageSystem || false,
             parentRole: parentRole || null,
+            dashboardRoute: dashboardRoute || '/dashboard-employee',
             organizationId // SECURITY: Set organizationId for multi-tenancy
         });
 

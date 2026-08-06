@@ -375,6 +375,18 @@ export const projectValidations = {
  * Role validations
  */
 export const roleValidations = {
+    dashboardRoute: body('dashboardRoute')
+        .optional()
+        .isIn([
+            '/dashboard-admin',
+            '/dashboard-employee',
+            '/dashboard-hr',
+            '/dashboard-manager',
+            '/dashboard-finance',
+            '/dashboard-administration',
+            '/organization/dashboard'
+        ])
+        .withMessage('Invalid dashboard route'),
     create: [
         body('name')
             .trim()
@@ -389,6 +401,18 @@ export const roleValidations = {
         body('permissions')
             .optional()
             .isArray().withMessage('Permissions must be an array'),
+        body('dashboardRoute')
+            .optional()
+            .isIn([
+                '/dashboard-admin',
+                '/dashboard-employee',
+                '/dashboard-hr',
+                '/dashboard-manager',
+                '/dashboard-finance',
+                '/dashboard-administration',
+                '/organization/dashboard'
+            ])
+            .withMessage('Invalid dashboard route'),
         handleValidationErrors
     ],
     update: [
@@ -406,6 +430,18 @@ export const roleValidations = {
         body('permissions')
             .optional()
             .isArray().withMessage('Permissions must be an array'),
+        body('dashboardRoute')
+            .optional()
+            .isIn([
+                '/dashboard-admin',
+                '/dashboard-employee',
+                '/dashboard-hr',
+                '/dashboard-manager',
+                '/dashboard-finance',
+                '/dashboard-administration',
+                '/organization/dashboard'
+            ])
+            .withMessage('Invalid dashboard route'),
         handleValidationErrors
     ],
     assign: [

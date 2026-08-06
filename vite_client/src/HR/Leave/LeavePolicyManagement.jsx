@@ -2,6 +2,24 @@ import React, { useState, useEffect } from 'react';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
 
+/** Matches employee.position enum (not jobTitle). */
+const EMPLOYEE_POSITION_OPTIONS = [
+    'Intern',
+    'Junior',
+    'Mid-Level',
+    'Senior',
+    'Lead',
+    'Supervisor',
+    'Manager',
+    'Director',
+    'Executive',
+    'VP',
+    'CTO',
+    'CFO',
+    'CEO',
+    'Developer',
+];
+
 const DEFAULT_LEAVE_TYPE = {
     enabled: true,
     type: 'casual',
@@ -56,6 +74,15 @@ const mapLeaveTypeToForm = (leaveType) => {
     lt.uiAnnualAmount = Number(lt.accrual?.maxAccrual) || 0;
     const monthly = Number(lt.accrual?.amount) || Number(lt.maxDaysPerMonth) || 0;
     lt.uiMonthlyEntitlement = monthly > 0 ? monthly : needsMonthlyEntitlement(lt) ? '' : 0;
+    lt.probationRestrictions = {
+        enabled: Boolean(lt.probationRestrictions?.enabled),
+        minServiceDays: Number(lt.probationRestrictions?.minServiceDays) || 0,
+        maxDaysDuringProbation: Number(lt.probationRestrictions?.maxDaysDuringProbation) || 0,
+    };
+    lt.noticePeriodRestrictions = {
+        enabled: Boolean(lt.noticePeriodRestrictions?.enabled),
+        minNoticeDays: Number(lt.noticePeriodRestrictions?.minNoticeDays) || 0,
+    };
     return lt;
 };
 
@@ -110,9 +137,11 @@ const emptyPolicyForm = () => ({
     description: '',
     effectiveDate: new Date().toISOString().split('T')[0],
     expiryDate: '',
+    isolateUsageFromPriorPolicies: false,
     isActive: true,
     applicableTo: 'all',
     applicableDepartments: [],
+    applicablePositions: [],
     applicableRoles: [],
     applicableEmployees: [],
     leaveTypes: [
@@ -139,6 +168,9 @@ const mapPolicyToForm = (policy) => ({
     applicableDepartments: (policy?.applicableDepartments || [])
         .map((d) => String(d || '').trim())
         .filter(Boolean),
+    applicablePositions: (policy?.applicablePositions || [])
+        .map((p) => String(p || '').trim())
+        .filter(Boolean),
     applicableRoles: (policy?.applicableRoles || []).map(toIdString).filter(Boolean),
     applicableEmployees: (policy?.applicableEmployees || []).map(toIdString).filter(Boolean),
     leaveTypes: (policy?.leaveTypes || []).map(mapLeaveTypeToForm),
@@ -153,6 +185,10 @@ const mapFormToApi = (formData) => {
         applicableDepartments:
             applicableTo === 'department'
                 ? [...new Set((formData.applicableDepartments || []).map((d) => String(d).trim()).filter(Boolean))]
+                : [],
+        applicablePositions:
+            applicableTo === 'position'
+                ? [...new Set((formData.applicablePositions || []).map((p) => String(p).trim()).filter(Boolean))]
                 : [],
         applicableRoles:
             applicableTo === 'role'
@@ -174,6 +210,9 @@ const validateApplicabilityClient = (formData) => {
     if (applicableTo === 'department' && !(formData.applicableDepartments || []).length) {
         return 'Select at least one department for this policy.';
     }
+    if (applicableTo === 'position' && !(formData.applicablePositions || []).length) {
+        return 'Select at least one position for this policy.';
+    }
     if (applicableTo === 'role' && !(formData.applicableRoles || []).length) {
         return 'Select at least one role for this policy.';
     }
@@ -189,6 +228,12 @@ const formatApplicabilitySummary = (policy) => {
     if (applicableTo === 'department') {
         const depts = policy.applicableDepartments || [];
         return depts.length ? `Dept: ${depts.join(', ')}` : 'Department (none selected)';
+    }
+    if (applicableTo === 'position') {
+        const positions = policy.applicablePositions || [];
+        return positions.length
+            ? `Position: ${positions.join(', ')}`
+            : 'Position (none selected)';
     }
     if (applicableTo === 'role') {
         const roles = (policy.applicableRoles || []).map((r) =>
@@ -603,11 +648,47 @@ const LeavePolicyManagement = () => {
                             >
                                 <option value="all">All Employees</option>
                                 <option value="department">Department</option>
+                                <option value="position">Position</option>
                                 <option value="role">Role</option>
                                 <option value="employee">Specific Employees</option>
                             </select>
                         </div>
                     </div>
+
+                    {formData.applicableTo === 'position' && (
+                        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+                            <label className="block text-sm font-medium mb-1">
+                                Positions *
+                            </label>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Policy applies to employees whose position field matches
+                                (e.g. Intern). This is not the job title.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white p-3">
+                                {EMPLOYEE_POSITION_OPTIONS.map((pos) => (
+                                    <label
+                                        key={pos}
+                                        className="flex items-center gap-2 cursor-pointer text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.applicablePositions.includes(pos)}
+                                            onChange={() =>
+                                                toggleListValue('applicablePositions', pos)
+                                            }
+                                            className="rounded"
+                                        />
+                                        <span>{pos}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            {formData.applicablePositions.length > 0 && (
+                                <p className="mt-2 text-xs text-slate-600">
+                                    Selected: {formData.applicablePositions.join(', ')}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {formData.applicableTo === 'department' && (
                         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
@@ -816,6 +897,32 @@ const LeavePolicyManagement = () => {
                                 Optional. Set when replacing a policy mid-year (day before the new policy starts).
                             </p>
                         </div>
+                    </div>
+
+                    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+                        <label className="flex items-start gap-3 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(formData.isolateUsageFromPriorPolicies)}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        isolateUsageFromPriorPolicies: e.target.checked,
+                                    })
+                                }
+                                className="mt-1 rounded"
+                            />
+                            <span>
+                                <span className="block font-medium text-slate-800">
+                                    Reset usage from this policy&apos;s effective date
+                                </span>
+                                <span className="mt-1 block text-xs text-slate-500">
+                                    Leave used before this policy starts will stay in history but will
+                                    not reduce balances under this policy. Unused balance still carries
+                                    into the new policy.
+                                </span>
+                            </span>
+                        </label>
                     </div>
 
                     <div className="mb-4">
@@ -1038,6 +1145,89 @@ const LeavePolicyManagement = () => {
                                         Notice Period
                                     </label>
                                 </div>
+
+                                {leaveType.probationRestrictions?.enabled && (
+                                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 space-y-3">
+                                        <p className="text-xs text-amber-900">
+                                            Restricts this leave type until the employee completes the
+                                            minimum service days, and while Lifecycle probation is
+                                            Active/Extended (extensions keep the limit). Employees
+                                            without onboarding probation use the day count only.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">
+                                                    Min service days
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={leaveType.probationRestrictions?.minServiceDays ?? 0}
+                                                    onChange={(e) =>
+                                                        updateLeaveType(
+                                                            index,
+                                                            'probationRestrictions.minServiceDays',
+                                                            Math.max(0, parseInt(e.target.value, 10) || 0)
+                                                        )
+                                                    }
+                                                    className="w-full border rounded px-3 py-2 text-sm"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Tenure gate from joining date (e.g. 180).
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">
+                                                    Max days during probation
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={leaveType.probationRestrictions?.maxDaysDuringProbation ?? 0}
+                                                    onChange={(e) =>
+                                                        updateLeaveType(
+                                                            index,
+                                                            'probationRestrictions.maxDaysDuringProbation',
+                                                            Math.max(0, parseFloat(e.target.value) || 0)
+                                                        )
+                                                    }
+                                                    className="w-full border rounded px-3 py-2 text-sm"
+                                                />
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Total for this leave type while restricted (0 = none).
+                                                    Not a monthly limit.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {leaveType.noticePeriodRestrictions?.enabled && (
+                                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                                        <label className="block text-sm font-medium mb-1">
+                                            Min notice days
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={leaveType.noticePeriodRestrictions?.minNoticeDays ?? 0}
+                                            onChange={(e) =>
+                                                updateLeaveType(
+                                                    index,
+                                                    'noticePeriodRestrictions.minNoticeDays',
+                                                    Math.max(0, parseInt(e.target.value, 10) || 0)
+                                                )
+                                            }
+                                            className="w-full border rounded px-3 py-2 text-sm max-w-xs"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Leave start must be at least this many days from today.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

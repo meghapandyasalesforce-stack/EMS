@@ -3,6 +3,16 @@ import { FiPlus, FiEdit, FiTrash2, FiUsers, FiShield, FiChevronDown, FiChevronRi
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 
+const DASHBOARD_ROUTE_OPTIONS = [
+  { value: '/dashboard-employee', label: 'Employee Dashboard' },
+  { value: '/dashboard-manager', label: 'Manager Dashboard' },
+  { value: '/dashboard-hr', label: 'HR Dashboard' },
+  { value: '/dashboard-finance', label: 'Finance Dashboard' },
+  { value: '/dashboard-administration', label: 'Administration Dashboard' },
+  { value: '/dashboard-admin', label: 'Admin Dashboard' },
+  { value: '/organization/dashboard', label: 'Organization Dashboard' }
+];
+
 const RoleHierarchy = () => {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +30,7 @@ const RoleHierarchy = () => {
     name: '',
     description: '',
     level: 1,
+    dashboardRoute: '/dashboard-employee',
     permissions: [],
     canManageRoles: false,
     canAccessReports: false,
@@ -146,6 +157,7 @@ const RoleHierarchy = () => {
       name: '',
       description: '',
       level: 1,
+      dashboardRoute: '/dashboard-employee',
       permissions: [],
       canManageRoles: false,
       canAccessReports: false,
@@ -161,6 +173,7 @@ const RoleHierarchy = () => {
       name: role.name,
       description: role.description,
       level: role.level,
+      dashboardRoute: role.dashboardRoute || '/dashboard-employee',
       permissions: role.permissions || [],
       canManageRoles: role.canManageRoles || false,
       canAccessReports: role.canAccessReports || false,
@@ -206,6 +219,9 @@ const RoleHierarchy = () => {
                 <h3 className="font-bold text-gray-900 text-xl mb-1 truncate">{role.name}</h3>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
                   <span className="px-2 py-1 bg-gray-100 rounded-lg font-medium">Level {role.level}</span>
+                  <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-medium">
+                    {DASHBOARD_ROUTE_OPTIONS.find((opt) => opt.value === role.dashboardRoute)?.label || role.dashboardRoute || 'Employee Dashboard'}
+                  </span>
                   <span className="px-2 py-1 bg-theme-secondary/10 text-theme-secondary rounded-lg font-medium">{role.permissions?.length || 0} permissions</span>
                 </div>
                 {role.description && (
@@ -556,6 +572,26 @@ const RoleModal = ({ title, formData, setFormData, onSubmit, onClose, roles }) =
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Dashboard Route
+            </label>
+            <select
+              value={formData.dashboardRoute}
+              onChange={(e) => setFormData({ ...formData, dashboardRoute: e.target.value })}
+              className="w-full p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary transition-all duration-200 text-lg"
+            >
+              {DASHBOARD_ROUTE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-sm text-gray-500">
+              Employees assigned to this role will prefer this dashboard after login.
+            </p>
           </div>
 
           {/* Special Permissions */}

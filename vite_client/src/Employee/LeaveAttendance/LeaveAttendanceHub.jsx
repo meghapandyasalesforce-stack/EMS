@@ -7,7 +7,7 @@ import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
 import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
-import { getLeaveTypeDisplayName, getLeaveDisplayLabel, getLeaveWidgetStats, getLeaveTypeCards } from '../../constants/leaveConstants';
+import { getLeaveTypeDisplayName, getLeaveDisplayLabel, getLeaveWidgetStats, getLeaveTypeCards, formatLeaveDurationDisplay, isHalfDayLeaveRecord } from '../../constants/leaveConstants';
 import WfhRequestPanel from '../Wfh/WfhRequestPanel';
 
 const toDateInput = (d) => {
@@ -317,16 +317,25 @@ const LeaveAttendanceHub = () => {
     return (leaveState.myLeaves || [])
       .map((raw) => raw?.leave || raw)
       .filter(Boolean)
-      .map((leave) => ({
-        id: leave._id,
-        type: leave.leaveType || 'unknown',
-        startDate: leave.startDate ? new Date(leave.startDate) : null,
-        endDate: leave.endDate ? new Date(leave.endDate) : null,
-        duration: Number(leave.duration || 0),
-        status: String(leave.status || 'pending').toLowerCase(),
-        approvalStage: leave.approvalStage || '',
-        displayStatus: getLeaveDisplayStatus(leave),
-      }));
+      .map((leave) => {
+        const startDate = leave.startDate ? new Date(leave.startDate) : null;
+        let endDate = leave.endDate ? new Date(leave.endDate) : null;
+        const halfDay = Boolean(leave.isHalfDay) || isHalfDayLeaveRecord(leave);
+        if (halfDay && startDate) {
+          endDate = new Date(startDate);
+        }
+        return {
+          id: leave._id,
+          type: leave.leaveType || 'unknown',
+          startDate,
+          endDate,
+          duration: Number(leave.duration || 0),
+          durationLabel: formatLeaveDurationDisplay(leave),
+          status: String(leave.status || 'pending').toLowerCase(),
+          approvalStage: leave.approvalStage || '',
+          displayStatus: getLeaveDisplayStatus(leave),
+        };
+      });
   }, [leaveState.myLeaves]);
 
   const sessionsByDate = useMemo(() => {
@@ -956,7 +965,7 @@ const LeaveAttendanceHub = () => {
                         </div>
                         <div className="rounded-lg bg-[#F8FAFC] px-2.5 py-2 col-span-2">
                           <p className="text-[11px] text-[#64748B]">Days</p>
-                          <p className="mt-0.5 font-semibold text-[#1E293B]">{row.duration}</p>
+                          <p className="mt-0.5 font-semibold text-[#1E293B]">{row.durationLabel}</p>
                         </div>
                       </div>
                     </div>
@@ -983,7 +992,7 @@ const LeaveAttendanceHub = () => {
                           <td className="px-4 py-3">{getLeaveDisplayLabel()}</td>
                           <td className="px-4 py-3">{row.startDate ? row.startDate.toLocaleDateString() : '--'}</td>
                           <td className="px-4 py-3">{row.endDate ? row.endDate.toLocaleDateString() : '--'}</td>
-                          <td className="px-4 py-3">{row.duration}</td>
+                          <td className="px-4 py-3">{row.durationLabel}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${leaveStatusPill(row.displayStatus)}`}>
                               {row.displayStatus}
