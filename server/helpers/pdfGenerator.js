@@ -569,9 +569,9 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
         doc.text('Earning Head', margin + 2, yPos + 5.5);
-        doc.text(period, margin + colW1 + 2, yPos + 5.5);
+        doc.text('INR', margin + colW1 + colW2 - 2, yPos + 5.5, { align: 'right' });
         doc.text('Deduction Head', margin + leftHalf + 2, yPos + 5.5);
-        doc.text(period, margin + leftHalf + colW3 + 2, yPos + 5.5);
+        doc.text('INR', margin + leftHalf + colW3 + colW4 - 2, yPos + 5.5, { align: 'right' });
         yPos += 8;
         doc.setFont('helvetica', 'normal');
         doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
