@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import axios from '../utils/axios';
 import { PUBLIC_LIFECYCLE_ENDPOINT } from '../utils/constant';
 import OfferLetterHtmlPreview from '../components/recruitment/OfferLetterHtmlPreview';
+import { CmButton } from '../components/recruitment/atsUi';
 
 const OfferCandidatePortal = () => {
     const { token } = useParams();
@@ -66,25 +67,37 @@ const OfferCandidatePortal = () => {
 
     if (!offer) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
-                <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-sm">
-                    <FaTimesCircle className="mx-auto text-4xl text-red-400" />
-                    <h1 className="mt-4 text-xl font-semibold text-gray-800">Offer unavailable</h1>
-                    <p className="mt-2 text-sm text-gray-500">This link may have expired or already been used.</p>
+            <div className="cm-hrms ats-ui ats-public-shell flex min-h-screen items-center justify-center p-6">
+                <div className="cm-card max-w-md text-center">
+                    <div
+                        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl"
+                        style={{ background: 'rgba(229,62,62,0.12)', color: 'var(--ats-error)' }}
+                    >
+                        <FaTimesCircle />
+                    </div>
+                    <h1 className="mt-4 text-xl font-semibold" style={{ color: 'var(--ats-secondary)' }}>Offer unavailable</h1>
+                    <p className="mt-2 text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>This link may have expired or already been used.</p>
                 </div>
             </div>
         );
     }
 
     if (responded) {
+        const toneBg = responded === 'accept' ? 'rgba(28,202,155,0.15)' : 'rgba(255,127,80,0.15)';
+        const toneColor = responded === 'accept' ? '#006c51' : '#c45a2a';
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
-                <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-sm">
-                    <FaCheckCircle className={`mx-auto text-4xl ${responded === 'accept' ? 'text-emerald-500' : 'text-amber-500'}`} />
-                    <h1 className="mt-4 text-xl font-semibold text-gray-800">
+            <div className="cm-hrms ats-ui ats-public-shell flex min-h-screen items-center justify-center p-6">
+                <div className="cm-card max-w-md text-center">
+                    <div
+                        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl"
+                        style={{ background: toneBg, color: toneColor }}
+                    >
+                        <FaCheckCircle />
+                    </div>
+                    <h1 className="mt-4 text-xl font-semibold" style={{ color: 'var(--ats-secondary)' }}>
                         {responded === 'accept' ? 'Offer accepted' : responded === 'counter' ? 'Counter-offer sent' : 'Offer declined'}
                     </h1>
-                    <p className="mt-2 text-sm text-gray-500">Thank you. HR has been notified of your response.</p>
+                    <p className="mt-2 text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>Thank you. HR has been notified of your response.</p>
                 </div>
             </div>
         );
@@ -95,30 +108,32 @@ const OfferCandidatePortal = () => {
         : 'Candidate';
 
     return (
-        <div className="min-h-screen bg-gray-50 py-10 px-4">
-            <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm sm:p-8">
-                <div className="mb-6 border-b pb-4">
-                    <p className="text-sm text-gray-500">Candidate portal</p>
-                    <h1 className="text-2xl font-bold text-gray-900">Offer Letter — {offer.position}</h1>
-                    <p className="mt-1 text-sm text-gray-600">For {candidateName}</p>
+        <div className="cm-hrms ats-ui ats-public-shell">
+            <header className="ats-public-header">
+                <div className="ats-public-header__inner">
+                    <p className="ats-eyebrow">Candidate portal</p>
+                    <h1 className="ats-page-title">Offer Letter — {offer.position}</h1>
+                    <p className="ats-page-subtitle">For {candidateName}</p>
                 </div>
+            </header>
 
-                <div className="mb-6 grid gap-3 rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:grid-cols-3">
-                    <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Annual CTC</p>
-                        <p className="mt-1 text-sm font-semibold text-gray-900">
+            <main className="ats-public-main space-y-6">
+                <div className="ats-stat-grid">
+                    <div className="cm-card !p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(15,45,38,0.45)' }}>Annual CTC</p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>
                             {offer.salary ? `Rs ${Number(offer.salary).toLocaleString('en-IN')}` : '—'}
                         </p>
                     </div>
-                    <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Joining date</p>
-                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                    <div className="cm-card !p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(15,45,38,0.45)' }}>Joining date</p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>
                             {offer.startDate ? new Date(offer.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                         </p>
                     </div>
-                    <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Valid until</p>
-                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                    <div className="cm-card !p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(15,45,38,0.45)' }}>Valid until</p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>
                             {offer.expiryDate ? new Date(offer.expiryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                         </p>
                     </div>
@@ -129,79 +144,64 @@ const OfferCandidatePortal = () => {
                         href={offer.pdfUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mb-6 inline-flex items-center gap-2 rounded-lg border border-theme-primary/30 px-4 py-2 text-sm font-medium text-theme-primary hover:bg-theme-primary/5"
+                        className="ats-link inline-flex items-center gap-2"
                     >
                         <FaFilePdf /> View / Download PDF
                     </a>
                 )}
 
                 {offer.bodyHtml?.trim() && offer.templateType !== 'pdf' && (
-                    <div className="mb-6 rounded-xl border bg-gray-50/60 p-5">
+                    <div className="cm-card">
                         <OfferLetterHtmlPreview html={offer.bodyHtml} />
                     </div>
                 )}
 
-                <div className="mt-2 space-y-4 rounded-xl border p-5">
-                    <h2 className="font-semibold text-gray-800">Your response</h2>
-                    <label className="block text-sm text-gray-600">
-                        Comments (optional)
+                <div className="cm-card space-y-4">
+                    <h2 className="cm-title-sm">Your response</h2>
+                    <label className="block">
+                        <span className="ats-form-label">Comments (optional)</span>
                         <textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                            className="cm-input w-full !rounded-lg"
                             placeholder="Any questions or notes for HR"
                         />
                     </label>
-                    <label className="block text-sm text-gray-600">
-                        Type your full name to accept
+                    <label className="block">
+                        <span className="ats-form-label">Type your full name to accept</span>
                         <input
                             type="text"
                             value={acceptedName}
                             onChange={(e) => setAcceptedName(e.target.value)}
-                            className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                            className="cm-input w-full"
                             placeholder={candidateName}
                         />
                     </label>
-                    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-                        <p className="text-sm font-semibold text-amber-900">Counter offer (optional)</p>
-                        <label className="block text-sm text-gray-700">
-                            Proposed CTC
-                            <input type="number" className="mt-1 w-full rounded-lg border px-3 py-2" value={counterSalary} onChange={(e) => setCounterSalary(e.target.value)} />
+                    <div className="space-y-3 rounded-xl p-4" style={{ background: 'rgba(255,127,80,0.08)', border: '1px solid rgba(255,127,80,0.25)' }}>
+                        <p className="text-sm font-semibold" style={{ color: '#c45a2a' }}>Counter offer (optional)</p>
+                        <label className="block">
+                            <span className="ats-form-label">Proposed CTC</span>
+                            <input type="number" className="cm-input w-full" value={counterSalary} onChange={(e) => setCounterSalary(e.target.value)} />
                         </label>
-                        <label className="block text-sm text-gray-700">
-                            Preferred joining date
-                            <input type="date" className="mt-1 w-full rounded-lg border px-3 py-2" value={counterStartDate} onChange={(e) => setCounterStartDate(e.target.value)} />
+                        <label className="block">
+                            <span className="ats-form-label">Preferred joining date</span>
+                            <input type="date" className="cm-input w-full" value={counterStartDate} onChange={(e) => setCounterStartDate(e.target.value)} />
                         </label>
                     </div>
                     <div className="flex flex-wrap gap-3 pt-2">
-                        <button
-                            type="button"
-                            disabled={submitting}
-                            onClick={() => respond('accept')}
-                            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                        >
+                        <CmButton type="button" disabled={submitting} onClick={() => respond('accept')}>
                             Accept offer
-                        </button>
-                        <button
-                            type="button"
-                            disabled={submitting}
-                            onClick={() => respond('counter')}
-                            className="rounded-lg border border-amber-300 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
-                        >
+                        </CmButton>
+                        <CmButton type="button" variant="tertiary" disabled={submitting} onClick={() => respond('counter')}>
                             Submit counter-offer
-                        </button>
-                        <button
-                            type="button"
-                            disabled={submitting}
-                            onClick={() => respond('decline')}
-                            className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                        >
+                        </CmButton>
+                        <CmButton type="button" variant="outline" disabled={submitting} onClick={() => respond('decline')}>
                             Decline offer
-                        </button>
+                        </CmButton>
                     </div>
                 </div>
-            </div>
+            </main>
         </div>
     );
 };

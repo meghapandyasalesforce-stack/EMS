@@ -22,8 +22,8 @@ export const JOB_FORM_POSITIONS = [
 
 export const JOB_FORM_LOCATIONS = ['Remote', 'Hybrid', 'On-site', 'Work From Home', 'Jaipur', 'Delhi', 'Mumbai', 'Bengaluru', 'Hyderabad', 'Pune', 'Chennai'];
 
-const selectClass = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-theme-secondary focus:ring-2 focus:ring-theme-secondary/20';
-const inputClass = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-gray-400 focus:border-theme-secondary focus:ring-2 focus:ring-theme-secondary/20';
+const selectClass = 'cm-select w-full';
+const inputClass = 'cm-input w-full';
 
 /** Dropdown with an Other option that reveals a manual text field */
 export const SelectWithOther = ({
@@ -39,7 +39,7 @@ export const SelectWithOther = ({
     const isOther = selectValue === OTHER_OPTION;
     return (
         <label className="block text-sm">
-            <span className="mb-1 block font-medium text-gray-700">
+            <span className="ats-form-label">
                 {label}{required ? ' *' : ''}
             </span>
             <select

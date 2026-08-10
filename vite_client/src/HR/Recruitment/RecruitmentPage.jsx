@@ -1,11 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FaPlus, FaBriefcase, FaUsers, FaFileContract, FaColumns, FaHome, FaClipboardList, FaCalendarAlt, FaEnvelopeOpenText, FaCog } from 'react-icons/fa';
+import { FaPlus, FaBriefcase, FaUsers, FaFileContract, FaColumns, FaHome, FaClipboardList, FaCalendarAlt, FaEnvelopeOpenText, FaCog, FaSearch, FaTimes, FaExternalLinkAlt, FaEdit, FaRegBookmark } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import OfferTemplateManager from '../../components/recruitment/OfferTemplateManager';
 import { normalizeResumeScreening, getScreeningBadgeClasses, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
+import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
+
+const postedAgoLabel = (dateVal) => {
+    if (!dateVal) return 'Posted recently';
+    const t = new Date(dateVal).getTime();
+    if (Number.isNaN(t)) return 'Posted recently';
+    const days = Math.floor((Date.now() - t) / 86400000);
+    if (days <= 0) return 'Posted today';
+    if (days === 1) return 'Posted 1d ago';
+    if (days < 7) return `Posted ${days}d ago`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 5) return `Posted ${weeks}w ago`;
+    const months = Math.floor(days / 30);
+    return months <= 1 ? 'Posted 1mo ago' : `Posted ${months}mo ago`;
+};
+
+const jobExcerpt = (text = '', max = 120) => {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t) return 'No description yet — open to review full posting details.';
+    return t.length > max ? `${t.slice(0, max).trim()}…` : t;
+};
 
 const RecruitmentPage = () => {
     const navigate = useNavigate();
@@ -74,7 +95,9 @@ const RecruitmentPage = () => {
                 const response = await axios.get('/v1/admin/recruitment/jobs', { withCredentials: true });
                 const jobs = response.data?.data || [];
                 setJobPostings(jobs);
-                if (jobs[0]?.organizationId) setOrgId(jobs[0].organizationId);
+                const rawOrg = jobs[0]?.organizationId;
+                const resolvedOrg = typeof rawOrg === 'object' && rawOrg ? (rawOrg._id || rawOrg.id) : rawOrg;
+                if (resolvedOrg) setOrgId(String(resolvedOrg));
             } else if (activeTab === 'candidates') {
                 const params = { limit: 100 };
                 if (candFilter.screeningStatus) params.screeningStatus = candFilter.screeningStatus;
@@ -208,198 +231,242 @@ const RecruitmentPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4 transition-all duration-300">
-            <div className="w-full">
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Recruitment & ATS</h1>
-                        <p className="text-gray-600 mt-1">Manage job postings and candidates</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => navigate('/recruitment/workspace')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                            <FaHome className="w-4 h-4" /> Workspace
-                        </button>
-                        <button type="button" onClick={() => navigate('/recruitment/pipeline')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                            <FaColumns className="w-4 h-4" /> Pipeline
-                        </button>
-                        <button type="button" onClick={() => navigate('/recruitment/requisitions')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                            <FaClipboardList className="w-4 h-4" /> Requisitions
-                        </button>
-                        <button type="button" onClick={() => navigate('/recruitment/calendar')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                            <FaCalendarAlt className="w-4 h-4" /> Calendar
-                        </button>
-                        <button type="button" onClick={() => navigate('/recruitment/inbox')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                            <FaEnvelopeOpenText className="w-4 h-4" /> Resume Inbox
-                        </button>
-                        <button type="button" onClick={openScreeningSettings} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                            <FaCog className="w-4 h-4" /> Screening Settings
-                        </button>
-                        {orgId && (
-                            <a href={`/careers/${orgId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white">
-                                Career Portal
+        <AtsPage>
+            <AtsPageHeader
+                eyebrow="Recruitment"
+                title="Recruitment & ATS"
+                subtitle="Manage job postings and candidates"
+                actions={
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        {orgId ? (
+                            <a href={`/careers/${orgId}`} target="_blank" rel="noreferrer" className="ats-module-nav__btn">
+                                Career Portal <FaExternalLinkAlt className="h-3 w-3 opacity-70" />
                             </a>
+                        ) : (
+                            <button
+                                type="button"
+                                className="ats-module-nav__btn"
+                                onClick={() => toast.info('Organization ID not available yet — open a job posting first or refresh.')}
+                            >
+                                Career Portal
+                            </button>
                         )}
-                        <button type="button" onClick={() => navigate('/recruitment/create-job')} className="bg-theme-secondary text-white px-4 py-2 rounded-lg hover:bg-theme-primary transition flex items-center gap-2">
-                            <FaPlus className="w-4 h-4" />
-                            Post New Job
-                        </button>
+                        <Link to="/recruitment/create-job" className="ats-module-nav__btn ats-module-nav__btn--primary">
+                            <FaPlus className="h-3.5 w-3.5" /> Post New Job
+                        </Link>
                     </div>
-                </div>
+                }
+            />
 
+            <div className="ats-module-nav">
+                <div className="ats-module-nav__links">
+                    <Link to="/recruitment/workspace" className="ats-module-nav__btn">
+                        <FaHome className="h-3.5 w-3.5" /> Workspace
+                    </Link>
+                    <Link to="/recruitment/pipeline" className="ats-module-nav__btn">
+                        <FaColumns className="h-3.5 w-3.5" /> Pipeline
+                    </Link>
+                    <Link to="/recruitment/requisitions" className="ats-module-nav__btn">
+                        <FaClipboardList className="h-3.5 w-3.5" /> Requisitions
+                    </Link>
+                    <Link to="/recruitment/calendar" className="ats-module-nav__btn">
+                        <FaCalendarAlt className="h-3.5 w-3.5" /> Calendar
+                    </Link>
+                    <Link to="/recruitment/inbox" className="ats-module-nav__btn">
+                        <FaEnvelopeOpenText className="h-3.5 w-3.5" /> Resume Inbox
+                    </Link>
+                    <button type="button" className="ats-module-nav__btn" onClick={openScreeningSettings}>
+                        <FaCog className="h-3.5 w-3.5" /> Screening Settings
+                    </button>
+                </div>
                 {screeningDash && (
-                    <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        {[
-                            { label: 'Approved Candidates', value: screeningDash.approvedCandidates, tone: 'text-emerald-700' },
-                            { label: 'Rejected Candidates', value: screeningDash.rejectedCandidates, tone: 'text-red-700' },
-                            { label: 'Pending Screening', value: screeningDash.pendingScreening, tone: 'text-amber-700' },
-                            { label: 'Average Match Score', value: screeningDash.averageMatchScore != null ? `${screeningDash.averageMatchScore}%` : '—', tone: 'text-gray-800' },
-                            { label: 'Auto-Deleted', value: screeningDash.candidatesDeletedAutomatically, tone: 'text-gray-600' },
-                        ].map((w) => (
-                            <div key={w.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{w.label}</p>
-                                <p className={`mt-1 text-2xl font-semibold ${w.tone}`}>{w.value ?? 0}</p>
-                            </div>
-                        ))}
+                    <div className="ats-module-nav__meta">
+                        <div className="ats-nav-chip">
+                            <span className="ats-nav-chip__label">Open jobs</span>
+                            <span className="ats-nav-chip__value">{jobPostings.length}</span>
+                        </div>
+                        <div className="ats-nav-chip">
+                            <span className="ats-nav-chip__label">Pending screen</span>
+                            <span className="ats-nav-chip__value">{screeningDash.pendingScreening ?? 0}</span>
+                        </div>
+                        <div className="ats-nav-chip">
+                            <span className="ats-nav-chip__label">Avg match</span>
+                            <span className="ats-nav-chip__value">
+                                {screeningDash.averageMatchScore != null ? `${screeningDash.averageMatchScore}%` : '—'}
+                            </span>
+                        </div>
                     </div>
                 )}
+            </div>
 
-                <div className="bg-white rounded-lg shadow-md mb-6">
-                    <div className="flex border-b overflow-x-auto">
-                        <button type="button" onClick={() => setActiveTab('jobs')} className={`px-6 py-3 font-medium ${activeTab === 'jobs' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}>
-                            <FaBriefcase className="inline mr-2" />
-                            Job Postings ({jobPostings.length})
-                        </button>
-                        <button type="button" onClick={() => setActiveTab('candidates')} className={`px-6 py-3 font-medium ${activeTab === 'candidates' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}>
-                            <FaUsers className="inline mr-2" />
-                            Candidates ({candidates.length})
-                        </button>
-                        <button type="button" onClick={() => setActiveTab('offers')} className={`px-6 py-3 font-medium ${activeTab === 'offers' ? 'border-b-2 border-theme-secondary text-theme-secondary' : 'text-gray-600'}`}>
-                            <FaFileContract className="inline mr-2" />
-                            Offer Templates
-                        </button>
-                    </div>
+            {screeningDash && (
+                <div className="ats-kpi-strip">
+                    {[
+                        { label: 'Approved Candidates', value: screeningDash.approvedCandidates },
+                        { label: 'Rejected Candidates', value: screeningDash.rejectedCandidates, tone: 'attention' },
+                        { label: 'Pending Screening', value: screeningDash.pendingScreening, tone: 'attention' },
+                        { label: 'Avg Match Score', value: screeningDash.averageMatchScore != null ? `${screeningDash.averageMatchScore}%` : '—' },
+                        { label: 'Auto-Deleted', value: screeningDash.candidatesDeletedAutomatically },
+                    ].map((w) => (
+                        <div key={w.label} className="cm-stat">
+                            <p className="cm-stat__label">{w.label}</p>
+                            <p className={`cm-stat__value ${w.tone === 'attention' ? 'cm-stat__value--attention' : ''}`}>{w.value ?? 0}</p>
+                        </div>
+                    ))}
                 </div>
+            )}
 
-                {activeTab === 'jobs' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <nav className="ats-tabs" aria-label="Recruitment sections">
+                <button type="button" onClick={() => setActiveTab('jobs')} className={`ats-tab ${activeTab === 'jobs' ? 'ats-tab--active' : ''}`}>
+                    <FaBriefcase className="h-3.5 w-3.5 opacity-80" />
+                    Job Postings
+                    <span className="ats-tab-count">{jobPostings.length}</span>
+                </button>
+                <button type="button" onClick={() => setActiveTab('candidates')} className={`ats-tab ${activeTab === 'candidates' ? 'ats-tab--active' : ''}`}>
+                    <FaUsers className="h-3.5 w-3.5 opacity-80" />
+                    Candidates
+                    <span className="ats-tab-count">{candidates.length}</span>
+                </button>
+                <button type="button" onClick={() => setActiveTab('offers')} className={`ats-tab ${activeTab === 'offers' ? 'ats-tab--active' : ''}`}>
+                    <FaFileContract className="h-3.5 w-3.5 opacity-80" />
+                    Offer Templates
+                </button>
+            </nav>
+
+            {activeTab === 'jobs' ? (
+                jobPostings.length === 0 ? (
+                    <AtsEmpty icon={FaBriefcase} title="No job postings yet" hint="Create your first job posting to start receiving applications." />
+                ) : (
+                    <div className="ats-job-grid">
                         {jobPostings.map((job) => (
-                            <div key={job._id} className="bg-white rounded-lg shadow-md p-4 sm:p-6 hover:shadow-lg transition">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="text-xl font-semibold text-gray-800">{job.jobTitle}</h3>
-                                        <p className="text-gray-600">{job.department} · {job.location}</p>
-                                    </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                        job.status === 'Open' ? 'bg-theme-primary/10 text-theme-primary' :
-                                        job.status === 'Draft' ? 'bg-gray-100 text-gray-800' :
-                                        'bg-red-100 text-red-800'
-                                    }`}>
-                                        {job.status}
-                                    </span>
+                            <div
+                                key={job._id}
+                                role="button"
+                                tabIndex={0}
+                                className="ats-role-card"
+                                onClick={() => navigate(`/recruitment/jobs/${job._id}`)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        navigate(`/recruitment/jobs/${job._id}`);
+                                    }
+                                }}
+                            >
+                                <div className="ats-role-card__head">
+                                    <h4 className="ats-role-card__title">{job.jobTitle}</h4>
+                                    <FaRegBookmark className="ats-role-card__bookmark h-4 w-4" aria-hidden />
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-500">{job.currentApplications || 0} applications</span>
-                                    <button type="button" onClick={() => navigate(`/recruitment/jobs/${job._id}`)} className="text-theme-secondary hover:text-theme-primary font-medium">
-                                        View Details
-                                    </button>
+                                <div className="ats-role-card__tags">
+                                    {job.status && (
+                                        <span className="ats-role-card__tag" style={{ background: 'rgba(28,202,155,0.12)', color: '#006c51' }}>
+                                            {job.status}
+                                        </span>
+                                    )}
+                                    {job.department && <span className="ats-role-card__tag">{job.department}</span>}
+                                    {job.location && <span className="ats-role-card__tag">{job.location}</span>}
+                                </div>
+                                <p className="ats-role-card__desc">{jobExcerpt(job.jobDescription)}</p>
+                                <div className="ats-role-card__footer">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <AtsAvatar name={job.department || job.jobTitle || 'Job'} />
+                                        <span className="truncate text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
+                                            {job.currentApplications || 0} applications
+                                        </span>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-3">
+                                        <span className="ats-role-card__posted">
+                                            {postedAgoLabel(job.postedDate || job.createdAt || job.postedAt)}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="ats-link inline-flex items-center gap-1"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/recruitment/jobs/${job._id}/edit`);
+                                            }}
+                                        >
+                                            <FaEdit className="h-3 w-3" /> Edit
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
-                        {jobPostings.length === 0 && (
-                            <div className="col-span-3 text-center py-8 sm:py-10">
-                                <p className="text-gray-500">No job postings yet. Create your first job posting!</p>
-                            </div>
-                        )}
                     </div>
-                ) : activeTab === 'candidates' ? (
-                    <div className="space-y-4">
-                        <div className="flex flex-wrap gap-2 items-end rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                            <label className="text-sm">
-                                <span className="mb-1 block text-gray-600">Screening</span>
-                                <select
-                                    className="rounded-lg border px-3 py-2 text-sm"
-                                    value={candFilter.screeningStatus}
-                                    onChange={(e) => setCandFilter((p) => ({ ...p, screeningStatus: e.target.value, searchRejected: false }))}
-                                >
-                                    <option value="">All</option>
-                                    <option value="passed">Approved</option>
-                                    <option value="failed">Rejected</option>
-                                    <option value="pending">Pending / Not Screened</option>
-                                </select>
-                            </label>
-                            <label className="text-sm">
-                                <span className="mb-1 block text-gray-600"></span>
-                                {/* <input type="number" className="w-24 rounded-lg border px-3 py-2 text-sm" value={candFilter.matchMin} onChange={(e) => setCandFilter((p) => ({ ...p, matchMin: e.target.value }))} /> */}
-                            </label>
-                            <label className="text-sm">
-                                <span className="mb-1 block text-gray-600"></span>
-                                {/* <input type="number" className="w-24 rounded-lg border px-3 py-2 text-sm" value={candFilter.matchMax} onChange={(e) => setCandFilter((p) => ({ ...p, matchMax: e.target.value }))} /> */}
-                            </label>
-                            <label className="text-sm flex-1 min-w-[160px]">
-                                <span className="mb-1 block text-gray-600">Search</span>
+                )
+            ) : activeTab === 'candidates' ? (
+                <div className="flex flex-col gap-4">
+                    <div className="ats-toolbar cm-card" style={{ padding: '1rem' }}>
+                        <label className="text-sm">
+                            <span className="ats-form-label">Screening</span>
+                            <select
+                                className="cm-select"
+                                value={candFilter.screeningStatus}
+                                onChange={(e) => setCandFilter((p) => ({ ...p, screeningStatus: e.target.value, searchRejected: false }))}
+                            >
+                                <option value="">All</option>
+                                <option value="passed">Approved</option>
+                                <option value="failed">Rejected</option>
+                                <option value="pending">Pending / Not Screened</option>
+                            </select>
+                        </label>
+                        <label className="text-sm flex-1" style={{ minWidth: 200 }}>
+                            <span className="ats-form-label">Search</span>
+                            <div className="cm-search">
+                                <FaSearch className="cm-search__icon h-3.5 w-3.5" />
                                 <input
-                                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                                    className="cm-input"
                                     placeholder="Name, email, phone"
                                     value={candFilter.q}
                                     onChange={(e) => setCandFilter((p) => ({ ...p, q: e.target.value }))}
                                     onKeyDown={(e) => { if (e.key === 'Enter') fetchData(); }}
                                 />
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => setCandFilter((p) => ({ ...p, searchRejected: !p.searchRejected, screeningStatus: '' }))}
-                                className={`rounded-lg border px-3 py-2 text-sm ${candFilter.searchRejected ? 'bg-red-50 border-red-300 text-red-800' : 'bg-white text-gray-700'}`}
-                            >
-                                Rejected only
-                            </button>
-                            <button type="button" onClick={fetchData} className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white">
-                                Apply
-                            </button>
-                        </div>
-                        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                            </div>
+                        </label>
+                        <CmButton
+                            variant={candFilter.searchRejected ? 'tertiary' : 'outline'}
+                            size="sm"
+                            onClick={() => setCandFilter((p) => ({ ...p, searchRejected: !p.searchRejected, screeningStatus: '' }))}
+                        >
+                            Rejected only
+                        </CmButton>
+                        <CmButton size="sm" onClick={fetchData}>Apply</CmButton>
+                    </div>
+                    {candidates.length === 0 ? (
+                        <AtsEmpty icon={FaUsers} title="No candidates yet" hint="Candidates will appear here once they apply to your job postings." />
+                    ) : (
+                        <div className="ats-table-wrap">
                             <div className="overflow-x-auto">
-                                <table className="min-w-[720px] w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
+                                <table className="ats-table">
+                                    <thead>
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Position</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Screening</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Match</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applied</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                            <th>Name</th>
+                                            <th>Position</th>
+                                            <th>Status</th>
+                                            <th>Screening</th>
+                                            <th>Match</th>
+                                            <th>Applied</th>
+                                            <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
+                                    <tbody>
                                         {candidates.map((candidate) => {
                                             const screening = normalizeResumeScreening(candidate.resumeScreening);
                                             return (
                                             <tr key={candidate._id}>
-                                                <td className="px-6 py-4 whitespace-nowrap">{candidate.firstName} {candidate.lastName}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                                <td className="font-semibold">{candidate.firstName} {candidate.lastName}</td>
+                                                <td>
                                                     {(candidate.tags || []).includes('Unassigned')
                                                         || (candidate.jobPostingId?.tags || []).includes('__resume_inbox_holding__')
                                                         || /unassigned/i.test(candidate.jobPostingId?.jobTitle || '')
                                                         ? 'Unassigned'
                                                         : (candidate.jobPostingId?.jobTitle || 'N/A')}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 py-1 rounded-full text-xs ${
-                                                        candidate.status === 'Offer Accepted' ? 'bg-theme-primary/10 text-theme-primary' :
-                                                        'bg-gray-100 text-gray-800'
-                                                    }`}>
-                                                        {candidate.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getScreeningBadgeClasses(screening)}`}>
-                                                        {screening.label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm">{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-gray-600">{new Date(candidate.applicationDate).toLocaleDateString()}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <button type="button" onClick={() => navigate(`/recruitment/candidates/${candidate._id}`)} className="text-theme-secondary hover:text-theme-secondary">
+                                                <td><AtsBadge status={candidate.status}>{candidate.status}</AtsBadge></td>
+                                                <td><AtsBadge status={screening.label}>{screening.label}</AtsBadge></td>
+                                                <td>{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</td>
+                                                <td>{new Date(candidate.applicationDate).toLocaleDateString()}</td>
+                                                <td>
+                                                    <button type="button" onClick={() => navigate(`/recruitment/candidates/${candidate._id}`)} className="ats-link">
                                                         View
                                                     </button>
                                                 </td>
@@ -409,39 +476,39 @@ const RecruitmentPage = () => {
                                     </tbody>
                                 </table>
                             </div>
-                            {candidates.length === 0 && (
-                                <div className="text-center py-8 sm:py-10">
-                                    <p className="text-gray-500">No candidates yet.</p>
-                                </div>
-                            )}
+                            <div className="ats-table-footer">
+                                <span>Showing {candidates.length} of {candidates.length} candidates</span>
+                            </div>
                         </div>
-                    </div>
-                ) : (
-                    <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
-                        <OfferTemplateManager />
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            ) : (
+                <div className="cm-card">
+                    <OfferTemplateManager />
+                </div>
+            )}
 
             {showScreeningSettings && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
-                        <div className="flex items-center justify-between border-b px-5 py-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Resume Screening Settings</h3>
-                            <button type="button" onClick={() => setShowScreeningSettings(false)} className="text-sm text-gray-500 hover:text-gray-800">Close</button>
+                    <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+                        <div className="flex items-center justify-between border-b border-[rgba(15,45,38,0.08)] px-5 py-4">
+                            <h3 className="text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Resume Screening Settings</h3>
+                            <button type="button" onClick={() => setShowScreeningSettings(false)} className="ats-back !mb-0">
+                                <FaTimes className="h-3.5 w-3.5" /> Close
+                            </button>
                         </div>
-                        <div className="flex gap-2 border-b px-5 pt-3">
+                        <div className="flex gap-1 border-b border-[rgba(15,45,38,0.08)] px-5 pt-3">
                             <button
                                 type="button"
                                 onClick={() => setSettingsTab('general')}
-                                className={`border-b-2 px-3 pb-2 text-sm font-medium ${settingsTab === 'general' ? 'border-theme-secondary text-theme-secondary' : 'border-transparent text-gray-600'}`}
+                                className={`ats-tab ${settingsTab === 'general' ? 'ats-tab--active' : ''}`}
                             >
                                 General
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSettingsTab('templates')}
-                                className={`border-b-2 px-3 pb-2 text-sm font-medium ${settingsTab === 'templates' ? 'border-theme-secondary text-theme-secondary' : 'border-transparent text-gray-600'}`}
+                                className={`ats-tab ${settingsTab === 'templates' ? 'ats-tab--active' : ''}`}
                             >
                                 Resume Screening Templates
                             </button>
@@ -454,21 +521,21 @@ const RecruitmentPage = () => {
                                         Enable automatic resume screening
                                     </label>
                                     <label className="block text-sm">
-                                        Default Minimum Match %
-                                        <input type="number" min="0" max="100" className="mt-1 w-full rounded-lg border px-3 py-2" value={screeningSettings.defaultMinimumMatchPercent} onChange={(e) => setScreeningSettings((p) => ({ ...p, defaultMinimumMatchPercent: e.target.value }))} />
+                                        <span className="ats-form-label">Default Minimum Match %</span>
+                                        <input type="number" min="0" max="100" className="cm-input w-full" value={screeningSettings.defaultMinimumMatchPercent} onChange={(e) => setScreeningSettings((p) => ({ ...p, defaultMinimumMatchPercent: e.target.value }))} />
                                     </label>
                                     <label className="block text-sm">
-                                        Retention Period (days)
-                                        <input type="number" min="1" max="365" className="mt-1 w-full rounded-lg border px-3 py-2" value={screeningSettings.retentionDays} onChange={(e) => setScreeningSettings((p) => ({ ...p, retentionDays: e.target.value }))} />
+                                        <span className="ats-form-label">Retention Period (days)</span>
+                                        <input type="number" min="1" max="365" className="cm-input w-full" value={screeningSettings.retentionDays} onChange={(e) => setScreeningSettings((p) => ({ ...p, retentionDays: e.target.value }))} />
                                     </label>
                                     <div className="grid grid-cols-2 gap-3">
                                         <label className="block text-sm">
-                                            Required Keyword Weight
-                                            <input type="number" step="0.1" min="0" className="mt-1 w-full rounded-lg border px-3 py-2" value={screeningSettings.requiredKeywordWeight} onChange={(e) => setScreeningSettings((p) => ({ ...p, requiredKeywordWeight: e.target.value }))} />
+                                            <span className="ats-form-label">Required Keyword Weight</span>
+                                            <input type="number" step="0.1" min="0" className="cm-input w-full" value={screeningSettings.requiredKeywordWeight} onChange={(e) => setScreeningSettings((p) => ({ ...p, requiredKeywordWeight: e.target.value }))} />
                                         </label>
                                         <label className="block text-sm">
-                                            Optional Keyword Weight
-                                            <input type="number" step="0.1" min="0" className="mt-1 w-full rounded-lg border px-3 py-2" value={screeningSettings.optionalKeywordWeight} onChange={(e) => setScreeningSettings((p) => ({ ...p, optionalKeywordWeight: e.target.value }))} />
+                                            <span className="ats-form-label">Optional Keyword Weight</span>
+                                            <input type="number" step="0.1" min="0" className="cm-input w-full" value={screeningSettings.optionalKeywordWeight} onChange={(e) => setScreeningSettings((p) => ({ ...p, optionalKeywordWeight: e.target.value }))} />
                                         </label>
                                     </div>
                                     <label className="flex items-center gap-2 text-sm">
@@ -476,21 +543,21 @@ const RecruitmentPage = () => {
                                         Auto-delete failed candidates after retention period
                                     </label>
                                     <div className="flex justify-end gap-2 pt-2">
-                                        <button type="submit" disabled={savingSettings} className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white disabled:opacity-60">
+                                        <CmButton type="submit" disabled={savingSettings}>
                                             {savingSettings ? 'Saving…' : 'Save Settings'}
-                                        </button>
+                                        </CmButton>
                                     </div>
                                 </form>
                             ) : (
                                 <div className="space-y-5">
-                                    <form onSubmit={saveTemplate} className="space-y-3 rounded-xl border border-teal-100 bg-teal-50/30 p-4">
-                                        <h4 className="text-sm font-semibold text-gray-800">
+                                    <form onSubmit={saveTemplate} className="space-y-3 rounded-2xl p-4" style={{ background: 'rgba(28,202,155,0.06)' }}>
+                                        <h4 className="text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>
                                             {templateForm._id ? 'Edit Template' : 'Create Template'}
                                         </h4>
                                         <label className="block text-sm">
-                                            Template Name
+                                            <span className="ats-form-label">Template Name</span>
                                             <input
-                                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                                className="cm-input w-full"
                                                 value={templateForm.name}
                                                 onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))}
                                                 placeholder="e.g. MERN Developer"
@@ -499,20 +566,20 @@ const RecruitmentPage = () => {
                                         </label>
                                         <div className="grid gap-3 sm:grid-cols-2">
                                             <label className="block text-sm">
-                                                Required Keywords (one per line)
+                                                <span className="ats-form-label">Required Keywords (one per line)</span>
                                                 <textarea
                                                     rows={4}
-                                                    className="mt-1 w-full rounded-lg border px-3 py-2"
+                                                    className="cm-input w-full"
                                                     value={templateForm.requiredKeywords}
                                                     onChange={(e) => setTemplateForm((p) => ({ ...p, requiredKeywords: e.target.value }))}
                                                     placeholder={'React\nNode.js\nMongoDB'}
                                                 />
                                             </label>
                                             <label className="block text-sm">
-                                                Optional Keywords (one per line)
+                                                <span className="ats-form-label">Optional Keywords (one per line)</span>
                                                 <textarea
                                                     rows={4}
-                                                    className="mt-1 w-full rounded-lg border px-3 py-2"
+                                                    className="cm-input w-full"
                                                     value={templateForm.optionalKeywords}
                                                     onChange={(e) => setTemplateForm((p) => ({ ...p, optionalKeywords: e.target.value }))}
                                                     placeholder={'Docker\nAWS'}
@@ -520,12 +587,12 @@ const RecruitmentPage = () => {
                                             </label>
                                         </div>
                                         <label className="block text-sm">
-                                            Minimum Match %
+                                            <span className="ats-form-label">Minimum Match %</span>
                                             <input
                                                 type="number"
                                                 min="0"
                                                 max="100"
-                                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                                className="cm-input w-full"
                                                 value={templateForm.minimumMatchPercent}
                                                 onChange={(e) => setTemplateForm((p) => ({ ...p, minimumMatchPercent: e.target.value }))}
                                             />
@@ -539,42 +606,42 @@ const RecruitmentPage = () => {
                                             Active (available when creating jobs)
                                         </label>
                                         <div className="flex flex-wrap gap-2">
-                                            <button type="submit" disabled={savingTemplate} className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white disabled:opacity-60">
+                                            <CmButton type="submit" size="sm" disabled={savingTemplate}>
                                                 {savingTemplate ? 'Saving…' : (templateForm._id ? 'Update Template' : 'Create Template')}
-                                            </button>
+                                            </CmButton>
                                             {templateForm._id && (
-                                                <button type="button" onClick={resetTemplateForm} className="rounded-lg border px-4 py-2 text-sm">
+                                                <CmButton type="button" size="sm" variant="outline" onClick={resetTemplateForm}>
                                                     Cancel Edit
-                                                </button>
+                                                </CmButton>
                                             )}
                                         </div>
                                     </form>
 
                                     <div>
-                                        <h4 className="mb-2 text-sm font-semibold text-gray-800">Saved Templates ({screeningTemplates.length})</h4>
+                                        <h4 className="mb-2 text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>Saved Templates ({screeningTemplates.length})</h4>
                                         {screeningTemplates.length === 0 ? (
-                                            <p className="text-sm text-gray-500">No templates yet. Create one above (e.g. MERN Developer, Java Developer).</p>
+                                            <p className="text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>No templates yet. Create one above (e.g. MERN Developer, Java Developer).</p>
                                         ) : (
-                                            <ul className="divide-y rounded-xl border border-gray-200">
+                                            <ul className="divide-y rounded-2xl border border-[rgba(15,45,38,0.08)]">
                                                 {screeningTemplates.map((t) => (
                                                     <li key={t._id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                                                         <div className="min-w-0">
-                                                            <p className="font-medium text-gray-900">
+                                                            <p className="font-medium" style={{ color: 'var(--ats-secondary)' }}>
                                                                 {t.name}
-                                                                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${t.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                                <AtsBadge tone={t.isActive ? 'success' : 'neutral'} className="ml-2">
                                                                     {t.isActive ? 'Active' : 'Inactive'}
-                                                                </span>
+                                                                </AtsBadge>
                                                             </p>
-                                                            <p className="truncate text-xs text-gray-500">
+                                                            <p className="truncate text-xs" style={{ color: 'rgba(15,45,38,0.55)' }}>
                                                                 Min {t.minimumMatchPercent ?? 70}% · Required: {(t.requiredKeywords || []).join(', ') || '—'}
                                                             </p>
                                                         </div>
                                                         <div className="flex flex-wrap gap-2">
-                                                            <button type="button" onClick={() => editTemplate(t)} className="rounded-lg border px-3 py-1.5 text-xs">Edit</button>
-                                                            <button type="button" onClick={() => toggleTemplateActive(t)} className="rounded-lg border px-3 py-1.5 text-xs">
+                                                            <CmButton type="button" size="sm" variant="outline" onClick={() => editTemplate(t)}>Edit</CmButton>
+                                                            <CmButton type="button" size="sm" variant="outline" onClick={() => toggleTemplateActive(t)}>
                                                                 {t.isActive ? 'Deactivate' : 'Activate'}
-                                                            </button>
-                                                            <button type="button" onClick={() => deleteTemplate(t)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-700">Delete</button>
+                                                            </CmButton>
+                                                            <CmButton type="button" size="sm" variant="outline" className="!text-[var(--ats-error)]" onClick={() => deleteTemplate(t)}>Delete</CmButton>
                                                         </div>
                                                     </li>
                                                 ))}
@@ -587,7 +654,7 @@ const RecruitmentPage = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </AtsPage>
     );
 };
 

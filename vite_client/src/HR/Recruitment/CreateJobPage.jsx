@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FaArrowLeft } from 'react-icons/fa';
 import axios from '../../utils/axios';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
+import { AtsPage, AtsPageHeader, CmButton } from '../../components/recruitment/atsUi';
 
 const OTHER = '__other__';
 
@@ -53,15 +55,15 @@ const EMPTY = {
     screeningTemplateId: '',
 };
 
-const selectClass = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-theme-secondary focus:ring-2 focus:ring-theme-secondary/20';
-const inputClass = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-gray-400 focus:border-theme-secondary focus:ring-2 focus:ring-theme-secondary/20';
+const selectClass = 'cm-select w-full';
+const inputClass = 'cm-input w-full';
 
 /** Dropdown + optional "Other" free-text field */
 const SelectWithOther = ({ label, required, options, selectValue, customValue, onSelectChange, onCustomChange, placeholder }) => {
     const isOther = selectValue === OTHER;
     return (
         <label className="block text-sm">
-            <span className="mb-1 block font-medium text-gray-700">
+            <span className="ats-form-label">
                 {label}{required ? ' *' : ''}
             </span>
             <select
@@ -90,10 +92,27 @@ const SelectWithOther = ({ label, required, options, selectValue, customValue, o
     );
 };
 
+const pickSelect = (value, optionList) => {
+    const v = String(value || '').trim();
+    if (!v) return { select: '', custom: '' };
+    if (optionList.includes(v)) return { select: v, custom: '' };
+    return { select: OTHER, custom: v };
+};
+
+const toDateInput = (val) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 10);
+};
+
 const CreateJobPage = () => {
     const navigate = useNavigate();
+    const { id: editId } = useParams();
+    const isEdit = Boolean(editId);
     const [form, setForm] = useState(EMPTY);
     const [saving, setSaving] = useState(false);
+    const [loadingJob, setLoadingJob] = useState(isEdit);
     const [screeningTemplates, setScreeningTemplates] = useState([]);
     const [selects, setSelects] = useState({
         jobTitle: '',
@@ -175,6 +194,93 @@ const CreateJobPage = () => {
         return () => { cancelled = true; };
     }, []);
 
+    useEffect(() => {
+        if (!isEdit) {
+            setLoadingJob(false);
+            return undefined;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                setLoadingJob(true);
+                const { data } = await axios.get(`/v1/admin/recruitment/jobs/${editId}`, { withCredentials: true });
+                if (cancelled) return;
+                if (!data?.success || !data?.data) {
+                    toast.error('Job not found');
+                    navigate('/recruitment');
+                    return;
+                }
+                const job = data.data;
+                const sc = job.screeningCriteria || {};
+                const nextOptions = {
+                    departments: [...new Set([...FALLBACK_DEPARTMENTS, job.department].filter(Boolean))].sort(),
+                    jobTitles: [...new Set([...FALLBACK_JOB_TITLES, job.jobTitle].filter(Boolean))],
+                    positions: [...new Set([...FALLBACK_POSITIONS, job.position].filter(Boolean))],
+                    locations: [...new Set([...FALLBACK_LOCATIONS, job.location].filter(Boolean))].sort(),
+                };
+                setOptions((prev) => ({
+                    departments: [...new Set([...prev.departments, ...nextOptions.departments])].sort(),
+                    jobTitles: [...new Set([...prev.jobTitles, ...nextOptions.jobTitles])],
+                    positions: [...new Set([...prev.positions, ...nextOptions.positions])],
+                    locations: [...new Set([...prev.locations, ...nextOptions.locations])].sort(),
+                }));
+
+                const titlePick = pickSelect(job.jobTitle, nextOptions.jobTitles);
+                const deptPick = pickSelect(job.department, nextOptions.departments);
+                const posPick = pickSelect(job.position, nextOptions.positions);
+                const locPick = pickSelect(job.location, nextOptions.locations);
+                setSelects({
+                    jobTitle: titlePick.select,
+                    department: deptPick.select,
+                    position: posPick.select,
+                    location: locPick.select,
+                });
+                setCustoms({
+                    jobTitle: titlePick.custom,
+                    department: deptPick.custom,
+                    position: posPick.custom,
+                    location: locPick.custom,
+                });
+                setForm({
+                    jobTitle: job.jobTitle || '',
+                    department: job.department || '',
+                    position: job.position || '',
+                    jobDescription: job.jobDescription || '',
+                    location: job.location || '',
+                    employmentType: job.employmentType || 'Full-time',
+                    status: job.status || 'Draft',
+                    priority: job.priority || 'Medium',
+                    numberOfPositions: job.numberOfPositions || 1,
+                    salaryMin: job.salaryRange?.min ?? '',
+                    salaryMax: job.salaryRange?.max ?? '',
+                    currency: job.salaryRange?.currency || 'INR',
+                    closingDate: toDateInput(job.closingDate),
+                    requirements: (job.requirements || []).join('\n'),
+                    responsibilities: (job.responsibilities || []).join('\n'),
+                    internalVisible: !!job.internalVisible,
+                    externalVisible: job.externalVisible !== false,
+                    notifyEmployeesOnOpen: job.notifyEmployeesOnOpen !== false,
+                    screeningEnabled: sc.enabled !== false,
+                    requiredKeywords: normalizeKeywordList(sc.requiredKeywords).join('\n'),
+                    optionalKeywords: normalizeKeywordList(sc.optionalKeywords).join('\n'),
+                    minimumMatchPercent: sc.minimumMatchPercent ?? 70,
+                    experienceRequired: sc.experienceRequired || '',
+                    education: sc.education || '',
+                    certifications: (sc.certifications || []).join('\n'),
+                    screeningTemplateId: sc.templateId || '',
+                });
+            } catch {
+                if (!cancelled) {
+                    toast.error('Failed to load job for editing');
+                    navigate('/recruitment');
+                }
+            } finally {
+                if (!cancelled) setLoadingJob(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isEdit, editId, navigate]);
+
     const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
     const resolved = (key) => (
@@ -217,8 +323,8 @@ const CreateJobPage = () => {
                 requirements: form.requirements.split('\n').map((s) => s.trim()).filter(Boolean),
                 responsibilities: form.responsibilities.split('\n').map((s) => s.trim()).filter(Boolean),
                 salaryRange: {
-                    min: form.salaryMin ? Number(form.salaryMin) : undefined,
-                    max: form.salaryMax ? Number(form.salaryMax) : undefined,
+                    min: form.salaryMin !== '' && form.salaryMin != null ? Number(form.salaryMin) : undefined,
+                    max: form.salaryMax !== '' && form.salaryMax != null ? Number(form.salaryMax) : undefined,
                     currency: form.currency || 'INR',
                 },
                 closingDate: form.closingDate || undefined,
@@ -234,261 +340,275 @@ const CreateJobPage = () => {
                     templateName: screeningTemplates.find((t) => t._id === form.screeningTemplateId)?.name || '',
                 },
             };
-            const { data } = await axios.post('/v1/admin/recruitment/jobs', payload, { withCredentials: true });
+            const { data } = isEdit
+                ? await axios.put(`/v1/admin/recruitment/jobs/${editId}`, payload, { withCredentials: true })
+                : await axios.post('/v1/admin/recruitment/jobs', payload, { withCredentials: true });
             if (!data.success) {
-                toast.error(data.message || 'Failed to create job');
+                toast.error(data.message || (isEdit ? 'Failed to update job' : 'Failed to create job'));
                 return;
             }
-            toast.success('Job posting created');
-            navigate(`/recruitment/jobs/${data.data._id}`);
+            toast.success(isEdit ? 'Job posting updated' : 'Job posting created');
+            navigate(`/recruitment/jobs/${data.data._id || editId}`);
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to create job');
+            toast.error(err.response?.data?.message || (isEdit ? 'Failed to update job' : 'Failed to create job'));
         } finally {
             setSaving(false);
         }
     };
 
+    if (loadingJob) {
+        return <LoadingSpinner message="Loading job…" />;
+    }
+
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <div className="mx-auto max-w-3xl">
-                <button
-                    type="button"
-                    onClick={() => navigate('/recruitment')}
-                    className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-                >
-                    <FaArrowLeft /> Back to Recruitment
-                </button>
-                <h1 className="mb-1 text-2xl font-bold text-gray-800">Post New Job</h1>
-                <p className="mb-6 text-gray-600">Create a job posting for the ATS and career portal</p>
+        <AtsPage narrow>
+            <button
+                type="button"
+                onClick={() => navigate(isEdit ? `/recruitment/jobs/${editId}` : '/recruitment')}
+                className="ats-back"
+            >
+                <FaArrowLeft className="h-3 w-3" /> {isEdit ? 'Back to Job' : 'Back to Recruitment'}
+            </button>
 
-                <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <SelectWithOther
-                            label="Job Title"
-                            required
-                            options={options.jobTitles}
-                            selectValue={selects.jobTitle}
-                            customValue={customs.jobTitle}
-                            onSelectChange={(v) => setSelect('jobTitle', v)}
-                            onCustomChange={(v) => setCustoms((p) => ({ ...p, jobTitle: v }))}
-                        />
-                        <SelectWithOther
-                            label="Position"
-                            required
-                            options={options.positions}
-                            selectValue={selects.position}
-                            customValue={customs.position}
-                            onSelectChange={(v) => setSelect('position', v)}
-                            onCustomChange={(v) => setCustoms((p) => ({ ...p, position: v }))}
-                        />
-                        <SelectWithOther
-                            label="Department"
-                            required
-                            options={options.departments}
-                            selectValue={selects.department}
-                            customValue={customs.department}
-                            onSelectChange={(v) => setSelect('department', v)}
-                            onCustomChange={(v) => setCustoms((p) => ({ ...p, department: v }))}
-                        />
-                        <SelectWithOther
-                            label="Location"
-                            required
-                            options={options.locations}
-                            selectValue={selects.location}
-                            customValue={customs.location}
-                            onSelectChange={(v) => setSelect('location', v)}
-                            onCustomChange={(v) => setCustoms((p) => ({ ...p, location: v }))}
-                        />
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Employment Type</span>
-                            <select className={selectClass} value={form.employmentType} onChange={(e) => set('employmentType', e.target.value)}>
-                                {['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary'].map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Status</span>
-                            <select className={selectClass} value={form.status} onChange={(e) => set('status', e.target.value)}>
-                                {['Draft', 'Open', 'On Hold', 'Closed', 'Cancelled'].map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Priority</span>
-                            <select className={selectClass} value={form.priority} onChange={(e) => set('priority', e.target.value)}>
-                                {['Low', 'Medium', 'High', 'Critical'].map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Number of Positions</span>
-                            <input type="number" min="1" className={inputClass} value={form.numberOfPositions} onChange={(e) => set('numberOfPositions', e.target.value)} />
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Salary Min</span>
-                            <input type="number" className={inputClass} value={form.salaryMin} onChange={(e) => set('salaryMin', e.target.value)} />
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Salary Max</span>
-                            <input type="number" className={inputClass} value={form.salaryMax} onChange={(e) => set('salaryMax', e.target.value)} />
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Currency</span>
-                            <select className={selectClass} value={form.currency} onChange={(e) => set('currency', e.target.value)}>
-                                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </label>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Closing Date</span>
-                            <input type="date" className={inputClass} value={form.closingDate} onChange={(e) => set('closingDate', e.target.value)} />
-                        </label>
-                    </div>
+            <AtsPageHeader
+                eyebrow="Recruitment"
+                title={isEdit ? 'Edit Job Posting' : 'Post New Job'}
+                subtitle={isEdit
+                    ? 'Update job details, visibility, and screening criteria'
+                    : 'Create a job posting for the ATS and career portal'}
+            />
 
+            <form onSubmit={handleSubmit} className="cm-card space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <SelectWithOther
+                        label="Job Title"
+                        required
+                        options={options.jobTitles}
+                        selectValue={selects.jobTitle}
+                        customValue={customs.jobTitle}
+                        onSelectChange={(v) => setSelect('jobTitle', v)}
+                        onCustomChange={(v) => setCustoms((p) => ({ ...p, jobTitle: v }))}
+                    />
+                    <SelectWithOther
+                        label="Position"
+                        required
+                        options={options.positions}
+                        selectValue={selects.position}
+                        customValue={customs.position}
+                        onSelectChange={(v) => setSelect('position', v)}
+                        onCustomChange={(v) => setCustoms((p) => ({ ...p, position: v }))}
+                    />
+                    <SelectWithOther
+                        label="Department"
+                        required
+                        options={options.departments}
+                        selectValue={selects.department}
+                        customValue={customs.department}
+                        onSelectChange={(v) => setSelect('department', v)}
+                        onCustomChange={(v) => setCustoms((p) => ({ ...p, department: v }))}
+                    />
+                    <SelectWithOther
+                        label="Location"
+                        required
+                        options={options.locations}
+                        selectValue={selects.location}
+                        customValue={customs.location}
+                        onSelectChange={(v) => setSelect('location', v)}
+                        onCustomChange={(v) => setCustoms((p) => ({ ...p, location: v }))}
+                    />
                     <label className="block text-sm">
-                        <span className="mb-1 block font-medium text-gray-700">Job Description *</span>
-                        <textarea rows={5} className={inputClass} value={form.jobDescription} onChange={(e) => set('jobDescription', e.target.value)} required />
+                        <span className="ats-form-label">Employment Type</span>
+                        <select className={selectClass} value={form.employmentType} onChange={(e) => set('employmentType', e.target.value)}>
+                            {['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary'].map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                            ))}
+                        </select>
                     </label>
                     <label className="block text-sm">
-                        <span className="mb-1 block font-medium text-gray-700">Requirements (one per line)</span>
-                        <textarea rows={3} className={inputClass} value={form.requirements} onChange={(e) => set('requirements', e.target.value)} />
+                        <span className="ats-form-label">Status</span>
+                        <select className={selectClass} value={form.status} onChange={(e) => set('status', e.target.value)}>
+                            {['Draft', 'Open', 'On Hold', 'Closed', 'Cancelled'].map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                            ))}
+                        </select>
                     </label>
                     <label className="block text-sm">
-                        <span className="mb-1 block font-medium text-gray-700">Responsibilities (one per line)</span>
-                        <textarea rows={3} className={inputClass} value={form.responsibilities} onChange={(e) => set('responsibilities', e.target.value)} />
+                        <span className="ats-form-label">Priority</span>
+                        <select className={selectClass} value={form.priority} onChange={(e) => set('priority', e.target.value)}>
+                            {['Low', 'Medium', 'High', 'Critical'].map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                            ))}
+                        </select>
                     </label>
+                    <label className="block text-sm">
+                        <span className="ats-form-label">Number of Positions</span>
+                        <input type="number" min="1" className={inputClass} value={form.numberOfPositions} onChange={(e) => set('numberOfPositions', e.target.value)} />
+                    </label>
+                    <label className="block text-sm">
+                        <span className="ats-form-label">Salary Min</span>
+                        <input type="number" className={inputClass} value={form.salaryMin} onChange={(e) => set('salaryMin', e.target.value)} />
+                    </label>
+                    <label className="block text-sm">
+                        <span className="ats-form-label">Salary Max</span>
+                        <input type="number" className={inputClass} value={form.salaryMax} onChange={(e) => set('salaryMax', e.target.value)} />
+                    </label>
+                    <label className="block text-sm">
+                        <span className="ats-form-label">Currency</span>
+                        <select className={selectClass} value={form.currency} onChange={(e) => set('currency', e.target.value)}>
+                            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </label>
+                    <label className="block text-sm">
+                        <span className="ats-form-label">Closing Date</span>
+                        <input type="date" className={inputClass} value={form.closingDate} onChange={(e) => set('closingDate', e.target.value)} />
+                    </label>
+                </div>
 
-                    <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                            <h2 className="text-sm font-semibold text-gray-800">Screening Criteria</h2>
-                            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                                <input
-                                    type="checkbox"
-                                    checked={form.screeningEnabled}
-                                    onChange={(e) => set('screeningEnabled', e.target.checked)}
-                                />
-                                Enable auto-screening
-                            </label>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            New applicants are scored against these keywords automatically. Leave required keywords empty to skip screening for this job.
-                            Select a template to pre-fill keywords — you can still edit them for this job only.
-                        </p>
-                        <label className="block text-sm">
-                            <span className="mb-1 block font-medium text-gray-700">Resume Screening Template</span>
-                            <select
-                                className={selectClass}
-                                value={form.screeningTemplateId}
-                                onChange={(e) => applyTemplate(e.target.value)}
-                                disabled={!form.screeningEnabled}
-                            >
-                                <option value="">None — enter keywords manually</option>
-                                {screeningTemplates.map((t) => (
-                                    <option key={t._id} value={t._id}>{t.name}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="block text-sm sm:col-span-1">
-                                <span className="mb-1 block font-medium text-gray-700">Required Skills / Keywords (one per line)</span>
-                                <textarea
-                                    rows={4}
-                                    className={inputClass}
-                                    value={form.requiredKeywords}
-                                    onChange={(e) => set('requiredKeywords', e.target.value)}
-                                    placeholder={'React\nNode.js\nMongoDB'}
-                                    disabled={!form.screeningEnabled}
-                                />
-                            </label>
-                            <label className="block text-sm">
-                                <span className="mb-1 block font-medium text-gray-700">Optional Skills / Keywords (one per line)</span>
-                                <textarea
-                                    rows={4}
-                                    className={inputClass}
-                                    value={form.optionalKeywords}
-                                    onChange={(e) => set('optionalKeywords', e.target.value)}
-                                    placeholder={'Docker\nAWS\nTypeScript'}
-                                    disabled={!form.screeningEnabled}
-                                />
-                            </label>
-                            <label className="block text-sm">
-                                <span className="mb-1 block font-medium text-gray-700">Minimum Match %</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    className={inputClass}
-                                    value={form.minimumMatchPercent}
-                                    onChange={(e) => set('minimumMatchPercent', e.target.value)}
-                                    disabled={!form.screeningEnabled}
-                                />
-                            </label>
-                            <label className="block text-sm">
-                                <span className="mb-1 block font-medium text-gray-700">Experience Required</span>
-                                <input
-                                    className={inputClass}
-                                    value={form.experienceRequired}
-                                    onChange={(e) => set('experienceRequired', e.target.value)}
-                                    placeholder="e.g. 3 years"
-                                    disabled={!form.screeningEnabled}
-                                />
-                            </label>
-                            <label className="block text-sm">
-                                <span className="mb-1 block font-medium text-gray-700">Education (optional)</span>
-                                <input
-                                    className={inputClass}
-                                    value={form.education}
-                                    onChange={(e) => set('education', e.target.value)}
-                                    placeholder="e.g. B.Tech / Bachelor"
-                                    disabled={!form.screeningEnabled}
-                                />
-                            </label>
-                            <label className="block text-sm">
-                                <span className="mb-1 block font-medium text-gray-700">Certifications (one per line)</span>
-                                <textarea
-                                    rows={2}
-                                    className={inputClass}
-                                    value={form.certifications}
-                                    onChange={(e) => set('certifications', e.target.value)}
-                                    disabled={!form.screeningEnabled}
-                                />
-                            </label>
-                        </div>
-                    </div>
+                <label className="block text-sm">
+                    <span className="ats-form-label">Job Description *</span>
+                    <textarea rows={5} className={inputClass} value={form.jobDescription} onChange={(e) => set('jobDescription', e.target.value)} required />
+                </label>
+                <label className="block text-sm">
+                    <span className="ats-form-label">Requirements (one per line)</span>
+                    <textarea rows={3} className={inputClass} value={form.requirements} onChange={(e) => set('requirements', e.target.value)} />
+                </label>
+                <label className="block text-sm">
+                    <span className="ats-form-label">Responsibilities (one per line)</span>
+                    <textarea rows={3} className={inputClass} value={form.responsibilities} onChange={(e) => set('responsibilities', e.target.value)} />
+                </label>
 
-                    <div className="flex flex-wrap gap-4 text-sm">
-                        <label className="inline-flex items-center gap-2">
-                            <input type="checkbox" checked={form.externalVisible} onChange={(e) => set('externalVisible', e.target.checked)} />
-                            Visible on career portal
-                        </label>
-                        <label className="inline-flex items-center gap-2">
-                            <input type="checkbox" checked={form.internalVisible} onChange={(e) => set('internalVisible', e.target.checked)} />
-                            Internal posting
-                        </label>
-                        <label className="inline-flex items-center gap-2">
+                <div className="space-y-3 rounded-2xl p-4" style={{ background: 'rgba(28,202,155,0.06)' }}>
+                    <div className="flex items-center justify-between gap-2">
+                        <h2 className="text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>Screening Criteria</h2>
+                        <label className="inline-flex items-center gap-2 text-sm" style={{ color: 'var(--ats-secondary)' }}>
                             <input
                                 type="checkbox"
-                                checked={form.notifyEmployeesOnOpen}
-                                disabled={!form.internalVisible}
-                                onChange={(e) => set('notifyEmployeesOnOpen', e.target.checked)}
+                                checked={form.screeningEnabled}
+                                onChange={(e) => set('screeningEnabled', e.target.checked)}
                             />
-                            Notify employees in-app when Open + internal
+                            Enable auto-screening
                         </label>
                     </div>
-
-                    <div className="flex justify-end gap-3 border-t pt-4">
-                        <button type="button" onClick={() => navigate('/recruitment')} className="rounded-lg border px-4 py-2 text-gray-700 hover:bg-gray-50">
-                            Cancel
-                        </button>
-                        <button type="submit" disabled={saving} className="rounded-lg bg-theme-secondary px-4 py-2 text-white hover:bg-theme-primary disabled:opacity-60">
-                            {saving ? 'Saving…' : 'Create Job'}
-                        </button>
+                    <p className="text-xs" style={{ color: 'rgba(15,45,38,0.55)' }}>
+                        New applicants are scored against these keywords automatically. Leave required keywords empty to skip screening for this job.
+                        Select a template to pre-fill keywords — you can still edit them for this job only.
+                    </p>
+                    <label className="block text-sm">
+                        <span className="ats-form-label">Resume Screening Template</span>
+                        <select
+                            className={selectClass}
+                            value={form.screeningTemplateId}
+                            onChange={(e) => applyTemplate(e.target.value)}
+                            disabled={!form.screeningEnabled}
+                        >
+                            <option value="">None — enter keywords manually</option>
+                            {screeningTemplates.map((t) => (
+                                <option key={t._id} value={t._id}>{t.name}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-sm sm:col-span-1">
+                            <span className="ats-form-label">Required Skills / Keywords (one per line)</span>
+                            <textarea
+                                rows={4}
+                                className={inputClass}
+                                value={form.requiredKeywords}
+                                onChange={(e) => set('requiredKeywords', e.target.value)}
+                                placeholder={'React\nNode.js\nMongoDB'}
+                                disabled={!form.screeningEnabled}
+                            />
+                        </label>
+                        <label className="block text-sm">
+                            <span className="ats-form-label">Optional Skills / Keywords (one per line)</span>
+                            <textarea
+                                rows={4}
+                                className={inputClass}
+                                value={form.optionalKeywords}
+                                onChange={(e) => set('optionalKeywords', e.target.value)}
+                                placeholder={'Docker\nAWS\nTypeScript'}
+                                disabled={!form.screeningEnabled}
+                            />
+                        </label>
+                        <label className="block text-sm">
+                            <span className="ats-form-label">Minimum Match %</span>
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                className={inputClass}
+                                value={form.minimumMatchPercent}
+                                onChange={(e) => set('minimumMatchPercent', e.target.value)}
+                                disabled={!form.screeningEnabled}
+                            />
+                        </label>
+                        <label className="block text-sm">
+                            <span className="ats-form-label">Experience Required</span>
+                            <input
+                                className={inputClass}
+                                value={form.experienceRequired}
+                                onChange={(e) => set('experienceRequired', e.target.value)}
+                                placeholder="e.g. 3 years"
+                                disabled={!form.screeningEnabled}
+                            />
+                        </label>
+                        <label className="block text-sm">
+                            <span className="ats-form-label">Education (optional)</span>
+                            <input
+                                className={inputClass}
+                                value={form.education}
+                                onChange={(e) => set('education', e.target.value)}
+                                placeholder="e.g. B.Tech / Bachelor"
+                                disabled={!form.screeningEnabled}
+                            />
+                        </label>
+                        <label className="block text-sm">
+                            <span className="ats-form-label">Certifications (one per line)</span>
+                            <textarea
+                                rows={2}
+                                className={inputClass}
+                                value={form.certifications}
+                                onChange={(e) => set('certifications', e.target.value)}
+                                disabled={!form.screeningEnabled}
+                            />
+                        </label>
                     </div>
-                </form>
-            </div>
-        </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 text-sm">
+                    <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={form.externalVisible} onChange={(e) => set('externalVisible', e.target.checked)} />
+                        Visible on career portal
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={form.internalVisible} onChange={(e) => set('internalVisible', e.target.checked)} />
+                        Internal posting
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={form.notifyEmployeesOnOpen}
+                            disabled={!form.internalVisible}
+                            onChange={(e) => set('notifyEmployeesOnOpen', e.target.checked)}
+                        />
+                        Notify employees in-app when Open + internal
+                    </label>
+                </div>
+
+                <div className="flex justify-end gap-3 border-t border-[rgba(15,45,38,0.08)] pt-4">
+                    <CmButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => navigate(isEdit ? `/recruitment/jobs/${editId}` : '/recruitment')}
+                    >
+                        Cancel
+                    </CmButton>
+                    <CmButton type="submit" disabled={saving}>
+                        {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Job')}
+                    </CmButton>
+                </div>
+            </form>
+        </AtsPage>
     );
 };
 

@@ -3,13 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
-    FaArrowLeft, FaBriefcase, FaCalendarAlt, FaComments, FaFileContract, FaUser, FaFileAlt, FaExternalLinkAlt, FaDownload,
+    FaArrowLeft, FaBriefcase, FaCalendarAlt, FaComments, FaFileContract, FaUser, FaFileAlt, FaExternalLinkAlt, FaDownload, FaTimes,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import OfferLetterPanel from '../../components/recruitment/OfferLetterPanel';
 import HireEmployeeModal from '../../components/recruitment/HireEmployeeModal';
-import { normalizeResumeScreening, getScreeningBadgeClasses } from '../../utils/resumeScreeningDisplay';
+import { normalizeResumeScreening } from '../../utils/resumeScreeningDisplay';
+import { AtsPage, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: FaUser },
@@ -527,30 +528,31 @@ const CandidateDetailPage = () => {
     const fullName = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ');
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <div className="w-full">
-                <button
-                    type="button"
-                    onClick={() => navigate('/recruitment')}
-                    className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-                >
-                    <FaArrowLeft /> Back to Recruitment
-                </button>
+        <AtsPage>
+            <button
+                type="button"
+                onClick={() => navigate('/recruitment')}
+                className="ats-back"
+            >
+                <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
+            </button>
 
-                <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">{fullName}</h1>
-                            <p className="mt-1 text-sm text-gray-600">{candidate.email}</p>
-                            <div className="mt-3 flex flex-wrap gap-2 text-sm text-gray-600">
-                                <span className="inline-flex items-center gap-1"><FaBriefcase /> {candidate.jobPostingId?.jobTitle || 'No job linked'}</span>
-                                <span className="inline-flex items-center gap-1"><FaCalendarAlt /> Applied {candidate.applicationDate ? format(new Date(candidate.applicationDate), 'dd MMM yyyy') : '—'}</span>
+            <section className="cm-card">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <AtsAvatar name={fullName} />
+                        <div className="min-w-0">
+                            <h1 className="text-2xl font-bold" style={{ color: 'var(--ats-secondary)' }}>{fullName}</h1>
+                            <p className="mt-1 text-sm" style={{ color: 'rgba(15,45,38,0.6)' }}>{candidate.email}</p>
+                            <div className="mt-3 flex flex-wrap gap-3 text-sm" style={{ color: 'rgba(15,45,38,0.6)' }}>
+                                <span className="inline-flex items-center gap-1.5"><FaBriefcase className="opacity-60" /> {candidate.jobPostingId?.jobTitle || 'No job linked'}</span>
+                                <span className="inline-flex items-center gap-1.5"><FaCalendarAlt className="opacity-60" /> Applied {candidate.applicationDate ? format(new Date(candidate.applicationDate), 'dd MMM yyyy') : '—'}</span>
                             </div>
                             {candidate.blacklist?.isBlacklisted && (
-                                <p className="mt-2 text-sm font-medium text-red-600">Blacklisted: {candidate.blacklist.reason || '—'}</p>
+                                <p className="mt-2 text-sm font-medium" style={{ color: 'var(--ats-error)' }}>Blacklisted: {candidate.blacklist.reason || '—'}</p>
                             )}
                             {screeningLocked && (
-                                <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+                                <p className="mt-2 rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
                                     Failed Screening — read-only. Match {screening.matchScore != null ? `${screening.matchScore}%` : '—'}
                                     {screening.deleteAfterDate
                                         ? ` - Auto-delete after ${format(new Date(screening.deleteAfterDate), 'dd MMM yyyy')}`
@@ -558,177 +560,176 @@ const CandidateDetailPage = () => {
                                 </p>
                             )}
                         </div>
-                        <span className={`self-start rounded-full px-3 py-1 text-sm font-semibold ${
-                            candidate.status === 'Offer Accepted' || candidate.stage === 'Hired' ? 'bg-emerald-100 text-emerald-800'
-                                : candidate.status === 'Withdrawn' ? 'bg-red-100 text-red-800'
-                                    : getScreeningBadgeClasses(screening)
-                        }`}>
-                            {screeningLabel}
-                            {candidate.status
-                                && !(screening.isRejected && candidate.status === 'Rejected')
-                                && !(screening.isApproved && ['Applied', 'Screening'].includes(candidate.status))
-                                ? ` - ${candidate.status}`
-                                : ''}
-                            {candidate.stage
-                                && candidate.stage !== candidate.status
-                                && !(screening.isRejected && candidate.stage === 'Rejected')
-                                && !(screening.isApproved && ['Application', 'Screening'].includes(candidate.stage))
-                                ? ` - ${candidate.stage}`
-                                : ''}
+                    </div>
+                    <AtsBadge
+                        tone={
+                            candidate.status === 'Offer Accepted' || candidate.stage === 'Hired' ? 'success'
+                                : candidate.status === 'Withdrawn' ? 'error'
+                                    : undefined
+                        }
+                        status={candidate.status === 'Offer Accepted' || candidate.stage === 'Hired' || candidate.status === 'Withdrawn' ? undefined : screeningLabel}
+                        className="self-start !text-sm"
+                    >
+                        {screeningLabel}
+                        {candidate.status
+                            && !(screening.isRejected && candidate.status === 'Rejected')
+                            && !(screening.isApproved && ['Applied', 'Screening'].includes(candidate.status))
+                            ? ` - ${candidate.status}`
+                            : ''}
+                        {candidate.stage
+                            && candidate.stage !== candidate.status
+                            && !(screening.isRejected && candidate.stage === 'Rejected')
+                            && !(screening.isApproved && ['Application', 'Screening'].includes(candidate.stage))
+                            ? ` - ${candidate.stage}`
+                            : ''}
+                    </AtsBadge>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-[rgba(15,45,38,0.08)] pt-4">
+                    {candidate.linkedEmployeeId ? (
+                        <span className="cm-btn cm-btn--sm" style={{ background: 'rgba(28,202,155,0.12)', color: '#006c51', cursor: 'default' }}>
+                            Employee: {candidate.linkedEmployeeId.employeeId || candidate.linkedEmployeeId._id}
                         </span>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
-                        {candidate.linkedEmployeeId ? (
-                            <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800">
-                                Employee: {candidate.linkedEmployeeId.employeeId || candidate.linkedEmployeeId._id}
-                            </span>
-                        ) : (
-                            <button
-                                type="button"
-                                disabled={busy || screeningLocked}
-                                onClick={() => setHireOpen(true)}
-                                className="rounded-lg bg-theme-secondary px-3 py-1.5 text-sm text-white hover:bg-theme-primary disabled:opacity-50"
-                            >
-                                Hire → Create Employee
-                            </button>
-                        )}
-                        <button type="button" disabled={busy || screeningLocked} onClick={() => runAction('joining', { joiningStatus: 'Confirmed' })} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Confirm Joining</button>
-                        <button type="button" disabled={busy || screeningLocked} onClick={() => {
-                            const reason = window.prompt('Withdraw reason');
-                            if (reason) runAction('withdraw', { reason });
-                        }} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Withdraw</button>
-                        <button type="button" disabled={busy} onClick={() => {
-                            const reason = window.prompt('Blacklist reason');
-                            if (reason) runAction('blacklist', { reason });
-                        }} className="rounded-lg border px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">Blacklist</button>
-                        <button type="button" disabled={busy} onClick={() => runAction('archive', {})} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">Archive</button>
+                    ) : (
+                        <CmButton size="sm" disabled={busy || screeningLocked} onClick={() => setHireOpen(true)}>
+                            Hire → Create Employee
+                        </CmButton>
+                    )}
+                    <CmButton size="sm" variant="outline" disabled={busy || screeningLocked} onClick={() => runAction('joining', { joiningStatus: 'Confirmed' })}>Confirm Joining</CmButton>
+                    <CmButton size="sm" variant="outline" disabled={busy || screeningLocked} onClick={() => {
+                        const reason = window.prompt('Withdraw reason');
+                        if (reason) runAction('withdraw', { reason });
+                    }}>Withdraw</CmButton>
+                    <CmButton size="sm" variant="outline" disabled={busy} onClick={() => {
+                        const reason = window.prompt('Blacklist reason');
+                        if (reason) runAction('blacklist', { reason });
+                    }} style={{ color: 'var(--ats-error)', borderColor: 'rgba(229,62,62,0.35)' }}>Blacklist</CmButton>
+                    <CmButton size="sm" variant="outline" disabled={busy} onClick={() => runAction('archive', {})}>Archive</CmButton>
+                    <CmButton
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={hardDelete}
+                        style={{ color: 'var(--ats-error)', borderColor: 'rgba(229,62,62,0.35)' }}
+                    >
+                        Delete
+                    </CmButton>
+                </div>
+                <nav className="ats-tabs !mb-0 mt-4">
+                    {TABS.map(({ id: tabId, label, icon: Icon }) => (
                         <button
+                            key={tabId}
                             type="button"
-                            disabled={busy}
-                            onClick={hardDelete}
-                            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            onClick={() => setActiveTab(tabId)}
+                            className={`ats-tab ${activeTab === tabId ? 'ats-tab--active' : ''}`}
                         >
-                            Delete
+                            <Icon className="h-3.5 w-3.5 opacity-80" /> {label}
                         </button>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-1 border-t border-gray-100 pt-4">
-                        {TABS.map(({ id: tabId, label, icon: Icon }) => (
-                            <button
-                                key={tabId}
-                                type="button"
-                                onClick={() => setActiveTab(tabId)}
-                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${
-                                    activeTab === tabId ? 'bg-theme-primary/10 text-theme-primary' : 'text-gray-600 hover:bg-gray-100'
-                                }`}
-                            >
-                                <Icon className="text-xs" /> {label}
-                            </button>
-                        ))}
-                    </div>
-                </section>
+                    ))}
+                </nav>
+            </section>
 
                 {activeTab === 'overview' && (
                     <div className="grid gap-6 lg:grid-cols-2">
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-                            <h2 className="mb-4 text-lg font-semibold text-gray-800">Resume Screening</h2>
+                        <section className="cm-card lg:col-span-2">
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Resume Screening</h2>
                             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
                                 <div>
-                                    <dt className="text-gray-500">Status</dt>
-                                    <dd className={`mt-0.5 font-semibold ${
-                                        screening.isPassed ? 'text-emerald-700'
-                                            : screening.isRejected ? 'text-red-700'
-                                                : 'text-amber-800'
-                                    }`}>
+                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Status</dt>
+                                    <dd className="mt-0.5 font-semibold" style={{
+                                        color: screening.isPassed ? '#006c51'
+                                            : screening.isRejected ? 'var(--ats-error)'
+                                                : '#c45a2a',
+                                    }}>
                                         {screeningLabel}
                                     </dd>
                                 </div>
                                 <div>
-                                    <dt className="text-gray-500">Match Score</dt>
-                                    <dd className="mt-0.5 font-semibold text-gray-800">{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</dd>
+                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Match Score</dt>
+                                    <dd className="mt-0.5 font-semibold" style={{ color: 'var(--ats-secondary)' }}>{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-gray-500">Minimum Required</dt>
-                                    <dd className="mt-0.5 font-semibold text-gray-800">{screening.minimumRequired != null ? `${screening.minimumRequired}%` : '—'}</dd>
+                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Minimum Required</dt>
+                                    <dd className="mt-0.5 font-semibold" style={{ color: 'var(--ats-secondary)' }}>{screening.minimumRequired != null ? `${screening.minimumRequired}%` : '—'}</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-gray-500">Screening Date</dt>
-                                    <dd className="mt-0.5 font-semibold text-gray-800">{screening.screeningDate ? format(new Date(screening.screeningDate), 'dd MMM yyyy HH:mm') : '—'}</dd>
+                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Screening Date</dt>
+                                    <dd className="mt-0.5 font-semibold" style={{ color: 'var(--ats-secondary)' }}>{screening.screeningDate ? format(new Date(screening.screeningDate), 'dd MMM yyyy HH:mm') : '—'}</dd>
                                 </div>
                             </dl>
                             {screening.reason && (
-                                <p className={`mt-3 text-sm ${screening.isRejected ? 'text-red-700' : 'text-amber-800'}`}>
+                                <p className="mt-3 text-sm" style={{ color: screening.isRejected ? 'var(--ats-error)' : '#c45a2a' }}>
                                     Reason: {screening.reason}
                                 </p>
                             )}
                             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <p className="mb-1 text-xs font-medium uppercase text-gray-500">Matched Keywords</p>
+                                    <p className="mb-1 text-xs font-medium uppercase" style={{ color: 'rgba(15,45,38,0.5)' }}>Matched Keywords</p>
                                     <div className="flex flex-wrap gap-1">
                                         {(screening.matchedKeywords || []).length === 0
-                                            ? <span className="text-sm text-gray-400">—</span>
+                                            ? <span className="text-sm" style={{ color: 'rgba(15,45,38,0.35)' }}>—</span>
                                             : screening.matchedKeywords.map((k) => (
-                                                <span key={k} className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{k}</span>
+                                                <span key={k} className="rounded-full px-2 py-0.5 text-xs" style={{ background: 'rgba(28,202,155,0.12)', color: '#006c51' }}>{k}</span>
                                             ))}
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="mb-1 text-xs font-medium uppercase text-gray-500">Missing Keywords</p>
+                                    <p className="mb-1 text-xs font-medium uppercase" style={{ color: 'rgba(15,45,38,0.5)' }}>Missing Keywords</p>
                                     <div className="flex flex-wrap gap-1">
                                         {(screening.missingKeywords || []).length === 0
-                                            ? <span className="text-sm text-gray-400">—</span>
+                                            ? <span className="text-sm" style={{ color: 'rgba(15,45,38,0.35)' }}>—</span>
                                             : screening.missingKeywords.map((k) => (
-                                                <span key={k} className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-800">{k}</span>
+                                                <span key={k} className="rounded-full px-2 py-0.5 text-xs" style={{ background: 'rgba(229,62,62,0.1)', color: 'var(--ats-error)' }}>{k}</span>
                                             ))}
                                     </div>
                                 </div>
                             </div>
                             {screening.rejectedDate && (
-                                <p className="mt-3 text-xs text-gray-500">
+                                <p className="mt-3 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                                     Rejected {format(new Date(screening.rejectedDate), 'dd MMM yyyy')}
                                     {screening.deleteAfterDate ? ` - Delete after ${format(new Date(screening.deleteAfterDate), 'dd MMM yyyy')}` : ''}
                                 </p>
                             )}
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="mb-4 text-lg font-semibold text-gray-800">Candidate Profile</h2>
+                        <section className="cm-card">
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Candidate Profile</h2>
                             <dl className="space-y-3 text-sm">
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Phone</dt><dd className="font-medium text-gray-800">{candidate.phone || '—'}</dd></div>
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Stage</dt><dd className="font-medium text-gray-800">{candidate.stage || '—'}</dd></div>
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Department</dt><dd className="font-medium text-gray-800">{displayDepartment}</dd></div>
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Source</dt><dd className="font-medium text-gray-800">{candidate.source || '—'}</dd></div>
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Joining</dt><dd className="font-medium text-gray-800">{candidate.joiningStatus || 'None'}</dd></div>
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Overall score</dt><dd className="font-medium text-gray-800">{candidate.scores?.overallScore != null ? Math.round(candidate.scores.overallScore) : '—'}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Phone</dt><dd className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{candidate.phone || '—'}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Stage</dt><dd className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{candidate.stage || '—'}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Department</dt><dd className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{displayDepartment}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Source</dt><dd className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{candidate.source || '—'}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Joining</dt><dd className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{candidate.joiningStatus || 'None'}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Overall score</dt><dd className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{candidate.scores?.overallScore != null ? Math.round(candidate.scores.overallScore) : '—'}</dd></div>
                             </dl>
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="mb-4 text-lg font-semibold text-gray-800">Update Status</h2>
+                        <section className="cm-card">
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Update Status</h2>
                             <div className="space-y-3">
-                                <select className="w-full rounded-lg border px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value)} disabled={screeningLocked}>
+                                <select className="cm-select w-full" value={status} onChange={(e) => setStatus(e.target.value)} disabled={screeningLocked}>
                                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                                 </select>
-                                <textarea className="w-full rounded-lg border px-3 py-2 text-sm" rows={2} placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} disabled={screeningLocked} />
-                                <button type="button" disabled={busy || screeningLocked} onClick={updateStatus} className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white disabled:opacity-60">Save status</button>
+                                <textarea className="cm-input w-full" rows={2} placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} disabled={screeningLocked} />
+                                <CmButton size="sm" disabled={busy || screeningLocked} onClick={updateStatus}>Save status</CmButton>
                             </div>
-                            <h3 className="mb-2 mt-6 font-semibold text-gray-800">Scores</h3>
+                            <h3 className="mb-2 mt-6 font-semibold" style={{ color: 'var(--ats-secondary)' }}>Scores</h3>
                             <div className="grid grid-cols-3 gap-2">
                                 {['resumeScore', 'technicalScore', 'culturalFitScore'].map((key) => (
-                                    <input key={key} type="number" min="0" max="100" className="rounded-lg border px-2 py-1.5 text-sm" placeholder={key.replace('Score', '')} value={scoreForm[key]} onChange={(e) => setScoreForm((p) => ({ ...p, [key]: e.target.value }))} disabled={screeningLocked} />
+                                    <input key={key} type="number" min="0" max="100" className="cm-input" placeholder={key.replace('Score', '')} value={scoreForm[key]} onChange={(e) => setScoreForm((p) => ({ ...p, [key]: e.target.value }))} disabled={screeningLocked} />
                                 ))}
                             </div>
-                            <button type="button" disabled={busy || screeningLocked} onClick={saveScores} className="mt-2 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-60">Save scores</button>
+                            <CmButton size="sm" variant="outline" className="mt-2" disabled={busy || screeningLocked} onClick={saveScores}>Save scores</CmButton>
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-                            <h2 className="mb-4 text-lg font-semibold text-gray-800">Documents</h2>
+                        <section className="cm-card lg:col-span-2">
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Documents</h2>
                             <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4">
-                                    <p className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                                        <FaFileAlt className="text-theme-secondary" /> Resume
+                                <div className="rounded-xl p-4" style={{ background: 'var(--ats-neutral)' }}>
+                                    <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>
+                                        <FaFileAlt style={{ color: 'var(--ats-primary)' }} /> Resume
                                     </p>
                                     {candidate.resume?.url ? (
                                         <div className="mt-2 space-y-2">
-                                            <p className="truncate text-sm text-gray-600">{candidate.resume.fileName || 'Resume file'}</p>
+                                            <p className="truncate text-sm" style={{ color: 'rgba(15,45,38,0.65)' }}>{candidate.resume.fileName || 'Resume file'}</p>
                                             {candidate.resume.uploadedAt && (
-                                                <p className="text-xs text-gray-400">
+                                                <p className="text-xs" style={{ color: 'rgba(15,45,38,0.4)' }}>
                                                     Uploaded {format(new Date(candidate.resume.uploadedAt), 'dd MMM yyyy')}
                                                 </p>
                                             )}
@@ -737,34 +738,34 @@ const CandidateDetailPage = () => {
                                                     href={candidate.resume.url}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="inline-flex items-center gap-1.5 rounded-lg bg-theme-secondary px-3 py-1.5 text-xs font-semibold text-white hover:bg-theme-primary"
+                                                    className="cm-btn cm-btn--primary cm-btn--sm"
                                                 >
                                                     <FaExternalLinkAlt className="h-2.5 w-2.5" /> View
                                                 </a>
                                                 <a
                                                     href={candidate.resume.url}
                                                     download={candidate.resume.fileName || 'resume'}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                                    className="cm-btn cm-btn--outline cm-btn--sm"
                                                 >
                                                     <FaDownload className="h-2.5 w-2.5" /> Download
                                                 </a>
                                             </div>
                                         </div>
                                     ) : (
-                                        <p className="mt-2 text-sm text-gray-500">No resume uploaded</p>
+                                        <p className="mt-2 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No resume uploaded</p>
                                     )}
                                 </div>
-                                <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4">
-                                    <p className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                                        <FaFileAlt className="text-theme-secondary" /> Cover letter
+                                <div className="rounded-xl p-4" style={{ background: 'var(--ats-neutral)' }}>
+                                    <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>
+                                        <FaFileAlt style={{ color: 'var(--ats-primary)' }} /> Cover letter
                                     </p>
                                     {candidate.coverLetterAttachment?.url ? (
                                         <div className="mt-2 space-y-2">
-                                            <p className="truncate text-sm text-gray-600">
+                                            <p className="truncate text-sm" style={{ color: 'rgba(15,45,38,0.65)' }}>
                                                 {candidate.coverLetterAttachment.fileName || 'Cover letter file'}
                                             </p>
                                             {candidate.coverLetterAttachment.uploadedAt && (
-                                                <p className="text-xs text-gray-400">
+                                                <p className="text-xs" style={{ color: 'rgba(15,45,38,0.4)' }}>
                                                     Uploaded {format(new Date(candidate.coverLetterAttachment.uploadedAt), 'dd MMM yyyy')}
                                                 </p>
                                             )}
@@ -773,14 +774,14 @@ const CandidateDetailPage = () => {
                                                     href={candidate.coverLetterAttachment.url}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="inline-flex items-center gap-1.5 rounded-lg bg-theme-secondary px-3 py-1.5 text-xs font-semibold text-white hover:bg-theme-primary"
+                                                    className="cm-btn cm-btn--primary cm-btn--sm"
                                                 >
                                                     <FaExternalLinkAlt className="h-2.5 w-2.5" /> View
                                                 </a>
                                                 <a
                                                     href={candidate.coverLetterAttachment.url}
                                                     download={candidate.coverLetterAttachment.fileName || 'cover-letter'}
-                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                                    className="cm-btn cm-btn--outline cm-btn--sm"
                                                 >
                                                     <FaDownload className="h-2.5 w-2.5" /> Download
                                                 </a>
@@ -788,28 +789,28 @@ const CandidateDetailPage = () => {
                                         </div>
                                     ) : candidate.coverLetter ? (
                                         <div className="mt-2">
-                                            <p className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                                            <p className="whitespace-pre-wrap rounded-lg bg-white p-3 text-sm" style={{ color: 'rgba(15,45,38,0.75)', border: '1px solid rgba(15,45,38,0.08)' }}>
                                                 {candidate.coverLetter}
                                             </p>
                                         </div>
                                     ) : (
-                                        <p className="mt-2 text-sm text-gray-500">No cover letter uploaded</p>
+                                        <p className="mt-2 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No cover letter uploaded</p>
                                     )}
                                 </div>
                             </div>
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-                            <h2 className="mb-4 text-lg font-semibold text-gray-800">Notes</h2>
+                        <section className="cm-card lg:col-span-2">
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Notes</h2>
                             {(candidate.notes || []).length ? (
                                 <div className="space-y-2">
                                     {candidate.notes.map((n, index) => (
-                                        <div key={index} className="rounded-lg bg-gray-50 p-3 text-sm">
-                                            <p>{n.note}</p>
-                                            <p className="mt-1 text-xs text-gray-500">{n.addedAt ? format(new Date(n.addedAt), 'dd MMM yyyy') : ''}</p>
+                                        <div key={index} className="rounded-lg p-3 text-sm" style={{ background: 'var(--ats-neutral)' }}>
+                                            <p style={{ color: 'var(--ats-secondary)' }}>{n.note}</p>
+                                            <p className="mt-1 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>{n.addedAt ? format(new Date(n.addedAt), 'dd MMM yyyy') : ''}</p>
                                         </div>
                                     ))}
                                 </div>
-                            ) : <p className="text-sm text-gray-500">No notes added.</p>}
+                            ) : <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No notes added.</p>}
                         </section>
                     </div>
                 )}
@@ -817,21 +818,21 @@ const CandidateDetailPage = () => {
                 {activeTab === 'interview' && (
                     <div className="grid gap-6 lg:grid-cols-2">
                         {screeningLocked && (
-                            <p className="lg:col-span-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+                            <p className="lg:col-span-2 rounded-lg px-4 py-3 text-sm" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
                                 Interview actions are disabled — this candidate failed resume screening.
                             </p>
                         )}
-                        <section className={`rounded-xl border border-gray-200 bg-white p-5 shadow-sm ${screeningLocked ? 'pointer-events-none opacity-50' : ''}`}>
-                            <h2 className="mb-4 text-lg font-semibold">Schedule Interview</h2>
+                        <section className={`cm-card ${screeningLocked ? 'pointer-events-none opacity-50' : ''}`}>
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Schedule Interview</h2>
                             <form onSubmit={scheduleInterview} className="space-y-3 text-sm">
-                                <select className="w-full rounded-lg border px-3 py-2" value={interviewForm.interviewType} onChange={(e) => setInterviewForm((p) => ({ ...p, interviewType: e.target.value }))}>
+                                <select className="cm-select w-full" value={interviewForm.interviewType} onChange={(e) => setInterviewForm((p) => ({ ...p, interviewType: e.target.value }))}>
                                     {['Phone', 'Video', 'On-site', 'Technical', 'Panel', 'Final'].map((t) => <option key={t} value={t}>{t}</option>)}
                                 </select>
                                 <label className="block">
-                                    <span className="mb-1 block font-medium text-gray-700">Interviewer *</span>
+                                    <span className="ats-form-label">Interviewer *</span>
                                     <select
                                         required
-                                        className="w-full rounded-lg border px-3 py-2"
+                                        className="cm-select w-full"
                                         value={interviewForm.interviewer}
                                         onChange={(e) => setInterviewForm((p) => ({ ...p, interviewer: e.target.value }))}
                                     >
@@ -846,11 +847,11 @@ const CandidateDetailPage = () => {
                                     </select>
                                 </label>
                                 <label className="block">
-                                    <span className="mb-1 block font-medium text-gray-700">Date *</span>
+                                    <span className="ats-form-label">Date *</span>
                                     <input
                                         type="date"
                                         required
-                                        className="w-full rounded-lg border px-3 py-2"
+                                        className="cm-input w-full"
                                         value={interviewForm.scheduledDate}
                                         onChange={(e) => {
                                             const value = e.target.value;
@@ -862,17 +863,17 @@ const CandidateDetailPage = () => {
                                             setInterviewForm((p) => ({ ...p, scheduledDate: value }));
                                         }}
                                     />
-                                    <span className="mt-1 block text-xs text-gray-500">Weekdays only (Mon–Fri). Sat/Sun are off.</span>
+                                    <span className="ats-field-hint block">Weekdays only (Mon–Fri). Sat/Sun are off.</span>
                                 </label>
-                                <input type="time" className="w-full rounded-lg border px-3 py-2" value={interviewForm.scheduledTime} onChange={(e) => setInterviewForm((p) => ({ ...p, scheduledTime: e.target.value }))} />
-                                <input className="w-full rounded-lg border px-3 py-2" placeholder="Location" value={interviewForm.location} onChange={(e) => setInterviewForm((p) => ({ ...p, location: e.target.value }))} />
-                                <input className="w-full rounded-lg border px-3 py-2" placeholder="Meeting link" value={interviewForm.meetingLink} onChange={(e) => setInterviewForm((p) => ({ ...p, meetingLink: e.target.value }))} />
-                                <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Schedule</button>
+                                <input type="time" className="cm-input w-full" value={interviewForm.scheduledTime} onChange={(e) => setInterviewForm((p) => ({ ...p, scheduledTime: e.target.value }))} />
+                                <input className="cm-input w-full" placeholder="Location" value={interviewForm.location} onChange={(e) => setInterviewForm((p) => ({ ...p, location: e.target.value }))} />
+                                <input className="cm-input w-full" placeholder="Meeting link" value={interviewForm.meetingLink} onChange={(e) => setInterviewForm((p) => ({ ...p, meetingLink: e.target.value }))} />
+                                <CmButton type="submit" disabled={busy}>Schedule</CmButton>
                             </form>
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-                            <h2 className="mb-1 text-lg font-semibold">Interviews</h2>
-                            <p className="mb-4 text-xs text-gray-500">
+                        <section className="cm-card lg:col-span-2">
+                            <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Interviews</h2>
+                            <p className="mb-4 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                                 Feedback belongs to each interview. Form appears only after status is <strong>Completed</strong>.
                                 Assigned interviewers submit from Internal Jobs → My interviews; HR can review all feedback here.
                             </p>
@@ -888,65 +889,61 @@ const CandidateDetailPage = () => {
                                             : 'Unassigned';
                                         const editingThis = feedbackForm.interviewId === item._id;
                                         return (
-                                            <div key={item._id || `${item.scheduledDate}-${item.interviewType}`} className="rounded-xl border border-gray-200 p-4 text-sm">
+                                            <div key={item._id || `${item.scheduledDate}-${item.interviewType}`} className="rounded-xl p-4 text-sm" style={{ border: '1px solid rgba(15,45,38,0.08)' }}>
                                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                                     <div>
-                                                        <p className="font-semibold text-gray-900">
+                                                        <p className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>
                                                             {item.interviewType || 'Interview'}
                                                             {candidate.jobPostingId?.jobTitle ? ` — ${candidate.jobPostingId.jobTitle}` : ''}
                                                         </p>
-                                                        <p className="text-gray-500">
+                                                        <p style={{ color: 'rgba(15,45,38,0.5)' }}>
                                                             {item.scheduledDate ? format(new Date(item.scheduledDate), 'dd MMM yyyy') : 'No date'}
                                                             {item.scheduledTime ? ` · ${item.scheduledTime}` : ''}
                                                             {item.location ? ` · ${item.location}` : ''}
                                                         </p>
-                                                        <p className="mt-1 text-gray-700">Interviewer: {interviewerName}</p>
+                                                        <p className="mt-1" style={{ color: 'rgba(15,45,38,0.75)' }}>Interviewer: {interviewerName}</p>
                                                         {item.meetingLink && (
-                                                            <a href={item.meetingLink} className="text-theme-secondary hover:underline" target="_blank" rel="noreferrer">Join link</a>
+                                                            <a href={item.meetingLink} className="ats-link" target="_blank" rel="noreferrer">Join link</a>
                                                         )}
                                                     </div>
-                                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                                        isCompleted ? 'bg-emerald-100 text-emerald-800'
-                                                            : item.status === 'Cancelled' ? 'bg-red-100 text-red-800'
-                                                                : 'bg-amber-100 text-amber-800'
-                                                    }`}>
-                                                        {item.status || 'Scheduled'}
-                                                    </span>
+                                                    <AtsBadge status={item.status || 'Scheduled'}>{item.status || 'Scheduled'}</AtsBadge>
                                                 </div>
 
                                                 {!isCompleted && item.status !== 'Cancelled' && !screeningLocked && (
                                                     <div className="mt-3">
-                                                        <p className="mb-2 text-xs text-gray-500">
+                                                        <p className="mb-2 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                                                             Feedback is hidden until this interview is Completed.
                                                         </p>
-                                                        <button
+                                                        <CmButton
                                                             type="button"
+                                                            size="sm"
+                                                            variant="outline"
                                                             disabled={busy}
                                                             onClick={() => markInterviewCompleted(item._id)}
-                                                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                                                            style={{ color: '#006c51', borderColor: 'rgba(28,202,155,0.4)' }}
                                                         >
                                                             Mark as Completed
-                                                        </button>
+                                                        </CmButton>
                                                     </div>
                                                 )}
 
                                                 {isCompleted && hasFb && (
-                                                    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
-                                                        <p className="font-semibold text-emerald-900">Interview Feedback</p>
-                                                        <p className="mt-1 text-gray-700">Interviewer: {interviewerName}</p>
-                                                        <p className="text-gray-700">
+                                                    <div className="mt-4 rounded-lg p-3" style={{ background: 'rgba(28,202,155,0.06)', border: '1px solid rgba(28,202,155,0.15)' }}>
+                                                        <p className="font-semibold" style={{ color: '#006c51' }}>Interview Feedback</p>
+                                                        <p className="mt-1" style={{ color: 'rgba(15,45,38,0.75)' }}>Interviewer: {interviewerName}</p>
+                                                        <p style={{ color: 'rgba(15,45,38,0.75)' }}>
                                                             Recommendation: {item.feedback.recommendation || '—'}
                                                             {item.feedback.rating != null ? ` · Overall ${item.feedback.rating}/10` : ''}
                                                         </p>
-                                                        <p className="text-gray-600">
+                                                        <p style={{ color: 'rgba(15,45,38,0.6)' }}>
                                                             {item.feedback.technical != null ? `Tech ${item.feedback.technical}` : ''}
                                                             {item.feedback.communication != null ? ` · Comm ${item.feedback.communication}` : ''}
                                                             {item.feedback.behaviour != null ? ` · Behaviour ${item.feedback.behaviour}` : ''}
                                                         </p>
                                                         {item.feedback.comments && (
-                                                            <p className="mt-2 whitespace-pre-wrap text-gray-700">{item.feedback.comments}</p>
+                                                            <p className="mt-2 whitespace-pre-wrap" style={{ color: 'rgba(15,45,38,0.75)' }}>{item.feedback.comments}</p>
                                                         )}
-                                                        <p className="mt-2 text-xs text-gray-500">
+                                                        <p className="mt-2 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                                                             Submitted {item.feedback.submittedAt
                                                                 ? format(new Date(item.feedback.submittedAt), 'dd MMM yyyy, h:mm a')
                                                                 : '—'}
@@ -955,13 +952,13 @@ const CandidateDetailPage = () => {
                                                 )}
 
                                                 {isCompleted && !hasFb && !screeningLocked && (
-                                                    <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50/80 p-3">
+                                                    <div className="mt-4 rounded-lg p-3" style={{ background: 'var(--ats-neutral)' }}>
                                                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                                            <h3 className="font-semibold text-gray-800">Submit Feedback</h3>
+                                                            <h3 className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>Submit Feedback</h3>
                                                             {!editingThis && (
                                                                 <button
                                                                     type="button"
-                                                                    className="text-xs font-medium text-theme-secondary hover:underline"
+                                                                    className="ats-link !text-xs"
                                                                     onClick={() => setFeedbackForm((p) => ({
                                                                         ...p,
                                                                         interviewId: item._id,
@@ -980,22 +977,22 @@ const CandidateDetailPage = () => {
                                                         {editingThis ? (
                                                             <form onSubmit={(e) => submitFeedback(e, item._id)} className="space-y-3">
                                                                 <div className="grid grid-cols-2 gap-2">
-                                                                    <input type="number" min="0" max="10" placeholder="Overall rating" className="rounded-lg border px-3 py-2" value={feedbackForm.rating} onChange={(e) => setFeedbackForm((p) => ({ ...p, rating: e.target.value }))} />
-                                                                    <input type="number" min="0" max="10" placeholder="Technical" className="rounded-lg border px-3 py-2" value={feedbackForm.technical} onChange={(e) => setFeedbackForm((p) => ({ ...p, technical: e.target.value }))} />
-                                                                    <input type="number" min="0" max="10" placeholder="Communication" className="rounded-lg border px-3 py-2" value={feedbackForm.communication} onChange={(e) => setFeedbackForm((p) => ({ ...p, communication: e.target.value }))} />
-                                                                    <input type="number" min="0" max="10" placeholder="Behaviour" className="rounded-lg border px-3 py-2" value={feedbackForm.behaviour} onChange={(e) => setFeedbackForm((p) => ({ ...p, behaviour: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Overall rating" className="cm-input" value={feedbackForm.rating} onChange={(e) => setFeedbackForm((p) => ({ ...p, rating: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Technical" className="cm-input" value={feedbackForm.technical} onChange={(e) => setFeedbackForm((p) => ({ ...p, technical: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Communication" className="cm-input" value={feedbackForm.communication} onChange={(e) => setFeedbackForm((p) => ({ ...p, communication: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Behaviour" className="cm-input" value={feedbackForm.behaviour} onChange={(e) => setFeedbackForm((p) => ({ ...p, behaviour: e.target.value }))} />
                                                                 </div>
-                                                                <select className="w-full rounded-lg border px-3 py-2" value={feedbackForm.recommendation} onChange={(e) => setFeedbackForm((p) => ({ ...p, recommendation: e.target.value }))}>
+                                                                <select className="cm-select w-full" value={feedbackForm.recommendation} onChange={(e) => setFeedbackForm((p) => ({ ...p, recommendation: e.target.value }))}>
                                                                     {['Strong Hire', 'Hire', 'Maybe', 'No Hire'].map((r) => <option key={r} value={r}>{r}</option>)}
                                                                 </select>
-                                                                <textarea rows={3} className="w-full rounded-lg border px-3 py-2" placeholder="Comments" value={feedbackForm.comments} onChange={(e) => setFeedbackForm((p) => ({ ...p, comments: e.target.value }))} />
+                                                                <textarea rows={3} className="cm-input w-full" placeholder="Comments" value={feedbackForm.comments} onChange={(e) => setFeedbackForm((p) => ({ ...p, comments: e.target.value }))} />
                                                                 <div className="flex flex-wrap gap-2">
-                                                                    <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Save feedback</button>
-                                                                    <button type="button" className="rounded-lg border px-3 py-2 text-gray-600" onClick={() => setFeedbackForm((p) => ({ ...p, interviewId: '' }))}>Cancel</button>
+                                                                    <CmButton type="submit" size="sm" disabled={busy}>Save feedback</CmButton>
+                                                                    <CmButton type="button" size="sm" variant="outline" onClick={() => setFeedbackForm((p) => ({ ...p, interviewId: '' }))}>Cancel</CmButton>
                                                                 </div>
                                                             </form>
                                                         ) : (
-                                                            <p className="text-xs text-gray-500">
+                                                            <p className="text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                                                                 No feedback yet. Assigned interviewer can submit from My interviews, or HR can enter feedback here.
                                                             </p>
                                                         )}
@@ -1005,7 +1002,7 @@ const CandidateDetailPage = () => {
                                         );
                                     })}
                                 </div>
-                            ) : <p className="text-sm text-gray-500">No interviews scheduled.</p>}
+                            ) : <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No interviews scheduled.</p>}
                         </section>
                     </div>
                 )}
@@ -1013,12 +1010,12 @@ const CandidateDetailPage = () => {
                 {activeTab === 'assessments' && (
                     <div className="grid gap-6 lg:grid-cols-2">
                         {screeningLocked && (
-                            <p className="lg:col-span-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+                            <p className="lg:col-span-2 rounded-lg px-4 py-3 text-sm" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
                                 Assessment actions are disabled — this candidate failed resume screening.
                             </p>
                         )}
-                        <section className={`rounded-xl border border-gray-200 bg-white p-5 shadow-sm ${screeningLocked ? 'pointer-events-none opacity-50' : ''}`}>
-                            <h2 className="mb-4 text-lg font-semibold">Assign Assessment</h2>
+                        <section className={`cm-card ${screeningLocked ? 'pointer-events-none opacity-50' : ''}`}>
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Assign Assessment</h2>
                             <form
                                 onSubmit={async (e) => {
                                     e.preventDefault();
@@ -1042,29 +1039,29 @@ const CandidateDetailPage = () => {
                                 }}
                                 className="space-y-3 text-sm"
                             >
-                                <select name="type" className="w-full rounded-lg border px-3 py-2" defaultValue="MCQ">
+                                <select name="type" className="cm-select w-full" defaultValue="MCQ">
                                     {['Coding', 'MCQ', 'Excel', 'Behaviour', 'Typing', 'Other'].map((t) => <option key={t} value={t}>{t}</option>)}
                                 </select>
-                                <input name="title" required placeholder="Title" className="w-full rounded-lg border px-3 py-2" />
-                                <input name="dueAt" type="date" className="w-full rounded-lg border px-3 py-2" />
-                                <textarea name="notes" rows={2} placeholder="Notes / link instructions" className="w-full rounded-lg border px-3 py-2" />
-                                <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Assign</button>
+                                <input name="title" required placeholder="Title" className="cm-input w-full" />
+                                <input name="dueAt" type="date" className="cm-input w-full" />
+                                <textarea name="notes" rows={2} placeholder="Notes / link instructions" className="cm-input w-full" />
+                                <CmButton type="submit" disabled={busy}>Assign</CmButton>
                             </form>
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="mb-4 text-lg font-semibold">Assigned</h2>
+                        <section className="cm-card">
+                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Assigned</h2>
                             {(candidate.assessments || []).length === 0 ? (
-                                <p className="text-sm text-gray-500">No assessments yet.</p>
+                                <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No assessments yet.</p>
                             ) : (
                                 <div className="space-y-3">
                                     {candidate.assessments.map((a) => (
-                                        <div key={a._id} className="rounded-lg border p-3 text-sm">
-                                            <p className="font-medium">{a.type} — {a.title}</p>
-                                            <p className="text-gray-500">{a.status}{a.score != null ? ` · Score ${a.score}/${a.maxScore || 100}` : ''}</p>
+                                        <div key={a._id} className="rounded-lg p-3 text-sm" style={{ border: '1px solid rgba(15,45,38,0.08)' }}>
+                                            <p className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{a.type} — {a.title}</p>
+                                            <p style={{ color: 'rgba(15,45,38,0.5)' }}>{a.status}{a.score != null ? ` · Score ${a.score}/${a.maxScore || 100}` : ''}</p>
                                             {a.status !== 'Completed' && (
                                                 <button
                                                     type="button"
-                                                    className="mt-2 text-theme-secondary hover:underline"
+                                                    className="ats-link mt-2"
                                                     onClick={async () => {
                                                         const score = window.prompt('Score');
                                                         if (score == null) return;
@@ -1092,170 +1089,139 @@ const CandidateDetailPage = () => {
                 )}
 
                 {activeTab === 'comms' && (
-                    <div className="space-y-6">
-                        <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
-                            {/* <p className="font-medium">HR communication hub (not visible to candidates)</p>
-                            <p className="mt-1 text-sky-800/90">
-                                Quick actions send a <strong>real email</strong> to{' '}
-                                <span className="font-semibold">{candidate.email || '— no email on file —'}</span>
-                                {' '}(Gmail / Outlook / etc.). The candidate does not see this EMS timeline.
-                                {candidate.source === 'Email' ? (
-                                    <span className="mt-1 block">
-                                        Applied via <strong>Email / Resume Inbox</strong> — same send &amp; log tools as Career Portal applicants.
-                                    </span>
-                                ) : (
-                                    <span className="mt-1 block">
-                                        Source: <strong>{candidate.source || '—'}</strong>
-                                    </span>
-                                )}
-                            </p> */}
-                        </div>
-
-                        <div className="grid gap-6 lg:grid-cols-2">
-                            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                                <h2 className="mb-1 text-lg font-semibold text-gray-800">Send email to candidate</h2>
-                                {/* <p className="mb-4 text-xs text-gray-500">
-                                    Sends one real email and adds one auto-logged outbound entry to the timeline.
-                                </p> */}
-                                {screeningLocked && (
-                                    <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">
-                                        Failed screening — outbound emails are blocked. You can still add internal logs below.
-                                    </p>
-                                )}
-                                {!candidate.email && (
-                                    <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                                        No candidate email on file — cannot send.
-                                    </p>
-                                )}
-                                <div className="mb-6 flex flex-wrap gap-2">
-                                    {EMAIL_ACTION_BUTTONS.map((btn) => (
-                                        <button
-                                            key={btn.type}
-                                            type="button"
-                                            disabled={busy || screeningLocked || !candidate.email}
-                                            title={btn.needs}
-                                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
-                                            onClick={() => sendQuickEmail(btn.type)}
-                                        >
-                                            {btn.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <p className="mb-1 text-xs text-gray-400">
-                                    Click a button to open a short form — assign a job/role and complete any missing interview details, then send.
+                    <div className="grid gap-6 lg:grid-cols-2">
+                        <section className="cm-card">
+                            <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Send email to candidate</h2>
+                            {screeningLocked && (
+                                <p className="mb-3 rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
+                                    Failed screening — outbound emails are blocked. You can still add internal logs below.
                                 </p>
-
-                                <h3 className="mb-1 mt-6 text-base font-semibold text-gray-800">Log internal record</h3>
-                                {/* <p className="mb-3 text-xs text-gray-500">
-                                    Saves an HR-only history entry. Does <strong>not</strong> send email, SMS, or WhatsApp.
-                                </p> */}
-                                <form onSubmit={logComm} className="space-y-3 text-sm">
-                                    <select
-                                        className="w-full rounded-lg border px-3 py-2"
-                                        value={commForm.channel}
-                                        onChange={(e) => setCommForm((p) => ({ ...p, channel: e.target.value }))}
-                                    >
-                                        {[
-                                            { value: 'note', label: 'note (internal)' },
-                                            { value: 'call', label: 'call (log only)' },
-                                            { value: 'meeting', label: 'meeting (log only)' },
-                                            { value: 'email', label: 'email (log only — does not send)' },
-                                            { value: 'sms', label: 'sms (log only — does not send)' },
-                                            { value: 'whatsapp', label: 'whatsapp (log only — does not send)' },
-                                        ].map((c) => (
-                                            <option key={c.value} value={c.value}>{c.label}</option>
-                                        ))}
-                                    </select>
-                                    <input
-                                        className="w-full rounded-lg border px-3 py-2"
-                                        placeholder="Subject (optional)"
-                                        value={commForm.subject}
-                                        onChange={(e) => setCommForm((p) => ({ ...p, subject: e.target.value }))}
-                                    />
-                                    <textarea
-                                        required
-                                        rows={4}
-                                        className="w-full rounded-lg border px-3 py-2"
-                                        placeholder="Body / internal notes"
-                                        value={commForm.body}
-                                        onChange={(e) => setCommForm((p) => ({ ...p, body: e.target.value }))}
-                                    />
+                            )}
+                            {!candidate.email && (
+                                <p className="mb-3 rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(255,127,80,0.12)', color: '#7f2700' }}>
+                                    No candidate email on file — cannot send.
+                                </p>
+                            )}
+                            <div className="mb-6 flex flex-wrap gap-2">
+                                {EMAIL_ACTION_BUTTONS.map((btn) => (
                                     <button
-                                        type="submit"
-                                        disabled={busy}
-                                        className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60"
+                                        key={btn.type}
+                                        type="button"
+                                        disabled={busy || screeningLocked || !candidate.email}
+                                        title={btn.needs}
+                                        className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                                        style={{ background: 'rgba(28,202,155,0.1)', color: '#006c51', border: '1px solid rgba(28,202,155,0.25)' }}
+                                        onClick={() => sendQuickEmail(btn.type)}
                                     >
-                                        Log (HR only)
+                                        {btn.label}
                                     </button>
-                                </form>
-                            </section>
+                                ))}
+                            </div>
+                            <p className="mb-1 text-xs" style={{ color: 'rgba(15,45,38,0.4)' }}>
+                                Click a button to open a short form — assign a job/role and complete any missing interview details, then send.
+                            </p>
 
-                            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                                <h2 className="mb-1 text-lg font-semibold text-gray-800">Communication timeline</h2>
-                                {/* <p className="mb-4 text-xs text-gray-500">
-                                    HR history only — inbound mailbox, outbound emails, and internal logs.
-                                </p> */}
-                                <div className="mb-4 flex flex-wrap gap-2 text-xs">
-                                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">Inbound</span>
-                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">Outbound (emailed)</span>
-                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">Internal</span>
-                                </div>
-                                {(candidate.communications || []).length ? (
-                                    <div className="relative max-h-[32rem] space-y-0 overflow-y-auto border-l-2 border-gray-200 pl-4">
-                                        {[...candidate.communications].reverse().map((c, i) => {
-                                            const cls = classifyCommunication(c);
-                                            const typeLabel = c.emailType
-                                                ? (EMAIL_TYPE_LABELS[c.emailType] || c.emailType)
-                                                : null;
-                                            return (
-                                                <div key={i} className="relative mb-4 pb-2">
-                                                    <span className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full ${
-                                                        cls.kind === 'inbound' ? 'bg-sky-500'
-                                                            : cls.kind === 'outbound' ? 'bg-emerald-500'
-                                                                : 'bg-amber-500'
-                                                    }`}
-                                                    />
-                                                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls.badge}`}>
-                                                            {cls.label}
+                            <h3 className="mb-1 mt-6 text-base font-semibold" style={{ color: 'var(--ats-secondary)' }}>Log internal record</h3>
+                            <form onSubmit={logComm} className="space-y-3 text-sm">
+                                <select
+                                    className="cm-select w-full"
+                                    value={commForm.channel}
+                                    onChange={(e) => setCommForm((p) => ({ ...p, channel: e.target.value }))}
+                                >
+                                    {[
+                                        { value: 'note', label: 'note (internal)' },
+                                        { value: 'call', label: 'call (log only)' },
+                                        { value: 'meeting', label: 'meeting (log only)' },
+                                        { value: 'email', label: 'email (log only — does not send)' },
+                                        { value: 'sms', label: 'sms (log only — does not send)' },
+                                        { value: 'whatsapp', label: 'whatsapp (log only — does not send)' },
+                                    ].map((c) => (
+                                        <option key={c.value} value={c.value}>{c.label}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    className="cm-input w-full"
+                                    placeholder="Subject (optional)"
+                                    value={commForm.subject}
+                                    onChange={(e) => setCommForm((p) => ({ ...p, subject: e.target.value }))}
+                                />
+                                <textarea
+                                    required
+                                    rows={4}
+                                    className="cm-input w-full"
+                                    placeholder="Body / internal notes"
+                                    value={commForm.body}
+                                    onChange={(e) => setCommForm((p) => ({ ...p, body: e.target.value }))}
+                                />
+                                <CmButton type="submit" disabled={busy}>
+                                    Log (HR only)
+                                </CmButton>
+                            </form>
+                        </section>
+
+                        <section className="cm-card">
+                            <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Communication timeline</h2>
+                            <div className="mb-4 flex flex-wrap gap-2 text-xs">
+                                <span className="rounded-full px-2 py-0.5" style={{ background: 'rgba(56,161,255,0.12)', color: '#1a5aa8' }}>Inbound</span>
+                                <span className="rounded-full px-2 py-0.5" style={{ background: 'rgba(28,202,155,0.15)', color: '#006c51' }}>Outbound (emailed)</span>
+                                <span className="rounded-full px-2 py-0.5" style={{ background: 'rgba(255,127,80,0.15)', color: '#c45a2a' }}>Internal</span>
+                            </div>
+                            {(candidate.communications || []).length ? (
+                                <div className="relative max-h-[32rem] space-y-0 overflow-y-auto border-l-2 pl-4" style={{ borderColor: 'rgba(15,45,38,0.1)' }}>
+                                    {[...candidate.communications].reverse().map((c, i) => {
+                                        const cls = classifyCommunication(c);
+                                        const dotColor = cls.kind === 'inbound' ? '#38a1ff' : cls.kind === 'outbound' ? 'var(--ats-primary)' : 'var(--ats-tertiary)';
+                                        const badgeStyle = cls.kind === 'inbound'
+                                            ? { background: 'rgba(56,161,255,0.12)', color: '#1a5aa8' }
+                                            : cls.kind === 'outbound'
+                                                ? { background: 'rgba(28,202,155,0.15)', color: '#006c51' }
+                                                : { background: 'rgba(255,127,80,0.15)', color: '#c45a2a' };
+                                        const typeLabel = c.emailType
+                                            ? (EMAIL_TYPE_LABELS[c.emailType] || c.emailType)
+                                            : null;
+                                        return (
+                                            <div key={i} className="relative mb-4 pb-2">
+                                                <span className="absolute -left-[21px] top-1 h-3 w-3 rounded-full" style={{ background: dotColor }} />
+                                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                                    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={badgeStyle}>
+                                                        {cls.label}
+                                                    </span>
+                                                    {c.autoLogged && (
+                                                        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase" style={{ background: 'rgba(15,45,38,0.06)', color: 'rgba(15,45,38,0.55)' }}>
+                                                            auto
                                                         </span>
-                                                        {c.autoLogged && (
-                                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase text-gray-600">
-                                                                auto
-                                                            </span>
-                                                        )}
-                                                        <span className="text-xs text-gray-400">
-                                                            {c.createdAt ? format(new Date(c.createdAt), 'dd MMM yyyy HH:mm') : ''}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-sm font-medium capitalize text-gray-800">
-                                                        {c.channel}
-                                                        {typeLabel ? ` · ${typeLabel}` : ''}
-                                                    </p>
-                                                    <p className="text-[11px] text-gray-400">{cls.hint}</p>
-                                                    {c.subject && <p className="mt-1 text-gray-700">{c.subject}</p>}
-                                                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{c.body}</p>
+                                                    )}
+                                                    <span className="text-xs" style={{ color: 'rgba(15,45,38,0.4)' }}>
+                                                        {c.createdAt ? format(new Date(c.createdAt), 'dd MMM yyyy HH:mm') : ''}
+                                                    </span>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-gray-500">
-                                        No communications yet.
-                                        {candidate.source === 'Email'
-                                            ? ' After Resume Inbox import, inbound resume email should appear here; send an invite to add outbound history.'
-                                            : ' Send an email or log a note to start the history.'}
-                                    </p>
-                                )}
-                            </section>
-                        </div>
+                                                <p className="text-sm font-medium capitalize" style={{ color: 'var(--ats-secondary)' }}>
+                                                    {c.channel}
+                                                    {typeLabel ? ` · ${typeLabel}` : ''}
+                                                </p>
+                                                <p className="text-[11px]" style={{ color: 'rgba(15,45,38,0.4)' }}>{cls.hint}</p>
+                                                {c.subject && <p className="mt-1" style={{ color: 'rgba(15,45,38,0.75)' }}>{c.subject}</p>}
+                                                <p className="text-sm whitespace-pre-wrap" style={{ color: 'rgba(15,45,38,0.65)' }}>{c.body}</p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>
+                                    No communications yet.
+                                    {candidate.source === 'Email'
+                                        ? ' After Resume Inbox import, inbound resume email should appear here; send an invite to add outbound history.'
+                                        : ' Send an email or log a note to start the history.'}
+                                </p>
+                            )}
+                        </section>
                     </div>
                 )}
 
                 {activeTab === 'offer' && (
-                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <section className="cm-card">
                         {screeningLocked ? (
-                            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+                            <p className="rounded-lg px-4 py-3 text-sm" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
                                 Offer letter actions are disabled — this candidate failed resume screening.
                             </p>
                         ) : (
@@ -1263,7 +1229,6 @@ const CandidateDetailPage = () => {
                         )}
                     </section>
                 )}
-            </div>
 
             <HireEmployeeModal
                 candidateId={id}
@@ -1274,21 +1239,28 @@ const CandidateDetailPage = () => {
 
             {emailPrep && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                            {EMAIL_TYPE_LABELS[emailPrep.type] || 'Send email'}
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            Complete the fields below, then send. The email goes to{' '}
-                            <span className="font-medium text-gray-800">{candidate.email}</span>.
-                        </p>
+                    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>
+                                    {EMAIL_TYPE_LABELS[emailPrep.type] || 'Send email'}
+                                </h3>
+                                <p className="mt-1 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>
+                                    Complete the fields below, then send. The email goes to{' '}
+                                    <span className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{candidate.email}</span>.
+                                </p>
+                            </div>
+                            <button type="button" onClick={() => setEmailPrep(null)} className="ats-back !mb-0">
+                                <FaTimes className="h-3.5 w-3.5" /> Close
+                            </button>
+                        </div>
 
                         <form onSubmit={submitEmailPrep} className="mt-4 space-y-3 text-sm">
                             <div>
-                                <label className="mb-1 block font-medium text-gray-700">Job / Role *</label>
+                                <label className="ats-form-label">Job / Role *</label>
                                 <select
                                     required
-                                    className="w-full rounded-lg border px-3 py-2"
+                                    className="cm-select w-full"
                                     value={emailPrep.jobPostingId}
                                     onChange={(e) => setEmailPrep((p) => ({ ...p, jobPostingId: e.target.value }))}
                                 >
@@ -1300,7 +1272,7 @@ const CandidateDetailPage = () => {
                                     ))}
                                 </select>
                                 {!emailPrep.jobPostingId && (
-                                    <p className="mt-1 text-xs text-amber-700">
+                                    <p className="mt-1 text-xs" style={{ color: '#c45a2a' }}>
                                         Required — Resume Inbox “Unassigned” cannot be used in the email.
                                     </p>
                                 )}
@@ -1310,9 +1282,9 @@ const CandidateDetailPage = () => {
                                 <>
                                     <div className="grid gap-3 sm:grid-cols-2">
                                         <div>
-                                            <label className="mb-1 block font-medium text-gray-700">Interview type *</label>
+                                            <label className="ats-form-label">Interview type *</label>
                                             <select
-                                                className="w-full rounded-lg border px-3 py-2"
+                                                className="cm-select w-full"
                                                 value={emailPrep.interviewType}
                                                 onChange={(e) => setEmailPrep((p) => ({ ...p, interviewType: e.target.value }))}
                                             >
@@ -1322,9 +1294,9 @@ const CandidateDetailPage = () => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="mb-1 block font-medium text-gray-700">Interviewer {!emailPrep.interviewId ? '*' : ''}</label>
+                                            <label className="ats-form-label">Interviewer {!emailPrep.interviewId ? '*' : ''}</label>
                                             <select
-                                                className="w-full rounded-lg border px-3 py-2"
+                                                className="cm-select w-full"
                                                 value={emailPrep.interviewer}
                                                 onChange={(e) => setEmailPrep((p) => ({ ...p, interviewer: e.target.value }))}
                                                 required={!emailPrep.interviewId}
@@ -1340,43 +1312,43 @@ const CandidateDetailPage = () => {
                                     </div>
                                     <div className="grid gap-3 sm:grid-cols-2">
                                         <div>
-                                            <label className="mb-1 block font-medium text-gray-700">Date *</label>
+                                            <label className="ats-form-label">Date *</label>
                                             <input
                                                 type="date"
                                                 required
-                                                className="w-full rounded-lg border px-3 py-2"
+                                                className="cm-input w-full"
                                                 value={emailPrep.scheduledDate}
                                                 onChange={(e) => setEmailPrep((p) => ({ ...p, scheduledDate: e.target.value }))}
                                             />
                                         </div>
                                         <div>
-                                            <label className="mb-1 block font-medium text-gray-700">Time *</label>
+                                            <label className="ats-form-label">Time *</label>
                                             <input
                                                 type="text"
                                                 required
                                                 placeholder="e.g. 10:00 – 11:00"
-                                                className="w-full rounded-lg border px-3 py-2"
+                                                className="cm-input w-full"
                                                 value={emailPrep.scheduledTime}
                                                 onChange={(e) => setEmailPrep((p) => ({ ...p, scheduledTime: e.target.value }))}
                                             />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="mb-1 block font-medium text-gray-700">Meeting link</label>
+                                        <label className="ats-form-label">Meeting link</label>
                                         <input
                                             type="url"
                                             placeholder="https://…"
-                                            className="w-full rounded-lg border px-3 py-2"
+                                            className="cm-input w-full"
                                             value={emailPrep.meetingLink}
                                             onChange={(e) => setEmailPrep((p) => ({ ...p, meetingLink: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="mb-1 block font-medium text-gray-700">Location</label>
+                                        <label className="ats-form-label">Location</label>
                                         <input
                                             type="text"
                                             placeholder="Office / dial-in details"
-                                            className="w-full rounded-lg border px-3 py-2"
+                                            className="cm-input w-full"
                                             value={emailPrep.location}
                                             onChange={(e) => setEmailPrep((p) => ({ ...p, location: e.target.value }))}
                                         />
@@ -1385,39 +1357,38 @@ const CandidateDetailPage = () => {
                             )}
 
                             {emailPrep.type === 'joining_reminder' && (
-                                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <p className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(255,127,80,0.12)', color: '#7f2700' }}>
                                     Joining date and hiring state must already be set on the candidate. This form assigns the job title used in the email.
                                 </p>
                             )}
 
                             {emailPrep.type === 'offer_reminder' && (
-                                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <p className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(255,127,80,0.12)', color: '#7f2700' }}>
                                     A sent offer with portal link is still required. This form assigns the job title used in the email.
                                 </p>
                             )}
 
                             <div className="flex justify-end gap-2 pt-2">
-                                <button
+                                <CmButton
                                     type="button"
+                                    variant="outline"
                                     disabled={busy}
-                                    className="rounded-lg border px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                                     onClick={() => setEmailPrep(null)}
                                 >
                                     Cancel
-                                </button>
-                                <button
+                                </CmButton>
+                                <CmButton
                                     type="submit"
                                     disabled={busy}
-                                    className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-50"
                                 >
                                     {busy ? 'Sending…' : 'Save & send email'}
-                                </button>
+                                </CmButton>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-        </div>
+        </AtsPage>
     );
 };
 

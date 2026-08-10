@@ -26,7 +26,7 @@ export function CmBadge({ tone = 'neutral', children, dot = true, className = ''
   );
 }
 
-export function CmButton({ variant = 'primary', size, className = '', children, ...props }) {
+export function CmButton({ variant = 'primary', size, className = '', type = 'button', children, ...props }) {
   const v = {
     primary: 'cm-btn--primary',
     inverted: 'cm-btn--inverted',
@@ -37,7 +37,7 @@ export function CmButton({ variant = 'primary', size, className = '', children, 
   }[variant] || 'cm-btn--primary';
   const s = size === 'sm' ? 'cm-btn--sm' : size === 'icon' ? 'cm-btn--icon' : '';
   return (
-    <button type="button" className={`cm-btn ${v} ${s} ${className}`} {...props}>
+    <button type={type} className={`cm-btn ${v} ${s} ${className}`} {...props}>
       {children}
     </button>
   );

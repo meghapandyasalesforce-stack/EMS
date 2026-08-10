@@ -13,33 +13,22 @@ import {
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { normalizeResumeScreening, getScreeningBadgeClasses, formatScreeningDisplayLabel } from '../../utils/resumeScreeningDisplay';
+import { normalizeResumeScreening, formatScreeningDisplayLabel } from '../../utils/resumeScreeningDisplay';
+import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, CmButton } from '../../components/recruitment/atsUi';
 
-const StatCard = ({ label, value, tone = 'gray' }) => {
-    const tones = {
-        gray: 'bg-gray-50 text-gray-800 border-gray-200',
-        teal: 'bg-teal-50 text-teal-800 border-teal-200',
-        amber: 'bg-amber-50 text-amber-800 border-amber-200',
-        rose: 'bg-rose-50 text-rose-800 border-rose-200',
-        indigo: 'bg-indigo-50 text-indigo-800 border-indigo-200',
-    };
-    return (
-        <div className={`rounded-xl border p-4 ${tones[tone] || tones.gray}`}>
-            <p className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</p>
-            <p className="mt-1 text-2xl font-semibold">{value ?? 0}</p>
-        </div>
-    );
-};
+const StatCard = ({ label, value, tone }) => (
+    <div className="cm-stat">
+        <p className="cm-stat__label">{label}</p>
+        <p className={`cm-stat__value ${tone === 'attention' ? 'cm-stat__value--attention' : ''}`}>{value ?? 0}</p>
+    </div>
+);
 
-const statusBadge = (status) => {
-    const map = {
-        imported: 'bg-teal-100 text-teal-800',
-        duplicate: 'bg-amber-100 text-amber-800',
-        failed: 'bg-rose-100 text-rose-800',
-        pending: 'bg-gray-100 text-gray-700',
-        skipped: 'bg-gray-100 text-gray-500',
-    };
-    return map[status] || map.pending;
+const STATUS_TONE = {
+    imported: 'success',
+    duplicate: 'pending',
+    failed: 'error',
+    pending: 'neutral',
+    skipped: 'neutral',
 };
 
 const getProviderDefaults = (provider) => {
@@ -246,48 +235,41 @@ const ResumeInboxPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/recruitment')}
-                        className="mb-2 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-theme-secondary"
-                    >
-                        <FaArrowLeft /> Back to Recruitment
-                    </button>
-                    <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-800">
-                        <FaEnvelopeOpenText className="text-theme-secondary" />
+        <AtsPage>
+            <button
+                type="button"
+                onClick={() => navigate('/recruitment')}
+                className="ats-back"
+            >
+                <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
+            </button>
+
+            <AtsPageHeader
+                eyebrow="Recruitment"
+                title={(
+                    <span className="inline-flex items-center gap-2">
+                        <FaEnvelopeOpenText style={{ color: 'var(--ats-primary)' }} />
                         Resume Inbox
-                    </h1>
-                    <p className="mt-1 text-gray-600">
-                        Automatically import resumes emailed to your recruitment mailbox into the ATS
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setShowConfig((v) => !v)}
-                        className="rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-white"
-                    >
-                        Mailbox Settings
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handlePoll}
-                        disabled={polling}
-                        className="inline-flex items-center gap-2 rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white hover:bg-theme-primary disabled:opacity-60"
-                    >
-                        <FaSync className={polling ? 'animate-spin' : ''} />
-                        {polling ? 'Polling…' : 'Poll Now'}
-                    </button>
-                </div>
-            </div>
+                    </span>
+                )}
+                subtitle="Automatically import resumes emailed to your recruitment mailbox into the ATS"
+                actions={
+                    <>
+                        <CmButton variant="outline" size="sm" onClick={() => setShowConfig((v) => !v)}>
+                            Mailbox Settings
+                        </CmButton>
+                        <CmButton size="sm" onClick={handlePoll} disabled={polling}>
+                            <FaSync className={polling ? 'animate-spin' : ''} />
+                            {polling ? 'Polling…' : 'Poll Now'}
+                        </CmButton>
+                    </>
+                }
+            />
 
             {showConfig && (
-                <form onSubmit={handleSaveConfig} className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <h2 className="mb-3 font-semibold text-gray-800">Recruitment Mailbox (IMAP)</h2>
-                    <p className="mb-4 text-sm text-gray-500">
+                <form onSubmit={handleSaveConfig} className="cm-card">
+                    <h2 className="mb-3 font-semibold" style={{ color: 'var(--ats-secondary)' }}>Recruitment Mailbox (IMAP)</h2>
+                    <p className="mb-4 text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>
                         Use <strong>Gmail</strong> with a Google App Password for best results.
                         Outlook/Office 365 often blocks password IMAP login. Host fills automatically when you pick a provider.
                     </p>
@@ -301,9 +283,9 @@ const ResumeInboxPage = () => {
                             Enable automatic resume import
                         </label>
                         <label className="text-sm">
-                            Provider
+                            <span className="ats-form-label">Provider</span>
                             <select
-                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                className="cm-select w-full"
                                 value={config.provider || ''}
                                 onChange={(e) => {
                                     const provider = e.target.value;
@@ -320,126 +302,116 @@ const ResumeInboxPage = () => {
                             </select>
                         </label>
                         <label className="text-sm">
-                            Host
+                            <span className="ats-form-label">Host</span>
                             <input
-                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                className="cm-input w-full"
                                 value={config.host || ''}
                                 onChange={(e) => setConfig((c) => ({ ...c, host: e.target.value }))}
                                 placeholder="imap.gmail.com"
                             />
                         </label>
                         <label className="text-sm">
-                            Port
+                            <span className="ats-form-label">Port</span>
                             <input
                                 type="number"
-                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                className="cm-input w-full"
                                 value={config.port || 993}
                                 onChange={(e) => setConfig((c) => ({ ...c, port: e.target.value }))}
                             />
                         </label>
                         <label className="text-sm">
-                            Mailbox email
+                            <span className="ats-form-label">Mailbox email</span>
                             <input
                                 type="email"
-                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                className="cm-input w-full"
                                 value={config.user || ''}
                                 onChange={(e) => setConfig((c) => ({ ...c, user: e.target.value }))}
                                 placeholder="careers@company.com"
                             />
                         </label>
                         <label className="text-sm">
-                            Password / App password {config.hasPassword ? '(saved)' : ''}
+                            <span className="ats-form-label">Password / App password {config.hasPassword ? '(saved)' : ''}</span>
                             <input
                                 type="password"
-                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                className="cm-input w-full"
                                 value={config.password || ''}
                                 onChange={(e) => setConfig((c) => ({ ...c, password: e.target.value }))}
                                 placeholder={config.hasPassword ? '•••••••• (leave blank to keep)' : 'App password'}
                                 autoComplete="new-password"
                             />
                             {config.provider === 'gmail' && (
-                                <span className="mt-1 block text-xs text-gray-500">
+                                <span className="ats-field-hint block">
                                     Gmail requires an App Password (Google Account → Security → 2-Step Verification → App passwords).
                                     Enable IMAP under Gmail Settings → Forwarding and POP/IMAP.
                                 </span>
                             )}
                         </label>
                         <label className="text-sm">
-                            Folder
+                            <span className="ats-form-label">Folder</span>
                             <input
-                                className="mt-1 w-full rounded-lg border px-3 py-2"
+                                className="cm-input w-full"
                                 value={config.folder || 'INBOX'}
                                 onChange={(e) => setConfig((c) => ({ ...c, folder: e.target.value }))}
                             />
                         </label>
                     </div>
                     {config.lastPollError && (
-                        <p className="mt-3 text-sm text-rose-600">Last poll error: {config.lastPollError}</p>
+                        <p className="mt-3 text-sm" style={{ color: 'var(--ats-error)' }}>Last poll error: {config.lastPollError}</p>
                     )}
                     {config.lastPolledAt && (
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                             Last polled: {new Date(config.lastPolledAt).toLocaleString()}
                         </p>
                     )}
                     <div className="mt-4 flex flex-wrap gap-2">
-                        <button
+                        <CmButton
                             type="button"
+                            variant="outline"
                             onClick={handleTestConnection}
                             disabled={testingConnection || !config.user}
-                            className="rounded-lg border border-theme-secondary px-4 py-2 text-sm text-theme-secondary hover:bg-teal-50 disabled:opacity-60"
                         >
                             {testingConnection ? 'Testing…' : 'Test Connection'}
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={savingConfig}
-                            className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white disabled:opacity-60"
-                        >
+                        </CmButton>
+                        <CmButton type="submit" disabled={savingConfig}>
                             {savingConfig ? 'Saving…' : 'Save Settings'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setShowConfig(false)}
-                            className="rounded-lg border px-4 py-2 text-sm"
-                        >
+                        </CmButton>
+                        <CmButton type="button" variant="outline" onClick={() => setShowConfig(false)}>
                             Cancel
-                        </button>
+                        </CmButton>
                     </div>
                 </form>
             )}
 
-            <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Unread Imports" value={stats.unread} tone="indigo" />
-                <StatCard label="Imported Today" value={stats.importedToday} tone="teal" />
-                <StatCard label="Failed Imports" value={stats.failed} tone="rose" />
-                <StatCard label="Duplicate Candidates" value={stats.duplicates} tone="amber" />
+            <div className="ats-stat-grid">
+                <StatCard label="Unread Imports" value={stats.unread} />
+                <StatCard label="Imported Today" value={stats.importedToday} />
+                <StatCard label="Failed Imports" value={stats.failed} tone="attention" />
+                <StatCard label="Duplicate Candidates" value={stats.duplicates} tone="attention" />
             </div>
 
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="ats-filter-pills">
                 {['', 'imported', 'duplicate', 'failed'].map((s) => (
                     <button
                         key={s || 'all'}
                         type="button"
                         onClick={() => setFilter(s)}
-                        className={`rounded-full px-3 py-1 text-sm ${
-                            filter === s ? 'bg-theme-secondary text-white' : 'border bg-white text-gray-700'
-                        }`}
+                        className={`ats-filter-pill ${filter === s ? 'ats-filter-pill--active' : ''}`}
                     >
                         {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All'}
                     </button>
                 ))}
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div className="border-b px-4 py-3">
-                    <h2 className="font-semibold text-gray-800">Recently Imported Resumes</h2>
+            <div className="ats-table-wrap">
+                <div className="border-b border-[rgba(15,45,38,0.08)] px-5 py-4">
+                    <h2 className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>Recently Imported Resumes</h2>
                 </div>
                 {imports.length === 0 ? (
-                    <p className="p-6 text-sm text-gray-500">
+                    <p className="p-6 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>
                         No imports yet. Enable the mailbox and click Poll Now, or wait for the automatic 5-minute sync.
                     </p>
                 ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-[rgba(15,45,38,0.06)]">
                         {imports.map((item) => {
                             const name = item.candidateId
                                 ? `${item.candidateId.firstName || ''} ${item.candidateId.lastName || ''}`.trim()
@@ -456,25 +428,20 @@ const ResumeInboxPage = () => {
                             return (
                                 <div
                                     key={item._id}
-                                    className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-                                        item.isUnread ? 'bg-indigo-50/40' : ''
-                                    }`}
+                                    className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                    style={item.isUnread ? { background: 'rgba(56,161,255,0.05)' } : undefined}
                                 >
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <p className="font-medium text-gray-900">{name || 'Unknown'}</p>
-                                            <span className={`rounded-full px-2 py-0.5 text-xs ${statusBadge(item.status)}`}>
-                                                {item.status}
-                                            </span>
-                                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getScreeningBadgeClasses(screening)}`}>
-                                                {screeningLabel}
-                                            </span>
+                                            <p className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{name || 'Unknown'}</p>
+                                            <AtsBadge tone={STATUS_TONE[item.status] || 'neutral'}>{item.status}</AtsBadge>
+                                            <AtsBadge status={screeningLabel}>{screeningLabel}</AtsBadge>
                                             {item.isUnread && (
-                                                <span className="text-xs font-medium text-indigo-600">Unread</span>
+                                                <span className="text-xs font-medium" style={{ color: '#1a5aa8' }}>Unread</span>
                                             )}
                                         </div>
-                                        <p className="truncate text-sm text-gray-600">{item.subject || '(no subject)'}</p>
-                                        <p className="text-xs text-gray-500">
+                                        <p className="truncate text-sm" style={{ color: 'rgba(15,45,38,0.65)' }}>{item.subject || '(no subject)'}</p>
+                                        <p className="text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
                                             {item.fromAddress}
                                             {' · '}
                                             {item.receivedAt ? new Date(item.receivedAt).toLocaleString() : ''}
@@ -484,7 +451,7 @@ const ResumeInboxPage = () => {
                                             {isHolding ? 'Unassigned' : jobTitle}
                                         </p>
                                         {item.failureReason && (
-                                            <p className="mt-1 flex items-center gap-1 text-xs text-rose-600">
+                                            <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: 'var(--ats-error)' }}>
                                                 <FaExclamationTriangle /> {item.failureReason}
                                             </p>
                                         )}
@@ -500,9 +467,9 @@ const ResumeInboxPage = () => {
                                                     handleMarkRead(item._id);
                                                     navigate(`/recruitment/candidates/${item.candidateId._id}`);
                                                 }}
-                                                className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm hover:border-theme-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                                                className="cm-btn cm-btn--outline cm-btn--sm disabled:cursor-not-allowed disabled:opacity-40"
                                             >
-                                                <FaUserPlus /> Open Candidate
+                                                <FaUserPlus className="h-3 w-3" /> Open Candidate
                                             </button>
                                         )}
                                         {!isRejected && (isHolding || item.status === 'imported' || item.status === 'duplicate') && item.candidateId && (
@@ -512,27 +479,28 @@ const ResumeInboxPage = () => {
                                                     setAssignFor(item._id);
                                                     setSelectedJobId('');
                                                 }}
-                                                className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm hover:border-theme-secondary"
+                                                className="cm-btn cm-btn--outline cm-btn--sm"
                                             >
-                                                <FaBriefcase /> Assign Job
+                                                <FaBriefcase className="h-3 w-3" /> Assign Job
                                             </button>
                                         )}
                                         {item.status === 'failed' && (
                                             <button
                                                 type="button"
                                                 onClick={() => handleRetry(item._id)}
-                                                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50"
+                                                className="cm-btn cm-btn--outline cm-btn--sm"
+                                                style={{ color: 'var(--ats-error)', borderColor: 'rgba(229,62,62,0.35)' }}
                                             >
-                                                <FaSync /> Retry
+                                                <FaSync className="h-3 w-3" /> Retry
                                             </button>
                                         )}
                                         {item.isUnread && (
                                             <button
                                                 type="button"
                                                 onClick={() => handleMarkRead(item._id)}
-                                                className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-600"
+                                                className="cm-btn cm-btn--outline cm-btn--sm"
                                             >
-                                                <FaCheck /> Mark Read
+                                                <FaCheck className="h-3 w-3" /> Mark Read
                                             </button>
                                         )}
                                         {item.resume?.url && (
@@ -540,7 +508,7 @@ const ResumeInboxPage = () => {
                                                 href={item.resume.url}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
+                                                className="cm-btn cm-btn--outline cm-btn--sm"
                                             >
                                                 Resume
                                             </a>
@@ -548,9 +516,9 @@ const ResumeInboxPage = () => {
                                         <button
                                             type="button"
                                             onClick={() => handleDelete(item._id)}
-                                            className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-600 hover:border-rose-300 hover:text-rose-700"
+                                            className="cm-btn cm-btn--outline cm-btn--sm"
                                         >
-                                            <FaTrash /> Delete
+                                            <FaTrash className="h-3 w-3" /> Delete
                                         </button>
                                     </div>
                                 </div>
@@ -562,11 +530,11 @@ const ResumeInboxPage = () => {
 
             {assignFor && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-                        <h3 className="text-lg font-semibold text-gray-900">Assign to Job</h3>
-                        <p className="mt-1 text-sm text-gray-500">Select an open job posting for this candidate.</p>
+                    <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+                        <h3 className="text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Assign to Job</h3>
+                        <p className="mt-1 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>Select an open job posting for this candidate.</p>
                         <select
-                            className="mt-4 w-full rounded-lg border px-3 py-2"
+                            className="cm-select mt-4 w-full"
                             value={selectedJobId}
                             onChange={(e) => setSelectedJobId(e.target.value)}
                         >
@@ -578,26 +546,17 @@ const ResumeInboxPage = () => {
                             ))}
                         </select>
                         <div className="mt-4 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setAssignFor(null)}
-                                className="rounded-lg border px-4 py-2 text-sm"
-                            >
+                            <CmButton type="button" variant="outline" onClick={() => setAssignFor(null)}>
                                 Cancel
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!selectedJobId}
-                                onClick={handleAssign}
-                                className="rounded-lg bg-theme-secondary px-4 py-2 text-sm text-white disabled:opacity-50"
-                            >
+                            </CmButton>
+                            <CmButton type="button" disabled={!selectedJobId} onClick={handleAssign}>
                                 Assign
-                            </button>
+                            </CmButton>
                         </div>
                     </div>
                 </div>
             )}
-        </div>
+        </AtsPage>
     );
 };
 

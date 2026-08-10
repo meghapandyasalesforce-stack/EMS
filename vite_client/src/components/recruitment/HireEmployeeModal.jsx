@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import { CmButton } from './atsUi';
 
 /**
  * Hire → Employee conversion form.
@@ -89,92 +90,92 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-900">Hire → Create Employee</h2>
-                    <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-800">✕</button>
+        <div className="cm-hrms ats-ui fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,45,38,0.45)' }}>
+            <div className="cm-card max-h-[90vh] w-full max-w-2xl overflow-y-auto !p-6" style={{ boxShadow: 'var(--ats-shadow-md)' }}>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <h2 className="cm-title-sm m-0">Hire → Create Employee</h2>
+                    <button type="button" onClick={onClose} className="ats-link text-lg leading-none" aria-label="Close">✕</button>
                 </div>
 
                 {loading ? (
-                    <p className="text-sm text-gray-500">Loading…</p>
+                    <p className="text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>Loading…</p>
                 ) : result ? (
                     <div className="space-y-3 text-sm">
-                        <p className="rounded-lg bg-emerald-50 p-3 text-emerald-800">
+                        <p className="rounded-lg px-3 py-3" style={{ background: 'rgba(28,202,155,0.12)', color: '#006c51' }}>
                             Employee <strong>{result.employee?.employeeId}</strong> created
                             {result.onboarding ? ' and onboarding started.' : '.'}
                         </p>
                         {result.temporaryPassword && (
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                                <p className="font-medium text-amber-900">Temporary password (copy now)</p>
-                                <code className="mt-1 block break-all text-amber-900">{result.temporaryPassword}</code>
-                                <p className="mt-1 text-xs text-amber-700">A welcome email with credentials was also queued.</p>
+                            <div className="rounded-lg px-3 py-3" style={{ background: 'rgba(255,127,80,0.12)', color: '#7f2700' }}>
+                                <p className="font-medium">Temporary password (copy now)</p>
+                                <code className="mt-1 block break-all">{result.temporaryPassword}</code>
+                                <p className="mt-1 text-xs opacity-80">A welcome email with credentials was also queued.</p>
                             </div>
                         )}
                         {result.onboardingError && (
-                            <p className="text-amber-700">Onboarding note: {result.onboardingError}</p>
+                            <p style={{ color: '#c45a2a' }}>Onboarding note: {result.onboardingError}</p>
                         )}
                         <div className="flex justify-end gap-2 pt-2">
-                            <button type="button" onClick={onClose} className="rounded-lg bg-theme-secondary px-4 py-2 text-white">Done</button>
+                            <CmButton onClick={onClose}>Done</CmButton>
                         </div>
                     </div>
                 ) : (
                     <form onSubmit={submit} className="space-y-3 text-sm">
-                        <p className="text-gray-600">
+                        <p style={{ color: 'rgba(15,45,38,0.65)' }}>
                             Creates employee ID, login, assigns role/department/manager, queues welcome email, and starts onboarding.
                         </p>
                         <div className="grid gap-3 sm:grid-cols-2">
                             <label className="block">
-                                <span className="mb-1 block font-medium">First name *</span>
-                                <input required className="w-full rounded-lg border px-3 py-2" value={form.name || ''} onChange={(e) => set('name', e.target.value)} />
+                                <span className="ats-form-label">First name *</span>
+                                <input required className="cm-input w-full" value={form.name || ''} onChange={(e) => set('name', e.target.value)} />
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Last name *</span>
-                                <input required className="w-full rounded-lg border px-3 py-2" value={form.lastName || ''} onChange={(e) => set('lastName', e.target.value)} />
+                                <span className="ats-form-label">Last name *</span>
+                                <input required className="cm-input w-full" value={form.lastName || ''} onChange={(e) => set('lastName', e.target.value)} />
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Email *</span>
-                                <input type="email" required className="w-full rounded-lg border px-3 py-2" value={form.email || ''} onChange={(e) => set('email', e.target.value)} />
+                                <span className="ats-form-label">Email *</span>
+                                <input type="email" required className="cm-input w-full" value={form.email || ''} onChange={(e) => set('email', e.target.value)} />
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Phone</span>
-                                <input className="w-full rounded-lg border px-3 py-2" value={form.phone || ''} onChange={(e) => set('phone', e.target.value)} />
+                                <span className="ats-form-label">Phone</span>
+                                <input className="cm-input w-full" value={form.phone || ''} onChange={(e) => set('phone', e.target.value)} />
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Department *</span>
-                                <select required className="w-full rounded-lg border px-3 py-2" value={form.department || ''} onChange={(e) => set('department', e.target.value)}>
+                                <span className="ats-form-label">Department *</span>
+                                <select required className="cm-select w-full" value={form.department || ''} onChange={(e) => set('department', e.target.value)}>
                                     {(enums.departments || []).map((d) => <option key={d} value={d}>{d}</option>)}
                                 </select>
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Job title *</span>
-                                <select required className="w-full rounded-lg border px-3 py-2" value={form.jobTitle || ''} onChange={(e) => set('jobTitle', e.target.value)}>
+                                <span className="ats-form-label">Job title *</span>
+                                <select required className="cm-select w-full" value={form.jobTitle || ''} onChange={(e) => set('jobTitle', e.target.value)}>
                                     {(enums.jobTitles || []).map((d) => <option key={d} value={d}>{d}</option>)}
                                 </select>
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Position *</span>
-                                <select required className="w-full rounded-lg border px-3 py-2" value={form.position || ''} onChange={(e) => set('position', e.target.value)}>
+                                <span className="ats-form-label">Position *</span>
+                                <select required className="cm-select w-full" value={form.position || ''} onChange={(e) => set('position', e.target.value)}>
                                     {(enums.positions || []).map((d) => <option key={d} value={d}>{d}</option>)}
                                 </select>
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Job category *</span>
-                                <select required className="w-full rounded-lg border px-3 py-2" value={form.jobCategory || ''} onChange={(e) => set('jobCategory', e.target.value)}>
+                                <span className="ats-form-label">Job category *</span>
+                                <select required className="cm-select w-full" value={form.jobCategory || ''} onChange={(e) => set('jobCategory', e.target.value)}>
                                     {(enums.jobCategories || []).map((d) => <option key={d} value={d}>{d}</option>)}
                                 </select>
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Salary *</span>
-                                <input type="number" required min="1" className="w-full rounded-lg border px-3 py-2" value={form.salary || ''} onChange={(e) => set('salary', e.target.value)} />
+                                <span className="ats-form-label">Salary *</span>
+                                <input type="number" required min="1" className="cm-input w-full" value={form.salary || ''} onChange={(e) => set('salary', e.target.value)} />
                             </label>
                             <label className="block">
-                                <span className="mb-1 block font-medium">Joining date</span>
-                                <input type="date" className="w-full rounded-lg border px-3 py-2" value={form.joiningDate || ''} onChange={(e) => set('joiningDate', e.target.value)} />
+                                <span className="ats-form-label">Joining date</span>
+                                <input type="date" className="cm-input w-full" value={form.joiningDate || ''} onChange={(e) => set('joiningDate', e.target.value)} />
                             </label>
                             <label className="block sm:col-span-2">
-                                <span className="mb-1 block font-medium">Reporting manager *</span>
-                                <select required={managers.length > 0} className="w-full rounded-lg border px-3 py-2" value={form.managerId || ''} onChange={(e) => set('managerId', e.target.value)}>
+                                <span className="ats-form-label">Reporting manager *</span>
+                                <select required={managers.length > 0} className="cm-select w-full" value={form.managerId || ''} onChange={(e) => set('managerId', e.target.value)}>
                                     <option value="">Select manager</option>
                                     {managers.map((m) => (
                                         <option key={m._id} value={m._id}>
@@ -184,11 +185,11 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
                                 </select>
                             </label>
                         </div>
-                        <div className="flex justify-end gap-2 border-t pt-4">
-                            <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2">Cancel</button>
-                            <button type="submit" disabled={submitting} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">
+                        <div className="flex justify-end gap-2 border-t border-[rgba(15,45,38,0.08)] pt-4">
+                            <CmButton type="button" variant="outline" onClick={onClose}>Cancel</CmButton>
+                            <CmButton type="submit" disabled={submitting}>
                                 {submitting ? 'Creating…' : 'Create Employee & Start Onboarding'}
-                            </button>
+                            </CmButton>
                         </div>
                     </form>
                 )}

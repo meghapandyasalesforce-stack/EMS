@@ -48,7 +48,15 @@ export const postInternalApply = asyncHandler(async (req, res) => {
             mode: 'apply',
             candidatePayload: req.body,
         });
-        res.status(201).json({ success: true, message: 'Application submitted', data: result.candidate });
+        const already = !!result.alreadyApplied;
+        res.status(already ? 200 : 201).json({
+            success: true,
+            alreadyApplied: already,
+            message: already
+                ? 'You already applied to this job — it is now linked to My Applications'
+                : 'Application submitted',
+            data: result.candidate,
+        });
     } catch (err) {
         res.status(err.status || 500).json({ success: false, message: err.message });
     }
@@ -89,6 +97,7 @@ export const getMyApplications = asyncHandler(async (req, res) => {
     if (!employee) return;
     const organizationId = getOrganizationId(req);
     const data = await listMyInternalApplications(organizationId, employee._id, employee.email);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ success: true, data });
 });
 

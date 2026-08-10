@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import { FaArrowLeft, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaArrowLeft, FaExternalLinkAlt, FaEdit } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { normalizeResumeScreening, getScreeningBadgeClasses, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
+import { normalizeResumeScreening, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
+import { AtsPage, AtsBadge, CmButton } from '../../components/recruitment/atsUi';
 
 const JobDetailPage = () => {
     const { id } = useParams();
@@ -199,254 +200,261 @@ const JobDetailPage = () => {
     const careerUrl = orgId ? `${window.location.origin}/careers/${orgId}/jobs/${job._id}` : '';
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <div className="mx-auto max-w-5xl">
-                <button type="button" onClick={() => navigate('/recruitment')} className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-                    <FaArrowLeft /> Back to Recruitment
-                </button>
+        <AtsPage>
+            <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
+                <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
+            </button>
 
-                <div className="mb-6 flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">{job.jobTitle}</h1>
-                        <p className="mt-1 text-gray-600">{job.department} · {job.location} · {job.employmentType}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{job.status}</span>
-                            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{job.priority} priority</span>
-                            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{job.filledPositions || 0}/{job.numberOfPositions || 1} filled</span>
-                            {job.archivedAt && <span className="rounded-full bg-red-100 px-3 py-1 text-sm text-red-700">Archived</span>}
-                        </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {['Draft', 'Open', 'On Hold', 'Closed'].map((s) => (
-                            <button
-                                key={s}
-                                type="button"
-                                disabled={saving || job.status === s}
-                                onClick={() => updateStatus(s)}
-                                className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40"
-                            >
-                                {s}
-                            </button>
-                        ))}
-                        {job.archivedAt ? (
-                            <button type="button" disabled={saving} onClick={() => archiveJob(true)} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50">
-                                Restore
-                            </button>
-                        ) : (
-                            <>
-                                <button type="button" disabled={saving} onClick={() => archiveJob(false)} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50">
-                                    Archive
-                                </button>
-                                <button type="button" disabled={saving} onClick={deleteJob} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
-                                    Delete
-                                </button>
-                            </>
-                        )}
+            <div className="cm-card flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h1 className="ats-page-title" style={{ fontSize: '1.5rem', lineHeight: '2rem' }}>{job.jobTitle}</h1>
+                    <p className="ats-page-subtitle">{job.department} · {job.location} · {job.employmentType}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        <AtsBadge status={job.status}>{job.status}</AtsBadge>
+                        <span className="ats-chip ats-chip--neutral" style={{ textTransform: 'none', letterSpacing: 0 }}>{job.priority} priority</span>
+                        <span className="ats-chip ats-chip--neutral" style={{ textTransform: 'none', letterSpacing: 0 }}>{job.filledPositions || 0}/{job.numberOfPositions || 1} filled</span>
+                        {job.archivedAt && <AtsBadge tone="error">Archived</AtsBadge>}
                     </div>
                 </div>
-
-                <div className="mb-6 grid gap-6 lg:grid-cols-2">
-                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <h2 className="mb-3 text-lg font-semibold">Description</h2>
-                        <p className="whitespace-pre-wrap text-sm text-gray-700">{job.jobDescription}</p>
-                        {(job.requirements || []).length > 0 && (
-                            <>
-                                <h3 className="mb-2 mt-4 font-medium">Requirements</h3>
-                                <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
-                                    {job.requirements.map((r, i) => <li key={i}>{r}</li>)}
-                                </ul>
-                            </>
-                        )}
-                    </section>
-                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <h2 className="mb-3 text-lg font-semibold">Details</h2>
-                        <dl className="space-y-2 text-sm">
-                            <div className="flex justify-between gap-4"><dt className="text-gray-500">Position</dt><dd>{job.position}</dd></div>
-                            <div className="flex justify-between gap-4"><dt className="text-gray-500">Posted</dt><dd>{job.postedDate ? format(new Date(job.postedDate), 'dd MMM yyyy') : '—'}</dd></div>
-                            <div className="flex justify-between gap-4"><dt className="text-gray-500">Applications</dt><dd>{job.currentApplications || candidates.length}</dd></div>
-                            {screeningStats && (
-                                <>
-                                    <div className="flex justify-between gap-4"><dt className="text-gray-500">Approved (screening)</dt><dd className="text-emerald-700 font-medium">{screeningStats.approvedCandidates}</dd></div>
-                                    <div className="flex justify-between gap-4"><dt className="text-gray-500">Rejected (screening)</dt><dd className="text-red-700 font-medium">{screeningStats.rejectedCandidates}</dd></div>
-                                    <div className="flex justify-between gap-4"><dt className="text-gray-500">Avg Match Score</dt><dd>{screeningStats.averageMatchScore != null ? `${screeningStats.averageMatchScore}%` : '—'}</dd></div>
-                                </>
-                            )}
-                        </dl>
-                        {(job.screeningCriteria?.requiredKeywords || []).length > 0 && (
-                            <div className="mt-4 border-t pt-3">
-                                <p className="text-xs font-medium uppercase text-gray-500">Screening Criteria</p>
-                                <p className="mt-1 text-sm text-gray-700">Min match: {job.screeningCriteria.minimumMatchPercent ?? 70}%</p>
-                                <p className="mt-1 text-xs text-gray-600">Required: {(job.screeningCriteria.requiredKeywords || []).join(', ')}</p>
-                            </div>
-                        )}
-                        <div className="mt-4 space-y-2 border-t pt-3">
-                            <p className="text-sm font-semibold text-gray-800">Edit Screening Criteria</p>
-                            <label className="flex items-center gap-2 text-xs text-gray-700">
-                                <input type="checkbox" checked={criteriaForm.enabled} onChange={(e) => setCriteriaForm((p) => ({ ...p, enabled: e.target.checked }))} />
-                                Enable auto-screening
-                            </label>
-                            <select
-                                className="w-full rounded-lg border px-2 py-1.5 text-xs"
-                                value={criteriaForm.templateId || ''}
-                                onChange={(e) => applyTemplateToCriteria(e.target.value)}
-                            >
-                                <option value="">None — enter keywords manually</option>
-                                {screeningTemplates.map((t) => (
-                                    <option key={t._id} value={t._id}>{t.name}</option>
-                                ))}
-                            </select>
-                            <textarea
-                                rows={3}
-                                className="w-full rounded-lg border px-2 py-1.5 text-xs"
-                                placeholder="Required keywords (one per line)"
-                                value={criteriaForm.requiredKeywords}
-                                onChange={(e) => setCriteriaForm((p) => ({ ...p, requiredKeywords: e.target.value }))}
-                            />
-                            <textarea
-                                rows={2}
-                                className="w-full rounded-lg border px-2 py-1.5 text-xs"
-                                placeholder="Optional keywords (one per line)"
-                                value={criteriaForm.optionalKeywords}
-                                onChange={(e) => setCriteriaForm((p) => ({ ...p, optionalKeywords: e.target.value }))}
-                            />
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                className="w-full rounded-lg border px-2 py-1.5 text-xs"
-                                value={criteriaForm.minimumMatchPercent}
-                                onChange={(e) => setCriteriaForm((p) => ({ ...p, minimumMatchPercent: e.target.value }))}
-                            />
-                            <button type="button" disabled={saving} onClick={saveScreeningCriteria} className="rounded-lg border px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50">
-                                Save criteria
-                            </button>
-                        </div>
-                        {careerUrl && job.status === 'Open' && !job.archivedAt && (
-                            <a href={careerUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm text-theme-secondary hover:underline">
-                                Open career apply page <FaExternalLinkAlt className="text-xs" />
-                            </a>
-                        )}
-                        {job.status === 'Open' && !job.archivedAt && (
-                            <button
-                                type="button"
-                                disabled={saving}
-                                onClick={notifyEmployees}
-                                className="mt-3 block text-sm text-theme-secondary hover:underline disabled:opacity-50"
-                            >
-                                Notify employees in-app (internal board)
-                            </button>
-                        )}
-                    </section>
-                </div>
-
-                {screeningStats?.topMatchingCandidates?.length > 0 && (
-                    <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <h2 className="mb-3 text-lg font-semibold">Top Matching Candidates</h2>
-                        <ul className="divide-y text-sm">
-                            {screeningStats.topMatchingCandidates.slice(0, 5).map((c) => (
-                                <li key={c._id} className="flex items-center justify-between py-2">
-                                    <button type="button" className="text-left text-theme-secondary hover:underline" onClick={() => navigate(`/recruitment/candidates/${c._id}`)}>
-                                        {c.firstName} {c.lastName}
-                                    </button>
-                                    <span className="font-medium">{c.resumeScreening?.matchScore != null ? `${c.resumeScreening.matchScore}%` : '—'}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
-                )}
-
-                <div className="mb-4 flex gap-2">
-                    <button type="button" onClick={() => setTab('candidates')} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === 'candidates' ? 'bg-theme-primary/10 text-theme-primary' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        Candidates ({candidates.length})
-                    </button>
-                    <button type="button" onClick={() => setTab('ranked')} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === 'ranked' ? 'bg-theme-primary/10 text-theme-primary' : 'text-gray-600 hover:bg-gray-100'}`}>
-                        Ranked by score
-                    </button>
-                    <button type="button" onClick={() => navigate(`/recruitment/pipeline?jobPostingId=${id}`)} className="ml-auto text-sm text-theme-secondary hover:underline">
-                        View in pipeline
-                    </button>
-                </div>
-
-                <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    {tab === 'candidates' ? (
-                        candidates.length === 0 ? (
-                            <p className="text-sm text-gray-500">No candidates yet.</p>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left">Name</th>
-                                            <th className="px-4 py-2 text-left">Status</th>
-                                            <th className="px-4 py-2 text-left">Screening</th>
-                                            <th className="px-4 py-2 text-left">Match</th>
-                                            <th className="px-4 py-2 text-left">Applied</th>
-                                            <th className="px-4 py-2 text-left" />
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {candidates.map((c) => {
-                                            const screening = normalizeResumeScreening(c.resumeScreening);
-                                            return (
-                                            <tr key={c._id}>
-                                                <td className="px-4 py-2">{c.firstName} {c.lastName}</td>
-                                                <td className="px-4 py-2">{c.status}</td>
-                                                <td className="px-4 py-2">
-                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getScreeningBadgeClasses(screening)}`}>
-                                                        {screening.label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-2">{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</td>
-                                                <td className="px-4 py-2">{c.applicationDate ? format(new Date(c.applicationDate), 'dd MMM yyyy') : '—'}</td>
-                                                <td className="px-4 py-2">
-                                                    <button type="button" className="text-theme-secondary hover:underline" onClick={() => navigate(`/recruitment/candidates/${c._id}`)}>View</button>
-                                                </td>
-                                            </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )
-                    ) : ranked.length === 0 ? (
-                        <p className="text-sm text-gray-500">No scored candidates yet. Add scores on candidate profiles to rank them.</p>
+                <div className="flex flex-wrap gap-2">
+                    <CmButton
+                        type="button"
+                        size="sm"
+                        onClick={() => navigate(`/recruitment/jobs/${id}/edit`)}
+                    >
+                        <FaEdit className="h-3.5 w-3.5" /> Edit Job
+                    </CmButton>
+                    {['Draft', 'Open', 'On Hold', 'Closed'].map((s) => (
+                        <CmButton
+                            key={s}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={saving || job.status === s}
+                            onClick={() => updateStatus(s)}
+                        >
+                            {s}
+                        </CmButton>
+                    ))}
+                    {job.archivedAt ? (
+                        <CmButton type="button" size="sm" variant="outline" disabled={saving} onClick={() => archiveJob(true)} style={{ color: '#006c51', borderColor: 'rgba(28,202,155,0.4)' }}>
+                            Restore
+                        </CmButton>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left">Rank</th>
-                                        <th className="px-4 py-2 text-left">Name</th>
-                                        <th className="px-4 py-2 text-left">Overall</th>
-                                        <th className="px-4 py-2 text-left">Resume</th>
-                                        <th className="px-4 py-2 text-left">Technical</th>
-                                        <th className="px-4 py-2 text-left">Cultural</th>
-                                        <th className="px-4 py-2 text-left">Status</th>
-                                        <th className="px-4 py-2 text-left" />
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                    {ranked.map((c, idx) => (
-                                        <tr key={c._id}>
-                                            <td className="px-4 py-2 font-semibold">#{idx + 1}</td>
-                                            <td className="px-4 py-2">{c.firstName} {c.lastName}</td>
-                                            <td className="px-4 py-2">{c.scores?.overallScore != null ? Math.round(c.scores.overallScore) : '—'}</td>
-                                            <td className="px-4 py-2">{c.scores?.resumeScore ?? '—'}</td>
-                                            <td className="px-4 py-2">{c.scores?.technicalScore ?? '—'}</td>
-                                            <td className="px-4 py-2">{c.scores?.culturalFitScore ?? '—'}</td>
-                                            <td className="px-4 py-2">{c.status}</td>
-                                            <td className="px-4 py-2">
-                                                <button type="button" className="text-theme-secondary hover:underline" onClick={() => navigate(`/recruitment/candidates/${c._id}`)}>View</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <>
+                            <CmButton type="button" size="sm" variant="outline" disabled={saving} onClick={() => archiveJob(false)}>
+                                Archive
+                            </CmButton>
+                            <CmButton type="button" size="sm" variant="outline" disabled={saving} onClick={deleteJob} style={{ color: 'var(--ats-error)', borderColor: 'rgba(229,62,62,0.35)' }}>
+                                Delete
+                            </CmButton>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+                <section className="cm-card">
+                    <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Description</h2>
+                    <p className="whitespace-pre-wrap text-sm" style={{ color: 'rgba(15,45,38,0.75)' }}>{job.jobDescription}</p>
+                    {(job.requirements || []).length > 0 && (
+                        <>
+                            <h3 className="mb-2 mt-4 font-medium" style={{ color: 'var(--ats-secondary)' }}>Requirements</h3>
+                            <ul className="list-disc space-y-1 pl-5 text-sm" style={{ color: 'rgba(15,45,38,0.75)' }}>
+                                {job.requirements.map((r, i) => <li key={i}>{r}</li>)}
+                            </ul>
+                        </>
+                    )}
+                </section>
+                <section className="cm-card">
+                    <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Details</h2>
+                    <dl className="space-y-2 text-sm">
+                        <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Position</dt><dd>{job.position}</dd></div>
+                        <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Posted</dt><dd>{job.postedDate ? format(new Date(job.postedDate), 'dd MMM yyyy') : '—'}</dd></div>
+                        <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Applications</dt><dd>{job.currentApplications || candidates.length}</dd></div>
+                        {screeningStats && (
+                            <>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Approved (screening)</dt><dd className="font-medium" style={{ color: '#006c51' }}>{screeningStats.approvedCandidates}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Rejected (screening)</dt><dd className="font-medium" style={{ color: 'var(--ats-error)' }}>{screeningStats.rejectedCandidates}</dd></div>
+                                <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Avg Match Score</dt><dd>{screeningStats.averageMatchScore != null ? `${screeningStats.averageMatchScore}%` : '—'}</dd></div>
+                            </>
+                        )}
+                    </dl>
+                    {(job.screeningCriteria?.requiredKeywords || []).length > 0 && (
+                        <div className="mt-4 border-t border-[rgba(15,45,38,0.08)] pt-3">
+                            <p className="text-xs font-medium uppercase" style={{ color: 'rgba(15,45,38,0.5)' }}>Screening Criteria</p>
+                            <p className="mt-1 text-sm" style={{ color: 'rgba(15,45,38,0.75)' }}>Min match: {job.screeningCriteria.minimumMatchPercent ?? 70}%</p>
+                            <p className="mt-1 text-xs" style={{ color: 'rgba(15,45,38,0.6)' }}>Required: {(job.screeningCriteria.requiredKeywords || []).join(', ')}</p>
                         </div>
+                    )}
+                    <div className="mt-4 space-y-2 border-t border-[rgba(15,45,38,0.08)] pt-3">
+                        <p className="text-sm font-semibold" style={{ color: 'var(--ats-secondary)' }}>Edit Screening Criteria</p>
+                        <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--ats-secondary)' }}>
+                            <input type="checkbox" checked={criteriaForm.enabled} onChange={(e) => setCriteriaForm((p) => ({ ...p, enabled: e.target.checked }))} />
+                            Enable auto-screening
+                        </label>
+                        <select
+                            className="cm-select w-full !text-xs"
+                            value={criteriaForm.templateId || ''}
+                            onChange={(e) => applyTemplateToCriteria(e.target.value)}
+                        >
+                            <option value="">None — enter keywords manually</option>
+                            {screeningTemplates.map((t) => (
+                                <option key={t._id} value={t._id}>{t.name}</option>
+                            ))}
+                        </select>
+                        <textarea
+                            rows={3}
+                            className="cm-input w-full !text-xs"
+                            placeholder="Required keywords (one per line)"
+                            value={criteriaForm.requiredKeywords}
+                            onChange={(e) => setCriteriaForm((p) => ({ ...p, requiredKeywords: e.target.value }))}
+                        />
+                        <textarea
+                            rows={2}
+                            className="cm-input w-full !text-xs"
+                            placeholder="Optional keywords (one per line)"
+                            value={criteriaForm.optionalKeywords}
+                            onChange={(e) => setCriteriaForm((p) => ({ ...p, optionalKeywords: e.target.value }))}
+                        />
+                        <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            className="cm-input w-full !text-xs"
+                            value={criteriaForm.minimumMatchPercent}
+                            onChange={(e) => setCriteriaForm((p) => ({ ...p, minimumMatchPercent: e.target.value }))}
+                        />
+                        <CmButton type="button" size="sm" variant="outline" disabled={saving} onClick={saveScreeningCriteria}>
+                            Save criteria
+                        </CmButton>
+                    </div>
+                    {careerUrl && job.status === 'Open' && !job.archivedAt && (
+                        <a href={careerUrl} target="_blank" rel="noreferrer" className="ats-link mt-4 inline-flex items-center gap-2">
+                            Open career apply page <FaExternalLinkAlt className="text-xs" />
+                        </a>
+                    )}
+                    {job.status === 'Open' && !job.archivedAt && (
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={notifyEmployees}
+                            className="ats-link mt-3 block disabled:opacity-50"
+                        >
+                            Notify employees in-app (internal board)
+                        </button>
                     )}
                 </section>
             </div>
-        </div>
+
+            {screeningStats?.topMatchingCandidates?.length > 0 && (
+                <section className="cm-card">
+                    <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Top Matching Candidates</h2>
+                    <ul className="divide-y divide-[rgba(15,45,38,0.06)] text-sm">
+                        {screeningStats.topMatchingCandidates.slice(0, 5).map((c) => (
+                            <li key={c._id} className="flex items-center justify-between py-2">
+                                <button type="button" className="ats-link" onClick={() => navigate(`/recruitment/candidates/${c._id}`)}>
+                                    {c.firstName} {c.lastName}
+                                </button>
+                                <span className="font-medium" style={{ color: 'var(--ats-secondary)' }}>{c.resumeScreening?.matchScore != null ? `${c.resumeScreening.matchScore}%` : '—'}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            <div className="flex items-center gap-1">
+                <nav className="ats-tabs !border-b-0 !mb-0 flex-1">
+                    <button type="button" onClick={() => setTab('candidates')} className={`ats-tab ${tab === 'candidates' ? 'ats-tab--active' : ''}`}>
+                        Candidates
+                        <span className="ats-tab-count">{candidates.length}</span>
+                    </button>
+                    <button type="button" onClick={() => setTab('ranked')} className={`ats-tab ${tab === 'ranked' ? 'ats-tab--active' : ''}`}>
+                        Ranked by score
+                    </button>
+                </nav>
+                <button type="button" onClick={() => navigate(`/recruitment/pipeline?jobPostingId=${id}`)} className="ats-link shrink-0">
+                    View in pipeline
+                </button>
+            </div>
+
+            <div className="ats-table-wrap">
+                {tab === 'candidates' ? (
+                    candidates.length === 0 ? (
+                        <p className="p-6 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No candidates yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="ats-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Screening</th>
+                                        <th>Match</th>
+                                        <th>Applied</th>
+                                        <th />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {candidates.map((c) => {
+                                        const screening = normalizeResumeScreening(c.resumeScreening);
+                                        return (
+                                        <tr key={c._id}>
+                                            <td className="font-semibold">{c.firstName} {c.lastName}</td>
+                                            <td>{c.status}</td>
+                                            <td>
+                                                <AtsBadge status={screening.label}>{screening.label}</AtsBadge>
+                                            </td>
+                                            <td>{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</td>
+                                            <td>{c.applicationDate ? format(new Date(c.applicationDate), 'dd MMM yyyy') : '—'}</td>
+                                            <td>
+                                                <button type="button" className="ats-link" onClick={() => navigate(`/recruitment/candidates/${c._id}`)}>View</button>
+                                            </td>
+                                        </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
+                ) : ranked.length === 0 ? (
+                    <p className="p-6 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No scored candidates yet. Add scores on candidate profiles to rank them.</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="ats-table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Name</th>
+                                    <th>Overall</th>
+                                    <th>Resume</th>
+                                    <th>Technical</th>
+                                    <th>Cultural</th>
+                                    <th>Status</th>
+                                    <th />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {ranked.map((c, idx) => (
+                                    <tr key={c._id}>
+                                        <td className="font-semibold">#{idx + 1}</td>
+                                        <td>{c.firstName} {c.lastName}</td>
+                                        <td>{c.scores?.overallScore != null ? Math.round(c.scores.overallScore) : '—'}</td>
+                                        <td>{c.scores?.resumeScore ?? '—'}</td>
+                                        <td>{c.scores?.technicalScore ?? '—'}</td>
+                                        <td>{c.scores?.culturalFitScore ?? '—'}</td>
+                                        <td>{c.status}</td>
+                                        <td>
+                                            <button type="button" className="ats-link" onClick={() => navigate(`/recruitment/candidates/${c._id}`)}>View</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </AtsPage>
     );
 };
 

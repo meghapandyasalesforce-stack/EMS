@@ -96,9 +96,29 @@ export async function employeeApplyOrRefer({
 
     if (mode === 'apply') {
         const email = String(employee.email || '').toLowerCase().trim();
-        const existing = await Candidate.findOne({ organizationId, jobPostingId, email }).select('_id').lean();
+        if (!email) {
+            throw Object.assign(new Error('Your employee profile needs an email before you can apply'), { status: 400 });
+        }
+
+        // Same email may already exist from career portal / prior apply — claim it for My Applications.
+        const existing = await Candidate.findOne({ organizationId, jobPostingId, email, archivedAt: null });
         if (existing) {
-            throw Object.assign(new Error('You have already applied to this job'), { status: 409 });
+            let dirty = false;
+            if (!existing.applicantEmployeeId || String(existing.applicantEmployeeId) !== String(employee._id)) {
+                existing.applicantEmployeeId = employee._id;
+                dirty = true;
+            }
+            if (!Array.isArray(existing.tags)) existing.tags = [];
+            if (!existing.tags.includes('Internal')) {
+                existing.tags.push('Internal');
+                dirty = true;
+            }
+            if (!existing.selfServiceToken) {
+                issueSelfServiceToken(existing);
+                dirty = true;
+            }
+            if (dirty) await existing.save();
+            return { candidate: existing, mode: 'apply', alreadyApplied: true };
         }
 
         const attachment = normalizeAttachment(candidatePayload.coverLetterAttachment);
@@ -136,7 +156,7 @@ export async function employeeApplyOrRefer({
         issueSelfServiceToken(candidate);
         await candidate.save();
         await Recruitment.findByIdAndUpdate(jobPostingId, { $inc: { currentApplications: 1 } });
-        return { candidate, mode: 'apply' };
+        return { candidate, mode: 'apply', alreadyApplied: false };
     }
 
     // refer
@@ -213,15 +233,17 @@ export async function listMyReferrals(organizationId, employeeId) {
 }
 
 export async function listMyInternalApplications(organizationId, employeeId, email) {
+    const normalizedEmail = email ? String(email).toLowerCase().trim() : '';
     return Candidate.find({
         organizationId,
         archivedAt: null,
         $or: [
             { applicantEmployeeId: employeeId },
-            ...(email ? [{ email: String(email).toLowerCase().trim(), source: 'Internal' }] : []),
+            // Include career-portal / other-source apps made with the employee's email
+            ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
         ],
     })
-        .populate('jobPostingId', 'jobTitle department status')
+        .populate('jobPostingId', 'jobTitle department status location')
         .sort({ applicationDate: -1 })
         .lean();
 }

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/corporateModern.css";
+@import "./styles/recruitmentUI.css";
 
 /* Modern Design System - Color Variables */
 :root {

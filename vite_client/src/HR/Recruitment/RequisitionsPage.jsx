@@ -226,7 +226,10 @@ const RequisitionsPage = () => {
                                             <button type="button" disabled={busy} onClick={() => action(r._id, 'convert', { status: 'Open' })} className="text-theme-secondary hover:underline">Convert to Job</button>
                                         )}
                                         {r.jobPostingId && (
-                                            <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}`)} className="text-gray-600 hover:underline">Open Job</button>
+                                            <>
+                                                <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}`)} className="text-gray-600 hover:underline">Open Job</button>
+                                                <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}/edit`)} className="text-theme-secondary hover:underline">Edit Job</button>
+                                            </>
                                         )}
                                     </div>
                                 </td>

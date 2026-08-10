@@ -4,17 +4,20 @@ import { toast } from 'react-toastify';
 import { FaArrowLeft, FaBriefcase, FaCalendarAlt, FaClipboardCheck, FaExclamationTriangle, FaUserCheck } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { AtsPage, AtsPageHeader, AtsAvatar } from '../../components/recruitment/atsUi';
 
 const Widget = ({ title, icon: Icon, items, empty, onOpen }) => (
-    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <section className="cm-card flex flex-col" style={{ minHeight: 0 }}>
         <div className="mb-3 flex items-center gap-2">
-            <Icon className="text-theme-secondary" />
-            <h2 className="font-semibold text-gray-800">{title}</h2>
-            <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs">{items?.length || 0}</span>
+            <div className="cm-stat__icon" style={{ width: '2.25rem', height: '2.25rem' }}>
+                <Icon className="h-3.5 w-3.5" />
+            </div>
+            <h2 className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>{title}</h2>
+            <span className="ats-tab-count ml-auto">{items?.length || 0}</span>
         </div>
         <div className="max-h-64 space-y-2 overflow-y-auto">
             {(items || []).length === 0 ? (
-                <p className="text-sm text-gray-500">{empty}</p>
+                <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>{empty}</p>
             ) : (
                 items.map((item) => {
                     const id = item._id || item.id;
@@ -24,10 +27,13 @@ const Widget = ({ title, icon: Icon, items, empty, onOpen }) => (
                             key={id}
                             type="button"
                             onClick={() => onOpen(id)}
-                            className="block w-full rounded-lg border px-3 py-2 text-left text-sm hover:border-theme-secondary/40"
+                            className="flex w-full items-center gap-3 rounded-xl border border-[rgba(15,45,38,0.08)] px-3 py-2 text-left text-sm transition hover:border-[var(--ats-primary)] hover:bg-[rgba(28,202,155,0.04)]"
                         >
-                            <p className="font-medium text-gray-900">{name}</p>
-                            <p className="text-xs text-gray-500">{item.jobPostingId?.jobTitle || item.status || item.stage || ''}</p>
+                            <AtsAvatar name={name} />
+                            <span className="min-w-0 flex-1">
+                                <p className="truncate font-medium" style={{ color: 'var(--ats-secondary)' }}>{name}</p>
+                                <p className="truncate text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>{item.jobPostingId?.jobTitle || item.status || item.stage || ''}</p>
+                            </span>
                         </button>
                     );
                 })
@@ -61,37 +67,39 @@ const WorkspacePage = () => {
     const widgets = data?.widgets || {};
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <div className="w-full">
-                <button type="button" onClick={() => navigate('/recruitment')} className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-                    <FaArrowLeft /> Back to Recruitment
-                </button>
-                <h1 className="text-2xl font-bold text-gray-800">My Workspace</h1>
-                <p className="mb-6 text-gray-600">Recruiter home screening, interviews, joining</p>
+        <AtsPage>
+            <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
+                <FaArrowLeft className="h-3 w-3" /> Back to Recruitment
+            </button>
 
-                <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-                    {[
-                        { label: 'Open jobs', value: counts.openJobs },
-                        { label: 'Active candidates', value: counts.totalCandidates },
-                        { label: 'Overdue screening', value: counts.overdueScreening },
-                        { label: 'Joining this week', value: counts.joiningThisWeek },
-                    ].map((c) => (
-                        <div key={c.label} className="rounded-xl border bg-white p-4 shadow-sm">
-                            <p className="text-2xl font-bold text-gray-900">{c.value ?? 0}</p>
-                            <p className="text-sm text-gray-500">{c.label}</p>
-                        </div>
-                    ))}
-                </div>
+            <AtsPageHeader
+                eyebrow="Recruitment"
+                title="My Workspace"
+                subtitle="Recruiter home — screening, interviews, joining"
+            />
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <Widget title="Pending Resume Screening" icon={FaClipboardCheck} items={widgets.pendingScreening} empty="No pending screening" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
-                    <Widget title="Interviews Today" icon={FaCalendarAlt} items={widgets.interviewsToday} empty="No interviews today" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
-                    <Widget title="Pending Feedback" icon={FaExclamationTriangle} items={widgets.pendingFeedback} empty="No pending feedback" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
-                    <Widget title="Awaiting Joining Confirm" icon={FaUserCheck} items={widgets.awaitingJoiningConfirm} empty="Nothing awaiting confirmation" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
-                    <Widget title="Joining This Week" icon={FaBriefcase} items={widgets.joiningThisWeek} empty="No joinings this week" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
-                </div>
+            <div className="ats-stat-grid">
+                {[
+                    { label: 'Open jobs', value: counts.openJobs },
+                    { label: 'Active candidates', value: counts.totalCandidates },
+                    { label: 'Overdue screening', value: counts.overdueScreening, tone: 'attention' },
+                    { label: 'Joining this week', value: counts.joiningThisWeek },
+                ].map((c) => (
+                    <div key={c.label} className="cm-stat">
+                        <p className="cm-stat__label">{c.label}</p>
+                        <p className={`cm-stat__value ${c.tone === 'attention' ? 'cm-stat__value--attention' : ''}`}>{c.value ?? 0}</p>
+                    </div>
+                ))}
             </div>
-        </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Widget title="Pending Resume Screening" icon={FaClipboardCheck} items={widgets.pendingScreening} empty="No pending screening" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
+                <Widget title="Interviews Today" icon={FaCalendarAlt} items={widgets.interviewsToday} empty="No interviews today" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
+                <Widget title="Pending Feedback" icon={FaExclamationTriangle} items={widgets.pendingFeedback} empty="No pending feedback" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
+                <Widget title="Awaiting Joining Confirm" icon={FaUserCheck} items={widgets.awaitingJoiningConfirm} empty="Nothing awaiting confirmation" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
+                <Widget title="Joining This Week" icon={FaBriefcase} items={widgets.joiningThisWeek} empty="No joinings this week" onOpen={(id) => navigate(`/recruitment/candidates/${id}`)} />
+            </div>
+        </AtsPage>
     );
 };
 

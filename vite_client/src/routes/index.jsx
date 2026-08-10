@@ -259,6 +259,7 @@ export const adminRoutes = [
 export const hrRoutes = [
   { path: '/recruitment', component: lazy(() => import('../HR/Recruitment/RecruitmentPage')), message: 'Loading recruitment...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
   { path: '/recruitment/create-job', component: lazy(() => import('../HR/Recruitment/CreateJobPage')), message: 'Loading job form...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
+  { path: '/recruitment/jobs/:id/edit', component: lazy(() => import('../HR/Recruitment/CreateJobPage')), message: 'Loading job editor...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
   { path: '/recruitment/jobs/:id', component: lazy(() => import('../HR/Recruitment/JobDetailPage')), message: 'Loading job...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
   { path: '/recruitment/pipeline', component: lazy(() => import('../HR/Recruitment/PipelinePage')), message: 'Loading pipeline...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
     { path: '/recruitment/workspace', component: lazy(() => import('../HR/Recruitment/WorkspacePage')), message: 'Loading workspace...', allowedRoles: ['admin', 'hr', 'executive'], requiredPermissions: ROUTE_PERMISSIONS.recruitment },
