@@ -30,9 +30,16 @@ import {
     isLeavePolicyApplicableToEmployee,
     selectApplicableLeavePolicy,
     buildEmployeeLeavePolicyMonthMap,
+    resolveFirstApplicablePolicyMonth,
     findPolicyLeaveTypeConfig,
     toLeavePolicyLocalDay,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
+import {
+    applyProbationAccrualOverlay,
+    buildLeaveProbationContext,
+    firstOfMonth,
+} from '../helpers/leaveProbationHelper.js';
+import { OnboardingWorkflow } from '../models/onboarding.model.js';
 
 class LeaveBalanceEngine {
     /**
@@ -159,7 +166,7 @@ class LeaveBalanceEngine {
         };
     }
 
-    buildLeaveTypeConfigResolver(policies, employee, fallbackConfig) {
+    buildLeaveTypeConfigResolver(policies, employee, fallbackConfig, probationContext = null) {
         const leaveType = fallbackConfig?.type;
         return (year, monthIndex) => {
             const asOf = new Date(year, monthIndex, 1, 12, 0, 0, 0);
@@ -170,12 +177,78 @@ class LeaveBalanceEngine {
             if (!policy) return null;
             const lt = findPolicyLeaveTypeConfig(policy, leaveType);
             if (!lt) return null;
-            return {
+            const base = {
                 ...lt,
                 carryForward: getEffectiveCarryForwardConfig(lt),
                 _sourcePolicyId: policy._id,
             };
+            return applyProbationAccrualOverlay(base, probationContext, asOf);
         };
+    }
+
+    async resolveLeaveProbationContext(organizationId, employee) {
+        let lifecycleProbation = null;
+        try {
+            if (organizationId && employee?._id) {
+                const workflow = await OnboardingWorkflow.findOne({
+                    organizationId,
+                    employeeId: employee._id,
+                    isTemplate: { $ne: true },
+                })
+                    .select('probation')
+                    .lean();
+                lifecycleProbation = workflow?.probation || null;
+            }
+        } catch (err) {
+            logger.warn('Lifecycle probation lookup failed during leave balance', {
+                error: err?.message,
+                employeeId: employee?._id,
+                organizationId,
+            });
+        }
+        return buildLeaveProbationContext({ employee, lifecycleProbation });
+    }
+
+    resolvePolicyWindowStartDate(policy, employee, year, asOfDate = new Date()) {
+        if (!policy?.isolateUsageFromPriorPolicies) return null;
+        const policyStart = toLeavePolicyLocalDay(policy.effectiveDate);
+        if (!policyStart || Number.isNaN(policyStart.getTime())) return null;
+        const joiningDate = getEffectiveJoiningDate(employee);
+        const yearStart = new Date(year, 0, 1, 12, 0, 0, 0);
+        const start = new Date(
+            Math.max(yearStart.getTime(), joiningDate.getTime(), policyStart.getTime())
+        );
+        return start.getTime() <= asOfDate.getTime() ? start : null;
+    }
+
+    async resolvePolicyWindowOpeningBalance(
+        employeeId,
+        leaveType,
+        year,
+        organizationId,
+        policyWindowStartDate,
+        options = {}
+    ) {
+        if (!policyWindowStartDate) return 0;
+        const yearStart = new Date(year, 0, 1, 12, 0, 0, 0);
+        if (policyWindowStartDate.getTime() <= yearStart.getTime()) return 0;
+
+        const priorAsOfDate = new Date(
+            policyWindowStartDate.getFullYear(),
+            policyWindowStartDate.getMonth(),
+            policyWindowStartDate.getDate() - 1,
+            23,
+            59,
+            59,
+            999
+        );
+        const priorBalance = await this.calculateBalance(employeeId, year, organizationId, {
+            ...options,
+            asOfDate: priorAsOfDate,
+            disablePolicyIsolation: true,
+        });
+        const priorRow = priorBalance?.balances?.find((row) => row.leaveType === leaveType);
+        return roundLeaveDays(Number(priorRow?.available) || 0);
     }
 
     /**
@@ -184,7 +257,7 @@ class LeaveBalanceEngine {
      * @param {boolean} [options.clearManualOverride] - Clear per-leave-type manual overrides during automated recalc (employee wallet anchor is never cleared here)
      */
     async calculateBalance(employeeId, year, organizationId, options = {}) {
-        const { asOfDate = new Date(), clearManualOverride = false } = options;
+        const { asOfDate = new Date(), clearManualOverride = false, disablePolicyIsolation = false } = options;
         try {
             const resolvedOrganizationId = await resolveLeaveBalanceOrganizationId(
                 employeeId,
@@ -241,6 +314,30 @@ class LeaveBalanceEngine {
             ) {
                 fromYear = Number(periodOpeningBalance.openingYear);
                 fromMonthIndex = Number(periodOpeningBalance.openingMonth) - 1;
+            } else {
+                const firstApplicableMonth = resolveFirstApplicablePolicyMonth(
+                    policies,
+                    employee,
+                    fromYear,
+                    fromMonthIndex,
+                    asOfDate.getFullYear(),
+                    asOfDate.getMonth(),
+                    {
+                        requireUsable: true,
+                        hasUsableLeaveTypes: (p) => this.hasUsableLeaveTypes(p),
+                    }
+                );
+                if (firstApplicableMonth) {
+                    const firstKey = calendarMonthSortKey(
+                        firstApplicableMonth.year,
+                        firstApplicableMonth.monthIndex + 1
+                    );
+                    const currentKey = calendarMonthSortKey(fromYear, fromMonthIndex + 1);
+                    if (firstKey > currentKey) {
+                        fromYear = firstApplicableMonth.year;
+                        fromMonthIndex = firstApplicableMonth.monthIndex;
+                    }
+                }
             }
 
             const { leaveTypeConfigs } = this.collectLeaveTypeConfigsForAccrualWindow(
@@ -271,6 +368,10 @@ class LeaveBalanceEngine {
             });
 
             // Each enabled leave type maintains an independent balance (policy-driven; mid-year split via resolver).
+            const probationContext = await this.resolveLeaveProbationContext(
+                resolvedOrganizationId,
+                employee
+            );
             for (const leaveTypeConfig of leaveTypeConfigs) {
                 if (leaveTypeConfig.enabled === false || !leaveTypeConfig.type) {
                     continue;
@@ -278,7 +379,8 @@ class LeaveBalanceEngine {
                 const resolveLeaveTypeConfigForMonth = this.buildLeaveTypeConfigResolver(
                     policies,
                     employee,
-                    leaveTypeConfig
+                    leaveTypeConfig,
+                    probationContext
                 );
                 await this.calculateLeaveTypeBalance(
                     balance,
@@ -286,7 +388,15 @@ class LeaveBalanceEngine {
                     employee,
                     year,
                     resolvedOrganizationId,
-                    { asOfDate, clearManualOverride, resolveLeaveTypeConfigForMonth, orgPolicies: policies }
+                    {
+                        asOfDate,
+                        clearManualOverride,
+                        resolveLeaveTypeConfigForMonth,
+                        orgPolicies: policies,
+                        activePolicy: policy,
+                        disablePolicyIsolation,
+                        probationContext,
+                    }
                 );
             }
 
@@ -313,12 +423,20 @@ class LeaveBalanceEngine {
             asOfDate = new Date(),
             clearManualOverride = false,
             resolveLeaveTypeConfigForMonth = null,
+            activePolicy = null,
+            disablePolicyIsolation = false,
+            probationContext = null,
         } = options;
         const leaveType = leaveTypeConfig.type;
         const effectiveConfig = {
             ...leaveTypeConfig,
             carryForward: getEffectiveCarryForwardConfig(leaveTypeConfig),
         };
+        const asOfAccrualConfig = applyProbationAccrualOverlay(
+            effectiveConfig,
+            probationContext,
+            firstOfMonth(asOfDate) || asOfDate
+        );
         
         // Find or create balance entry for this leave type
         let typeBalance = balance.balances.find(b => b.leaveType === leaveType);
@@ -347,6 +465,23 @@ class LeaveBalanceEngine {
         }
 
         const carryForwardConfig = effectiveConfig.carryForward;
+        const policyWindowStartDate = !disablePolicyIsolation
+            ? this.resolvePolicyWindowStartDate(activePolicy, employee, year, asOfDate)
+            : null;
+        const isolatedPolicyWindow = Boolean(policyWindowStartDate);
+        const policyWindowOpeningBalance = isolatedPolicyWindow
+            ? await this.resolvePolicyWindowOpeningBalance(
+                  employee._id,
+                  leaveType,
+                  year,
+                  organizationId,
+                  policyWindowStartDate,
+                  { clearManualOverride }
+              )
+            : 0;
+        const effectiveEmployee = isolatedPolicyWindow
+            ? { ...employee, joiningDate: policyWindowStartDate }
+            : employee;
         const manualCarryLocked =
             typeBalance.manualOverride?.active &&
             typeBalance.manualOverride?.carriedForward != null &&
@@ -381,22 +516,25 @@ class LeaveBalanceEngine {
         if (this.usesStandardMonthlyBalanceRules(effectiveConfig)) {
             const computed = await this.computeRollingMonthlyBalance(
                 effectiveConfig,
-                employee,
+                effectiveEmployee,
                 organizationId,
                 asOfDate,
                 null,
                 year,
                 rateSchedule,
-                resolveLeaveTypeConfigForMonth
+                isolatedPolicyWindow ? null : resolveLeaveTypeConfigForMonth,
+                policyWindowOpeningBalance
             );
             typeBalance.accrued = computed.totalEarned;
             typeBalance.used = computed.totalUsed;
             if (!manualCarryLocked) {
-                typeBalance.carriedForward = computed.yearOpeningBalance;
+                typeBalance.carriedForward = isolatedPolicyWindow
+                    ? policyWindowOpeningBalance
+                    : computed.yearOpeningBalance;
             }
             rollingAvailable = computed.available;
         } else {
-            const joiningDate = getEffectiveJoiningDate(employee);
+            const joiningDate = getEffectiveJoiningDate(effectiveEmployee);
             const joiningYear = joiningDate.getFullYear();
 
             if (carryForwardConfig?.enabled && year > joiningYear && !manualCarryLocked) {
@@ -435,20 +573,25 @@ class LeaveBalanceEngine {
             }
 
             typeBalance.accrued = await this.calculateAccruedBalance(
-                effectiveConfig,
-                employee,
+                asOfAccrualConfig,
+                effectiveEmployee,
                 year,
                 organizationId,
                 asOfDate,
-                resolveLeaveTypeConfigForMonth
+                isolatedPolicyWindow ? null : resolveLeaveTypeConfigForMonth
             );
             typeBalance.used = await this.calculateUsedBalance(
                 employee._id,
                 leaveType,
                 year,
                 organizationId,
-                asOfDate
+                asOfDate,
+                activePolicy,
+                disablePolicyIsolation
             );
+            if (!manualCarryLocked && isolatedPolicyWindow) {
+                typeBalance.carriedForward = policyWindowOpeningBalance;
+            }
         }
 
         const pending = await this.calculatePendingBalance(
@@ -456,7 +599,9 @@ class LeaveBalanceEngine {
             leaveType,
             year,
             organizationId,
-            asOfDate
+            asOfDate,
+            activePolicy,
+            disablePolicyIsolation
         );
         typeBalance.pending = pending;
 
@@ -496,7 +641,9 @@ class LeaveBalanceEngine {
                 leaveType,
                 year,
                 organizationId,
-                asOfDate
+                asOfDate,
+                activePolicy,
+                disablePolicyIsolation
             );
             const usedBaseline =
                 mo.used != null && !Number.isNaN(Number(mo.used))
@@ -1131,7 +1278,8 @@ class LeaveBalanceEngine {
         periodOpeningBalance = null,
         viewYear = null,
         rateSchedule = null,
-        resolveLeaveTypeConfigForMonth = null
+        resolveLeaveTypeConfigForMonth = null,
+        initialBalance = 0
     ) {
         const leaveType = leaveTypeConfig.type;
         const policyMonthlyRate = getRollingAccrualMonthlyRate(leaveTypeConfig);
@@ -1165,7 +1313,7 @@ class LeaveBalanceEngine {
         const configForMonth = (year, monthIndex) => {
             if (typeof resolveLeaveTypeConfigForMonth === 'function') {
                 const resolved = resolveLeaveTypeConfigForMonth(year, monthIndex);
-                if (resolved) return resolved;
+                return resolved || null;
             }
             return leaveTypeConfig;
         };
@@ -1240,6 +1388,7 @@ class LeaveBalanceEngine {
                 usedByMonth.get(`${year}-${monthIndex}`) || 0,
             shouldCreditMonth: (year, monthIndex) => creditWithAnnualCap(year, monthIndex),
             periodOpeningBalance,
+            initialBalance,
         });
     }
 
@@ -1360,7 +1509,7 @@ class LeaveBalanceEngine {
             let total = 0;
             const earnedByPolicy = new Map();
             for (let m = startMonth; m <= endMonth; m += 1) {
-                const cfg = resolveLeaveTypeConfigForMonth(year, m) || leaveTypeConfig;
+                const cfg = resolveLeaveTypeConfigForMonth(year, m);
                 if (!cfg) continue;
                 const rate = getRollingAccrualMonthlyRate(cfg);
                 const cap = getAnnualEntitlementAmount(cfg);
@@ -1381,21 +1530,39 @@ class LeaveBalanceEngine {
         return this.calculateAccruedThroughDate(leaveTypeConfig, employee, year, asOfDate);
     }
 
+    resolveUsageWindowStartDate(policy, year, disablePolicyIsolation = false) {
+        if (disablePolicyIsolation || !policy?.isolateUsageFromPriorPolicies) return null;
+        const policyStart = toLeavePolicyLocalDay(policy.effectiveDate);
+        if (!policyStart || Number.isNaN(policyStart.getTime())) return null;
+        const yearStart = new Date(year, 0, 1, 0, 0, 0, 0);
+        return policyStart.getTime() > yearStart.getTime() ? policyStart : null;
+    }
+
     /**
      * Calculate used balance (approved leaves). Uses variants so 'paid' includes 'annual' leaves.
      */
-    async calculateUsedBalance(employeeId, leaveType, year, organizationId, asOfDate = new Date()) {
+    async calculateUsedBalance(
+        employeeId,
+        leaveType,
+        year,
+        organizationId,
+        asOfDate = new Date(),
+        policy = null,
+        disablePolicyIsolation = false
+    ) {
         const types = getLeaveTypeVariantsForBalance(leaveType);
         const yearStart = new Date(year, 0, 1);
         const yearEnd = new Date(year, 11, 31, 23, 59, 59);
         const cutoff = asOfDate < yearEnd ? asOfDate : yearEnd;
+        const usageStartDate =
+            this.resolveUsageWindowStartDate(policy, year, disablePolicyIsolation) || yearStart;
         const leaves = await Leave.find({
             organizationId,
             employee: employeeId,
             leaveType: { $in: types },
-            $or: [{ year }, { startDate: { $gte: yearStart, $lte: cutoff } }],
+            $or: [{ year }, { startDate: { $gte: usageStartDate, $lte: cutoff } }],
             status: 'approved',
-            startDate: { $lte: cutoff },
+            startDate: { $gte: usageStartDate, $lte: cutoff },
         });
 
         return leaves.reduce((total, leave) => total + (leave.duration || 0), 0);
@@ -1404,18 +1571,28 @@ class LeaveBalanceEngine {
     /**
      * Calculate pending balance. Uses variants so 'paid' includes 'annual' leaves.
      */
-    async calculatePendingBalance(employeeId, leaveType, year, organizationId, asOfDate = new Date()) {
+    async calculatePendingBalance(
+        employeeId,
+        leaveType,
+        year,
+        organizationId,
+        asOfDate = new Date(),
+        policy = null,
+        disablePolicyIsolation = false
+    ) {
         const types = getLeaveTypeVariantsForBalance(leaveType);
         const yearStart = new Date(year, 0, 1);
         const yearEnd = new Date(year, 11, 31, 23, 59, 59);
         const cutoff = asOfDate < yearEnd ? asOfDate : yearEnd;
+        const usageStartDate =
+            this.resolveUsageWindowStartDate(policy, year, disablePolicyIsolation) || yearStart;
         const leaves = await Leave.find({
             organizationId,
             employee: employeeId,
             leaveType: { $in: types },
-            $or: [{ year }, { startDate: { $gte: yearStart, $lte: cutoff } }],
+            $or: [{ year }, { startDate: { $gte: usageStartDate, $lte: cutoff } }],
             status: 'pending',
-            startDate: { $lte: cutoff },
+            startDate: { $gte: usageStartDate, $lte: cutoff },
         });
 
         return leaves.reduce((total, leave) => total + (leave.duration || 0), 0);
@@ -1492,10 +1669,12 @@ class LeaveBalanceEngine {
         };
 
         const policies = await this.loadOrganizationLeavePolicies(organizationId);
+        const probationContext = await this.resolveLeaveProbationContext(organizationId, employee);
         const resolveLeaveTypeConfigForMonth = this.buildLeaveTypeConfigResolver(
             policies,
             employee,
-            effectiveConfig
+            effectiveConfig,
+            probationContext
         );
 
         if (this.usesStandardMonthlyBalanceRules(effectiveConfig)) {

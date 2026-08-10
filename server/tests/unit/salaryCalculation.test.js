@@ -1,7 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
 import {
     computeEarningsFromGross,
-    computeSalaryStructureCoreEarnings
+    computeSalaryStructureCoreEarnings,
+    computeEsiStatutoryWages,
+    isEsiEligibleByStatutoryWages,
+    ESI_GROSS_WAGE_LIMIT,
 } from '../../helpers/salaryCalculation.js';
 
 describe('salaryCalculation', () => {
@@ -54,6 +57,67 @@ describe('salaryCalculation', () => {
             expect(result.transportAllowance).toBe(5000);
             expect(result.medicalAllowance).toBe(2500);
             expect(result.specialAllowance).toBe(22500);
+        });
+    });
+
+    describe('computeEsiStatutoryWages', () => {
+        it('uses Basic when excluded components are within 50% of gross', () => {
+            const result = computeEsiStatutoryWages({
+                basicWage: 15000,
+                houseRentAllowance: 5000,
+                specialAllowance: 0,
+            });
+            expect(result.includedWages).toBe(15000);
+            expect(result.excludedWages).toBe(5000);
+            expect(result.totalRemuneration).toBe(20000);
+            expect(result.fiftyPercentCap).toBe(10000);
+            expect(result.fiftyPercentAddBack).toBe(0);
+            expect(result.statutoryWages).toBe(15000);
+        });
+
+        it('adds excess excluded components back when over 50% of gross', () => {
+            const result = computeEsiStatutoryWages({
+                basicWage: 8000,
+                houseRentAllowance: 12000,
+                specialAllowance: 20000,
+            });
+            expect(result.includedWages).toBe(8000);
+            expect(result.excludedWages).toBe(32000);
+            expect(result.totalRemuneration).toBe(40000);
+            expect(result.fiftyPercentCap).toBe(20000);
+            expect(result.fiftyPercentAddBack).toBe(12000);
+            expect(result.statutoryWages).toBe(20000);
+        });
+
+        it('includes DA and retaining allowance in the starting wage base', () => {
+            const result = computeEsiStatutoryWages({
+                basicWage: 10000,
+                dearnessAllowance: 2000,
+                retainingAllowance: 1000,
+                houseRentAllowance: 4000,
+            });
+            expect(result.includedWages).toBe(13000);
+            expect(result.excludedWages).toBe(4000);
+            expect(result.statutoryWages).toBe(13000);
+        });
+    });
+
+    describe('isEsiEligibleByStatutoryWages', () => {
+        it('uses statutory wages for the ₹21,000 ceiling, not payroll gross', () => {
+            expect(isEsiEligibleByStatutoryWages(ESI_GROSS_WAGE_LIMIT)).toBe(true);
+            expect(isEsiEligibleByStatutoryWages(18000)).toBe(true);
+            expect(isEsiEligibleByStatutoryWages(ESI_GROSS_WAGE_LIMIT + 1)).toBe(false);
+
+            // Gross 28k but statutory wages 18k → still eligible
+            const highGross = computeEsiStatutoryWages({
+                basicWage: 16000,
+                dearnessAllowance: 2000,
+                houseRentAllowance: 6000,
+                specialAllowance: 4000,
+            });
+            expect(highGross.totalRemuneration).toBe(28000);
+            expect(highGross.statutoryWages).toBe(18000);
+            expect(isEsiEligibleByStatutoryWages(highGross.statutoryWages)).toBe(true);
         });
     });
 });

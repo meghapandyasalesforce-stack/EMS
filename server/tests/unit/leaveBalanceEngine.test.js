@@ -157,4 +157,43 @@ describe('leaveBalanceEngine', () => {
             expect(total).toBe(0);
         });
     });
+
+    describe('effective-date policy windows', () => {
+        it('resolves isolated policy window start from policy effective date', () => {
+            const start = leaveBalanceEngine.resolvePolicyWindowStartDate(
+                {
+                    isolateUsageFromPriorPolicies: true,
+                    effectiveDate: new Date(2026, 5, 1),
+                },
+                { joiningDate: new Date(2020, 0, 1) },
+                2026,
+                new Date(2026, 7, 1)
+            );
+            expect(start).toEqual(new Date(2026, 5, 1, 12, 0, 0, 0));
+        });
+
+        it('does not credit monthly accrual before the first applicable policy month', async () => {
+            const leaveTypeConfig = {
+                type: 'casual',
+                enabled: true,
+                accrual: { method: 'monthly', frequency: 'monthly', amount: 0.5, maxAccrual: 6 },
+            };
+            const employee = { joiningDate: new Date(2026, 0, 1) };
+            const asOfDate = new Date(2026, 7, 31);
+            const total = await leaveBalanceEngine.calculateAccruedBalance(
+                leaveTypeConfig,
+                employee,
+                2026,
+                null,
+                asOfDate,
+                (year, monthIndex) => {
+                    if (year === 2026 && monthIndex >= 5) {
+                        return { ...leaveTypeConfig, _sourcePolicyId: 'june-policy' };
+                    }
+                    return null;
+                }
+            );
+            expect(total).toBe(1.5);
+        });
+    });
 });

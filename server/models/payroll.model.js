@@ -154,6 +154,10 @@ const payrollSchema = new mongoose.Schema({
     presentDays: {
         type: Number
     },
+    /** Approved paid leave days in the pay period (excludes loss of pay; may be fractional) */
+    paidLeaveDays: {
+        type: Number
+    },
     /** workingDays − presentDays (may be fractional) */
     unpaidLeave: {
         type: Number

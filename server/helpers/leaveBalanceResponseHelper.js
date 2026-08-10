@@ -69,7 +69,9 @@ async function resolvePolicyForBalanceResponse(policyRef) {
     if (!policyId) {
         return policyRef;
     }
-    return LeavePolicy.findById(policyId).select('policyName leaveTypes leaveCycle isActive').lean();
+    return LeavePolicy.findById(policyId)
+        .select('policyName leaveTypes leaveCycle isActive effectiveDate expiryDate isolateUsageFromPriorPolicies')
+        .lean();
 }
 
 /**
@@ -273,6 +275,12 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
 
     const enabledPolicyTypes = getEnabledPolicyTypes(balanceObj.policy);
     const employeeForAccrual = employee || { joiningDate: bounds.joiningDate, _id: employeeId };
+    const policyWindowStartDate = leaveBalanceEngine.resolvePolicyWindowStartDate(
+        balanceObj.policy,
+        employeeForAccrual,
+        viewYear,
+        asOfDate
+    );
 
     balanceObj.balances = await Promise.all(
         enabledPolicyTypes.map(async (policyType) => {
@@ -384,21 +392,33 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 b.lifetimeEarned = b.earnedToDate;
                 b.lifetimeUsed = b.usedDays;
             } else {
+                const rollingEmployee = policyWindowStartDate
+                    ? { ...employeeForAccrual, joiningDate: policyWindowStartDate }
+                    : employeeForAccrual;
+                const rollingInitialBalance = policyWindowStartDate
+                    ? roundLeaveDays(Number(b.carriedForward) || 0)
+                    : 0;
                 const rollingAtView = await leaveBalanceEngine.computeRollingMonthlyBalance(
                     effectiveConfig,
-                    employee || { joiningDate: bounds.joiningDate, _id: employeeId },
+                    rollingEmployee,
                     resolvedOrganizationId,
                     asOfDate,
                     null,
-                    viewYear
+                    viewYear,
+                    null,
+                    null,
+                    rollingInitialBalance
                 );
                 const rollingFull = await leaveBalanceEngine.computeRollingMonthlyBalance(
                     effectiveConfig,
-                    employee || { joiningDate: bounds.joiningDate, _id: employeeId },
+                    rollingEmployee,
                     resolvedOrganizationId,
                     now,
                     null,
-                    viewYear
+                    viewYear,
+                    null,
+                    null,
+                    rollingInitialBalance
                 );
 
                 b.monthlyLedger = rollingAtView.ledger || [];
@@ -441,7 +461,8 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 b.leaveType,
                 viewYear,
                 resolvedOrganizationId,
-                asOfDate
+                asOfDate,
+                balanceObj.policy
             );
             b.usedDays = roundLeaveDays(liveApprovedUsed);
             b.used = b.usedDays;

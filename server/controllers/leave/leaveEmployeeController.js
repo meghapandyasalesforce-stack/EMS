@@ -117,6 +117,9 @@ export const createLeave = async (req, res) => {
             return sendError(res, "End date cannot be before start date", 400, 'INVALID_DATE_RANGE');
         }
 
+        const halfDayRequested = Boolean(isHalfDay);
+        const persistedEndDate = halfDayRequested ? startDate : endDate;
+
         const employee = await Employee.findById(employeeId);
         logger.debug("Employee found", { employeeId, hasEmployee: !!employee });
 
@@ -140,7 +143,13 @@ export const createLeave = async (req, res) => {
         // Validate leave request using comprehensive validation service
         const validation = await leaveValidationService.validateLeaveRequest(
             employeeId,
-            { startDate, endDate, leaveType, isHalfDay, document },
+            {
+                startDate,
+                endDate: persistedEndDate,
+                leaveType,
+                isHalfDay: halfDayRequested,
+                document,
+            },
             organizationId
         );
 
@@ -163,7 +172,7 @@ export const createLeave = async (req, res) => {
         });
 
         // Calculate duration and working days
-        const duration = validation.duration || Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1);
+        const duration = validation.duration || Math.max(1, Math.ceil((new Date(persistedEndDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1);
         const workingDays = validation.workingDays || duration;
 
         // Check leave balance before creating request (skip for loss_of_pay; use normalized type for policy alignment)
@@ -179,7 +188,7 @@ export const createLeave = async (req, res) => {
 
                 if (balance) {
                     const typeBalance = balance.balances.find(b => b.leaveType === balanceLeaveType);
-                    const requestedDays = isHalfDay ? 0.5 : duration;
+                    const requestedDays = halfDayRequested ? 0.5 : duration;
                     if (typeBalance && typeBalance.available < requestedDays) {
                         return sendError(
                             res,
@@ -204,13 +213,13 @@ export const createLeave = async (req, res) => {
             employee: employeeId,
             employeeName: `${employee.name} ${employee.lastName}`,
             startDate,
-            endDate,
+            endDate: persistedEndDate,
             leaveType,
             reason,
-            duration: isHalfDay ? 0.5 : duration,
+            duration: halfDayRequested ? 0.5 : duration,
             workingDays,
-            isHalfDay: isHalfDay || false,
-            halfDayType: isHalfDay ? halfDayType : null,
+            isHalfDay: halfDayRequested,
+            halfDayType: halfDayRequested ? halfDayType : null,
             document: document || null,
             resumptionDate: new Date(endDate),
             year: new Date(startDate).getFullYear(),

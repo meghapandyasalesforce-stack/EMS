@@ -1,5 +1,6 @@
 import { roundLeaveDays, getEffectiveJoiningDate, calendarMonthSortKey } from './leaveBalanceRulesHelper.js';
 import { getEmployeeAppliableDaysThisMonth } from './leaveEmployeeTakeLimitHelper.js';
+import { normalizeProbationRestrictions } from './leaveProbationHelper.js';
 
 /**
  * Policy-driven leave accrual helpers — Leave Policy is the single source of truth.
@@ -189,6 +190,7 @@ export function normalizePolicyLeaveType(leaveType) {
         },
         maxDaysPerMonth,
         carryForward: plain.carryForward || { enabled: false, maxDays: null },
+        probationRestrictions: normalizeProbationRestrictions(plain.probationRestrictions || {}),
     };
 }
 

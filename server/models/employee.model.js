@@ -177,6 +177,31 @@ const employeeSchema = new mongoose.Schema({
         required: true,
         default: Date.now 
     },
+
+    /**
+     * Employment probation (SaaS fallback when Lifecycle onboarding is not used).
+     * Leave accrual/validation prefers OnboardingWorkflow.probation when present.
+     */
+    probation: {
+        status: {
+            type: String,
+            enum: [
+                'None',
+                'Not Started',
+                'Active',
+                'Extended',
+                'Confirmed',
+                'Waived',
+                'Rejected',
+                'Terminated',
+            ],
+            default: 'None',
+        },
+        startDate: { type: Date },
+        endDate: { type: Date },
+        confirmedAt: { type: Date },
+        rejectedAt: { type: Date },
+    },
     
     // Birth date
     birthDate: { 

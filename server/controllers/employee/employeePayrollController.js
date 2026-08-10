@@ -5,6 +5,8 @@ import { pickDisplayPayroll, enrichAttendanceMetricsForPayslip } from "../../hel
 import { aggregatePayrollPeriod, attachPayrollRecordIds, isValidMongoObjectId } from "../../helpers/payrollAggregationHelper.js";
 import { getCachedEffectiveTimezone } from "../../helpers/orgContextCache.js";
 import { employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
+import { fetchPayslipComponentYtd, normalizePayslipEarnings } from "../../helpers/payslipYtdHelper.js";
+import { fetchPayslipLeaveBalanceSummary } from "../../helpers/payslipLeaveBalanceHelper.js";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -384,6 +386,7 @@ export const downloadPayslip = async (req, res) => {
             workingDays: payroll.workingDays,
             presentDays: payroll.presentDays,
             unpaidLeave: payroll.unpaidLeave,
+            paidLeaveDays: payroll.paidLeaveDays,
             cumulativeEarnings: payroll.cumulativeEarnings,
             cumulativeDeductions: payroll.cumulativeDeductions
         };
@@ -398,6 +401,46 @@ export const downloadPayslip = async (req, res) => {
         payrollData.workingDays = attendanceMetrics.workingDays ?? payrollData.workingDays;
         payrollData.presentDays = attendanceMetrics.presentDays ?? payrollData.presentDays;
         payrollData.unpaidLeave = attendanceMetrics.unpaidLeave ?? payrollData.unpaidLeave;
+        payrollData.paidLeaveDays = attendanceMetrics.paidLeaveDays ?? payrollData.paidLeaveDays;
+
+        // FY YTD (Apr–Mar inclusive of this payslip month) for Current | YTD columns
+        const ytdEarningsBase = normalizePayslipEarnings(payrollData.earnings);
+        const ytdDeductionsBase = { ...(payrollData.deductions || {}) };
+        const autoPfForYtd = employeePfFromBasicWage(Number(ytdEarningsBase.basicWage) || 0);
+        if (!(Number(ytdDeductionsBase.pfEmployee) > 0) && autoPfForYtd > 0) {
+            ytdDeductionsBase.pfEmployee = autoPfForYtd;
+        }
+        try {
+            const ytd = await fetchPayslipComponentYtd({
+                employeeId,
+                organizationId,
+                month: payroll.month,
+                year: payroll.year,
+                currentEarnings: ytdEarningsBase,
+                currentDeductions: ytdDeductionsBase
+            });
+            payrollData.ytdEarnings = ytd.earnings;
+            payrollData.ytdDeductions = ytd.deductions;
+        } catch (ytdError) {
+            logger.warn('Payslip YTD aggregation failed; falling back to current amounts', {
+                error: ytdError.message,
+                payrollId
+            });
+        }
+
+        try {
+            payrollData.leaveBalanceSummary = await fetchPayslipLeaveBalanceSummary({
+                employeeId,
+                organizationId,
+                month: payroll.month,
+                year: payroll.year
+            });
+        } catch (leaveBalError) {
+            logger.warn('Payslip leave balance summary failed', {
+                error: leaveBalError.message,
+                payrollId
+            });
+        }
 
         // Generate PDF (new format with org name + bank details)
         const pdfBuffer = await generatePayrollPDF(payrollData, employeeData, orgData);

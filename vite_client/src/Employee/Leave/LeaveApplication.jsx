@@ -145,8 +145,15 @@ const LeaveApplication = () => {
     const { name, value } = e.target;
     setLeaveForm((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === 'leaveType' && value !== 'sick') {
-        // keep document as-is for other types
+      if (name === 'startDate') {
+        if (prev.isHalfDay) {
+          next.endDate = value;
+        } else if (next.endDate && value > next.endDate) {
+          next.endDate = value;
+        }
+      }
+      if (name === 'endDate' && value !== prev.startDate) {
+        next.isHalfDay = false;
       }
       return next;
     });
@@ -190,8 +197,16 @@ const LeaveApplication = () => {
 
     if (leaveForm.startDate && leaveForm.endDate) {
       if (new Date(leaveForm.startDate) > new Date(leaveForm.endDate)) {
-        formErrors.endDate = 'End date must be after start date';
+        formErrors.endDate = 'End date must be on or after start date';
       }
+      if (leaveForm.isHalfDay && leaveForm.endDate !== leaveForm.startDate) {
+        formErrors.endDate =
+          'Half-day leave must be on a single day (end date matches start date).';
+      }
+    }
+
+    if (leaveForm.isHalfDay && !leaveForm.startDate) {
+      formErrors.startDate = 'Start date is required for half-day leave';
     }
 
     if (sickDocumentRequired && !(leaveForm.document instanceof File)) {
@@ -209,15 +224,19 @@ const LeaveApplication = () => {
       return;
     }
 
+    const endDateForSubmit = leaveForm.isHalfDay ? leaveForm.startDate : leaveForm.endDate;
+    const isHalfDaySubmit =
+      Boolean(leaveForm.isHalfDay) && endDateForSubmit === leaveForm.startDate;
+
     dispatch(submitLeave({
       name: leaveForm.name,
       email: leaveForm.email,
       startDate: leaveForm.startDate,
-      endDate: leaveForm.endDate,
+      endDate: endDateForSubmit,
       leaveType: leaveForm.leaveType,
       reason: leaveForm.reason.trim(),
-      isHalfDay: leaveForm.isHalfDay,
-      halfDayType: leaveForm.isHalfDay ? leaveForm.halfDayType : null,
+      isHalfDay: isHalfDaySubmit,
+      halfDayType: isHalfDaySubmit ? leaveForm.halfDayType : null,
       document: isSickLeave && !sickDocumentRequired ? null : leaveForm.document,
     }));
   };
@@ -257,6 +276,14 @@ const LeaveApplication = () => {
       setErrors((prev) => ({ ...prev, document: '' }));
     }
   }, [isSickLeave, sickDocumentRequired]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // If date range spans multiple days, half-day mode is invalid (checkbox may be hidden but flag still set).
+  useEffect(() => {
+    if (!leaveForm.startDate || !leaveForm.endDate) return;
+    if (leaveForm.startDate === leaveForm.endDate) return;
+    if (!leaveForm.isHalfDay) return;
+    setLeaveForm((prev) => ({ ...prev, isHalfDay: false }));
+  }, [leaveForm.startDate, leaveForm.endDate, leaveForm.isHalfDay]);
 
   return (
     <div className="page-shell w-full min-w-0">
@@ -316,18 +343,24 @@ const LeaveApplication = () => {
                   name={field}
                   value={leaveForm[field]}
                   onChange={handleChange}
-                  disabled={submitting}
+                  disabled={
+                    submitting || (field === 'endDate' && leaveForm.isHalfDay)
+                  }
                   min={field === 'endDate' ? leaveForm.startDate : new Date().toISOString().split('T')[0]}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary text-sm md:text-base disabled:bg-gray-100"
                 />
+                {field === 'endDate' && leaveForm.isHalfDay && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Same as start date for half-day leave (0.5 day).
+                  </p>
+                )}
                 {errors[field] && <p className="text-red-500 text-xs md:text-sm mt-1">{errors[field]}</p>}
               </div>
             ))}
           </div>
 
           {/* Half Day Option */}
-          {leaveForm.startDate && leaveForm.endDate &&
-           new Date(leaveForm.startDate).toDateString() === new Date(leaveForm.endDate).toDateString() && (
+          {leaveForm.startDate && (
             <div className="bg-theme-secondary/10 border border-theme-secondary rounded-lg p-4">
               <label className="flex items-center mb-2">
                 <input
@@ -335,7 +368,12 @@ const LeaveApplication = () => {
                   name="isHalfDay"
                   checked={leaveForm.isHalfDay}
                   onChange={(e) => {
-                    setLeaveForm({ ...leaveForm, isHalfDay: e.target.checked });
+                    const checked = e.target.checked;
+                    setLeaveForm((prev) => ({
+                      ...prev,
+                      isHalfDay: checked,
+                      endDate: checked ? prev.startDate : prev.endDate,
+                    }));
                     if (errors.isHalfDay) {
                       setErrors({ ...errors, isHalfDay: '' });
                     }

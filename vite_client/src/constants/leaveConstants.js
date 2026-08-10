@@ -295,3 +295,33 @@ export const pickPrimaryLeaveBalance = (balances = [], policy) => {
   }
   return balances[0] || null;
 };
+
+/** True when leave is a single-calendar-day half-day request. */
+export function isHalfDayLeaveRecord(leave) {
+  if (!leave) return false;
+  if (leave.isHalfDay === true) return true;
+  return Number(leave.duration) === 0.5 && Boolean(leave.halfDayType);
+}
+
+/** Human-readable days column for leave history tables. */
+export function formatLeaveDurationDisplay(leave) {
+  const duration = Number(leave?.duration ?? leave?.days ?? 0);
+  if (isHalfDayLeaveRecord(leave) || (leave?.isHalfDay && duration === 0.5)) {
+    const half =
+      leave?.halfDayType === 'second_half'
+        ? '2nd half'
+        : leave?.halfDayType === 'first_half'
+          ? '1st half'
+          : 'half day';
+    return `0.5 (${half})`;
+  }
+  return duration;
+}
+
+/** For half-day rows, end date should match start (avoids misleading multi-day ranges). */
+export function formatLeaveHistoryEndDate(leave, startIso, endIso) {
+  if (isHalfDayLeaveRecord(leave) || leave?.isHalfDay) {
+    return startIso;
+  }
+  return endIso;
+}

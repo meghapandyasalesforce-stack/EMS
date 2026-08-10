@@ -26,6 +26,10 @@ const leavePolicySchema = new mongoose.Schema({
         default: Date.now
     },
     expiryDate: Date,
+    isolateUsageFromPriorPolicies: {
+        type: Boolean,
+        default: false,
+    },
 
     /** Leave cycle — default January to December (calendar year) */
     leaveCycle: {
@@ -146,14 +150,45 @@ const leavePolicySchema = new mongoose.Schema({
                 default: 'daily_salary'
             }
         },
-        // Probation period restrictions
+        // Probation: status from Lifecycle / employee.probation; alternate accrual while on probation
         probationRestrictions: {
             enabled: {
                 type: Boolean,
                 default: false
             },
-            minServiceDays: Number, // Minimum days of service before eligible
-            maxDaysDuringProbation: Number
+            // When false, block applying this leave type while on probation
+            allowLeave: {
+                type: Boolean,
+                default: true
+            },
+            // Alternate entitlement for the same leave type during probation (monthly or yearly)
+            accrual: {
+                method: {
+                    type: String,
+                    enum: ['fixed', 'monthly', 'yearly'],
+                    default: 'fixed'
+                },
+                frequency: {
+                    type: String,
+                    enum: ['monthly', 'yearly'],
+                    default: 'monthly'
+                },
+                amount: {
+                    type: Number,
+                    min: 0,
+                    default: 0
+                },
+                maxAccrual: {
+                    type: Number,
+                    min: 0,
+                    default: 0
+                }
+            },
+            // Optional take cap per calendar month while on probation
+            maxDaysPerMonth: {
+                type: Number,
+                min: 0
+            }
         },
         // Notice period restrictions
         noticePeriodRestrictions: {
@@ -211,10 +246,12 @@ const leavePolicySchema = new mongoose.Schema({
     // Applicability rules
     applicableTo: {
         type: String,
-        enum: ['all', 'department', 'role', 'employee', 'custom'],
+        enum: ['all', 'department', 'position', 'role', 'employee', 'custom'],
         default: 'all'
     },
     applicableDepartments: [String],
+    // Matches employee.position (e.g. Intern, Junior) — not jobTitle
+    applicablePositions: [String],
     applicableRoles: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Role'

@@ -9,8 +9,15 @@ import { useNavigate } from 'react-router-dom';
 import axios from '../../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
 import { toast } from 'react-toastify';
-import { getLeaveDisplayLabel, getLeaveSummary } from '../../constants/leaveConstants';
+import {
+  getLeaveDisplayLabel,
+  getLeaveSummary,
+  formatLeaveDurationDisplay,
+  formatLeaveHistoryEndDate,
+  isHalfDayLeaveRecord,
+} from '../../constants/leaveConstants';
 import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
+
 
 const COLORS = ['#FF6384', '#36A2EB', '#FFCE56'];
 
@@ -205,21 +212,25 @@ const MyLeavePage = () => {
         return null;
       }
 
+      const startIso = start.toISOString().split('T')[0];
+      const endIso = end.toISOString().split('T')[0];
+
       return {
         id: leave._id,
         rawStatus: leave.status,
         type: leave.leaveType
           ? leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)
           : 'Unknown',
-        startDate: start.toISOString().split('T')[0],
-        endDate: end.toISOString().split('T')[0],
+        startDate: startIso,
+        endDate: formatLeaveHistoryEndDate(leave, startIso, endIso),
         status: leave.status
           ? leave.status.charAt(0).toUpperCase() + leave.status.slice(1)
           : 'Unknown',
-        approvalStage: leave.approvalStage || (leave.status === 'pending' ? 'Pending' : leave.status),
-        workflowSummary: leave.workflowSummary,
-        days: leave.duration ?? 0
-      };
+          approvalStage: leave.approvalStage || (leave.status === 'pending' ? 'Pending' : leave.status),
+          workflowSummary: leave.workflowSummary,
+          days: formatLeaveDurationDisplay(leave),
+          isHalfDay: Boolean(leave.isHalfDay) || isHalfDayLeaveRecord(leave),
+        };
     })
     .filter(Boolean);
 

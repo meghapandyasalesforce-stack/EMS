@@ -7,8 +7,10 @@ import {
     isLeavePolicyEffectiveOnDate,
     selectApplicableLeavePolicy,
     buildEmployeeLeavePolicyMonthMap,
+    resolveFirstApplicablePolicyMonth,
     groupLeavePolicyMonthMapIntoWindows,
     compareLeavePolicySelectionPriority,
+    getLeavePolicyApplicabilitySpecificity,
 } from '../../helpers/leavePolicyApplicabilityHelper.js';
 
 describe('leavePolicyApplicabilityHelper', () => {
@@ -51,6 +53,31 @@ describe('leavePolicyApplicabilityHelper', () => {
             ).toBe(false);
         });
 
+        it('matches position case-insensitively', () => {
+            const policy = {
+                applicableTo: 'position',
+                applicablePositions: ['Intern'],
+            };
+            expect(
+                isLeavePolicyApplicableToEmployee(policy, {
+                    _id: empId,
+                    position: 'intern',
+                })
+            ).toBe(true);
+            expect(
+                isLeavePolicyApplicableToEmployee(policy, {
+                    _id: empId,
+                    position: 'Junior',
+                })
+            ).toBe(false);
+            expect(
+                isLeavePolicyApplicableToEmployee(policy, {
+                    _id: empId,
+                    jobTitle: 'Intern',
+                })
+            ).toBe(false);
+        });
+
         it('matches assignedRole, not system role string', () => {
             const policy = {
                 applicableTo: 'role',
@@ -80,6 +107,20 @@ describe('leavePolicyApplicabilityHelper', () => {
             expect(
                 isLeavePolicyApplicableToEmployee(policy, { _id: '64b0000000000000000000bb' })
             ).toBe(false);
+        });
+
+        it('custom OR includes position', () => {
+            const policy = {
+                applicableTo: 'custom',
+                applicablePositions: ['Intern'],
+                applicableDepartments: [],
+            };
+            expect(
+                isLeavePolicyApplicableToEmployee(policy, {
+                    _id: empId,
+                    position: 'Intern',
+                })
+            ).toBe(true);
         });
     });
 
@@ -160,6 +201,34 @@ describe('leavePolicyApplicabilityHelper', () => {
             expect(compareLeavePolicySelectionPriority(empPolicy, allPolicy)).toBeLessThan(0);
         });
 
+        it('ranks position above department and below role', () => {
+            expect(getLeavePolicyApplicabilitySpecificity({ applicableTo: 'position' })).toBe(3);
+            expect(getLeavePolicyApplicabilitySpecificity({ applicableTo: 'department' })).toBe(2);
+            expect(getLeavePolicyApplicabilitySpecificity({ applicableTo: 'role' })).toBe(4);
+
+            const deptPolicy = {
+                ...base,
+                _id: 'dept',
+                applicableTo: 'department',
+                applicableDepartments: ['Engineering'],
+                effectiveDate: new Date(2026, 0, 1),
+            };
+            const posPolicy = {
+                ...base,
+                _id: 'pos',
+                applicableTo: 'position',
+                applicablePositions: ['Intern'],
+                effectiveDate: new Date(2026, 0, 1),
+            };
+            expect(
+                selectApplicableLeavePolicy(
+                    [deptPolicy, posPolicy],
+                    { _id: empId, department: 'Engineering', position: 'Intern' },
+                    new Date(2026, 3, 1)
+                )?._id
+            ).toBe('pos');
+        });
+
         it('builds mid-year month map and windows', () => {
             const oldPolicy = {
                 ...base,
@@ -193,6 +262,27 @@ describe('leavePolicyApplicabilityHelper', () => {
             expect(windows[1].policy._id).toBe('new');
             expect(windows[1].startMonthIndex).toBe(6);
         });
+
+        it('finds the first month where a policy applies', () => {
+            const futurePolicy = {
+                ...base,
+                _id: 'future',
+                effectiveDate: new Date(2026, 5, 1),
+            };
+            const first = resolveFirstApplicablePolicyMonth(
+                [futurePolicy],
+                { _id: empId },
+                2026,
+                0,
+                2026,
+                11
+            );
+            expect(first).toEqual({
+                year: 2026,
+                monthIndex: 5,
+                policy: futurePolicy,
+            });
+        });
     });
 
     describe('validate + normalize', () => {
@@ -209,6 +299,18 @@ describe('leavePolicyApplicabilityHelper', () => {
                     applicableDepartments: ['HR'],
                 })
             ).toEqual([]);
+            expect(
+                validateLeavePolicyApplicability({
+                    applicableTo: 'position',
+                    applicablePositions: [],
+                }).length
+            ).toBeGreaterThan(0);
+            expect(
+                validateLeavePolicyApplicability({
+                    applicableTo: 'position',
+                    applicablePositions: ['Intern'],
+                })
+            ).toEqual([]);
         });
 
         it('clears unused scopes on normalize', () => {
@@ -216,12 +318,29 @@ describe('leavePolicyApplicabilityHelper', () => {
                 normalizeLeavePolicyApplicability({
                     applicableTo: 'department',
                     applicableDepartments: ['HR', 'HR'],
+                    applicablePositions: ['Intern'],
                     applicableRoles: [roleId],
                     applicableEmployees: [empId],
                 })
             ).toEqual({
                 applicableTo: 'department',
                 applicableDepartments: ['HR'],
+                applicablePositions: [],
+                applicableRoles: [],
+                applicableEmployees: [],
+            });
+
+            expect(
+                normalizeLeavePolicyApplicability({
+                    applicableTo: 'position',
+                    applicableDepartments: ['HR'],
+                    applicablePositions: ['Intern', 'Intern'],
+                    applicableRoles: [roleId],
+                })
+            ).toEqual({
+                applicableTo: 'position',
+                applicableDepartments: [],
+                applicablePositions: ['Intern'],
                 applicableRoles: [],
                 applicableEmployees: [],
             });

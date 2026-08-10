@@ -279,6 +279,7 @@ export const updateLeavePolicy = async (req, res) => {
         const touchesApplicability =
             updateBody.applicableTo != null ||
             updateBody.applicableDepartments != null ||
+            updateBody.applicablePositions != null ||
             updateBody.applicableRoles != null ||
             updateBody.applicableEmployees != null;
 
@@ -287,6 +288,8 @@ export const updateLeavePolicy = async (req, res) => {
                 applicableTo: updateBody.applicableTo ?? policy.applicableTo,
                 applicableDepartments:
                     updateBody.applicableDepartments ?? policy.applicableDepartments,
+                applicablePositions:
+                    updateBody.applicablePositions ?? policy.applicablePositions,
                 applicableRoles: updateBody.applicableRoles ?? policy.applicableRoles,
                 applicableEmployees:
                     updateBody.applicableEmployees ?? policy.applicableEmployees,

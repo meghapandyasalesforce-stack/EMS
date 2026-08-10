@@ -5,8 +5,7 @@
 import { getOrCreateLifecycleSettings, isFeatureEnabled } from './lifecycleConfigService.js';
 import { notify } from '../helpers/notificationManager.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
-
-const PROBATION_STATUSES = ['Not Started', 'Active', 'Extended', 'Confirmed', 'Rejected', 'Terminated', 'Waived'];
+import { syncEmployeeProbationFromWorkflow } from '../helpers/employeeProbationSyncHelper.js';
 
 export function initProbationForWorkflow(workflow, { probationMonths = 6, joiningDate } = {}) {
     const start = joiningDate || workflow.joiningDate || workflow.startDate || new Date();
@@ -57,6 +56,7 @@ export async function extendProbation(workflow, { extensionDays, reason }, { act
         action: 'Update', entityType: 'Onboarding', entityId: workflow._id,
         entityName: 'Probation Extension', actor, req, metadata: { extensionDays },
     });
+    await syncEmployeeProbationFromWorkflow(workflow);
     return workflow;
 }
 
@@ -98,6 +98,7 @@ export async function submitProbationReview(workflow, { reviewType, rating, feed
         data: { workflowId: workflow._id, reviewType, decision },
     }).catch(() => {});
 
+    await syncEmployeeProbationFromWorkflow(workflow);
     return workflow;
 }
 

@@ -6,7 +6,18 @@ import Employee from '../models/employee.model.js';
 import Organization from '../models/organization.model.js';
 import SalaryStructure from '../models/salaryStructure.model.js';
 import logger from './logger.js';
-import { computeEarningsFromGross, computeSalaryStructureCoreEarnings, employeePfFromBasicWage, employerPfFromBasicWage, pfWageFromBasicWage } from './salaryCalculation.js';
+import {
+    computeEarningsFromGross,
+    computeSalaryStructureCoreEarnings,
+    computeEsiStatutoryWages,
+    employeePfFromBasicWage,
+    employerPfFromBasicWage,
+    pfWageFromBasicWage,
+    isEsiEligibleByStatutoryWages,
+    ESI_GROSS_WAGE_LIMIT,
+    ESI_EMPLOYEE_RATE,
+    ESI_EMPLOYER_RATE,
+} from './salaryCalculation.js';
 import { getEffectiveSalaryForMonth } from './salaryRevisionHelper.js';
 import { computeRegimeIncomeTaxCumulative, clearTdsCalculationModeCache } from './tdsCumulativeHelper.js';
 import { getCachedEffectiveTimezone } from './orgContextCache.js';
@@ -14,15 +25,12 @@ import { getDateKeyInTimezone, getEndOfDayInTimezone, getPayrollMonthUtcBounds, 
 import { buildAttendancePeriodFilter, parseDateKeyInTimezone } from './attendanceDayHelper.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezoneOptions.js';
 
-export { getPayrollMonthUtcBounds };
+export { getPayrollMonthUtcBounds, ESI_GROSS_WAGE_LIMIT };
 
 const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 /** Default overtime multiplier when salary structure does not specify a rate. */
 export const DEFAULT_OVERTIME_RATE = 1.5;
-
-/** ESI applies only when monthly gross is at or below this statutory limit (₹21,000). */
-export const ESI_GROSS_WAGE_LIMIT = 21000;
 
 // Cache calendar docs during a single Node process run to avoid
 // repeated DB reads for every employee in the same month/year.
@@ -440,6 +448,16 @@ export function sumEffectivePresentDaysByKeys(
     return total;
 }
 
+/** Sum approved paid-leave credits from a dateKey → credit map (excludes LOP). */
+export function sumPaidLeaveDaysFromMap(paidLeaveByDay) {
+    if (!paidLeaveByDay || typeof paidLeaveByDay.values !== 'function') return 0;
+    let total = 0;
+    for (const v of paidLeaveByDay.values()) {
+        total += Number(v) || 0;
+    }
+    return total;
+}
+
 /**
  * Map dateKey → paid leave credit using org calendar days (timezone-safe).
  */
@@ -761,9 +779,18 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             },
             ctc: 0,
             inHandSalary: 0,
+            esiStatutoryWages: {
+                includedWages: 0,
+                excludedWages: 0,
+                fiftyPercentCap: 0,
+                fiftyPercentAddBack: 0,
+                totalRemuneration: 0,
+                statutoryWages: 0,
+            },
             workingDays: 0,
             presentDays: 0,
             unpaidLeave: 0,
+            paidLeaveDays: 0,
             leaves: []
         };
     }
@@ -865,6 +892,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         orgTimezone,
         isWorkingDayKeyFn
     );
+    const paidLeaveDays = sumPaidLeaveDaysFromMap(paidLeaveByDay);
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
     const effectivePresent = sumEffectivePresentDaysByKeys(
         effStartKey,
@@ -894,6 +922,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
     let basicSalary = 0;
     let earnings;
     let deductions;
+    let esiStatutoryWages = null;
 
     if (salaryStructure) {
         const overtimeRules = salaryStructure.overtimeRules || {};
@@ -927,9 +956,21 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         basicSalary = earnings.basicWage;
         const pfWageBase = pfWageFromBasicWage(basicSalary);
         earnings.pfEmployer = computeConfiguredComponent(salaryStructure?.earnings?.pfEmployer, pfWageBase);
-        const esiEligible = effectiveGross <= ESI_GROSS_WAGE_LIMIT;
+        const esiWageInfo = computeEsiStatutoryWages({
+            basicWage: earnings.basicWage,
+            houseRentAllowance: earnings.houseRentAllowance,
+            transportAllowance: earnings.transportAllowance,
+            medicalAllowance: earnings.medicalAllowance,
+            specialAllowance: earnings.specialAllowance,
+            overtime: earnings.overtime,
+            performanceBonus: earnings.performanceBonus,
+            projectBonus: earnings.projectBonus,
+            attendanceBonus: earnings.attendanceBonus,
+        });
+        const esiEligible = isEsiEligibleByStatutoryWages(esiWageInfo.statutoryWages);
+        const esiWageBase = esiWageInfo.statutoryWages;
         earnings.esiEmployer = esiEligible
-            ? computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, basicSalary)
+            ? computeConfiguredComponent(salaryStructure?.earnings?.esiEmployer, esiWageBase)
             : 0;
         earnings.totalEarnings =
             (earnings.basicWage || 0) +
@@ -947,7 +988,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         deductions = {
             pfEmployee: computeConfiguredComponent(salaryStructure?.deductions?.pfEmployee, pfWageBase),
             esiEmployee: esiEligible
-                ? computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, basicSalary)
+                ? computeConfiguredComponent(salaryStructure?.deductions?.esiEmployee, esiWageBase)
                 : 0,
             professionalTax: computeConfiguredComponent(salaryStructure?.deductions?.professionalTax, effectiveGross),
             incomeTax: 0,
@@ -964,14 +1005,22 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             yearNum,
             orgId
         );
+        esiStatutoryWages = esiEligible ? esiWageInfo : { ...esiWageInfo, statutoryWages: 0 };
     } else {
         const formula = computeEarningsFromGross(effectiveGross);
-        // PF/ESI/tax should be based on earned (prorated) basic wage, not full-month salary.
+        // PF/ESI/tax should be based on earned (prorated) wages, not full-month salary.
         basicSalary = formula.basicWage;
         const overtimeRatePerHour = (perDayRate / 8) * DEFAULT_OVERTIME_RATE;
         const overtimePay = Math.round(totalOvertimeHours * overtimeRatePerHour);
 
-        const esiEligibleFallback = effectiveGross <= ESI_GROSS_WAGE_LIMIT;
+        const esiWageInfo = computeEsiStatutoryWages({
+            basicWage: formula.basicWage,
+            houseRentAllowance: formula.houseRentAllowance,
+            specialAllowance: formula.specialAllowance,
+            overtime: overtimePay,
+        });
+        const esiEligibleFallback = isEsiEligibleByStatutoryWages(esiWageInfo.statutoryWages);
+        const esiWageBase = esiWageInfo.statutoryWages;
         earnings = {
             basicWage: formula.basicWage,
             houseRentAllowance: formula.houseRentAllowance,
@@ -984,7 +1033,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             projectBonus: 0,
             attendanceBonus: 0,
             pfEmployer: employerPfFromBasicWage(basicSalary),
-            esiEmployer: esiEligibleFallback ? Math.round(basicSalary * 0.0325) : 0
+            esiEmployer: esiEligibleFallback ? Math.round(esiWageBase * ESI_EMPLOYER_RATE) : 0
         };
         earnings.totalEarnings =
             formula.totalEarnings +
@@ -996,7 +1045,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
         deductions = {
             pfEmployee: employeePfFromBasicWage(basicSalary),
-            esiEmployee: esiEligibleFallback ? Math.round(basicSalary * 0.0075) : 0,
+            esiEmployee: esiEligibleFallback ? Math.round(esiWageBase * ESI_EMPLOYEE_RATE) : 0,
             professionalTax: 0,
             incomeTax: 0,
             advanceSalary: 0,
@@ -1012,6 +1061,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             yearNum,
             orgId
         );
+        esiStatutoryWages = esiEligibleFallback ? esiWageInfo : { ...esiWageInfo, statutoryWages: 0 };
     }
 
     deductions.total =
@@ -1032,10 +1082,12 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         deductions,
         ctc,
         inHandSalary,
+        esiStatutoryWages,
         // Keep this field semantics as attendance working days (excluding weekends/holidays).
         workingDays: attendanceWorkingDays,
         presentDays: effectivePresent,
         unpaidLeave: unpaidDays,
+        paidLeaveDays,
         // Store leaves without internal flags
         leaves: payrollLeaves.map(({ isLossOfPay: _ignored, ...rest }) => rest)
     };
@@ -1043,21 +1095,26 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
 /**
  * Resolve attendance metrics for payslip PDF when missing on the saved document (e.g. legacy rows).
+ * Always resolves paidLeaveDays when missing (Present was replaced by Paid Leaves on the slip).
  */
 export async function enrichAttendanceMetricsForPayslip(payroll, organizationId) {
     const base = {
         workingDays: payroll.workingDays,
         presentDays: payroll.presentDays,
-        unpaidLeave: payroll.unpaidLeave
+        unpaidLeave: payroll.unpaidLeave,
+        paidLeaveDays: payroll.paidLeaveDays
     };
     if (payroll.type !== 'monthly') return base;
-    if (
+
+    const hasAttendanceMetrics =
         payroll.workingDays != null &&
         payroll.presentDays != null &&
-        payroll.unpaidLeave != null
-    ) {
+        payroll.unpaidLeave != null;
+    const hasPaidLeaveDays = payroll.paidLeaveDays != null;
+    if (hasAttendanceMetrics && hasPaidLeaveDays) {
         return base;
     }
+
     try {
         const empId = payroll.employeeId?._id || payroll.employeeId;
         if (!empId) return base;
@@ -1075,9 +1132,10 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
             mode: 'final'
         });
         return {
-            workingDays: payload.workingDays ?? base.workingDays,
-            presentDays: payload.presentDays ?? base.presentDays,
-            unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
+            workingDays: hasAttendanceMetrics ? base.workingDays : (payload.workingDays ?? base.workingDays),
+            presentDays: hasAttendanceMetrics ? base.presentDays : (payload.presentDays ?? base.presentDays),
+            unpaidLeave: hasAttendanceMetrics ? base.unpaidLeave : (payload.unpaidLeave ?? base.unpaidLeave),
+            paidLeaveDays: hasPaidLeaveDays ? base.paidLeaveDays : (payload.paidLeaveDays ?? base.paidLeaveDays)
         };
     } catch (error) {
         logger.warn('Payslip attendance enrichment failed; using stored payroll metrics', {
