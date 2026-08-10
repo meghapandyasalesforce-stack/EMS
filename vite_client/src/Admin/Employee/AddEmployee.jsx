@@ -50,6 +50,8 @@ function AddEmployee() {
         position: '',
         salary: '',
         systemRole: DEFAULT_SYSTEM_ROLE,
+        onProbation: false,
+        probationMonths: 6,
     });
     const [roleCatalog, setRoleCatalog] = useState([]);
     const [loadingRoles, setLoadingRoles] = useState(true);
@@ -291,6 +293,13 @@ function AddEmployee() {
             if (managers.length > 0 && (!form.manager || !String(form.manager).trim())) {
                 toast.error('Please select a manager.');
                 return false;
+            }
+            if (form.onProbation) {
+                const months = Number(form.probationMonths);
+                if (!Number.isFinite(months) || months < 1 || months > 36) {
+                    toast.error('Probation duration must be between 1 and 36 months.');
+                    return false;
+                }
             }
             return true;
         }
@@ -622,6 +631,43 @@ function AddEmployee() {
                     required
                 />
             </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        checked={Boolean(form.onProbation)}
+                        onChange={(e) =>
+                            setForm((prev) => ({ ...prev, onProbation: e.target.checked }))
+                        }
+                    />
+                    <span>
+                        <span className="block text-sm font-semibold text-slate-900">
+                            Put this employee on probation
+                        </span>
+                        <span className="block text-xs text-slate-500 mt-0.5">
+                            Off by default. Only enable if this hire should start a probation period.
+                        </span>
+                    </span>
+                </label>
+                {form.onProbation ? (
+                    <div className="max-w-xs">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Probation duration (months)
+                        </label>
+                        <input
+                            className={inputClass}
+                            name="probationMonths"
+                            type="number"
+                            min={1}
+                            max={36}
+                            step={1}
+                            value={form.probationMonths}
+                            onChange={handleChange}
+                        />
+                    </div>
+                ) : null}
+            </div>
         </div>
     );
 
@@ -656,6 +702,14 @@ function AddEmployee() {
                         <div>
                             <dt className="text-slate-500">Manager</dt>
                             <dd className="font-medium text-slate-900">{managerLabel}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-slate-500">Probation</dt>
+                            <dd className="font-medium text-slate-900">
+                                {form.onProbation
+                                    ? `Yes — ${form.probationMonths || 6} month(s)`
+                                    : 'No'}
+                            </dd>
                         </div>
                         <div>
                             <dt className="text-slate-500">System access</dt>

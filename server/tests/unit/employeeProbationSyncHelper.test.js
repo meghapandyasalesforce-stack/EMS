@@ -3,6 +3,8 @@ import {
     lifecycleStatusToEmployee,
     employeeStatusToLifecycle,
     mapLifecycleProbationToEmployee,
+    buildEmployeeProbationFromOptIn,
+    employeeHasActiveProbation,
 } from '../../helpers/employeeProbationSyncHelper.js';
 
 describe('employeeProbationSyncHelper', () => {
@@ -50,6 +52,35 @@ describe('employeeProbationSyncHelper', () => {
 
         it('defaults empty probation to None', () => {
             expect(mapLifecycleProbationToEmployee(null).status).toBe('None');
+        });
+    });
+
+    describe('buildEmployeeProbationFromOptIn', () => {
+        it('defaults to no probation when not opted in', () => {
+            expect(buildEmployeeProbationFromOptIn({ onProbation: false }).status).toBe('None');
+            expect(buildEmployeeProbationFromOptIn({}).status).toBe('None');
+        });
+
+        it('creates Active probation with duration when opted in', () => {
+            const join = new Date(2026, 7, 10);
+            const result = buildEmployeeProbationFromOptIn({
+                onProbation: true,
+                probationMonths: 3,
+                joiningDate: join,
+            });
+            expect(result.status).toBe('Active');
+            expect(result.startDate.getTime()).toBe(join.getTime());
+            expect(result.endDate.getFullYear()).toBe(2026);
+            expect(result.endDate.getMonth()).toBe(10);
+            expect(result.endDate.getDate()).toBe(10);
+        });
+    });
+
+    describe('employeeHasActiveProbation', () => {
+        it('is true only for Active/Extended', () => {
+            expect(employeeHasActiveProbation({ probation: { status: 'Active' } })).toBe(true);
+            expect(employeeHasActiveProbation({ probation: { status: 'Confirmed' } })).toBe(false);
+            expect(employeeHasActiveProbation({ probation: { status: 'None' } })).toBe(false);
         });
     });
 });

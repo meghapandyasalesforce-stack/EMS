@@ -5,13 +5,6 @@
 import leaveBalanceEngine from '../services/leaveBalanceEngine.js';
 import logger from './logger.js';
 
-function formatLeaveTypeLabel(leaveType) {
-    if (!leaveType || typeof leaveType !== 'string') return '';
-    return leaveType
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 function formatDays(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return '0';
@@ -21,7 +14,7 @@ function formatDays(value) {
 }
 
 /**
- * @returns {Promise<string>} e.g. "Casual: 3, Paid: 5" or "Casual: 0, Paid: 0"
+ * @returns {Promise<string>} e.g. "2.5 Days" (sum of Casual + Paid available)
  */
 export async function fetchPayslipLeaveBalanceSummary({
     employeeId,
@@ -47,12 +40,12 @@ export async function fetchPayslipLeaveBalanceSummary({
         );
 
         const rows = balance?.balances || [];
-        const parts = allowedTypes.map((type) => {
+        const total = allowedTypes.reduce((sum, type) => {
             const row = rows.find((b) => String(b.leaveType || '').toLowerCase() === type);
-            return `${formatLeaveTypeLabel(type)}: ${formatDays(row?.available || 0)}`;
-        });
+            return sum + (Number(row?.available) || 0);
+        }, 0);
 
-        return parts.join(', ');
+        return `${formatDays(total)} Days`;
     } catch (error) {
         logger.warn('Payslip leave balance summary failed', {
             error: error.message,

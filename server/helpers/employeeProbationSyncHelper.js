@@ -64,6 +64,74 @@ export function mapLifecycleProbationToEmployee(probation) {
 }
 
 /**
+ * Build employee.probation from Add Employee opt-in.
+ * Default is no probation — must explicitly opt in.
+ */
+export function buildEmployeeProbationFromOptIn({
+    onProbation = false,
+    probationMonths = 6,
+    joiningDate = null,
+} = {}) {
+    const optedIn =
+        onProbation === true ||
+        onProbation === 'true' ||
+        onProbation === 1 ||
+        onProbation === '1' ||
+        String(onProbation).toLowerCase() === 'yes';
+
+    if (!optedIn) {
+        return {
+            status: 'None',
+            startDate: null,
+            endDate: null,
+            confirmedAt: null,
+            rejectedAt: null,
+        };
+    }
+
+    const months = Math.max(1, Math.min(36, Number(probationMonths) || 6));
+    const start = joiningDate ? new Date(joiningDate) : new Date();
+    const startDay = Number.isNaN(start.getTime())
+        ? new Date()
+        : new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const end = new Date(startDay);
+    end.setMonth(end.getMonth() + months);
+
+    return {
+        status: 'Active',
+        startDate: startDay,
+        endDate: end,
+        confirmedAt: null,
+        rejectedAt: null,
+    };
+}
+
+export function employeeHasActiveProbation(employee) {
+    const status = String(employee?.probation?.status || '');
+    return status === 'Active' || status === 'Extended';
+}
+
+export function resolveProbationMonthsFromEmployee(employee, fallback = 6) {
+    const start = employee?.probation?.startDate
+        ? new Date(employee.probation.startDate)
+        : null;
+    const end = employee?.probation?.endDate ? new Date(employee.probation.endDate) : null;
+    if (
+        start &&
+        end &&
+        !Number.isNaN(start.getTime()) &&
+        !Number.isNaN(end.getTime()) &&
+        end > start
+    ) {
+        const months =
+            (end.getFullYear() - start.getFullYear()) * 12 +
+            (end.getMonth() - start.getMonth());
+        if (months >= 1) return Math.min(36, months);
+    }
+    return Math.max(1, Math.min(36, Number(fallback) || 6));
+}
+
+/**
  * Copy Lifecycle workflow.probation → employee.probation (Job Details).
  */
 export async function syncEmployeeProbationFromWorkflow(workflow) {
@@ -93,6 +161,7 @@ export async function syncEmployeeProbationFromWorkflow(workflow) {
 /**
  * Copy employee.probation → Lifecycle onboarding workflow (if one exists).
  * Merges into existing workflow.probation so reviews / extensions history stay intact.
+ * When employee is first put on Active probation and workflow has no probation yet, initializes it.
  */
 export async function syncWorkflowProbationFromEmployee({
     organizationId,
@@ -113,12 +182,29 @@ export async function syncWorkflowProbationFromEmployee({
             return null;
         }
 
-        if (!workflow.probation) {
+        const { initProbationForWorkflow } = await import(
+            '../services/lifecycleProbationService.js'
+        );
+
+        const nextStatus = employeeStatusToLifecycle(probation.status);
+        const needsInit =
+            !workflow.probation?.startDate &&
+            (nextStatus === 'Active' || nextStatus === 'Extended');
+
+        if (needsInit) {
+            const months = resolveProbationMonthsFromEmployee({ probation }, 6);
+            initProbationForWorkflow(workflow, {
+                probationMonths: months,
+                joiningDate: probation.startDate || workflow.joiningDate,
+                startDate: probation.startDate || null,
+                endDate: probation.endDate || null,
+            });
+        } else if (!workflow.probation) {
             workflow.probation = {};
         }
 
         if (probation.status !== undefined) {
-            workflow.probation.status = employeeStatusToLifecycle(probation.status);
+            workflow.probation.status = nextStatus;
         }
         if (probation.startDate !== undefined) {
             workflow.probation.startDate = probation.startDate
@@ -144,7 +230,6 @@ export async function syncWorkflowProbationFromEmployee({
                 : null;
         }
 
-        // Keep originalEndDate if missing
         if (!workflow.probation.originalEndDate && workflow.probation.endDate) {
             workflow.probation.originalEndDate = workflow.probation.endDate;
         }
