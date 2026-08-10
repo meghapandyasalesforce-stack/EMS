@@ -421,7 +421,7 @@ export const getCandidates = asyncHandler(async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const candidates = await Candidate.find(query)
-        .populate('jobPostingId', 'jobTitle department')
+        .populate('jobPostingId', 'jobTitle department tags')
         .populate('referredBy', 'name email')
         .populate('primaryRecruiterId', 'name email')
         .sort({ applicationDate: -1 })
@@ -454,9 +454,9 @@ export const getCandidateById = asyncHandler(async (req, res) => {
         _id: id,
         organizationId
     })
-        .populate('jobPostingId', 'jobTitle department screeningCriteria')
+        .populate('jobPostingId', 'jobTitle department tags screeningCriteria')
         .populate('referredBy', 'name email')
-        .populate('interviewSchedule.interviewer', 'name email')
+        .populate('interviewSchedule.interviewer', 'name lastName email')
         .populate('linkedEmployeeId', 'name lastName employeeId email department jobTitle');
 
     if (!candidate) {
@@ -545,6 +545,35 @@ export const updateCandidateStatus = asyncHandler(async (req, res) => {
     if (req.body.tags) candidate.tags = req.body.tags;
     if (req.body.poolMemberships) candidate.poolMemberships = req.body.poolMemberships;
     if (req.body.referralBonusStatus) candidate.referralBonusStatus = req.body.referralBonusStatus;
+
+    // Allow HR to assign a real job posting from candidate detail / email prep (not the holding job).
+    if (req.body.jobPostingId !== undefined && req.body.jobPostingId !== null && req.body.jobPostingId !== '') {
+        const job = await Recruitment.findOne({
+            _id: req.body.jobPostingId,
+            organizationId,
+            isActive: { $ne: false },
+        });
+        if (!job) {
+            return res.status(400).json({ success: false, message: 'Job posting not found' });
+        }
+        const holdingTag = '__resume_inbox_holding__';
+        if ((job.tags || []).includes(holdingTag) || /unassigned/i.test(job.jobTitle || '')) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please assign a real job posting, not the Resume Inbox holding job.',
+            });
+        }
+        const prevJob = candidate.jobPostingId;
+        candidate.jobPostingId = job._id;
+        if (String(prevJob || '') !== String(job._id)) {
+            candidate.notes.push({
+                note: `Assigned to job "${job.jobTitle}"`,
+                addedBy: req.user?._id || req.employee?._id,
+                addedAt: new Date(),
+            });
+            candidate.tags = (candidate.tags || []).filter((t) => t !== 'Unassigned');
+        }
+    }
 
     await candidate.save();
 
@@ -635,7 +664,8 @@ export const scheduleInterview = asyncHandler(async (req, res) => {
 
     const last = candidate.interviewSchedule[candidate.interviewSchedule.length - 1];
 
-    // In-app notify the assigned interviewer (no email)
+    // In-app notify the assigned interviewer only — do NOT email the candidate.
+    // Interview invitation is sent only when HR clicks "Interview Invite" on Communications.
     try {
         const { notify } = await import('../../helpers/notificationManager.js');
         await notify({
@@ -658,25 +688,13 @@ export const scheduleInterview = asyncHandler(async (req, res) => {
         logger.warn('Interviewer notification skipped', { error: e.message });
     }
 
-    // Auto-send interview invite email to candidate (best-effort)
-    try {
-        const { sendInterviewInvite } = await import('../../services/recruitmentEmailService.js');
-        await sendInterviewInvite({
-            candidate,
-            interview: last,
-            actorId: req.employee?._id || req.user?._id,
-        });
-    } catch (e) {
-        logger.warn('Interview invite email skipped', { error: e.message });
-    }
-
     const populated = await Candidate.findById(candidate._id)
         .populate('jobPostingId', 'jobTitle department')
         .populate('interviewSchedule.interviewer', 'name lastName email');
 
     res.json({
         success: true,
-        message: 'Interview scheduled — interviewer notified in-app',
+        message: 'Interview scheduled — interviewer notified in-app. Use Communication → Interview Invite to email the candidate.',
         data: populated
     });
 });
@@ -1294,7 +1312,8 @@ export const withdrawCandidate = asyncHandler(async (req, res) => {
 });
 
 /**
- * Log communication against candidate
+ * Log communication against candidate (HR-internal history only).
+ * Does NOT send email/SMS/WhatsApp — use POST .../send-email for real outbound mail.
  * @route POST /api/v1/admin/recruitment/candidates/:id/communication
  */
 export const logCandidateCommunication = asyncHandler(async (req, res) => {
@@ -1303,17 +1322,24 @@ export const logCandidateCommunication = asyncHandler(async (req, res) => {
     if (!candidate) {
         return res.status(404).json({ success: false, message: 'Candidate not found' });
     }
+    const channel = req.body.channel || 'note';
     candidate.communications.push({
-        channel: req.body.channel || 'note',
+        channel,
+        // Manual logs are HR records; direction stays inbound/outbound for timeline filters.
         direction: req.body.direction || 'outbound',
         subject: req.body.subject,
         body: req.body.body || req.body.notes,
-        participants: req.body.participants || [],
+        participants: req.body.participants || (candidate.email ? [candidate.email] : []),
         createdBy: req.employee?._id || req.user?._id,
         createdAt: new Date(),
+        autoLogged: false,
     });
     await candidate.save();
-    res.json({ success: true, message: 'Communication logged', data: candidate });
+    res.json({
+        success: true,
+        message: 'Communication logged (HR-only — nothing was sent to the candidate)',
+        data: candidate,
+    });
 });
 
 /**
@@ -1371,7 +1397,9 @@ export const bulkUpdateCandidates = asyncHandler(async (req, res) => {
 });
 
 /**
- * Submit interview feedback
+ * Update interview status and/or submit interview feedback (HR/Admin/Executive).
+ * Feedback is stored on the specific interviewSchedule entry.
+ * Feedback submission requires interview status Completed (or status Completed in the same request).
  * @route PUT /api/v1/admin/recruitment/candidates/:id/interview/:interviewId
  */
 export const updateInterviewFeedback = asyncHandler(async (req, res) => {
@@ -1386,15 +1414,74 @@ export const updateInterviewFeedback = asyncHandler(async (req, res) => {
         return res.status(404).json({ success: false, message: 'Interview not found' });
     }
 
-    if (req.body.status) interview.status = req.body.status;
+    const {
+        canAcceptFeedbackSubmission,
+    } = await import('../../helpers/interviewFeedbackAccess.js');
+
+    // Status-only update (e.g. Mark Completed) — no feedback payload
+    if (req.body.status && req.body.feedback == null
+        && req.body.interviewType == null
+        && req.body.scheduledDate == null
+        && req.body.scheduledTime == null
+        && req.body.location == null
+        && req.body.meetingLink == null
+        && req.body.interviewer == null) {
+        const allowed = ['Scheduled', 'Completed', 'Cancelled', 'Rescheduled'];
+        if (!allowed.includes(req.body.status)) {
+            return res.status(400).json({ success: false, message: 'Invalid interview status' });
+        }
+        interview.status = req.body.status;
+        await candidate.save();
+        return res.json({ success: true, message: 'Interview status updated', data: candidate });
+    }
+
+    // Allow completing / editing interview details (used by Communication email prep modal)
+    const detailKeys = ['interviewType', 'scheduledDate', 'scheduledTime', 'location', 'meetingLink', 'interviewer'];
+    const hasDetailPatch = detailKeys.some((k) => req.body[k] !== undefined);
+    if (hasDetailPatch && req.body.feedback == null) {
+        if (req.body.interviewType !== undefined) interview.interviewType = req.body.interviewType;
+        if (req.body.scheduledDate !== undefined) {
+            interview.scheduledDate = req.body.scheduledDate ? new Date(req.body.scheduledDate) : interview.scheduledDate;
+        }
+        if (req.body.scheduledTime !== undefined) interview.scheduledTime = req.body.scheduledTime;
+        if (req.body.location !== undefined) interview.location = req.body.location;
+        if (req.body.meetingLink !== undefined) interview.meetingLink = req.body.meetingLink;
+        if (req.body.interviewer !== undefined && req.body.interviewer) {
+            interview.interviewer = req.body.interviewer;
+        }
+        if (req.body.status) {
+            const allowed = ['Scheduled', 'Completed', 'Cancelled', 'Rescheduled'];
+            if (!allowed.includes(req.body.status)) {
+                return res.status(400).json({ success: false, message: 'Invalid interview status' });
+            }
+            interview.status = req.body.status;
+        } else if (interview.status === 'Cancelled') {
+            interview.status = 'Scheduled';
+        }
+        await candidate.save();
+        return res.json({ success: true, message: 'Interview details updated', data: candidate });
+    }
+
     if (req.body.feedback) {
+        if (!canAcceptFeedbackSubmission(interview, { nextStatus: req.body.status })) {
+            return res.status(400).json({
+                success: false,
+                code: 'INTERVIEW_NOT_COMPLETED',
+                message: 'Feedback can only be submitted after the interview is marked Completed',
+            });
+        }
+        if (req.body.status) interview.status = req.body.status;
+        else interview.status = 'Completed';
+
         interview.feedback = {
-            ...interview.feedback?.toObject?.() || interview.feedback || {},
+            ...(interview.feedback?.toObject?.() || interview.feedback || {}),
             ...req.body.feedback,
             submittedAt: new Date(),
         };
-        if (!req.body.status) interview.status = 'Completed';
+    } else if (req.body.status) {
+        interview.status = req.body.status;
     }
+
     await candidate.save();
     res.json({ success: true, message: 'Interview updated', data: candidate });
 });

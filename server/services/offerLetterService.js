@@ -3,16 +3,40 @@
  */
 
 import crypto from 'crypto';
-import { Candidate } from '../models/recruitment.model.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { Candidate, Recruitment } from '../models/recruitment.model.js';
 import Organization from '../models/organization.model.js';
 import { OfferLetter, OfferLetterTemplate } from '../models/lifecycleGap.model.js';
-import { applyPlaceholders, generateLetterPdf } from '../helpers/lifecycleLetterPdf.js';
+import { generateLetterPdf } from '../helpers/lifecycleLetterPdf.js';
+import {
+    buildOfferPlaceholderMap,
+    buildSampleOfferPlaceholderMap,
+    validateOfferLetterHtml,
+} from '../helpers/offerPlaceholderResolver.js';
+import { normalizeRichHtml, normalizeRichHtmlFields } from '../helpers/normalizeRichHtml.js';
+import { enhanceOfferLetterHtml } from '../helpers/enhanceOfferLetterHtml.js';
 import { initiateLifecycleApproval } from './lifecycleApprovalService.js';
 import { captureSignature } from './esignAdapter.js';
 import { getOrCreateLifecycleSettings, isFeatureEnabled, assertFeatureEnabled } from './lifecycleConfigService.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
 import { notify } from '../helpers/notificationManager.js';
 import logger from '../helpers/logger.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LIFECYCLE_LETTERS_DIR = path.join(__dirname, '../uploads/lifecycle-letters');
+
+function deleteOfferPdfFile(pdfUrl) {
+    if (!pdfUrl) return;
+    try {
+        const relative = String(pdfUrl).replace(/^\/uploads\/lifecycle-letters\//, '');
+        const fullPath = path.join(LIFECYCLE_LETTERS_DIR, relative);
+        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+    } catch (error) {
+        logger.warn('Failed to delete offer PDF file', { pdfUrl, error: error.message });
+    }
+}
 
 const DEFAULT_OFFER_BODY = `<p>Dear {{candidateName}},</p>
 <p>We are pleased to offer you the position of <strong>{{position}}</strong> at {{companyName}}.</p>
@@ -38,12 +62,14 @@ export async function ensureDefaultOfferTemplate(organizationId) {
 
 export async function listOfferTemplates(organizationId) {
     await ensureDefaultOfferTemplate(organizationId);
-    return OfferLetterTemplate.find({ organizationId, isActive: { $ne: false } }).sort({ isDefault: -1, name: 1 }).lean();
+    const templates = await OfferLetterTemplate.find({ organizationId, isActive: { $ne: false } }).sort({ isDefault: -1, name: 1 }).lean();
+    return templates.map((template) => normalizeRichHtmlFields(template));
 }
 
 export async function upsertOfferTemplate(organizationId, payload, actor) {
     await assertFeatureEnabled(organizationId, 'offerLetter', 'Offer letter');
     const { id, ...data } = payload;
+    if (data.bodyHtml) data.bodyHtml = normalizeRichHtml(data.bodyHtml);
     if (data.isDefault) {
         await OfferLetterTemplate.updateMany({ organizationId }, { $set: { isDefault: false } });
     }
@@ -51,7 +77,7 @@ export async function upsertOfferTemplate(organizationId, payload, actor) {
     if (id) {
         const existing = await OfferLetterTemplate.findOne({ _id: id, organizationId });
         if (!existing) throw new Error('Template not found');
-        if (data.bodyHtml && data.bodyHtml !== existing.bodyHtml) {
+        if (data.bodyHtml && normalizeRichHtml(data.bodyHtml) !== normalizeRichHtml(existing.bodyHtml)) {
             existing.versionHistory = existing.versionHistory || [];
             existing.versionHistory.push({
                 version: existing.version,
@@ -66,24 +92,113 @@ export async function upsertOfferTemplate(organizationId, payload, actor) {
     } else {
         template = await OfferLetterTemplate.create({ ...data, organizationId, createdBy: actor?._id });
     }
-    return template;
+    return normalizeRichHtmlFields(template.toObject?.() || template);
 }
 
-function buildOfferPlaceholderData({ candidate, org, offer, job }) {
-    const name = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ');
+function loadOfferContextJob(organizationId, candidate) {
+    if (!candidate?.jobPostingId) return Promise.resolve(null);
+    return Recruitment.findOne({ _id: candidate.jobPostingId, organizationId })
+        .populate('hiringManager', 'name firstName lastName')
+        .lean();
+}
+
+async function resolveOfferLetterContent({
+    organizationId,
+    candidate,
+    template,
+    offerDraft,
+    payload,
+    settings,
+}) {
+    const org = await Organization.findById(organizationId)
+        .select('name legalName email phone website address workingHours')
+        .lean();
+    const job = await loadOfferContextJob(organizationId, candidate);
+    const placeholderMap = buildOfferPlaceholderMap({
+        candidate,
+        org,
+        offer: offerDraft,
+        job,
+        settings,
+        payload,
+    });
+    const templateHtml = normalizeRichHtml(template.bodyHtml);
+    const validation = validateOfferLetterHtml(templateHtml, placeholderMap);
+    return { ...validation, placeholderMap, org, job };
+}
+
+export async function previewOfferLetter({
+    organizationId,
+    candidateId,
+    payload = {},
+}) {
+    await assertFeatureEnabled(organizationId, 'offerLetter', 'Offer letter');
+
+    const candidate = await Candidate.findOne({ _id: candidateId, organizationId });
+    if (!candidate) throw new Error('Candidate not found');
+
+    const template = payload.templateId
+        ? await OfferLetterTemplate.findOne({ _id: payload.templateId, organizationId })
+        : await ensureDefaultOfferTemplate(organizationId);
+    if (!template) throw new Error('Offer template not found');
+
+    if (template.templateType === 'pdf') {
+        const { previewPdfOfferLetter } = await import('./offerPdfTemplateService.js');
+        return previewPdfOfferLetter({ organizationId, candidateId, payload });
+    }
+
+    const settings = await getOrCreateLifecycleSettings(organizationId);
+    const defaultExpiryDays = settings.offerPolicy?.defaultExpiryDays ?? 7;
+    const expiryDate = payload.expiryDate
+        ? new Date(payload.expiryDate)
+        : new Date(Date.now() + defaultExpiryDays * 86400000);
+
+    const offerDraft = {
+        position: payload.position || candidate.offerDetails?.position,
+        department: payload.department,
+        salary: payload.salary ?? candidate.offerDetails?.salary,
+        benefits: payload.benefits || candidate.offerDetails?.benefits || [],
+        startDate: payload.startDate ? new Date(payload.startDate) : candidate.offerDetails?.startDate,
+        expiryDate,
+        createdAt: new Date(),
+    };
+
+    const result = await resolveOfferLetterContent({
+        organizationId,
+        candidate,
+        template,
+        offerDraft,
+        payload,
+        settings,
+    });
+
     return {
-        '{{candidateName}}': name,
-        '{{candidateEmail}}': candidate.email || '',
-        '{{position}}': offer.position || job?.jobTitle || '',
-        '{{department}}': offer.department || job?.department || '',
-        '{{salary}}': offer.salary ? `Rs ${Number(offer.salary).toLocaleString('en-IN')}` : '',
-        '{{startDate}}': offer.startDate ? new Date(offer.startDate).toLocaleDateString('en-IN') : '',
-        '{{companyName}}': org?.name || org?.legalName || 'Organization',
-        '{{location}}': job?.location || '',
-        '{{benefits}}': (offer.benefits || []).join(', '),
-        '{{offerExpiryDate}}': offer.expiryDate ? new Date(offer.expiryDate).toLocaleDateString('en-IN') : '',
-        '{{currentDate}}': new Date().toLocaleDateString('en-IN'),
-        '{{reportingManager}}': '',
+        renderedHtml: enhanceOfferLetterHtml(normalizeRichHtml(result.renderedHtml)),
+        isValid: result.ok,
+        missingFields: result.missing,
+        unresolvedTokens: result.unresolvedTokens,
+        templateId: template._id,
+        templateName: template.name,
+    };
+}
+
+export async function previewOfferTemplate(organizationId, templateId, { useSampleData = true } = {}) {
+    const template = templateId
+        ? await OfferLetterTemplate.findOne({ _id: templateId, organizationId })
+        : await ensureDefaultOfferTemplate(organizationId);
+    if (!template) throw new Error('Offer template not found');
+
+    const placeholderMap = useSampleData
+        ? buildSampleOfferPlaceholderMap()
+        : {};
+    const validation = validateOfferLetterHtml(template.bodyHtml, placeholderMap);
+    return {
+        renderedHtml: validation.renderedHtml,
+        isValid: validation.ok,
+        missingFields: validation.missing,
+        templateId: template._id,
+        templateName: template.name,
+        sampleData: useSampleData,
     };
 }
 
@@ -104,7 +219,17 @@ export async function createOfferLetter({
         : await ensureDefaultOfferTemplate(organizationId);
     if (!template) throw new Error('Offer template not found');
 
-    const org = await Organization.findById(organizationId).select('name legalName').lean();
+    if (template.templateType === 'pdf') {
+        const { createOfferLetterFromPdfTemplate } = await import('./offerPdfTemplateService.js');
+        return createOfferLetterFromPdfTemplate({
+            organizationId,
+            candidateId,
+            payload,
+            actor,
+            req,
+        });
+    }
+
     const defaultExpiryDays = settings.offerPolicy?.defaultExpiryDays ?? 7;
     const expiryDate = payload.expiryDate
         ? new Date(payload.expiryDate)
@@ -130,9 +255,25 @@ export async function createOfferLetter({
     offerData.version = (lastVersion?.version || 0) + 1;
 
     const draft = new OfferLetter(offerData);
-    draft.bodyHtml = applyPlaceholders(template.bodyHtml, buildOfferPlaceholderData({
-        candidate, org, offer: draft, job: null,
-    }));
+
+    const resolved = await resolveOfferLetterContent({
+        organizationId,
+        candidate,
+        template,
+        offerDraft: draft,
+        payload,
+        settings,
+    });
+
+    if (!resolved.ok) {
+        const err = new Error('Missing offer information required by the template');
+        err.code = 'OFFER_PLACEHOLDER_MISSING';
+        err.missingFields = resolved.missing;
+        err.renderedHtml = resolved.renderedHtml;
+        throw err;
+    }
+
+    draft.bodyHtml = enhanceOfferLetterHtml(normalizeRichHtml(resolved.renderedHtml));
 
     const pdf = await generateLetterPdf({
         organizationId,
@@ -276,7 +417,7 @@ export async function getOfferByPortalToken(token) {
         offer.viewedAt = new Date();
         await offer.save();
     }
-    return offer;
+    return normalizeRichHtmlFields(offer.toObject?.() || offer);
 }
 
 export async function respondToOfferPortal({ token, action, signatureData, ipAddress, notes, counterOffer }) {
@@ -410,5 +551,66 @@ export async function reviseCounteredOffer(organizationId, offerId, payload, act
 }
 
 export async function listOffersForCandidate(organizationId, candidateId) {
-    return OfferLetter.find({ organizationId, candidateId }).sort({ version: -1 }).lean();
+    const offers = await OfferLetter.find({ organizationId, candidateId }).sort({ version: -1 }).lean();
+    return offers.map((offer) => normalizeRichHtmlFields(offer));
+}
+
+export async function deleteOfferLetter(organizationId, offerId, actor, req) {
+    await assertFeatureEnabled(organizationId, 'offerLetter', 'Offer letter');
+
+    const offer = await OfferLetter.findOne({ _id: offerId, organizationId });
+    if (!offer) throw new Error('Offer not found');
+    if (!['Draft', 'PendingApproval'].includes(offer.status)) {
+        throw new Error(`Cannot delete offer in status: ${offer.status}. Only Draft or PendingApproval offers can be deleted.`);
+    }
+
+    const before = offer.toObject();
+    deleteOfferPdfFile(offer.pdfUrl);
+
+    await OfferLetter.deleteOne({ _id: offerId, organizationId });
+
+    const candidate = await Candidate.findOne({ _id: offer.candidateId, organizationId });
+    if (candidate) {
+        const latest = await OfferLetter.findOne({ organizationId, candidateId: offer.candidateId })
+            .sort({ version: -1 })
+            .lean();
+        const currentStatus = candidate.offerDetails?.status;
+        if (['Draft', 'PendingApproval', undefined].includes(currentStatus)) {
+            if (latest) {
+                candidate.offerDetails = {
+                    ...(candidate.offerDetails?.toObject?.() || candidate.offerDetails || {}),
+                    position: latest.position,
+                    startDate: latest.startDate,
+                    salary: latest.salary,
+                    benefits: latest.benefits,
+                    offerLetter: {
+                        url: latest.pdfUrl,
+                        sentDate: latest.sentAt || null,
+                        expiryDate: latest.expiryDate,
+                    },
+                    status: latest.status,
+                };
+            } else {
+                const existing = candidate.offerDetails?.toObject?.() || candidate.offerDetails || {};
+                candidate.offerDetails = {
+                    ...existing,
+                    offerLetter: undefined,
+                    status: undefined,
+                };
+            }
+            await candidate.save();
+        }
+    }
+
+    await logLifecycleAudit({
+        action: 'Delete',
+        entityType: 'Offer',
+        entityId: offerId,
+        entityName: `Offer v${before.version}`,
+        req,
+        actor,
+        before,
+    });
+
+    return { deletedId: offerId, version: before.version };
 }

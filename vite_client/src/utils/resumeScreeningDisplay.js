@@ -67,9 +67,9 @@ export function normalizeResumeScreening(raw = {}) {
 
     let label;
     if (normalizedStatus === 'passed') {
-        label = score != null ? `Approved - ${score}%` : 'Approved';
+        label = score != null ? `Approved · ${score}%` : 'Approved';
     } else if (normalizedStatus === 'failed') {
-        label = score != null ? `Rejected - ${score}%` : 'Rejected';
+        label = score != null ? `Rejected · ${score}%` : 'Rejected';
     } else {
         label = 'Pending - Not Screened';
     }
@@ -110,10 +110,10 @@ export function getScreeningBadgeClasses(screening) {
 
 /**
  * Display screening decision; duplicate is an additive flag, not the decision.
- * e.g. "Duplicate - Approved - 66.7%"
+ * e.g. "Duplicate · Approved · 66.7%"
  */
 export function formatScreeningDisplayLabel(screening, { isDuplicate = false } = {}) {
     const s = normalizeResumeScreening(screening);
-    if (isDuplicate) return `Duplicate - ${s.label}`;
+    if (isDuplicate) return `Duplicate · ${s.label}`;
     return s.label;
 }

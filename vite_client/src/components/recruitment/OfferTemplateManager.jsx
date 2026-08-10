@@ -9,6 +9,9 @@ import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import LoadingSpinner from '../LoadingSpinner';
 import RichTextEditor, { PlaceholderChips } from './RichTextEditor';
 import { CmBadge, CmButton } from '../corporateModern';
+import OfferLetterHtmlPreview from './OfferLetterHtmlPreview';
+import OfferPdfTemplateUpload from './OfferPdfTemplateUpload';
+import OfferPdfFieldMapping from './OfferPdfFieldMapping';
 
 const EMPTY_TEMPLATE = {
     name: '',
@@ -23,7 +26,11 @@ const OfferTemplateManager = () => {
     const [templates, setTemplates] = useState([]);
     const [editorOpen, setEditorOpen] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewHtml, setPreviewHtml] = useState('');
+    const [previewLoading, setPreviewLoading] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [uploadPdfOpen, setUploadPdfOpen] = useState(false);
+    const [mappingOpen, setMappingOpen] = useState(false);
     const [form, setForm] = useState(EMPTY_TEMPLATE);
     const [selected, setSelected] = useState(null);
 
@@ -95,12 +102,32 @@ const OfferTemplateManager = () => {
         }
     };
 
+    const openTemplatePreview = async (template) => {
+        setSelected(template);
+        setPreviewOpen(true);
+        setPreviewHtml('');
+        if (template.templateType === 'pdf') return;
+        try {
+            setPreviewLoading(true);
+            const { data } = await axios.post(
+                `${ADMIN_LIFECYCLE_ENDPOINT}/offers/templates/preview`,
+                { templateId: template._id, useSampleData: true },
+                { withCredentials: true },
+            );
+            if (data.success) setPreviewHtml(data.data?.renderedHtml || template.bodyHtml);
+        } catch {
+            setPreviewHtml(template.bodyHtml);
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
     const setAsDefault = async (template) => {
         try {
             await axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/templates`, {
                 id: template._id,
                 name: template.name,
-                bodyHtml: template.bodyHtml,
+                bodyHtml: template.bodyHtml || '',
+                templateType: template.templateType || 'html',
                 isDefault: true,
             }, { withCredentials: true });
             toast.success('Default template updated');
@@ -118,14 +145,45 @@ const OfferTemplateManager = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <p className="cm-title-sm">Offer Letter Templates</p>
-                        <p className="cm-subtitle">Manage reusable templates with dynamic placeholders and version history.</p>
+                        {/* <p className="cm-subtitle">Create HTML templates with placeholders, or upload a PDF — fields are detected automatically and verified once.</p> */}
                     </div>
-                    <CmButton onClick={openCreate}>
-                        <FaPlus /> New Template
-                    </CmButton>
                 </div>
 
-                <div className="grid gap-3">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <button
+                        type="button"
+                        onClick={openCreate}
+                        className="cm-card flex items-start gap-3 p-4 text-left transition hover:shadow-md"
+                    >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-theme-primary/10 text-theme-primary">
+                            <FaPlus />
+                        </span>
+                        <span>
+                            <span className="block font-semibold" style={{ color: 'var(--cm-on-surface)' }}>New HTML Template</span>
+                            <span className="mt-1 block text-sm" style={{ color: 'var(--cm-muted)' }}>
+                                Build with the rich text editor and {'{{placeholders}}'}.
+                            </span>
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setUploadPdfOpen(true)}
+                        className="cm-card flex items-start gap-3 p-4 text-left transition hover:shadow-md"
+                        style={{ border: '1px solid rgba(59,130,246,0.25)' }}
+                    >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                            <FaFilePdf />
+                        </span>
+                        <span>
+                            <span className="block font-semibold" style={{ color: 'var(--cm-on-surface)' }}>Upload PDF Template</span>
+                            <span className="mt-1 block text-sm" style={{ color: 'var(--cm-muted)' }}>
+                                Upload your company offer letter PDF — fields are detected automatically.
+                            </span>
+                        </span>
+                    </button>
+                </div>
+
+                <div className="mt-6 grid gap-3">
                     {templates.filter((t) => t.isActive !== false).map((template) => (
                         <div key={template._id} className="cm-card">
                             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -133,6 +191,11 @@ const OfferTemplateManager = () => {
                                     <div className="flex flex-wrap items-center gap-2">
                                         <h3 className="font-semibold" style={{ color: 'var(--cm-on-surface)' }}>{template.name}</h3>
                                         {template.isDefault && <CmBadge tone="done">Default</CmBadge>}
+                                        <CmBadge tone={template.templateType === 'pdf' && !template.pdfTemplate?.mappingsConfigured ? 'attention' : 'neutral'} dot={false}>
+                                            {template.templateType === 'pdf'
+                                                ? (template.pdfTemplate?.mappingsConfigured ? 'PDF · Verified' : 'PDF — needs verification')
+                                                : 'HTML'}
+                                        </CmBadge>
                                         <CmBadge tone="neutral" dot={false}>v{template.version || 1}</CmBadge>
                                     </div>
                                     {template.description && <p className="mt-1 text-sm" style={{ color: 'var(--cm-muted)' }}>{template.description}</p>}
@@ -141,9 +204,18 @@ const OfferTemplateManager = () => {
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setPreviewOpen(true); }}><FaEye className="text-xs" />Preview</CmButton>
-                                    <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setHistoryOpen(true); }}><FaHistory className="text-xs" />History</CmButton>
-                                    <CmButton variant="outline" size="sm" onClick={() => openEdit(template)}><FaEdit className="text-xs" />Edit</CmButton>
+                                    <CmButton variant="outline" size="sm" onClick={() => openTemplatePreview(template)}><FaEye className="text-xs" />Preview</CmButton>
+                                    {template.templateType === 'pdf' && (
+                                        <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setMappingOpen(true); }}>
+                                            {template.pdfTemplate?.mappingsConfigured ? 'View Fields' : 'Verify Fields'}
+                                        </CmButton>
+                                    )}
+                                    {template.templateType !== 'pdf' && (
+                                        <>
+                                            <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setHistoryOpen(true); }}><FaHistory className="text-xs" />History</CmButton>
+                                            <CmButton variant="outline" size="sm" onClick={() => openEdit(template)}><FaEdit className="text-xs" />Edit</CmButton>
+                                        </>
+                                    )}
                                     {!template.isDefault && (
                                         <CmButton variant="outline" size="sm" onClick={() => setAsDefault(template)}><FaStar className="text-xs" />Set default</CmButton>
                                     )}
@@ -153,7 +225,13 @@ const OfferTemplateManager = () => {
                         </div>
                     ))}
                     {!templates.filter((t) => t.isActive !== false).length && (
-                        <div className="cm-empty">No offer templates yet.</div>
+                        <div className="cm-empty space-y-3">
+                            <p>No offer templates yet.</p>
+                            <div className="flex flex-wrap justify-center gap-2">
+                                <CmButton onClick={openCreate}><FaPlus /> New HTML Template</CmButton>
+                                <CmButton variant="outline" onClick={() => setUploadPdfOpen(true)}><FaFilePdf /> Upload PDF Template</CmButton>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
@@ -161,7 +239,10 @@ const OfferTemplateManager = () => {
             {editorOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-                        <h3 className="mb-4 text-lg font-semibold">{form.id ? 'Edit Template' : 'Create Template'}</h3>
+                        <h3 className="mb-1 text-lg font-semibold">{form.id ? 'Edit HTML Template' : 'Create HTML Template'}</h3>
+                        <p className="mb-4 text-sm text-gray-500">
+                            For an existing company PDF, close this and use <strong>Upload PDF Template</strong> instead.
+                        </p>
                         <form onSubmit={saveTemplate} className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <label className="text-sm text-gray-700">
@@ -193,11 +274,47 @@ const OfferTemplateManager = () => {
 
             {previewOpen && selected && (
                 <Modal title={`Preview — ${selected.name}`} onClose={() => setPreviewOpen(false)}>
-                    <div className="prose prose-sm max-w-none rounded-lg border bg-gray-50 p-4" dangerouslySetInnerHTML={{ __html: selected.bodyHtml }} />
-                    {selected.pdfUrl && (
-                        <a href={selected.pdfUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-theme-primary"><FaFilePdf /> Open PDF</a>
+                    {selected.templateType === 'pdf' ? (
+                        <>
+                            <p className="mb-3 text-xs text-gray-500">PDF template — sample preview uses mapped fields when generating offers.</p>
+                            {(selected.pdfTemplate?.pdfUrl) && (
+                                <iframe title="PDF template" src={selected.pdfTemplate.pdfUrl} className="h-[560px] w-full rounded-lg border bg-gray-50" />
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <p className="mb-3 text-xs text-gray-500">Sample data preview — formatting matches generated offer letters.</p>
+                            {previewLoading ? (
+                                <LoadingSpinner message="Loading preview..." />
+                            ) : (
+                                <div className="rounded-lg border bg-gray-50 p-4">
+                                    <OfferLetterHtmlPreview html={previewHtml || selected.bodyHtml} />
+                                </div>
+                            )}
+                        </>
                     )}
                 </Modal>
+            )}
+
+            {uploadPdfOpen && (
+                <OfferPdfTemplateUpload
+                    onClose={() => setUploadPdfOpen(false)}
+                    onUploaded={(template) => {
+                        loadTemplates();
+                        if (template?.pdfTemplate?.hasSelectableText !== false) {
+                            setSelected(template);
+                            setMappingOpen(true);
+                        }
+                    }}
+                />
+            )}
+
+            {mappingOpen && selected && selected.templateType === 'pdf' && (
+                <OfferPdfFieldMapping
+                    template={selected}
+                    onClose={() => setMappingOpen(false)}
+                    onSaved={() => loadTemplates()}
+                />
             )}
 
             {historyOpen && selected && (

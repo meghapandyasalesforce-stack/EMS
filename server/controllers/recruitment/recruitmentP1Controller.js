@@ -11,6 +11,14 @@ import {
     sendInterviewReminder,
     sendOfferReminder,
     sendJoiningReminder,
+    isValidEmailAddress,
+    pickInterviewForEmail,
+    validateInterviewForInvite,
+    validateInterviewForReminder,
+    validateOfferForReminder,
+    validateJoiningForReminder,
+    validateRealJobForEmail,
+    findRecentCommunication,
 } from '../../services/recruitmentEmailService.js';
 
 export const createRequisition = asyncHandler(async (req, res) => {
@@ -273,47 +281,124 @@ export const updateAssessment = asyncHandler(async (req, res) => {
     res.json({ success: true, data: assessment });
 });
 
+/**
+ * Explicit HR-triggered recruitment emails only.
+ * Creating interviews / offers / joining records must NOT call this.
+ */
 export const sendCandidateEmail = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const candidate = await Candidate.findOne({ _id: req.params.id, organizationId });
-    if (!candidate) return res.status(404).json({ success: false, message: 'Candidate not found' });
+    const candidate = await Candidate.findOne({ _id: req.params.id, organizationId })
+        .populate('jobPostingId', 'jobTitle location tags');
+    if (!candidate) {
+        return res.status(404).json({ success: false, message: 'Candidate not found' });
+    }
+
+    if (!isValidEmailAddress(candidate.email)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Candidate has no valid email address. Add an email before sending.',
+        });
+    }
 
     const type = req.body.type || 'custom';
     const actorId = req.employee?._id;
+    const confirmResend = Boolean(req.body.confirmResend);
 
-    if (type === 'interview_invite') {
-        const interview = candidate.interviewSchedule.id(req.body.interviewId)
-            || candidate.interviewSchedule[candidate.interviewSchedule.length - 1];
-        if (!interview) return res.status(400).json({ success: false, message: 'No interview found' });
-        await sendInterviewInvite({ candidate, interview, meetingLink: req.body.meetingLink, actorId });
-    } else if (type === 'interview_reminder') {
-        const interview = candidate.interviewSchedule.id(req.body.interviewId)
-            || candidate.interviewSchedule[candidate.interviewSchedule.length - 1];
-        if (!interview) return res.status(400).json({ success: false, message: 'No interview found' });
-        await sendInterviewReminder({ candidate, interview, actorId });
-    } else if (type === 'offer_reminder') {
-        const offer = await OfferLetter.findOne({
-            organizationId,
-            candidateId: candidate._id,
-            status: { $in: ['Sent', 'Viewed'] },
-        }).sort({ sentAt: -1 });
-        if (!offer?.portalToken) return res.status(400).json({ success: false, message: 'No sent offer with portal link' });
-        const base = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
-        await sendOfferReminder({
-            candidate,
-            offer,
-            portalUrl: `${base.replace(/\/$/, '')}/offer/${offer.portalToken}`,
-            actorId,
-        });
-    } else if (type === 'joining_reminder') {
-        await sendJoiningReminder({
-            candidate,
-            joiningDate: candidate.expectedJoiningDate || req.body.joiningDate,
-            actorId,
-        });
-    } else {
+    const EMAIL_TYPE_LABELS = {
+        interview_invite: 'Interview Invite',
+        interview_reminder: 'Interview Reminder',
+        offer_reminder: 'Offer Reminder',
+        joining_reminder: 'Joining Reminder',
+    };
+
+    if (!EMAIL_TYPE_LABELS[type]) {
         return res.status(400).json({ success: false, message: 'Unknown email type' });
     }
 
-    res.json({ success: true, message: 'Email sent and logged to communication timeline' });
+    // Holding job "Unassigned (Resume Inbox)" must never appear in candidate-facing emails.
+    const jobCheck = validateRealJobForEmail(candidate);
+    if (!jobCheck.ok) {
+        return res.status(400).json({ success: false, message: jobCheck.message });
+    }
+    const jobTitle = jobCheck.jobTitle;
+
+    const recent = findRecentCommunication(candidate, type);
+    if (recent && !confirmResend) {
+        const when = recent.createdAt
+            ? new Date(recent.createdAt).toLocaleString('en-IN')
+            : 'recently';
+        return res.status(409).json({
+            success: false,
+            needsConfirmation: true,
+            message: `A ${EMAIL_TYPE_LABELS[type]} was already sent ${when}. Send again?`,
+            data: { type, lastSentAt: recent.createdAt },
+        });
+    }
+
+    try {
+        if (type === 'interview_invite') {
+            const interview = pickInterviewForEmail(candidate, req.body.interviewId);
+            const check = validateInterviewForInvite(interview, { meetingLinkOverride: req.body.meetingLink });
+            if (!check.ok) {
+                return res.status(400).json({ success: false, message: check.message });
+            }
+            await sendInterviewInvite({
+                candidate,
+                interview,
+                meetingLink: req.body.meetingLink,
+                actorId,
+                jobTitle,
+            });
+        } else if (type === 'interview_reminder') {
+            const interview = pickInterviewForEmail(candidate, req.body.interviewId);
+            const check = validateInterviewForReminder(interview);
+            if (!check.ok) {
+                return res.status(400).json({ success: false, message: check.message });
+            }
+            await sendInterviewReminder({ candidate, interview, actorId, jobTitle });
+        } else if (type === 'offer_reminder') {
+            const offer = await OfferLetter.findOne({
+                organizationId,
+                candidateId: candidate._id,
+                status: { $in: ['Sent', 'Viewed'] },
+            }).sort({ sentAt: -1 });
+            const check = validateOfferForReminder(offer);
+            if (!check.ok) {
+                return res.status(400).json({ success: false, message: check.message });
+            }
+            const base = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
+            await sendOfferReminder({
+                candidate,
+                offer,
+                portalUrl: `${base.replace(/\/$/, '')}/offer/${offer.portalToken}`,
+                actorId,
+                jobTitle,
+            });
+        } else if (type === 'joining_reminder') {
+            const check = validateJoiningForReminder(candidate);
+            if (!check.ok) {
+                return res.status(400).json({ success: false, message: check.message });
+            }
+            await sendJoiningReminder({
+                candidate,
+                joiningDate: candidate.expectedJoiningDate,
+                actorId,
+                jobTitle,
+                reportingLocation: candidate.jobPostingId?.location || undefined,
+                reportingTime: req.body.reportingTime || undefined,
+            });
+        }
+    } catch (err) {
+        return res.status(err.status || 500).json({
+            success: false,
+            message: err.message || 'Failed to send email',
+        });
+    }
+
+    // One real email to candidate.email + one auto-logged timeline record (inside send helpers).
+    res.json({
+        success: true,
+        message: `Email sent to ${candidate.email} and logged to the HR communication timeline`,
+        data: { to: candidate.email, type, jobTitle },
+    });
 });

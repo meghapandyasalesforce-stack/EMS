@@ -114,7 +114,10 @@ import {
     getOfferTemplates,
     saveOfferTemplate,
     postOfferLetter,
+    postOfferPreview,
+    postOfferTemplatePreview,
     getOffersForCandidate,
+    deleteOfferLetterHandler,
     postOfferSubmitApproval,
     postOfferSend,
     postOfferRevise,
@@ -137,6 +140,15 @@ import {
     postFnfSubmitApproval,
     postFnfGeneratePdf,
 } from '../../controllers/lifecycle/lifecycleGapController.js';
+import {
+    getPdfTemplateFields,
+    postPdfTemplateUpload,
+    getPdfTemplateExtract,
+    postPdfTemplateDetect,
+    putPdfTemplateMappings,
+    postPdfOfferPreview,
+} from '../../controllers/lifecycle/offerPdfTemplateController.js';
+import { offerPdfTemplateUpload } from '../../middlewares/offerPdfTemplateUpload.js';
 import {
     getReportsCatalogHandler,
     getLifecycleDashboardHandler,
@@ -644,6 +656,36 @@ router.route('/offers/templates')
     .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getOfferTemplates)
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, saveOfferTemplate);
 
+router.route('/offers/templates/preview')
+    .post(isAdminOrHROrExecutiveAuthenticated, readLimiter, postOfferTemplatePreview);
+
+router.route('/offers/templates/pdf/fields')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getPdfTemplateFields);
+
+router.route('/offers/templates/pdf/upload')
+    .post(
+        isAdminOrHROrExecutiveAuthenticated,
+        writeLimiter,
+        (req, _res, next) => { req.organizationId = req.organizationId || req.employee?.organizationId || req.user?.organizationId; next(); },
+        offerPdfTemplateUpload.single('pdf'),
+        postPdfTemplateUpload,
+    );
+
+router.route('/offers/templates/:id/pdf/extract')
+    .get(isAdminOrHROrExecutiveAuthenticated, readLimiter, getPdfTemplateExtract);
+
+router.route('/offers/templates/:id/pdf/detect')
+    .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, postPdfTemplateDetect);
+
+router.route('/offers/templates/:id/pdf/mappings')
+    .put(isAdminOrHROrExecutiveAuthenticated, writeLimiter, putPdfTemplateMappings);
+
+router.route('/offers/preview/pdf')
+    .post(isAdminOrHROrExecutiveAuthenticated, readLimiter, postPdfOfferPreview);
+
+router.route('/offers/preview')
+    .post(isAdminOrHROrExecutiveAuthenticated, readLimiter, postOfferPreview);
+
 router.route('/offers')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, postOfferLetter);
 
@@ -658,6 +700,9 @@ router.route('/offers/:id/send')
 
 router.route('/offers/:id/revise')
     .post(isAdminOrHROrExecutiveAuthenticated, writeLimiter, postOfferRevise);
+
+router.route('/offers/:id')
+    .delete(isAdminOrHROrExecutiveAuthenticated, writeLimiter, deleteOfferLetterHandler);
 
 // Phase 1 — Background verification (Configure toggle gates API + UI)
 router.route('/bgv')

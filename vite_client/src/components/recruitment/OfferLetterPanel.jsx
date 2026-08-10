@@ -3,12 +3,13 @@ import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
-    FaCheckCircle, FaClock, FaCopy, FaEye, FaFilePdf, FaPaperPlane, FaRedo,
+    FaCheckCircle, FaClock, FaCopy, FaEye, FaFilePdf, FaPaperPlane, FaRedo, FaTrash,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import LoadingSpinner from '../LoadingSpinner';
 import { CmBadge, CmButton, CmStat, statusTone } from '../corporateModern';
+import OfferLetterHtmlPreview, { OfferMissingFieldsAlert } from './OfferLetterHtmlPreview';
 
 /**
  * Offer Management — Corporate-Modern HR/recruitment view. Admin/HR-only
@@ -24,7 +25,10 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
     const [auditLogs, setAuditLogs] = useState([]);
     const [showCreate, setShowCreate] = useState(false);
     const [previewOffer, setPreviewOffer] = useState(null);
+    const [createPreview, setCreatePreview] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
     const [form, setForm] = useState({
+        templateType: 'html',
         templateId: '',
         position: '',
         department: '',
@@ -32,7 +36,23 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
         startDate: '',
         expiryDate: '',
         benefits: '',
+        probationPeriod: '',
+        noticePeriod: '',
+        workingHours: '',
+        annualCTCInWords: '',
+        employeeESI: '',
+        gratuity: '',
     });
+
+    const htmlTemplates = useMemo(
+        () => templates.filter((t) => t.isActive !== false && (t.templateType || 'html') === 'html'),
+        [templates],
+    );
+    const pdfTemplates = useMemo(
+        () => templates.filter((t) => t.isActive !== false && t.templateType === 'pdf'),
+        [templates],
+    );
+    const filteredTemplates = form.templateType === 'pdf' ? pdfTemplates : htmlTemplates;
 
     const defaultExpiryDays = settings?.offerPolicy?.defaultExpiryDays ?? 7;
 
@@ -78,7 +98,8 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
         const expiry = new Date();
         expiry.setDate(expiry.getDate() + Number(defaultExpiryDays || 7));
         setForm({
-            templateId: templates.find((t) => t.isDefault)?._id || templates[0]?._id || '',
+            templateType: 'html',
+            templateId: htmlTemplates.find((t) => t.isDefault)?._id || htmlTemplates[0]?._id || '',
             position: candidate?.offerDetails?.position || candidate?.jobPostingId?.jobTitle || '',
             department: candidate?.jobPostingId?.department || '',
             salary: candidate?.offerDetails?.salary || '',
@@ -86,8 +107,50 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                 ? format(new Date(candidate.offerDetails.startDate), 'yyyy-MM-dd') : '',
             expiryDate: format(expiry, 'yyyy-MM-dd'),
             benefits: (candidate?.offerDetails?.benefits || []).join(', '),
+            probationPeriod: candidate?.offerDetails?.probationPeriod || '',
+            noticePeriod: '',
+            workingHours: '',
+            annualCTCInWords: '',
+            employeeESI: '',
+            gratuity: '',
         });
-    }, [showCreate, templates, candidate, defaultExpiryDays]);
+        setCreatePreview(null);
+    }, [showCreate, htmlTemplates, candidate, defaultExpiryDays]);
+
+    const buildOfferPayload = () => ({
+        candidateId,
+        templateId: form.templateId || undefined,
+        position: form.position,
+        department: form.department,
+        salary: form.salary ? Number(form.salary) : undefined,
+        startDate: form.startDate || undefined,
+        expiryDate: form.expiryDate || undefined,
+        benefits: form.benefits ? form.benefits.split(',').map((b) => b.trim()).filter(Boolean) : [],
+        probationPeriod: form.probationPeriod || undefined,
+        noticePeriod: form.noticePeriod || undefined,
+        workingHours: form.workingHours || undefined,
+        annualCTCInWords: form.annualCTCInWords || undefined,
+        salaryWords: form.annualCTCInWords || undefined,
+        employeeESI: form.employeeESI || undefined,
+        gratuity: form.gratuity || undefined,
+    });
+
+    const previewCreateOffer = async () => {
+        try {
+            setPreviewLoading(true);
+            const { data } = await axios.post(
+                `${ADMIN_LIFECYCLE_ENDPOINT}/offers/preview`,
+                buildOfferPayload(),
+                { withCredentials: true },
+            );
+            if (!data.success) throw new Error(data.message);
+            setCreatePreview(data.data);
+        } catch (error) {
+            toast.error(error.response?.data?.message || error.message || 'Preview failed');
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
 
     const runAction = async (request, message) => {
         try {
@@ -98,7 +161,19 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
             onRefresh?.();
             return response?.data?.data;
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Action failed');
+            const missingFields = error.response?.data?.missingFields;
+            if (missingFields?.length) {
+                toast.error('Missing offer information — see preview for details');
+                setCreatePreview({
+                    templateType: form.templateType,
+                    renderedHtml: error.response?.data?.renderedHtml || '',
+                    previewPdfUrl: error.response?.data?.previewPdfUrl || null,
+                    isValid: false,
+                    missingFields,
+                });
+            } else {
+                toast.error(error.response?.data?.message || 'Action failed');
+            }
             return null;
         } finally {
             setSubmitting(false);
@@ -107,21 +182,14 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
 
     const createOffer = async (event) => {
         event.preventDefault();
-        const payload = {
-            candidateId,
-            templateId: form.templateId || undefined,
-            position: form.position,
-            department: form.department,
-            salary: form.salary ? Number(form.salary) : undefined,
-            startDate: form.startDate || undefined,
-            expiryDate: form.expiryDate || undefined,
-            benefits: form.benefits ? form.benefits.split(',').map((b) => b.trim()).filter(Boolean) : [],
-        };
         const created = await runAction(
-            () => axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers`, payload, { withCredentials: true }),
+            () => axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers`, buildOfferPayload(), { withCredentials: true }),
             'Offer letter generated',
         );
-        if (created) setShowCreate(false);
+        if (created) {
+            setShowCreate(false);
+            setCreatePreview(null);
+        }
     };
 
     const portalUrl = (offer) => {
@@ -136,6 +204,15 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
             return;
         }
         navigator.clipboard.writeText(url).then(() => toast.success('Portal link copied'));
+    };
+
+    const deleteOffer = (offer) => {
+        const label = `${offer.position || 'Offer'} — v${offer.version}`;
+        if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+        runAction(
+            () => axios.delete(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/${offer._id}`, { withCredentials: true }),
+            'Offer letter deleted',
+        );
     };
 
     if (loading) return <LoadingSpinner message="Loading offers..." />;
@@ -278,6 +355,17 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                                     Review approvals
                                                 </Link>
                                             )}
+                                            {['Draft', 'PendingApproval'].includes(offer.status) && (
+                                                <CmButton
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={submitting}
+                                                    onClick={() => deleteOffer(offer)}
+                                                    style={{ color: 'var(--cm-error)' }}
+                                                >
+                                                    <FaTrash className="text-xs" /> Delete
+                                                </CmButton>
+                                            )}
                                         </div>
 
                                         <div className="grid gap-3">
@@ -297,10 +385,31 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                             <p className="cm-title-sm mb-4">Generate Offer Letter</p>
                             <form onSubmit={createOffer} className="space-y-3.5">
                                 <label className="block text-sm">
+                                    <span className="cm-label mb-1 block">Template type</span>
+                                    <select
+                                        value={form.templateType}
+                                        onChange={(e) => {
+                                            const templateType = e.target.value;
+                                            const pool = templateType === 'pdf' ? pdfTemplates : htmlTemplates;
+                                            setForm((p) => ({
+                                                ...p,
+                                                templateType,
+                                                templateId: pool.find((t) => t.isDefault)?._id || pool[0]?._id || '',
+                                            }));
+                                            setCreatePreview(null);
+                                        }}
+                                        className="cm-select w-full"
+                                    >
+                                        <option value="html">HTML Template</option>
+                                        <option value="pdf">PDF Template</option>
+                                    </select>
+                                </label>
+                                <label className="block text-sm">
                                     <span className="cm-label mb-1 block">Template</span>
-                                    <select value={form.templateId} onChange={(e) => setForm((p) => ({ ...p, templateId: e.target.value }))} className="cm-select w-full">
-                                        <option value="">Default template</option>
-                                        {templates.filter((t) => t.isActive !== false).map((t) => (
+                                    <select value={form.templateId} onChange={(e) => { setForm((p) => ({ ...p, templateId: e.target.value })); setCreatePreview(null); }} className="cm-select w-full">
+                                        {filteredTemplates.length === 0 ? (
+                                            <option value="">No {form.templateType === 'pdf' ? 'PDF' : 'HTML'} templates available</option>
+                                        ) : filteredTemplates.map((t) => (
                                             <option key={t._id} value={t._id}>{t.name}{t.isDefault ? ' (Default)' : ''}</option>
                                         ))}
                                     </select>
@@ -317,6 +426,35 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                     <span className="cm-label mb-1 block">Annual CTC (INR)</span>
                                     <input type="number" min="0" value={form.salary} onChange={(e) => setForm((p) => ({ ...p, salary: e.target.value }))} className="cm-input w-full" />
                                 </label>
+                                <label className="block text-sm">
+                                    <span className="cm-label mb-1 block">Annual CTC in words</span>
+                                    <input
+                                        value={form.annualCTCInWords}
+                                        onChange={(e) => setForm((p) => ({ ...p, annualCTCInWords: e.target.value }))}
+                                        className="cm-input w-full"
+                                        placeholder="Auto from CTC if blank (e.g. Five Lakh Rupees Only)"
+                                    />
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <label className="block text-sm">
+                                        <span className="cm-label mb-1 block">Employee ESI</span>
+                                        <input
+                                            value={form.employeeESI}
+                                            onChange={(e) => setForm((p) => ({ ...p, employeeESI: e.target.value }))}
+                                            className="cm-input w-full"
+                                            placeholder="Auto from CTC if blank"
+                                        />
+                                    </label>
+                                    <label className="block text-sm">
+                                        <span className="cm-label mb-1 block">Gratuity</span>
+                                        <input
+                                            value={form.gratuity}
+                                            onChange={(e) => setForm((p) => ({ ...p, gratuity: e.target.value }))}
+                                            className="cm-input w-full"
+                                            placeholder="Auto from CTC if blank"
+                                        />
+                                    </label>
+                                </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <label className="block text-sm">
                                         <span className="cm-label mb-1 block">Start date</span>
@@ -331,9 +469,38 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                     <span className="cm-label mb-1 block">Benefits (comma-separated)</span>
                                     <input value={form.benefits} onChange={(e) => setForm((p) => ({ ...p, benefits: e.target.value }))} className="cm-input w-full" />
                                 </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <label className="block text-sm">
+                                        <span className="cm-label mb-1 block">Probation period</span>
+                                        <input value={form.probationPeriod} onChange={(e) => setForm((p) => ({ ...p, probationPeriod: e.target.value }))} className="cm-input w-full" placeholder="e.g. 6 months" />
+                                    </label>
+                                    <label className="block text-sm">
+                                        <span className="cm-label mb-1 block">Notice period</span>
+                                        <input value={form.noticePeriod} onChange={(e) => setForm((p) => ({ ...p, noticePeriod: e.target.value }))} className="cm-input w-full" placeholder="From policy if blank" />
+                                    </label>
+                                    <label className="block text-sm">
+                                        <span className="cm-label mb-1 block">Working hours</span>
+                                        <input value={form.workingHours} onChange={(e) => setForm((p) => ({ ...p, workingHours: e.target.value }))} className="cm-input w-full" placeholder="From org if blank" />
+                                    </label>
+                                </div>
+                                {createPreview && (
+                                    <div className="space-y-3 rounded-xl p-4" style={{ background: 'var(--cm-surface-low)', border: '1px solid rgba(113,121,116,0.12)' }}>
+                                        <OfferMissingFieldsAlert missingFields={createPreview.missingFields} />
+                                        {(createPreview.templateType === 'pdf' || form.templateType === 'pdf') && createPreview.previewPdfUrl ? (
+                                            <iframe title="Offer PDF preview" src={createPreview.previewPdfUrl} className="h-[480px] w-full rounded-lg border bg-white" />
+                                        ) : createPreview.renderedHtml ? (
+                                            <OfferLetterHtmlPreview html={createPreview.renderedHtml} />
+                                        ) : null}
+                                    </div>
+                                )}
                                 <div className="flex justify-end gap-2 pt-2" style={{ borderTop: '1px solid rgba(113,121,116,0.12)' }}>
                                     <CmButton variant="secondary" type="button" onClick={() => setShowCreate(false)}>Cancel</CmButton>
-                                    <CmButton type="submit" disabled={submitting}>{submitting ? 'Generating...' : 'Generate'}</CmButton>
+                                    <CmButton variant="outline" type="button" disabled={previewLoading || submitting} onClick={previewCreateOffer}>
+                                        {previewLoading ? 'Previewing...' : 'Preview'}
+                                    </CmButton>
+                                    <CmButton type="submit" disabled={submitting || (createPreview && !createPreview.isValid)}>
+                                        {submitting ? 'Generating...' : 'Generate'}
+                                    </CmButton>
                                 </div>
                             </form>
                         </div>
@@ -348,10 +515,15 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                 <button type="button" onClick={() => setPreviewOffer(null)} className="cm-link text-sm">Close</button>
                             </div>
                             <div
-                                className="prose prose-sm max-w-none rounded-xl p-4"
+                                className="rounded-xl p-4"
                                 style={{ background: 'var(--cm-surface-low)', border: '1px solid rgba(113,121,116,0.12)' }}
-                                dangerouslySetInnerHTML={{ __html: previewOffer.bodyHtml || '<p>No preview content</p>' }}
-                            />
+                            >
+                                {(previewOffer.templateType === 'pdf' || (!previewOffer.bodyHtml && previewOffer.pdfUrl)) ? (
+                                    <iframe title="Offer PDF preview" src={previewOffer.pdfUrl} className="h-[560px] w-full rounded-lg border bg-white" />
+                                ) : (
+                                    <OfferLetterHtmlPreview html={previewOffer.bodyHtml} />
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}

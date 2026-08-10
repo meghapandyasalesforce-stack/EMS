@@ -20,6 +20,7 @@ import helmet from "helmet";
 import compression from "compression";
 import mongoSanitize from "express-mongo-sanitize";
 import xss from "xss-clean";
+import { stashRichHtmlFields, restoreRichHtmlFields } from "./middlewares/preserveRichHtmlFields.js";
 import connectDB from "./db/database.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import { requestIdMiddleware, requestLogger } from "./middlewares/requestLogger.js";
@@ -146,7 +147,9 @@ app.use(
   })
 );
 app.use(mongoSanitize());
+app.use(stashRichHtmlFields);
 app.use(xss());
+app.use(restoreRichHtmlFields);
 
 // ✅ CORS configuration
 app.use(corsMiddleware);

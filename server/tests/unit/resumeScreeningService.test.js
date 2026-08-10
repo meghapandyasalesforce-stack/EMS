@@ -16,7 +16,7 @@ import {
     resolveMinimumMatchPercent,
     shouldSkipBlindForceRescreen,
 } from '../../services/resumeScreeningService.js';
-import { scoreJobTitleMatch } from '../../services/resumeInboxService.js';
+import { scoreJobTitleMatch, extractContactFromText, extractNameFromResumeText, isLikelyPhoneNumber, parsePersonName } from '../../services/resumeInboxService.js';
 
 const MERN_REQUIRED = ['React', 'Node.js', 'MongoDB'];
 const MERN_OPTIONAL = ['Express', 'JavaScript'];
@@ -524,7 +524,7 @@ describe('resumeScreeningService', () => {
         };
         const twoOfThree = 'React Node.js Express';
 
-        it('Test 1: MERN min 2% with 2/3 → Approved - 66.7%', () => {
+        it('Test 1: MERN min 2% with 2/3 → Approved · 66.7%', () => {
             const { result, decision } = screenDecision(twoOfThree, criteria, 2);
             expect(result.requiredMatchPercent).toBeCloseTo(66.7, 1);
             expect(decision.passed).toBe(true);
@@ -533,10 +533,10 @@ describe('resumeScreeningService', () => {
                 decision: 'approved',
                 requiredMatchPercent: result.requiredMatchPercent,
             }).label;
-            expect(label).toBe('Approved - 66.7%');
+            expect(label).toBe('Approved · 66.7%');
         });
 
-        it('Test 2: duplicate flag does not change Approved - 66.7%', () => {
+        it('Test 2: duplicate flag does not change Approved · 66.7%', () => {
             const { result, decision } = screenDecision(twoOfThree, criteria, 2);
             expect(decision.passed).toBe(true);
             // Duplicate is display-only; screening decision is identical
@@ -545,11 +545,11 @@ describe('resumeScreeningService', () => {
                 decision: 'approved',
                 requiredMatchPercent: result.requiredMatchPercent,
             });
-            expect(screening.label).toBe('Approved - 66.7%');
-            expect(`Duplicate - ${screening.label}`).toBe('Duplicate - Approved - 66.7%');
+            expect(screening.label).toBe('Approved · 66.7%');
+            expect(`Duplicate · ${screening.label}`).toBe('Duplicate · Approved · 66.7%');
         });
 
-        it('Test 3: duplicate + min 70% → Duplicate - Rejected - 66.7%', () => {
+        it('Test 3: duplicate + min 70% → Duplicate · Rejected · 66.7%', () => {
             const { result, decision } = screenDecision(twoOfThree, criteria, 70);
             expect(decision.passed).toBe(false);
             expect(result.requiredMatchPercent).toBeCloseTo(66.7, 1);
@@ -558,10 +558,10 @@ describe('resumeScreeningService', () => {
                 decision: 'rejected',
                 requiredMatchPercent: result.requiredMatchPercent,
             });
-            expect(`Duplicate - ${screening.label}`).toBe('Duplicate - Rejected - 66.7%');
+            expect(`Duplicate · ${screening.label}`).toBe('Duplicate · Rejected · 66.7%');
         });
 
-        it('Test 4: no required keywords matched → Rejected - 0%', () => {
+        it('Test 4: no required keywords matched → Rejected · 0%', () => {
             const { result, decision } = screenDecision('Sales marketing excel', criteria, 2);
             expect(result.requiredMatchPercent).toBe(0);
             expect(decision.passed).toBe(false);
@@ -569,10 +569,10 @@ describe('resumeScreeningService', () => {
                 status: 'failed',
                 decision: 'rejected',
                 requiredMatchPercent: 0,
-            }).label).toBe('Rejected - 0%');
+            }).label).toBe('Rejected · 0%');
         });
 
-        it('Test 5: extraction failure display is Pending - Not Screened (not Rejected - 0%)', () => {
+        it('Test 5: extraction failure display is Pending - Not Screened (not Rejected · 0%)', () => {
             const n = normalizeResumeScreening({
                 status: 'pending',
                 decision: 'pending',
@@ -665,6 +665,148 @@ describe('resumeScreeningService', () => {
             expect(text).toContain('react.js');
             expect(text).toContain('node.js');
             expect(text).toContain('mongodb');
+        });
+    });
+
+    describe('inbox contact extraction (name / email / phone)', () => {
+        it('extracts name from resume Name: label before sender fallback', () => {
+            const text = 'Name: Priya Sharma\nEmail: priya.sharma@example.com\nPhone: +91 98765 43210\nReact Node.js MongoDB';
+            const contact = extractContactFromText(text, 'recruiter@company.com', 'Recruiter Bot');
+            expect(contact.firstName).toBe('Priya');
+            expect(contact.lastName).toBe('Sharma');
+            expect(contact.email).toBe('priya.sharma@example.com');
+            expect(isLikelyPhoneNumber(contact.phone)).toBe(true);
+        });
+
+        it('extracts letterhead name from first resume lines', () => {
+            const name = extractNameFromResumeText('Aisha Khan\nSoftware Engineer\naisha@mail.com\n+1 (415) 555-0199');
+            expect(name).toEqual({ firstName: 'Aisha', lastName: 'Khan' });
+        });
+
+        it('falls back to sender display name when resume has no reliable name', () => {
+            const contact = extractContactFromText(
+                'Skills: Excel, Sales\nemail: candidate@mail.com',
+                'sender@mail.com',
+                'Jordan Lee'
+            );
+            expect(contact.firstName).toBe('Jordan');
+            expect(contact.lastName).toBe('Lee');
+        });
+
+        it('does not invent a name from job titles or section headers', () => {
+            expect(extractNameFromResumeText('Software Developer\nExperience\nEducation')).toBeNull();
+            expect(parsePersonName('Senior Software Engineer')).toBeNull();
+        });
+
+        it('rejects random numeric values as phone numbers', () => {
+            expect(isLikelyPhoneNumber('1234567890')).toBe(false);
+            expect(isLikelyPhoneNumber('0000000000')).toBe(false);
+            expect(isLikelyPhoneNumber('99999999999999')).toBe(false);
+            expect(isLikelyPhoneNumber('+91 98765 43210')).toBe(true);
+            expect(isLikelyPhoneNumber('(415) 555-0199')).toBe(true);
+        });
+
+        it('prefers candidate email in resume over sender mailbox address', () => {
+            const contact = extractContactFromText(
+                'Jane Doe\njane.doe@gmail.com\n+1 202-555-0147',
+                'careers@company.com',
+                'Careers Inbox'
+            );
+            expect(contact.email).toBe('jane.doe@gmail.com');
+            expect(contact.firstName).toBe('Jane');
+            expect(contact.lastName).toBe('Doe');
+        });
+    });
+
+    describe('requirement cases A–J', () => {
+        const criteria = {
+            requiredKeywords: MERN_REQUIRED,
+            optionalKeywords: MERN_OPTIONAL,
+        };
+
+        it('A: correct job + all required keywords → Approved', () => {
+            const { decision } = screenDecision('React Node.js MongoDB Express', criteria, 70);
+            expect(decision.passed).toBe(true);
+            expect(normalizeResumeScreening({
+                status: 'passed',
+                requiredMatchPercent: 100,
+            }).label).toBe('Approved · 100%');
+        });
+
+        it('B: correct job + partial required below threshold → Rejected', () => {
+            const { result, decision } = screenDecision('React only developer', criteria, 70);
+            expect(result.requiredMatchPercent).toBeCloseTo(33.3, 1);
+            expect(decision.passed).toBe(false);
+        });
+
+        it('C: correct job + partial required above threshold → Approved', () => {
+            const { result, decision } = screenDecision('React Node.js Express', criteria, 2);
+            expect(result.requiredMatchPercent).toBeCloseTo(66.7, 1);
+            expect(decision.passed).toBe(true);
+        });
+
+        it('D: optional missing but required passed → Approved', () => {
+            const { decision } = screenDecision('React Node.js MongoDB', {
+                requiredKeywords: MERN_REQUIRED,
+                optionalKeywords: ['AWS', 'Docker'],
+            }, 70);
+            expect(decision.passed).toBe(true);
+        });
+
+        it('E: extraction failure display → Pending - Not Screened', () => {
+            const n = normalizeResumeScreening({
+                status: 'pending',
+                reason: 'Resume text could not be extracted',
+                matchScore: null,
+            });
+            expect(n.label).toBe('Pending - Not Screened');
+            expect(n.isRejected).toBe(false);
+        });
+
+        it('F: job not identified → Unassigned + Pending - Not Screened', () => {
+            const n = normalizeResumeScreening({
+                status: 'pending',
+                reason: 'Job could not be identified',
+            });
+            expect(n.label).toBe('Pending - Not Screened');
+            expect(n.reason).toBe('Job could not be identified');
+        });
+
+        it('G: duplicate keeps actual screening result (not rejection)', () => {
+            const screening = normalizeResumeScreening({
+                status: 'passed',
+                requiredMatchPercent: 80,
+            });
+            expect(`Duplicate · ${screening.label}`).toBe('Duplicate · Approved · 80%');
+            expect(screening.isRejected).toBe(false);
+        });
+
+        it('H: minimum threshold = 2% uses 2%, not 70%', () => {
+            expect(resolveMinimumMatchPercent({ minimumMatchPercent: 2 }, { defaultMinimumMatchPercent: 70 })).toBe(2);
+            const { decision } = screenDecision('React Node.js', criteria, 2);
+            expect(decision.minRequired).toBe(2);
+            expect(decision.passed).toBe(true);
+        });
+
+        it('I: comma and newline keyword lists both split into separate keywords', () => {
+            expect(normalizeKeywordList('React, Node.js, MongoDB'))
+                .toEqual(['React', 'Node.js', 'MongoDB']);
+            expect(normalizeKeywordList('React\nNode.js\nMongoDB'))
+                .toEqual(['React', 'Node.js', 'MongoDB']);
+        });
+
+        it('J: legacy composite keyword array expands during matching', () => {
+            const result = calculateKeywordMatch(
+                'React Node JavaScript Express Mongo skills',
+                { requiredKeywords: ['React,Node,JavaScript,Express,Mongo'], optionalKeywords: [] }
+            );
+            expect(result.requiredTotal).toBe(5);
+            expect(result.requiredMatchPercent).toBe(100);
+        });
+
+        it('title match requires confident score (exact / full tokens)', () => {
+            expect(scoreJobTitleMatch('Applying for MERN Developer role', 'MERN Developer')).toBeGreaterThanOrEqual(300);
+            expect(scoreJobTitleMatch('hello world', 'MERN Developer')).toBe(0);
         });
     });
 });

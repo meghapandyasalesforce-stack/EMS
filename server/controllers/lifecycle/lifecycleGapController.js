@@ -4,9 +4,12 @@ import {
     listOfferTemplates,
     upsertOfferTemplate,
     createOfferLetter,
+    previewOfferLetter,
+    previewOfferTemplate,
     submitOfferForApproval,
     sendOfferToCandidate,
     listOffersForCandidate,
+    deleteOfferLetter,
     getOfferByPortalToken,
     respondToOfferPortal,
     reviseCounteredOffer,
@@ -120,6 +123,41 @@ export const postOfferLetter = async (req, res) => {
         });
         return res.status(201).json({ success: true, data: offer, message: 'Offer letter created' });
     } catch (error) {
+        if (error.code === 'OFFER_PLACEHOLDER_MISSING') {
+            return res.status(400).json({
+                success: false,
+                message: error.message,
+                missingFields: error.missingFields || [],
+                renderedHtml: error.renderedHtml || '',
+            });
+        }
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+export const postOfferPreview = async (req, res) => {
+    try {
+        const { candidateId, ...payload } = req.body;
+        if (!candidateId) {
+            return res.status(400).json({ success: false, message: 'candidateId is required' });
+        }
+        const preview = await previewOfferLetter({
+            organizationId: orgId(req),
+            candidateId,
+            payload,
+        });
+        return res.json({ success: true, data: preview });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+export const postOfferTemplatePreview = async (req, res) => {
+    try {
+        const { templateId, useSampleData = true } = req.body;
+        const preview = await previewOfferTemplate(orgId(req), templateId, { useSampleData });
+        return res.json({ success: true, data: preview });
+    } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
@@ -130,6 +168,15 @@ export const getOffersForCandidate = async (req, res) => {
         return res.json({ success: true, data: offers });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const deleteOfferLetterHandler = async (req, res) => {
+    try {
+        const result = await deleteOfferLetter(orgId(req), req.params.id, actor(req), req);
+        return res.json({ success: true, data: result, message: 'Offer letter deleted' });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
     }
 };
 

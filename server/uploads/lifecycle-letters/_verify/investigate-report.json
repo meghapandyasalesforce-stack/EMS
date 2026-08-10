@@ -1,0 +1,590 @@
+{
+  "meta": {
+    "offerId": "6a7434b56f6d344c0a1fd612",
+    "offerVersion": 4,
+    "offerPdfUrl": "/uploads/lifecycle-letters/6a3cbbacc02ff3769ba3e8c6/offer-6a7033748d3e65c2cce97d53-v4.pdf",
+    "offerCreatedAt": "2026-08-06T07:16:06.262Z",
+    "templateId": "6a7431c22cf82bc315278504",
+    "templateName": "PDF Template 2",
+    "candidateName": "abc singh",
+    "mappingCount": 36,
+    "extractedItemCount": 320
+  },
+  "placeholderMap": {
+    "candidateName": "abc singh",
+    "companyName": "Paarsiv",
+    "joiningDate": "5/8/2026",
+    "noticePeriod": "30 days",
+    "probationPeriod": "15 days",
+    "salaryWords": "Rupees Two Lakh Only",
+    "annualCTC": "Rs 2,00,000",
+    "totalCTC": "Rs 2,00,000",
+    "basicSalary": "Rs 8,333",
+    "hra": "Rs 3,333",
+    "grossSalary": "Rs 16,667",
+    "employeePF": "Rs 1,000",
+    "employerPF": "Rs 1,000",
+    "employeeESI": "Rs 125",
+    "employerESI": "Rs 542",
+    "gratuity": "Rs 401"
+  },
+  "settingsNoticePolicy": {
+    "enabled": true,
+    "defaultNoticeDays": 30,
+    "probationNoticeDays": 15,
+    "allowBuyout": false,
+    "maxBuyoutDays": 0,
+    "allowLeaveAdjustment": true,
+    "reminderDaysBeforeLwd": [
+      7,
+      3,
+      1,
+      0
+    ],
+    "escalationDaysAfterOverdue": 2,
+    "breachAlertDays": 3,
+    "departmentPolicies": [],
+    "employmentTypePolicies": [],
+    "gradePolicies": []
+  },
+  "drawPlans": [
+    {
+      "token": "candidateName",
+      "sourceText": "Rohan Sharma",
+      "page": 0,
+      "x": 54.02,
+      "y": 596.83,
+      "width": 99.42,
+      "height": 11.04,
+      "fontSize": 11.04,
+      "label": "Candidate Name",
+      "resolvedRaw": "abc singh",
+      "finalValue": "abc singh",
+      "skipReason": null,
+      "plan": {
+        "coverX": 53.620000000000005,
+        "coverY": 594.6220000000001,
+        "coverWidth": 100.22,
+        "coverHeight": 10.788,
+        "drawX": 54.02,
+        "drawY": 596.83,
+        "fontSize": 11.04,
+        "textWidth": 47.2512,
+        "sourceWidth": 99.42
+      },
+      "safety": {
+        "incoherent": false
+      }
+    },
+    {
+      "token": "salaryWords",
+      "sourceText": "Rupees Six Lakh Twenty Thousand Only",
+      "page": 0,
+      "x": 81.14,
+      "y": 537.77,
+      "width": 230.68,
+      "height": 11.04,
+      "fontSize": 11.04,
+      "label": "Salary in Words",
+      "resolvedRaw": "Rupees Two Lakh Only",
+      "finalValue": "Rupees Two Lakh Only",
+      "skipReason": null,
+      "plan": {
+        "coverX": 80.74,
+        "coverY": 535.562,
+        "coverWidth": 231.48000000000002,
+        "coverHeight": 10.788,
+        "drawX": 199.06848,
+        "drawY": 537.77,
+        "fontSize": 11.04,
+        "textWidth": 112.75152,
+        "sourceWidth": 230.68
+      },
+      "safety": {
+        "incoherent": false
+      }
+    },
+    {
+      "token": "candidateName",
+      "sourceText": "ensure that:",
+      "page": 0,
+      "x": 54.02,
+      "y": 481.1,
+      "width": 62.29,
+      "height": 11.04,
+      "fontSize": 11.04,
+      "label": "Candidate Name",
+      "resolvedRaw": "abc singh",
+      "finalValue": "abc singh",
+      "skipReason": null,
+      "plan": {
+        "coverX": 53.620000000000005,
+        "coverY": 478.892,
+        "coverWidth": 63.089999999999996,
+        "coverHeight": 10.788,
+        "drawX": 54.02,
+        "drawY": 481.1,
+        "fontSize": 11.04,
+        "textWidth": 47.2512,
+        "sourceWidth": 62.29
+      },
+      "safety": {
+        "incoherent": false
+      }
+    },
+    {
+      "token": "candidateName",
+      "sourceText": "you or may come into your possession, and will return the same when required.",
+      "page": 1,
+      "x": 90.02,
+      "y": 432.14,
+      "width": 360.54,
+      "height": 11.04,
+      "fontSize": 11.04,
+      "label": "Candidate Name",
+      "resolvedRaw": "abc singh",
+      "finalValue": "abc singh",
+      "skipReason": null,
+      "plan": {
+        "coverX": 89.61999999999999,
+        "coverY": 429.93199999999996,
+        "coverWidth": 361.34000000000003,
+        "coverHeight": 10.788,
+        "drawX": 90.02,
+        "drawY": 432.14,
+        "fontSize": 11.04,
+        "textWidth": 47.2512,
+        "sourceWidth": 360.54
+      },
+      "safety": {
+        "incoherent": false
+      }
+    },
+    {
+      "token": "candidateName",
+      "sourceText": "tal Deductions 2,820 33,840",
+      "page": 3,
+      "x": 54.74,
+      "y": 558.17,
+      "width": 426.63,
+      "height": 10.56,
+      "fontSize": 10.56,
+      "label": "Candidate Name",
+      "resolvedRaw": "abc singh",
+      "finalValue": "abc singh",
+      "skipReason": null,
+      "plan": {
+        "coverX": 54.34,
+        "coverY": 556.058,
+        "coverWidth": 145.44243200000003,
+        "coverHeight": 10.332,
+        "drawX": 54.74,
+        "drawY": 558.17,
+        "fontSize": 10.56,
+        "textWidth": 45.1968,
+        "sourceWidth": 144.642432
+      },
+      "safety": {
+        "incoherent": false
+      }
+    },
+    {
+      "token": "totalCTC",
+      "sourceText": "6,20,000",
+      "page": 3,
+      "x": 448.49,
+      "y": 444.86,
+      "width": 36.96,
+      "height": 10.56,
+      "fontSize": 10.56,
+      "label": "Total CTC",
+      "resolvedRaw": "Rs 2,00,000",
+      "finalValue": "2,00,000",
+      "skipReason": null,
+      "plan": {
+        "coverX": 448.09000000000003,
+        "coverY": 442.748,
+        "coverWidth": 37.76,
+        "coverHeight": 10.332,
+        "drawX": 448.49,
+        "drawY": 444.86,
+        "fontSize": 9.06,
+        "textWidth": 35.261520000000004,
+        "sourceWidth": 36.96
+      },
+      "safety": {
+        "incoherent": false
+      }
+    },
+    {
+      "token": "noticePeriod",
+      "sourceText": "60 days",
+      "page": 5,
+      "x": 90.02,
+      "y": 692.38,
+      "width": 370.3,
+      "height": 11.04,
+      "fontSize": 11.04,
+      "label": "Notice Period",
+      "resolvedRaw": "30 days",
+      "finalValue": "30 days",
+      "skipReason": null,
+      "plan": {
+        "coverX": 89.61999999999999,
+        "coverY": 690.172,
+        "coverWidth": 42.963968,
+        "coverHeight": 10.788,
+        "drawX": 93.85308799999999,
+        "drawY": 692.38,
+        "fontSize": 11.04,
+        "textWidth": 38.33088,
+        "sourceWidth": 42.163968000000004
+      },
+      "safety": {
+        "incoherent": false
+      }
+    }
+  ],
+  "skipped": [],
+  "overlaps": [
+    {
+      "a": {
+        "token": "employeePF",
+        "source": "2,820",
+        "x": 330.12,
+        "y": 583.37,
+        "w": 23.76,
+        "h": 10.56
+      },
+      "b": {
+        "token": "employeePF",
+        "source": "Employee Share 2,820 33,840",
+        "x": 83.3,
+        "y": 583.37,
+        "w": 398.07,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "employeePFAnnual",
+        "source": "33,840",
+        "x": 452.33,
+        "y": 583.37,
+        "w": 29.04,
+        "h": 10.56
+      },
+      "b": {
+        "token": "employeePF",
+        "source": "Employee Share 2,820 33,840",
+        "x": 83.3,
+        "y": 583.37,
+        "w": 398.07,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "candidateName",
+        "source": "tal Deductions 2,820 33,840",
+        "x": 54.74,
+        "y": 558.17,
+        "w": 426.63,
+        "h": 10.56
+      },
+      "b": {
+        "token": "totalDeductions",
+        "source": "2,820",
+        "x": 330.12,
+        "y": 558.17,
+        "w": 23.76,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "candidateName",
+        "source": "tal Deductions 2,820 33,840",
+        "x": 54.74,
+        "y": 558.17,
+        "w": 426.63,
+        "h": 10.56
+      },
+      "b": {
+        "token": "totalDeductionsAnnual",
+        "source": "33,840",
+        "x": 452.33,
+        "y": 558.17,
+        "w": 29.04,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "employeePF",
+        "source": "2,820",
+        "x": 330.12,
+        "y": 533.21,
+        "w": 23.76,
+        "h": 10.56
+      },
+      "b": {
+        "token": "employeePF",
+        "source": "Employer Share 2,820 33,840",
+        "x": 83.3,
+        "y": 533.21,
+        "w": 398.07,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "employeePFAnnual",
+        "source": "33,840",
+        "x": 452.33,
+        "y": 533.21,
+        "w": 29.04,
+        "h": 10.56
+      },
+      "b": {
+        "token": "employeePF",
+        "source": "Employer Share 2,820 33,840",
+        "x": 83.3,
+        "y": 533.21,
+        "w": 398.07,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "employeePF",
+        "source": "2,820",
+        "x": 330.12,
+        "y": 470.3,
+        "w": 23.76,
+        "h": 10.56
+      },
+      "b": {
+        "token": "employeePF",
+        "source": "Employer Share 2,820 33,840",
+        "x": 83.3,
+        "y": 470.3,
+        "w": 398.07,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    },
+    {
+      "a": {
+        "token": "employeePFAnnual",
+        "source": "33,840",
+        "x": 452.33,
+        "y": 470.3,
+        "w": 29.04,
+        "h": 10.56
+      },
+      "b": {
+        "token": "employeePF",
+        "source": "Employer Share 2,820 33,840",
+        "x": 83.3,
+        "y": 470.3,
+        "w": 398.07,
+        "h": 10.56
+      },
+      "mappingOverlapPct": 100,
+      "coverOverlapPct": 0
+    }
+  ],
+  "extractedLines": {
+    "noticeProbation": [
+      {
+        "text": "1.",
+        "x": 72.02,
+        "y": 692.38,
+        "width": 7.56,
+        "height": 10.08,
+        "fontSize": 10.08
+      },
+      {
+        "text": "After completion of your probation period, you will have a notice period of 60 days.",
+        "x": 90.02,
+        "y": 692.38,
+        "width": 370.3,
+        "height": 11.04,
+        "fontSize": 11.04
+      }
+    ],
+    "salaryWords": [
+      {
+        "text": "you a",
+        "x": 54.02,
+        "y": 537.77,
+        "width": 24.09,
+        "height": 11.04,
+        "fontSize": 11.04
+      },
+      {
+        "text": "CTC of Rupees Six Lakh Twenty Thousand Only",
+        "x": 81.14,
+        "y": 537.77,
+        "width": 230.68,
+        "height": 11.04,
+        "fontSize": 11.04
+      },
+      {
+        "text": "per annum, as per Annexure B below.",
+        "x": 315,
+        "y": 537.77,
+        "width": 166.55,
+        "height": 11.04,
+        "fontSize": 11.04
+      }
+    ],
+    "candidateName": [
+      {
+        "text": "Dear Rohan Sharma,",
+        "x": 54.02,
+        "y": 596.83,
+        "width": 99.42,
+        "height": 11.04,
+        "fontSize": 11.04
+      }
+    ],
+    "annexureDeductions": [
+      {
+        "text": "Total Deductions",
+        "x": 54.74,
+        "y": 558.17,
+        "width": 76.55,
+        "height": 10.56,
+        "fontSize": 10.56
+      },
+      {
+        "text": "2,820",
+        "x": 330.12,
+        "y": 558.17,
+        "width": 23.76,
+        "height": 10.56,
+        "fontSize": 10.56
+      },
+      {
+        "text": "33,840",
+        "x": 452.33,
+        "y": 558.17,
+        "width": 29.04,
+        "height": 10.56,
+        "fontSize": 10.56
+      }
+    ],
+    "annexureCTC": [
+      {
+        "text": "Total CTC",
+        "x": 54.74,
+        "y": 444.86,
+        "width": 48.88,
+        "height": 10.56,
+        "fontSize": 10.56
+      },
+      {
+        "text": "51,667",
+        "x": 327.48,
+        "y": 444.86,
+        "width": 29.04,
+        "height": 10.56,
+        "fontSize": 10.56
+      },
+      {
+        "text": "6,20,000",
+        "x": 448.49,
+        "y": 444.86,
+        "width": 36.96,
+        "height": 10.56,
+        "fontSize": 10.56
+      }
+    ]
+  },
+  "freshPdf": {
+    "path": "C:\\Users\\megha\\Downloads\\EMS\\server\\uploads\\lifecycle-letters\\_verify\\investigate-fresh-1786002762431.pdf",
+    "size": 267183
+  },
+  "freshPdfNoticeLine": [
+    {
+      "text": "1.",
+      "page": 5,
+      "x": 72.02,
+      "y": 692.38,
+      "width": 7.56,
+      "height": 10.08,
+      "fontSize": 10.08
+    },
+    {
+      "text": "After completion of your probation period, you will have a notice period of 60 days.",
+      "page": 5,
+      "x": 90.02,
+      "y": 692.38,
+      "width": 370.3,
+      "height": 11.04,
+      "fontSize": 11.04
+    },
+    {
+      "text": "30 days",
+      "page": 5,
+      "x": 93.85,
+      "y": 692.38,
+      "width": 38.66,
+      "height": 11.04,
+      "fontSize": 11.04
+    }
+  ],
+  "freshPdfSalaryLine": [
+    {
+      "text": "you a",
+      "page": 0,
+      "x": 54.02,
+      "y": 537.77,
+      "width": 24.09,
+      "height": 11.04,
+      "fontSize": 11.04
+    },
+    {
+      "text": "CTC of Rupees Six Lakh Twenty Thousand Only",
+      "page": 0,
+      "x": 81.14,
+      "y": 537.77,
+      "width": 230.68,
+      "height": 11.04,
+      "fontSize": 11.04
+    },
+    {
+      "text": "per annum, as per Annexure B below.",
+      "page": 0,
+      "x": 315,
+      "y": 537.77,
+      "width": 166.55,
+      "height": 11.04,
+      "fontSize": 11.04
+    },
+    {
+      "text": "Rupees Two Lakh Only",
+      "page": 0,
+      "x": 199.07,
+      "y": 537.77,
+      "width": 114.74,
+      "height": 11.04,
+      "fontSize": 11.04
+    }
+  ]
+}

@@ -5,10 +5,10 @@
 import Employee from '../models/employee.model.js';
 import { getOrCreateLifecycleSettings, isFeatureEnabled } from './lifecycleConfigService.js';
 import { notify } from '../helpers/notificationManager.js';
+import { findAuthoritativeHrEscalationRecipient } from '../helpers/lifecycleNotificationRecipients.js';
 import logger from '../helpers/logger.js';
 
 const ROLE_PATTERNS = {
-    hr: /human resource|^hr$/i,
     it: /^it$|information technology|system admin/i,
     payroll: /payroll|finance|accounts/i,
     admin: /admin|office admin/i,
@@ -16,7 +16,23 @@ const ROLE_PATTERNS = {
 };
 
 async function findEscalationRecipient(organizationId, role) {
-    const pattern = ROLE_PATTERNS[role] || ROLE_PATTERNS.hr;
+    const escalateRole = role || 'hr';
+
+    // Onboarding/offboarding HR escalations use platform HR roles — not title/dept heuristics.
+    if (escalateRole === 'hr') {
+        return findAuthoritativeHrEscalationRecipient(organizationId);
+    }
+
+    if (escalateRole === 'admin') {
+        const adminRecipient = await findAuthoritativeHrEscalationRecipient(organizationId);
+        if (adminRecipient) return adminRecipient;
+    }
+
+    const pattern = ROLE_PATTERNS[escalateRole];
+    if (!pattern) {
+        return findAuthoritativeHrEscalationRecipient(organizationId);
+    }
+
     const employee = await Employee.findOne({
         organizationId,
         status: 'active',

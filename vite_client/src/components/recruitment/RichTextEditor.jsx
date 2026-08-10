@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { FaBold, FaItalic, FaListUl, FaListOl, FaLink } from 'react-icons/fa';
+import { normalizeRichHtml } from './OfferLetterHtmlPreview';
 
 const TOOLBAR_ACTIONS = [
     { cmd: 'bold', icon: FaBold, title: 'Bold' },
@@ -13,8 +14,9 @@ const RichTextEditor = ({ value = '', onChange, placeholder = 'Enter content...'
 
     useEffect(() => {
         if (!editorRef.current) return;
-        if (editorRef.current.innerHTML !== value) {
-            editorRef.current.innerHTML = value || '';
+        const normalized = normalizeRichHtml(value);
+        if (editorRef.current.innerHTML !== normalized) {
+            editorRef.current.innerHTML = normalized || '';
         }
     }, [value]);
 
@@ -83,17 +85,44 @@ const RichTextEditor = ({ value = '', onChange, placeholder = 'Enter content...'
 
 export const OFFER_PLACEHOLDERS = [
     { token: '{{candidateName}}', label: 'Candidate name' },
-    { token: '{{candidateEmail}}', label: 'Email' },
+    { token: '{{email}}', label: 'Email' },
+    { token: '{{phone}}', label: 'Phone' },
     { token: '{{position}}', label: 'Position' },
     { token: '{{department}}', label: 'Department' },
-    { token: '{{salary}}', label: 'Salary' },
-    { token: '{{startDate}}', label: 'Start date' },
-    { token: '{{companyName}}', label: 'Company' },
-    { token: '{{location}}', label: 'Location' },
-    { token: '{{benefits}}', label: 'Benefits' },
-    { token: '{{offerExpiryDate}}', label: 'Expiry date' },
-    { token: '{{currentDate}}', label: 'Current date' },
     { token: '{{reportingManager}}', label: 'Reporting manager' },
+    { token: '{{employmentType}}', label: 'Employment type' },
+    { token: '{{salary}}', label: 'Annual CTC' },
+    { token: '{{annualCTC}}', label: 'Annual CTC' },
+    { token: '{{basicSalary}}', label: 'Basic (monthly)' },
+    { token: '{{basicSalaryAnnual}}', label: 'Basic (annual)' },
+    { token: '{{hra}}', label: 'HRA (monthly)' },
+    { token: '{{hraAnnual}}', label: 'HRA (annual)' },
+    { token: '{{specialAllowance}}', label: 'Special allowance (monthly)' },
+    { token: '{{grossSalary}}', label: 'Gross (monthly)' },
+    { token: '{{employeePF}}', label: 'Employee PF (monthly)' },
+    { token: '{{employeeESI}}', label: 'Employee ESI (monthly)' },
+    { token: '{{employerPF}}', label: 'Employer PF (monthly)' },
+    { token: '{{employerESI}}', label: 'Employer ESI (monthly)' },
+    { token: '{{gratuity}}', label: 'Gratuity (monthly)' },
+    { token: '{{totalCTC}}', label: 'Total CTC (annual)' },
+    { token: '{{startDate}}', label: 'Start date' },
+    { token: '{{offerDate}}', label: 'Offer date' },
+    { token: '{{offerExpiryDate}}', label: 'Expiry date' },
+    { token: '{{probationPeriod}}', label: 'Probation period' },
+    { token: '{{noticePeriod}}', label: 'Notice period' },
+    { token: '{{workingHours}}', label: 'Working hours' },
+    { token: '{{location}}', label: 'Location' },
+    { token: '{{companyName}}', label: 'Company' },
+    { token: '{{company}}', label: 'Company (alias)' },
+    { token: '{{companyAddress}}', label: 'Company address' },
+    { token: '{{companyEmail}}', label: 'Company email' },
+    { token: '{{companyPhone}}', label: 'Company phone' },
+    { token: '{{companyWebsite}}', label: 'Company website' },
+    { token: '{{benefits}}', label: 'Benefits' },
+    { token: '{{salaryWords}}', label: 'Salary in words' },
+    { token: '{{annualCTCInWords}}', label: 'Annual CTC in words' },
+    { token: '{{leaveEntitlement}}', label: 'Leave entitlement' },
+    { token: '{{currentDate}}', label: 'Current date' },
 ];
 
 export const PlaceholderChips = ({ onInsert }) => (

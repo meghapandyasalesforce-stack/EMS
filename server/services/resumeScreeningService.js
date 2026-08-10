@@ -226,11 +226,11 @@ export function normalizeResumeScreening(raw = {}) {
 
     const label = normalizedStatus === 'passed'
         ? (raw?.requiredMatchPercent != null || raw?.matchScore != null
-            ? `Approved - ${Number(raw.requiredMatchPercent ?? raw.matchScore)}%`
+            ? `Approved · ${Number(raw.requiredMatchPercent ?? raw.matchScore)}%`
             : 'Approved')
         : normalizedStatus === 'failed'
             ? (raw?.requiredMatchPercent != null || raw?.matchScore != null
-                ? `Rejected - ${Number(raw.requiredMatchPercent ?? raw.matchScore)}%`
+                ? `Rejected · ${Number(raw.requiredMatchPercent ?? raw.matchScore)}%`
                 : 'Rejected')
             : 'Pending - Not Screened';
 
@@ -965,6 +965,9 @@ async function autoMatchAndScreenCandidateUnlocked(candidateId, {
         });
 
         if (!hasMeaningfulKeywordMatch(result) && !decisionPreview.passed) continue;
+        // Confident job ID only: resume must meet that job's minimum threshold.
+        // Weak keyword hits must NOT guess a job/department — leave Unassigned + Pending.
+        if (!decisionPreview.passed) continue;
 
         const rank = decisionPreview.thresholdScore;
         if (!best || rank > best.rank) {
@@ -993,7 +996,7 @@ async function autoMatchAndScreenCandidateUnlocked(candidateId, {
                 settings
             );
             const decisionPreview = evaluateScreeningDecision(result, minRequired);
-            if (!hasMeaningfulKeywordMatch(result) && !decisionPreview.passed) continue;
+            if (!decisionPreview.passed) continue;
             const rank = decisionPreview.thresholdScore;
             if (!best || rank > best.rank) {
                 best = { type: 'template', template: t, result, minRequired, rank };

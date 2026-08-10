@@ -16,11 +16,68 @@ const versionHistorySchema = new mongoose.Schema({
 }, { _id: false });
 
 export const OFFER_PLACEHOLDERS = Object.freeze([
-    '{{candidateName}}', '{{candidateEmail}}', '{{position}}', '{{department}}',
-    '{{salary}}', '{{salaryWords}}', '{{startDate}}', '{{companyName}}',
-    '{{reportingManager}}', '{{location}}', '{{benefits}}', '{{offerExpiryDate}}',
-    '{{currentDate}}',
+    '{{candidateName}}', '{{email}}', '{{candidateEmail}}', '{{phone}}', '{{position}}', '{{department}}',
+    '{{reportingManager}}', '{{employmentType}}', '{{salary}}', '{{annualCTC}}', '{{basicSalary}}',
+    '{{basicSalaryAnnual}}', '{{hra}}', '{{hraAnnual}}', '{{specialAllowance}}', '{{grossSalary}}',
+    '{{employeePF}}', '{{employeeESI}}', '{{employerPF}}', '{{employerESI}}', '{{gratuity}}',
+    '{{totalCTC}}', '{{startDate}}', '{{offerDate}}', '{{offerExpiryDate}}', '{{probationPeriod}}',
+    '{{noticePeriod}}', '{{workingHours}}', '{{location}}', '{{companyName}}', '{{companyAddress}}',
+    '{{companyEmail}}', '{{companyPhone}}', '{{companyWebsite}}', '{{benefits}}', '{{currentDate}}',
+    '{{salaryWords}}',
 ]);
+
+const pdfFieldMappingSchema = new mongoose.Schema({
+    placeholderToken: { type: String, trim: true, default: '' },
+    sourceText: { type: String, trim: true, default: '' },
+    fillPattern: { type: String, trim: true, default: '' },
+    label: { type: String, trim: true, default: '' },
+    searchText: { type: String, trim: true, default: '' },
+    itemKey: { type: String, trim: true, default: '' },
+    page: { type: Number, default: 0 },
+    x: { type: Number, default: 0 },
+    y: { type: Number, default: 0 },
+    width: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
+    fontSize: { type: Number, default: 11 },
+    fontFamily: { type: String, trim: true, default: '' },
+    fontStyle: { type: String, trim: true, default: '' },
+    confidence: { type: Number, default: 0 },
+    confidenceLevel: { type: String, enum: ['high', 'medium', 'low'], default: 'low' },
+    replacementStrategy: { type: String, trim: true, default: 'overlay' },
+    required: { type: Boolean, default: true },
+}, { _id: false });
+
+const pdfDetectedFieldSchema = new mongoose.Schema({
+    placeholderToken: { type: String, trim: true, default: '' },
+    sourceText: { type: String, trim: true, default: '' },
+    label: { type: String, trim: true, default: '' },
+    detectedLabel: { type: String, trim: true, default: '' },
+    itemKey: { type: String, trim: true, default: '' },
+    page: { type: Number, default: 0 },
+    x: { type: Number, default: 0 },
+    y: { type: Number, default: 0 },
+    width: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
+    fontSize: { type: Number, default: 11 },
+    confidence: { type: Number, default: 0 },
+    confidenceLevel: { type: String, enum: ['high', 'medium', 'low'], default: 'low' },
+    replacementStrategy: { type: String, trim: true, default: 'overlay' },
+    status: {
+        type: String,
+        enum: ['accepted', 'pending', 'rejected', 'not_detected'],
+        default: 'pending',
+    },
+}, { _id: false });
+
+const pdfExtractedTextSchema = new mongoose.Schema({
+    text: { type: String, trim: true },
+    page: { type: Number, default: 0 },
+    x: { type: Number, default: 0 },
+    y: { type: Number, default: 0 },
+    width: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
+    fontSize: { type: Number, default: 11 },
+}, { _id: false });
 
 const offerLetterTemplateSchema = new mongoose.Schema({
     organizationId: {
@@ -31,7 +88,31 @@ const offerLetterTemplateSchema = new mongoose.Schema({
     },
     name: { type: String, required: true, trim: true },
     description: String,
-    bodyHtml: { type: String, required: true },
+    /** html = existing rich-text templates; pdf = uploaded PDF templates */
+    templateType: { type: String, enum: ['html', 'pdf'], default: 'html', index: true },
+    bodyHtml: {
+        type: String,
+        default: '',
+        required() { return this.templateType !== 'pdf'; },
+    },
+    pdfTemplate: {
+        pdfUrl: String,
+        pdfFileName: String,
+        originalFileName: String,
+        fileSize: Number,
+        hasSelectableText: { type: Boolean, default: false },
+        mappingsConfigured: { type: Boolean, default: false },
+        isVerified: { type: Boolean, default: false },
+        detectionStatus: {
+            type: String,
+            enum: ['pending', 'completed', 'failed', 'no_text'],
+            default: 'pending',
+        },
+        lastDetectionAt: Date,
+        extractedTextItems: [pdfExtractedTextSchema],
+        detectedFields: [pdfDetectedFieldSchema],
+        fieldMappings: [pdfFieldMappingSchema],
+    },
     isDefault: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     version: { type: Number, default: 1 },
@@ -58,6 +139,7 @@ const offerLetterSchema = new mongoose.Schema({
     jobPostingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Recruitment' },
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'OfferLetterTemplate' },
     templateVersion: { type: Number, default: 1 },
+    templateType: { type: String, enum: ['html', 'pdf'], default: 'html' },
     version: { type: Number, default: 1 },
     versionHistory: [versionHistorySchema],
     position: String,

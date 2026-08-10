@@ -68,12 +68,19 @@ export async function ensureHoldingJob(organizationId) {
         tags: HOLDING_JOB_TAG,
         isActive: true,
     });
-    if (job) return job;
+    if (job) {
+        // Never expose a fake HR department for unassigned inbox candidates
+        if (job.department === 'Human Resources' || !job.department) {
+            job.department = 'Unassigned';
+            await job.save();
+        }
+        return job;
+    }
 
     job = await Recruitment.create({
         organizationId,
         jobTitle: 'Unassigned (Resume Inbox)',
-        department: 'Human Resources',
+        department: 'Unassigned',
         position: 'Unassigned',
         jobDescription: 'System holding job for candidates imported via Resume Inbox without a matched posting. Not visible on the Career Portal.',
         location: 'N/A',
@@ -119,25 +126,116 @@ function capitalize(s) {
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const PHONE_RE = /(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{2,4}\)?[\s-]?)?\d{3,5}[\s-]?\d{4,6}/g;
 
+const NAME_LABEL_RE = /^(?:full\s*name|candidate\s*name|name)\s*[:\-–—]\s*(.+)$/i;
+const RESUME_SECTION_RE = /^(objective|summary|experience|education|skills|projects|certifications|contact|profile|employment|work\s*history|professional|technical|languages|interests|references|about\s*me|career)\b/i;
+const JOB_TITLE_HINT_RE = /\b(developer|engineer|manager|analyst|consultant|specialist|architect|designer|intern|lead|director|officer|executive|administrator|assistant|coordinator|recruiter)\b/i;
+const BLOCKED_NAME_WORDS = new Set([
+    'resume', 'curriculum', 'vitae', 'cv', 'phone', 'email', 'address', 'mobile',
+    'the', 'and', 'for', 'with', 'from', 'application', 'applied', 'position',
+]);
+
+/**
+ * Parse a person name from a short line. Returns null when unreliable (do not invent).
+ */
+export function parsePersonName(raw = '') {
+    const cleaned = String(raw || '')
+        .replace(/[|•·].*$/, '')
+        .replace(/,.*$/, '')
+        .replace(/[^a-zA-Z\s'.-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!cleaned || cleaned.length > 60) return null;
+
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (parts.length < 1 || parts.length > 4) return null;
+    if (!parts.every((p) => /^[A-Za-z][A-Za-z'.-]{1,29}$/.test(p))) return null;
+    if (BLOCKED_NAME_WORDS.has(parts[0].toLowerCase())) return null;
+    if (JOB_TITLE_HINT_RE.test(cleaned)) return null;
+
+    if (parts.length === 1) {
+        return { firstName: capitalize(parts[0]), lastName: 'Candidate' };
+    }
+    return {
+        firstName: capitalize(parts[0]),
+        lastName: parts.slice(1).map(capitalize).join(' '),
+    };
+}
+
+/**
+ * Prefer a reliable candidate name from resume letterhead / "Name:" lines.
+ * Returns null when no confident name is found.
+ */
+export function extractNameFromResumeText(text = '') {
+    const lines = String(text || '')
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(0, 25);
+
+    for (const line of lines) {
+        const labeled = line.match(NAME_LABEL_RE);
+        if (labeled) {
+            const parsed = parsePersonName(labeled[1]);
+            if (parsed) return parsed;
+        }
+    }
+
+    for (const line of lines.slice(0, 10)) {
+        if (/@/.test(line)) continue;
+        if (/https?:|www\.|linkedin\.com|github\.com/i.test(line)) continue;
+        if (RESUME_SECTION_RE.test(line)) continue;
+        const digitCount = (line.match(/\d/g) || []).length;
+        if (digitCount >= 7) continue;
+
+        const parsed = parsePersonName(line);
+        if (parsed) return parsed;
+    }
+    return null;
+}
+
+/**
+ * Reject random numeric values (IDs, years, sequential junk) that are not phone-like.
+ */
+export function isLikelyPhoneNumber(raw = '') {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return false;
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 15) return false;
+    if (/^(\d)\1{9,}$/.test(digits)) return false;
+    if (digits === '1234567890' || digits === '0123456789') return false;
+    // Bare long digit strings without phone formatting are usually IDs
+    const hasSeparator = /[\s\-().+]/.test(trimmed);
+    if (!hasSeparator && digits.length > 11) return false;
+    // Reject compact year-like 8-digit sequences
+    if (digits.length === 8 && /^(19|20)\d{6}$/.test(digits)) return false;
+    return true;
+}
+
+/**
+ * Extract contact fields from resume + email body.
+ * Name priority: resume text → sender display name → email local-part fallback.
+ */
 export function extractContactFromText(text = '', fallbackEmail = '', fallbackName = '') {
     const blob = String(text || '');
     const emails = blob.match(EMAIL_RE) || [];
-    const email = (emails.find((e) => e.toLowerCase() !== String(fallbackEmail).toLowerCase())
-        || fallbackEmail
-        || emails[0]
-        || '').toLowerCase().trim();
+    const fallbackLc = String(fallbackEmail || '').toLowerCase().trim();
+    // Prefer an address found in resume/body that is not the mailbox sender
+    const email = (emails.find((e) => e.toLowerCase() !== fallbackLc)
+        || fallbackLc
+        || (emails[0] || '').toLowerCase()
+        || '').trim();
 
     let phone = '';
     const phones = blob.match(PHONE_RE) || [];
     for (const p of phones) {
-        const digits = p.replace(/\D/g, '');
-        if (digits.length >= 10 && digits.length <= 15) {
+        if (isLikelyPhoneNumber(p)) {
             phone = p.trim();
             break;
         }
     }
 
-    const { firstName, lastName } = splitName(fallbackName, email);
+    const fromResume = extractNameFromResumeText(blob);
+    const { firstName, lastName } = fromResume || splitName(fallbackName, email);
     return { firstName, lastName, email, phone };
 }
 
@@ -260,16 +358,23 @@ export async function matchJobFromEmail(organizationId, { subject = '', bodyText
         tags: { $ne: HOLDING_JOB_TAG },
     }).select('jobTitle').lean();
 
+    // Confident title match only — do not guess from weak/ambiguous token hits.
+    const MIN_CONFIDENT_TITLE_SCORE = 300;
     let best = null;
+    let second = null;
     for (const j of openJobs) {
         const score = scoreJobTitleMatch(haystack, j.jobTitle);
-        if (score <= 0) continue;
+        if (score < MIN_CONFIDENT_TITLE_SCORE) continue;
         if (!best || score > best.score) {
+            second = best;
             best = { id: j._id, title: j.jobTitle, score };
+        } else if (!second || score > second.score) {
+            second = { id: j._id, title: j.jobTitle, score };
         }
     }
 
-    if (best) {
+    const ambiguous = !!(best && second && (best.score - second.score) < 50);
+    if (best && !ambiguous) {
         logger.info('Resume screening debug', {
             stage: 'matchJobFromEmail',
             jobId: best.id,
@@ -535,7 +640,16 @@ export async function processInboxMessage(organizationId, message, imapSettings)
 
     const resumeText = await extractTextFromResume(attachment.buffer, attachment.fileName);
     const combinedText = `${message.bodyText || ''}\n${resumeText}`;
-    const extracted = extractContactFromText(combinedText, message.fromAddress, message.fromName);
+    // Name: resume letterhead first → sender display → email local-part
+    // Email/Phone: resume+body, preferring candidate contact over mailbox sender
+    const fromCombined = extractContactFromText(combinedText, message.fromAddress, message.fromName);
+    const resumeName = extractNameFromResumeText(resumeText);
+    const extracted = {
+        firstName: resumeName?.firstName || fromCombined.firstName,
+        lastName: resumeName?.lastName || fromCombined.lastName,
+        email: fromCombined.email,
+        phone: fromCombined.phone,
+    };
 
     if (!extracted.email) {
         const failed = await ResumeInboxImport.findOneAndUpdate(

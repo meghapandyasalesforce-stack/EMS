@@ -150,6 +150,118 @@ export const getMyAssignedInterviews = asyncHandler(async (req, res) => {
     res.json({ success: true, data: interviews });
 });
 
+/**
+ * Assigned interviewer marks their interview Completed.
+ * Feedback form becomes available only after this (or HR marks Completed).
+ */
+export const markMyInterviewCompleted = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    const { id, interviewId } = req.params;
+
+    const {
+        isAssignedInterviewer,
+        isInterviewCompleted,
+    } = await import('../../helpers/interviewFeedbackAccess.js');
+
+    const candidate = await Candidate.findOne({ _id: id, organizationId });
+    if (!candidate) return res.status(404).json({ success: false, message: 'Candidate not found' });
+
+    const interview = candidate.interviewSchedule.id(interviewId);
+    if (!interview) return res.status(404).json({ success: false, message: 'Interview not found' });
+
+    if (!isAssignedInterviewer(interview, employee._id)) {
+        return res.status(403).json({
+            success: false,
+            code: 'NOT_ASSIGNED_INTERVIEWER',
+            message: 'Only the assigned interviewer can mark this interview completed',
+        });
+    }
+
+    if (isInterviewCompleted(interview)) {
+        return res.json({ success: true, message: 'Interview already completed', data: { status: interview.status } });
+    }
+
+    if (interview.status === 'Cancelled') {
+        return res.status(400).json({ success: false, message: 'Cancelled interviews cannot be completed' });
+    }
+
+    interview.status = 'Completed';
+    await candidate.save();
+    res.json({ success: true, message: 'Interview marked Completed', data: { status: 'Completed' } });
+});
+
+/**
+ * Assigned interviewer submits feedback for a Completed interview only.
+ */
+export const submitMyInterviewFeedback = asyncHandler(async (req, res) => {
+    const employee = requireEmployee(req, res);
+    if (!employee) return;
+    const organizationId = getOrganizationId(req);
+    const { id, interviewId } = req.params;
+
+    const {
+        isAssignedInterviewer,
+        isInterviewCompleted,
+        hasSubmittedFeedback,
+    } = await import('../../helpers/interviewFeedbackAccess.js');
+
+    const candidate = await Candidate.findOne({ _id: id, organizationId });
+    if (!candidate) return res.status(404).json({ success: false, message: 'Candidate not found' });
+
+    const interview = candidate.interviewSchedule.id(interviewId);
+    if (!interview) return res.status(404).json({ success: false, message: 'Interview not found' });
+
+    if (!isAssignedInterviewer(interview, employee._id)) {
+        return res.status(403).json({
+            success: false,
+            code: 'NOT_ASSIGNED_INTERVIEWER',
+            message: 'Only the assigned interviewer can submit feedback for this interview',
+        });
+    }
+
+    if (!isInterviewCompleted(interview)) {
+        return res.status(400).json({
+            success: false,
+            code: 'INTERVIEW_NOT_COMPLETED',
+            message: 'Feedback can only be submitted after the interview is marked Completed',
+        });
+    }
+
+    if (hasSubmittedFeedback(interview) && !req.body.forceEdit) {
+        return res.status(409).json({
+            success: false,
+            code: 'FEEDBACK_ALREADY_SUBMITTED',
+            message: 'Feedback already submitted for this interview',
+        });
+    }
+
+    const fb = req.body.feedback || req.body;
+    interview.feedback = {
+        rating: Number(fb.rating) || 0,
+        technical: Number(fb.technical) || 0,
+        communication: Number(fb.communication) || 0,
+        behaviour: Number(fb.behaviour) || 0,
+        recommendation: fb.recommendation || 'Hire',
+        comments: fb.comments || '',
+        strengths: Array.isArray(fb.strengths) ? fb.strengths : (interview.feedback?.strengths || []),
+        weaknesses: Array.isArray(fb.weaknesses) ? fb.weaknesses : (interview.feedback?.weaknesses || []),
+        submittedAt: new Date(),
+    };
+    await candidate.save();
+
+    res.json({
+        success: true,
+        message: 'Feedback submitted',
+        data: {
+            interviewId: interview._id,
+            status: interview.status,
+            feedback: interview.feedback,
+        },
+    });
+});
+
 /** Managers create hiring need (requisition) — same model as HR */
 export const managerCreateRequisition = asyncHandler(async (req, res) => {
     const employee = requireEmployee(req, res);

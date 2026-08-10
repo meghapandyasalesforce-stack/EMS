@@ -376,7 +376,13 @@ const RecruitmentPage = () => {
                                             return (
                                             <tr key={candidate._id}>
                                                 <td className="px-6 py-4 whitespace-nowrap">{candidate.firstName} {candidate.lastName}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-gray-600">{candidate.jobPostingId?.jobTitle || 'N/A'}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                                    {(candidate.tags || []).includes('Unassigned')
+                                                        || (candidate.jobPostingId?.tags || []).includes('__resume_inbox_holding__')
+                                                        || /unassigned/i.test(candidate.jobPostingId?.jobTitle || '')
+                                                        ? 'Unassigned'
+                                                        : (candidate.jobPostingId?.jobTitle || 'N/A')}
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`px-2 py-1 rounded-full text-xs ${
                                                         candidate.status === 'Offer Accepted' ? 'bg-theme-primary/10 text-theme-primary' :

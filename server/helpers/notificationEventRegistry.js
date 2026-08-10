@@ -10,6 +10,12 @@ import User from '../models/user.model.js';
 import logger from './logger.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezoneOptions.js';
 import { formatDateInTimezone, formatTimeInTimezone } from './timezoneHelper.js';
+import {
+  expandOnboardingRecipients,
+  getOnboardingHrRecipients,
+  getOnboardingProgressRecipients,
+  getAuthoritativeHrRecipients,
+} from './lifecycleNotificationRecipients.js';
 
 // Helper function to normalize role text
 const normalizeRoleText = (value) => String(value || '').trim().toLowerCase();
@@ -691,87 +697,6 @@ const onboardingId = (value) => value?._id?.toString?.() || value?.toString?.() 
 const onboardingName = (employee) => {
   const name = `${employee?.name || ''} ${employee?.lastName || ''}`.trim();
   return name || 'The employee';
-};
-const uniqueOnboardingIds = (values) => [...new Set(values.map(onboardingId).filter(Boolean))];
-
-/** HR often logs in as User while tasks store Employee IDs — notify both. */
-const expandOnboardingRecipients = async (recipientIds, organizationId, { includeAdmins = false } = {}) => {
-  const ids = new Set(uniqueOnboardingIds(recipientIds));
-  if (!ids.size && !includeAdmins) return [];
-
-  if (ids.size) {
-    const employees = await Employee.find({ _id: { $in: [...ids] } })
-      .select('_id userId')
-      .lean();
-    employees.forEach((employee) => {
-      if (employee?.userId) ids.add(employee.userId.toString());
-    });
-  }
-
-  if (includeAdmins && organizationId) {
-    const admins = await User.find({
-      organizationId,
-      role: 'admin',
-      isActive: true,
-    }).select('_id').lean();
-    admins.forEach((admin) => ids.add(admin._id.toString()));
-  }
-
-  return [...ids];
-};
-
-const getOnboardingRoleRecipients = async (organizationId, role) => {
-  const roleQueries = {
-    hr: [
-      { functionalRoles: { $in: ['hr', 'HR'] } },
-      { department: { $regex: /human resource|^hr$/i } },
-      { jobTitle: { $regex: /\bhr\b|human resource/i } },
-      { position: { $regex: /\bhr\b|human resource/i } },
-    ],
-    it: [
-      { functionalRoles: { $in: ['it', 'IT'] } },
-      { department: { $regex: /^it$|information technology/i } },
-      { jobTitle: { $regex: /\bit\b|information technology|system admin/i } },
-      { position: { $regex: /\bit\b|information technology|system admin/i } },
-    ],
-  };
-  const conditions = roleQueries[role];
-  if (!conditions) return [];
-  const employees = await Employee.find({
-    organizationId,
-    status: 'active',
-    $or: conditions,
-  }).select('_id userId').lean();
-  return employees.flatMap((employee) => [
-    employee._id.toString(),
-    ...(employee.userId ? [employee.userId.toString()] : []),
-  ]);
-};
-
-const getOnboardingHrRecipients = async (workflow, organizationId) => expandOnboardingRecipients([
-  workflow?.assignedHR,
-  ...(await getOnboardingRoleRecipients(organizationId, 'hr')),
-], organizationId, { includeAdmins: true });
-
-const getOnboardingProgressRecipients = async (
-  workflow,
-  organizationId,
-  { employee = false, hr = false, manager = false, buddy = false, it = false } = {},
-) => {
-  const ids = [];
-  if (employee) ids.push(workflow?.employeeId);
-  if (hr) ids.push(...await getOnboardingHrRecipients(workflow, organizationId));
-  if (manager) ids.push(workflow?.assignedManager);
-  if (buddy) ids.push(workflow?.assignedBuddy);
-  if (it) {
-    ids.push(
-      ...(workflow?.tasks || [])
-        .filter((task) => task.assigneeRole === 'it')
-        .map((task) => task.assignedTo),
-      ...await getOnboardingRoleRecipients(organizationId, 'it'),
-    );
-  }
-  return expandOnboardingRecipients(ids, organizationId, { includeAdmins: hr });
 };
 
 registerEvent({
@@ -1487,10 +1412,15 @@ registerEvent({
   }),
 });
 
+/** Legacy loose HR match for non-onboarding/offboarding lifecycle events (offers, etc.). */
 const getHrRecipients = async (organizationId) => {
   const employees = await Employee.find({ organizationId, status: 'active' }).select('_id department jobTitle position functionalRoles').lean();
   return employees.filter(isHrEmployee).map((e) => e._id.toString());
 };
+
+/** Authoritative HR for onboarding/offboarding escalation fallbacks. */
+const getOnboardingOffboardingHrFallback = async (organizationId) =>
+  getAuthoritativeHrRecipients(organizationId);
 
 registerEvent({
   type: 'lifecycle_offer_sent',
@@ -1603,8 +1533,8 @@ registerEvent({
   defaultType: 'onboarding',
   defaultPriority: 'high',
   recipientResolver: async ({ recipient, organizationId }) => {
-    if (recipient) return [recipient.toString()];
-    return getHrRecipients(organizationId);
+    if (recipient) return expandOnboardingRecipients([recipient], organizationId);
+    return getOnboardingOffboardingHrFallback(organizationId);
   },
   messageBuilder: ({ message }) => message || 'An onboarding item is overdue and has been escalated.',
   metadataBuilder: ({ workflow, item }) => ({ workflowId: workflow?._id, itemKind: item?.kind, lifecycle: 'escalation' }),
@@ -1616,8 +1546,8 @@ registerEvent({
   defaultType: 'onboarding',
   defaultPriority: 'high',
   recipientResolver: async ({ recipient, organizationId }) => {
-    if (recipient) return [recipient.toString()];
-    return getHrRecipients(organizationId);
+    if (recipient) return expandOnboardingRecipients([recipient], organizationId);
+    return getOnboardingOffboardingHrFallback(organizationId);
   },
   messageBuilder: ({ message }) => message || 'An offboarding item is overdue and has been escalated.',
   metadataBuilder: ({ workflow, item }) => ({ workflowId: workflow?._id, itemKind: item?.kind, lifecycle: 'escalation', url: offboardingUrl(workflow) }),

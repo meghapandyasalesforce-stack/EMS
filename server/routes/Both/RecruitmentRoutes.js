@@ -8,6 +8,8 @@ import {
     getMyReferrals,
     getMyApplications,
     getMyAssignedInterviews,
+    markMyInterviewCompleted,
+    submitMyInterviewFeedback,
     managerCreateRequisition,
     managerListMyRequisitions,
     managerSubmitRequisition,
@@ -42,6 +44,12 @@ router.route('/my-applications')
 
 router.route('/my-interviews')
     .get(isAuthenticatedBoth, readLimiter, getMyAssignedInterviews);
+
+router.route('/candidates/:id/interview/:interviewId/complete')
+    .put(isAuthenticatedBoth, writeLimiter, markMyInterviewCompleted);
+
+router.route('/candidates/:id/interview/:interviewId/feedback')
+    .put(isAuthenticatedBoth, writeLimiter, submitMyInterviewFeedback);
 
 // Manager hiring requests
 router.route('/requisitions')

@@ -24,6 +24,80 @@ const STATUS_OPTIONS = [
     'Offer Extended', 'Offer Accepted', 'Offer Declined', 'Rejected', 'Withdrawn', 'On Hold',
 ];
 
+const EMAIL_ACTION_BUTTONS = [
+    { type: 'interview_invite', label: 'Interview Invite', needs: 'Assign job + complete interview details' },
+    { type: 'interview_reminder', label: 'Interview Reminder', needs: 'Assign job + upcoming interview' },
+    { type: 'offer_reminder', label: 'Offer Reminder', needs: 'Assign job + sent offer portal link' },
+    { type: 'joining_reminder', label: 'Joining Reminder', needs: 'Assign job + joining date' },
+];
+
+const INTERVIEW_EMAIL_TYPES = new Set(['interview_invite', 'interview_reminder']);
+
+function isHoldingJob(jobOrCandidateJob) {
+    if (!jobOrCandidateJob) return true;
+    const tags = jobOrCandidateJob.tags || [];
+    return tags.includes('__resume_inbox_holding__')
+        || /unassigned/i.test(jobOrCandidateJob.jobTitle || '')
+        || jobOrCandidateJob.department === 'Unassigned';
+}
+
+function pickLatestActiveInterview(schedule = []) {
+    const list = Array.isArray(schedule) ? schedule : [];
+    const active = [...list].reverse().find((i) => i.status === 'Scheduled' || i.status === 'Rescheduled');
+    if (active) return active;
+    return [...list].reverse().find((i) => i.status !== 'Cancelled') || null;
+}
+
+function toDateInputValue(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+const EMAIL_TYPE_LABELS = {
+    interview_invite: 'Interview Invite',
+    interview_reminder: 'Interview Reminder',
+    offer_reminder: 'Offer Reminder',
+    offer_link: 'Offer Letter',
+    joining_reminder: 'Joining Reminder',
+    resume_inbox_import: 'Resume Inbox',
+};
+
+/**
+ * Classify timeline entries for HR display.
+ * Candidate never sees this timeline — Internal = HR-only records that were not emailed.
+ */
+function classifyCommunication(c = {}) {
+    if (c.direction === 'inbound') {
+        return {
+            kind: 'inbound',
+            label: 'Inbound',
+            badge: 'bg-sky-100 text-sky-800',
+            hint: 'Received (e.g. resume via mailbox)',
+        };
+    }
+    // Real outbound emails auto-logged after sendRecruitmentEmail
+    if (c.autoLogged && c.channel === 'email' && c.direction === 'outbound') {
+        return {
+            kind: 'outbound',
+            label: 'Outbound',
+            badge: 'bg-emerald-100 text-emerald-800',
+            hint: 'Sent to candidate email',
+        };
+    }
+    // Manual Log form entries — never delivered to candidate via this form
+    return {
+        kind: 'internal',
+        label: 'Internal',
+        badge: 'bg-amber-100 text-amber-800',
+        hint: 'HR-only log (not sent to candidate)',
+    };
+}
+
 const CandidateDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -45,6 +119,9 @@ const CandidateDetailPage = () => {
     const [commForm, setCommForm] = useState({ channel: 'note', subject: '', body: '' });
     const [scoreForm, setScoreForm] = useState({ resumeScore: '', technicalScore: '', culturalFitScore: '' });
     const [hireOpen, setHireOpen] = useState(false);
+    const [jobOptions, setJobOptions] = useState([]);
+    const [emailPrep, setEmailPrep] = useState(null);
+    // emailPrep: { type, jobPostingId, interviewId, interviewType, scheduledDate, scheduledTime, location, meetingLink, interviewer }
     const [feedbackForm, setFeedbackForm] = useState({
         interviewId: '',
         rating: '',
@@ -102,6 +179,29 @@ const CandidateDetailPage = () => {
         return () => { cancelled = true; };
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axios.get('/v1/admin/recruitment/inbox/jobs', { withCredentials: true });
+                const list = Array.isArray(data?.data) ? data.data : [];
+                if (!cancelled) setJobOptions(list.filter((j) => !isHoldingJob(j)));
+            } catch {
+                try {
+                    const { data } = await axios.get('/v1/admin/recruitment/jobs', {
+                        withCredentials: true,
+                        params: { limit: 200 },
+                    });
+                    const raw = Array.isArray(data?.data) ? data.data : [];
+                    if (!cancelled) setJobOptions(raw.filter((j) => !isHoldingJob(j) && j.status !== 'Closed'));
+                } catch {
+                    if (!cancelled) setJobOptions([]);
+                }
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
     const updateStatus = async () => {
         try {
             setBusy(true);
@@ -140,7 +240,7 @@ const CandidateDetailPage = () => {
         try {
             setBusy(true);
             await axios.post(`/v1/admin/recruitment/candidates/${id}/interview`, interviewForm, { withCredentials: true });
-            toast.success('Interview scheduled — interviewer notified');
+            toast.success('Interview scheduled — interviewer notified. Use Communication → Interview Invite to email the candidate.');
             setInterviewForm({ interviewType: 'Video', scheduledDate: '', scheduledTime: '', location: '', meetingLink: '', interviewer: '' });
             fetchCandidate();
         } catch (err) {
@@ -172,8 +272,8 @@ const CandidateDetailPage = () => {
         e.preventDefault();
         try {
             setBusy(true);
-            await axios.post(`/v1/admin/recruitment/candidates/${id}/communication`, commForm, { withCredentials: true });
-            toast.success('Logged');
+            const { data } = await axios.post(`/v1/admin/recruitment/candidates/${id}/communication`, commForm, { withCredentials: true });
+            toast.success(data.message || 'Logged (HR-only — nothing sent)');
             setCommForm({ channel: 'note', subject: '', body: '' });
             fetchCandidate();
         } catch (err) {
@@ -183,16 +283,159 @@ const CandidateDetailPage = () => {
         }
     };
 
-    const submitFeedback = async (e) => {
+    const openEmailPrep = (type) => {
+        if (!candidate?.email) {
+            toast.error('Candidate has no email address');
+            return;
+        }
+        const interview = pickLatestActiveInterview(candidate.interviewSchedule);
+        const jobId = !isHoldingJob(candidate.jobPostingId)
+            ? (candidate.jobPostingId?._id || candidate.jobPostingId || '')
+            : '';
+        setEmailPrep({
+            type,
+            jobPostingId: jobId ? String(jobId) : '',
+            interviewId: interview?._id ? String(interview._id) : '',
+            interviewType: interview?.interviewType || 'Video',
+            scheduledDate: toDateInputValue(interview?.scheduledDate),
+            scheduledTime: interview?.scheduledTime || '',
+            location: interview?.location || '',
+            meetingLink: interview?.meetingLink || '',
+            interviewer: interview?.interviewer?._id
+                ? String(interview.interviewer._id)
+                : (interview?.interviewer ? String(interview.interviewer) : ''),
+        });
+    };
+
+    const sendEmailApi = async (type, confirmResend = false) => {
+        const { data } = await axios.post(
+            `/v1/admin/recruitment/candidates/${id}/send-email`,
+            { type, confirmResend },
+            { withCredentials: true }
+        );
+        return data;
+    };
+
+    const submitEmailPrep = async (e) => {
         e.preventDefault();
-        if (!feedbackForm.interviewId) {
+        if (!emailPrep?.type) return;
+
+        const needsInterview = INTERVIEW_EMAIL_TYPES.has(emailPrep.type);
+        if (!emailPrep.jobPostingId) {
+            toast.error('Please assign a job / role before sending');
+            return;
+        }
+        if (needsInterview) {
+            if (!emailPrep.interviewType || !emailPrep.scheduledDate || !emailPrep.scheduledTime) {
+                toast.error('Please complete interview type, date, and time');
+                return;
+            }
+            const needsLink = emailPrep.interviewType === 'Video';
+            const needsLocation = emailPrep.interviewType === 'On-site';
+            if (needsLink && !emailPrep.meetingLink?.trim()) {
+                toast.error('Please add a meeting link for video interviews');
+                return;
+            }
+            if (needsLocation && !emailPrep.location?.trim()) {
+                toast.error('Please add a location for on-site interviews');
+                return;
+            }
+            if (!emailPrep.meetingLink?.trim() && !emailPrep.location?.trim()) {
+                toast.error('Please add a meeting link or location');
+                return;
+            }
+        }
+
+        try {
+            setBusy(true);
+
+            // 1) Assign real job if needed / changed
+            const currentJobId = !isHoldingJob(candidate.jobPostingId)
+                ? String(candidate.jobPostingId?._id || candidate.jobPostingId || '')
+                : '';
+            if (String(emailPrep.jobPostingId) !== currentJobId) {
+                await axios.put(
+                    `/v1/admin/recruitment/candidates/${id}`,
+                    { jobPostingId: emailPrep.jobPostingId },
+                    { withCredentials: true }
+                );
+            }
+
+            // 2) Create or update interview details for invite/reminder
+            if (needsInterview) {
+                const payload = {
+                    interviewType: emailPrep.interviewType,
+                    scheduledDate: emailPrep.scheduledDate,
+                    scheduledTime: emailPrep.scheduledTime,
+                    location: emailPrep.location || '',
+                    meetingLink: emailPrep.meetingLink || '',
+                    interviewer: emailPrep.interviewer || undefined,
+                };
+                if (emailPrep.interviewId) {
+                    await axios.put(
+                        `/v1/admin/recruitment/candidates/${id}/interview/${emailPrep.interviewId}`,
+                        payload,
+                        { withCredentials: true }
+                    );
+                } else {
+                    if (!emailPrep.interviewer) {
+                        toast.error('Select who will take the interview');
+                        setBusy(false);
+                        return;
+                    }
+                    await axios.post(
+                        `/v1/admin/recruitment/candidates/${id}/interview`,
+                        payload,
+                        { withCredentials: true }
+                    );
+                }
+            }
+
+            // 3) Send email (explicit HR action)
+            try {
+                const data = await sendEmailApi(emailPrep.type, false);
+                toast.success(data.message || `Email sent to ${candidate.email}`);
+                setEmailPrep(null);
+                fetchCandidate();
+            } catch (err) {
+                const payload = err.response?.data;
+                if (err.response?.status === 409 && payload?.needsConfirmation) {
+                    const ok = window.confirm(
+                        payload.message || 'This email was already sent recently. Send again?'
+                    );
+                    if (ok) {
+                        const data = await sendEmailApi(emailPrep.type, true);
+                        toast.success(data.message || `Email sent to ${candidate.email}`);
+                        setEmailPrep(null);
+                        fetchCandidate();
+                    }
+                    return;
+                }
+                toast.error(payload?.message || 'Send failed');
+                fetchCandidate();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Could not prepare email');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const sendQuickEmail = (type) => {
+        openEmailPrep(type);
+    };
+
+    const submitFeedback = async (e, interviewId) => {
+        e.preventDefault();
+        const targetId = interviewId || feedbackForm.interviewId;
+        if (!targetId) {
             toast.error('Select an interview');
             return;
         }
         try {
             setBusy(true);
             await axios.put(
-                `/v1/admin/recruitment/candidates/${id}/interview/${feedbackForm.interviewId}`,
+                `/v1/admin/recruitment/candidates/${id}/interview/${targetId}`,
                 {
                     status: 'Completed',
                     feedback: {
@@ -224,6 +467,23 @@ const CandidateDetailPage = () => {
         }
     };
 
+    const markInterviewCompleted = async (interviewId) => {
+        try {
+            setBusy(true);
+            await axios.put(
+                `/v1/admin/recruitment/candidates/${id}/interview/${interviewId}`,
+                { status: 'Completed' },
+                { withCredentials: true }
+            );
+            toast.success('Interview marked Completed — feedback can be submitted');
+            fetchCandidate();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update status');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const runAction = async (path, body = {}) => {
         try {
             setBusy(true);
@@ -243,6 +503,11 @@ const CandidateDetailPage = () => {
     const screening = normalizeResumeScreening(candidate.resumeScreening || {});
     const screeningLocked = screening.isRejected;
     const screeningLabel = screening.label;
+    const isUnassignedJob = isHoldingJob(candidate.jobPostingId)
+        || (candidate.tags || []).includes('Unassigned');
+    const displayDepartment = isUnassignedJob
+        ? '—'
+        : (candidate.jobPostingId?.department || '—');
 
     const hardDelete = async () => {
         if (!window.confirm('Permanently delete this candidate and their resume? This cannot be undone.')) return;
@@ -429,7 +694,7 @@ const CandidateDetailPage = () => {
                             <dl className="space-y-3 text-sm">
                                 <div className="flex justify-between gap-4"><dt className="text-gray-500">Phone</dt><dd className="font-medium text-gray-800">{candidate.phone || '—'}</dd></div>
                                 <div className="flex justify-between gap-4"><dt className="text-gray-500">Stage</dt><dd className="font-medium text-gray-800">{candidate.stage || '—'}</dd></div>
-                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Department</dt><dd className="font-medium text-gray-800">{candidate.jobPostingId?.department || '—'}</dd></div>
+                                <div className="flex justify-between gap-4"><dt className="text-gray-500">Department</dt><dd className="font-medium text-gray-800">{displayDepartment}</dd></div>
                                 <div className="flex justify-between gap-4"><dt className="text-gray-500">Source</dt><dd className="font-medium text-gray-800">{candidate.source || '—'}</dd></div>
                                 <div className="flex justify-between gap-4"><dt className="text-gray-500">Joining</dt><dd className="font-medium text-gray-800">{candidate.joiningStatus || 'None'}</dd></div>
                                 <div className="flex justify-between gap-4"><dt className="text-gray-500">Overall score</dt><dd className="font-medium text-gray-800">{candidate.scores?.overallScore != null ? Math.round(candidate.scores.overallScore) : '—'}</dd></div>
@@ -605,62 +870,140 @@ const CandidateDetailPage = () => {
                                 <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Schedule</button>
                             </form>
                         </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="mb-4 text-lg font-semibold">Submit Feedback</h2>
-                            <form onSubmit={submitFeedback} className="space-y-3 text-sm">
-                                <select required className="w-full rounded-lg border px-3 py-2" value={feedbackForm.interviewId} onChange={(e) => setFeedbackForm((p) => ({ ...p, interviewId: e.target.value }))}>
-                                    <option value="">Select interview</option>
-                                    {(candidate.interviewSchedule || []).map((item) => (
-                                        <option key={item._id} value={item._id}>
-                                            {item.interviewType} — {item.scheduledDate ? format(new Date(item.scheduledDate), 'dd MMM yyyy') : 'No date'} ({item.status})
-                                        </option>
-                                    ))}
-                                </select>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input type="number" min="0" max="10" placeholder="Overall rating" className="rounded-lg border px-3 py-2" value={feedbackForm.rating} onChange={(e) => setFeedbackForm((p) => ({ ...p, rating: e.target.value }))} />
-                                    <input type="number" min="0" max="10" placeholder="Technical" className="rounded-lg border px-3 py-2" value={feedbackForm.technical} onChange={(e) => setFeedbackForm((p) => ({ ...p, technical: e.target.value }))} />
-                                    <input type="number" min="0" max="10" placeholder="Communication" className="rounded-lg border px-3 py-2" value={feedbackForm.communication} onChange={(e) => setFeedbackForm((p) => ({ ...p, communication: e.target.value }))} />
-                                    <input type="number" min="0" max="10" placeholder="Behaviour" className="rounded-lg border px-3 py-2" value={feedbackForm.behaviour} onChange={(e) => setFeedbackForm((p) => ({ ...p, behaviour: e.target.value }))} />
-                                </div>
-                                <select className="w-full rounded-lg border px-3 py-2" value={feedbackForm.recommendation} onChange={(e) => setFeedbackForm((p) => ({ ...p, recommendation: e.target.value }))}>
-                                    {['Strong Hire', 'Hire', 'Maybe', 'No Hire'].map((r) => <option key={r} value={r}>{r}</option>)}
-                                </select>
-                                <textarea rows={3} className="w-full rounded-lg border px-3 py-2" placeholder="Comments" value={feedbackForm.comments} onChange={(e) => setFeedbackForm((p) => ({ ...p, comments: e.target.value }))} />
-                                <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Save feedback</button>
-                            </form>
-                        </section>
                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-                            <h2 className="mb-4 text-lg font-semibold">Scheduled / Feedback history</h2>
+                            <h2 className="mb-1 text-lg font-semibold">Interviews</h2>
+                            <p className="mb-4 text-xs text-gray-500">
+                                Feedback belongs to each interview. Form appears only after status is <strong>Completed</strong>.
+                                Assigned interviewers submit from Internal Jobs → My interviews; HR can review all feedback here.
+                            </p>
                             {(candidate.interviewSchedule || []).length ? (
-                                <div className="space-y-3">
-                                    {candidate.interviewSchedule.map((item) => (
-                                        <div key={item._id || `${item.scheduledDate}-${item.interviewType}`} className="rounded-lg border p-3 text-sm">
-                                            <p className="font-medium">{item.interviewType || 'Interview'} — {item.status || 'Scheduled'}</p>
-                                            <p className="text-gray-500">
-                                                {item.scheduledDate ? format(new Date(item.scheduledDate), 'dd MMM yyyy') : ''}
-                                                {item.scheduledTime ? ` ${item.scheduledTime}` : ''}
-                                            </p>
-                                            {item.interviewer && (
-                                                <p className="mt-1 text-gray-700">
-                                                    Interviewer:{' '}
-                                                    {[item.interviewer.name, item.interviewer.lastName].filter(Boolean).join(' ')
-                                                        || item.interviewer.email
-                                                        || 'Assigned'}
-                                                </p>
-                                            )}
-                                            {item.meetingLink && <a href={item.meetingLink} className="text-theme-secondary hover:underline" target="_blank" rel="noreferrer">Join link</a>}
-                                            {item.feedback?.submittedAt && (
-                                                <p className="mt-2 text-gray-700">
-                                                    Feedback: {item.feedback.recommendation || '—'}
-                                                    {item.feedback.rating != null ? ` · Rating ${item.feedback.rating}` : ''}
-                                                    {item.feedback.technical != null ? ` · Tech ${item.feedback.technical}` : ''}
-                                                    {item.feedback.communication != null ? ` · Comm ${item.feedback.communication}` : ''}
-                                                    {item.feedback.behaviour != null ? ` · Behaviour ${item.feedback.behaviour}` : ''}
-                                                    {item.feedback.comments ? ` — ${item.feedback.comments}` : ''}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ))}
+                                <div className="space-y-4">
+                                    {candidate.interviewSchedule.map((item) => {
+                                        const isCompleted = item.status === 'Completed';
+                                        const hasFb = !!item.feedback?.submittedAt;
+                                        const interviewerName = item.interviewer
+                                            ? ([item.interviewer.name, item.interviewer.lastName].filter(Boolean).join(' ')
+                                                || item.interviewer.email
+                                                || 'Assigned')
+                                            : 'Unassigned';
+                                        const editingThis = feedbackForm.interviewId === item._id;
+                                        return (
+                                            <div key={item._id || `${item.scheduledDate}-${item.interviewType}`} className="rounded-xl border border-gray-200 p-4 text-sm">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900">
+                                                            {item.interviewType || 'Interview'}
+                                                            {candidate.jobPostingId?.jobTitle ? ` — ${candidate.jobPostingId.jobTitle}` : ''}
+                                                        </p>
+                                                        <p className="text-gray-500">
+                                                            {item.scheduledDate ? format(new Date(item.scheduledDate), 'dd MMM yyyy') : 'No date'}
+                                                            {item.scheduledTime ? ` · ${item.scheduledTime}` : ''}
+                                                            {item.location ? ` · ${item.location}` : ''}
+                                                        </p>
+                                                        <p className="mt-1 text-gray-700">Interviewer: {interviewerName}</p>
+                                                        {item.meetingLink && (
+                                                            <a href={item.meetingLink} className="text-theme-secondary hover:underline" target="_blank" rel="noreferrer">Join link</a>
+                                                        )}
+                                                    </div>
+                                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                                        isCompleted ? 'bg-emerald-100 text-emerald-800'
+                                                            : item.status === 'Cancelled' ? 'bg-red-100 text-red-800'
+                                                                : 'bg-amber-100 text-amber-800'
+                                                    }`}>
+                                                        {item.status || 'Scheduled'}
+                                                    </span>
+                                                </div>
+
+                                                {!isCompleted && item.status !== 'Cancelled' && !screeningLocked && (
+                                                    <div className="mt-3">
+                                                        <p className="mb-2 text-xs text-gray-500">
+                                                            Feedback is hidden until this interview is Completed.
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy}
+                                                            onClick={() => markInterviewCompleted(item._id)}
+                                                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                                                        >
+                                                            Mark as Completed
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {isCompleted && hasFb && (
+                                                    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
+                                                        <p className="font-semibold text-emerald-900">Interview Feedback</p>
+                                                        <p className="mt-1 text-gray-700">Interviewer: {interviewerName}</p>
+                                                        <p className="text-gray-700">
+                                                            Recommendation: {item.feedback.recommendation || '—'}
+                                                            {item.feedback.rating != null ? ` · Overall ${item.feedback.rating}/10` : ''}
+                                                        </p>
+                                                        <p className="text-gray-600">
+                                                            {item.feedback.technical != null ? `Tech ${item.feedback.technical}` : ''}
+                                                            {item.feedback.communication != null ? ` · Comm ${item.feedback.communication}` : ''}
+                                                            {item.feedback.behaviour != null ? ` · Behaviour ${item.feedback.behaviour}` : ''}
+                                                        </p>
+                                                        {item.feedback.comments && (
+                                                            <p className="mt-2 whitespace-pre-wrap text-gray-700">{item.feedback.comments}</p>
+                                                        )}
+                                                        <p className="mt-2 text-xs text-gray-500">
+                                                            Submitted {item.feedback.submittedAt
+                                                                ? format(new Date(item.feedback.submittedAt), 'dd MMM yyyy, h:mm a')
+                                                                : '—'}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {isCompleted && !hasFb && !screeningLocked && (
+                                                    <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50/80 p-3">
+                                                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                            <h3 className="font-semibold text-gray-800">Submit Feedback</h3>
+                                                            {!editingThis && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-xs font-medium text-theme-secondary hover:underline"
+                                                                    onClick={() => setFeedbackForm((p) => ({
+                                                                        ...p,
+                                                                        interviewId: item._id,
+                                                                        rating: '',
+                                                                        technical: '',
+                                                                        communication: '',
+                                                                        behaviour: '',
+                                                                        recommendation: 'Hire',
+                                                                        comments: '',
+                                                                    }))}
+                                                                >
+                                                                    Enter feedback
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        {editingThis ? (
+                                                            <form onSubmit={(e) => submitFeedback(e, item._id)} className="space-y-3">
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    <input type="number" min="0" max="10" placeholder="Overall rating" className="rounded-lg border px-3 py-2" value={feedbackForm.rating} onChange={(e) => setFeedbackForm((p) => ({ ...p, rating: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Technical" className="rounded-lg border px-3 py-2" value={feedbackForm.technical} onChange={(e) => setFeedbackForm((p) => ({ ...p, technical: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Communication" className="rounded-lg border px-3 py-2" value={feedbackForm.communication} onChange={(e) => setFeedbackForm((p) => ({ ...p, communication: e.target.value }))} />
+                                                                    <input type="number" min="0" max="10" placeholder="Behaviour" className="rounded-lg border px-3 py-2" value={feedbackForm.behaviour} onChange={(e) => setFeedbackForm((p) => ({ ...p, behaviour: e.target.value }))} />
+                                                                </div>
+                                                                <select className="w-full rounded-lg border px-3 py-2" value={feedbackForm.recommendation} onChange={(e) => setFeedbackForm((p) => ({ ...p, recommendation: e.target.value }))}>
+                                                                    {['Strong Hire', 'Hire', 'Maybe', 'No Hire'].map((r) => <option key={r} value={r}>{r}</option>)}
+                                                                </select>
+                                                                <textarea rows={3} className="w-full rounded-lg border px-3 py-2" placeholder="Comments" value={feedbackForm.comments} onChange={(e) => setFeedbackForm((p) => ({ ...p, comments: e.target.value }))} />
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Save feedback</button>
+                                                                    <button type="button" className="rounded-lg border px-3 py-2 text-gray-600" onClick={() => setFeedbackForm((p) => ({ ...p, interviewId: '' }))}>Cancel</button>
+                                                                </div>
+                                                            </form>
+                                                        ) : (
+                                                            <p className="text-xs text-gray-500">
+                                                                No feedback yet. Assigned interviewer can submit from My interviews, or HR can enter feedback here.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             ) : <p className="text-sm text-gray-500">No interviews scheduled.</p>}
                         </section>
@@ -749,66 +1092,163 @@ const CandidateDetailPage = () => {
                 )}
 
                 {activeTab === 'comms' && (
-                    <div className="grid gap-6 lg:grid-cols-2">
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="mb-4 text-lg font-semibold">Send / Log communication</h2>
-                            <div className="mb-4 flex flex-wrap gap-2">
-                                {[
-                                    { type: 'interview_invite', label: 'Interview Invite' },
-                                    { type: 'interview_reminder', label: 'Interview Reminder' },
-                                    { type: 'offer_reminder', label: 'Offer Reminder' },
-                                    { type: 'joining_reminder', label: 'Joining Reminder' },
-                                ].map((btn) => (
-                                    <button
-                                        key={btn.type}
-                                        type="button"
-                                        disabled={busy}
-                                        className="rounded-lg border px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50"
-                                        onClick={async () => {
-                                            try {
-                                                setBusy(true);
-                                                await axios.post(`/v1/admin/recruitment/candidates/${id}/send-email`, { type: btn.type }, { withCredentials: true });
-                                                toast.success('Email sent & logged');
-                                                fetchCandidate();
-                                            } catch (err) {
-                                                toast.error(err.response?.data?.message || 'Send failed');
-                                            } finally {
-                                                setBusy(false);
-                                            }
-                                        }}
-                                    >
-                                        {btn.label}
-                                    </button>
-                                ))}
-                            </div>
-                            <form onSubmit={logComm} className="space-y-3 text-sm">
-                                <select className="w-full rounded-lg border px-3 py-2" value={commForm.channel} onChange={(e) => setCommForm((p) => ({ ...p, channel: e.target.value }))}>
-                                    {['email', 'sms', 'whatsapp', 'call', 'meeting', 'note'].map((c) => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                                <input className="w-full rounded-lg border px-3 py-2" placeholder="Subject" value={commForm.subject} onChange={(e) => setCommForm((p) => ({ ...p, subject: e.target.value }))} />
-                                <textarea required rows={4} className="w-full rounded-lg border px-3 py-2" placeholder="Body / notes" value={commForm.body} onChange={(e) => setCommForm((p) => ({ ...p, body: e.target.value }))} />
-                                <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Log</button>
-                            </form>
-                        </section>
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="mb-4 text-lg font-semibold">Timeline</h2>
-                            {(candidate.communications || []).length ? (
-                                <div className="relative space-y-0 border-l-2 border-gray-200 pl-4">
-                                    {[...candidate.communications].reverse().map((c, i) => (
-                                        <div key={i} className="relative mb-4 pb-2">
-                                            <span className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-theme-secondary" />
-                                            <p className="text-xs uppercase tracking-wide text-gray-400">
-                                                {c.createdAt ? format(new Date(c.createdAt), 'dd MMM yyyy HH:mm') : ''}
-                                                {c.autoLogged ? ' · auto' : ''}
-                                            </p>
-                                            <p className="font-medium capitalize">{c.channel} · {c.direction}{c.emailType ? ` · ${c.emailType}` : ''}</p>
-                                            {c.subject && <p className="text-gray-700">{c.subject}</p>}
-                                            <p className="text-sm text-gray-600 whitespace-pre-wrap">{c.body}</p>
-                                        </div>
+                    <div className="space-y-6">
+                        <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
+                            {/* <p className="font-medium">HR communication hub (not visible to candidates)</p>
+                            <p className="mt-1 text-sky-800/90">
+                                Quick actions send a <strong>real email</strong> to{' '}
+                                <span className="font-semibold">{candidate.email || '— no email on file —'}</span>
+                                {' '}(Gmail / Outlook / etc.). The candidate does not see this EMS timeline.
+                                {candidate.source === 'Email' ? (
+                                    <span className="mt-1 block">
+                                        Applied via <strong>Email / Resume Inbox</strong> — same send &amp; log tools as Career Portal applicants.
+                                    </span>
+                                ) : (
+                                    <span className="mt-1 block">
+                                        Source: <strong>{candidate.source || '—'}</strong>
+                                    </span>
+                                )}
+                            </p> */}
+                        </div>
+
+                        <div className="grid gap-6 lg:grid-cols-2">
+                            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                                <h2 className="mb-1 text-lg font-semibold text-gray-800">Send email to candidate</h2>
+                                {/* <p className="mb-4 text-xs text-gray-500">
+                                    Sends one real email and adds one auto-logged outbound entry to the timeline.
+                                </p> */}
+                                {screeningLocked && (
+                                    <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">
+                                        Failed screening — outbound emails are blocked. You can still add internal logs below.
+                                    </p>
+                                )}
+                                {!candidate.email && (
+                                    <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                        No candidate email on file — cannot send.
+                                    </p>
+                                )}
+                                <div className="mb-6 flex flex-wrap gap-2">
+                                    {EMAIL_ACTION_BUTTONS.map((btn) => (
+                                        <button
+                                            key={btn.type}
+                                            type="button"
+                                            disabled={busy || screeningLocked || !candidate.email}
+                                            title={btn.needs}
+                                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                                            onClick={() => sendQuickEmail(btn.type)}
+                                        >
+                                            {btn.label}
+                                        </button>
                                     ))}
                                 </div>
-                            ) : <p className="text-sm text-gray-500">No communications logged.</p>}
-                        </section>
+                                <p className="mb-1 text-xs text-gray-400">
+                                    Click a button to open a short form — assign a job/role and complete any missing interview details, then send.
+                                </p>
+
+                                <h3 className="mb-1 mt-6 text-base font-semibold text-gray-800">Log internal record</h3>
+                                {/* <p className="mb-3 text-xs text-gray-500">
+                                    Saves an HR-only history entry. Does <strong>not</strong> send email, SMS, or WhatsApp.
+                                </p> */}
+                                <form onSubmit={logComm} className="space-y-3 text-sm">
+                                    <select
+                                        className="w-full rounded-lg border px-3 py-2"
+                                        value={commForm.channel}
+                                        onChange={(e) => setCommForm((p) => ({ ...p, channel: e.target.value }))}
+                                    >
+                                        {[
+                                            { value: 'note', label: 'note (internal)' },
+                                            { value: 'call', label: 'call (log only)' },
+                                            { value: 'meeting', label: 'meeting (log only)' },
+                                            { value: 'email', label: 'email (log only — does not send)' },
+                                            { value: 'sms', label: 'sms (log only — does not send)' },
+                                            { value: 'whatsapp', label: 'whatsapp (log only — does not send)' },
+                                        ].map((c) => (
+                                            <option key={c.value} value={c.value}>{c.label}</option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        className="w-full rounded-lg border px-3 py-2"
+                                        placeholder="Subject (optional)"
+                                        value={commForm.subject}
+                                        onChange={(e) => setCommForm((p) => ({ ...p, subject: e.target.value }))}
+                                    />
+                                    <textarea
+                                        required
+                                        rows={4}
+                                        className="w-full rounded-lg border px-3 py-2"
+                                        placeholder="Body / internal notes"
+                                        value={commForm.body}
+                                        onChange={(e) => setCommForm((p) => ({ ...p, body: e.target.value }))}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={busy}
+                                        className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60"
+                                    >
+                                        Log (HR only)
+                                    </button>
+                                </form>
+                            </section>
+
+                            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                                <h2 className="mb-1 text-lg font-semibold text-gray-800">Communication timeline</h2>
+                                {/* <p className="mb-4 text-xs text-gray-500">
+                                    HR history only — inbound mailbox, outbound emails, and internal logs.
+                                </p> */}
+                                <div className="mb-4 flex flex-wrap gap-2 text-xs">
+                                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">Inbound</span>
+                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">Outbound (emailed)</span>
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">Internal</span>
+                                </div>
+                                {(candidate.communications || []).length ? (
+                                    <div className="relative max-h-[32rem] space-y-0 overflow-y-auto border-l-2 border-gray-200 pl-4">
+                                        {[...candidate.communications].reverse().map((c, i) => {
+                                            const cls = classifyCommunication(c);
+                                            const typeLabel = c.emailType
+                                                ? (EMAIL_TYPE_LABELS[c.emailType] || c.emailType)
+                                                : null;
+                                            return (
+                                                <div key={i} className="relative mb-4 pb-2">
+                                                    <span className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full ${
+                                                        cls.kind === 'inbound' ? 'bg-sky-500'
+                                                            : cls.kind === 'outbound' ? 'bg-emerald-500'
+                                                                : 'bg-amber-500'
+                                                    }`}
+                                                    />
+                                                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls.badge}`}>
+                                                            {cls.label}
+                                                        </span>
+                                                        {c.autoLogged && (
+                                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase text-gray-600">
+                                                                auto
+                                                            </span>
+                                                        )}
+                                                        <span className="text-xs text-gray-400">
+                                                            {c.createdAt ? format(new Date(c.createdAt), 'dd MMM yyyy HH:mm') : ''}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm font-medium capitalize text-gray-800">
+                                                        {c.channel}
+                                                        {typeLabel ? ` · ${typeLabel}` : ''}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400">{cls.hint}</p>
+                                                    {c.subject && <p className="mt-1 text-gray-700">{c.subject}</p>}
+                                                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{c.body}</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500">
+                                        No communications yet.
+                                        {candidate.source === 'Email'
+                                            ? ' After Resume Inbox import, inbound resume email should appear here; send an invite to add outbound history.'
+                                            : ' Send an email or log a note to start the history.'}
+                                    </p>
+                                )}
+                            </section>
+                        </div>
                     </div>
                 )}
 
@@ -831,6 +1271,152 @@ const CandidateDetailPage = () => {
                 onClose={() => setHireOpen(false)}
                 onSuccess={() => { setHireOpen(false); fetchCandidate(); }}
             />
+
+            {emailPrep && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                            {EMAIL_TYPE_LABELS[emailPrep.type] || 'Send email'}
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                            Complete the fields below, then send. The email goes to{' '}
+                            <span className="font-medium text-gray-800">{candidate.email}</span>.
+                        </p>
+
+                        <form onSubmit={submitEmailPrep} className="mt-4 space-y-3 text-sm">
+                            <div>
+                                <label className="mb-1 block font-medium text-gray-700">Job / Role *</label>
+                                <select
+                                    required
+                                    className="w-full rounded-lg border px-3 py-2"
+                                    value={emailPrep.jobPostingId}
+                                    onChange={(e) => setEmailPrep((p) => ({ ...p, jobPostingId: e.target.value }))}
+                                >
+                                    <option value="">Select a job posting…</option>
+                                    {jobOptions.map((j) => (
+                                        <option key={j._id} value={j._id}>
+                                            {j.jobTitle}{j.department ? ` · ${j.department}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                {!emailPrep.jobPostingId && (
+                                    <p className="mt-1 text-xs text-amber-700">
+                                        Required — Resume Inbox “Unassigned” cannot be used in the email.
+                                    </p>
+                                )}
+                            </div>
+
+                            {INTERVIEW_EMAIL_TYPES.has(emailPrep.type) && (
+                                <>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <label className="mb-1 block font-medium text-gray-700">Interview type *</label>
+                                            <select
+                                                className="w-full rounded-lg border px-3 py-2"
+                                                value={emailPrep.interviewType}
+                                                onChange={(e) => setEmailPrep((p) => ({ ...p, interviewType: e.target.value }))}
+                                            >
+                                                {['Phone', 'Video', 'On-site', 'Technical', 'Panel', 'Final'].map((t) => (
+                                                    <option key={t} value={t}>{t === 'On-site' ? 'In-Person (On-site)' : t}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block font-medium text-gray-700">Interviewer {!emailPrep.interviewId ? '*' : ''}</label>
+                                            <select
+                                                className="w-full rounded-lg border px-3 py-2"
+                                                value={emailPrep.interviewer}
+                                                onChange={(e) => setEmailPrep((p) => ({ ...p, interviewer: e.target.value }))}
+                                                required={!emailPrep.interviewId}
+                                            >
+                                                <option value="">Select interviewer…</option>
+                                                {interviewers.map((emp) => (
+                                                    <option key={emp._id} value={emp._id}>
+                                                        {[emp.name, emp.lastName].filter(Boolean).join(' ') || emp.email}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <label className="mb-1 block font-medium text-gray-700">Date *</label>
+                                            <input
+                                                type="date"
+                                                required
+                                                className="w-full rounded-lg border px-3 py-2"
+                                                value={emailPrep.scheduledDate}
+                                                onChange={(e) => setEmailPrep((p) => ({ ...p, scheduledDate: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block font-medium text-gray-700">Time *</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                placeholder="e.g. 10:00 – 11:00"
+                                                className="w-full rounded-lg border px-3 py-2"
+                                                value={emailPrep.scheduledTime}
+                                                onChange={(e) => setEmailPrep((p) => ({ ...p, scheduledTime: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block font-medium text-gray-700">Meeting link</label>
+                                        <input
+                                            type="url"
+                                            placeholder="https://…"
+                                            className="w-full rounded-lg border px-3 py-2"
+                                            value={emailPrep.meetingLink}
+                                            onChange={(e) => setEmailPrep((p) => ({ ...p, meetingLink: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block font-medium text-gray-700">Location</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Office / dial-in details"
+                                            className="w-full rounded-lg border px-3 py-2"
+                                            value={emailPrep.location}
+                                            onChange={(e) => setEmailPrep((p) => ({ ...p, location: e.target.value }))}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {emailPrep.type === 'joining_reminder' && (
+                                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                    Joining date and hiring state must already be set on the candidate. This form assigns the job title used in the email.
+                                </p>
+                            )}
+
+                            {emailPrep.type === 'offer_reminder' && (
+                                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                    A sent offer with portal link is still required. This form assigns the job title used in the email.
+                                </p>
+                            )}
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    className="rounded-lg border px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    onClick={() => setEmailPrep(null)}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={busy}
+                                    className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-50"
+                                >
+                                    {busy ? 'Sending…' : 'Save & send email'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

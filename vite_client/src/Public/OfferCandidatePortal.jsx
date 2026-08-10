@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { FaCheckCircle, FaFilePdf, FaTimesCircle } from 'react-icons/fa';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { PUBLIC_LIFECYCLE_ENDPOINT } from '../utils/constant';
+import OfferLetterHtmlPreview from '../components/recruitment/OfferLetterHtmlPreview';
 
 const OfferCandidatePortal = () => {
     const { token } = useParams();
@@ -114,10 +115,13 @@ const OfferCandidatePortal = () => {
                     </a>
                 )}
 
-                <div
-                    className="prose prose-sm max-w-none rounded-xl border bg-gray-50/60 p-5"
-                    dangerouslySetInnerHTML={{ __html: offer.bodyHtml || '<p>Offer details are attached as PDF.</p>' }}
-                />
+                <div className="rounded-xl border bg-gray-50/60 p-5">
+                    {(offer.templateType === 'pdf' || (!offer.bodyHtml?.trim() && offer.pdfUrl)) ? (
+                        <iframe title="Offer letter" src={offer.pdfUrl} className="h-[560px] w-full rounded-lg border bg-white" />
+                    ) : (
+                        <OfferLetterHtmlPreview html={offer.bodyHtml || '<p>Offer details are attached as PDF.</p>'} />
+                    )}
+                </div>
 
                 <div className="mt-8 space-y-4 rounded-xl border p-5">
                     <h2 className="font-semibold text-gray-800">Your response</h2>
