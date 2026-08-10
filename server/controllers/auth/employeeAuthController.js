@@ -32,6 +32,7 @@ import {
     syncLinkedUserForSystemRole,
 } from '../../helpers/systemRoleService.js';
 import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
+import { buildEmployeeProbationFromOptIn } from '../../helpers/employeeProbationSyncHelper.js';
 
 // Generate token with employeeId instead of email
 
@@ -162,6 +163,9 @@ export const registerEmployee = async (req, res) => {
             systemRole: systemRoleInput,
             confirmReplace = false,
             linkAsOrgOwnerMe = false,
+            onProbation = false,
+            probationMonths = 6,
+            joiningDate: joiningDateInput,
         } = req.body;
 
         let systemRole = systemRoleInput;
@@ -365,6 +369,11 @@ export const registerEmployee = async (req, res) => {
             profileToUpdate.salary = salary;
             profileToUpdate.status = profileToUpdate.status || 'active';
             profileToUpdate.active = profileToUpdate.active !== false;
+            profileToUpdate.probation = buildEmployeeProbationFromOptIn({
+                onProbation,
+                probationMonths,
+                joiningDate: joiningDateInput || profileToUpdate.joiningDate || new Date(),
+            });
             if (!profileToUpdate.userId) {
                 profileToUpdate.userId = linkedOrgUser._id;
             }
@@ -507,6 +516,7 @@ export const registerEmployee = async (req, res) => {
         }
 
         // Create the employee (normalize email to lowercase)
+        const joiningDate = joiningDateInput ? new Date(joiningDateInput) : new Date();
         const employee = new Employee({
             organizationId, // Add organizationId
             ...(linkedToExistingUser && linkedOrgUser
@@ -525,6 +535,12 @@ export const registerEmployee = async (req, res) => {
             jobTitle,
             jobCategory,
             salary,
+            joiningDate: Number.isNaN(joiningDate.getTime()) ? new Date() : joiningDate,
+            probation: buildEmployeeProbationFromOptIn({
+                onProbation,
+                probationMonths,
+                joiningDate: Number.isNaN(joiningDate.getTime()) ? new Date() : joiningDate,
+            }),
             role: 'employee',
             mustResetPassword: mustResetPassword,
             hasCompletedFirstLogin: linkedToExistingUser ? true : false,

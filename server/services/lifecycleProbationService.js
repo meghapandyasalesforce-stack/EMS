@@ -7,13 +7,27 @@ import { notify } from '../helpers/notificationManager.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
 import { syncEmployeeProbationFromWorkflow } from '../helpers/employeeProbationSyncHelper.js';
 
-export function initProbationForWorkflow(workflow, { probationMonths = 6, joiningDate } = {}) {
-    const start = joiningDate || workflow.joiningDate || workflow.startDate || new Date();
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + probationMonths);
+export function initProbationForWorkflow(workflow, { probationMonths = 6, joiningDate, startDate = null, endDate = null } = {}) {
+    const startRaw = startDate || joiningDate || workflow.joiningDate || workflow.startDate || new Date();
+    const start = new Date(startRaw);
+    const startDay = Number.isNaN(start.getTime())
+        ? new Date()
+        : new Date(start.getFullYear(), start.getMonth(), start.getDate());
+
+    let end;
+    if (endDate) {
+        const parsedEnd = new Date(endDate);
+        end = Number.isNaN(parsedEnd.getTime())
+            ? null
+            : new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate());
+    }
+    if (!end) {
+        end = new Date(startDay);
+        end.setMonth(end.getMonth() + Math.max(1, Math.min(36, Number(probationMonths) || 6)));
+    }
 
     workflow.probation = workflow.probation?.startDate ? workflow.probation : {
-        startDate: start,
+        startDate: startDay,
         endDate: end,
         originalEndDate: end,
         status: 'Active',

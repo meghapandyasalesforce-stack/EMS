@@ -476,8 +476,8 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
                 : 0;
         const paidLeaveDaysVal = formatPayslipDayCount(paidLeaveDerived, '0');
         const unpaidLeaveVal = formatPayslipDayCount(payrollData.unpaidLeave, '0');
-        const col1End = margin + contentWidth * 0.52;
-        const col2End = margin + contentWidth * 0.76;
+        const col1End = margin + halfWidth; // align with Employee Details / Earnings center
+        const col2End = margin + halfWidth + halfWidth / 2;
         const cellPadSalary = 4;
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -518,7 +518,7 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         });
         yPos += 5;
 
-        // ==================== EARNING AND DEDUCTION (Label | Current | YTD × 2) ====================
+        // ==================== EARNING AND DEDUCTION (Earning Head | Amount | Deduction Head | Amount) ====================
         yPos = checkPageBreak(doc, yPos, pageHeight, margin, 50);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -530,93 +530,48 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         const earningsExclude = ['totalEarnings', 'total', 'gratuity', 'pfEmployer', 'esiEmployer'];
         const deductionsExclude = ['total', 'totalDeductions'];
         const earningsForPdf = normalizePayslipEarnings(payrollData.earnings);
-        const ytdEarningsMap =
-            payrollData.ytdEarnings && typeof payrollData.ytdEarnings === 'object'
-                ? { ...payrollData.ytdEarnings }
-                : {};
-        const ytdDeductionsMap =
-            payrollData.ytdDeductions && typeof payrollData.ytdDeductions === 'object'
-                ? { ...payrollData.ytdDeductions }
-                : {};
         let earningsTotal = 0;
         let deductionsTotal = 0;
-        let earningsYtdTotal = 0;
-        let deductionsYtdTotal = 0;
-        const earningsKeys = new Set([
-            ...Object.keys(earningsForPdf).filter((key) => {
-                const numValue = Number(earningsForPdf[key]);
-                return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
-            }),
-            ...Object.keys(ytdEarningsMap).filter((key) => {
-                const numValue = Number(ytdEarningsMap[key]);
+        const earningsEntries = Object.entries(earningsForPdf)
+            .filter(([key, value]) => {
+                const numValue = Number(value);
                 return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
             })
-        ]);
+            .sort((a, b) => Number(b[1]) - Number(a[1]));
         const normalizedDeductions = (payrollData.deductions && typeof payrollData.deductions === 'object')
             ? { ...payrollData.deductions }
             : {};
-        // Keep payslip behavior aligned with payroll: PF auto-calculated as 12% of capped PF wage.
         const basicWageForPf = Number(payrollData.earnings?.basicWage) || 0;
         const autoPfEmployee = employeePfFromBasicWage(basicWageForPf);
         if (!(Number(normalizedDeductions.pfEmployee) > 0) && autoPfEmployee > 0) {
             normalizedDeductions.pfEmployee = autoPfEmployee;
         }
-        const deductionsKeys = new Set([
-            ...Object.keys(normalizedDeductions).filter((key) => {
-                const numValue = Number(normalizedDeductions[key]);
-                return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
-            }),
-            ...Object.keys(ytdDeductionsMap).filter((key) => {
-                const numValue = Number(ytdDeductionsMap[key]);
+        const deductionsEntries = Object.entries(normalizedDeductions)
+            .filter(([key, value]) => {
+                const numValue = Number(value);
                 return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
             })
-        ]);
-        const resolveYtd = (map, key, current) =>
-            Object.prototype.hasOwnProperty.call(map, key) ? (Number(map[key]) || 0) : (Number(current) || 0);
-        const earningsEntries = [...earningsKeys]
-            .map((key) => {
-                const current = Number(earningsForPdf[key]) || 0;
-                return [key, current, resolveYtd(ytdEarningsMap, key, current)];
-            })
-            .filter(([, current, ytd]) => current > 0 || ytd > 0)
-            .sort((a, b) => Number(b[1]) - Number(a[1]) || Number(b[2]) - Number(a[2]));
-        const deductionsEntries = [...deductionsKeys]
-            .map((key) => {
-                const current = Number(normalizedDeductions[key]) || 0;
-                return [key, current, resolveYtd(ytdDeductionsMap, key, current)];
-            })
-            .filter(([, current, ytd]) => current > 0 || ytd > 0)
-            .sort((a, b) => Number(b[1]) - Number(a[1]) || Number(b[2]) - Number(a[2]));
-        earningsEntries.forEach(([, current, ytd]) => {
-            earningsTotal += Number(current);
-            earningsYtdTotal += Number(ytd);
-        });
-        deductionsEntries.forEach(([, current, ytd]) => {
-            deductionsTotal += Number(current);
-            deductionsYtdTotal += Number(ytd);
-        });
-        // Recompute totals from the exact rows we are going to render (after PF normalization),
-        // so "Total Earnings / Total Deductions / Net Amount" always match the table.
+            .sort((a, b) => Number(b[1]) - Number(a[1]));
+        earningsEntries.forEach(([, value]) => { earningsTotal += Number(value); });
+        deductionsEntries.forEach(([, value]) => { deductionsTotal += Number(value); });
         const totalEarnings = earningsTotal;
         const totalDeductions = deductionsTotal;
         const maxRows = Math.max(earningsEntries.length, deductionsEntries.length, 1);
-        const half = contentWidth / 2;
-        const labelW = half * 0.48;
-        const curW = half * 0.26;
-        const ytdW = half * 0.26;
-        const leftHalf = half;
+        const colW1 = contentWidth * 0.38;
+        const colW2 = contentWidth * 0.12;
+        const colW3 = contentWidth * 0.38;
+        const colW4 = contentWidth * 0.12;
+        const leftHalf = colW1 + colW2;
         const tableTopY = yPos;
         doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
         doc.rect(margin, yPos, leftHalf, 8, 'F');
-        doc.rect(margin + leftHalf, yPos, half, 8, 'F');
+        doc.rect(margin + leftHalf, yPos, colW3 + colW4, 8, 'F');
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text('Earnings', margin + 2, yPos + 5.5);
-        doc.text('Current (INR)', margin + labelW + curW - 2, yPos + 5.5, { align: 'right' });
-        doc.text('YTD (INR)', margin + labelW + curW + ytdW - 2, yPos + 5.5, { align: 'right' });
-        doc.text('Deductions', margin + leftHalf + 2, yPos + 5.5);
-        doc.text('Current (INR)', margin + leftHalf + labelW + curW - 2, yPos + 5.5, { align: 'right' });
-        doc.text('YTD (INR)', margin + leftHalf + labelW + curW + ytdW - 2, yPos + 5.5, { align: 'right' });
+        doc.text('Earning Head', margin + 2, yPos + 5.5);
+        doc.text(period, margin + colW1 + 2, yPos + 5.5);
+        doc.text('Deduction Head', margin + leftHalf + 2, yPos + 5.5);
+        doc.text(period, margin + leftHalf + colW3 + 2, yPos + 5.5);
         yPos += 8;
         doc.setFont('helvetica', 'normal');
         doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
@@ -625,18 +580,16 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
             yPos = checkPageBreak(doc, yPos, pageHeight, margin, 8);
             const earn = earningsEntries[i];
             const ded = deductionsEntries[i];
-            if (earn) {
-                const earnLabelLine = doc.splitTextToSize(sanitizeText(formatLabel(earn[0])), labelW - 3)[0] || '';
-                doc.text(earnLabelLine, margin + 2, yPos + 5);
-                doc.text(formatAmount(earn[1]), margin + labelW + curW - 2, yPos + 5, { align: 'right' });
-                doc.text(formatAmount(earn[2]), margin + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
-            }
-            if (ded) {
-                const dedLabelLine = doc.splitTextToSize(sanitizeText(formatLabel(ded[0])), labelW - 3)[0] || '';
-                doc.text(dedLabelLine, margin + leftHalf + 2, yPos + 5);
-                doc.text(formatAmount(ded[1]), margin + leftHalf + labelW + curW - 2, yPos + 5, { align: 'right' });
-                doc.text(formatAmount(ded[2]), margin + leftHalf + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
-            }
+            const earnLabel = earn ? formatLabel(earn[0]) : '';
+            const earnAmt = earn ? formatAmount(earn[1]) : '';
+            const dedLabel = ded ? formatLabel(ded[0]) : '';
+            const dedAmt = ded ? formatAmount(ded[1]) : '';
+            const earnLabelLine = doc.splitTextToSize(sanitizeText(earnLabel), colW1 - 2)[0] || '';
+            const dedLabelLine = doc.splitTextToSize(sanitizeText(dedLabel), colW3 - 2)[0] || '';
+            doc.text(earnLabelLine, margin + 2, yPos + 5);
+            doc.text(earnAmt, margin + colW1 + colW2 - 2, yPos + 5, { align: 'right' });
+            doc.text(dedLabelLine, margin + leftHalf + 2, yPos + 5);
+            doc.text(dedAmt, margin + leftHalf + colW3 + colW4 - 2, yPos + 5, { align: 'right' });
             doc.line(margin, yPos + 6, pageWidth - margin, yPos + 6);
             yPos += 7;
         }
@@ -646,24 +599,14 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         yPos += 5;
         doc.setFont('helvetica', 'bold');
         doc.text('Gross Earnings', margin + 2, yPos + 5);
-        doc.text(formatAmount(totalEarnings), margin + labelW + curW - 2, yPos + 5, { align: 'right' });
-        doc.text(formatAmount(earningsYtdTotal), margin + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
+        doc.text(formatAmount(totalEarnings), margin + colW1 + colW2 - 2, yPos + 5, { align: 'right' });
         doc.text('Total Deductions', margin + leftHalf + 2, yPos + 5);
-        doc.text(formatAmount(totalDeductions), margin + leftHalf + labelW + curW - 2, yPos + 5, { align: 'right' });
-        doc.text(formatAmount(deductionsYtdTotal), margin + leftHalf + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
+        doc.text(formatAmount(totalDeductions), margin + leftHalf + colW3 + colW4 - 2, yPos + 5, { align: 'right' });
         doc.setFont('helvetica', 'normal');
         const tableBottomY = yPos + 12;
-        const earnCurYtdX = margin + labelW + curW;
-        const dedCurYtdX = margin + leftHalf + labelW + curW;
-        // Main split: Earnings | Deductions (darker)
         doc.setDrawColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
         doc.setLineWidth(0.4);
         doc.line(margin + leftHalf, tableTopY, margin + leftHalf, tableBottomY);
-        // Inner splits: Current | YTD (lighter)
-        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
-        doc.setLineWidth(0.3);
-        doc.line(earnCurYtdX, tableTopY, earnCurYtdX, tableBottomY);
-        doc.line(dedCurYtdX, tableTopY, dedCurYtdX, tableBottomY);
         yPos += 14;
 
         // ==================== NET AMOUNT + AMOUNT IN WORDS ====================

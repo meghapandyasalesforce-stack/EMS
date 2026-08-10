@@ -18,7 +18,11 @@ import { resolveGatedOnboardingTemplate, ensureDefaultOnboardingTemplate } from 
 import { applyPackArtifactsToOnboardingWorkflow } from './lifecyclePackWorkflowService.js';
 import { seedMilestonesForWorkflow } from './lifecycleMilestoneService.js';
 import { initProbationForWorkflow } from './lifecycleProbationService.js';
-import { syncEmployeeProbationFromWorkflow } from '../helpers/employeeProbationSyncHelper.js';
+import {
+    syncEmployeeProbationFromWorkflow,
+    employeeHasActiveProbation,
+    resolveProbationMonthsFromEmployee,
+} from '../helpers/employeeProbationSyncHelper.js';
 import { createBgvCase } from './backgroundVerificationService.js';
 import { syncFormGateToWorkflow } from './lifecycleFormGateService.js';
 import { syncGoalsProgressToWorkflow, autoAssignDefaultProbationGoals } from './lifecycleGoalIntegrationService.js';
@@ -830,8 +834,17 @@ export async function createEmployeeOnboardingWorkflow({
     if (isFeatureEnabled(lifecycleSettings, 'milestone30_60_90')) {
         seedMilestonesForWorkflow(workflow, effectiveJoining);
     }
-    if (isFeatureEnabled(lifecycleSettings, 'probation')) {
-        initProbationForWorkflow(workflow, { joiningDate: effectiveJoining });
+    // Probation is opt-in at employee create / Job Details — never auto-start for every hire
+    if (
+        isFeatureEnabled(lifecycleSettings, 'probation') &&
+        employeeHasActiveProbation(employee)
+    ) {
+        initProbationForWorkflow(workflow, {
+            joiningDate: effectiveJoining,
+            probationMonths: resolveProbationMonthsFromEmployee(employee, 6),
+            startDate: employee.probation?.startDate || null,
+            endDate: employee.probation?.endDate || null,
+        });
     }
     await syncFormGateToWorkflow(workflow, organizationId);
     if (isFeatureEnabled(lifecycleSettings, 'goalAssignment')) {
@@ -841,7 +854,7 @@ export async function createEmployeeOnboardingWorkflow({
 
     applyProgressToWorkflow(workflow, lifecycleSettings);
     await workflow.save();
-    if (isFeatureEnabled(lifecycleSettings, 'probation') && workflow.probation) {
+    if (workflow.probation && employeeHasActiveProbation(employee)) {
         await syncEmployeeProbationFromWorkflow(workflow);
     }
 
