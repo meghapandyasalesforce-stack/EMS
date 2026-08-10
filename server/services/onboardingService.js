@@ -18,6 +18,7 @@ import { resolveGatedOnboardingTemplate, ensureDefaultOnboardingTemplate } from 
 import { applyPackArtifactsToOnboardingWorkflow } from './lifecyclePackWorkflowService.js';
 import { seedMilestonesForWorkflow } from './lifecycleMilestoneService.js';
 import { initProbationForWorkflow } from './lifecycleProbationService.js';
+import { syncEmployeeProbationFromWorkflow } from '../helpers/employeeProbationSyncHelper.js';
 import { createBgvCase } from './backgroundVerificationService.js';
 import { syncFormGateToWorkflow } from './lifecycleFormGateService.js';
 import { syncGoalsProgressToWorkflow, autoAssignDefaultProbationGoals } from './lifecycleGoalIntegrationService.js';
@@ -840,6 +841,9 @@ export async function createEmployeeOnboardingWorkflow({
 
     applyProgressToWorkflow(workflow, lifecycleSettings);
     await workflow.save();
+    if (isFeatureEnabled(lifecycleSettings, 'probation') && workflow.probation) {
+        await syncEmployeeProbationFromWorkflow(workflow);
+    }
 
     if (isFeatureEnabled(lifecycleSettings, 'backgroundVerification')) {
         try {

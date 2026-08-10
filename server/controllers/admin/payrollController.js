@@ -316,6 +316,7 @@ export const updatePayroll = async (req, res) => {
                     updateData.workingDays = generatedPayload.workingDays;
                     updateData.presentDays = generatedPayload.presentDays;
                     updateData.unpaidLeave = generatedPayload.unpaidLeave;
+                    updateData.paidLeaveDays = generatedPayload.paidLeaveDays;
                     updateData.leaves = generatedPayload.leaves;
                     updateData.generationType = recomputeMode === 'preview' ? 'preview' : 'final';
                     updateData.isProvisional = recomputeMode === 'preview';
@@ -606,6 +607,7 @@ export const createPayroll = async (req, res) => {
                 workingDays: generatedPayload.workingDays,
                 presentDays: generatedPayload.presentDays,
                 unpaidLeave: generatedPayload.unpaidLeave,
+                paidLeaveDays: generatedPayload.paidLeaveDays,
                 generationType: recomputeMode === 'preview' ? 'preview' : 'final',
                 isProvisional: recomputeMode === 'preview'
             };
@@ -676,7 +678,8 @@ export const createPayroll = async (req, res) => {
                 ? {
                     workingDays: monthlyGeneratedData?.workingDays,
                     presentDays: monthlyGeneratedData?.presentDays,
-                    unpaidLeave: monthlyGeneratedData?.unpaidLeave
+                    unpaidLeave: monthlyGeneratedData?.unpaidLeave,
+                    paidLeaveDays: monthlyGeneratedData?.paidLeaveDays
                 }
                 : {})
         });

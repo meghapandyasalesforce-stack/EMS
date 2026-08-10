@@ -11,6 +11,7 @@ import { assignSystemRoleToEmployee } from '../../helpers/systemRoleService.js';
 import { SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
 import { buildSalaryRevisionEntries } from '../../helpers/salaryRevisionHelper.js';
 import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
+import { syncWorkflowProbationFromEmployee } from '../../helpers/employeeProbationSyncHelper.js';
 
 async function resolveManagerReference(organizationId, managerInput) {
   const raw = String(managerInput || '').trim();
@@ -53,7 +54,7 @@ async function resolveManagerReference(organizationId, managerInput) {
 export const updateEmployeeWorkInfo = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote } = req.body;
+    const { jobTitle, department, position, manager, salary, joiningDate, performanceScore, salaryEffectiveFrom, salaryRevisionNote, probation } = req.body;
 
     // Validate employee ID
     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
@@ -141,15 +142,55 @@ export const updateEmployeeWorkInfo = async (req, res) => {
     }
     if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
     if (performanceScore !== undefined) updateData.performanceScore = performanceScore;
+    if (probation !== undefined && probation !== null && typeof probation === 'object') {
+      const nextProbation = {
+        ...(employee.probation?.toObject?.() || employee.probation || {}),
+      };
+      if (probation.status !== undefined) nextProbation.status = probation.status;
+      if (probation.startDate !== undefined) {
+        nextProbation.startDate = probation.startDate ? new Date(probation.startDate) : null;
+      }
+      if (probation.endDate !== undefined) {
+        nextProbation.endDate = probation.endDate ? new Date(probation.endDate) : null;
+      }
+      if (probation.confirmedAt !== undefined) {
+        nextProbation.confirmedAt = probation.confirmedAt
+          ? new Date(probation.confirmedAt)
+          : null;
+      }
+      if (probation.rejectedAt !== undefined) {
+        nextProbation.rejectedAt = probation.rejectedAt
+          ? new Date(probation.rejectedAt)
+          : null;
+      }
+      updateData.probation = nextProbation;
+    }
 
     const workProfileChanged =
       jobTitle !== undefined || department !== undefined || position !== undefined;
+    const probationChanged = updateData.probation !== undefined;
 
   let updatedEmployee = await Employee.findOneAndUpdate(
     { _id: employeeId, organizationId },
     updateData,
     { new: true, runValidators: true }
   ).select('-password -role').lean();
+
+  // Keep Lifecycle onboarding probation in sync with Job Details
+  if (probationChanged && updatedEmployee?.probation) {
+    try {
+      await syncWorkflowProbationFromEmployee({
+        organizationId,
+        employeeId,
+        probation: updatedEmployee.probation,
+      });
+    } catch (e) {
+      logger.warn('Failed to sync Lifecycle probation after work-info update', {
+        error: e.message,
+        employeeId,
+      });
+    }
+  }
 
   // Job Details → sync system role from job fields; keep the title/position the user saved
   if (workProfileChanged && updatedEmployee) {

@@ -19,7 +19,7 @@ import {
     isLeavePolicyApplicableToEmployee,
     selectApplicableLeavePolicy,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
-import { evaluateLeaveProbationRestriction } from '../helpers/leaveProbationHelper.js';
+import { evaluateLeaveProbationRestriction, buildLeaveProbationContext } from '../helpers/leaveProbationHelper.js';
 import { OnboardingWorkflow } from '../models/onboarding.model.js';
 
 class LeaveValidationService {
@@ -134,7 +134,7 @@ class LeaveValidationService {
                 duration = 0.5;
             }
 
-            // 5. Probation restrictions (after duration so maxDaysDuringProbation can be enforced)
+            // 5. Probation restrictions (Lifecycle / employee status; alternate accrual via balance)
             if (leaveTypeConfig.probationRestrictions?.enabled) {
                 const probationCheck = await this.checkProbationPeriod(
                     employee,
@@ -143,10 +143,9 @@ class LeaveValidationService {
                         employeeId,
                         organizationId,
                         leaveType: normalizedType,
-                        requestedDays: duration,
                         leaveTypeLabel:
                             leaveTypeConfig.displayName || normalizedType || 'leave',
-                        excludeLeaveId: leaveData._id || leaveData.leaveId || null,
+                        asOfDate: startDate,
                     }
                 );
                 if (!probationCheck.allowed) {
@@ -416,35 +415,31 @@ class LeaveValidationService {
     }
 
     /**
-     * Hybrid probation check:
-     * - Tenure: days since joining < minServiceDays
-     * - Lifecycle: Active/Extended onboarding probation (missing workflow ignored)
-     * While either applies, enforce maxDaysDuringProbation total for this leave type.
+     * Probation apply-time check:
+     * Status from Lifecycle (preferred) or employee.probation.
+     * Blocks only when allowLeave is false while on probation.
+     * Alternate entitlements are applied in the balance engine (month-1st switch).
      */
     async checkProbationPeriod(employee, restrictions, context = {}) {
         const {
             employeeId,
             organizationId,
-            leaveType,
-            requestedDays = 0,
             leaveTypeLabel = 'leave',
-            excludeLeaveId = null,
             asOfDate = new Date(),
         } = context;
 
-        let lifecycleProbationStatus = null;
+        let lifecycleProbation = null;
         try {
             const empRef = employeeId || employee?._id;
             if (organizationId && empRef) {
-                const activeWorkflow = await OnboardingWorkflow.findOne({
+                const workflow = await OnboardingWorkflow.findOne({
                     organizationId,
                     employeeId: empRef,
                     isTemplate: { $ne: true },
-                    'probation.status': { $in: ['Active', 'Extended'] },
                 })
-                    .select('probation.status')
+                    .select('probation')
                     .lean();
-                lifecycleProbationStatus = activeWorkflow?.probation?.status || null;
+                lifecycleProbation = workflow?.probation || null;
             }
         } catch (err) {
             logger.warn('Lifecycle probation lookup failed during leave validation', {
@@ -454,29 +449,14 @@ class LeaveValidationService {
             });
         }
 
-        let usedDays = 0;
-        const normalizedType = leaveType ? normalizeLeaveTypeForPolicy(leaveType) : null;
-        if (organizationId && (employeeId || employee?._id) && normalizedType) {
-            const query = {
-                organizationId,
-                employee: employeeId || employee._id,
-                leaveType: { $in: getLeaveTypeVariantsForBalance(normalizedType) },
-                status: { $in: ['pending', 'approved'] },
-            };
-            if (excludeLeaveId) {
-                query._id = { $ne: excludeLeaveId };
-            }
-            const existing = await Leave.find(query).select('duration').lean();
-            usedDays = existing.reduce((sum, row) => sum + (Number(row.duration) || 0), 0);
-        }
+        const probationContext = buildLeaveProbationContext({
+            employee,
+            lifecycleProbation,
+        });
 
         return evaluateLeaveProbationRestriction({
-            joiningDate: employee?.joiningDate,
-            minServiceDays: restrictions?.minServiceDays,
-            maxDaysDuringProbation: restrictions?.maxDaysDuringProbation,
-            lifecycleProbationStatus,
-            usedDays,
-            requestedDays,
+            probationContext,
+            allowLeave: restrictions?.allowLeave !== false,
             asOfDate,
             leaveTypeLabel,
         });

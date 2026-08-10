@@ -448,6 +448,16 @@ export function sumEffectivePresentDaysByKeys(
     return total;
 }
 
+/** Sum approved paid-leave credits from a dateKey → credit map (excludes LOP). */
+export function sumPaidLeaveDaysFromMap(paidLeaveByDay) {
+    if (!paidLeaveByDay || typeof paidLeaveByDay.values !== 'function') return 0;
+    let total = 0;
+    for (const v of paidLeaveByDay.values()) {
+        total += Number(v) || 0;
+    }
+    return total;
+}
+
 /**
  * Map dateKey → paid leave credit using org calendar days (timezone-safe).
  */
@@ -780,6 +790,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
             workingDays: 0,
             presentDays: 0,
             unpaidLeave: 0,
+            paidLeaveDays: 0,
             leaves: []
         };
     }
@@ -881,6 +892,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         orgTimezone,
         isWorkingDayKeyFn
     );
+    const paidLeaveDays = sumPaidLeaveDaysFromMap(paidLeaveByDay);
     // Paid days = per working day in payroll window: min(1, attendance credit + approved paid leave), fractional OK.
     const effectivePresent = sumEffectivePresentDaysByKeys(
         effStartKey,
@@ -1075,6 +1087,7 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         workingDays: attendanceWorkingDays,
         presentDays: effectivePresent,
         unpaidLeave: unpaidDays,
+        paidLeaveDays,
         // Store leaves without internal flags
         leaves: payrollLeaves.map(({ isLossOfPay: _ignored, ...rest }) => rest)
     };
@@ -1082,21 +1095,26 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
 
 /**
  * Resolve attendance metrics for payslip PDF when missing on the saved document (e.g. legacy rows).
+ * Always resolves paidLeaveDays when missing (Present was replaced by Paid Leaves on the slip).
  */
 export async function enrichAttendanceMetricsForPayslip(payroll, organizationId) {
     const base = {
         workingDays: payroll.workingDays,
         presentDays: payroll.presentDays,
-        unpaidLeave: payroll.unpaidLeave
+        unpaidLeave: payroll.unpaidLeave,
+        paidLeaveDays: payroll.paidLeaveDays
     };
     if (payroll.type !== 'monthly') return base;
-    if (
+
+    const hasAttendanceMetrics =
         payroll.workingDays != null &&
         payroll.presentDays != null &&
-        payroll.unpaidLeave != null
-    ) {
+        payroll.unpaidLeave != null;
+    const hasPaidLeaveDays = payroll.paidLeaveDays != null;
+    if (hasAttendanceMetrics && hasPaidLeaveDays) {
         return base;
     }
+
     try {
         const empId = payroll.employeeId?._id || payroll.employeeId;
         if (!empId) return base;
@@ -1114,9 +1132,10 @@ export async function enrichAttendanceMetricsForPayslip(payroll, organizationId)
             mode: 'final'
         });
         return {
-            workingDays: payload.workingDays ?? base.workingDays,
-            presentDays: payload.presentDays ?? base.presentDays,
-            unpaidLeave: payload.unpaidLeave ?? base.unpaidLeave
+            workingDays: hasAttendanceMetrics ? base.workingDays : (payload.workingDays ?? base.workingDays),
+            presentDays: hasAttendanceMetrics ? base.presentDays : (payload.presentDays ?? base.presentDays),
+            unpaidLeave: hasAttendanceMetrics ? base.unpaidLeave : (payload.unpaidLeave ?? base.unpaidLeave),
+            paidLeaveDays: hasPaidLeaveDays ? base.paidLeaveDays : (payload.paidLeaveDays ?? base.paidLeaveDays)
         };
     } catch (error) {
         logger.warn('Payslip attendance enrichment failed; using stored payroll metrics', {

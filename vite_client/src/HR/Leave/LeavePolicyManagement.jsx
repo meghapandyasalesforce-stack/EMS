@@ -47,9 +47,17 @@ const DEFAULT_LEAVE_TYPE = {
     },
     probationRestrictions: {
         enabled: false,
-        minServiceDays: 0,
-        maxDaysDuringProbation: 0,
+        allowLeave: true,
+        accrual: {
+            method: 'fixed',
+            frequency: 'monthly',
+            amount: 0,
+            maxAccrual: 0,
+        },
+        maxDaysPerMonth: null,
     },
+    uiProbationAnnualAmount: 0,
+    uiProbationMonthlyEntitlement: 0,
     noticePeriodRestrictions: {
         enabled: false,
         minNoticeDays: 0,
@@ -76,9 +84,26 @@ const mapLeaveTypeToForm = (leaveType) => {
     lt.uiMonthlyEntitlement = monthly > 0 ? monthly : needsMonthlyEntitlement(lt) ? '' : 0;
     lt.probationRestrictions = {
         enabled: Boolean(lt.probationRestrictions?.enabled),
-        minServiceDays: Number(lt.probationRestrictions?.minServiceDays) || 0,
-        maxDaysDuringProbation: Number(lt.probationRestrictions?.maxDaysDuringProbation) || 0,
+        allowLeave: lt.probationRestrictions?.allowLeave !== false,
+        accrual: {
+            method: lt.probationRestrictions?.accrual?.method || 'fixed',
+            frequency: lt.probationRestrictions?.accrual?.frequency || 'monthly',
+            amount: Number(lt.probationRestrictions?.accrual?.amount) || 0,
+            maxAccrual: Number(lt.probationRestrictions?.accrual?.maxAccrual) || 0,
+        },
+        maxDaysPerMonth:
+            lt.probationRestrictions?.maxDaysPerMonth != null
+                ? Number(lt.probationRestrictions.maxDaysPerMonth)
+                : null,
     };
+    const pFreq = String(lt.probationRestrictions.accrual.frequency || 'monthly').toLowerCase();
+    lt.uiProbationAnnualAmount = Number(lt.probationRestrictions.accrual.maxAccrual) || 0;
+    lt.uiProbationMonthlyEntitlement =
+        pFreq === 'monthly'
+            ? Number(lt.probationRestrictions.accrual.amount) ||
+              Number(lt.probationRestrictions.maxDaysPerMonth) ||
+              0
+            : 0;
     lt.noticePeriodRestrictions = {
         enabled: Boolean(lt.noticePeriodRestrictions?.enabled),
         minNoticeDays: Number(lt.noticePeriodRestrictions?.minNoticeDays) || 0,
@@ -113,6 +138,29 @@ const mapLeaveTypeToApi = (leaveType) => {
         anniversaryBased: method === 'on_anniversary' || frequency === 'on_anniversary',
     };
     lt.maxDaysPerMonth = monthly > 0 ? monthly : null;
+
+    const pEnabled = Boolean(lt.probationRestrictions?.enabled);
+    const pFreq = String(lt.probationRestrictions?.accrual?.frequency || 'monthly').toLowerCase();
+    const pAnnual = Number(lt.uiProbationAnnualAmount ?? lt.probationRestrictions?.accrual?.maxAccrual) || 0;
+    const pMonthlyRaw = Number(
+        lt.uiProbationMonthlyEntitlement ?? lt.probationRestrictions?.accrual?.amount
+    );
+    const pMonthly =
+        pFreq === 'monthly' && Number.isFinite(pMonthlyRaw) && pMonthlyRaw > 0 ? pMonthlyRaw : 0;
+    delete lt.uiProbationAnnualAmount;
+    delete lt.uiProbationMonthlyEntitlement;
+    lt.probationRestrictions = {
+        enabled: pEnabled,
+        allowLeave: lt.probationRestrictions?.allowLeave !== false,
+        accrual: {
+            method: pFreq === 'yearly' ? 'yearly' : 'fixed',
+            frequency: pFreq === 'yearly' ? 'yearly' : 'monthly',
+            amount: pMonthly,
+            maxAccrual: pAnnual,
+        },
+        maxDaysPerMonth: pMonthly > 0 ? pMonthly : null,
+    };
+
     return lt;
 };
 
@@ -1133,7 +1181,7 @@ const LeavePolicyManagement = () => {
                                             onChange={(e) => updateLeaveType(index, 'probationRestrictions.enabled', e.target.checked)}
                                             className="mr-2"
                                         />
-                                        Probation Restrictions
+                                        Probation leave rules
                                     </label>
                                     <label className="flex items-center">
                                         <input
@@ -1149,57 +1197,93 @@ const LeavePolicyManagement = () => {
                                 {leaveType.probationRestrictions?.enabled && (
                                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 space-y-3">
                                         <p className="text-xs text-amber-900">
-                                            Restricts this leave type until the employee completes the
-                                            minimum service days, and while Lifecycle probation is
-                                            Active/Extended (extensions keep the limit). Employees
-                                            without onboarding probation use the day count only.
+                                            Probation status comes from Lifecycle onboarding (or
+                                            employee probation details). Accrual uses the alternate
+                                            rates below while on probation, switching to normal
+                                            rates from the 1st of the month after confirmation.
                                         </p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <label className="flex items-center text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={leaveType.probationRestrictions?.allowLeave !== false}
+                                                onChange={(e) =>
+                                                    updateLeaveType(
+                                                        index,
+                                                        'probationRestrictions.allowLeave',
+                                                        e.target.checked
+                                                    )
+                                                }
+                                                className="mr-2"
+                                            />
+                                            Allow applying this leave during probation
+                                        </label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             <div>
                                                 <label className="block text-sm font-medium mb-1">
-                                                    Min service days
+                                                    Probation accrual
                                                 </label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    step="1"
-                                                    value={leaveType.probationRestrictions?.minServiceDays ?? 0}
+                                                <select
+                                                    value={
+                                                        leaveType.probationRestrictions?.accrual
+                                                            ?.frequency || 'monthly'
+                                                    }
                                                     onChange={(e) =>
                                                         updateLeaveType(
                                                             index,
-                                                            'probationRestrictions.minServiceDays',
-                                                            Math.max(0, parseInt(e.target.value, 10) || 0)
+                                                            'probationRestrictions.accrual.frequency',
+                                                            e.target.value
                                                         )
                                                     }
                                                     className="w-full border rounded px-3 py-2 text-sm"
-                                                />
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    Tenure gate from joining date (e.g. 180).
-                                                </p>
+                                                >
+                                                    <option value="monthly">Monthly</option>
+                                                    <option value="yearly">Yearly</option>
+                                                </select>
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium mb-1">
-                                                    Max days during probation
+                                                    Amount (annual)
                                                 </label>
                                                 <input
                                                     type="number"
                                                     min="0"
                                                     step="0.5"
-                                                    value={leaveType.probationRestrictions?.maxDaysDuringProbation ?? 0}
+                                                    value={leaveType.uiProbationAnnualAmount ?? 0}
                                                     onChange={(e) =>
                                                         updateLeaveType(
                                                             index,
-                                                            'probationRestrictions.maxDaysDuringProbation',
+                                                            'uiProbationAnnualAmount',
                                                             Math.max(0, parseFloat(e.target.value) || 0)
                                                         )
                                                     }
                                                     className="w-full border rounded px-3 py-2 text-sm"
                                                 />
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    Total for this leave type while restricted (0 = none).
-                                                    Not a monthly limit.
-                                                </p>
                                             </div>
+                                            {(leaveType.probationRestrictions?.accrual?.frequency ||
+                                                'monthly') === 'monthly' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium mb-1">
+                                                        Days / month
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.5"
+                                                        value={leaveType.uiProbationMonthlyEntitlement ?? 0}
+                                                        onChange={(e) =>
+                                                            updateLeaveType(
+                                                                index,
+                                                                'uiProbationMonthlyEntitlement',
+                                                                Math.max(
+                                                                    0,
+                                                                    parseFloat(e.target.value) || 0
+                                                                )
+                                                            )
+                                                        }
+                                                        className="w-full border rounded px-3 py-2 text-sm"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

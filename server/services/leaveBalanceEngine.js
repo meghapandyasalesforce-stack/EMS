@@ -34,6 +34,12 @@ import {
     findPolicyLeaveTypeConfig,
     toLeavePolicyLocalDay,
 } from '../helpers/leavePolicyApplicabilityHelper.js';
+import {
+    applyProbationAccrualOverlay,
+    buildLeaveProbationContext,
+    firstOfMonth,
+} from '../helpers/leaveProbationHelper.js';
+import { OnboardingWorkflow } from '../models/onboarding.model.js';
 
 class LeaveBalanceEngine {
     /**
@@ -160,7 +166,7 @@ class LeaveBalanceEngine {
         };
     }
 
-    buildLeaveTypeConfigResolver(policies, employee, fallbackConfig) {
+    buildLeaveTypeConfigResolver(policies, employee, fallbackConfig, probationContext = null) {
         const leaveType = fallbackConfig?.type;
         return (year, monthIndex) => {
             const asOf = new Date(year, monthIndex, 1, 12, 0, 0, 0);
@@ -171,12 +177,36 @@ class LeaveBalanceEngine {
             if (!policy) return null;
             const lt = findPolicyLeaveTypeConfig(policy, leaveType);
             if (!lt) return null;
-            return {
+            const base = {
                 ...lt,
                 carryForward: getEffectiveCarryForwardConfig(lt),
                 _sourcePolicyId: policy._id,
             };
+            return applyProbationAccrualOverlay(base, probationContext, asOf);
         };
+    }
+
+    async resolveLeaveProbationContext(organizationId, employee) {
+        let lifecycleProbation = null;
+        try {
+            if (organizationId && employee?._id) {
+                const workflow = await OnboardingWorkflow.findOne({
+                    organizationId,
+                    employeeId: employee._id,
+                    isTemplate: { $ne: true },
+                })
+                    .select('probation')
+                    .lean();
+                lifecycleProbation = workflow?.probation || null;
+            }
+        } catch (err) {
+            logger.warn('Lifecycle probation lookup failed during leave balance', {
+                error: err?.message,
+                employeeId: employee?._id,
+                organizationId,
+            });
+        }
+        return buildLeaveProbationContext({ employee, lifecycleProbation });
     }
 
     resolvePolicyWindowStartDate(policy, employee, year, asOfDate = new Date()) {
@@ -338,6 +368,10 @@ class LeaveBalanceEngine {
             });
 
             // Each enabled leave type maintains an independent balance (policy-driven; mid-year split via resolver).
+            const probationContext = await this.resolveLeaveProbationContext(
+                resolvedOrganizationId,
+                employee
+            );
             for (const leaveTypeConfig of leaveTypeConfigs) {
                 if (leaveTypeConfig.enabled === false || !leaveTypeConfig.type) {
                     continue;
@@ -345,7 +379,8 @@ class LeaveBalanceEngine {
                 const resolveLeaveTypeConfigForMonth = this.buildLeaveTypeConfigResolver(
                     policies,
                     employee,
-                    leaveTypeConfig
+                    leaveTypeConfig,
+                    probationContext
                 );
                 await this.calculateLeaveTypeBalance(
                     balance,
@@ -360,6 +395,7 @@ class LeaveBalanceEngine {
                         orgPolicies: policies,
                         activePolicy: policy,
                         disablePolicyIsolation,
+                        probationContext,
                     }
                 );
             }
@@ -389,12 +425,18 @@ class LeaveBalanceEngine {
             resolveLeaveTypeConfigForMonth = null,
             activePolicy = null,
             disablePolicyIsolation = false,
+            probationContext = null,
         } = options;
         const leaveType = leaveTypeConfig.type;
         const effectiveConfig = {
             ...leaveTypeConfig,
             carryForward: getEffectiveCarryForwardConfig(leaveTypeConfig),
         };
+        const asOfAccrualConfig = applyProbationAccrualOverlay(
+            effectiveConfig,
+            probationContext,
+            firstOfMonth(asOfDate) || asOfDate
+        );
         
         // Find or create balance entry for this leave type
         let typeBalance = balance.balances.find(b => b.leaveType === leaveType);
@@ -531,7 +573,7 @@ class LeaveBalanceEngine {
             }
 
             typeBalance.accrued = await this.calculateAccruedBalance(
-                effectiveConfig,
+                asOfAccrualConfig,
                 effectiveEmployee,
                 year,
                 organizationId,
@@ -1627,10 +1669,12 @@ class LeaveBalanceEngine {
         };
 
         const policies = await this.loadOrganizationLeavePolicies(organizationId);
+        const probationContext = await this.resolveLeaveProbationContext(organizationId, employee);
         const resolveLeaveTypeConfigForMonth = this.buildLeaveTypeConfigResolver(
             policies,
             employee,
-            effectiveConfig
+            effectiveConfig,
+            probationContext
         );
 
         if (this.usesStandardMonthlyBalanceRules(effectiveConfig)) {

@@ -11,6 +11,7 @@ import { jsPDF } from 'jspdf';
 import logger from './logger.js';
 import { employeePfFromBasicWage } from './salaryCalculation.js';
 import { resolvePayslipSalaryPaidDays } from './payrollGenerationHelper.js';
+import { normalizePayslipEarnings } from './payslipYtdHelper.js';
 
 // Constants
 const PDF_CONFIG = {
@@ -47,6 +48,24 @@ const formatPayslipDayCount = (value, fallback) => {
     const rounded = Math.round(v * 100) / 100;
     if (Math.abs(rounded - Math.round(rounded)) < 0.001) return String(Math.round(rounded));
     return rounded.toFixed(1).replace(/\.0$/, '');
+};
+
+const formatAmount = (amount) => {
+    try {
+        const num = Number(amount || 0);
+        if (isNaN(num)) {
+            return '0.00';
+        }
+        const formattedAbs = new Intl.NumberFormat('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Math.abs(num));
+        const sign = num < 0 ? '-' : '';
+        return `${sign}${formattedAbs}`;
+    } catch (error) {
+        logger.error('Amount formatting error', { error: error.message, amount });
+        return '0.00';
+    }
 };
 
 const formatCurrency = (amount) => {
@@ -451,16 +470,11 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         });
         const daysInPeriodStr = formatPayslipDayCount(salaryPaidDays, '21');
         const salaryPaidFor = payrollData.salaryPaidFor || `${period} (${daysInPeriodStr} Days)`;
-        const presentDerived =
-            payrollData.presentDays != null && !Number.isNaN(Number(payrollData.presentDays))
-                ? payrollData.presentDays
-                : payrollData.workingDays != null &&
-                  payrollData.unpaidLeave != null &&
-                  !Number.isNaN(Number(payrollData.workingDays)) &&
-                  !Number.isNaN(Number(payrollData.unpaidLeave))
-                  ? Number(payrollData.workingDays) - Number(payrollData.unpaidLeave)
-                  : null;
-        const presentDaysVal = formatPayslipDayCount(presentDerived, '21');
+        const paidLeaveDerived =
+            payrollData.paidLeaveDays != null && !Number.isNaN(Number(payrollData.paidLeaveDays))
+                ? payrollData.paidLeaveDays
+                : 0;
+        const paidLeaveDaysVal = formatPayslipDayCount(paidLeaveDerived, '0');
         const unpaidLeaveVal = formatPayslipDayCount(payrollData.unpaidLeave, '0');
         const col1End = margin + contentWidth * 0.52;
         const col2End = margin + contentWidth * 0.76;
@@ -483,9 +497,9 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         const salaryPaidLines = doc.splitTextToSize(sanitizeText(salaryPaidFor), col1End - margin - 28);
         doc.text(salaryPaidLines[0] || '', col1End - cellPadSalary, yPos + 5.5, { align: 'right' });
         doc.setFont('helvetica', 'bold');
-        doc.text('Present', col1End + cellPadSalary, yPos + 5.5);
+        doc.text('Paid Leaves', col1End + cellPadSalary, yPos + 5.5);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${presentDaysVal} Days`, col2End - cellPadSalary, yPos + 5.5, { align: 'right' });
+        doc.text(`${paidLeaveDaysVal} Days`, col2End - cellPadSalary, yPos + 5.5, { align: 'right' });
         doc.setFont('helvetica', 'bold');
         doc.text('Unpaid Leave', col2End + cellPadSalary, yPos + 5.5);
         doc.setFont('helvetica', 'normal');
@@ -493,12 +507,18 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         yPos += 12;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text('Balance Leaves as on last day of ' + period + ' is:', margin, yPos);
-        yPos += 6;
-        doc.text('Note:', margin, yPos);
-        yPos += 10;
+        const leaveBalanceSummary = String(payrollData.leaveBalanceSummary || '').trim();
+        const balanceLeavesLine = leaveBalanceSummary
+            ? `Balance Leaves as on last day of ${period} is: ${leaveBalanceSummary}`
+            : `Balance Leaves as on last day of ${period} is:`;
+        const balanceLeavesLines = doc.splitTextToSize(sanitizeText(balanceLeavesLine), contentWidth);
+        balanceLeavesLines.forEach((line) => {
+            doc.text(line, margin, yPos);
+            yPos += 5;
+        });
+        yPos += 5;
 
-        // ==================== EARNING AND DEDUCTION (Earning Head | Amount | Deduction Head | Amount) ====================
+        // ==================== EARNING AND DEDUCTION (Label | Current | YTD × 2) ====================
         yPos = checkPageBreak(doc, yPos, pageHeight, margin, 50);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -506,26 +526,32 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         doc.text('Earning and Deduction', margin, yPos);
         doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
         yPos += 6;
-        const earningsExclude = ['totalEarnings', 'total', 'gratuity'];
+        // Employer contributions are CTC-side only — hide from payslip lines and Gross Earnings.
+        const earningsExclude = ['totalEarnings', 'total', 'gratuity', 'pfEmployer', 'esiEmployer'];
         const deductionsExclude = ['total', 'totalDeductions'];
-        const earningsForPdf = (payrollData.earnings && typeof payrollData.earnings === 'object')
-            ? { ...payrollData.earnings }
-            : {};
-        const gratuityLegacyPdf = Number(earningsForPdf.gratuity) || 0;
-        delete earningsForPdf.gratuity;
-        // For legacy payrolls, specialAllowance was reduced by gratuity.
-        // Fold legacy gratuity into specialAllowance so SPA is gross - (Basic + HRA).
-        if (gratuityLegacyPdf > 0) {
-            earningsForPdf.specialAllowance = (Number(earningsForPdf.specialAllowance) || 0) + gratuityLegacyPdf;
-        }
+        const earningsForPdf = normalizePayslipEarnings(payrollData.earnings);
+        const ytdEarningsMap =
+            payrollData.ytdEarnings && typeof payrollData.ytdEarnings === 'object'
+                ? { ...payrollData.ytdEarnings }
+                : {};
+        const ytdDeductionsMap =
+            payrollData.ytdDeductions && typeof payrollData.ytdDeductions === 'object'
+                ? { ...payrollData.ytdDeductions }
+                : {};
         let earningsTotal = 0;
         let deductionsTotal = 0;
-        const earningsEntries = Object.entries(earningsForPdf)
-            .filter(([key, value]) => {
-                const numValue = Number(value);
+        let earningsYtdTotal = 0;
+        let deductionsYtdTotal = 0;
+        const earningsKeys = new Set([
+            ...Object.keys(earningsForPdf).filter((key) => {
+                const numValue = Number(earningsForPdf[key]);
+                return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
+            }),
+            ...Object.keys(ytdEarningsMap).filter((key) => {
+                const numValue = Number(ytdEarningsMap[key]);
                 return !earningsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
             })
-            .sort((a, b) => Number(b[1]) - Number(a[1]));
+        ]);
         const normalizedDeductions = (payrollData.deductions && typeof payrollData.deductions === 'object')
             ? { ...payrollData.deductions }
             : {};
@@ -535,50 +561,82 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         if (!(Number(normalizedDeductions.pfEmployee) > 0) && autoPfEmployee > 0) {
             normalizedDeductions.pfEmployee = autoPfEmployee;
         }
-        const deductionsEntries = Object.entries(normalizedDeductions)
-                .filter(([key, value]) => {
-                    const numValue = Number(value);
-                    return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
-                })
-                .sort((a, b) => Number(b[1]) - Number(a[1]));
-        earningsEntries.forEach(([, value]) => { earningsTotal += Number(value); });
-        deductionsEntries.forEach(([, value]) => { deductionsTotal += Number(value); });
+        const deductionsKeys = new Set([
+            ...Object.keys(normalizedDeductions).filter((key) => {
+                const numValue = Number(normalizedDeductions[key]);
+                return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
+            }),
+            ...Object.keys(ytdDeductionsMap).filter((key) => {
+                const numValue = Number(ytdDeductionsMap[key]);
+                return !deductionsExclude.includes(key) && !isNaN(numValue) && numValue > 0;
+            })
+        ]);
+        const resolveYtd = (map, key, current) =>
+            Object.prototype.hasOwnProperty.call(map, key) ? (Number(map[key]) || 0) : (Number(current) || 0);
+        const earningsEntries = [...earningsKeys]
+            .map((key) => {
+                const current = Number(earningsForPdf[key]) || 0;
+                return [key, current, resolveYtd(ytdEarningsMap, key, current)];
+            })
+            .filter(([, current, ytd]) => current > 0 || ytd > 0)
+            .sort((a, b) => Number(b[1]) - Number(a[1]) || Number(b[2]) - Number(a[2]));
+        const deductionsEntries = [...deductionsKeys]
+            .map((key) => {
+                const current = Number(normalizedDeductions[key]) || 0;
+                return [key, current, resolveYtd(ytdDeductionsMap, key, current)];
+            })
+            .filter(([, current, ytd]) => current > 0 || ytd > 0)
+            .sort((a, b) => Number(b[1]) - Number(a[1]) || Number(b[2]) - Number(a[2]));
+        earningsEntries.forEach(([, current, ytd]) => {
+            earningsTotal += Number(current);
+            earningsYtdTotal += Number(ytd);
+        });
+        deductionsEntries.forEach(([, current, ytd]) => {
+            deductionsTotal += Number(current);
+            deductionsYtdTotal += Number(ytd);
+        });
         // Recompute totals from the exact rows we are going to render (after PF normalization),
         // so "Total Earnings / Total Deductions / Net Amount" always match the table.
         const totalEarnings = earningsTotal;
         const totalDeductions = deductionsTotal;
         const maxRows = Math.max(earningsEntries.length, deductionsEntries.length, 1);
-        const colW1 = contentWidth * 0.38;
-        const colW2 = contentWidth * 0.12;
-        const colW3 = contentWidth * 0.38;
-        const colW4 = contentWidth * 0.12;
-        const leftHalf = colW1 + colW2;
+        const half = contentWidth / 2;
+        const labelW = half * 0.48;
+        const curW = half * 0.26;
+        const ytdW = half * 0.26;
+        const leftHalf = half;
         const tableTopY = yPos;
         doc.setFillColor(COLORS.tableHeader.r, COLORS.tableHeader.g, COLORS.tableHeader.b);
         doc.rect(margin, yPos, leftHalf, 8, 'F');
-        doc.rect(margin + leftHalf, yPos, colW3 + colW4, 8, 'F');
+        doc.rect(margin + leftHalf, yPos, half, 8, 'F');
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text('Earning Head', margin + 2, yPos + 5.5);
-        doc.text(period, margin + colW1 + 2, yPos + 5.5);
-        doc.text('Deduction Head', margin + leftHalf + 2, yPos + 5.5);
-        doc.text(period, margin + leftHalf + colW3 + 2, yPos + 5.5);
+        doc.text('Earnings', margin + 2, yPos + 5.5);
+        doc.text('Current (INR)', margin + labelW + curW - 2, yPos + 5.5, { align: 'right' });
+        doc.text('YTD (INR)', margin + labelW + curW + ytdW - 2, yPos + 5.5, { align: 'right' });
+        doc.text('Deductions', margin + leftHalf + 2, yPos + 5.5);
+        doc.text('Current (INR)', margin + leftHalf + labelW + curW - 2, yPos + 5.5, { align: 'right' });
+        doc.text('YTD (INR)', margin + leftHalf + labelW + curW + ytdW - 2, yPos + 5.5, { align: 'right' });
         yPos += 8;
         doc.setFont('helvetica', 'normal');
+        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
+        doc.setLineWidth(0.3);
         for (let i = 0; i < maxRows; i++) {
             yPos = checkPageBreak(doc, yPos, pageHeight, margin, 8);
             const earn = earningsEntries[i];
             const ded = deductionsEntries[i];
-            const earnLabel = earn ? formatLabel(earn[0]) : '';
-            const earnAmt = earn ? formatCurrency(earn[1]) : '';
-            const dedLabel = ded ? formatLabel(ded[0]) : '';
-            const dedAmt = ded ? formatCurrency(ded[1]) : '';
-            const earnLabelLine = doc.splitTextToSize(sanitizeText(earnLabel), colW1 - 2)[0] || '';
-            const dedLabelLine = doc.splitTextToSize(sanitizeText(dedLabel), colW3 - 2)[0] || '';
-            doc.text(earnLabelLine, margin + 2, yPos + 5);
-            doc.text(earnAmt, margin + colW1 + 2, yPos + 5);
-            doc.text(dedLabelLine, margin + leftHalf + 2, yPos + 5);
-            doc.text(dedAmt, margin + leftHalf + colW3 + 2, yPos + 5);
+            if (earn) {
+                const earnLabelLine = doc.splitTextToSize(sanitizeText(formatLabel(earn[0])), labelW - 3)[0] || '';
+                doc.text(earnLabelLine, margin + 2, yPos + 5);
+                doc.text(formatAmount(earn[1]), margin + labelW + curW - 2, yPos + 5, { align: 'right' });
+                doc.text(formatAmount(earn[2]), margin + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
+            }
+            if (ded) {
+                const dedLabelLine = doc.splitTextToSize(sanitizeText(formatLabel(ded[0])), labelW - 3)[0] || '';
+                doc.text(dedLabelLine, margin + leftHalf + 2, yPos + 5);
+                doc.text(formatAmount(ded[1]), margin + leftHalf + labelW + curW - 2, yPos + 5, { align: 'right' });
+                doc.text(formatAmount(ded[2]), margin + leftHalf + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
+            }
             doc.line(margin, yPos + 6, pageWidth - margin, yPos + 6);
             yPos += 7;
         }
@@ -587,15 +645,25 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         doc.line(margin, yPos, pageWidth - margin, yPos);
         yPos += 5;
         doc.setFont('helvetica', 'bold');
-        doc.text('Total Earnings', margin + 2, yPos + 5);
-        doc.text(formatCurrency(totalEarnings), margin + colW1 + 2, yPos + 5);
+        doc.text('Gross Earnings', margin + 2, yPos + 5);
+        doc.text(formatAmount(totalEarnings), margin + labelW + curW - 2, yPos + 5, { align: 'right' });
+        doc.text(formatAmount(earningsYtdTotal), margin + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
         doc.text('Total Deductions', margin + leftHalf + 2, yPos + 5);
-        doc.text(formatCurrency(totalDeductions), margin + leftHalf + colW3 + 2, yPos + 5);
+        doc.text(formatAmount(totalDeductions), margin + leftHalf + labelW + curW - 2, yPos + 5, { align: 'right' });
+        doc.text(formatAmount(deductionsYtdTotal), margin + leftHalf + labelW + curW + ytdW - 2, yPos + 5, { align: 'right' });
         doc.setFont('helvetica', 'normal');
         const tableBottomY = yPos + 12;
-        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
+        const earnCurYtdX = margin + labelW + curW;
+        const dedCurYtdX = margin + leftHalf + labelW + curW;
+        // Main split: Earnings | Deductions (darker)
+        doc.setDrawColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
         doc.setLineWidth(0.4);
         doc.line(margin + leftHalf, tableTopY, margin + leftHalf, tableBottomY);
+        // Inner splits: Current | YTD (lighter)
+        doc.setDrawColor(COLORS.border.r, COLORS.border.g, COLORS.border.b);
+        doc.setLineWidth(0.3);
+        doc.line(earnCurYtdX, tableTopY, earnCurYtdX, tableBottomY);
+        doc.line(dedCurYtdX, tableTopY, dedCurYtdX, tableBottomY);
         yPos += 14;
 
         // ==================== NET AMOUNT + AMOUNT IN WORDS ====================
@@ -607,8 +675,8 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.text('Net Amount:', margin + 4, yPos + 6);
-        doc.text(formatCurrency(netSalary), pageWidth - margin - 4, yPos + 6, { align: 'right' });
+        doc.text('Net Amount (INR):', margin + 4, yPos + 6);
+        doc.text(formatAmount(netSalary), pageWidth - margin - 4, yPos + 6, { align: 'right' });
         doc.setTextColor(COLORS.text.r, COLORS.text.g, COLORS.text.b);
         yPos += netAmountBarHeight + 6;
         doc.setFont('helvetica', 'normal');

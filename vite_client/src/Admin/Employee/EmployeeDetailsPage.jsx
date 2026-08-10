@@ -79,6 +79,10 @@ const EmployeeDetailsPage = () => {
     manager: '',
     salary: '',
     joiningDate: '',
+    probationStatus: 'None',
+    probationStartDate: '',
+    probationEndDate: '',
+    probationConfirmedAt: '',
   });
   const [editPerformanceForm, setEditPerformanceForm] = useState({ performanceScore: '' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -308,15 +312,19 @@ const EmployeeDetailsPage = () => {
   };
 
   const handleEditWorkClick = () => {
+    const toDateInput = (value) =>
+      value ? new Date(value).toISOString().split('T')[0] : '';
     setEditWorkForm({
       jobTitle: employee.jobTitle || '',
       department: employee.department || '',
       position: employee.position || '',
       manager: employee.managerId || employee.manager || '',
       salary: employee.salary != null ? employee.salary : '',
-      joiningDate: employee.joiningDate
-        ? new Date(employee.joiningDate).toISOString().split('T')[0]
-        : '',
+      joiningDate: toDateInput(employee.joiningDate),
+      probationStatus: employee.probation?.status || 'None',
+      probationStartDate: toDateInput(employee.probation?.startDate),
+      probationEndDate: toDateInput(employee.probation?.endDate),
+      probationConfirmedAt: toDateInput(employee.probation?.confirmedAt),
     });
     setOpenEditWorkDialog(true);
   };
@@ -381,6 +389,12 @@ const EmployeeDetailsPage = () => {
       joiningDate: editWorkForm.joiningDate
         ? new Date(editWorkForm.joiningDate).toISOString()
         : null,
+      probation: {
+        status: editWorkForm.probationStatus || 'None',
+        startDate: editWorkForm.probationStartDate || null,
+        endDate: editWorkForm.probationEndDate || null,
+        confirmedAt: editWorkForm.probationConfirmedAt || null,
+      },
     };
 
     const resultAction = await dispatch(
@@ -796,6 +810,60 @@ const EmployeeDetailsPage = () => {
                 type="date"
                 value={editWorkForm.joiningDate}
                 onChange={handleEditWorkFormChange('joiningDate')}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Probation status</InputLabel>
+                <Select
+                  value={editWorkForm.probationStatus || 'None'}
+                  onChange={handleEditWorkFormChange('probationStatus')}
+                  label="Probation status"
+                >
+                  {['None', 'Not Started', 'Active', 'Extended', 'Confirmed', 'Waived', 'Rejected', 'Terminated'].map(
+                    (status) => (
+                      <MenuItem key={status} value={status}>
+                        {status}
+                      </MenuItem>
+                    )
+                  )}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Synced with Lifecycle Probation Center when onboarding exists.
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Probation start"
+                type="date"
+                value={editWorkForm.probationStartDate}
+                onChange={handleEditWorkFormChange('probationStartDate')}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Probation end"
+                type="date"
+                value={editWorkForm.probationEndDate}
+                onChange={handleEditWorkFormChange('probationEndDate')}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Confirmed on"
+                type="date"
+                value={editWorkForm.probationConfirmedAt}
+                onChange={handleEditWorkFormChange('probationConfirmedAt')}
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>

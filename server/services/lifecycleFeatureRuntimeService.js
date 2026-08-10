@@ -16,6 +16,7 @@ import {
     applyPackArtifactsToOffboardingWorkflow,
 } from './lifecyclePackWorkflowService.js';
 import logger from '../helpers/logger.js';
+import { syncEmployeeProbationFromWorkflow } from '../helpers/employeeProbationSyncHelper.js';
 
 export const ONBOARDING_BASE_WEIGHTS = Object.freeze({
     tasks: 0.22,
@@ -500,6 +501,9 @@ export async function syncActiveWorkflowsWithFeatureGates(organizationId) {
             applyOnboardingFeatureGates(wf, settings);
             applyProgressToWorkflow(wf, settings);
             await wf.save();
+            if (wf.probation) {
+                await syncEmployeeProbationFromWorkflow(wf);
+            }
             updated += 1;
         } catch (err) {
             logger.error('Failed to sync onboarding workflow feature gates', {

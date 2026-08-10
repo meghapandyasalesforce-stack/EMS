@@ -333,6 +333,7 @@ export const generatePayrollWithStructure = async (req, res) => {
             workingDays: calculatedSalary.workingDays,
             presentDays: calculatedSalary.presentDays,
             unpaidLeave: calculatedSalary.unpaidLeave,
+            paidLeaveDays: calculatedSalary.paidLeaveDays,
             generationType: mode === 'preview' ? 'preview' : 'final',
             isProvisional: mode === 'preview',
             status: 'Pending'

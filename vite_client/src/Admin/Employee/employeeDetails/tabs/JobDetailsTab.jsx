@@ -21,6 +21,18 @@ const JobDetailsTab = ({
     { label: 'Manager', value: employee.manager },
     ...(hidePayrollFields ? [] : [{ label: 'Salary', value: formatSalary(employee.salary) }]),
     { label: 'Joining Date', value: formatDate(employee.joiningDate) },
+    {
+      label: 'Probation',
+      value: employee.probation?.status && employee.probation.status !== 'None'
+        ? `${employee.probation.status}${
+            employee.probation.confirmedAt
+              ? ` (confirmed ${formatDate(employee.probation.confirmedAt)})`
+              : employee.probation.endDate
+                ? ` (ends ${formatDate(employee.probation.endDate)})`
+                : ''
+          }`
+        : '—',
+    },
     { label: 'Created At', value: formatDateTime(employee.createdAt) },
     { label: 'Status', value: getStatusLabel(employee) },
     { label: 'Employee ID', value: employee.employeeId },
