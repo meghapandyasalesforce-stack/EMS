@@ -6,6 +6,7 @@ import axios from '../../utils/axios';
 const MARKSHEET_LEVELS = [
     { value: '10th', label: '10th' },
     { value: '12th', label: '12th' },
+    { value: 'Diploma', label: 'Diploma' },
     { value: 'Graduation', label: 'Graduation' },
     { value: 'Post Graduation', label: 'Post Graduation' },
 ];
@@ -174,7 +175,7 @@ const JobDetails = () => {
         }
 
         if (documentType === 'DEGREE_CERTIFICATE' && !marksheetLevel) {
-            alert('Please select a marksheet level (10th, 12th, Graduation, or Post Graduation) before uploading.');
+            alert('Please select a marksheet level (10th, 12th, Diploma, Graduation, or Post Graduation) before uploading.');
             return;
         }
 
