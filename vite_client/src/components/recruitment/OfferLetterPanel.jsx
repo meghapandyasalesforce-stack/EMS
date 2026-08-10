@@ -27,6 +27,8 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
     const [previewOffer, setPreviewOffer] = useState(null);
     const [createPreview, setCreatePreview] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
+    /** Inline revise salary after counter — keyed by offer id (no prompt/modal). */
+    const [reviseSalaryByOffer, setReviseSalaryByOffer] = useState({});
     const [form, setForm] = useState({
         templateType: 'html',
         templateId: '',
@@ -298,8 +300,8 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                         </div>
 
                                         <div className="mb-3 flex flex-wrap gap-2">
-                                            <CmButton variant="outline" size="sm" onClick={() => setPreviewOffer(offer)}>
-                                                <FaEye className="text-xs" /> Preview
+                                            <CmButton variant="outline" size="sm" onClick={() => setPreviewOffer((current) => (current?._id === offer._id ? null : offer))}>
+                                                <FaEye className="text-xs" /> {previewOffer?._id === offer._id ? 'Hide preview' : 'Preview'}
                                             </CmButton>
                                             {offer.pdfUrl && (
                                                 <a href={offer.pdfUrl} target="_blank" rel="noopener noreferrer" className="cm-btn cm-btn--outline cm-btn--sm">
@@ -331,8 +333,14 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                                     size="sm"
                                                     disabled={submitting}
                                                     onClick={() => {
-                                                        const salary = window.prompt('Revised salary', offer.salary || '');
-                                                        if (salary == null) return;
+                                                        const salaryRaw = reviseSalaryByOffer[offer._id];
+                                                        const salary = salaryRaw != null && salaryRaw !== ''
+                                                            ? salaryRaw
+                                                            : (offer.salary ?? '');
+                                                        if (salary === '' || Number.isNaN(Number(salary))) {
+                                                            toast.error('Enter a revised salary');
+                                                            return;
+                                                        }
                                                         runAction(
                                                             () => axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/${offer._id}/revise`, {
                                                                 salary: Number(salary),
@@ -367,6 +375,75 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                                                 </CmButton>
                                             )}
                                         </div>
+
+                                        {previewOffer?._id === offer._id && (
+                                            <div
+                                                className="mb-3 rounded-lg p-3"
+                                                style={{
+                                                    background: 'var(--cm-surface-low)',
+                                                    border: '1px solid rgba(113,121,116,0.15)',
+                                                }}
+                                            >
+                                                <p className="cm-label mb-2">Offer preview — v{offer.version}</p>
+                                                {(offer.templateType === 'pdf' || (!offer.bodyHtml && offer.pdfUrl)) ? (
+                                                    <iframe title="Offer PDF preview" src={offer.pdfUrl} className="h-[420px] w-full rounded-lg border bg-white" />
+                                                ) : (
+                                                    <OfferLetterHtmlPreview html={offer.bodyHtml} />
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {offer.status === 'Countered' && (() => {
+                                            const counter = getCounterDetails(offer);
+                                            const reviseValue = reviseSalaryByOffer[offer._id] != null
+                                                ? reviseSalaryByOffer[offer._id]
+                                                : String(offer.salary ?? counter.salary ?? '');
+                                            return (
+                                                <div
+                                                    className="mb-3 rounded-lg p-3 text-sm"
+                                                    style={{
+                                                        background: 'var(--cm-surface-low)',
+                                                        border: '1px solid rgba(113,121,116,0.15)',
+                                                    }}
+                                                >
+                                                    <p className="cm-label mb-2">Counter details</p>
+                                                    <div className="grid gap-1.5 text-xs sm:grid-cols-2" style={{ color: 'var(--cm-on-surface)' }}>
+                                                        <p>
+                                                            <span style={{ color: 'var(--cm-muted)' }}>Proposed CTC: </span>
+                                                            {counter.salary != null && counter.salary !== ''
+                                                                ? `Rs ${Number(counter.salary).toLocaleString('en-IN')}`
+                                                                : (offer.salary ? `Rs ${Number(offer.salary).toLocaleString('en-IN')}` : '—')}
+                                                        </p>
+                                                        <p>
+                                                            <span style={{ color: 'var(--cm-muted)' }}>Preferred joining: </span>
+                                                            {counter.startDate
+                                                                ? format(new Date(counter.startDate), 'dd MMM yyyy')
+                                                                : (offer.startDate ? format(new Date(offer.startDate), 'dd MMM yyyy') : '—')}
+                                                        </p>
+                                                        {counter.notes ? (
+                                                            <p className="sm:col-span-2">
+                                                                <span style={{ color: 'var(--cm-muted)' }}>Notes: </span>
+                                                                {counter.notes}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
+                                                    <label className="mt-3 block text-xs" style={{ color: 'var(--cm-muted)' }}>
+                                                        Revised salary (INR)
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            className="cm-input mt-1 w-full"
+                                                            value={reviseValue}
+                                                            onChange={(e) => setReviseSalaryByOffer((prev) => ({
+                                                                ...prev,
+                                                                [offer._id]: e.target.value,
+                                                            }))}
+                                                            placeholder="Enter revised CTC"
+                                                        />
+                                                    </label>
+                                                </div>
+                                            );
+                                        })()}
 
                                         <div className="grid gap-3">
                                             <ActivityTimeline activities={offer.activityFeed || []} />
@@ -507,30 +584,22 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                     </div>
                 )}
 
-                {previewOffer && (
-                    <div className="cm-modal-overlay" onClick={() => setPreviewOffer(null)}>
-                        <div className="cm-modal" style={{ maxWidth: '48rem' }} onClick={(e) => e.stopPropagation()}>
-                            <div className="mb-4 flex items-center justify-between">
-                                <p className="cm-title-sm">Offer Preview — v{previewOffer.version}</p>
-                                <button type="button" onClick={() => setPreviewOffer(null)} className="cm-link text-sm">Close</button>
-                            </div>
-                            <div
-                                className="rounded-xl p-4"
-                                style={{ background: 'var(--cm-surface-low)', border: '1px solid rgba(113,121,116,0.12)' }}
-                            >
-                                {(previewOffer.templateType === 'pdf' || (!previewOffer.bodyHtml && previewOffer.pdfUrl)) ? (
-                                    <iframe title="Offer PDF preview" src={previewOffer.pdfUrl} className="h-[560px] w-full rounded-lg border bg-white" />
-                                ) : (
-                                    <OfferLetterHtmlPreview html={previewOffer.bodyHtml} />
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
 };
+
+/** Pull latest counter-offer fields from activity feed (display only). */
+function getCounterDetails(offer) {
+    const feed = [...(offer?.activityFeed || [])].reverse();
+    const entry = feed.find((a) => a?.action === 'offer_countered' || /counter/i.test(a?.description || ''));
+    const meta = entry?.metadata || {};
+    return {
+        salary: meta.salary != null ? meta.salary : undefined,
+        startDate: meta.startDate || undefined,
+        notes: meta.notes || offer?.responseNotes || entry?.description || '',
+    };
+}
 
 function ActivityTimeline({ activities }) {
     const items = [...(activities || [])].reverse();

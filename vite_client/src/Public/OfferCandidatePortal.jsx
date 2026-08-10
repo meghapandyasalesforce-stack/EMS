@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import { toast } from 'react-toastify';
 import { FaCheckCircle, FaFilePdf, FaTimesCircle } from 'react-icons/fa';
 import LoadingSpinner from '../components/LoadingSpinner';
+import axios from '../utils/axios';
 import { PUBLIC_LIFECYCLE_ENDPOINT } from '../utils/constant';
 import OfferLetterHtmlPreview from '../components/recruitment/OfferLetterHtmlPreview';
 
@@ -15,7 +15,6 @@ const OfferCandidatePortal = () => {
     const [notes, setNotes] = useState('');
     const [acceptedName, setAcceptedName] = useState('');
     const [responded, setResponded] = useState(null);
-    const [showCounter, setShowCounter] = useState(false);
     const [counterSalary, setCounterSalary] = useState('');
     const [counterStartDate, setCounterStartDate] = useState('');
 
@@ -104,6 +103,27 @@ const OfferCandidatePortal = () => {
                     <p className="mt-1 text-sm text-gray-600">For {candidateName}</p>
                 </div>
 
+                <div className="mb-6 grid gap-3 rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:grid-cols-3">
+                    <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Annual CTC</p>
+                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                            {offer.salary ? `Rs ${Number(offer.salary).toLocaleString('en-IN')}` : '—'}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Joining date</p>
+                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                            {offer.startDate ? new Date(offer.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Valid until</p>
+                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                            {offer.expiryDate ? new Date(offer.expiryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                        </p>
+                    </div>
+                </div>
+
                 {offer.pdfUrl && (
                     <a
                         href={offer.pdfUrl}
@@ -111,19 +131,17 @@ const OfferCandidatePortal = () => {
                         rel="noopener noreferrer"
                         className="mb-6 inline-flex items-center gap-2 rounded-lg border border-theme-primary/30 px-4 py-2 text-sm font-medium text-theme-primary hover:bg-theme-primary/5"
                     >
-                        <FaFilePdf /> Download PDF
+                        <FaFilePdf /> View / Download PDF
                     </a>
                 )}
 
-                <div className="rounded-xl border bg-gray-50/60 p-5">
-                    {(offer.templateType === 'pdf' || (!offer.bodyHtml?.trim() && offer.pdfUrl)) ? (
-                        <iframe title="Offer letter" src={offer.pdfUrl} className="h-[560px] w-full rounded-lg border bg-white" />
-                    ) : (
-                        <OfferLetterHtmlPreview html={offer.bodyHtml || '<p>Offer details are attached as PDF.</p>'} />
-                    )}
-                </div>
+                {offer.bodyHtml?.trim() && offer.templateType !== 'pdf' && (
+                    <div className="mb-6 rounded-xl border bg-gray-50/60 p-5">
+                        <OfferLetterHtmlPreview html={offer.bodyHtml} />
+                    </div>
+                )}
 
-                <div className="mt-8 space-y-4 rounded-xl border p-5">
+                <div className="mt-2 space-y-4 rounded-xl border p-5">
                     <h2 className="font-semibold text-gray-800">Your response</h2>
                     <label className="block text-sm text-gray-600">
                         Comments (optional)
@@ -145,6 +163,17 @@ const OfferCandidatePortal = () => {
                             placeholder={candidateName}
                         />
                     </label>
+                    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                        <p className="text-sm font-semibold text-amber-900">Counter offer (optional)</p>
+                        <label className="block text-sm text-gray-700">
+                            Proposed CTC
+                            <input type="number" className="mt-1 w-full rounded-lg border px-3 py-2" value={counterSalary} onChange={(e) => setCounterSalary(e.target.value)} />
+                        </label>
+                        <label className="block text-sm text-gray-700">
+                            Preferred joining date
+                            <input type="date" className="mt-1 w-full rounded-lg border px-3 py-2" value={counterStartDate} onChange={(e) => setCounterStartDate(e.target.value)} />
+                        </label>
+                    </div>
                     <div className="flex flex-wrap gap-3 pt-2">
                         <button
                             type="button"
@@ -157,10 +186,10 @@ const OfferCandidatePortal = () => {
                         <button
                             type="button"
                             disabled={submitting}
-                            onClick={() => setShowCounter((v) => !v)}
+                            onClick={() => respond('counter')}
                             className="rounded-lg border border-amber-300 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
                         >
-                            Counter offer
+                            Submit counter-offer
                         </button>
                         <button
                             type="button"
@@ -171,26 +200,6 @@ const OfferCandidatePortal = () => {
                             Decline offer
                         </button>
                     </div>
-                    {showCounter && (
-                        <div className="mt-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-                            <label className="block text-sm">
-                                Proposed CTC
-                                <input type="number" className="mt-1 w-full rounded-lg border px-3 py-2" value={counterSalary} onChange={(e) => setCounterSalary(e.target.value)} />
-                            </label>
-                            <label className="block text-sm">
-                                Preferred joining date
-                                <input type="date" className="mt-1 w-full rounded-lg border px-3 py-2" value={counterStartDate} onChange={(e) => setCounterStartDate(e.target.value)} />
-                            </label>
-                            <button
-                                type="button"
-                                disabled={submitting}
-                                onClick={() => respond('counter')}
-                                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                            >
-                                Submit counter-offer
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

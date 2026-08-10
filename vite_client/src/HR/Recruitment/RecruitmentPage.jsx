@@ -328,12 +328,12 @@ const RecruitmentPage = () => {
                                 </select>
                             </label>
                             <label className="text-sm">
-                                <span className="mb-1 block text-gray-600">Match min %</span>
-                                <input type="number" className="w-24 rounded-lg border px-3 py-2 text-sm" value={candFilter.matchMin} onChange={(e) => setCandFilter((p) => ({ ...p, matchMin: e.target.value }))} />
+                                <span className="mb-1 block text-gray-600"></span>
+                                {/* <input type="number" className="w-24 rounded-lg border px-3 py-2 text-sm" value={candFilter.matchMin} onChange={(e) => setCandFilter((p) => ({ ...p, matchMin: e.target.value }))} /> */}
                             </label>
                             <label className="text-sm">
-                                <span className="mb-1 block text-gray-600">Match max %</span>
-                                <input type="number" className="w-24 rounded-lg border px-3 py-2 text-sm" value={candFilter.matchMax} onChange={(e) => setCandFilter((p) => ({ ...p, matchMax: e.target.value }))} />
+                                <span className="mb-1 block text-gray-600"></span>
+                                {/* <input type="number" className="w-24 rounded-lg border px-3 py-2 text-sm" value={candFilter.matchMax} onChange={(e) => setCandFilter((p) => ({ ...p, matchMax: e.target.value }))} /> */}
                             </label>
                             <label className="text-sm flex-1 min-w-[160px]">
                                 <span className="mb-1 block text-gray-600">Search</span>

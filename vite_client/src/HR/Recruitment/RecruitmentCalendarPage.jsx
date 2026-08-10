@@ -168,13 +168,13 @@ const RecruitmentCalendarPage = () => {
             </div>
 
             <div className="mb-4 rounded-xl border bg-white p-4 text-sm text-gray-600 shadow-sm">
-                <p className="font-medium text-gray-800">Calendar integrations</p>
+                {/* <p className="font-medium text-gray-800">Calendar integrations</p> */}
                 <p className="mt-1">
                     Google: {integrations.googleCalendar?.connected ? 'Connected' : 'Not connected'} ·
                     Outlook: {integrations.outlook?.connected ? 'Connected' : 'Not connected'} ·
                     Teams: {integrations.teams?.connected ? 'Connected' : 'Not connected'}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">OAuth connectors can be enabled in a later settings sprint without changing core ATS data.</p>
+                <p className="mt-1 text-xs text-gray-500"></p>
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
