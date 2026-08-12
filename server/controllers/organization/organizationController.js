@@ -253,6 +253,7 @@ export const updateOrganizationSettings = async (req, res) => {
             timezone,
             tdsCalculationMode,
             allowWorkFromHome,
+            allowProbationAfterJoining,
             allowNonWorkingDayPunch,
             approvalSlaHours,
             payrollSettings,
@@ -322,6 +323,10 @@ export const updateOrganizationSettings = async (req, res) => {
         if (allowWorkFromHome !== undefined) {
             if (!organization.settings) organization.settings = {};
             organization.settings.allowWorkFromHome = !!allowWorkFromHome;
+        }
+        if (allowProbationAfterJoining !== undefined) {
+            if (!organization.settings) organization.settings = {};
+            organization.settings.allowProbationAfterJoining = !!allowProbationAfterJoining;
         }
         if (allowNonWorkingDayPunch !== undefined) {
             if (!organization.settings) organization.settings = {};

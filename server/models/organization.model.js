@@ -408,6 +408,15 @@ const organizationSchema = new mongoose.Schema({
             default: true
         },
         /**
+         * When false (default): probation can only be started on Add Employee.
+         * Active probation can still be extended/reduced; after confirmation it cannot restart.
+         * When true: HR may start or restart probation after joining, including after confirmation.
+         */
+        allowProbationAfterJoining: {
+            type: Boolean,
+            default: false
+        },
+        /**
          * Non-working day punch: when true, employees may punch in on
          * calendar non-working days (weekends / off days) and holidays.
          * Defaults to false — punch-in is blocked unless admin enables this.

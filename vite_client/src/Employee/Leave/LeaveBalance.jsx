@@ -86,6 +86,13 @@ const LeaveBalance = () => {
             )}
 
             {/* Summary Cards */}
+            {(leaveSummary.inProbation || balance?.probation?.inProbation) && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {leaveSummary.probationNote ||
+                        balance?.probation?.note ||
+                        'On probation — leave accrues at probation rates from leave policy until confirmation.'}
+                </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white rounded-lg shadow p-4">
                     <p className="text-sm text-gray-600 mb-1">This Month Leave</p>
@@ -100,10 +107,13 @@ const LeaveBalance = () => {
                     </p>
                 </div>
                 <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600 mb-1">Available</p>
+                    <p className="text-sm text-gray-600 mb-1">Can apply this month</p>
                     <p className="text-2xl font-bold text-theme-primary">
-                        {leaveSummary.totalAvailableLeave} days
+                        {leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave} days
                     </p>
+                    {leaveSummary.noCarryProbation ? (
+                        <p className="mt-1 text-xs text-amber-800">Frozen balance is not included.</p>
+                    ) : null}
                 </div>
             </div>
 
@@ -114,7 +124,7 @@ const LeaveBalance = () => {
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                             <Pie
-                                data={[{ name: leaveLabel, value: leaveSummary.totalAvailableLeave || 0 }]}
+                                data={[{ name: leaveLabel, value: leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave || 0 }]}
                                 cx="50%"
                                 cy="50%"
                                 labelLine={false}
@@ -123,7 +133,7 @@ const LeaveBalance = () => {
                                 fill="#8884d8"
                                 dataKey="value"
                             >
-                                {[{ name: leaveLabel, value: leaveSummary.totalAvailableLeave || 0 }].length > 0 ? (
+                                {[{ name: leaveLabel, value: leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave || 0 }].length > 0 ? (
                                     <Cell fill="#0088FE" />
                                 ) : null}
                             </Pie>
@@ -139,7 +149,7 @@ const LeaveBalance = () => {
                         <BarChart data={[{
                             name: leaveLabel,
                             used: leaveSummary.totalUsed || 0,
-                            available: leaveSummary.totalAvailableLeave || 0,
+                            available: leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave || 0,
                         }]}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="name" />
@@ -147,7 +157,7 @@ const LeaveBalance = () => {
                             <Tooltip />
                             <Legend />
                             <Bar dataKey="used" fill="#ef4444" name="Used" />
-                            <Bar dataKey="available" fill="#10b981" name="Available" />
+                            <Bar dataKey="available" fill="#10b981" name="Can apply this month" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -170,11 +180,11 @@ const LeaveBalance = () => {
                         </div>
                         <div className="border-t pt-2 mt-2">
                             <div className="flex justify-between mb-2">
-                                <span className="font-semibold">Available:</span>
+                                <span className="font-semibold">Can apply this month:</span>
                                 <span className={`font-bold text-lg ${
-                                    leaveSummary.totalAvailableLeave > 0 ? 'text-theme-primary' : 'text-red-600'
+                                    (leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave) > 0 ? 'text-theme-primary' : 'text-red-600'
                                 }`}>
-                                    {leaveSummary.totalAvailableLeave} days
+                                    {leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave} days
                                 </span>
                             </div>
                             {leaveSummary.totalAccrued > 0 && (

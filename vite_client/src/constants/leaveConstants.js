@@ -53,6 +53,25 @@ const fmtLeaveStatDays = (value) => {
   return Math.round(n * 2) / 2;
 };
 
+/** Days the employee can actually apply this month (probation cap when carry-forward is off). */
+export const getTakeableDaysThisMonth = (row = {}) => {
+  if (row.appliableThisMonth != null && !Number.isNaN(Number(row.appliableThisMonth))) {
+    return fmtLeaveStatDays(Number(row.appliableThisMonth));
+  }
+  if (row.remainingThisMonth != null && !Number.isNaN(Number(row.remainingThisMonth))) {
+    return fmtLeaveStatDays(Number(row.remainingThisMonth));
+  }
+  return fmtLeaveStatDays(
+    Number(row.availableBalance ?? row.availableDays ?? row.available) || 0
+  );
+};
+
+export const sumTakeableDaysThisMonth = (rows = []) =>
+  fmtLeaveStatDays(rows.reduce((sum, row) => sum + getTakeableDaysThisMonth(row), 0));
+
+export const hasNoCarryProbationLeave = (rows = []) =>
+  rows.some((row) => row?.probationAccrualActive && row?.carryForwardDuringProbation !== true);
+
 export const getLeaveTypeDisplayName = (leaveType, policyLeaveTypes = []) => {
   if (!leaveType) return 'Leave';
   const fromPolicy = policyLeaveTypes?.find((lt) => lt.type === leaveType);
@@ -117,7 +136,7 @@ export const sumPolicyMonthlyAccrual = (policy) =>
     )
   );
 
-/** One card per enabled leave type — driven by policy + balance rows. */
+/** One card per enabled leave type — driven by policy + balance rows (probation-aware from API). */
 export const getLeaveTypeCards = (balance) => {
   if (!balance) return [];
   const policyTypes = getEnabledPolicyLeaveTypes(balance.policy);
@@ -133,15 +152,26 @@ export const getLeaveTypeCards = (balance) => {
         carriedForward: 0,
         manualAdjustment: 0,
       };
-    const annualEntitlement = Number(policyType.accrual?.maxAccrual) || 0;
-    const monthlyAccrual = usesPolicyMonthlyAccrual(policyType)
+    const policyAnnual = Number(policyType.accrual?.maxAccrual) || 0;
+    const policyMonthly = usesPolicyMonthlyAccrual(policyType)
       ? getPolicyMonthlyAccrualForType(policyType)
       : 0;
+    // Prefer API row values (probation overlay) when present
+    const annualEntitlement =
+      row.annualEntitlement != null && !Number.isNaN(Number(row.annualEntitlement))
+        ? Number(row.annualEntitlement)
+        : policyAnnual;
+    const monthlyAccrual =
+      row.monthlyRate != null && !Number.isNaN(Number(row.monthlyRate))
+        ? Number(row.monthlyRate)
+        : policyMonthly;
     const currentMonthAccrual = fmtLeaveStatDays(
       Number(row.earnedThisMonth ?? row.currentMonthAccrual) ||
-        (usesPolicyMonthlyAccrual(policyType) ? monthlyAccrual : 0)
+        (row.monthlyRate != null ? Number(row.monthlyRate) : policyMonthly)
     );
     const available = Number(row.availableDays ?? row.available) || 0;
+    const inProbation = Boolean(row.inProbation || balance.probation?.inProbation);
+    const probationAccrualActive = Boolean(row.probationAccrualActive);
     return {
       leaveType: policyType.type,
       displayName:
@@ -156,52 +186,96 @@ export const getLeaveTypeCards = (balance) => {
       pending: fmtLeaveStatDays(Number(row.pendingDays ?? row.pending) || 0),
       carriedForward: fmtLeaveStatDays(Number(row.carriedDays ?? row.carriedForward) || 0),
       manualAdjustment: fmtLeaveStatDays(Number(row.manualAdjustment) || 0),
-      chartTotal: fmtLeaveStatDays(annualEntitlement),
+      chartTotal: fmtLeaveStatDays(annualEntitlement > 0 ? annualEntitlement : policyAnnual || 1),
+      inProbation,
+      probationAccrualActive,
+      carryForwardDuringProbation: row.carryForwardDuringProbation === true,
+      appliableThisMonth:
+        row.appliableThisMonth != null ? fmtLeaveStatDays(Number(row.appliableThisMonth)) : null,
+      takeableThisMonth: getTakeableDaysThisMonth({
+        ...row,
+        available,
+        appliableThisMonth: row.appliableThisMonth,
+      }),
+      probationFrozenBalance:
+        row.probationFrozenBalance != null
+          ? fmtLeaveStatDays(Number(row.probationFrozenBalance))
+          : null,
+      probationNote: row.probationNote || balance.probation?.note || null,
+      normalMonthlyAccrual: fmtLeaveStatDays(
+        row.normalMonthlyRate != null ? Number(row.normalMonthlyRate) : policyMonthly
+      ),
     };
   });
 };
 
-/** Employee leave summary — sums across all enabled leave types from active policy. */
+/** Employee leave summary — sums across leave types; prefers API/row probation-aware rates. */
 export const getLeaveSummary = (balance) => {
   const policy = balance?.policy;
+  const allRows = balance?.balances || [];
   const policyAnnual = sumPolicyAnnualEntitlement(policy);
   const policyMonthly = sumPolicyMonthlyAccrual(policy);
+  const rowMonthly = fmtLeaveStatDays(
+    allRows.reduce((sum, row) => sum + (Number(row.monthlyRate) || 0), 0)
+  );
+  const rowAnnual = fmtLeaveStatDays(
+    allRows.reduce((sum, row) => sum + (Number(row.annualEntitlement) || 0), 0)
+  );
+  const hasRowRates = allRows.some((r) => r.monthlyRate != null || r.annualEntitlement != null);
   const viewPeriod = balance?.viewPeriod;
   const joiningDate = balance?.employeeContext?.joiningDate
     ? new Date(balance.employeeContext.joiningDate)
     : null;
-  const policyEarnedThisMonth =
+  const employedThisMonth =
     viewPeriod && joiningDate && !Number.isNaN(joiningDate.getTime())
       ? (() => {
           const joinKey = joiningDate.getFullYear() * 12 + joiningDate.getMonth();
           const viewKey = viewPeriod.year * 12 + (viewPeriod.month - 1);
-          return viewKey >= joinKey ? policyMonthly : 0;
+          return viewKey >= joinKey;
         })()
-      : policyMonthly;
+      : true;
 
   const rowEarnedThisMonth = fmtLeaveStatDays(
-    (balance?.balances || []).reduce((sum, row) => sum + (Number(row.earnedThisMonth ?? row.currentMonthAccrual) || 0), 0)
+    allRows.reduce((sum, row) => sum + (Number(row.earnedThisMonth ?? row.currentMonthAccrual) || 0), 0)
   );
 
   const resolveEarnedThisMonth = (fromApiValue) => {
-    const policyVal = fmtLeaveStatDays(policyEarnedThisMonth);
-    if (policyVal > 0) return policyVal;
+    // Prefer per-type / leaveSummary values (probation-aware) over raw policy monthly sum
+    if (hasRowRates || allRows.some((r) => r.earnedThisMonth != null || r.probationAccrualActive)) {
+      return employedThisMonth ? rowEarnedThisMonth : 0;
+    }
     const apiVal = fmtLeaveStatDays(fromApiValue);
-    if (apiVal > 0) return apiVal;
-    if (rowEarnedThisMonth > 0) return rowEarnedThisMonth;
-    return 0;
+    if (fromApiValue != null && !Number.isNaN(apiVal)) {
+      return employedThisMonth ? apiVal : 0;
+    }
+    return employedThisMonth ? fmtLeaveStatDays(policyMonthly) : 0;
   };
+
+  const inProbation = Boolean(
+    balance?.probation?.inProbation ||
+      balance?.employeeContext?.inProbation ||
+      allRows.some((r) => r.inProbation)
+  );
+  const probationNote = balance?.probation?.note || null;
+  const totalTakeableThisMonth = sumTakeableDaysThisMonth(allRows);
+  const noCarryProbation = hasNoCarryProbationLeave(allRows);
 
   const fromApi = balance?.leaveSummary;
   if (fromApi && typeof fromApi === 'object') {
     return {
       totalAvailableLeave: fmtLeaveStatDays(fromApi.totalAvailableLeave),
-      totalAnnualEntitlement: policy?.leaveTypes?.length
-        ? policyAnnual
-        : fmtLeaveStatDays(fromApi.totalAnnualEntitlement),
-      totalMonthlyAccrual: policy?.leaveTypes?.length
-        ? policyMonthly
-        : fmtLeaveStatDays(fromApi.totalMonthlyAccrual),
+      totalTakeableThisMonth,
+      noCarryProbation,
+      totalAnnualEntitlement: hasRowRates
+        ? rowAnnual
+        : policy?.leaveTypes?.length
+          ? policyAnnual
+          : fmtLeaveStatDays(fromApi.totalAnnualEntitlement),
+      totalMonthlyAccrual: hasRowRates
+        ? rowMonthly
+        : policy?.leaveTypes?.length
+          ? policyMonthly
+          : fmtLeaveStatDays(fromApi.totalMonthlyAccrual),
       totalAccrued: fmtLeaveStatDays(fromApi.totalAccrued),
       totalUsed: fmtLeaveStatDays(fromApi.totalUsed),
       totalCarriedForward: fmtLeaveStatDays(fromApi.totalCarriedForward),
@@ -209,11 +283,13 @@ export const getLeaveSummary = (balance) => {
       earnedThisMonth: resolveEarnedThisMonth(fromApi.earnedThisMonth ?? fromApi.perTypeCurrentMonthAccrual),
       manualAdjustment: fmtLeaveStatDays(fromApi.perTypeManualAdjustment ?? fromApi.manualAdjustment),
       legacyGlobalAdjustment: fmtLeaveStatDays(fromApi.legacyGlobalAdjustment),
+      inProbation,
+      probationNote,
     };
   }
 
   const enabledTypes = getEnabledPolicyLeaveTypes(policy);
-  const rows = (balance?.balances || []).filter((b) =>
+  const rows = allRows.filter((b) =>
     enabledTypes.some((lt) => lt.type === b.leaveType)
   );
 
@@ -221,8 +297,10 @@ export const getLeaveSummary = (balance) => {
     totalAvailableLeave: fmtLeaveStatDays(
       rows.reduce((sum, row) => sum + (Number(row.availableDays ?? row.available) || 0), 0)
     ),
-    totalAnnualEntitlement: policyAnnual,
-    totalMonthlyAccrual: policyMonthly,
+    totalTakeableThisMonth: sumTakeableDaysThisMonth(rows),
+    noCarryProbation: hasNoCarryProbationLeave(rows),
+    totalAnnualEntitlement: hasRowRates ? rowAnnual : policyAnnual,
+    totalMonthlyAccrual: hasRowRates ? rowMonthly : policyMonthly,
     totalAccrued: fmtLeaveStatDays(rows.reduce((sum, row) => sum + (Number(row.accrued) || 0), 0)),
     totalUsed: fmtLeaveStatDays(rows.reduce((sum, row) => sum + (Number(row.usedDays ?? row.used) || 0), 0)),
     totalCarriedForward: fmtLeaveStatDays(
@@ -232,6 +310,8 @@ export const getLeaveSummary = (balance) => {
     earnedThisMonth: resolveEarnedThisMonth(balance?.leaveSummary?.earnedThisMonth),
     manualAdjustment: 0,
     legacyGlobalAdjustment: fmtLeaveStatDays(balance?.legacyGlobalAdjustment?.amount),
+    inProbation,
+    probationNote,
   };
 };
 
@@ -239,6 +319,13 @@ export const getTotalAvailableLeave = (balance) => getLeaveSummary(balance).tota
 
 export const resolvePolicyAnnualEntitlement = (balance) => {
   if (!balance) return 0;
+  const fromRows = (balance.balances || []).reduce(
+    (sum, row) => sum + (Number(row.annualEntitlement) || 0),
+    0
+  );
+  if ((balance.balances || []).some((r) => r.annualEntitlement != null)) {
+    return fmtLeaveStatDays(fromRows);
+  }
   const fromPolicy = sumPolicyAnnualEntitlement(balance.policy);
   if (balance.policy?.leaveTypes?.length) return fromPolicy;
   const fromSummary = Number(balance.leaveSummary?.totalAnnualEntitlement);
@@ -252,16 +339,26 @@ export const resolvePolicyAnnualEntitlement = (balance) => {
 
 export const resolvePolicyMonthlyAccrual = (balance) => {
   if (!balance) return 0;
+  const fromRows = (balance.balances || []).reduce(
+    (sum, row) => sum + (Number(row.monthlyRate) || 0),
+    0
+  );
+  if ((balance.balances || []).some((r) => r.monthlyRate != null)) {
+    return fmtLeaveStatDays(fromRows);
+  }
   const fromPolicy = sumPolicyMonthlyAccrual(balance.policy);
   if (balance.policy?.leaveTypes?.length) return fromPolicy;
   const fromSummary = Number(balance.leaveSummary?.totalMonthlyAccrual);
   if (fromSummary > 0) return fmtLeaveStatDays(fromSummary);
   const fromTotals = Number(balance.policyTotals?.monthlyAccrual);
   if (fromTotals > 0) return fmtLeaveStatDays(fromTotals);
+  const fromContext = Number(balance.employeeContext?.totalMonthlyAccrual);
+  if (fromContext > 0) return fmtLeaveStatDays(fromContext);
   return fromPolicy;
 };
+  
 
-/** Statistics — policy-driven totals; chart uses available / total annual entitlement. */
+/** Statistics — policy-driven totals; chart uses available / to        tal annual entitlement. */
 export const getLeaveWidgetStats = (balance) => {
   if (!balance) return null;
 
@@ -276,6 +373,8 @@ export const getLeaveWidgetStats = (balance) => {
     accrued: fmtLeaveStatDays(summary.totalAccrued),
     carriedForward: fmtLeaveStatDays(summary.totalCarriedForward),
     available: fmtLeaveStatDays(summary.totalAvailableLeave),
+    takeableThisMonth: fmtLeaveStatDays(summary.totalTakeableThisMonth),
+    noCarryProbation: Boolean(summary.noCarryProbation),
     used: fmtLeaveStatDays(summary.totalUsed),
     manualAdjustment: fmtLeaveStatDays(summary.manualAdjustment),
     earnedThisMonth: fmtLeaveStatDays(summary.earnedThisMonth),

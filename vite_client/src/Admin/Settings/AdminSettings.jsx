@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave } from 'react-icons/fa';
+import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave, FaUserCheck } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
 import AttendanceRules from '../Attendance/AttendanceRules';
 import NotificationSettings from './NotificationSettings';
@@ -204,6 +204,7 @@ const GeneralSettingsContent = () => {
         requireEmailVerification: false,
         allowSelfService: true,
         allowWorkFromHome: true,
+        allowProbationAfterJoining: false,
         approvalSlaHours: 12,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
@@ -228,6 +229,7 @@ const GeneralSettingsContent = () => {
                 requireEmailVerification: profile.settings.requireEmailVerification ?? false,
                 allowSelfService: profile.settings.allowSelfService ?? true,
                 allowWorkFromHome: profile.settings.allowWorkFromHome ?? true,
+                allowProbationAfterJoining: profile.settings.allowProbationAfterJoining === true,
                 approvalSlaHours: profile.settings.approvalSlaHours || 12,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
@@ -292,6 +294,7 @@ const GeneralSettingsContent = () => {
                     requireEmailVerification: updatedProfile.settings.requireEmailVerification ?? false,
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
                     allowWorkFromHome: updatedProfile.settings.allowWorkFromHome ?? true,
+                    allowProbationAfterJoining: updatedProfile.settings.allowProbationAfterJoining === true,
                     approvalSlaHours: updatedProfile.settings.approvalSlaHours || 12,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
@@ -462,6 +465,31 @@ const GeneralSettingsContent = () => {
                         className="ml-2 flex-shrink-0"
                     >
                         {settings.allowWorkFromHome ? (
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
+                        ) : (
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
+                        )}
+                    </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
+                            <FaUserCheck className="mr-2 flex-shrink-0" />
+                            Allow adding probation after joining
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                            When off, probation can only be started on Add Employee. You can still extend or reduce
+                            an active probation, but after confirmation you cannot put the employee on probation again.
+                            When on, HR can start or restart probation from Job Details or Lifecycle, including after confirmation.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleSettingChange('allowProbationAfterJoining')}
+                        className="ml-2 flex-shrink-0"
+                    >
+                        {settings.allowProbationAfterJoining ? (
                             <FiToggleRight className="h-6 w-12 text-theme-primary" />
                         ) : (
                             <FiToggleLeft className="h-6 w-12 text-gray-400" />

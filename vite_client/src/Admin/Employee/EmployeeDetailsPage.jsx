@@ -53,6 +53,36 @@ import {
   getFullName,
 } from './employeeDetails/utils';
 import { promoteEmployeeToHrManager } from '../../utils/systemRoleApi';
+import { fetchOrganizationProfile } from '../../context/organizationSlice';
+
+const ALL_PROBATION_STATUSES = [
+  'None',
+  'Not Started',
+  'Active',
+  'Extended',
+  'Confirmed',
+  'Waived',
+  'Rejected',
+  'Terminated',
+];
+
+function normalizeProbationStatus(status) {
+  const s = String(status || '').trim();
+  if (!s || s === 'Not Started') return 'None';
+  return s;
+}
+
+function getAllowedProbationStatuses(currentStatus, allowAfterJoining) {
+  if (allowAfterJoining) return ALL_PROBATION_STATUSES;
+  const current = normalizeProbationStatus(currentStatus);
+  if (current === 'None') return ['None', 'Not Started'];
+  if (current === 'Active' || current === 'Extended') {
+    return ['Active', 'Extended', 'Confirmed', 'Waived', 'Rejected', 'Terminated'];
+  }
+  return ['Confirmed', 'Waived', 'Rejected', 'Terminated'].includes(current)
+    ? ['Confirmed', 'Waived', 'Rejected', 'Terminated']
+    : [currentStatus || 'None'];
+}
 
 const EmployeeDetailsPage = () => {
   const { employeeId } = useParams();
@@ -110,6 +140,8 @@ const EmployeeDetailsPage = () => {
     workInfoError,
   } = useSelector((state) => state.employeeDetails);
   const currentUser = useSelector((state) => state.auth?.user);
+  const orgProfile = useSelector((state) => state.organization?.profile);
+  const allowProbationAfterJoining = orgProfile?.settings?.allowProbationAfterJoining === true;
   const sessionEmployee = useSelector((state) => state.employeeDetails?.employee);
   const { hasAnyPermission, isOrgOwner, isHrExecutive, isHrManager } = useAuthPermissions();
   const userIsHr = isHR(currentUser || sessionEmployee);
@@ -150,6 +182,7 @@ const EmployeeDetailsPage = () => {
 
   useEffect(() => {
     dispatch(fetchEmployeeDetails(employeeId));
+    dispatch(fetchOrganizationProfile());
     return () => dispatch(clearEmployeeDetails());
   }, [dispatch, employeeId]);
 
@@ -817,21 +850,36 @@ const EmployeeDetailsPage = () => {
               <FormControl fullWidth size="small">
                 <InputLabel>Probation status</InputLabel>
                 <Select
-                  value={editWorkForm.probationStatus || 'None'}
+                  value={
+                    getAllowedProbationStatuses(
+                      employee?.probation?.status || 'None',
+                      allowProbationAfterJoining
+                    ).includes(editWorkForm.probationStatus)
+                      ? editWorkForm.probationStatus || 'None'
+                      : employee?.probation?.status || 'None'
+                  }
                   onChange={handleEditWorkFormChange('probationStatus')}
                   label="Probation status"
                 >
-                  {['None', 'Not Started', 'Active', 'Extended', 'Confirmed', 'Waived', 'Rejected', 'Terminated'].map(
-                    (status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
-                      </MenuItem>
-                    )
-                  )}
+                  {getAllowedProbationStatuses(
+                    employee?.probation?.status || 'None',
+                    allowProbationAfterJoining
+                  ).map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                Synced with Lifecycle Probation Center when onboarding exists.
+                {allowProbationAfterJoining
+                  ? 'Synced with Lifecycle. This organization allows starting or restarting probation after joining.'
+                  : normalizeProbationStatus(employee?.probation?.status) === 'None'
+                    ? 'Probation can only be started on Add Employee. Enable “Allow adding probation after joining” in Admin General Settings to start it later.'
+                    : normalizeProbationStatus(employee?.probation?.status) === 'Active' ||
+                        normalizeProbationStatus(employee?.probation?.status) === 'Extended'
+                      ? 'You can extend or reduce the end date, or confirm probation. Restarting after confirmation is disabled for this organization.'
+                      : 'Probation is complete. This organization does not allow putting the employee on probation again.'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={4}>
@@ -843,6 +891,10 @@ const EmployeeDetailsPage = () => {
                 value={editWorkForm.probationStartDate}
                 onChange={handleEditWorkFormChange('probationStartDate')}
                 InputLabelProps={{ shrink: true }}
+                disabled={
+                  !allowProbationAfterJoining &&
+                  normalizeProbationStatus(employee?.probation?.status) === 'None'
+                }
               />
             </Grid>
             <Grid item xs={12} md={4}>
@@ -854,6 +906,12 @@ const EmployeeDetailsPage = () => {
                 value={editWorkForm.probationEndDate}
                 onChange={handleEditWorkFormChange('probationEndDate')}
                 InputLabelProps={{ shrink: true }}
+                disabled={
+                  !allowProbationAfterJoining &&
+                  !['Active', 'Extended'].includes(
+                    normalizeProbationStatus(employee?.probation?.status)
+                  )
+                }
               />
             </Grid>
             <Grid item xs={12} md={4}>
@@ -865,6 +923,10 @@ const EmployeeDetailsPage = () => {
                 value={editWorkForm.probationConfirmedAt}
                 onChange={handleEditWorkFormChange('probationConfirmedAt')}
                 InputLabelProps={{ shrink: true }}
+                disabled={
+                  !allowProbationAfterJoining &&
+                  normalizeProbationStatus(employee?.probation?.status) === 'None'
+                }
               />
             </Grid>
           </Grid>

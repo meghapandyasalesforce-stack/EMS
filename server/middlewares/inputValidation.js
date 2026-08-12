@@ -673,6 +673,9 @@ export const organizationValidations = {
         body('allowWorkFromHome')
             .optional()
             .isBoolean().withMessage('allowWorkFromHome must be a boolean'),
+        body('allowProbationAfterJoining')
+            .optional()
+            .isBoolean().withMessage('allowProbationAfterJoining must be a boolean'),
         body('allowNonWorkingDayPunch')
             .optional()
             .isBoolean().withMessage('allowNonWorkingDayPunch must be a boolean'),

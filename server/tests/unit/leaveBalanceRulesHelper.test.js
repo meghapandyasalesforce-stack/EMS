@@ -11,6 +11,7 @@ import {
     roundLeaveDays,
     getEffectiveJoiningDate,
     computeRemainingPreJoinCarryForward,
+    expireUnusedMonthCredit,
 } from '../../helpers/leaveBalanceRulesHelper.js';
 
 describe('leaveBalanceRulesHelper', () => {
@@ -674,5 +675,34 @@ describe('leaveBalanceRulesHelper', () => {
         expect(computeRemainingPreJoinCarryForward(10, 3)).toBe(7);
         expect(computeRemainingPreJoinCarryForward(10, 10)).toBe(0);
         expect(computeRemainingPreJoinCarryForward(10, 15)).toBe(0);
+    });
+
+    it('expireUnusedMonthCredit keeps opening and drops leftover credit', () => {
+        expect(
+            expireUnusedMonthCredit({ previousBalance: 3.5, credit: 1, used: 0 })
+        ).toEqual({ closingBalance: 3.5, expiredUnused: 1 });
+        expect(
+            expireUnusedMonthCredit({ previousBalance: 3.5, credit: 1, used: 1 })
+        ).toEqual({ closingBalance: 3.5, expiredUnused: 0 });
+        expect(
+            expireUnusedMonthCredit({ previousBalance: 3.5, credit: 1, used: 0.5 })
+        ).toEqual({ closingBalance: 3.5, expiredUnused: 0.5 });
+    });
+
+    it('rollLeaveBalanceThroughPeriod expires unused credit when callback says so', () => {
+        const result = rollLeaveBalanceThroughPeriod({
+            joinYear: 2026,
+            joinMonthIndex: 4,
+            endYear: 2026,
+            endMonthIndex: 6,
+            monthlyRate: 1,
+            initialBalance: 3.5,
+            expireUnusedCreditForMonth: (year, monthIndex) =>
+                year === 2026 && monthIndex >= 4 && monthIndex < 6,
+        });
+        // May (4) and June (5) expire unused; July (6) is current-style carry
+        expect(result.ledgerByYear[2026][0].available).toBe(3.5);
+        expect(result.ledgerByYear[2026][1].available).toBe(3.5);
+        expect(result.ledgerByYear[2026][2].available).toBe(4.5);
     });
 });

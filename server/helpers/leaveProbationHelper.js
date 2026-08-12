@@ -164,6 +164,7 @@ export function applyProbationAccrualOverlay(leaveTypeConfig, probationContext, 
                       : leaveTypeConfig.maxDaysPerMonth,
             _probationOverlay: true,
             _probationFrequency: 'yearly',
+            _probationCarryForward: restrictions.carryForwardDuringProbation === true,
         };
     }
 
@@ -186,6 +187,7 @@ export function applyProbationAccrualOverlay(leaveTypeConfig, probationContext, 
                   : leaveTypeConfig.maxDaysPerMonth,
         _probationOverlay: true,
         _probationFrequency: 'monthly',
+        _probationCarryForward: restrictions.carryForwardDuringProbation === true,
     };
 }
 
@@ -243,6 +245,13 @@ export function evaluateLeaveProbationRestriction({
     }
 
     return { allowed: true, inProbation: true, remaining: null };
+}
+
+/** Overlay months with carry-forward disabled: freeze prior balance, expire unused month credit. */
+export function isProbationNoCarryForwardConfig(leaveTypeConfig) {
+    return Boolean(
+        leaveTypeConfig?._probationOverlay && leaveTypeConfig?._probationCarryForward !== true
+    );
 }
 
 /**
@@ -305,6 +314,7 @@ export function normalizeProbationRestrictions(raw = {}) {
     return {
         enabled,
         allowLeave: migratedAllowLeave,
+        carryForwardDuringProbation: raw?.carryForwardDuringProbation === true,
         accrual: {
             method: frequency === 'yearly' ? 'yearly' : 'fixed',
             frequency,

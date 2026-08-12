@@ -5,6 +5,7 @@ import {
     mapLifecycleProbationToEmployee,
     buildEmployeeProbationFromOptIn,
     employeeHasActiveProbation,
+    evaluateProbationStartLock,
 } from '../../helpers/employeeProbationSyncHelper.js';
 
 describe('employeeProbationSyncHelper', () => {
@@ -79,8 +80,75 @@ describe('employeeProbationSyncHelper', () => {
     describe('employeeHasActiveProbation', () => {
         it('is true only for Active/Extended', () => {
             expect(employeeHasActiveProbation({ probation: { status: 'Active' } })).toBe(true);
-            expect(employeeHasActiveProbation({ probation: { status: 'Confirmed' } })).toBe(false);
+            expect(employeeHasActiveProbation({ probation: { status: 'Extended' } })).toBe(true);
             expect(employeeHasActiveProbation({ probation: { status: 'None' } })).toBe(false);
+            expect(employeeHasActiveProbation({ probation: { status: 'Confirmed' } })).toBe(false);
+        });
+    });
+
+    describe('evaluateProbationStartLock', () => {
+        it('allows all starts when org toggle is on', () => {
+            expect(
+                evaluateProbationStartLock({
+                    currentStatus: 'None',
+                    nextStatus: 'Active',
+                    allowProbationAfterJoining: true,
+                }).allowed
+            ).toBe(true);
+            expect(
+                evaluateProbationStartLock({
+                    currentStatus: 'Confirmed',
+                    nextStatus: 'Active',
+                    allowProbationAfterJoining: true,
+                }).allowed
+            ).toBe(true);
+        });
+
+        it('blocks starting probation after join when toggle is off', () => {
+            const result = evaluateProbationStartLock({
+                currentStatus: 'None',
+                nextStatus: 'Active',
+                allowProbationAfterJoining: false,
+            });
+            expect(result.allowed).toBe(false);
+            expect(result.reason).toMatch(/creating the employee/i);
+        });
+
+        it('blocks restarting after confirmation when toggle is off', () => {
+            const result = evaluateProbationStartLock({
+                currentStatus: 'Confirmed',
+                nextStatus: 'Active',
+                allowProbationAfterJoining: false,
+            });
+            expect(result.allowed).toBe(false);
+            expect(result.reason).toMatch(/cannot be put on probation again/i);
+        });
+
+        it('allows extend/reduce while already on probation', () => {
+            expect(
+                evaluateProbationStartLock({
+                    currentStatus: 'Active',
+                    nextStatus: 'Extended',
+                    allowProbationAfterJoining: false,
+                }).allowed
+            ).toBe(true);
+            expect(
+                evaluateProbationStartLock({
+                    currentStatus: 'Active',
+                    nextStatus: 'Active',
+                    allowProbationAfterJoining: false,
+                }).allowed
+            ).toBe(true);
+        });
+
+        it('allows confirmation while on probation', () => {
+            expect(
+                evaluateProbationStartLock({
+                    currentStatus: 'Active',
+                    nextStatus: 'Confirmed',
+                    allowProbationAfterJoining: false,
+                }).allowed
+            ).toBe(true);
         });
     });
 });

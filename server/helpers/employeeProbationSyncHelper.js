@@ -4,6 +4,7 @@
  */
 
 import Employee from '../models/employee.model.js';
+import Organization from '../models/organization.model.js';
 import { OnboardingWorkflow } from '../models/onboarding.model.js';
 import logger from './logger.js';
 
@@ -109,6 +110,84 @@ export function buildEmployeeProbationFromOptIn({
 export function employeeHasActiveProbation(employee) {
     const status = String(employee?.probation?.status || '');
     return status === 'Active' || status === 'Extended';
+}
+
+export function normalizeEmployeeProbationStatus(status) {
+    const s = String(status || '').trim();
+    if (!s || s === 'Not Started') return 'None';
+    return s;
+}
+
+export function isActiveProbationStatus(status) {
+    const s = normalizeEmployeeProbationStatus(status);
+    return s === 'Active' || s === 'Extended';
+}
+
+export function isExitedProbationStatus(status) {
+    const s = normalizeEmployeeProbationStatus(status);
+    return s === 'Confirmed' || s === 'Waived' || s === 'Rejected' || s === 'Terminated';
+}
+
+export function isNeverStartedProbationStatus(status) {
+    return normalizeEmployeeProbationStatus(status) === 'None';
+}
+
+/** Org setting: missing/false means probation can only start at Add Employee. */
+export async function resolveAllowProbationAfterJoining(organizationId) {
+    if (!organizationId) return false;
+    try {
+        const org = await Organization.findById(organizationId)
+            .select('settings.allowProbationAfterJoining')
+            .lean();
+        return org?.settings?.allowProbationAfterJoining === true;
+    } catch (err) {
+        logger.warn('Failed to read allowProbationAfterJoining', {
+            error: err?.message,
+            organizationId: String(organizationId),
+        });
+        return false;
+    }
+}
+
+/**
+ * When allowProbationAfterJoining is false:
+ * - cannot start probation if it was never opted in at create
+ * - cannot restart after confirmation / exit
+ * Extend/reduce while Active or Extended is always allowed.
+ */
+export function evaluateProbationStartLock({
+    currentStatus,
+    nextStatus,
+    allowProbationAfterJoining = false,
+} = {}) {
+    if (allowProbationAfterJoining) {
+        return { allowed: true };
+    }
+
+    const current = normalizeEmployeeProbationStatus(currentStatus);
+    const next = normalizeEmployeeProbationStatus(nextStatus);
+
+    if (!isActiveProbationStatus(next) || isActiveProbationStatus(current)) {
+        return { allowed: true };
+    }
+
+    if (isNeverStartedProbationStatus(current)) {
+        return {
+            allowed: false,
+            reason:
+                'Probation can only be started when creating the employee. Enable “Allow adding probation after joining” in Admin General Settings to start probation later.',
+        };
+    }
+
+    if (isExitedProbationStatus(current)) {
+        return {
+            allowed: false,
+            reason:
+                'This employee has already completed probation and cannot be put on probation again. Enable “Allow adding probation after joining” in Admin General Settings to restart probation.',
+        };
+    }
+
+    return { allowed: true };
 }
 
 export function resolveProbationMonthsFromEmployee(employee, fallback = 6) {

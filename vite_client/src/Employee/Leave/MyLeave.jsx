@@ -15,6 +15,8 @@ import {
   formatLeaveDurationDisplay,
   formatLeaveHistoryEndDate,
   isHalfDayLeaveRecord,
+  getTakeableDaysThisMonth,
+  hasNoCarryProbationLeave,
 } from '../../constants/leaveConstants';
 import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
 
@@ -140,10 +142,15 @@ const MyLeavePage = () => {
       ? leaveBalance.balances.reduce((sum, b) => sum + (b.accrued + b.carriedForward), 0)
       : (statsData?.totalLeaves || 0),
     remainingLeaves: leaveBalance?.leaveSummary || leaveBalance?.totalAvailableLeave != null
-      ? leaveSummary.totalAvailableLeave
+      ? (leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave)
       : leaveBalance?.balances
-      ? leaveBalance.balances.reduce((sum, b) => sum + b.available, 0)
-      : (statsData?.remainingLeaves || 0),
+      ? leaveSummary.totalTakeableThisMonth ?? leaveBalance.balances.reduce((sum, b) => sum + b.available, 0)
+      : (statsData?.monthlyLeaveCaps?.types?.length
+        ? statsData.monthlyLeaveCaps.types.reduce(
+            (sum, t) => sum + getTakeableDaysThisMonth(t),
+            0
+          )
+        : (statsData?.remainingLeaves || 0)),
     sickLeaves: {
       taken: safeLeavesByType.sick || 0,
       remaining: getTypeRemaining('sick', 'sick')
@@ -332,6 +339,13 @@ const MyLeavePage = () => {
                 return (
                   <div className="w-full min-w-0 rounded-lg bg-gray-50 p-4">
                     <h3 className="font-semibold mb-2">Employee Leave Summary</h3>
+                    {(leaveSummary.inProbation || leaveBalance?.probation?.inProbation) && (
+                      <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        {leaveSummary.probationNote ||
+                          leaveBalance?.probation?.note ||
+                          'On probation — leave accrues at probation rates from leave policy until confirmation.'}
+                      </p>
+                    )}
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">This Month Leave:</span>
@@ -343,13 +357,20 @@ const MyLeavePage = () => {
                       </div>
                       <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between">
-                          <span className="font-semibold">Available:</span>
+                          <span className="font-semibold">Can apply this month:</span>
                           <span className={`font-bold text-lg ${
-                            leaveSummary.totalAvailableLeave > 0 ? 'text-theme-primary' : 'text-red-600'
+                            (leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave) > 0
+                              ? 'text-theme-primary'
+                              : 'text-red-600'
                           }`}>
-                            {leaveSummary.totalAvailableLeave} days
+                            {leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave} days
                           </span>
                         </div>
+                        {leaveSummary.noCarryProbation ? (
+                          <p className="mt-1 text-xs text-amber-800">
+                            Frozen until confirmation is not included in this total.
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -371,21 +392,48 @@ const MyLeavePage = () => {
               <h3 className="text-sm font-semibold text-gray-800 mb-2">
                 This month ({statsData.monthlyLeaveCaps.monthLabel})
               </h3>
+              {(statsData.monthlyLeaveCaps.inProbation ||
+                statsData.monthlyLeaveCaps.types.some((t) => t.probationAccrualActive)) && (
+                <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  {statsData.monthlyLeaveCaps.probationNote ||
+                    'On probation — monthly leave rates follow leave policy probation rules.'}
+                </p>
+              )}
               <ul className="space-y-2">
-                {statsData.monthlyLeaveCaps.types.map((t) => (
+                {statsData.monthlyLeaveCaps.types.map((t) => {
+                  const takeable = getTakeableDaysThisMonth(t);
+                  const frozen =
+                    t.probationFrozenBalance != null ? Number(t.probationFrozenBalance) : null;
+                  return (
                   <li
                     key={t.leaveType}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm"
                   >
-                    <span className="font-medium capitalize">{t.displayName || t.leaveType}</span>
-                    <span className="text-gray-600">
-                      <span className="font-semibold text-theme-primary">{t.availableBalance ?? 0}</span> available ·{' '}
-                      <span className="font-semibold text-theme-primary">{t.appliableThisMonth ?? 0}</span> can apply
-                      (max {t.maxDaysPerMonth}/month)
+                    <span className="font-medium capitalize">
+                      {t.displayName || t.leaveType}
+                      {t.probationAccrualActive ? (
+                        <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                          Probation
+                        </span>
+                      ) : null}
                     </span>
+                    <span className="text-gray-600">
+                      <span className="font-semibold text-theme-primary">{takeable}</span> can apply this month
+                      · earns {t.monthlyEntitlement ?? 0}/month
+                      {frozen != null && frozen > 0 ? ` · ${frozen} frozen` : ''}
+                    </span>
+                    {t.probationNote ? (
+                      <span className="w-full text-xs text-amber-800">{t.probationNote}</span>
+                    ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
+              {hasNoCarryProbationLeave(statsData.monthlyLeaveCaps.types) ? (
+                <p className="mt-2 text-xs text-amber-800">
+                  Totals above are what you can apply this month. Frozen balance unlocks on confirmation.
+                </p>
+              ) : null}
             </div>
           )}
         </div>
@@ -448,7 +496,7 @@ const MyLeavePage = () => {
                     <BsCalendarCheck size={20} />
                   </div>
                   <div>
-                    <p className="text-xs md:text-sm text-gray-500">Remaining Leaves</p>
+                    <p className="text-xs md:text-sm text-gray-500">Can apply this month</p>
                     <h3 className="text-xl font-bold">{calculatedStats.remainingLeaves}</h3>
                   </div>
                 </div>
