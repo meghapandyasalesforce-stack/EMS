@@ -14,6 +14,8 @@ import {
   getLeaveTypeCards,
   formatLeaveDurationDisplay,
   isHalfDayLeaveRecord,
+  LEAVE_UI,
+  monthlyEarnsLabel,
 } from '../../constants/leaveConstants';
 import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
 import WfhRequestPanel from '../Wfh/WfhRequestPanel';
@@ -154,7 +156,7 @@ const buildMonthMatrix = (cursor, sessionsByDate) => {
   return cells;
 };
 
-const CircleMeter = ({ value, total, label, used, valueLabel = 'Can apply' }) => {
+const CircleMeter = ({ value, total, label, used, valueLabel = LEAVE_UI.youCanTakeThisMonth }) => {
   const percentage = total > 0 ? Math.max(0, Math.min(100, Math.round((value / total) * 100))) : 0;
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-[#FFFFFF] p-4">
@@ -890,60 +892,60 @@ const LeaveAttendanceHub = () => {
                               value={takeable}
                               total={meterTotal}
                               used={card.used}
-                              valueLabel="Can apply"
+                              valueLabel={LEAVE_UI.youCanTakeThisMonth}
                             />
                             {(card.inProbation || card.probationAccrualActive) && (
                               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
                                 <span className="font-semibold">On probation</span>
-                                {card.probationAccrualActive ? (
+                                {card.probationNote ? (
+                                  <span> — {card.probationNote.replace(/^On probation —\s*/i, '')}</span>
+                                ) : card.probationAccrualActive ? (
                                   <span>
                                     {' '}
-                                    — accrues {card.monthlyAccrual}/month
+                                    — you earn {card.monthlyAccrual} day(s) per month
                                     {card.normalMonthlyAccrual != null &&
                                     card.normalMonthlyAccrual !== card.monthlyAccrual
-                                      ? ` (normal ${card.normalMonthlyAccrual}/month after confirmation)`
+                                      ? ` (then ${card.normalMonthlyAccrual}/month after confirmation)`
                                       : ''}
                                     {card.carryForwardDuringProbation !== true
-                                      ? '. Unused days do not carry to the next month; pre-probation balance is frozen.'
+                                      ? '. Unused days this month do not move to next month. Your old balance stays locked until confirmation.'
                                       : ''}
                                   </span>
                                 ) : (
-                                  <span> — using normal leave rates for this type</span>
+                                  <span> — normal leave rules apply for this type</span>
                                 )}
                               </div>
                             )}
                             <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[11px] text-[#475569]">
                               <div className="flex items-center justify-between">
-                                <span>Annual entitlement</span>
+                                <span>{LEAVE_UI.yearlyLimit}</span>
                                 <span className="font-semibold text-[#0F172A]">{card.annualEntitlement}</span>
                               </div>
                               <div className="mt-1 flex items-center justify-between">
-                                <span>
-                                  {card.probationAccrualActive ? 'Probation monthly accrual' : 'Monthly accrual'}
-                                </span>
+                                <span>{monthlyEarnsLabel(card.probationAccrualActive)}</span>
                                 <span className="font-semibold text-[#0F172A]">{card.monthlyAccrual}</span>
                               </div>
                               <div className="mt-1 flex items-center justify-between">
-                                <span>Current month accrual</span>
+                                <span>{LEAVE_UI.addedThisMonth}</span>
                                 <span className="font-semibold text-[#0F766E]">
                                   {card.currentMonthAccrual > 0 ? `+${card.currentMonthAccrual}` : card.currentMonthAccrual}
                                 </span>
                               </div>
                               <div className="mt-1 flex items-center justify-between">
-                                <span>Used</span>
+                                <span>{LEAVE_UI.used}</span>
                                 <span className="font-semibold text-[#0F172A]">{card.used}</span>
                               </div>
                               <div className="mt-1 flex items-center justify-between">
-                                <span>Carry forward</span>
+                                <span>{LEAVE_UI.savedFromEarlier}</span>
                                 <span className="font-semibold text-[#0F172A]">{card.carriedForward}</span>
                               </div>
                               <div className="mt-1 flex items-center justify-between">
-                                <span>Can apply this month</span>
+                                <span>{LEAVE_UI.youCanTakeThisMonth}</span>
                                 <span className="font-semibold text-[#0F766E]">{takeable}</span>
                               </div>
                               {card.probationFrozenBalance != null && card.probationFrozenBalance > 0 ? (
                                 <div className="mt-1 flex items-center justify-between">
-                                  <span>Frozen until confirmation</span>
+                                  <span>{LEAVE_UI.lockedUntilConfirmation}</span>
                                   <span className="font-semibold text-[#0F172A]">{card.probationFrozenBalance}</span>
                                 </div>
                               ) : null}
@@ -955,20 +957,19 @@ const LeaveAttendanceHub = () => {
                     </div>
                     {(leaveBalance?.probation?.inProbation || leaveTypeCards.some((c) => c.inProbation)) && (
                       <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
-                        {leaveBalance?.probation?.note ||
-                          'On probation — leave accrues at probation rates from leave policy until confirmation (normal rates from the 1st of the next month).'}
+                        {leaveBalance?.probation?.note || LEAVE_UI.probationBanner}
                       </p>
                     )}
                     {leaveStats && (
                       <div className="mt-4 rounded-lg border border-[#E2E8F0] bg-white px-4 py-3 text-xs text-[#475569]">
                         <p className="font-semibold text-[#0F172A] mb-2">Leave summary</p>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          <span>Total annual: <strong>{leaveStats.annualQuota}</strong></span>
-                          <span>Current month: <strong>+{leaveStats.earnedThisMonth}</strong></span>
-                          <span>Can apply this month: <strong>{leaveStats.takeableThisMonth ?? leaveStats.available}</strong></span>
-                          <span>Used: <strong>{leaveStats.used}</strong></span>
-                          <span>Carry forward: <strong>{leaveStats.carriedForward}</strong></span>
-                          <span>Manual adj.: <strong>{leaveStats.manualAdjustment}</strong></span>
+                          <span>{LEAVE_UI.yearlyLimitAll}: <strong>{leaveStats.annualQuota}</strong></span>
+                          <span>{LEAVE_UI.addedThisMonth}: <strong>+{leaveStats.earnedThisMonth}</strong></span>
+                          <span>{LEAVE_UI.youCanTakeThisMonth}: <strong>{leaveStats.takeableThisMonth ?? leaveStats.available}</strong></span>
+                          <span>{LEAVE_UI.used}: <strong>{leaveStats.used}</strong></span>
+                          <span>{LEAVE_UI.savedFromEarlier}: <strong>{leaveStats.carriedForward}</strong></span>
+                          <span>{LEAVE_UI.hrAdjustment}: <strong>{leaveStats.manualAdjustment}</strong></span>
                         </div>
                       </div>
                     )}

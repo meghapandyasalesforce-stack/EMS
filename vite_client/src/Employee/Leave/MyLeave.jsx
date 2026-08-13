@@ -17,6 +17,7 @@ import {
   isHalfDayLeaveRecord,
   getTakeableDaysThisMonth,
   hasNoCarryProbationLeave,
+  LEAVE_UI,
 } from '../../constants/leaveConstants';
 import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
 
@@ -343,21 +344,21 @@ const MyLeavePage = () => {
                       <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                         {leaveSummary.probationNote ||
                           leaveBalance?.probation?.note ||
-                          'On probation — leave accrues at probation rates from leave policy until confirmation.'}
+                          LEAVE_UI.probationBanner}
                       </p>
                     )}
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">This Month Leave:</span>
+                        <span className="text-gray-600">{LEAVE_UI.addedThisMonth}:</span>
                         <span className="font-medium">{leaveSummary.earnedThisMonth} days</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Total Used:</span>
+                        <span className="text-gray-600">{LEAVE_UI.totalUsed}:</span>
                         <span className="font-medium text-red-600">-{leaveSummary.totalUsed} days</span>
                       </div>
                       <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between">
-                          <span className="font-semibold">Can apply this month:</span>
+                          <span className="font-semibold">{LEAVE_UI.youCanTakeThisMonth}:</span>
                           <span className={`font-bold text-lg ${
                             (leaveSummary.totalTakeableThisMonth ?? leaveSummary.totalAvailableLeave) > 0
                               ? 'text-theme-primary'
@@ -368,7 +369,7 @@ const MyLeavePage = () => {
                         </div>
                         {leaveSummary.noCarryProbation ? (
                           <p className="mt-1 text-xs text-amber-800">
-                            Frozen until confirmation is not included in this total.
+                            {LEAVE_UI.lockedNotIncluded}
                           </p>
                         ) : null}
                       </div>
@@ -381,7 +382,7 @@ const MyLeavePage = () => {
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="text-yellow-800">
                 {leavesData.length > 0
-                  ? 'Leave balance is not yet configured. Your applied leaves are shown below. Contact HR for entitlement details.'
+                  ? 'Leave balance is not yet configured. Your applied leaves are shown below. Contact HR for leave details.'
                   : 'No leave policy configured yet. Please contact HR to set up your leave policy.'}
               </p>
             </div>
@@ -395,8 +396,7 @@ const MyLeavePage = () => {
               {(statsData.monthlyLeaveCaps.inProbation ||
                 statsData.monthlyLeaveCaps.types.some((t) => t.probationAccrualActive)) && (
                 <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  {statsData.monthlyLeaveCaps.probationNote ||
-                    'On probation — monthly leave rates follow leave policy probation rules.'}
+                  {statsData.monthlyLeaveCaps.probationNote || LEAVE_UI.probationBanner}
                 </p>
               )}
               <ul className="space-y-2">
@@ -418,9 +418,9 @@ const MyLeavePage = () => {
                       ) : null}
                     </span>
                     <span className="text-gray-600">
-                      <span className="font-semibold text-theme-primary">{takeable}</span> can apply this month
-                      · earns {t.monthlyEntitlement ?? 0}/month
-                      {frozen != null && frozen > 0 ? ` · ${frozen} frozen` : ''}
+                      <span className="font-semibold text-theme-primary">{takeable}</span> {LEAVE_UI.youCanTakeThisMonth.toLowerCase()}
+                      · earns {t.monthlyEntitlement ?? 0} day(s) per month
+                      {frozen != null && frozen > 0 ? ` · ${frozen} locked` : ''}
                     </span>
                     {t.probationNote ? (
                       <span className="w-full text-xs text-amber-800">{t.probationNote}</span>
@@ -431,7 +431,7 @@ const MyLeavePage = () => {
               </ul>
               {hasNoCarryProbationLeave(statsData.monthlyLeaveCaps.types) ? (
                 <p className="mt-2 text-xs text-amber-800">
-                  Totals above are what you can apply this month. Frozen balance unlocks on confirmation.
+                  Totals above are what you can take this month. Locked days unlock on confirmation.
                 </p>
               ) : null}
             </div>
@@ -496,7 +496,7 @@ const MyLeavePage = () => {
                     <BsCalendarCheck size={20} />
                   </div>
                   <div>
-                    <p className="text-xs md:text-sm text-gray-500">Can apply this month</p>
+                    <p className="text-xs md:text-sm text-gray-500">{LEAVE_UI.youCanTakeThisMonth}</p>
                     <h3 className="text-xl font-bold">{calculatedStats.remainingLeaves}</h3>
                   </div>
                 </div>

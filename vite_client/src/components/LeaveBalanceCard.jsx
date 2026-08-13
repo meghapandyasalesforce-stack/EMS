@@ -7,6 +7,7 @@ import { EMPLOYEE_LEAVE_ENDPOINT } from '../utils/constant';
 import {
     getTakeableDaysThisMonth,
     hasNoCarryProbationLeave,
+    LEAVE_UI,
 } from '../constants/leaveConstants';
 
 const CARD_BORDER = 'rgba(148, 163, 184, 0.24)';
@@ -122,6 +123,7 @@ const LeaveBalanceCard = () => {
                 remainingThisMonth: row.remainingThisMonth,
                 probationAccrualActive: Boolean(row.probationAccrualActive),
                 carryForwardDuringProbation: row.carryForwardDuringProbation === true,
+                allowLeaveDuringProbation: row.allowLeaveDuringProbation !== false,
                 probationFrozenBalance: row.probationFrozenBalance,
                 maxDaysPerMonth: monthlyEntitlement > 0 ? monthlyEntitlement : Number(row.monthlyTakeLimit ?? 0),
                 monthlyEntitlement,
@@ -160,13 +162,13 @@ const LeaveBalanceCard = () => {
                                         <span className="font-semibold text-[#006D4E]">
                                             {takeable}
                                         </span>
-                                        <span className="text-slate-500"> can apply this month</span>
+                                        <span className="text-slate-500"> {LEAVE_UI.youCanTakeThisMonth.toLowerCase()}</span>
                                     </span>
                                 </div>
                                 <p className="mt-1 text-xs text-slate-500">
-                                    Earns {type.monthlyEntitlement ?? 0}/month
+                                    Earns {type.monthlyEntitlement ?? 0} day(s) per month
                                     {frozen != null && frozen > 0 ? (
-                                        <> · {frozen} frozen until confirmation</>
+                                        <> · {frozen} locked until confirmation</>
                                     ) : null}
                                 </p>
                             </li>
@@ -175,12 +177,12 @@ const LeaveBalanceCard = () => {
                     </ul>
                     <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
                         {hasNoCarryProbationLeave(detailRows)
-                            ? 'Numbers are what you can apply this month. Unused probation days do not roll forward; pre-probation balance is frozen until confirmation.'
-                            : 'These numbers are what you can apply this month.'}
+                            ? LEAVE_UI.noCarryFooter
+                            : LEAVE_UI.takeableFooter}
                     </p>
                     {hasNoCarryProbationLeave(detailRows) ? (
                         <p className="mt-2 text-xs text-slate-500">
-                            Frozen until confirmation:{' '}
+                            {LEAVE_UI.lockedUntilConfirmation}:{' '}
                             <span className="font-semibold text-slate-800">
                                 {detailRows.reduce(
                                     (sum, type) => sum + (Number(type.probationFrozenBalance) || 0),
@@ -190,7 +192,7 @@ const LeaveBalanceCard = () => {
                         </p>
                     ) : (
                         <p className="mt-2 text-xs text-slate-500">
-                            Balance remaining:{' '}
+                            {LEAVE_UI.totalBalance}:{' '}
                             <span className="font-semibold text-slate-800">{leaveDaysRemaining}</span>
                         </p>
                     )}
@@ -198,7 +200,7 @@ const LeaveBalanceCard = () => {
             ) : (
                 <>
                     <p className="mt-3 text-3xl font-bold text-[#006D4E]">{leaveDaysRemaining}</p>
-                    <p className="text-xs text-slate-500">days remaining</p>
+                    <p className="text-xs text-slate-500">{LEAVE_UI.daysRemaining.toLowerCase()}</p>
                 </>
             )}
             <div className="mt-4 space-y-2">

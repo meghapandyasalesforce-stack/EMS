@@ -55,6 +55,12 @@ const fmtLeaveStatDays = (value) => {
 
 /** Days the employee can actually apply this month (probation cap when carry-forward is off). */
 export const getTakeableDaysThisMonth = (row = {}) => {
+  if (
+    row.probationAccrualActive &&
+    row.allowLeaveDuringProbation === false
+  ) {
+    return 0;
+  }
   if (row.appliableThisMonth != null && !Number.isNaN(Number(row.appliableThisMonth))) {
     return fmtLeaveStatDays(Number(row.appliableThisMonth));
   }
@@ -71,6 +77,35 @@ export const sumTakeableDaysThisMonth = (rows = []) =>
 
 export const hasNoCarryProbationLeave = (rows = []) =>
   rows.some((row) => row?.probationAccrualActive && row?.carryForwardDuringProbation !== true);
+
+/** Employee-facing leave copy — keep policy/admin forms technical if needed. */
+export const LEAVE_UI = {
+  yearlyLimit: 'Yearly limit',
+  yearlyLimitAll: 'Yearly limit (all types)',
+  earnsEachMonth: 'Earns each month',
+  earnsEachMonthProbation: 'Earns each month (on probation)',
+  addedThisMonth: 'Added this month',
+  youCanTakeThisMonth: 'You can take this month',
+  totalBalance: 'Total balance',
+  used: 'Used',
+  savedFromEarlier: 'Saved from earlier',
+  lockedUntilConfirmation: 'Locked until confirmation',
+  hrAdjustment: 'HR adjustment',
+  pending: 'Pending',
+  leaveThisMonth: 'Leave this month',
+  daysRemaining: 'Days remaining',
+  thisMonthLeave: 'Added this month',
+  totalUsed: 'Total used',
+  probationBanner:
+    'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.',
+  noCarryFooter:
+    'These numbers are what you can take this month. Unused days this month do not move to next month. Your old balance stays locked until confirmation.',
+  takeableFooter: 'These numbers are what you can take this month.',
+  lockedNotIncluded: 'Locked days are not included until confirmation.',
+};
+
+export const monthlyEarnsLabel = (onProbation) =>
+  onProbation ? LEAVE_UI.earnsEachMonthProbation : LEAVE_UI.earnsEachMonth;
 
 export const getLeaveTypeDisplayName = (leaveType, policyLeaveTypes = []) => {
   if (!leaveType) return 'Leave';
@@ -190,12 +225,14 @@ export const getLeaveTypeCards = (balance) => {
       inProbation,
       probationAccrualActive,
       carryForwardDuringProbation: row.carryForwardDuringProbation === true,
+      allowLeaveDuringProbation: row.allowLeaveDuringProbation !== false,
       appliableThisMonth:
         row.appliableThisMonth != null ? fmtLeaveStatDays(Number(row.appliableThisMonth)) : null,
       takeableThisMonth: getTakeableDaysThisMonth({
         ...row,
         available,
         appliableThisMonth: row.appliableThisMonth,
+        allowLeaveDuringProbation: row.allowLeaveDuringProbation,
       }),
       probationFrozenBalance:
         row.probationFrozenBalance != null
