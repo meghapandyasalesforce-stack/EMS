@@ -3,6 +3,8 @@ import { shouldScopeDataToManagedTeam } from './permissionService.js';
 import {
     processApprovalAction,
     hrOverrideFinalizeApproval,
+    getNextWorkflowInstanceStep,
+    isTimeoutNextStepAssignee,
 } from '../services/approvalWorkflowService.js';
 import {
     attachWorkflowSummariesToRequests,
@@ -38,7 +40,7 @@ const DEFAULT_LEAVE_WORKFLOW = {
         },
     ],
     autoApprove: { enabled: false },
-    escalation: { enabled: true, escalateAfterHours: 12, escalateTo: 'HR' },
+    escalation: { enabled: true, escalateAfterHours: 72, escalateTo: 'NextLevel' },
 };
 
 /** Ensure every org has an active Leave workflow: Manager → HR. */
@@ -99,28 +101,37 @@ export const getLeaveApprovalStageLabel = (leave = {}, options = {}) => {
         return summary.instanceStatus === 'In Progress' ? 'In review' : 'Pending';
     }
 
+    const timedOut = Boolean(summary.slaEscalated || pending.escalated);
+    const baseName = pending.stepName || pending.approverType || 'approver';
+
     if (pending.approverType === 'Manager') {
         const base = pending.approverName
             ? `Pending Manager (${pending.approverName})`
             : 'Pending Manager';
-        if (summary.slaEscalated) {
+        if (timedOut) {
             return includeHrOverrideHint
-                ? `${base} · SLA Breached (HR Override Available)`
-                : `${base} · SLA Breached`;
+                ? `${base} · Timed out (next step can act)`
+                : `${base} · Timed out`;
         }
         return includeHrOverrideHint ? `${base} (HR Override Available)` : base;
     }
     if (pending.approverType === 'HR') {
-        return 'Awaiting HR approval';
+        return timedOut ? 'Awaiting HR approval · Timed out' : 'Awaiting HR approval';
     }
 
+    if (timedOut) {
+        return includeHrOverrideHint
+            ? `Pending ${baseName} · Timed out (next step can act)`
+            : `Pending ${baseName} · Timed out`;
+    }
     return pending.stepName || 'Pending';
 };
 
 /**
  * Leave workflow action resolver.
- * Additive: HR Manager / HR Executive may override while Manager step is still pending.
- * Manager / natural HR step behaviour is unchanged.
+ * - Assigned / natural actors act on their step.
+ * - HR may finalize early on any non-HR pending step.
+ * - After step timeout, the next step's assignee may finalize (previous can still act).
  */
 export const resolveLeaveWorkflowAction = async ({
     req,
@@ -169,11 +180,15 @@ export const resolveLeaveWorkflowAction = async ({
         throw err;
     }
 
-    /** Additive HR override: HR may act while Manager step is still pending */
-    const hrOverrideOnManagerStep =
-        isManagerStep && isHrEmployee(req) && !naturalActor && !isAssignedApprover;
+    /** HR may jump early on any non-HR pending step */
+    const hrEarlyOverride =
+        Boolean(approverType) &&
+        approverType !== 'HR' &&
+        isHrEmployee(req) &&
+        !naturalActor &&
+        !isAssignedApprover;
 
-    if (hrOverrideOnManagerStep) {
+    if (hrEarlyOverride) {
         return {
             approverIdForAction: reviewerEmployeeId || assignedApproverId,
             performedByEmployeeId: reviewerEmployeeId || assignedApproverId,
@@ -182,6 +197,56 @@ export const resolveLeaveWorkflowAction = async ({
             approverType,
             useHrOverrideFinalize: true,
         };
+    }
+
+    /** After timeout: next step assignee may finalize */
+    const timeoutNextStep =
+        Boolean(currentStep?.escalated) &&
+        isTimeoutNextStepAssignee(approvalInstance, reviewerEmployeeId);
+
+    if (timeoutNextStep) {
+        const nextStep = getNextWorkflowInstanceStep(
+            approvalInstance,
+            currentStep.stepNumber
+        );
+        const nextDef = nextStep
+            ? await loadWorkflowStepDefinition(approvalInstance, nextStep)
+            : null;
+        return {
+            approverIdForAction: reviewerEmployeeId || assignedApproverId,
+            performedByEmployeeId: reviewerEmployeeId || assignedApproverId,
+            reviewerEmployeeId,
+            overrideLabel: nextDef?.approverType || nextStep?.stepName || 'Next step',
+            approverType,
+            useHrOverrideFinalize: true,
+        };
+    }
+
+    /** Natural next-step type actor after timeout (e.g. any HR when next is HR) */
+    if (currentStep?.escalated && reviewerEmployeeId) {
+        const nextStep = getNextWorkflowInstanceStep(
+            approvalInstance,
+            currentStep.stepNumber
+        );
+        if (nextStep) {
+            const nextDef = await loadWorkflowStepDefinition(approvalInstance, nextStep);
+            const nextNatural = isNaturalActorForStep(
+                req,
+                nextDef?.approverType,
+                nextStep,
+                employeeLinked
+            );
+            if (nextNatural && !isAssignedApprover) {
+                return {
+                    approverIdForAction: reviewerEmployeeId || assignedApproverId,
+                    performedByEmployeeId: reviewerEmployeeId || assignedApproverId,
+                    reviewerEmployeeId,
+                    overrideLabel: nextDef?.approverType || 'Next step',
+                    approverType,
+                    useHrOverrideFinalize: true,
+                };
+            }
+        }
     }
 
     const mayAct = Boolean(naturalActor || managerTeamOverride || isAssignedApprover);
@@ -228,7 +293,9 @@ export const executeLeaveWorkflowAction = async ({
         const actor = req.employee;
         const performedByName = actor
             ? [actor.name, actor.lastName].filter(Boolean).join(' ').trim()
-            : 'HR';
+            : params.overrideLabel || 'Approver';
+        const timeoutEscalation =
+            Boolean(currentStep?.escalated) && params.overrideLabel !== 'HR';
         return hrOverrideFinalizeApproval({
             approvalInstanceId: approvalInstance._id,
             action,
@@ -240,6 +307,7 @@ export const executeLeaveWorkflowAction = async ({
                 leaveType: leave.leaveType,
                 duration: leave.duration,
                 overrideRole: params.overrideLabel,
+                ...(timeoutEscalation ? { timeoutEscalation: true } : {}),
             },
         });
     }

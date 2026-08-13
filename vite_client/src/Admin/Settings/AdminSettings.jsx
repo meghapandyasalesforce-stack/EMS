@@ -205,7 +205,6 @@ const GeneralSettingsContent = () => {
         allowSelfService: true,
         allowWorkFromHome: true,
         allowProbationAfterJoining: false,
-        approvalSlaHours: 12,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
         employeeIdMinDigits: 3,
@@ -230,7 +229,6 @@ const GeneralSettingsContent = () => {
                 allowSelfService: profile.settings.allowSelfService ?? true,
                 allowWorkFromHome: profile.settings.allowWorkFromHome ?? true,
                 allowProbationAfterJoining: profile.settings.allowProbationAfterJoining === true,
-                approvalSlaHours: profile.settings.approvalSlaHours || 12,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
                 employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
@@ -295,7 +293,6 @@ const GeneralSettingsContent = () => {
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
                     allowWorkFromHome: updatedProfile.settings.allowWorkFromHome ?? true,
                     allowProbationAfterJoining: updatedProfile.settings.allowProbationAfterJoining === true,
-                    approvalSlaHours: updatedProfile.settings.approvalSlaHours || 12,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
                     employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
@@ -495,34 +492,6 @@ const GeneralSettingsContent = () => {
                             <FiToggleLeft className="h-6 w-12 text-gray-400" />
                         )}
                     </button>
-                </div>
-
-                <div className="rounded-lg border border-gray-200 p-3 sm:p-4">
-                    <div className="min-w-0 flex-1">
-                        <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
-                            <FaCog className="mr-2 flex-shrink-0" />
-                            Approval SLA
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            Choose when pending approvals are escalated to HR for follow-up.
-                        </p>
-                    </div>
-
-                    <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700">Escalate after</label>
-                        <select
-                            value={settings.approvalSlaHours}
-                            onChange={(e) =>
-                                setSettings((prev) => ({ ...prev, approvalSlaHours: Number(e.target.value) }))
-                            }
-                            className="mt-1 w-full rounded-md border p-2 sm:w-64"
-                        >
-                            <option value={6}>6 Hours</option>
-                            <option value={12}>12 Hours</option>
-                            <option value={24}>24 Hours</option>
-                            <option value={48}>48 Hours</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div className="rounded-lg border border-gray-200 p-3 sm:p-4">

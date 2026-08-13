@@ -425,6 +425,10 @@ const organizationSchema = new mongoose.Schema({
             type: Boolean,
             default: false
         },
+        /**
+         * @deprecated Prefer per-step timeoutHours on Approval Workflows.
+         * Kept for backward compatibility; no longer used by escalation jobs.
+         */
         approvalSlaHours: {
             type: Number,
             enum: [6, 12, 24, 48],

@@ -203,7 +203,9 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Timeout (Hours)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Timeout (Hours)
+                      </label>
                       <input
                         type="number"
                         value={step.timeoutHours}
@@ -211,6 +213,9 @@ const WorkflowModal = ({ workflow, onClose, onSuccess }) => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                         min="1"
                       />
+                      <p className="mt-1 text-xs text-gray-500">
+                        If no action, the next step&apos;s approver is notified and may act. This step can still approve.
+                      </p>
                     </div>
                     <div className="flex items-center gap-4 pt-6">
                       <label className="flex items-center gap-2 text-sm">

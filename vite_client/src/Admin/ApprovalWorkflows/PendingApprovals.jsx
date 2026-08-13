@@ -80,6 +80,9 @@ const PendingApprovals = () => {
           action,
           comments,
           ...(approval.hrOverrideAvailable ? { hrOverride: true } : {}),
+          ...(approval.timeoutEscalationAvailable && !approval.hrOverrideAvailable
+            ? { timeoutEscalation: true }
+            : {}),
         });
       }
       toast.success(`Request ${action.toLowerCase()}ed successfully`);
@@ -184,7 +187,14 @@ const PendingApprovals = () => {
                           {approval.entityType === 'TaxRegimeChange' ? 'High' : 'Urgent'}
                         </span>
                       )}
-                      {daysPending !== null && daysPending < 1 && (
+                      {approval.slaEscalated && (
+                        <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                          {approval.timeoutEscalationAvailable
+                            ? 'Timed out — you may act'
+                            : 'Timed out'}
+                        </span>
+                      )}
+                      {daysPending !== null && daysPending < 1 && !approval.slaEscalated && (
                         <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
                           Due Soon
                         </span>
@@ -282,7 +292,9 @@ const PendingApprovals = () => {
               {showEscalatedOnly ? 'No overdue approvals' : 'No pending approvals'}
             </p>
             <p className="text-gray-500 text-sm mt-2">
-              {showEscalatedOnly ? 'No requests are currently past the review window.' : "You're all caught up!"}
+              {showEscalatedOnly
+                ? 'No requests are currently past their step timeout.'
+                : "You're all caught up!"}
             </p>
           </div>
         )}
