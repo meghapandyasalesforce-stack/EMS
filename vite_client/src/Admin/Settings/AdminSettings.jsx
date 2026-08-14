@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave } from 'react-icons/fa';
+import { FaCog, FaRuler, FaLock, FaUserShield, FaBell, FaEnvelope, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaCalendarAlt, FaPalette, FaMoneyBillWave, FaUserCheck } from 'react-icons/fa';
 import { FiToggleLeft, FiToggleRight, FiX } from 'react-icons/fi';
 import AttendanceRules from '../Attendance/AttendanceRules';
 import NotificationSettings from './NotificationSettings';
@@ -204,7 +204,7 @@ const GeneralSettingsContent = () => {
         requireEmailVerification: false,
         allowSelfService: true,
         allowWorkFromHome: true,
-        approvalSlaHours: 12,
+        allowProbationAfterJoining: false,
         employeeIdPrefix: '',
         employeeIdStartNumber: 1,
         employeeIdMinDigits: 3,
@@ -228,7 +228,7 @@ const GeneralSettingsContent = () => {
                 requireEmailVerification: profile.settings.requireEmailVerification ?? false,
                 allowSelfService: profile.settings.allowSelfService ?? true,
                 allowWorkFromHome: profile.settings.allowWorkFromHome ?? true,
-                approvalSlaHours: profile.settings.approvalSlaHours || 12,
+                allowProbationAfterJoining: profile.settings.allowProbationAfterJoining === true,
                 employeeIdPrefix: profile.settings.employeeIdPrefix || '',
                 employeeIdStartNumber: profile.settings.employeeIdNextNumber || 1,
                 employeeIdMinDigits: profile.settings.employeeIdMinDigits || 3,
@@ -292,7 +292,7 @@ const GeneralSettingsContent = () => {
                     requireEmailVerification: updatedProfile.settings.requireEmailVerification ?? false,
                     allowSelfService: updatedProfile.settings.allowSelfService ?? true,
                     allowWorkFromHome: updatedProfile.settings.allowWorkFromHome ?? true,
-                    approvalSlaHours: updatedProfile.settings.approvalSlaHours || 12,
+                    allowProbationAfterJoining: updatedProfile.settings.allowProbationAfterJoining === true,
                     employeeIdPrefix: updatedProfile.settings.employeeIdPrefix || '',
                     employeeIdStartNumber: updatedProfile.settings.employeeIdNextNumber || 1,
                     employeeIdMinDigits: updatedProfile.settings.employeeIdMinDigits || 3,
@@ -469,32 +469,29 @@ const GeneralSettingsContent = () => {
                     </button>
                 </div>
 
-                <div className="rounded-lg border border-gray-200 p-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3 sm:items-center sm:p-4">
                     <div className="min-w-0 flex-1">
                         <h3 className="flex items-center text-base font-medium text-gray-800 sm:text-lg">
-                            <FaCog className="mr-2 flex-shrink-0" />
-                            Approval SLA
+                            <FaUserCheck className="mr-2 flex-shrink-0" />
+                            Allow adding probation after joining
                         </h3>
                         <p className="mt-1 text-sm text-gray-500">
-                            Choose when pending approvals are escalated to HR for follow-up.
+                            When off, probation can only be started on Add Employee. You can still extend or reduce
+                            an active probation, but after confirmation you cannot put the employee on probation again.
+                            When on, HR can start or restart probation from Job Details or Lifecycle, including after confirmation.
                         </p>
                     </div>
-
-                    <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700">Escalate after</label>
-                        <select
-                            value={settings.approvalSlaHours}
-                            onChange={(e) =>
-                                setSettings((prev) => ({ ...prev, approvalSlaHours: Number(e.target.value) }))
-                            }
-                            className="mt-1 w-full rounded-md border p-2 sm:w-64"
-                        >
-                            <option value={6}>6 Hours</option>
-                            <option value={12}>12 Hours</option>
-                            <option value={24}>24 Hours</option>
-                            <option value={48}>48 Hours</option>
-                        </select>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleSettingChange('allowProbationAfterJoining')}
+                        className="ml-2 flex-shrink-0"
+                    >
+                        {settings.allowProbationAfterJoining ? (
+                            <FiToggleRight className="h-6 w-12 text-theme-primary" />
+                        ) : (
+                            <FiToggleLeft className="h-6 w-12 text-gray-400" />
+                        )}
+                    </button>
                 </div>
 
                 <div className="rounded-lg border border-gray-200 p-3 sm:p-4">

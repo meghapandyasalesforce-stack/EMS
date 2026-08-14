@@ -161,6 +161,14 @@ const leavePolicySchema = new mongoose.Schema({
                 type: Boolean,
                 default: true
             },
+            /**
+             * When false (default): pre-probation balance is frozen and unused probation
+             * accrual expires each month. When true: unused leave rolls during probation.
+             */
+            carryForwardDuringProbation: {
+                type: Boolean,
+                default: false
+            },
             // Alternate entitlement for the same leave type during probation (monthly or yearly)
             accrual: {
                 method: {

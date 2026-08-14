@@ -78,6 +78,29 @@ describe('leaveProbationHelper', () => {
             },
         };
 
+        it('keeps explicit zero probation rate (no fallback to normal)', () => {
+            const zeroProbation = {
+                ...base,
+                probationRestrictions: {
+                    enabled: true,
+                    allowLeave: false,
+                    carryForwardDuringProbation: false,
+                    accrual: { method: 'fixed', frequency: 'monthly', amount: 0, maxAccrual: 0 },
+                    maxDaysPerMonth: 0,
+                },
+            };
+            const ctx = buildLeaveProbationContext({
+                employee: { joiningDate: join },
+                lifecycleProbation: { status: 'Active', startDate: join },
+            });
+            const overlay = applyProbationAccrualOverlay(zeroProbation, ctx, new Date(2026, 2, 1));
+            expect(overlay._probationOverlay).toBe(true);
+            expect(overlay.accrual.amount).toBe(0);
+            expect(overlay.accrual.maxAccrual).toBe(0);
+            expect(overlay.maxDaysPerMonth).toBe(0);
+            expect(overlay._probationAllowLeave).toBe(false);
+        });
+
         it('applies monthly probation rates while on probation', () => {
             const ctx = buildLeaveProbationContext({
                 employee: { joiningDate: join },
@@ -87,6 +110,39 @@ describe('leaveProbationHelper', () => {
             expect(overlay._probationOverlay).toBe(true);
             expect(overlay.accrual.amount).toBe(0.5);
             expect(overlay.accrual.maxAccrual).toBe(6);
+            expect(overlay._probationCarryForward).toBe(false);
+        });
+
+        it('marks overlay when carry forward during probation is on', () => {
+            const withCarry = {
+                ...base,
+                probationRestrictions: {
+                    ...base.probationRestrictions,
+                    carryForwardDuringProbation: true,
+                },
+            };
+            const ctx = buildLeaveProbationContext({
+                employee: { joiningDate: join },
+                lifecycleProbation: { status: 'Active', startDate: join },
+            });
+            const overlay = applyProbationAccrualOverlay(withCarry, ctx, new Date(2026, 2, 1));
+            expect(overlay._probationCarryForward).toBe(true);
+        });
+
+        it('marks overlay when carry forward during probation is off', () => {
+            const noCarry = {
+                ...base,
+                probationRestrictions: {
+                    ...base.probationRestrictions,
+                    carryForwardDuringProbation: false,
+                },
+            };
+            const ctx = buildLeaveProbationContext({
+                employee: { joiningDate: join },
+                lifecycleProbation: { status: 'Active', startDate: join },
+            });
+            const overlay = applyProbationAccrualOverlay(noCarry, ctx, new Date(2026, 2, 1));
+            expect(overlay._probationCarryForward).toBe(false);
         });
 
         it('returns normal config after confirmation month', () => {
@@ -135,7 +191,7 @@ describe('leaveProbationHelper', () => {
                 leaveTypeLabel: 'Casual Leave',
             });
             expect(result.allowed).toBe(false);
-            expect(result.reason).toMatch(/not allowed during probation/i);
+            expect(result.reason).toMatch(/cannot apply .* during probation/i);
         });
 
         it('allows leave during probation when allowLeave is true', () => {
@@ -185,6 +241,19 @@ describe('leaveProbationHelper', () => {
             expect(result.allowLeave).toBe(true);
             expect(result.accrual.frequency).toBe('yearly');
             expect(result.accrual.maxAccrual).toBe(2);
+        });
+
+        it('defaults carryForwardDuringProbation to false', () => {
+            const result = normalizeProbationRestrictions({ enabled: true });
+            expect(result.carryForwardDuringProbation).toBe(false);
+        });
+
+        it('preserves carryForwardDuringProbation true', () => {
+            const result = normalizeProbationRestrictions({
+                enabled: true,
+                carryForwardDuringProbation: true,
+            });
+            expect(result.carryForwardDuringProbation).toBe(true);
         });
     });
 });

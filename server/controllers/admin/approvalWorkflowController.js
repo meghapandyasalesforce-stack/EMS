@@ -6,6 +6,9 @@ import {
     getEscalatedApprovalsCount,
     delegateApproval,
     hrOverrideFinalizeApproval,
+    isTimeoutNextStepAssignee,
+    getFirstPendingStep,
+    getNextWorkflowInstanceStep,
 } from '../../services/approvalWorkflowService.js';
 import logger from '../../helpers/logger.js';
 import { sendSuccess, sendError } from '../../helpers/responseHelper.js';
@@ -247,7 +250,7 @@ export const getEscalatedApprovalsMetric = asyncHandler(async (req, res) => {
  */
 export const processApproval = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { stepNumber, action, comments, metadata, hrOverride } = req.body;
+    const { stepNumber, action, comments, metadata, hrOverride, timeoutEscalation } = req.body;
     const approverId = req.user?._id || req.employee?._id;
 
     if (!approverId) {
@@ -273,6 +276,50 @@ export const processApproval = asyncHandler(async (req, res) => {
             metadata: { ...(metadata || {}), hrOverride: true },
         });
         return sendSuccess(res, result, 'Approval processed via HR override successfully');
+    }
+
+    // Step-timeout handoff: next-step assignee may finalize after previous step timed out
+    if (timeoutEscalation && ['Approve', 'Reject'].includes(action)) {
+        const instance = await ApprovalInstance.findById(id);
+        if (!instance || instance.status !== 'In Progress') {
+            return sendError(res, 'Approval instance not found or already processed', 404);
+        }
+        const actorId = req.employee?._id || approverId;
+
+        if (!isTimeoutNextStepAssignee(instance, actorId)) {
+            return sendError(
+                res,
+                'Timeout escalation is only available to the next step approver after the current step times out',
+                403
+            );
+        }
+
+        const pending = getFirstPendingStep(instance);
+        const next = pending
+            ? getNextWorkflowInstanceStep(instance, pending.stepNumber)
+            : null;
+        const actor = req.employee;
+        const performedByName = actor
+            ? [actor.name, actor.lastName].filter(Boolean).join(' ').trim()
+            : next?.approverName || 'Next step';
+
+        const result = await hrOverrideFinalizeApproval({
+            approvalInstanceId: id,
+            action,
+            performedByEmployeeId: actorId,
+            performedByName,
+            comments,
+            metadata: {
+                ...(metadata || {}),
+                timeoutEscalation: true,
+                overrideRole: next?.stepName || 'Next step',
+            },
+        });
+        return sendSuccess(
+            res,
+            result,
+            'Approval processed via step-timeout escalation successfully'
+        );
     }
 
     const result = await processApprovalAction({

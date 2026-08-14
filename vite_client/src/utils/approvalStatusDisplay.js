@@ -13,13 +13,15 @@ export function sanitizeApprovalStatusText(raw) {
   if (!s) return '';
 
   s = s.replace(/\s*[·•]\s*SLA\s+Breached\s*\(\s*HR\s+Override\s+Available\s*\)/gi, '');
-  s = s.replace(/\s*[·•]\s*SLA\s+Breached\s*\(\s*HR\s+Override\s+Available\s*\)/gi, '');
   s = s.replace(/\s*[·•]\s*SLA\s+Breached/gi, '');
+  s = s.replace(/\s*[·•]\s*Timed\s+out\s*\(\s*next\s+step\s+can\s+act\s*\)/gi, '');
+  s = s.replace(/\s*[·•]\s*Timed\s+out/gi, '');
   s = s.replace(/\s*\(\s*HR\s+Override\s+Available\s*\)/gi, '');
   s = s.replace(/\s*[·•]\s*Escalated/gi, '');
   s = s.replace(/\bSLA\s+Breached\b/gi, '');
   s = s.replace(/\bHR\s+Override\s+Available\b/gi, '');
   s = s.replace(/\bSLA\s+breached\b/gi, '');
+  s = s.replace(/\bTimed\s+out\b/gi, '');
 
   s = s.replace(/^Pending\s+Manager(?:\s*\([^)]*\))?/i, 'Waiting for Manager');
   s = s.replace(/^Pending\s+manager(?:\s*\([^)]*\))?/i, 'Waiting for Manager');

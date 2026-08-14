@@ -5,7 +5,12 @@
 import { getOrCreateLifecycleSettings, isFeatureEnabled } from './lifecycleConfigService.js';
 import { notify } from '../helpers/notificationManager.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
-import { syncEmployeeProbationFromWorkflow } from '../helpers/employeeProbationSyncHelper.js';
+import {
+    evaluateProbationStartLock,
+    isExitedProbationStatus,
+    resolveAllowProbationAfterJoining,
+    syncEmployeeProbationFromWorkflow,
+} from '../helpers/employeeProbationSyncHelper.js';
 
 export function initProbationForWorkflow(workflow, { probationMonths = 6, joiningDate, startDate = null, endDate = null } = {}) {
     const startRaw = startDate || joiningDate || workflow.joiningDate || workflow.startDate || new Date();
@@ -48,14 +53,33 @@ export async function extendProbation(workflow, { extensionDays, reason }, { act
     const settings = await getOrCreateLifecycleSettings(workflow.organizationId);
     if (!isFeatureEnabled(settings, 'probation')) throw new Error('Probation tracking is disabled');
 
+    const allowProbationAfterJoining = await resolveAllowProbationAfterJoining(
+        workflow.organizationId
+    );
+    const currentStatus = workflow.probation?.status || 'Not Started';
+    const startLock = evaluateProbationStartLock({
+        currentStatus,
+        nextStatus: 'Extended',
+        allowProbationAfterJoining,
+    });
+    if (!startLock.allowed) {
+        throw new Error(startLock.reason);
+    }
+
     if (!workflow.probation) initProbationForWorkflow(workflow);
-    if (workflow.probation.status === 'Waived') {
+    if (workflow.probation.status === 'Waived' && !allowProbationAfterJoining) {
         throw new Error('Probation is waived for this workflow (feature disabled)');
     }
-    const end = new Date(workflow.probation.endDate);
-    end.setDate(end.getDate() + extensionDays);
+    if (isExitedProbationStatus(currentStatus)) {
+        workflow.probation.confirmedAt = null;
+        workflow.probation.confirmedBy = null;
+        workflow.probation.rejectedAt = null;
+        workflow.probation.rejectionReason = '';
+    }
+    const end = new Date(workflow.probation.endDate || new Date());
+    end.setDate(end.getDate() + Number(extensionDays || 0));
     workflow.probation.endDate = end;
-    workflow.probation.extensionDays = (workflow.probation.extensionDays || 0) + extensionDays;
+    workflow.probation.extensionDays = (workflow.probation.extensionDays || 0) + Number(extensionDays || 0);
     workflow.probation.extensionReason = reason || workflow.probation.extensionReason;
     workflow.probation.status = 'Extended';
 
@@ -77,7 +101,9 @@ export async function extendProbation(workflow, { extensionDays, reason }, { act
 export async function submitProbationReview(workflow, { reviewType, rating, feedback, decision }, { actor, req }) {
     const settings = await getOrCreateLifecycleSettings(workflow.organizationId);
     if (!isFeatureEnabled(settings, 'probation')) throw new Error('Probation tracking is disabled');
-    if (!workflow.probation) initProbationForWorkflow(workflow);
+    if (!workflow.probation || !workflow.probation.startDate) {
+        throw new Error('This employee is not on probation.');
+    }
     if (workflow.probation.status === 'Waived') {
         throw new Error('Probation is waived for this workflow (feature disabled)');
     }
@@ -93,7 +119,25 @@ export async function submitProbationReview(workflow, { reviewType, rating, feed
     };
 
     if (reviewType === 'final' && decision) {
-        if (decision === 'confirm') {
+        if (decision === 'extend') {
+            const allowProbationAfterJoining = await resolveAllowProbationAfterJoining(
+                workflow.organizationId
+            );
+            const startLock = evaluateProbationStartLock({
+                currentStatus: workflow.probation.status,
+                nextStatus: 'Extended',
+                allowProbationAfterJoining,
+            });
+            if (!startLock.allowed) {
+                throw new Error(startLock.reason);
+            }
+            if (isExitedProbationStatus(workflow.probation.status)) {
+                workflow.probation.confirmedAt = null;
+                workflow.probation.confirmedBy = null;
+                workflow.probation.rejectedAt = null;
+            }
+            workflow.probation.status = 'Extended';
+        } else if (decision === 'confirm') {
             workflow.probation.status = 'Confirmed';
             workflow.probation.confirmedAt = new Date();
             workflow.probation.confirmedBy = actor?._id;
@@ -101,8 +145,6 @@ export async function submitProbationReview(workflow, { reviewType, rating, feed
             workflow.probation.status = 'Rejected';
             workflow.probation.rejectedAt = new Date();
             workflow.probation.rejectionReason = feedback || '';
-        } else if (decision === 'extend') {
-            workflow.probation.status = 'Extended';
         }
     }
 

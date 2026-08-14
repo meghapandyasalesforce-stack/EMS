@@ -13,7 +13,6 @@ import {
     getDisplayYearlyAccrualCap,
     sumPolicyAnnualEntitlement,
     sumPolicyMonthlyAccrual,
-    sumPolicyMonthlyAccrualForViewMonth,
     getTypeMonthlyAccrualForViewMonth,
     roundDaysForDisplay,
     normalizePolicyLeaveTypes,
@@ -31,6 +30,11 @@ import {
 import { getEffectiveMonthlyTakeCap } from './leaveEmployeeTakeLimitHelper.js';
 import { LEAVE_HISTORY_MIN_YEAR } from '../constants/leaveDefaults.js';
 import { resolveLeaveBalanceOrganizationId } from './leaveBalanceAccessHelper.js';
+import {
+    applyProbationAccrualOverlay,
+    firstOfMonth,
+    isOnProbationAsOf,
+} from './leaveProbationHelper.js';
 
 function buildYearSummaries(ledgerByYear = {}, monthlyRate = 0, periodsPerYear = 12) {
     return Object.keys(ledgerByYear)
@@ -206,7 +210,9 @@ function sortLedgerByYear(ledgerByYear = {}) {
  */
 export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organizationId, options = {}) {
     const now = new Date();
-    const employee = await Employee.findById(employeeId).select('joiningDate organizationId').lean();
+    const employee = await Employee.findById(employeeId)
+        .select('joiningDate organizationId probation')
+        .lean();
     const resolvedOrganizationId = await resolveLeaveBalanceOrganizationId(employeeId, organizationId);
     const bounds = getEmployeeLeaveYearBounds(employee, now);
 
@@ -281,6 +287,19 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
         viewYear,
         asOfDate
     );
+    const probationContext = await leaveBalanceEngine.resolveLeaveProbationContext(
+        resolvedOrganizationId,
+        employeeForAccrual
+    );
+    const viewMonthAsOf = firstOfMonth(new Date(viewYear, viewMonth - 1, 1)) || monthStart;
+    const employeeInProbation = isOnProbationAsOf(probationContext, viewMonthAsOf);
+
+    balanceObj.probation = {
+        inProbation: employeeInProbation,
+        note: employeeInProbation
+            ? 'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.'
+            : null,
+    };
 
     balanceObj.balances = await Promise.all(
         enabledPolicyTypes.map(async (policyType) => {
@@ -296,13 +315,20 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 };
 
             const types = getLeaveTypeVariantsForBalance(b.leaveType);
-            let annualEntitlement = getAnnualEntitlementAmount(policyType);
-            let monthlyRate = getRollingAccrualMonthlyRate(policyType);
-            const yearlyCap = getDisplayYearlyAccrualCap(policyType);
-            const effectiveConfig = {
-                ...policyType,
-                carryForward: getEffectiveCarryForwardConfig(policyType),
-            };
+            const displayConfig = applyProbationAccrualOverlay(
+                {
+                    ...policyType,
+                    carryForward: getEffectiveCarryForwardConfig(policyType),
+                },
+                probationContext,
+                viewMonthAsOf
+            );
+            const probationAccrualActive = Boolean(displayConfig?._probationOverlay);
+            let annualEntitlement = getAnnualEntitlementAmount(displayConfig);
+            let monthlyRate = getRollingAccrualMonthlyRate(displayConfig);
+            const yearlyCap = getDisplayYearlyAccrualCap(displayConfig);
+            const normalMonthlyRate = getRollingAccrualMonthlyRate(policyType);
+            const normalAnnualEntitlement = getAnnualEntitlementAmount(policyType);
 
             if (
                 b.manualOverride?.active &&
@@ -346,6 +372,23 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
             b.annualEntitlement = annualEntitlement;
             b.monthlyRate = monthlyRate;
             b.yearlyCap = yearlyCap;
+            b.normalMonthlyRate = normalMonthlyRate;
+            b.normalAnnualEntitlement = normalAnnualEntitlement;
+            b.inProbation = employeeInProbation;
+            b.probationAccrualActive = probationAccrualActive;
+            b.carryForwardDuringProbation = displayConfig?._probationCarryForward === true;
+            b.allowLeaveDuringProbation = displayConfig?._probationAllowLeave !== false;
+            const leaveBlockedOnProbation =
+                probationAccrualActive && displayConfig?._probationAllowLeave === false;
+            b.probationNote = leaveBlockedOnProbation
+                ? `On probation — you cannot apply ${policyType.displayName || policyType.type} until confirmation.`
+                : probationAccrualActive
+                  ? displayConfig?._probationCarryForward !== true
+                      ? `On probation — you earn ${monthlyRate} day(s) per month. Unused days this month do not move to next month. Your old balance stays locked until confirmation.`
+                      : `On probation — you earn ${monthlyRate} day(s) per month.`
+                  : employeeInProbation && policyType.probationRestrictions?.enabled === false
+                    ? 'On probation — normal leave rules apply for this type.'
+                    : null;
             b.usedDays = Number(b.used) || 0;
             b.pendingDays = Number(b.pending) || 0;
             b.carriedDays = Number(b.carriedForward) || 0;
@@ -383,7 +426,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 b.accrualHistoryByYear = {};
                 b.yearSummaries = [];
                 b.earnedThisMonth = getTypeMonthlyAccrualForViewMonth(
-                    policyType,
+                    displayConfig,
                     employeeForAccrual,
                     viewYear,
                     viewMonth
@@ -398,26 +441,36 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 const rollingInitialBalance = policyWindowStartDate
                     ? roundLeaveDays(Number(b.carriedForward) || 0)
                     : 0;
+                const baseTypeConfig = {
+                    ...policyType,
+                    carryForward: getEffectiveCarryForwardConfig(policyType),
+                };
+                const resolveTypeForMonth = (year, monthIndex) =>
+                    applyProbationAccrualOverlay(
+                        baseTypeConfig,
+                        probationContext,
+                        new Date(year, monthIndex, 1)
+                    );
                 const rollingAtView = await leaveBalanceEngine.computeRollingMonthlyBalance(
-                    effectiveConfig,
+                    baseTypeConfig,
                     rollingEmployee,
                     resolvedOrganizationId,
                     asOfDate,
                     null,
                     viewYear,
                     null,
-                    null,
+                    resolveTypeForMonth,
                     rollingInitialBalance
                 );
                 const rollingFull = await leaveBalanceEngine.computeRollingMonthlyBalance(
-                    effectiveConfig,
+                    baseTypeConfig,
                     rollingEmployee,
                     resolvedOrganizationId,
                     now,
                     null,
                     viewYear,
                     null,
-                    null,
+                    resolveTypeForMonth,
                     rollingInitialBalance
                 );
 
@@ -426,7 +479,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
                 b.yearSummaries = buildYearSummaries(b.accrualHistoryByYear, b.monthlyRate, 12);
 
                 b.earnedThisMonth = getTypeMonthlyAccrualForViewMonth(
-                    policyType,
+                    displayConfig,
                     employeeForAccrual,
                     viewYear,
                     viewMonth
@@ -489,6 +542,25 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
             b.annualEntitlementDisplay = roundDaysForDisplay(annualEntitlement);
             b.monthlyRateDisplay = roundDaysForDisplay(monthlyRate);
 
+            if (probationAccrualActive && displayConfig?._probationCarryForward !== true) {
+                const remainingThisMonth = leaveBlockedOnProbation
+                    ? 0
+                    : roundLeaveDays(
+                          Math.max(0, Number(monthlyRate) - (Number(b.usedThisMonth) || 0))
+                      );
+                b.appliableThisMonth = remainingThisMonth;
+                b.probationFrozenBalance = roundLeaveDays(
+                    Math.max(0, Number(b.availableDays) - remainingThisMonth)
+                );
+                b.monthlyTakeLimit = leaveBlockedOnProbation
+                    ? 0
+                    : roundLeaveDays((Number(b.usedThisMonth) || 0) + remainingThisMonth);
+            } else if (leaveBlockedOnProbation) {
+                b.appliableThisMonth = 0;
+                b.monthlyTakeLimit = 0;
+                b.probationFrozenBalance = roundLeaveDays(Math.max(0, Number(b.availableDays) || 0));
+            }
+
             return b;
         })
     );
@@ -520,16 +592,22 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
     const perTypeCurrentMonthAccrual = roundLeaveDays(
         balanceObj.balances.reduce((sum, row) => sum + (Number(row.earnedThisMonth) || 0), 0)
     );
-    const policyEarnedThisMonth = sumPolicyMonthlyAccrualForViewMonth(
-        balanceObj.policy || {},
-        employeeForAccrual,
-        viewYear,
-        viewMonth
+    // Prefer per-type (probation-aware) accrual for this month; policy sum is normal rates only.
+    const earnedThisMonth = perTypeCurrentMonthAccrual;
+    const totalAnnualEntitlement = roundLeaveDays(
+        balanceObj.balances.reduce(
+            (sum, row) => sum + (Number(row.annualEntitlement) || 0),
+            0
+        )
     );
-    const earnedThisMonth =
-        policyEarnedThisMonth > 0 ? policyEarnedThisMonth : perTypeCurrentMonthAccrual;
-    const totalAnnualEntitlement = sumPolicyAnnualEntitlement(balanceObj.policy || {});
-    const totalMonthlyAccrual = sumPolicyMonthlyAccrual(balanceObj.policy || {});
+    const totalMonthlyAccrual = roundLeaveDays(
+        balanceObj.balances.reduce((sum, row) => sum + (Number(row.monthlyRate) || 0), 0)
+    );
+    if (balanceObj.employeeContext) {
+        balanceObj.employeeContext.totalAnnualEntitlement = totalAnnualEntitlement;
+        balanceObj.employeeContext.totalMonthlyAccrual = totalMonthlyAccrual;
+        balanceObj.employeeContext.inProbation = employeeInProbation;
+    }
 
     const perTypeManualAdjustment = sumTypeManualAdjustments(balanceObj.balances);
     const legacyGlobalAdjustment = legacyGlobalOverride?.available != null

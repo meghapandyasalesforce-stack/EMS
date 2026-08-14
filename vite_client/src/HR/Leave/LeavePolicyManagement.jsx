@@ -48,6 +48,7 @@ const DEFAULT_LEAVE_TYPE = {
     probationRestrictions: {
         enabled: false,
         allowLeave: true,
+        carryForwardDuringProbation: false,
         accrual: {
             method: 'fixed',
             frequency: 'monthly',
@@ -85,6 +86,8 @@ const mapLeaveTypeToForm = (leaveType) => {
     lt.probationRestrictions = {
         enabled: Boolean(lt.probationRestrictions?.enabled),
         allowLeave: lt.probationRestrictions?.allowLeave !== false,
+        carryForwardDuringProbation:
+            lt.probationRestrictions?.carryForwardDuringProbation === true,
         accrual: {
             method: lt.probationRestrictions?.accrual?.method || 'fixed',
             frequency: lt.probationRestrictions?.accrual?.frequency || 'monthly',
@@ -152,6 +155,8 @@ const mapLeaveTypeToApi = (leaveType) => {
     lt.probationRestrictions = {
         enabled: pEnabled,
         allowLeave: lt.probationRestrictions?.allowLeave !== false,
+        carryForwardDuringProbation:
+            lt.probationRestrictions?.carryForwardDuringProbation === true,
         accrual: {
             method: pFreq === 'yearly' ? 'yearly' : 'fixed',
             frequency: pFreq === 'yearly' ? 'yearly' : 'monthly',
@@ -1197,10 +1202,9 @@ const LeavePolicyManagement = () => {
                                 {leaveType.probationRestrictions?.enabled && (
                                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 space-y-3">
                                         <p className="text-xs text-amber-900">
-                                            Probation status comes from Lifecycle onboarding (or
-                                            employee probation details). Accrual uses the alternate
-                                            rates below while on probation, switching to normal
-                                            rates from the 1st of the month after confirmation.
+                                            Probation comes from Lifecycle or the employee’s job details.
+                                            While on probation, leave uses the rates below. After confirmation,
+                                            normal rates start from the 1st of the next month.
                                         </p>
                                         <label className="flex items-center text-sm">
                                             <input
@@ -1216,6 +1220,31 @@ const LeavePolicyManagement = () => {
                                                 className="mr-2"
                                             />
                                             Allow applying this leave during probation
+                                        </label>
+                                        <label className="flex items-start text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    leaveType.probationRestrictions
+                                                        ?.carryForwardDuringProbation === true
+                                                }
+                                                onChange={(e) =>
+                                                    updateLeaveType(
+                                                        index,
+                                                        'probationRestrictions.carryForwardDuringProbation',
+                                                        e.target.checked
+                                                    )
+                                                }
+                                                className="mr-2 mt-0.5"
+                                            />
+                                            <span>
+                                                Carry forward leave during probation
+                                                <span className="block text-xs text-amber-800/80 mt-0.5">
+                                                    Off: unused days this month do not move to next month,
+                                                    and old balance stays locked until confirmation.
+                                                    On: unused days and old balance stay available.
+                                                </span>
+                                            </span>
                                         </label>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             <div>

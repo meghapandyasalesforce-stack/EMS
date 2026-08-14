@@ -4,6 +4,11 @@ import { FaEye, FaPlus } from 'react-icons/fa';
 import { format } from 'date-fns';
 import axios from '../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../utils/constant';
+import {
+    getTakeableDaysThisMonth,
+    hasNoCarryProbationLeave,
+    LEAVE_UI,
+} from '../constants/leaveConstants';
 
 const CARD_BORDER = 'rgba(148, 163, 184, 0.24)';
 
@@ -113,7 +118,13 @@ const LeaveBalanceCard = () => {
                     row.leaveTypeDisplayName ||
                     String(row.leaveType).replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
                 availableBalance,
-                appliableThisMonth: availableBalance,
+                appliableThisMonth:
+                    row.appliableThisMonth != null ? Number(row.appliableThisMonth) : availableBalance,
+                remainingThisMonth: row.remainingThisMonth,
+                probationAccrualActive: Boolean(row.probationAccrualActive),
+                carryForwardDuringProbation: row.carryForwardDuringProbation === true,
+                allowLeaveDuringProbation: row.allowLeaveDuringProbation !== false,
+                probationFrozenBalance: row.probationFrozenBalance,
                 maxDaysPerMonth: monthlyEntitlement > 0 ? monthlyEntitlement : Number(row.monthlyTakeLimit ?? 0),
                 monthlyEntitlement,
             };
@@ -134,7 +145,13 @@ const LeaveBalanceCard = () => {
                         {detailMonthLabel || 'This month'}
                     </p>
                     <ul className="mt-3 space-y-2.5">
-                        {detailRows.map((type) => (
+                        {detailRows.map((type) => {
+                            const takeable = getTakeableDaysThisMonth(type);
+                            const frozen =
+                                type.probationFrozenBalance != null
+                                    ? Number(type.probationFrozenBalance)
+                                    : null;
+                            return (
                             <li
                                 key={type.leaveType}
                                 className="rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
@@ -143,34 +160,47 @@ const LeaveBalanceCard = () => {
                                     <span className="font-medium text-slate-800">{type.displayName}</span>
                                     <span className="shrink-0 text-right text-slate-700">
                                         <span className="font-semibold text-[#006D4E]">
-                                            {type.availableBalance ?? 0}
+                                            {takeable}
                                         </span>
-                                        <span className="text-slate-500"> days available</span>
+                                        <span className="text-slate-500"> {LEAVE_UI.youCanTakeThisMonth.toLowerCase()}</span>
                                     </span>
                                 </div>
                                 <p className="mt-1 text-xs text-slate-500">
-                                    Can apply this month:{' '}
-                                    <span className="font-semibold text-[#006D4E]">
-                                        {type.appliableThisMonth ?? type.remainingThisMonth ?? 0}
-                                    </span>{' '}
-                                    / {type.maxDaysPerMonth} max per month
-                                    {type.monthlyEntitlement ? <> . earns {type.monthlyEntitlement}/month</> : null}
+                                    Earns {type.monthlyEntitlement ?? 0} day(s) per month
+                                    {frozen != null && frozen > 0 ? (
+                                        <> · {frozen} locked until confirmation</>
+                                    ) : null}
                                 </p>
                             </li>
-                        ))}
+                            );
+                        })}
                     </ul>
                     <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                        Unused monthly entitlement stays in your year-to-date balance. The per-month limit is the
-                        maximum you can take in one calendar month.
+                        {hasNoCarryProbationLeave(detailRows)
+                            ? LEAVE_UI.noCarryFooter
+                            : LEAVE_UI.takeableFooter}
                     </p>
-                    <p className="mt-2 text-xs text-slate-500">
-                        Annual days available: <span className="font-semibold text-slate-800">{leaveDaysRemaining}</span>
-                    </p>
+                    {hasNoCarryProbationLeave(detailRows) ? (
+                        <p className="mt-2 text-xs text-slate-500">
+                            {LEAVE_UI.lockedUntilConfirmation}:{' '}
+                            <span className="font-semibold text-slate-800">
+                                {detailRows.reduce(
+                                    (sum, type) => sum + (Number(type.probationFrozenBalance) || 0),
+                                    0
+                                )}
+                            </span>
+                        </p>
+                    ) : (
+                        <p className="mt-2 text-xs text-slate-500">
+                            {LEAVE_UI.totalBalance}:{' '}
+                            <span className="font-semibold text-slate-800">{leaveDaysRemaining}</span>
+                        </p>
+                    )}
                 </>
             ) : (
                 <>
                     <p className="mt-3 text-3xl font-bold text-[#006D4E]">{leaveDaysRemaining}</p>
-                    <p className="text-xs text-slate-500">days remaining</p>
+                    <p className="text-xs text-slate-500">{LEAVE_UI.daysRemaining.toLowerCase()}</p>
                 </>
             )}
             <div className="mt-4 space-y-2">

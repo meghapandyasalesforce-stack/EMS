@@ -105,6 +105,20 @@ export function applyApprovedLeaveDeduction(balanceAfterAccrual, approvedLeaveUs
 }
 
 /**
+ * Close a month so unused credit does not roll forward (probation no-carry).
+ * Opening/frozen balance is kept; leftover month credit expires.
+ */
+export function expireUnusedMonthCredit({ previousBalance = 0, credit = 0, used = 0 } = {}) {
+    const opening = roundLeaveDays(previousBalance);
+    const monthCredit = roundLeaveDays(credit);
+    const monthUsed = roundLeaveDays(used);
+    const expiredUnused = roundLeaveDays(Math.max(0, monthCredit - monthUsed));
+    const fromOpening = roundLeaveDays(Math.max(0, monthUsed - monthCredit));
+    const closingBalance = roundLeaveDays(Math.max(0, opening - fromOpening));
+    return { closingBalance, expiredUnused };
+}
+
+/**
  * Apply monthly accrual then approved-leave deduction for one calendar month.
  * Returns closing balance chained forward into the next month.
  */
@@ -367,6 +381,7 @@ export function rollLeaveBalanceThroughPeriod({
     monthlyRate = 0,
     getUsedForMonth = () => 0,
     shouldCreditMonth = null,
+    expireUnusedCreditForMonth = null,
     balanceAnchor = null,
     periodOpeningBalance = null,
     initialBalance = 0,
@@ -476,6 +491,21 @@ export function rollLeaveBalanceThroughPeriod({
             // Normal month: apply accrual and deductions
             const credit = creditForMonth(cursorYear, cursorMonth);
             monthUpdate = applyMonthlyLeaveBalanceUpdate(previousBalance, credit, used);
+            if (
+                typeof expireUnusedCreditForMonth === 'function' &&
+                expireUnusedCreditForMonth(cursorYear, cursorMonth)
+            ) {
+                const expired = expireUnusedMonthCredit({
+                    previousBalance: monthUpdate.previousBalance,
+                    credit: monthUpdate.credit,
+                    used: monthUpdate.used,
+                });
+                monthUpdate = {
+                    ...monthUpdate,
+                    closingBalance: expired.closingBalance,
+                    expiredUnused: expired.expiredUnused,
+                };
+            }
         }
 
         // Add manual carry forwards effective this month to the balance (not to credit)

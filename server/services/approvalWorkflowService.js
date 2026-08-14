@@ -5,7 +5,6 @@
 
 import logger from '../helpers/logger.js';
 import { ApprovalWorkflow, ApprovalInstance } from '../models/approvalWorkflow.model.js';
-import Organization from '../models/organization.model.js';
 import Employee from '../models/employee.model.js';
 import { notify } from '../helpers/notificationManager.js';
 import '../helpers/notificationEventRegistry.js';
@@ -32,17 +31,45 @@ const buildAlreadyProcessedError = (message = 'Request has already been processe
     return err;
 };
 
-const DEFAULT_APPROVAL_SLA_HOURS = 12;
+const DEFAULT_STEP_TIMEOUT_HOURS = 48;
 
-const resolveApprovalSlaHours = async (organizationId, workflow = null) => {
-    const org = organizationId
-        ? await Organization.findById(organizationId).select('settings.approvalSlaHours').lean()
-        : null;
-    const orgHours = Number(org?.settings?.approvalSlaHours);
-    if (orgHours > 0) return orgHours;
-    const workflowHours = Number(workflow?.escalation?.escalateAfterHours);
-    if (workflowHours > 0) return workflowHours;
-    return DEFAULT_APPROVAL_SLA_HOURS;
+const resolveStepTimeoutHours = (workflowStep) => {
+    const hours = Number(workflowStep?.timeoutHours);
+    return hours > 0 ? hours : DEFAULT_STEP_TIMEOUT_HOURS;
+};
+
+/** Sorted instance steps by stepNumber. */
+export const sortApprovalSteps = (steps = []) =>
+    [...steps].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
+
+/** First pending step in workflow order. */
+export const getFirstPendingStep = (instance) => {
+    if (!instance?.steps?.length) return null;
+    return sortApprovalSteps(instance.steps).find((s) => s.status === 'Pending') || null;
+};
+
+/** Next step after a given step number (any status). */
+export const getNextWorkflowInstanceStep = (instance, currentStepNumber) => {
+    if (!instance?.steps?.length || currentStepNumber == null) return null;
+    return (
+        sortApprovalSteps(instance.steps).find(
+            (s) => (s.stepNumber || 0) > (currentStepNumber || 0)
+        ) || null
+    );
+};
+
+/**
+ * Whether the employee may act via step-timeout escalation:
+ * current pending step is escalated and employee is the next step's assignee
+ * (or a natural actor for that next step type — handled by callers for HR/Manager).
+ */
+export const isTimeoutNextStepAssignee = (instance, employeeId) => {
+    if (!instance || !employeeId) return false;
+    const pending = getFirstPendingStep(instance);
+    if (!pending?.escalated) return false;
+    const next = getNextWorkflowInstanceStep(instance, pending.stepNumber);
+    if (!next?.approverId) return false;
+    return String(next.approverId) === String(employeeId);
 };
 
 const uniqueEmployeeIds = (ids) => [...new Set(ids.map((id) => String(id)).filter(Boolean))];
@@ -264,20 +291,26 @@ export const initiateApproval = async ({
             }
         }
 
-        // Build steps array (await approver determination)
+        // Build steps array (await approver determination).
+        // Only the first step gets a dueDate now; later steps start their timer when they become current.
         const sortedWorkflowSteps = [...workflow.steps].sort(
             (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
         );
         const steps = [];
-        for (const step of sortedWorkflowSteps) {
+        for (let i = 0; i < sortedWorkflowSteps.length; i += 1) {
+            const step = sortedWorkflowSteps[i];
             const approver = await determineApprover(step, requestedBy, organizationId);
+            const timeoutHours = resolveStepTimeoutHours(step);
             steps.push({
                 stepNumber: step.stepNumber,
                 stepName: step.stepName,
                 approverId: approver?.id,
                 approverName: approver?.name,
                 status: 'Pending',
-                dueDate: new Date(Date.now() + (step.timeoutHours || 48) * 60 * 60 * 1000)
+                dueDate:
+                    i === 0
+                        ? new Date(Date.now() + timeoutHours * 60 * 60 * 1000)
+                        : undefined,
             });
         }
 
@@ -303,10 +336,11 @@ export const initiateApproval = async ({
             ],
         });
 
-        const slaHours = await resolveApprovalSlaHours(organizationId, workflow);
+        const firstWorkflowStep = sortedWorkflowSteps[0];
+        const firstTimeoutHours = resolveStepTimeoutHours(firstWorkflowStep);
         await pushAuditEvent(approvalInstance._id, {
             action: 'sla_timer_started',
-            note: `SLA timer started (${slaHours} hours)`,
+            note: `Step timer started (${firstTimeoutHours} hours)`,
         });
 
         // Start first step
@@ -441,8 +475,10 @@ export const processApprovalAction = async ({
             };
         }
 
-        // Move to next step
+        // Move to next step — clear instance-level timeout so overdue UI resets
         instance.currentStep = stepNumber;
+        instance.slaEscalated = false;
+        instance.slaEscalatedAt = undefined;
         await instance.save();
 
         // Send intermediate approval notification for leave (e.g., manager approved, pending HR)
@@ -619,10 +655,18 @@ export const hrOverrideFinalizeApproval = async ({
         throw buildAlreadyProcessedError();
     }
 
+    const overrideTag = metadata?.timeoutEscalation
+        ? String(metadata.overrideRole || 'Next step').trim() || 'Next step'
+        : 'HR';
+    const taggedComment =
+        overrideComment.startsWith('[')
+            ? overrideComment
+            : `[${overrideTag} override] ${overrideComment}`;
+
     const updateSet = {
         [`steps.${primaryIndex}.status`]: action === 'Approve' ? 'Approved' : 'Rejected',
         [`steps.${primaryIndex}.action`]: action,
-        [`steps.${primaryIndex}.comments`]: `[HR override] ${overrideComment}`,
+        [`steps.${primaryIndex}.comments`]: taggedComment,
         [`steps.${primaryIndex}.actionDate`]: now,
         hrOverride: {
             used: true,
@@ -638,7 +682,8 @@ export const hrOverrideFinalizeApproval = async ({
         metadata: {
             ...(instance.metadata || {}),
             ...(metadata && Object.keys(metadata).length ? metadata : {}),
-            hrOverride: true,
+            hrOverride: !metadata?.timeoutEscalation,
+            timeoutEscalation: Boolean(metadata?.timeoutEscalation),
         },
     };
     if (performedByEmployeeId) {
@@ -682,7 +727,9 @@ export const hrOverrideFinalizeApproval = async ({
         action: action === 'Approve' ? 'hr_override_approved' : 'hr_override_rejected',
         actorId: performedByEmployeeId,
         actorName,
-        actorRole: 'HR',
+        actorRole: metadata?.timeoutEscalation
+            ? String(metadata.overrideRole || 'Next step')
+            : 'HR',
         note: overrideComment,
     });
 
@@ -731,11 +778,47 @@ const processNextStep = async (approvalInstanceId) => {
         if (!workflow) return;
 
         // Find next pending step
-        const nextStep = instance.steps.find(s => s.status === 'Pending');
+        const nextStep = sortApprovalSteps(instance.steps).find((s) => s.status === 'Pending');
         if (!nextStep) return;
 
         const workflowStep = workflow.steps.find(s => s.stepNumber === nextStep.stepNumber);
         if (!workflowStep) return;
+
+        const timeoutHours = resolveStepTimeoutHours(workflowStep);
+        const priorStepCompleted = sortApprovalSteps(instance.steps).some(
+            (s) =>
+                (s.stepNumber || 0) < (nextStep.stepNumber || 0) &&
+                s.status !== 'Pending'
+        );
+        const hadPriorEscalation = Boolean(instance.slaEscalated || nextStep.escalated);
+        // Fresh clock when advancing from a completed step, after timeout, or if dueDate missing
+        const shouldFreshTimer =
+            priorStepCompleted || hadPriorEscalation || !nextStep.dueDate;
+
+        // Always clear instance-level overdue state when a new current step is active
+        instance.slaEscalated = false;
+        instance.slaEscalatedAt = undefined;
+        nextStep.escalated = false;
+        nextStep.escalatedAt = undefined;
+
+        if (shouldFreshTimer) {
+            nextStep.dueDate = new Date(Date.now() + timeoutHours * 60 * 60 * 1000);
+        }
+        await instance.save();
+
+        if (shouldFreshTimer) {
+            try {
+                appendAuditEvent(instance, {
+                    action: 'sla_timer_started',
+                    note: hadPriorEscalation
+                        ? `Step ${nextStep.stepNumber} timer restarted (${timeoutHours} hours)`
+                        : `Step ${nextStep.stepNumber} timer started (${timeoutHours} hours)`,
+                });
+                await instance.save();
+            } catch (_) {
+                /* audit is best-effort */
+            }
+        }
 
         // Notify approver
         await notifyApprover(instance, nextStep, workflowStep);
@@ -1299,8 +1382,8 @@ export const delegateApproval = async ({
 
 /**
  * Get pending approvals for an employee.
- * Additive: when includeHrOverrides is true, also return In-Progress instances
- * still waiting on a Manager step so HR can override without being the assigned approver.
+ * Shows requests where they are the current (first) pending assignee.
+ * Additive: HR overrides (includeHrOverrides) and step-timeout next-step handoff.
  */
 export const getPendingApprovals = async (employeeId, organizationId, options = {}) => {
     try {
@@ -1310,24 +1393,74 @@ export const getPendingApprovals = async (employeeId, organizationId, options = 
             organizationId,
             'steps.approverId': employeeId,
             'steps.status': 'Pending',
-            status: 'In Progress'
+            status: 'In Progress',
         })
             .populate('requestedBy', 'name email')
-            .populate('workflowId', 'name steps.stepNumber steps.stepName steps.approverType escalation')
+            .populate(
+                'workflowId',
+                'name steps.stepNumber steps.stepName steps.approverType escalation'
+            )
             .sort({ createdAt: -1 })
             .lean();
 
-        const mapped = approvals.map(approval => {
-            const pendingStep = approval.steps.find(s => 
-                s.approverId?.toString() === employeeId?.toString() && s.status === 'Pending'
+        const mapped = [];
+        const seen = new Set();
+
+        for (const approval of approvals) {
+            const firstPending = getFirstPendingStep(approval);
+            if (!firstPending) continue;
+
+            const isCurrentAssignee =
+                firstPending.approverId &&
+                String(firstPending.approverId) === String(employeeId);
+            const timeoutEscalationAvailable = isTimeoutNextStepAssignee(
+                approval,
+                employeeId
             );
-            return {
+
+            if (!isCurrentAssignee && !timeoutEscalationAvailable) {
+                continue;
+            }
+
+            mapped.push({
+                ...approval,
+                currentPendingStep: firstPending,
+                hrOverrideAvailable: false,
+                timeoutEscalationAvailable,
+                slaEscalated: Boolean(approval.slaEscalated || firstPending.escalated),
+            });
+            seen.add(String(approval._id));
+        }
+
+        // Step-timeout handoff when next-step assignee was not in the primary query edge cases
+        const timeoutCandidates = await ApprovalInstance.find({
+            organizationId,
+            status: 'In Progress',
+            'steps.escalated': true,
+            'steps.status': 'Pending',
+        })
+            .populate('requestedBy', 'name email')
+            .populate(
+                'workflowId',
+                'name steps.stepNumber steps.stepName steps.approverType escalation'
+            )
+            .sort({ createdAt: -1 })
+            .lean();
+
+        for (const approval of timeoutCandidates) {
+            if (seen.has(String(approval._id))) continue;
+            if (!isTimeoutNextStepAssignee(approval, employeeId)) continue;
+
+            const pendingStep = getFirstPendingStep(approval);
+            mapped.push({
                 ...approval,
                 currentPendingStep: pendingStep,
                 hrOverrideAvailable: false,
-                slaEscalated: Boolean(approval.slaEscalated),
-            };
-        });
+                timeoutEscalationAvailable: true,
+                slaEscalated: true,
+            });
+            seen.add(String(approval._id));
+        }
 
         if (!includeHrOverrides) {
             return mapped;
@@ -1339,11 +1472,13 @@ export const getPendingApprovals = async (employeeId, organizationId, options = 
             'steps.status': 'Pending',
         })
             .populate('requestedBy', 'name email')
-            .populate('workflowId', 'name steps.stepNumber steps.stepName steps.approverType escalation')
+            .populate(
+                'workflowId',
+                'name steps.stepNumber steps.stepName steps.approverType escalation'
+            )
             .sort({ createdAt: -1 })
             .lean();
 
-        const seen = new Set(mapped.map((a) => String(a._id)));
         for (const approval of overrideCandidates) {
             if (seen.has(String(approval._id))) continue;
 
@@ -1351,10 +1486,7 @@ export const getPendingApprovals = async (employeeId, organizationId, options = 
             const typeByNumber = new Map(
                 workflowSteps.map((s) => [s.stepNumber, s.approverType])
             );
-            const sorted = [...(approval.steps || [])].sort(
-                (a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)
-            );
-            const pendingStep = sorted.find((s) => s.status === 'Pending') || null;
+            const pendingStep = getFirstPendingStep(approval);
             if (!pendingStep) continue;
 
             const pendingType = typeByNumber.get(pendingStep.stepNumber);
@@ -1365,6 +1497,7 @@ export const getPendingApprovals = async (employeeId, organizationId, options = 
                 ...approval,
                 currentPendingStep: pendingStep,
                 hrOverrideAvailable: true,
+                timeoutEscalationAvailable: Boolean(pendingStep.escalated),
                 pendingManager: pendingType === 'Manager',
                 slaEscalated: Boolean(approval.slaEscalated),
             });

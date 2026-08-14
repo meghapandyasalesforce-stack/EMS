@@ -11,7 +11,13 @@ import { assignSystemRoleToEmployee } from '../../helpers/systemRoleService.js';
 import { SYSTEM_ROLE_IDS } from '../../config/systemRole.constants.js';
 import { buildSalaryRevisionEntries } from '../../helpers/salaryRevisionHelper.js';
 import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
-import { syncWorkflowProbationFromEmployee } from '../../helpers/employeeProbationSyncHelper.js';
+import {
+  evaluateProbationStartLock,
+  isActiveProbationStatus,
+  isExitedProbationStatus,
+  resolveAllowProbationAfterJoining,
+  syncWorkflowProbationFromEmployee,
+} from '../../helpers/employeeProbationSyncHelper.js';
 
 async function resolveManagerReference(organizationId, managerInput) {
   const raw = String(managerInput || '').trim();
@@ -146,6 +152,21 @@ export const updateEmployeeWorkInfo = async (req, res) => {
       const nextProbation = {
         ...(employee.probation?.toObject?.() || employee.probation || {}),
       };
+      const currentStatus = employee.probation?.status || 'None';
+      const nextStatus = probation.status !== undefined ? probation.status : currentStatus;
+      const allowProbationAfterJoining = await resolveAllowProbationAfterJoining(organizationId);
+      const startLock = evaluateProbationStartLock({
+        currentStatus,
+        nextStatus,
+        allowProbationAfterJoining,
+      });
+      if (!startLock.allowed) {
+        return res.status(400).json({
+          success: false,
+          message: startLock.reason,
+        });
+      }
+
       if (probation.status !== undefined) nextProbation.status = probation.status;
       if (probation.startDate !== undefined) {
         nextProbation.startDate = probation.startDate ? new Date(probation.startDate) : null;
@@ -162,6 +183,13 @@ export const updateEmployeeWorkInfo = async (req, res) => {
         nextProbation.rejectedAt = probation.rejectedAt
           ? new Date(probation.rejectedAt)
           : null;
+      }
+      if (
+        isExitedProbationStatus(currentStatus) &&
+        isActiveProbationStatus(nextStatus)
+      ) {
+        if (probation.confirmedAt === undefined) nextProbation.confirmedAt = null;
+        if (probation.rejectedAt === undefined) nextProbation.rejectedAt = null;
       }
       updateData.probation = nextProbation;
     }

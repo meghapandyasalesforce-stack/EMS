@@ -102,6 +102,9 @@ const PendingApprovals = () => {
           action,
           comments,
           ...(approval.hrOverrideAvailable ? { hrOverride: true } : {}),
+          ...(approval.timeoutEscalationAvailable && !approval.hrOverrideAvailable
+            ? { timeoutEscalation: true }
+            : {}),
         });
       }
       toast.success(`Request ${action.toLowerCase()}ed successfully`);
@@ -235,6 +238,31 @@ const PendingApprovals = () => {
                       <p className="ats-approval-card__requester">
                         Requested by <span>{requesterName}</span>
                       </p>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {approval.entityType === 'TaxRegimeChange'
+                          ? 'Tax Regime Change Request'
+                          : `${approval.entityType} Request`}
+                      </h3>
+                      {isUrgent && (
+                        <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
+                          {approval.entityType === 'TaxRegimeChange' ? 'High' : 'Urgent'}
+                        </span>
+                      )}
+                      {approval.slaEscalated && (
+                        <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                          {approval.timeoutEscalationAvailable
+                            ? 'Timed out — you may act'
+                            : 'Timed out'}
+                        </span>
+                      )}
+                      {daysPending !== null && daysPending < 1 && !approval.slaEscalated && (
+                        <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                          Due Soon
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -350,7 +378,23 @@ const PendingApprovals = () => {
             );
           })}
         </div>
-      )}
+
+        {filteredApprovals.length === 0 && !loading && (
+          <div className="text-center py-12 bg-white rounded-xl shadow-md">
+            <FiCheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg">
+              {showEscalatedOnly ? 'No overdue approvals' : 'No pending approvals'}
+            </p>
+            <p className="text-gray-500 text-sm mt-2">
+              {showEscalatedOnly
+                ? 'No requests are currently past their step timeout.'
+                : "You're all caught up!"}
+            </p>
+          </div>
+        )}
+      </div>
+      </div>
+      </div>
 
       {showDetail && selectedApproval && (
         <ApprovalDetailModal

@@ -7,6 +7,7 @@ import {
     BOTH_TASK_ENDPOINT,
     EMPLOYEE_LEAVE_ENDPOINT,
 } from '../utils/constant';
+import { LEAVE_UI } from '../constants/leaveConstants';
 
 const WS = {
     border: 'rgba(148, 163, 184, 0.24)',
@@ -108,13 +109,13 @@ const PersonalDashboardKpiRow = ({ compact = false, layout = 'row' }) => {
         };
     }, []);
 
-    const leaveLabel = monthlyCapSummary ? 'Leave room this month' : 'Leave remaining';
+    const leaveLabel = monthlyCapSummary ? LEAVE_UI.leaveThisMonth : LEAVE_UI.daysRemaining;
     const leaveValue = monthlyCapSummary
         ? `${monthlyCapSummary.totalRemainingThisMonth} days`
         : `${leaveDaysRemaining} days`;
     const leaveSub = monthlyCapSummary
-        ? `${monthlyCapSummary.monthLabel || 'This month'} · policy monthly limits`
-        : 'Available balance';
+        ? `${monthlyCapSummary.monthLabel || 'This month'} · ${LEAVE_UI.youCanTakeThisMonth.toLowerCase()}`
+        : LEAVE_UI.totalBalance;
 
     const stacked = layout === 'stack';
 

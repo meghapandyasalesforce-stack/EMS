@@ -41,6 +41,11 @@ import {
     BOTH_TASK_ENDPOINT,
     EMPLOYEE_LEAVE_ENDPOINT,
 } from '../../utils/constant';
+import {
+    getTakeableDaysThisMonth,
+    hasNoCarryProbationLeave,
+    LEAVE_UI,
+} from '../../constants/leaveConstants';
 
 /** Workspace-style mint / forest palette (scoped to this dashboard) */
 const WS = {
@@ -502,15 +507,15 @@ function DashboardEmployee() {
                                 <FaCheckCircle className="h-5 w-5" />
                             )}
                             {kpiCard(
-                                dashboardStats.monthlyCapSummary ? 'Leave room this month' : 'Leave remaining',
+                                dashboardStats.monthlyCapSummary ? LEAVE_UI.leaveThisMonth : LEAVE_UI.daysRemaining,
                                 statsLoading
                                     ? '…'
                                     : dashboardStats.monthlyCapSummary
                                       ? `${dashboardStats.monthlyCapSummary.totalRemainingThisMonth} days`
                                       : `${dashboardStats.leaveDaysRemaining} days`,
                                 dashboardStats.monthlyCapSummary
-                                    ? `${dashboardStats.monthlyCapSummary.monthLabel || 'This month'} · policy monthly limits`
-                                    : 'Available balance',
+                                    ? `${dashboardStats.monthlyCapSummary.monthLabel || 'This month'} · ${LEAVE_UI.youCanTakeThisMonth.toLowerCase()}`
+                                    : LEAVE_UI.totalBalance,
                                 <FaCalendarAlt className="h-5 w-5" />
                             )}
                             {kpiCard(
@@ -733,52 +738,87 @@ function DashboardEmployee() {
                                     <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
                                         {dashboardStats.monthlyCapSummary.monthLabel || 'This month'}
                                     </p>
+                                    {(dashboardStats.monthlyCapSummary.inProbation ||
+                                        dashboardStats.monthlyCapSummary.types?.some((t) => t.probationAccrualActive)) && (
+                                        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+                                            {dashboardStats.monthlyCapSummary.probationNote ||
+                                                LEAVE_UI.probationBanner}
+                                        </p>
+                                    )}
                                     <ul className="mt-3 space-y-2.5">
-                                        {dashboardStats.monthlyCapSummary.types.map((t) => (
+                                        {dashboardStats.monthlyCapSummary.types.map((t) => {
+                                            const takeable = getTakeableDaysThisMonth(t);
+                                            const frozen =
+                                                t.probationFrozenBalance != null
+                                                    ? Number(t.probationFrozenBalance)
+                                                    : null;
+                                            return (
                                             <li
                                                 key={t.leaveType}
                                                 className="rounded-lg border border-slate-100 bg-[#F8F9FB] px-3 py-2 text-sm"
                                             >
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <span className="font-medium text-slate-800">{t.displayName}</span>
+                                                    <span className="font-medium text-slate-800">
+                                                        {t.displayName}
+                                                        {t.probationAccrualActive ? (
+                                                            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                                                                Probation
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
                                                     <span className="shrink-0 text-right text-slate-700">
                                                         <span className="font-semibold text-[#006D4E]">
-                                                            {t.availableBalance ?? 0}
+                                                            {takeable}
                                                         </span>
-                                                        <span className="text-slate-500"> days available</span>
+                                                        <span className="text-slate-500"> {LEAVE_UI.youCanTakeThisMonth.toLowerCase()}</span>
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-xs text-slate-500">
-                                                    Can apply this month:{' '}
-                                                    <span className="font-semibold text-[#006D4E]">
-                                                        {t.appliableThisMonth ?? t.remainingThisMonth ?? 0}
-                                                    </span>
-                                                    {' '}
-                                                    / {t.maxDaysPerMonth} max per month
-                                                    {t.monthlyEntitlement ? (
-                                                        <> · earns {t.monthlyEntitlement}/month</>
+                                                    Earns {t.monthlyEntitlement ?? 0} day(s) per month
+                                                    {t.probationAccrualActive ? (
+                                                        <span className="text-amber-700"> (on probation)</span>
+                                                    ) : null}
+                                                    {frozen != null && frozen > 0 ? (
+                                                        <> · {frozen} locked until confirmation</>
                                                     ) : null}
                                                 </p>
+                                                {t.probationNote ? (
+                                                    <p className="mt-1 text-[11px] text-amber-800">{t.probationNote}</p>
+                                                ) : null}
                                             </li>
-                                        ))}
+                                            );
+                                        })}
                                     </ul>
                                     <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                                        Unused monthly entitlement stays in your year-to-date balance. The per-month
-                                        limit is the maximum you can take in one calendar month.
+                                        {hasNoCarryProbationLeave(dashboardStats.monthlyCapSummary.types)
+                                            ? LEAVE_UI.noCarryFooter
+                                            : LEAVE_UI.takeableFooter}
                                     </p>
-                                    <p className="mt-2 text-xs text-slate-500">
-                                        Annual days available:{' '}
-                                        <span className="font-semibold text-slate-800">
-                                            {dashboardStats.leaveDaysRemaining}
-                                        </span>
-                                    </p>
+                                    {hasNoCarryProbationLeave(dashboardStats.monthlyCapSummary.types) ? (
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            {LEAVE_UI.lockedUntilConfirmation}:{' '}
+                                            <span className="font-semibold text-slate-800">
+                                                {dashboardStats.monthlyCapSummary.types.reduce(
+                                                    (sum, t) => sum + (Number(t.probationFrozenBalance) || 0),
+                                                    0
+                                                )}
+                                            </span>
+                                        </p>
+                                    ) : (
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            {LEAVE_UI.totalBalance}:{' '}
+                                            <span className="font-semibold text-slate-800">
+                                                {dashboardStats.leaveDaysRemaining}
+                                            </span>
+                                        </p>
+                                    )}
                                 </>
                             ) : (
                                 <>
                                     <p className="mt-3 text-3xl font-bold text-[#006D4E]">
                                         {dashboardStats.leaveDaysRemaining}
                                     </p>
-                                    <p className="text-xs text-slate-500">days remaining</p>
+                                    <p className="text-xs text-slate-500">{LEAVE_UI.daysRemaining.toLowerCase()}</p>
                                 </>
                             )}
                             <div className="mt-4 space-y-2">

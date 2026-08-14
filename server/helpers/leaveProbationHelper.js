@@ -145,8 +145,14 @@ export function applyProbationAccrualOverlay(leaveTypeConfig, probationContext, 
     );
     const monthly = Math.max(0, Number(accrualIn.amount) || 0);
 
+    const allowLeave = restrictions.allowLeave !== false;
+
     if (frequency === 'yearly' || accrualIn.method === 'yearly') {
         const grant = annual > 0 ? annual : monthly;
+        const maxDays =
+            restrictions.maxDaysPerMonth != null && Number(restrictions.maxDaysPerMonth) >= 0
+                ? Number(restrictions.maxDaysPerMonth)
+                : grant;
         return {
             ...leaveTypeConfig,
             accrual: {
@@ -156,19 +162,27 @@ export function applyProbationAccrualOverlay(leaveTypeConfig, probationContext, 
                 maxAccrual: grant,
                 anniversaryBased: false,
             },
-            maxDaysPerMonth:
-                restrictions.maxDaysPerMonth != null && Number(restrictions.maxDaysPerMonth) > 0
-                    ? Number(restrictions.maxDaysPerMonth)
-                    : grant > 0
-                      ? grant
-                      : leaveTypeConfig.maxDaysPerMonth,
+            // Keep explicit 0 — do not fall back to normal policy maxDaysPerMonth.
+            maxDaysPerMonth: maxDays,
             _probationOverlay: true,
             _probationFrequency: 'yearly',
+            _probationCarryForward: restrictions.carryForwardDuringProbation === true,
+            _probationAllowLeave: allowLeave,
         };
     }
 
     const monthlyRate = monthly > 0 ? monthly : annual > 0 ? annual / 12 : 0;
-    const cap = annual > 0 ? annual : leaveTypeConfig.accrual?.maxAccrual;
+    // Explicit probation 0/0 must not inherit normal annual cap or monthly take limit.
+    const cap =
+        annual > 0
+            ? annual
+            : monthlyRate > 0
+              ? Number(leaveTypeConfig.accrual?.maxAccrual) || 0
+              : 0;
+    const maxDays =
+        restrictions.maxDaysPerMonth != null && Number(restrictions.maxDaysPerMonth) >= 0
+            ? Number(restrictions.maxDaysPerMonth)
+            : monthlyRate;
     return {
         ...leaveTypeConfig,
         accrual: {
@@ -178,14 +192,11 @@ export function applyProbationAccrualOverlay(leaveTypeConfig, probationContext, 
             maxAccrual: Number(cap) >= 0 ? Number(cap) : 0,
             anniversaryBased: false,
         },
-        maxDaysPerMonth:
-            restrictions.maxDaysPerMonth != null && Number(restrictions.maxDaysPerMonth) > 0
-                ? Number(restrictions.maxDaysPerMonth)
-                : monthlyRate > 0
-                  ? monthlyRate
-                  : leaveTypeConfig.maxDaysPerMonth,
+        maxDaysPerMonth: maxDays,
         _probationOverlay: true,
         _probationFrequency: 'monthly',
+        _probationCarryForward: restrictions.carryForwardDuringProbation === true,
+        _probationAllowLeave: allowLeave,
     };
 }
 
@@ -236,13 +247,20 @@ export function evaluateLeaveProbationRestriction({
     if (allowLeave === false) {
         return {
             allowed: false,
-            reason: `${leaveTypeLabel} is not allowed during probation.`,
+            reason: `You cannot apply ${leaveTypeLabel} during probation.`,
             inProbation: true,
             remaining: 0,
         };
     }
 
     return { allowed: true, inProbation: true, remaining: null };
+}
+
+/** Overlay months with carry-forward disabled: freeze prior balance, expire unused month credit. */
+export function isProbationNoCarryForwardConfig(leaveTypeConfig) {
+    return Boolean(
+        leaveTypeConfig?._probationOverlay && leaveTypeConfig?._probationCarryForward !== true
+    );
 }
 
 /**
@@ -305,6 +323,7 @@ export function normalizeProbationRestrictions(raw = {}) {
     return {
         enabled,
         allowLeave: migratedAllowLeave,
+        carryForwardDuringProbation: raw?.carryForwardDuringProbation === true,
         accrual: {
             method: frequency === 'yearly' ? 'yearly' : 'fixed',
             frequency,

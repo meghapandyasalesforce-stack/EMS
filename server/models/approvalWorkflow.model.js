@@ -63,7 +63,7 @@ const approvalWorkflowSchema = new mongoose.Schema({
         },
         timeoutHours: {
             type: Number,
-            default: 48 // Auto-approve after timeout
+            default: 48 // Escalate to next step after this many hours
         },
         conditions: {
             minAmount: Number, // For expenses
@@ -199,7 +199,7 @@ const approvalInstanceSchema = new mongoose.Schema({
         ref: 'Employee'
     },
     rejectionReason: String,
-    /** Additive SLA escalation (12h default) — does not replace step.escalated */
+    /** Step-timeout escalation — next step may act; does not replace step.escalated */
     slaEscalated: {
         type: Boolean,
         default: false,

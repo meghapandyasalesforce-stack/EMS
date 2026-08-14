@@ -38,6 +38,7 @@ import {
     applyProbationAccrualOverlay,
     buildLeaveProbationContext,
     firstOfMonth,
+    isProbationNoCarryForwardConfig,
 } from '../helpers/leaveProbationHelper.js';
 import { OnboardingWorkflow } from '../models/onboarding.model.js';
 
@@ -1378,6 +1379,17 @@ class LeaveBalanceEngine {
             return credit;
         };
 
+        const asOfYear = asOfDate.getFullYear();
+        const asOfMonthIndex = asOfDate.getMonth();
+        const expireUnusedCreditForMonth = (year, monthIndex) => {
+            const cfg = configForMonth(year, monthIndex);
+            if (!isProbationNoCarryForwardConfig(cfg)) return false;
+            // Keep current month's unused credit takeable until the month ends.
+            if (year > asOfYear) return false;
+            if (year === asOfYear && monthIndex >= asOfMonthIndex) return false;
+            return true;
+        };
+
         return rollLeaveBalanceThroughPeriod({
             joinYear: joiningDate.getFullYear(),
             joinMonthIndex: joiningDate.getMonth(),
@@ -1387,6 +1399,7 @@ class LeaveBalanceEngine {
             getUsedForMonth: (year, monthIndex) =>
                 usedByMonth.get(`${year}-${monthIndex}`) || 0,
             shouldCreditMonth: (year, monthIndex) => creditWithAnnualCap(year, monthIndex),
+            expireUnusedCreditForMonth,
             periodOpeningBalance,
             initialBalance,
         });
