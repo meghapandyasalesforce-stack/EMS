@@ -15,8 +15,10 @@ import { getNavigationItems } from '../utils/navigationConfig';
 import { syncPortalsForSession, getEffectiveActivePortal } from '../utils/portalConfig';
 import PortalSwitcher from '../components/PortalSwitcher';
 import RoleBucketBadges from '../components/RoleBucketBadges';
+import useHrmsPopupDismiss from '../Hooks/useHrmsPopupDismiss';
 import { mergeSessionProfile, getProfileDisplayName } from '../utils/profileUtils';
 import { clearOrgAdminCredentials } from '../utils/orgAdminCredentials';
+import { isHrmsAuthenticatedUser } from '../utils/authSessionUtils';
 
 const Header = () => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -34,7 +36,7 @@ const Header = () => {
     const roleBuckets = useSelector((state) => state.auth.roleBuckets) || [];
     const activePortal = useSelector((state) => state.auth.activePortal);
     const availablePortals = useSelector((state) => state.auth.availablePortals) || [];
-    const authChecked = useSelector((state) => state.auth.authChecked);
+    const sessionValidated = useSelector((state) => state.auth.sessionValidated);
     const profile = useMemo(() => mergeSessionProfile(user, employee), [user, employee]);
     const { username, email } = useMemo(() => {
         const name = getProfileDisplayName(profile, user, employee);
@@ -65,26 +67,11 @@ const Header = () => {
         };
     }, [isMobile, mobileMenuOpen]);
 
-    // Close mobile profile dropdown when tapping/clicking outside it
-    useEffect(() => {
-        if (!isMobile || !dropdownOpen) return undefined;
-
-        const handlePointerOutside = (event) => {
-            if (mobileProfileRef.current && !mobileProfileRef.current.contains(event.target)) {
-                setDropdownOpen(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handlePointerOutside);
-        document.addEventListener('touchstart', handlePointerOutside);
-        return () => {
-            document.removeEventListener('mousedown', handlePointerOutside);
-            document.removeEventListener('touchstart', handlePointerOutside);
-        };
-    }, [isMobile, dropdownOpen]);
+    const closeProfileDropdown = useCallback(() => setDropdownOpen(false), []);
+    useHrmsPopupDismiss(closeProfileDropdown, dropdownOpen);
 
     useEffect(() => {
-        if (!authChecked || (!user && !employee)) return;
+        if (!sessionValidated || (!user && !employee)) return;
 
         const { portals, activePortal: nextPortal } = syncPortalsForSession({
             user,
@@ -106,7 +93,7 @@ const Header = () => {
             dispatch(setActivePortal(nextPortal));
         }
     }, [
-        authChecked,
+        sessionValidated,
         user,
         employee,
         roleBuckets,
@@ -210,6 +197,44 @@ const Header = () => {
         [location.pathname]
     );
 
+    const isCareerRoute = location.pathname.startsWith('/careers/');
+    const isHrmsUser = sessionValidated && isHrmsAuthenticatedUser({
+        user,
+        employee,
+        permissions,
+        roleBuckets,
+        permissionFlags,
+    });
+    const isCareerPublicMode = isCareerRoute && sessionValidated && !isHrmsUser;
+
+    if (isCareerPublicMode) {
+        const returnTo = `${location.pathname}${location.search}`;
+        const loginHref = `/login?returnTo=${encodeURIComponent(returnTo)}`;
+        return (
+            <header className="safe-area-top relative z-30 flex h-14 w-full shrink-0 items-center justify-between border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 px-4 text-white shadow-xl sm:px-6">
+                <h3 className="text-2xl font-extrabold tracking-tight" aria-label="paarsiv">
+                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>p</span>
+                    <span className="text-white">a</span>
+                    <span className="text-white">a</span>
+                    <span className="text-white">r</span>
+                    <span className="drop-shadow-lg" style={{ color: 'var(--color-primary)' }}>s</span>
+                    <span className="text-white">i</span>
+                    <span className="text-white">v</span>
+                </h3>
+                {!user ? (
+                    <Link
+                        to={loginHref}
+                        className="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: 'var(--color-primary)' }}
+                        title="For existing company employees and HR staff only"
+                    >
+                        Employee Login
+                    </Link>
+                ) : null}
+            </header>
+        );
+    }
+
     return (
         <>
             {isMobile ? (
@@ -249,16 +274,26 @@ const Header = () => {
                             </div>
 
                             <div className="relative shrink-0" ref={mobileProfileRef}>
-                                <FaUserCircle
+                                <button
+                                    type="button"
                                     className={
                                         useLightEmployeeNav
                                             ? 'cursor-pointer rounded-lg p-1 text-2xl text-gray-600 transition-colors hover:bg-gray-100 hover:opacity-90'
                                             : 'cursor-pointer rounded-lg p-1 text-2xl text-white transition-colors hover:bg-gray-700/50 hover:opacity-90'
                                     }
                                     onClick={toggleDropdown}
-                                />
+                                    aria-label="Profile menu"
+                                    aria-expanded={dropdownOpen}
+                                    data-hrms-popup-trigger
+                                >
+                                    <FaUserCircle className="text-2xl" />
+                                </button>
                                 {dropdownOpen && (
-                                    <div className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-[min(14rem,calc(100vw-2rem))] border border-gray-100 animate-scaleIn">
+                                    <div
+                                        className="absolute top-full right-0 mt-2 bg-white text-black rounded-xl shadow-2xl p-2 z-50 w-[min(14rem,calc(100vw-2rem))] border border-gray-100 animate-scaleIn"
+                                        role="menu"
+                                        data-hrms-popup
+                                    >
                                         <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Welcome,</p>
                                             <p className="text-sm font-bold text-gray-900 truncate mt-1">{username}</p>

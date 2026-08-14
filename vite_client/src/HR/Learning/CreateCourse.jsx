@@ -6,6 +6,7 @@ import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import CourseFormShell from './CourseFormShell';
 import { MINT_GRADIENT } from '../Reports/constants';
+import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
 
 const CreateCourse = () => {
     const navigate = useNavigate();
@@ -146,13 +147,14 @@ const CreateCourse = () => {
         }));
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e, targetStatus = formData.status) => {
         e.preventDefault();
         setLoading(true);
 
         try {
             const payload = {
                 ...formData,
+                status: targetStatus,
                 duration: parseFloat(formData.duration) || 0,
                 maxEnrollments: formData.maxEnrollments ? parseInt(formData.maxEnrollments) : undefined,
                 startDate: formData.startDate ? new Date(formData.startDate) : undefined,
@@ -166,7 +168,7 @@ const CreateCourse = () => {
             };
 
             await axios.post('/v1/admin/learning/courses', payload, { withCredentials: true });
-            toast.success('Course created successfully');
+            toast.success(toastForSave('Course', targetStatus, 'course'));
             navigate('/learning');
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to create course');
@@ -185,7 +187,7 @@ const CreateCourse = () => {
             subtitle="Design and publish training courses"
             onBack={() => navigate('/learning')}
         >
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
                     {/* Basic Information */}
                     <div className="space-y-4">
                         <h2 className="text-xl font-semibold text-gray-800">Basic Information</h2>
@@ -612,11 +614,14 @@ const CreateCourse = () => {
                                 <option value="Published">Published</option>
                                 <option value="Archived">Archived</option>
                             </select>
+                            {getStatusHint(formData.status, 'course') && (
+                                <p className="mt-1.5 text-xs text-amber-700">{getStatusHint(formData.status, 'course')}</p>
+                            )}
                         </div>
                     </div>
 
                     {/* Submit Buttons */}
-                    <div className="flex justify-end gap-4 pt-4 border-t">
+                    <div className="flex flex-wrap justify-end gap-3 pt-4 border-t">
                         <button
                             type="button"
                             onClick={() => navigate('/learning')}
@@ -625,12 +630,22 @@ const CreateCourse = () => {
                             Cancel
                         </button>
                         <button
-                            type="submit"
-                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                            type="button"
+                            disabled={loading}
+                            onClick={(e) => handleSubmit(e, 'Draft')}
+                            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-60"
+                        >
+                            Save as Draft
+                        </button>
+                        <button
+                            type="button"
+                            disabled={loading}
+                            onClick={(e) => handleSubmit(e, 'Published')}
+                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
                             style={{ background: MINT_GRADIENT }}
                         >
                             <FaSave className="w-4 h-4" />
-                            Create Course
+                            Publish Course
                         </button>
                     </div>
                 </form>

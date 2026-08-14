@@ -397,7 +397,14 @@ export const getEmployeeLeaveBalance = async (req, res) => {
         const { year, month } = req.query;
         const targetYear = year ? parseInt(year, 10) : new Date().getFullYear();
         const targetMonth = month ? parseInt(month, 10) : new Date().getMonth() + 1;
-        const targetEmployeeId = employeeId || req.employee?._id || req.user?._id;
+        const targetEmployeeId = employeeId || req.employee?._id;
+
+        if (!targetEmployeeId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Employee ID is required',
+            });
+        }
 
         const access = await resolveEmployeeLeaveBalanceAccess(req, targetEmployeeId, { forAdjust: false });
         if (!access.ok) {
@@ -444,6 +451,12 @@ export const getEmployeeLeaveBalance = async (req, res) => {
         });
     } catch (error) {
         logger.error('Get Employee Leave Balance Error', { error: error.message });
+        if (error.message === 'Employee not found') {
+            return res.status(404).json({
+                success: false,
+                message: 'Leave balance not found. No employee profile is linked to this account.',
+            });
+        }
         res.status(500).json({
             success: false,
             message: 'Error fetching leave balance',

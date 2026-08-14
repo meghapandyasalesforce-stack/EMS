@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FaBell, FaTimes, FaCheck, FaTrash } from 'react-icons/fa';
 import axios from '../utils/axios';
@@ -9,9 +9,12 @@ import { io } from 'socket.io-client';
 import { BOTH_NOTIFICATION_ENDPOINT } from '../utils/constant';
 import { getTokenFromCookie } from '../utils/authHelper';
 import { getSocketIOUrl } from '../utils/socketUrl';
+import useHrmsPopupDismiss from '../Hooks/useHrmsPopupDismiss';
 
 const NotificationDropdown = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const closeDropdown = useCallback(() => setIsOpen(false), []);
+    useHrmsPopupDismiss(closeDropdown, isOpen);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -235,10 +238,6 @@ const NotificationDropdown = () => {
     const markAsRead = async (notificationId) => {
         try {
             await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}/read`, {});
-            // Auto-delete after reading
-            try {
-                await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${notificationId}`);
-            } catch {}
             setNotifications(prev => prev.filter(notification => notification._id !== notificationId));
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (error) {
@@ -340,6 +339,7 @@ const NotificationDropdown = () => {
         <div className="relative">
             <button
                 ref={buttonRef}
+                type="button"
                 onClick={() => {
                     setIsOpen(!isOpen);
                     if (!isOpen) {
@@ -347,6 +347,9 @@ const NotificationDropdown = () => {
                     }
                 }}
                 className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Notifications"
+                aria-expanded={isOpen}
+                data-hrms-popup-trigger
             >
                 <FaBell className="text-xl" />
                 {unreadCount > 0 && (

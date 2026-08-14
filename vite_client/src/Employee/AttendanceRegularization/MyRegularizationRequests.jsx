@@ -246,7 +246,7 @@ const MyRegularizationRequests = () => {
                         <div>
                             <h1 className="text-xl sm:text-2xl font-bold text-gray-800 break-words">My Attendance Regularization Requests</h1>
                             <p className="text-gray-600 mt-1">Request corrections for your attendance records</p>
-                            {limitsLoading ? (
+                            {/* {limitsLoading ? (
                                 <p className="text-sm text-gray-500 mt-1">Loading monthly regularization limit...</p>
                             ) : limits ? (
                                 <p className="text-sm text-gray-500 mt-1">
@@ -260,7 +260,7 @@ const MyRegularizationRequests = () => {
                                 <p className="text-sm text-amber-600 mt-1">
                                     Could not load regularization limits. New requests are temporarily unavailable.
                                 </p>
-                            )}
+                            )} */}
                         </div>
                         <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2 shrink-0">
                             {canAccessTeamRegularization(userObj) && (

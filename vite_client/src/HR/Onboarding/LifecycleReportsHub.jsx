@@ -260,14 +260,14 @@ const LifecycleReportsHub = ({ onBack }) => {
     }
 
     return (
-        <div className="cm-hrms min-h-[calc(100vh-4rem)]">
+        <div className="cm-hrms hrms-lifecycle min-h-[calc(100vh-4rem)]">
             <div className="page-shell !bg-transparent">
                 <div className="page-shell-inner cm-page pb-10">
                 {onBack && (
                     <button
                         type="button"
                         onClick={onBack}
-                        className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-[var(--cm-primary-deep)] hover:underline"
+                        className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-theme-secondary hover:text-theme-primary"
                     >
                         <FaArrowLeft /> Back to workflows
                     </button>
@@ -275,10 +275,10 @@ const LifecycleReportsHub = ({ onBack }) => {
                 {/* Page header — matches Onboarding Analytics mock */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h2 className="cm-title" style={{ fontSize: '2rem', lineHeight: '2.5rem', letterSpacing: '-0.01em' }}>
+                        <h2 className="mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">
                             Onboarding Analytics
                         </h2>
-                        <p className="cm-subtitle mt-1">
+                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
                             Track performance and compliance across the employee lifecycle.
                         </p>
                     </div>

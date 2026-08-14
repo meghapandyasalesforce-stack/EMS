@@ -245,8 +245,9 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
             <div className="cm-page">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <p className="cm-title">Offer Management</p>
-                        <p className="cm-subtitle">Generate, approve, and send offers to this candidate</p>
+                        <p className="text-sm font-medium text-theme-secondary">Offer Management</p>
+                        <h2 className="mt-1 text-xl font-bold text-gray-800 sm:text-2xl">Candidate Offers</h2>
+                        <p className="mt-1 text-sm text-gray-500">Generate, approve, and send offers to this candidate</p>
                     </div>
                     <CmButton onClick={() => setShowCreate(true)} disabled={submitting}>
                         + New Offer
@@ -270,7 +271,9 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                 </div>
 
                 {offers.length === 0 ? (
-                    <div className="cm-empty">No offer letters yet for this candidate.</div>
+                    <div className="hrms-empty-shell">
+                        <div className="cm-empty">No offer letters yet for this candidate.</div>
+                    </div>
                 ) : (
                     <div className="cm-kanban">
                         {pipelineColumns.map((col) => (
@@ -459,7 +462,7 @@ const OfferLetterPanel = ({ candidateId, candidate, onRefresh }) => {
                 {showCreate && (
                     <div className="cm-modal-overlay" onClick={() => setShowCreate(false)}>
                         <div className="cm-modal" style={{ maxWidth: '32rem' }} onClick={(e) => e.stopPropagation()}>
-                            <p className="cm-title-sm mb-4">Generate Offer Letter</p>
+                            <p className="mb-4 text-lg font-semibold text-gray-800">Generate Offer Letter</p>
                             <form onSubmit={createOffer} className="space-y-3.5">
                                 <label className="block text-sm">
                                     <span className="cm-label mb-1 block">Template type</span>

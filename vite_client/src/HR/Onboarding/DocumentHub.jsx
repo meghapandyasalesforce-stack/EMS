@@ -242,7 +242,7 @@ const DocumentHub = () => {
     const pendingAlertCount = reports?.pending ?? expiry?.expiringSoon ?? null;
 
     return (
-        <div className="cm-hrms">
+        <div className="cm-hrms hrms-lifecycle">
             <div className="cm-page">
                 {/* ── Top compliance bar ── */}
                 <div className="cm-card">

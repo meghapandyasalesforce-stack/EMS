@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import axios from '../../utils/axios';
 import { toast } from 'react-toastify';
@@ -15,6 +15,7 @@ import {
     FaCircle
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 import { HiOutlineDocumentText } from 'react-icons/hi2';
 
 const EmployeeOneOnOnePage = () => {
@@ -30,7 +31,9 @@ const EmployeeOneOnOnePage = () => {
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [openActionMenuId, setOpenActionMenuId] = useState(null);
     const fileInputRef = useRef(null);
-    const actionMenuRef = useRef(null);
+
+    const closeActionMenu = useCallback(() => setOpenActionMenuId(null), []);
+    useHrmsPopupDismiss(closeActionMenu, Boolean(openActionMenuId));
 
     useEffect(() => {
         fetchMeetings();
@@ -99,30 +102,6 @@ const EmployeeOneOnOnePage = () => {
             setSelectedMeetingId(nextMeeting._id);
         }
     }, [nextMeeting, selectedMeetingId]);
-
-    useEffect(() => {
-        if (!openActionMenuId) return undefined;
-
-        const handleOutsideClick = (event) => {
-            if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
-                setOpenActionMenuId(null);
-            }
-        };
-
-        const handleEscape = (event) => {
-            if (event.key === 'Escape') {
-                setOpenActionMenuId(null);
-            }
-        };
-
-        document.addEventListener('mousedown', handleOutsideClick);
-        document.addEventListener('keydown', handleEscape);
-
-        return () => {
-            document.removeEventListener('mousedown', handleOutsideClick);
-            document.removeEventListener('keydown', handleEscape);
-        };
-    }, [openActionMenuId]);
 
     useEffect(() => {
         const currentUser = user || employee;
@@ -508,7 +487,7 @@ const EmployeeOneOnOnePage = () => {
                                                                     Confirmed
                                                                 </p>
                                                             </div>
-                                                            <div className="relative" ref={openActionMenuId === meeting._id ? actionMenuRef : null}>
+                                                            <div className="relative">
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
@@ -518,6 +497,8 @@ const EmployeeOneOnOnePage = () => {
                                                                     className="rounded p-1 text-slate-400 transition hover:bg-slate-100"
                                                                     aria-label="Meeting quick actions"
                                                                     aria-expanded={openActionMenuId === meeting._id}
+                                                                    aria-haspopup="menu"
+                                                                    data-hrms-popup-trigger
                                                                 >
                                                                     <FaEllipsisV className="text-slate-400" />
                                                                 </button>

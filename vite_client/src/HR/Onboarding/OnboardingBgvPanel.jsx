@@ -278,7 +278,7 @@ const OnboardingBgvPanel = ({
     // ─────────────────────────────────────────────────────────────────────
     if (isHRView) {
         return (
-            <div className="cm-hrms">
+            <div className="cm-hrms hrms-lifecycle">
                 <div className="cm-page">
                     {blocksJoining && (
                         <div className="cm-banner cm-banner--attention flex items-center gap-2">

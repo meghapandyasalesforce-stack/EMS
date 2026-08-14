@@ -8,7 +8,7 @@ import axios from '../../utils/axios';
 import { ADMIN_LIFECYCLE_ENDPOINT } from '../../utils/constant';
 import LoadingSpinner from '../LoadingSpinner';
 import RichTextEditor, { PlaceholderChips } from './RichTextEditor';
-import { CmBadge, CmButton } from '../corporateModern';
+import { CmButton } from '../corporateModern';
 import OfferLetterHtmlPreview from './OfferLetterHtmlPreview';
 import OfferPdfTemplateUpload from './OfferPdfTemplateUpload';
 import OfferPdfFieldMapping from './OfferPdfFieldMapping';
@@ -18,6 +18,13 @@ const EMPTY_TEMPLATE = {
     description: '',
     bodyHtml: '',
     isDefault: false,
+};
+
+const templateTypeLabel = (template) => {
+    if (template.templateType === 'pdf') {
+        return template.pdfTemplate?.mappingsConfigured ? 'PDF' : 'PDF';
+    }
+    return 'HTML';
 };
 
 const OfferTemplateManager = () => {
@@ -121,6 +128,7 @@ const OfferTemplateManager = () => {
             setPreviewLoading(false);
         }
     };
+
     const setAsDefault = async (template) => {
         try {
             await axios.post(`${ADMIN_LIFECYCLE_ENDPOINT}/offers/templates`, {
@@ -137,103 +145,106 @@ const OfferTemplateManager = () => {
         }
     };
 
+    const activeTemplates = templates.filter((t) => t.isActive !== false);
+
     if (loading) return <LoadingSpinner message="Loading offer templates..." />;
 
     return (
-        <div className="cm-hrms">
-            <div className="cm-page">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <p className="cm-title-sm">Offer Letter Templates</p>
-                        {/* <p className="cm-subtitle">Create HTML templates with placeholders, or upload a PDF — fields are detected automatically and verified once.</p> */}
+        <div className="ats-offer-panel">
+            <h2 className="ats-offer-panel__title">Offer Letter Templates</h2>
+
+            <div className="ats-offer-create-grid">
+                <button type="button" onClick={openCreate} className="ats-offer-create-card">
+                    <span className="ats-offer-create-card__icon ats-offer-create-card__icon--html">
+                        <FaPlus />
+                    </span>
+                    <span className="ats-offer-create-card__body">
+                        <span className="ats-offer-create-card__title">New HTML Template</span>
+                        <span className="ats-offer-create-card__desc">
+                            Build with the rich text editor and {'{{placeholders}}'}.
+                        </span>
+                    </span>
+                </button>
+
+                <button type="button" onClick={() => setUploadPdfOpen(true)} className="ats-offer-create-card">
+                    <span className="ats-offer-create-card__icon ats-offer-create-card__icon--pdf">
+                        <FaFilePdf />
+                    </span>
+                    <span className="ats-offer-create-card__body">
+                        <span className="ats-offer-create-card__title">Upload PDF Template</span>
+                        <span className="ats-offer-create-card__desc">
+                            Upload your company offer letter PDF — fields are detected automatically.
+                        </span>
+                    </span>
+                </button>
+            </div>
+
+            <div className="ats-offer-template-list">
+                {activeTemplates.map((template) => (
+                    <article key={template._id} className="ats-offer-template-row">
+                        <div className="ats-offer-template-row__info">
+                            <div className="ats-offer-template-row__title-line">
+                                <h3 className="ats-offer-template-row__name">{template.name}</h3>
+                                {template.isDefault && (
+                                    <span className="ats-offer-tag">Default</span>
+                                )}
+                                <span className="ats-offer-tag">{templateTypeLabel(template)}</span>
+                                <span className="ats-offer-tag">v{template.version || 1}</span>
+                                {template.templateType === 'pdf' && !template.pdfTemplate?.mappingsConfigured && (
+                                    <span className="ats-offer-tag ats-offer-tag--warn">Needs verification</span>
+                                )}
+                            </div>
+                            <p className="ats-offer-template-row__date">
+                                Updated {template.updatedAt ? format(new Date(template.updatedAt), 'dd MMM yyyy') : '—'}
+                            </p>
+                        </div>
+
+                        <div className="ats-offer-template-row__actions">
+                            <CmButton variant="outline" size="sm" onClick={() => openTemplatePreview(template)}>
+                                <FaEye className="text-xs" /> Preview
+                            </CmButton>
+                            {template.templateType === 'pdf' ? (
+                                <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setMappingOpen(true); }}>
+                                    {template.pdfTemplate?.mappingsConfigured ? 'View Fields' : 'Verify Fields'}
+                                </CmButton>
+                            ) : (
+                                <>
+                                    <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setHistoryOpen(true); }}>
+                                        <FaHistory className="text-xs" /> History
+                                    </CmButton>
+                                    <CmButton variant="outline" size="sm" onClick={() => openEdit(template)}>
+                                        <FaEdit className="text-xs" /> Edit
+                                    </CmButton>
+                                </>
+                            )}
+                            {!template.isDefault && (
+                                <CmButton variant="outline" size="sm" onClick={() => setAsDefault(template)}>
+                                    <FaStar className="text-xs" /> Set default
+                                </CmButton>
+                            )}
+                            <CmButton
+                                variant="outline"
+                                size="sm"
+                                className="ats-offer-action-btn--danger"
+                                onClick={() => deactivateTemplate(template)}
+                            >
+                                <FaTrash className="text-xs" /> Deactivate
+                            </CmButton>
+                        </div>
+                    </article>
+                ))}
+
+                {activeTemplates.length === 0 && (
+                    <div className="hrms-empty-shell">
+                    <div className="ats-offer-empty">
+                        <p>No offer templates yet.</p>
+                        <div className="ats-offer-empty__actions">
+                            <CmButton onClick={openCreate}><FaPlus /> New HTML Template</CmButton>
+                            <CmButton variant="outline" onClick={() => setUploadPdfOpen(true)}><FaFilePdf /> Upload PDF Template</CmButton>
+                        </div>
                     </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className="cm-card flex items-start gap-3 p-4 text-left transition hover:shadow-md"
-                    >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-theme-primary/10 text-theme-primary">
-                            <FaPlus />
-                        </span>
-                        <span>
-                            <span className="block font-semibold" style={{ color: 'var(--cm-on-surface)' }}>New HTML Template</span>
-                            <span className="mt-1 block text-sm" style={{ color: 'var(--cm-muted)' }}>
-                                Build with the rich text editor and {'{{placeholders}}'}.
-                            </span>
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setUploadPdfOpen(true)}
-                        className="cm-card flex items-start gap-3 p-4 text-left transition hover:shadow-md"
-                        style={{ border: '1px solid rgba(59,130,246,0.25)' }}
-                    >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                            <FaFilePdf />
-                        </span>
-                        <span>
-                            <span className="block font-semibold" style={{ color: 'var(--cm-on-surface)' }}>Upload PDF Template</span>
-                            <span className="mt-1 block text-sm" style={{ color: 'var(--cm-muted)' }}>
-                                Upload your company offer letter PDF — fields are detected automatically.
-                            </span>
-                        </span>
-                    </button>
-                </div>
-
-                <div className="mt-6 grid gap-3">
-                    {templates.filter((t) => t.isActive !== false).map((template) => (
-                        <div key={template._id} className="cm-card">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <h3 className="font-semibold" style={{ color: 'var(--cm-on-surface)' }}>{template.name}</h3>
-                                        {template.isDefault && <CmBadge tone="done">Default</CmBadge>}
-                                        <CmBadge tone={template.templateType === 'pdf' && !template.pdfTemplate?.mappingsConfigured ? 'attention' : 'neutral'} dot={false}>
-                                            {template.templateType === 'pdf'
-                                                ? (template.pdfTemplate?.mappingsConfigured ? 'PDF · Verified' : 'PDF — needs verification')
-                                                : 'HTML'}
-                                        </CmBadge>
-                                        <CmBadge tone="neutral" dot={false}>v{template.version || 1}</CmBadge>
-                                    </div>
-                                    {template.description && <p className="mt-1 text-sm" style={{ color: 'var(--cm-muted)' }}>{template.description}</p>}
-                                    <p className="mt-1 text-xs" style={{ color: 'var(--cm-muted)' }}>
-                                        Updated {template.updatedAt ? format(new Date(template.updatedAt), 'dd MMM yyyy') : '—'}
-                                    </p>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    <CmButton variant="outline" size="sm" onClick={() => openTemplatePreview(template)}><FaEye className="text-xs" />Preview</CmButton>
-                                    {template.templateType === 'pdf' && (
-                                        <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setMappingOpen(true); }}>
-                                            {template.pdfTemplate?.mappingsConfigured ? 'View Fields' : 'Verify Fields'}
-                                        </CmButton>
-                                    )}
-                                    {template.templateType !== 'pdf' && (
-                                        <>
-                                            <CmButton variant="outline" size="sm" onClick={() => { setSelected(template); setHistoryOpen(true); }}><FaHistory className="text-xs" />History</CmButton>
-                                            <CmButton variant="outline" size="sm" onClick={() => openEdit(template)}><FaEdit className="text-xs" />Edit</CmButton>
-                                        </>
-                                    )}
-                                    {!template.isDefault && (
-                                        <CmButton variant="outline" size="sm" onClick={() => setAsDefault(template)}><FaStar className="text-xs" />Set default</CmButton>
-                                    )}
-                                    <CmButton variant="outline" size="sm" onClick={() => deactivateTemplate(template)} style={{ color: 'var(--cm-error)' }}><FaTrash className="text-xs" />Deactivate</CmButton>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {!templates.filter((t) => t.isActive !== false).length && (
-                        <div className="cm-empty space-y-3">
-                            <p>No offer templates yet.</p>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                <CmButton onClick={openCreate}><FaPlus /> New HTML Template</CmButton>
-                                <CmButton variant="outline" onClick={() => setUploadPdfOpen(true)}><FaFilePdf /> Upload PDF Template</CmButton>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             {editorOpen && (

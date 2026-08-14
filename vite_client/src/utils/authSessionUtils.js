@@ -100,3 +100,69 @@ export function resolveLoginSessionRole(sessionRole, permissionFlags = {}, hasEm
   }
   return sessionRole || 'employee';
 }
+
+/**
+ * Whether the current session belongs to an HRMS workforce/platform user.
+ * Uses the same session fields populated by checkAuthSession() and login — not email heuristics.
+ */
+export function isHrmsAuthenticatedUser({
+  user = null,
+  employee = null,
+  permissions = [],
+  roleBuckets = [],
+  permissionFlags = {},
+} = {}) {
+  const hasPermissions = Array.isArray(permissions) && permissions.length > 0;
+  const hasRoleBuckets = Array.isArray(roleBuckets) && roleBuckets.length > 0;
+
+  const flags = permissionFlags || {};
+  const hasPlatformContext = Boolean(
+    flags.isOrgOwner ||
+    flags.isHrManager ||
+    flags.isHrExecutive ||
+    flags.isPayrollAdmin ||
+    flags.isLineManager ||
+    flags.isProjectManager ||
+    flags.isExecutive
+  );
+
+  // Session restored via checkAuthSession permissions (workforce/platform context)
+  if (hasPermissions || hasRoleBuckets || hasPlatformContext) {
+    return true;
+  }
+
+  if (!user) return false;
+
+  return (
+    Boolean(employee?._id || employee?.id) ||
+    Boolean(user?.employeeProfileId)
+  );
+}
+
+/** Routes that must stay reachable without forcing HRMS login (guest / external visitors). */
+export function isPublicGuestRoute(pathname) {
+  if (!pathname || typeof pathname !== 'string') return false;
+  return (
+    pathname.startsWith('/careers/') ||
+    pathname.startsWith('/application/') ||
+    pathname.startsWith('/offer/')
+  );
+}
+
+/** Allow only internal Career Portal return paths after login. */
+export function getSafeCareerReturnTo(value) {
+  if (!value || typeof value !== 'string') return null;
+  let decoded = value.trim();
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    return null;
+  }
+  if (!decoded.startsWith('/careers/')) return null;
+  if (decoded.startsWith('//')) return null;
+  if (decoded.includes('\\') || decoded.includes('..')) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(decoded)) return null;
+  const pathOnly = decoded.split('?')[0].split('#')[0];
+  if (!pathOnly.startsWith('/careers/')) return null;
+  return decoded;
+}

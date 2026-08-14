@@ -93,7 +93,7 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
         <div className="cm-hrms ats-ui fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,45,38,0.45)' }}>
             <div className="cm-card max-h-[90vh] w-full max-w-2xl overflow-y-auto !p-6" style={{ boxShadow: 'var(--ats-shadow-md)' }}>
                 <div className="mb-4 flex items-center justify-between gap-3">
-                    <h2 className="cm-title-sm m-0">Hire → Create Employee</h2>
+                    <h2 className="m-0 text-lg font-semibold text-gray-800">Hire → Create Employee</h2>
                     <button type="button" onClick={onClose} className="ats-link text-lg leading-none" aria-label="Close">✕</button>
                 </div>
 

@@ -125,7 +125,9 @@ function matchesMarksheetLevel(doc, marksheetLevel) {
     return String(level || '').trim() === String(marksheetLevel || '').trim();
 }
 
-/** Deactivate older rows of the same job-doc type and remove their files (caller must pass new doc _id to keep). */
+/** Deactivate older rows of the same job-doc type (caller must pass new doc _id to keep).
+ *  @returns {Promise<number>} number of previous documents deactivated
+ */
 export async function deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, keepId, parsedInfo = {}) {
     const candidateFilter = {
         organizationId,
@@ -149,13 +151,19 @@ export async function deactivatePreviousJobDocumentsExcept(organizationId, emplo
         if (idsToDeactivate.length > 0) {
             await Document.updateMany(
                 { _id: { $in: idsToDeactivate } },
-                { $set: { isActive: false } }
+                { $set: { isActive: false } },
+                { timestamps: false }
             );
         }
-        return;
+        return idsToDeactivate.length;
     }
 
-    await Document.updateMany(candidateFilter, { $set: { isActive: false } });
+    const result = await Document.updateMany(
+        candidateFilter,
+        { $set: { isActive: false } },
+        { timestamps: false }
+    );
+    return result?.modifiedCount || 0;
 }
 
 /**
@@ -222,7 +230,21 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         const catalogKey = body.catalogKey || JOB_TYPE_TO_CATALOG[documentType];
         applyHubMetadataToDocument(doc, { catalogKey, orgCatalogEntry: getCatalogDocument(catalogKey) });
         if (catalogKey) await doc.save();
-        await deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, doc._id, parsedInfo);
+        const replacedCount = await deactivatePreviousJobDocumentsExcept(
+            organizationId,
+            employeeId,
+            documentType,
+            doc._id,
+            parsedInfo
+        );
+        if (replacedCount > 0) {
+            doc.metadata = {
+                ...(doc.metadata && typeof doc.metadata === 'object' ? doc.metadata : {}),
+                isReupload: true,
+                reuploadedAt: new Date(),
+            };
+            await doc.save();
+        }
         await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
         return doc;
     }

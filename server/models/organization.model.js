@@ -453,6 +453,43 @@ const organizationSchema = new mongoose.Schema({
                 default: false
             }
         },
+        /** Employee Engagement module settings */
+        engagement: {
+            /** When true, peer recognition stays Pending until HR/Admin approves */
+            recognitionRequireApproval: {
+                type: Boolean,
+                default: false
+            },
+            features: {
+                surveys: { type: Boolean, default: true },
+                feedback: { type: Boolean, default: true },
+                suggestions: { type: Boolean, default: true },
+                recognition: { type: Boolean, default: true },
+                pulse: { type: Boolean, default: true }
+            },
+            anonymousFeedbackDefault: { type: Boolean, default: false },
+            /** Organization may raise this; server never allows below 5 */
+            analyticsMinResponses: { type: Number, default: 5, min: 5, max: 50 },
+            notifications: {
+                surveyAssigned: { type: Boolean, default: true },
+                surveyReminder: { type: Boolean, default: true },
+                recognitionReceived: { type: Boolean, default: true },
+                actionPlanAssigned: { type: Boolean, default: true },
+                actionPlanDue: { type: Boolean, default: true },
+                suggestionImplemented: { type: Boolean, default: true },
+                lifecycleSurveyAssigned: { type: Boolean, default: true }
+            },
+            /** Automated lifecycle surveys (reuses Survey model + jobs) */
+            lifecycle: {
+                enabled: { type: Boolean, default: false },
+                day7: { type: Boolean, default: true },
+                day30: { type: Boolean, default: true },
+                day90: { type: Boolean, default: true },
+                exit: { type: Boolean, default: true },
+                openDurationDays: { type: Number, default: 7, min: 3, max: 30 },
+                anonymous: { type: Boolean, default: true }
+            }
+        },
         /**
          * Resume Inbox — inbound recruitment mailbox (IMAP).
          * Password is stored encrypted; never returned by APIs in plaintext.

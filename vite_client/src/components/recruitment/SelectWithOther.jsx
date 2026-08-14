@@ -5,6 +5,7 @@ export const OTHER_OPTION = '__other__';
 export const JOB_FORM_DEPARTMENTS = [
     'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations',
     'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration', 'IT',
+    'Salesforce',
 ];
 
 export const JOB_FORM_TITLES = [
@@ -12,7 +13,7 @@ export const JOB_FORM_TITLES = [
     'HR Manager', 'HR Executive', 'Financial Analyst', 'Marketing Executive',
     'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist',
     'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator',
-    'Full Stack Developer', 'Web Intern', 'Intern',
+    'Full Stack Developer', 'Web Intern', 'Intern', 'MCP', 'SFMC',
 ];
 
 export const JOB_FORM_POSITIONS = [

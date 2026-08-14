@@ -21,12 +21,14 @@ import { invalidateEmployeesCache } from '../helpers/cacheHelper.js';
 export const EMPLOYEE_DEPARTMENTS = [
     'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations',
     'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration',
+    'Salesforce',
 ];
 export const EMPLOYEE_JOB_TITLES = [
     'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer',
     'HR Manager', 'HR Executive', 'Financial Analyst', 'Marketing Executive',
     'Sales Representative', 'Product Manager', 'QA Tester', 'Customer Support Specialist',
     'UX/UI Designer', 'Project Manager', 'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer',
+    'MCP', 'SFMC',
 ];
 export const EMPLOYEE_POSITIONS = [
     'Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead', 'Supervisor', 'Manager',
@@ -35,7 +37,7 @@ export const EMPLOYEE_POSITIONS = [
 export const EMPLOYEE_JOB_CATEGORIES = [
     'Information Technology', 'Human Resources', 'Finance', 'Marketing', 'Sales', 'Operations',
     'Customer Service', 'Research and Development', 'Engineering', 'Legal', 'Administration',
-    'Management', 'Design', 'Product Management',
+    'Management', 'Design', 'Product Management', 'Salesforce',
 ];
 
 function pickClosest(value, allowed, fallback) {

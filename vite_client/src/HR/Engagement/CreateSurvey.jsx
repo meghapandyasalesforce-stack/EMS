@@ -5,7 +5,9 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EngagementFormShell from './EngagementFormShell';
+import SurveyAudienceFields from './SurveyAudienceFields';
 import { MINT_GRADIENT } from '../Reports/constants';
+import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
 
 const CreateSurvey = () => {
     const navigate = useNavigate();
@@ -22,7 +24,9 @@ const CreateSurvey = () => {
         startDate: '',
         endDate: '',
         anonymous: false,
-        status: 'Draft'
+        status: 'Draft',
+        reminderEnabled: true,
+        reminderDaysBefore: 2
     });
 
     const [newQuestion, setNewQuestion] = useState({
@@ -38,10 +42,43 @@ const CreateSurvey = () => {
 
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
+        if (name === 'targetAudience') {
+            setFormData((prev) => ({
+                ...prev,
+                targetAudience: value,
+                targetDepartments: [],
+                targetRoles: [],
+                targetEmployees: [],
+            }));
+            return;
+        }
         setFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+    };
+
+    const handleAudienceChange = (patch) => {
+        setFormData((prev) => ({ ...prev, ...patch }));
+    };
+
+    const validateAudience = () => {
+        if (formData.targetAudience === 'Department' && formData.targetDepartments.length === 0) {
+            toast.error('Select at least one department');
+            return false;
+        }
+        if (formData.targetAudience === 'Role' && formData.targetRoles.length === 0) {
+            toast.error('Select at least one role');
+            return false;
+        }
+        if (
+            formData.targetAudience === 'Specific Employees' &&
+            formData.targetEmployees.length === 0
+        ) {
+            toast.error('Select at least one employee');
+            return false;
+        }
+        return true;
     };
 
     const handleQuestionInputChange = (e) => {
@@ -155,19 +192,22 @@ const CreateSurvey = () => {
         }));
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e, targetStatus = formData.status) => {
         e.preventDefault();
-        
+
         if (formData.questions.length === 0) {
             toast.error('Please add at least one question');
             return;
         }
+
+        if (!validateAudience()) return;
 
         setLoading(true);
 
         try {
             const payload = {
                 ...formData,
+                status: targetStatus,
                 startDate: new Date(formData.startDate),
                 endDate: new Date(formData.endDate),
                 targetDepartments: formData.targetAudience === 'Department' ? formData.targetDepartments : [],
@@ -176,7 +216,7 @@ const CreateSurvey = () => {
             };
 
             await axios.post('/v1/both/engagement/surveys', payload, { withCredentials: true });
-            toast.success('Survey created successfully');
+            toast.success(toastForSave('Survey', targetStatus, 'survey'));
             navigate('/engagement');
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to create survey');
@@ -195,7 +235,7 @@ const CreateSurvey = () => {
             subtitle="Design employee engagement surveys"
             onBack={() => navigate('/engagement')}
         >
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
                     {/* Basic Information */}
                     <div className="space-y-4">
                         <h2 className="text-xl font-semibold text-gray-800">Survey Information</h2>
@@ -240,6 +280,7 @@ const CreateSurvey = () => {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                                 >
                                     <option value="Pulse">Pulse</option>
+                                    <option value="Wellbeing">Wellbeing</option>
                                     <option value="Annual">Annual</option>
                                     <option value="Exit">Exit</option>
                                     <option value="Onboarding">Onboarding</option>
@@ -262,6 +303,9 @@ const CreateSurvey = () => {
                                     <option value="Closed">Closed</option>
                                     <option value="Archived">Archived</option>
                                 </select>
+                                {getStatusHint(formData.status, 'survey') && (
+                                    <p className="mt-1.5 text-xs text-amber-700">{getStatusHint(formData.status, 'survey')}</p>
+                                )}
                             </div>
                         </div>
 
@@ -312,6 +356,14 @@ const CreateSurvey = () => {
                             </select>
                         </div>
 
+                        <SurveyAudienceFields
+                            targetAudience={formData.targetAudience}
+                            targetDepartments={formData.targetDepartments}
+                            targetRoles={formData.targetRoles}
+                            targetEmployees={formData.targetEmployees}
+                            onChange={handleAudienceChange}
+                        />
+
                         <div className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -322,6 +374,33 @@ const CreateSurvey = () => {
                             />
                             <label className="text-sm text-gray-700">Anonymous Survey</label>
                         </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    name="reminderEnabled"
+                                    checked={formData.reminderEnabled !== false}
+                                    onChange={handleInputChange}
+                                    className="w-4 h-4"
+                                />
+                                Enable reminders / closing notices
+                            </label>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Reminder days before end
+                                </label>
+                                <input
+                                    type="number"
+                                    name="reminderDaysBefore"
+                                    min={0}
+                                    max={30}
+                                    value={formData.reminderDaysBefore ?? 2}
+                                    onChange={handleInputChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Questions */}
@@ -330,7 +409,29 @@ const CreateSurvey = () => {
                             <h2 className="text-xl font-semibold text-gray-800">
                                 Questions ({formData.questions.length})
                             </h2>
-                            <button
+                            <div className="flex gap-2">
+                                {formData.type === 'Wellbeing' && (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                const { data } = await axios.get('/v1/both/engagement/wellbeing-template', { withCredentials: true });
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    questions: data?.data?.questions || [],
+                                                    anonymous: true,
+                                                }));
+                                                toast.success('Wellbeing template loaded. Responses stay aggregate-only.');
+                                            } catch {
+                                                toast.error('Could not load wellbeing template');
+                                            }
+                                        }}
+                                        className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"
+                                    >
+                                        Load wellbeing template
+                                    </button>
+                                )}
+                                <button
                                 type="button"
                                 onClick={() => {
                                     setShowQuestionForm(!showQuestionForm);
@@ -348,6 +449,7 @@ const CreateSurvey = () => {
                                 <FaPlus className="w-4 h-4" />
                                 Add Question
                             </button>
+                            </div>
                         </div>
 
                         {showQuestionForm && (
@@ -377,7 +479,7 @@ const CreateSurvey = () => {
                                             value={newQuestion.type}
                                             onChange={(e) => {
                                                 handleQuestionInputChange(e);
-                                                if (e.target.value === 'Text' || e.target.value === 'Yes/No') {
+                                                if (e.target.value === 'Text' || e.target.value === 'Yes/No' || e.target.value === 'eNPS') {
                                                     setNewQuestion(prev => ({ ...prev, options: [''] }));
                                                 } else if (e.target.value === 'Rating' || e.target.value === 'Scale') {
                                                     setNewQuestion(prev => ({ ...prev, options: ['1', '2', '3', '4', '5'] }));
@@ -388,6 +490,7 @@ const CreateSurvey = () => {
                                             <option value="Multiple Choice">Multiple Choice</option>
                                             <option value="Rating">Rating (1-5)</option>
                                             <option value="Scale">Scale (1-10)</option>
+                                            <option value="eNPS">eNPS (0-10)</option>
                                             <option value="Text">Text</option>
                                             <option value="Yes/No">Yes/No</option>
                                         </select>
@@ -545,7 +648,7 @@ const CreateSurvey = () => {
                     </div>
 
                     {/* Submit Buttons */}
-                    <div className="flex justify-end gap-4 pt-4 border-t">
+                    <div className="flex flex-wrap justify-end gap-3 pt-4 border-t">
                         <button
                             type="button"
                             onClick={() => navigate('/engagement')}
@@ -554,12 +657,22 @@ const CreateSurvey = () => {
                             Cancel
                         </button>
                         <button
-                            type="submit"
-                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                            type="button"
+                            disabled={loading}
+                            onClick={(e) => handleSubmit(e, 'Draft')}
+                            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-60"
+                        >
+                            Save as Draft
+                        </button>
+                        <button
+                            type="button"
+                            disabled={loading}
+                            onClick={(e) => handleSubmit(e, 'Active')}
+                            className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
                             style={{ background: MINT_GRADIENT }}
                         >
                             <FaSave className="w-4 h-4" />
-                            Create Survey
+                            Publish Survey
                         </button>
                     </div>
                 </form>

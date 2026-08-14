@@ -8,7 +8,8 @@ import {
     FaCalendarAlt, FaPaperPlane, FaVideo, FaClipboardList, FaUser,
     FaEllipsisV, FaChevronLeft, FaChevronRight,
     FaPhone, FaUsers, FaEye, FaIdBadge, FaFilter, FaCheck, FaChevronDown, FaSlidersH, FaInfoCircle, FaPlus, FaArrowRight,
-    FaRocket, FaAward, FaCompass, FaArrowUp, FaRegBookmark,
+    FaStar, FaTimes, FaMinus, FaSortAmountDown,
+    FaBookmark, FaRegBookmark, FaClock, FaCode, FaBullhorn, FaDatabase, FaPaintBrush, FaLaptopCode,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -18,7 +19,13 @@ import {
     resolveSelectValue,
     OTHER_OPTION,
 } from '../../components/recruitment/SelectWithOther';
+import { formatJobPostedLabel, getJobPostedDate } from '../../utils/jobPostedDate';
 import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
+import InterviewFeedbackForm, {
+    EMPTY_INTERVIEW_FEEDBACK,
+    InterviewFeedbackReadonly,
+} from '../../components/recruitment/InterviewFeedbackForm';
+import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 
 const REQ_EMPTY = {
     jobDescription: '',
@@ -27,6 +34,8 @@ const REQ_EMPTY = {
     priority: 'Medium',
     justification: '',
 };
+const JOB_EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary'];
+const JOB_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const EMPTY_SELECTS = { title: '', department: '', position: '', location: '' };
 const EMPTY_CUSTOMS = { title: '', department: '', position: '', location: '' };
 
@@ -45,47 +54,80 @@ const hireStatusLabel = (status = '') => {
     return String(status || '—').toUpperCase();
 };
 
-const formatInterviewWhen = (iv) => {
+const formatInterviewDateTime = (iv) => {
     if (!iv?.scheduledDate) {
-        return iv?.scheduledTime ? `Time TBD · ${iv.scheduledTime}` : 'Date TBD';
+        return iv?.scheduledTime ? `Date TBD · ${iv.scheduledTime}` : 'Date TBD';
     }
     const d = new Date(iv.scheduledDate);
     if (Number.isNaN(d.getTime())) return 'Date TBD';
-    const today = new Date();
-    const isToday = d.toDateString() === today.toDateString();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    const isTomorrow = d.toDateString() === tomorrow.toDateString();
-    const dayLabel = isToday
-        ? 'Today'
-        : isTomorrow
-            ? 'Tomorrow'
-            : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     const timePart = iv.scheduledTime || d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    const loc = iv.location ? ` · ${iv.location}` : '';
-    return `${dayLabel}, ${timePart}${loc}`;
+    return `${datePart} • ${timePart}`;
+};
+
+const formatInterviewLocation = (iv) => {
+    if (iv?.location) return iv.location;
+    if (iv?.meetingLink) return 'Virtual';
+    if (iv?.job?.location) return iv.job.location;
+    return 'Location TBD';
+};
+
+const interviewDisplayStatus = (iv) => {
+    const isCompleted = iv?.status === 'Completed';
+    const hasFb = !!iv?.feedback?.submittedAt;
+    if (isCompleted && !hasFb) {
+        return { label: 'Needs Feedback', tone: 'attention' };
+    }
+    if (isCompleted && hasFb) {
+        return { label: 'Completed', tone: 'success' };
+    }
+    if (iv?.status === 'Cancelled') {
+        return { label: 'Cancelled', tone: 'error' };
+    }
+    return { label: 'Scheduled', tone: 'success' };
 };
 
 const interviewTypeMeta = (type = '') => {
     const t = String(type).toLowerCase();
     if (t.includes('phone') || t.includes('screen')) return { Icon: FaPhone, label: type || 'Phone Screen' };
     if (t.includes('panel') || t.includes('final')) return { Icon: FaUsers, label: type || 'Final Panel' };
-    if (t.includes('technical') || t.includes('tech')) return { Icon: FaIdBadge, label: type || 'Technical Interview' };
+    if (t.includes('technical') || t.includes('tech')) return { Icon: FaIdBadge, label: type || 'Technical Assessment' };
     return { Icon: FaClipboardList, label: type || 'Interview' };
 };
 
 const applicationStatusLabel = (status = '') => {
     const s = String(status || '').trim();
     if (!s) return '—';
-    if (/offer\s*extended/i.test(s)) return 'OFFER EXTENDED';
-    if (/offer\s*accepted|accepted|hired/i.test(s)) return 'ACCEPTED';
-    if (/interview/i.test(s)) return 'INTERVIEW';
-    if (/applied|application/i.test(s)) return 'APPLIED';
-    return s.toUpperCase();
+    if (/offer\s*extended/i.test(s)) return 'Offer Extended';
+    if (/offer\s*accepted|accepted|hired/i.test(s)) return 'Accepted';
+    if (/interview/i.test(s)) return 'Interview';
+    if (/reject/i.test(s)) return 'Rejected';
+    if (/under\s*review|review/i.test(s)) return 'Under Review';
+    if (/screen/i.test(s)) return 'Screening';
+    if (/applied|application|pending/i.test(s)) return 'Under Review';
+    return s.replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
-const isOfferStatus = (status = '') => /offer/i.test(String(status));
-const isAcceptedStatus = (status = '') => /accepted|hired/i.test(String(status)) && !/declined/i.test(String(status));
+const applicationStatusMeta = (status = '') => {
+    const s = String(status || '').trim();
+    if (/offer\s*extended|offer/i.test(s) && !/accept|declin|reject/i.test(s)) {
+        return { label: applicationStatusLabel(s), tone: 'offer', Icon: FaStar };
+    }
+    if (/offer\s*accepted|accepted|hired/i.test(s)) {
+        return { label: applicationStatusLabel(s), tone: 'success', Icon: FaCheck };
+    }
+    if (/interview/i.test(s)) {
+        return { label: 'Interview', tone: 'interview', Icon: FaCalendarAlt };
+    }
+    if (/reject|declin|withdrawn/i.test(s)) {
+        return { label: applicationStatusLabel(s), tone: 'rejected', Icon: FaTimes };
+    }
+    return { label: applicationStatusLabel(s), tone: 'review', Icon: FaMinus };
+};
+
+const isOfferStatus = (status = '') => /offer/i.test(String(status)) && !/accept|declin|reject/i.test(String(status));
+
+const APP_PAGE_SIZE = 8;
 
 const referralBonusLabel = (status = '') => {
     const s = String(status || 'None');
@@ -107,50 +149,138 @@ const referralAppStatusLabel = (status = '') => {
     return s.toUpperCase();
 };
 
-const employmentChip = (type = '') => {
-    const t = String(type).toLowerCase();
-    if (t.includes('contract')) return 'ats-chip ats-chip--tertiary';
-    if (t.includes('part')) return 'ats-chip ats-chip--part';
-    return 'ats-chip ats-chip--primary';
+const savedJobsStorageKey = (userId) => `ems-saved-internal-jobs:${userId || 'guest'}`;
+
+const loadSavedJobIds = (userId) => {
+    try {
+        const raw = localStorage.getItem(savedJobsStorageKey(userId));
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+        return [];
+    }
 };
 
-const postedAgoLabel = (dateVal) => {
-    if (!dateVal) return 'Posted recently';
-    const t = new Date(dateVal).getTime();
-    if (Number.isNaN(t)) return 'Posted recently';
-    const days = Math.floor((Date.now() - t) / 86400000);
+const persistSavedJobIds = (userId, ids) => {
+    try {
+        localStorage.setItem(savedJobsStorageKey(userId), JSON.stringify(ids.map(String)));
+    } catch {
+        /* ignore quota / private mode */
+    }
+};
+
+const formatPostedAgo = (job) => {
+    const posted = getJobPostedDate(job);
+    if (!posted) return null;
+    const d = new Date(posted);
+    if (Number.isNaN(d.getTime())) return null;
+    const days = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000));
     if (days <= 0) return 'Posted today';
-    if (days === 1) return 'Posted 1d ago';
-    if (days < 7) return `Posted ${days}d ago`;
-    const weeks = Math.floor(days / 7);
-    if (weeks < 5) return `Posted ${weeks}w ago`;
-    const months = Math.floor(days / 30);
-    return months <= 1 ? 'Posted 1mo ago' : `Posted ${months}mo ago`;
+    if (days === 1) return 'Posted 1 day ago';
+    if (days < 30) return `Posted ${days} days ago`;
+    return formatJobPostedLabel(job);
 };
 
-const JobRoleCard = ({ job, onOpen, excerptFn }) => (
-    <button
-        type="button"
-        className="ats-role-card"
-        onClick={() => onOpen(job._id)}
-    >
-        <div className="ats-role-card__head">
-            <h4 className="ats-role-card__title">{job.jobTitle}</h4>
-            <FaRegBookmark className="ats-role-card__bookmark h-4 w-4" aria-hidden />
-        </div>
-        <div className="ats-role-card__tags">
-            {job.department && <span className="ats-role-card__tag">{job.department}</span>}
-            {job.location && <span className="ats-role-card__tag">{job.location}</span>}
-        </div>
-        <p className="ats-role-card__desc">{excerptFn(job.jobDescription, 120)}</p>
-        <div className="ats-role-card__footer">
-            <AtsAvatar name={job.department || job.jobTitle || 'Job'} />
-            <span className="ats-role-card__posted">
-                {postedAgoLabel(job.postedDate || job.createdAt || job.postedAt)}
-            </span>
-        </div>
-    </button>
-);
+const formatClosesMeta = (job) => {
+    if (!job?.closingDate) return null;
+    const d = new Date(job.closingDate);
+    if (Number.isNaN(d.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const closeDay = new Date(d);
+    closeDay.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((closeDay.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+    if (diffDays < 0) return { label: 'Closed', urgent: true };
+    if (diffDays === 0) return { label: 'Closes Today', urgent: true };
+    if (diffDays === 1) return { label: 'Closes Tomorrow', urgent: true };
+    return { label: `Closes ${format(d, 'MMM d')}`, urgent: diffDays <= 3 };
+};
+
+const departmentVisual = (department = '') => {
+    const t = String(department).toLowerCase();
+    if (t.includes('design') || t.includes('ux') || t.includes('creative')) {
+        return { Icon: FaPaintBrush, tone: 'design' };
+    }
+    if (t.includes('market') || t.includes('growth') || t.includes('sales')) {
+        return { Icon: FaBullhorn, tone: 'market' };
+    }
+    if (t.includes('data') || t.includes('analytic') || t.includes('science')) {
+        return { Icon: FaDatabase, tone: 'data' };
+    }
+    if (t.includes('product') || t.includes('eng') || t.includes('tech') || t.includes('software') || t.includes('it')) {
+        return { Icon: FaCode, tone: 'eng' };
+    }
+    if (t.includes('hr') || t.includes('people') || t.includes('talent')) {
+        return { Icon: FaUsers, tone: 'hr' };
+    }
+    return { Icon: FaLaptopCode, tone: 'default' };
+};
+
+const OpenJobCard = ({ job, excerptFn, saved, onToggleSave, onOpen }) => {
+    const visual = departmentVisual(job.department);
+    const DeptIcon = visual.Icon;
+    const closes = formatClosesMeta(job);
+    const posted = formatPostedAgo(job);
+
+    return (
+        <article className="ats-open-card">
+            <div className="ats-open-card__top">
+                <span className={`ats-open-card__icon ats-open-card__icon--${visual.tone}`} aria-hidden>
+                    <DeptIcon />
+                </span>
+                <button
+                    type="button"
+                    className={`ats-open-card__save ${saved ? 'ats-open-card__save--on' : ''}`}
+                    aria-label={saved ? 'Remove from saved jobs' : 'Save job'}
+                    aria-pressed={saved}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSave(job._id);
+                    }}
+                >
+                    {saved ? <FaBookmark /> : <FaRegBookmark />}
+                </button>
+            </div>
+
+            {job.department ? (
+                <p className={`ats-open-card__dept ats-open-card__dept--${visual.tone}`}>{job.department}</p>
+            ) : null}
+            <h4 className="ats-open-card__title">{job.jobTitle}</h4>
+            <p className="ats-open-card__desc">{excerptFn(job.jobDescription, 110)}</p>
+
+            <div className="ats-open-card__tags">
+                {job.location ? (
+                    <span className="ats-open-card__tag">
+                        <FaMapMarkerAlt aria-hidden /> {job.location}
+                    </span>
+                ) : null}
+                {job.employmentType ? (
+                    <span className="ats-open-card__tag">
+                        <FaClock aria-hidden /> {job.employmentType}
+                    </span>
+                ) : null}
+            </div>
+
+            <div className="ats-open-card__meta">
+                <span>{posted || 'Posted date TBD'}</span>
+                {closes ? (
+                    <span className={closes.urgent ? 'ats-open-card__closes--urgent' : ''}>
+                        {closes.urgent ? <FaClock aria-hidden /> : null}
+                        {closes.label}
+                    </span>
+                ) : null}
+            </div>
+
+            <button
+                type="button"
+                className="ats-open-card__cta"
+                onClick={() => onOpen(job._id)}
+            >
+                View Job
+            </button>
+        </article>
+    );
+};
 
 const canUseHireRequests = (user, employee) => {
     const role = String(user?.role || employee?.role || '').toLowerCase();
@@ -165,18 +295,38 @@ const canUseHireRequests = (user, employee) => {
     );
 };
 
+const canViewAllHireRequests = (user, employee) => {
+    const role = String(user?.role || employee?.role || '').toLowerCase();
+    const roles = (employee?.functionalRoles || []).map((r) => String(r).toLowerCase());
+    return role === 'admin' || role === 'hr' || roles.includes('hr');
+};
+
+const requesterName = (requestedBy) => {
+    if (!requestedBy) return '—';
+    if (typeof requestedBy === 'object') {
+        return [requestedBy.name, requestedBy.lastName].filter(Boolean).join(' ').trim() || requestedBy.email || '—';
+    }
+    return '—';
+};
+
+const isOwnHireRequest = (requisition, employee) => {
+    const employeeId = employee?._id || employee?.id;
+    const requesterId = requisition?.requestedBy?._id || requisition?.requestedBy;
+    return employeeId && requesterId && String(employeeId) === String(requesterId);
+};
+
 const TAB_COPY = {
     jobs: {
-        title: 'Internal Jobs',
-        subtitle: 'Explore internal growth opportunities and manage your applications.',
+        title: 'Open Roles',
+        subtitle: 'Discover your next opportunity within the organization.',
     },
     interviews: {
-        title: 'Interviews',
-        subtitle: 'Manage and join your scheduled candidate interviews.',
+        title: 'My Interviews',
+        subtitle: 'Manage your upcoming and completed candidate interviews.',
     },
     applications: {
         title: 'My Applications',
-        subtitle: 'Track the status of roles you have applied for internally.',
+        subtitle: 'Track and manage your submitted job applications.',
     },
     referrals: {
         title: 'My Referrals',
@@ -194,6 +344,7 @@ const InternalJobsPage = () => {
     const user = useSelector((state) => state.auth?.user);
     const employee = useSelector((state) => state.employeeDetails?.employee || state.auth?.employee);
     const showHireTab = canUseHireRequests(user, employee);
+    const viewAllHireRequests = canViewAllHireRequests(user, employee);
 
     const initialTab = searchParams.get('tab') || 'jobs';
     const [tab, setTab] = useState(initialTab);
@@ -210,31 +361,31 @@ const InternalJobsPage = () => {
     const [options, setOptions] = useState({ titles: [], departments: [], positions: [], locations: [] });
     const [feedbackDrafts, setFeedbackDrafts] = useState({});
     const [interviewView, setInterviewView] = useState('upcoming');
+    const [interviewQuery, setInterviewQuery] = useState('');
+    const [showInterviewFilter, setShowInterviewFilter] = useState(false);
     const [jobQuery, setJobQuery] = useState('');
     const [hireMenuId, setHireMenuId] = useState(null);
     const [expandedHireId, setExpandedHireId] = useState(null);
     const [expandedInterviewId, setExpandedInterviewId] = useState(null);
+    const [interviewMenuId, setInterviewMenuId] = useState(null);
     const [appStatusFilter, setAppStatusFilter] = useState('');
     const [showAppFilter, setShowAppFilter] = useState(false);
-    const [appQuery, setAppQuery] = useState('');
+    const [showAppSort, setShowAppSort] = useState(false);
+    const [appSort, setAppSort] = useState('newest');
+    const [appPage, setAppPage] = useState(1);
     const [jobDept, setJobDept] = useState('');
     const [jobLoc, setJobLoc] = useState('');
     const [jobEmpType, setJobEmpType] = useState('');
     const [jobPriority, setJobPriority] = useState('');
     const [showMoreJobFilters, setShowMoreJobFilters] = useState(false);
     const [openJobFilter, setOpenJobFilter] = useState(null);
+    const [showSavedOnly, setShowSavedOnly] = useState(false);
+    const [savedJobIds, setSavedJobIds] = useState([]);
     const [refQuery, setRefQuery] = useState('');
     const [showBonusInfo, setShowBonusInfo] = useState(false);
     const [showAllReferrals, setShowAllReferrals] = useState(false);
 
-    const emptyFeedbackDraft = () => ({
-        rating: '',
-        technical: '',
-        communication: '',
-        behaviour: '',
-        recommendation: 'Hire',
-        comments: '',
-    });
+    const emptyFeedbackDraft = () => ({ ...EMPTY_INTERVIEW_FEEDBACK });
 
     const setDraft = (interviewId, patch) => {
         setFeedbackDrafts((prev) => ({
@@ -275,6 +426,8 @@ const InternalJobsPage = () => {
                         behaviour: Number(draft.behaviour) || 0,
                         recommendation: draft.recommendation,
                         comments: draft.comments,
+                        strengths: Array.isArray(draft.strengths) ? draft.strengths : [],
+                        weaknesses: Array.isArray(draft.weaknesses) ? draft.weaknesses : [],
                     },
                 },
                 { withCredentials: true }
@@ -309,8 +462,32 @@ const InternalJobsPage = () => {
 
     const changeTab = (id) => {
         setTab(id);
+        setShowAppFilter(false);
+        setShowAppSort(false);
+        setShowInterviewFilter(false);
+        setOpenJobFilter(null);
+        setShowMoreJobFilters(false);
         setSearchParams(id === 'jobs' ? {} : { tab: id });
     };
+
+    const savedOwnerId = employee?._id || employee?.id || user?._id || user?.id || 'guest';
+
+    useEffect(() => {
+        setSavedJobIds(loadSavedJobIds(savedOwnerId));
+    }, [savedOwnerId]);
+
+    const toggleSavedJob = useCallback((jobId) => {
+        const id = String(jobId);
+        setSavedJobIds((prev) => {
+            const exists = prev.includes(id);
+            const next = exists ? prev.filter((x) => x !== id) : [...prev, id];
+            persistSavedJobIds(savedOwnerId, next);
+            toast.success(exists ? 'Removed from saved jobs' : 'Job saved');
+            return next;
+        });
+    }, [savedOwnerId]);
+
+    const isJobSaved = useCallback((jobId) => savedJobIds.includes(String(jobId)), [savedJobIds]);
 
     useEffect(() => {
         const t = searchParams.get('tab') || 'jobs';
@@ -427,17 +604,25 @@ const InternalJobsPage = () => {
 
     const pendingInterviews = interviews.filter((i) => i.status === 'Scheduled').length;
     const copy = TAB_COPY[tab] || TAB_COPY.jobs;
+    const pageSubtitle = tab === 'hire' && viewAllHireRequests
+        ? 'Review and track all headcount requisitions across the organization.'
+        : copy.subtitle;
 
-    const jobFilterOptions = useMemo(() => ({
-        departments: Array.from(new Set(jobs.map((j) => j.department).filter(Boolean))).sort(),
-        locations: Array.from(new Set(jobs.map((j) => j.location).filter(Boolean))).sort(),
-        employmentTypes: Array.from(new Set(jobs.map((j) => j.employmentType).filter(Boolean))).sort(),
-        priorities: Array.from(new Set(jobs.map((j) => j.priority).filter(Boolean))).sort(),
-    }), [jobs]);
+    const jobFilterOptions = useMemo(() => {
+        const fromJobs = (key) => jobs.map((j) => j[key]).filter(Boolean);
+        const mergeSorted = (base, extra) => Array.from(new Set([...(base || []), ...extra])).sort();
+        return {
+            departments: mergeSorted(options.departments, fromJobs('department')),
+            locations: mergeSorted(options.locations, fromJobs('location')),
+            employmentTypes: JOB_EMPLOYMENT_TYPES,
+            priorities: JOB_PRIORITIES,
+        };
+    }, [jobs, options.departments, options.locations]);
 
     const filteredJobs = useMemo(() => {
         const q = jobQuery.trim().toLowerCase();
         return jobs.filter((j) => {
+            if (showSavedOnly && !savedJobIds.includes(String(j._id))) return false;
             if (jobDept && j.department !== jobDept) return false;
             if (jobLoc && j.location !== jobLoc) return false;
             if (jobEmpType && j.employmentType !== jobEmpType) return false;
@@ -446,21 +631,12 @@ const InternalJobsPage = () => {
             const hay = `${j.jobTitle || ''} ${j.department || ''} ${j.location || ''} ${j.employmentType || ''} ${j.position || ''} ${j.jobDescription || ''}`.toLowerCase();
             return hay.includes(q);
         });
-    }, [jobs, jobQuery, jobDept, jobLoc, jobEmpType, jobPriority]);
+    }, [jobs, jobQuery, jobDept, jobLoc, jobEmpType, jobPriority, showSavedOnly, savedJobIds]);
 
-    const hasActiveJobFilters = !!(jobDept || jobLoc || jobEmpType || jobPriority);
+    const hasActiveJobFilters = !!(jobDept || jobLoc || jobEmpType || jobPriority || showSavedOnly);
 
     const featuredJob = filteredJobs[0] || null;
-    const recommendedJobs = filteredJobs.slice(1, 4);
-    const recentJobs = filteredJobs.slice(0, 6);
-    const openPositions = useMemo(
-        () => jobs.reduce((sum, j) => sum + (Number(j.numberOfPositions) || 1), 0),
-        [jobs]
-    );
-    const deptCount = useMemo(
-        () => new Set(jobs.map((j) => j.department).filter(Boolean)).size,
-        [jobs]
-    );
+    const gridJobs = filteredJobs.slice(1);
 
     const excerpt = (text = '', max = 140) => {
         const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -470,13 +646,24 @@ const InternalJobsPage = () => {
 
     const filteredInterviews = useMemo(() => {
         const now = Date.now();
+        const q = interviewQuery.trim().toLowerCase();
         return interviews.filter((iv) => {
             const when = iv.scheduledDate ? new Date(iv.scheduledDate).getTime() : null;
             const isPast = iv.status === 'Completed' || iv.status === 'Cancelled'
                 || (when != null && when < now - 24 * 60 * 60 * 1000);
-            return interviewView === 'past' ? isPast : !isPast;
+            if (interviewView === 'past' ? !isPast : isPast) return false;
+            if (!q) return true;
+            const hay = [
+                iv.candidate?.name,
+                iv.job?.jobTitle,
+                iv.job?.department,
+                iv.interviewType,
+                iv.location,
+                iv.status,
+            ].filter(Boolean).join(' ').toLowerCase();
+            return hay.includes(q);
         });
-    }, [interviews, interviewView]);
+    }, [interviews, interviewView, interviewQuery]);
 
     const applicationStatuses = useMemo(() => {
         const set = new Set(applications.map((a) => a.status).filter(Boolean));
@@ -484,19 +671,40 @@ const InternalJobsPage = () => {
     }, [applications]);
 
     const filteredApplications = useMemo(() => {
-        const q = appQuery.trim().toLowerCase();
-        return applications.filter((a) => {
+        const list = applications.filter((a) => {
             if (appStatusFilter && a.status !== appStatusFilter) return false;
-            if (!q) return true;
-            const hay = `${a.jobPostingId?.jobTitle || ''} ${a.jobPostingId?.department || ''} ${a.status || ''}`.toLowerCase();
-            return hay.includes(q);
+            return true;
         });
-    }, [applications, appStatusFilter, appQuery]);
+        const sorted = [...list].sort((a, b) => {
+            if (appSort === 'title') {
+                return String(a.jobPostingId?.jobTitle || '').localeCompare(String(b.jobPostingId?.jobTitle || ''));
+            }
+            const da = a.applicationDate ? new Date(a.applicationDate).getTime() : 0;
+            const db = b.applicationDate ? new Date(b.applicationDate).getTime() : 0;
+            return appSort === 'oldest' ? da - db : db - da;
+        });
+        return sorted;
+    }, [applications, appStatusFilter, appSort]);
+
+    const appTotalPages = Math.max(1, Math.ceil(filteredApplications.length / APP_PAGE_SIZE));
+    const appPageSafe = Math.min(appPage, appTotalPages);
+    const pagedApplications = useMemo(() => {
+        const start = (appPageSafe - 1) * APP_PAGE_SIZE;
+        return filteredApplications.slice(start, start + APP_PAGE_SIZE);
+    }, [filteredApplications, appPageSafe]);
+
+    useEffect(() => {
+        setAppPage(1);
+    }, [appStatusFilter, appSort]);
 
     const highlightAppId = searchParams.get('highlight') || '';
 
     useEffect(() => {
         if (tab !== 'applications' || !highlightAppId || loading) return;
+        const idx = filteredApplications.findIndex((a) => String(a._id) === String(highlightAppId));
+        if (idx >= 0) {
+            setAppPage(Math.floor(idx / APP_PAGE_SIZE) + 1);
+        }
         const el = document.getElementById(`app-row-${highlightAppId}`);
         if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -514,73 +722,221 @@ const InternalJobsPage = () => {
 
     const visibleReferrals = showAllReferrals ? filteredReferrals : filteredReferrals.slice(0, 10);
 
+    const closeAllPopups = useCallback(() => {
+        setShowInterviewFilter(false);
+        setHireMenuId(null);
+        setInterviewMenuId(null);
+        setShowAppFilter(false);
+        setShowAppSort(false);
+        setShowMoreJobFilters(false);
+        setOpenJobFilter(null);
+        setShowBonusInfo(false);
+    }, []);
+
+    const hasOpenPopup = Boolean(
+        showInterviewFilter
+        || hireMenuId
+        || interviewMenuId
+        || showAppFilter
+        || showAppSort
+        || showMoreJobFilters
+        || openJobFilter
+        || showBonusInfo
+    );
+
+    useHrmsPopupDismiss(closeAllPopups, hasOpenPopup);
+
     return (
-        <AtsPage>
+        <AtsPage className={tab === 'hire' ? 'ats-hire-page' : ''}>
             <AtsPageHeader
                 eyebrow="Recruitment"
                 title={copy.title}
-                subtitle={copy.subtitle}
+                subtitle={pageSubtitle}
                 actions={
                     tab === 'jobs' ? (
-                        <div className="cm-search w-full sm:w-72">
-                            <svg className="cm-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                                <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                            <input
-                                className="cm-input"
-                                value={jobQuery}
-                                onChange={(e) => setJobQuery(e.target.value)}
-                                placeholder="Search jobs, keywords, or skills..."
-                            />
+                        <div className="ats-open-filters">
+                            {[
+                                { key: 'dept', label: 'Department', value: jobDept, set: setJobDept, options: jobFilterOptions.departments },
+                                { key: 'emp', label: 'Employment Type', value: jobEmpType, set: setJobEmpType, options: jobFilterOptions.employmentTypes },
+                                { key: 'loc', label: 'Location', value: jobLoc, set: setJobLoc, options: jobFilterOptions.locations },
+                            ].map((f) => (
+                                <div key={f.key} className="relative">
+                                    <button
+                                        type="button"
+                                        className={`ats-open-filter-pill ${f.value ? 'ats-open-filter-pill--active' : ''}`}
+                                        aria-expanded={openJobFilter === f.key}
+                                        data-hrms-popup-trigger
+                                        onClick={() => {
+                                            setShowMoreJobFilters(false);
+                                            setOpenJobFilter(openJobFilter === f.key ? null : f.key);
+                                        }}
+                                    >
+                                        <span>{f.value || f.label}</span>
+                                        <FaChevronDown className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                                    </button>
+                                    {openJobFilter === f.key && (
+                                        <div className="ats-open-filter-menu" role="menu">
+                                            <button
+                                                type="button"
+                                                className="ats-open-filter-menu__item"
+                                                onClick={() => { f.set(''); setOpenJobFilter(null); }}
+                                            >
+                                                All {f.label.toLowerCase()}s
+                                            </button>
+                                            {f.options.map((opt) => (
+                                                <button
+                                                    key={opt}
+                                                    type="button"
+                                                    className={`ats-open-filter-menu__item ${f.value === opt ? 'ats-open-filter-menu__item--active' : ''}`}
+                                                    onClick={() => { f.set(opt); setOpenJobFilter(null); }}
+                                                >
+                                                    {opt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            <button
+                                type="button"
+                                className={`ats-open-filter-pill ${showSavedOnly ? 'ats-open-filter-pill--active' : ''}`}
+                                aria-pressed={showSavedOnly}
+                                onClick={() => {
+                                    setOpenJobFilter(null);
+                                    setShowMoreJobFilters(false);
+                                    setShowSavedOnly((v) => !v);
+                                }}
+                            >
+                                {showSavedOnly ? <FaBookmark className="h-3 w-3" /> : <FaRegBookmark className="h-3 w-3" />}
+                                <span>Saved{savedJobIds.length > 0 ? ` (${savedJobIds.length})` : ''}</span>
+                            </button>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    className={`ats-open-filter-pill ${showMoreJobFilters || jobPriority ? 'ats-open-filter-pill--active' : ''}`}
+                                    aria-expanded={showMoreJobFilters}
+                                    data-hrms-popup-trigger
+                                    onClick={() => {
+                                        setOpenJobFilter(null);
+                                        setShowMoreJobFilters((v) => !v);
+                                    }}
+                                >
+                                    <FaSlidersH className="h-3 w-3" />
+                                    <span>More Filters</span>
+                                </button>
+                                {showMoreJobFilters && (
+                                    <div className="ats-open-filter-menu ats-open-filter-menu--end" role="menu">
+                                        <p className="ats-open-filter-menu__label">Priority</p>
+                                        <button
+                                            type="button"
+                                            className={`ats-open-filter-menu__item ${!jobPriority ? 'ats-open-filter-menu__item--active' : ''}`}
+                                            onClick={() => { setJobPriority(''); setShowMoreJobFilters(false); }}
+                                        >
+                                            All priorities
+                                        </button>
+                                        {(jobFilterOptions.priorities.length ? jobFilterOptions.priorities : ['High', 'Medium', 'Low']).map((p) => (
+                                            <button
+                                                key={p}
+                                                type="button"
+                                                className={`ats-open-filter-menu__item ${jobPriority === p ? 'ats-open-filter-menu__item--active' : ''}`}
+                                                onClick={() => { setJobPriority(p); setShowMoreJobFilters(false); }}
+                                            >
+                                                {p}
+                                            </button>
+                                        ))}
+                                        {hasActiveJobFilters && (
+                                            <button
+                                                type="button"
+                                                className="ats-open-filter-menu__item"
+                                                onClick={() => {
+                                                    setJobDept('');
+                                                    setJobLoc('');
+                                                    setJobEmpType('');
+                                                    setJobPriority('');
+                                                    setShowSavedOnly(false);
+                                                    setJobQuery('');
+                                                    setShowMoreJobFilters(false);
+                                                    setOpenJobFilter(null);
+                                                }}
+                                            >
+                                                Clear all filters
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     ) : tab === 'interviews' ? (
-                        <div className="ats-segment">
-                            <button
-                                type="button"
-                                className={`ats-segment__btn ${interviewView === 'upcoming' ? 'ats-segment__btn--active' : ''}`}
-                                onClick={() => setInterviewView('upcoming')}
-                            >
-                                Upcoming
-                            </button>
-                            <button
-                                type="button"
-                                className={`ats-segment__btn ${interviewView === 'past' ? 'ats-segment__btn--active' : ''}`}
-                                onClick={() => setInterviewView('past')}
-                            >
-                                Past
-                            </button>
-                        </div>
-                    ) : tab === 'applications' ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="cm-search w-full sm:w-56">
+                        <div className="ats-list-toolbar">
+                            <div className="cm-search ats-list-toolbar__search w-full sm:w-64">
                                 <svg className="cm-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
                                     <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
                                     <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                                 </svg>
                                 <input
                                     className="cm-input"
-                                    value={appQuery}
-                                    onChange={(e) => setAppQuery(e.target.value)}
-                                    placeholder="Search..."
+                                    value={interviewQuery}
+                                    onChange={(e) => setInterviewQuery(e.target.value)}
+                                    placeholder="Search interviews..."
                                 />
                             </div>
+                            <CmButton
+                                variant="outline"
+                                onClick={() => setShowInterviewFilter((v) => !v)}
+                                className={`ats-list-toolbar__filter ats-interview-filter-btn shrink-0 ${interviewView === 'past' ? '!border-[var(--ats-primary)] !text-[var(--ats-primary)]' : ''}`}
+                                aria-label="Filter interviews"
+                                aria-expanded={showInterviewFilter}
+                                data-hrms-popup-trigger
+                            >
+                                <FaSlidersH className="h-3.5 w-3.5" />
+                            </CmButton>
+                            {showInterviewFilter && (
+                                <div className="ats-list-toolbar__panel" data-hrms-popup role="menu">
+                                    <button
+                                        type="button"
+                                        className={`ats-list-toolbar__panel-item ${interviewView === 'upcoming' ? 'ats-list-toolbar__panel-item--active' : ''}`}
+                                        onClick={() => {
+                                            setInterviewView('upcoming');
+                                            setShowInterviewFilter(false);
+                                        }}
+                                    >
+                                        Upcoming
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`ats-list-toolbar__panel-item ${interviewView === 'past' ? 'ats-list-toolbar__panel-item--active' : ''}`}
+                                        onClick={() => {
+                                            setInterviewView('past');
+                                            setShowInterviewFilter(false);
+                                        }}
+                                    >
+                                        Past
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ) : tab === 'applications' ? (
+                        <div className="ats-apps-toolbar">
                             <div className="relative">
                                 <CmButton
                                     variant="outline"
-                                    onClick={() => setShowAppFilter((v) => !v)}
-                                    className={appStatusFilter ? '!border-[var(--ats-primary)] !text-[var(--ats-primary)]' : ''}
+                                    onClick={() => {
+                                        setShowAppSort(false);
+                                        setShowAppFilter((v) => !v);
+                                    }}
+                                    className={`ats-apps-toolbar__btn ${appStatusFilter ? 'ats-apps-toolbar__btn--active' : ''}`}
+                                    aria-expanded={showAppFilter}
+                                    data-hrms-popup-trigger
                                 >
-                                    <FaFilter className="h-3 w-3" /> Filter
+                                    <FaFilter className="h-3 w-3" />
+                                    Filter
                                 </CmButton>
                                 {showAppFilter && (
-                                    <div
-                                        className="absolute right-0 z-20 mt-2 min-w-[180px] rounded-xl bg-white py-2"
-                                        style={{ boxShadow: 'var(--ats-shadow-md)' }}
-                                    >
+                                    <div className="ats-apps-toolbar__menu" role="menu">
                                         <button
                                             type="button"
-                                            className="block w-full px-4 py-2 text-left text-sm hover:bg-[rgba(28,202,155,0.08)]"
+                                            className={`ats-apps-toolbar__item ${!appStatusFilter ? 'ats-apps-toolbar__item--active' : ''}`}
+                                            role="menuitem"
                                             onClick={() => { setAppStatusFilter(''); setShowAppFilter(false); }}
                                         >
                                             All statuses
@@ -589,8 +945,8 @@ const InternalJobsPage = () => {
                                             <button
                                                 key={s}
                                                 type="button"
-                                                className="block w-full px-4 py-2 text-left text-sm hover:bg-[rgba(28,202,155,0.08)]"
-                                                style={{ color: appStatusFilter === s ? 'var(--ats-primary)' : undefined, fontWeight: appStatusFilter === s ? 600 : 400 }}
+                                                className={`ats-apps-toolbar__item ${appStatusFilter === s ? 'ats-apps-toolbar__item--active' : ''}`}
+                                                role="menuitem"
                                                 onClick={() => { setAppStatusFilter(s); setShowAppFilter(false); }}
                                             >
                                                 {applicationStatusLabel(s)}
@@ -599,10 +955,44 @@ const InternalJobsPage = () => {
                                     </div>
                                 )}
                             </div>
+                            <div className="relative">
+                                <CmButton
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowAppFilter(false);
+                                        setShowAppSort((v) => !v);
+                                    }}
+                                    className="ats-apps-toolbar__btn"
+                                    aria-expanded={showAppSort}
+                                    data-hrms-popup-trigger
+                                >
+                                    <FaSortAmountDown className="h-3 w-3" />
+                                    Sort
+                                </CmButton>
+                                {showAppSort && (
+                                    <div className="ats-apps-toolbar__menu" role="menu">
+                                        {[
+                                            { id: 'newest', label: 'Newest first' },
+                                            { id: 'oldest', label: 'Oldest first' },
+                                            { id: 'title', label: 'Job title A–Z' },
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                className={`ats-apps-toolbar__item ${appSort === opt.id ? 'ats-apps-toolbar__item--active' : ''}`}
+                                                role="menuitem"
+                                                onClick={() => { setAppSort(opt.id); setShowAppSort(false); }}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     ) : tab === 'referrals' ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="cm-search w-full sm:w-56">
+                        <div className="ats-ref-header-actions">
+                            <div className="cm-search ats-ref-header-actions__search">
                                 <svg className="cm-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
                                     <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
                                     <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -615,7 +1005,9 @@ const InternalJobsPage = () => {
                                 />
                             </div>
                             <CmButton
+                                size="sm"
                                 variant="inverted"
+                                className="ats-ref-header-actions__btn"
                                 onClick={() => {
                                     changeTab('jobs');
                                     toast.info('Open a role, then choose Refer Someone to submit a referral.');
@@ -652,250 +1044,104 @@ const InternalJobsPage = () => {
             {loading ? (
                 <LoadingSpinner message="Loading…" />
             ) : tab === 'jobs' ? (
-                <div className="space-y-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="ats-filter-pills">
-                            {[
-                                { key: 'dept', label: 'Department', value: jobDept, set: setJobDept, options: jobFilterOptions.departments },
-                                { key: 'loc', label: 'Location', value: jobLoc, set: setJobLoc, options: jobFilterOptions.locations },
-                                { key: 'emp', label: 'Employment Type', value: jobEmpType, set: setJobEmpType, options: jobFilterOptions.employmentTypes },
-                            ].map((f) => (
-                                <div key={f.key} className="relative">
-                                    <button
-                                        type="button"
-                                        className={`ats-filter-pill ${f.value ? 'ats-filter-pill--active' : ''}`}
-                                        onClick={() => setOpenJobFilter(openJobFilter === f.key ? null : f.key)}
-                                    >
-                                        {f.value || f.label}
-                                        <FaChevronDown className="h-2.5 w-2.5 opacity-60" />
-                                    </button>
-                                    {openJobFilter === f.key && (
-                                        <div
-                                            className="absolute left-0 z-20 mt-2 max-h-56 min-w-[180px] overflow-y-auto rounded-xl bg-white py-2"
-                                            style={{ boxShadow: 'var(--ats-shadow-md)' }}
-                                        >
-                                            <button
-                                                type="button"
-                                                className="block w-full px-4 py-2 text-left text-sm hover:bg-[rgba(28,202,155,0.08)]"
-                                                onClick={() => { f.set(''); setOpenJobFilter(null); }}
-                                            >
-                                                All {f.label.toLowerCase()}s
-                                            </button>
-                                            {f.options.map((opt) => (
-                                                <button
-                                                    key={opt}
-                                                    type="button"
-                                                    className="block w-full px-4 py-2 text-left text-sm hover:bg-[rgba(28,202,155,0.08)]"
-                                                    style={{ fontWeight: f.value === opt ? 600 : 400, color: f.value === opt ? 'var(--ats-primary)' : undefined }}
-                                                    onClick={() => { f.set(opt); setOpenJobFilter(null); }}
-                                                >
-                                                    {opt}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                            {hasActiveJobFilters && (
-                                <button
-                                    type="button"
-                                    className="ats-link text-sm"
-                                    onClick={() => {
-                                        setJobDept('');
-                                        setJobLoc('');
-                                        setJobEmpType('');
-                                        setJobPriority('');
-                                        setShowMoreJobFilters(false);
-                                        setOpenJobFilter(null);
-                                    }}
-                                >
-                                    Clear filters
-                                </button>
-                            )}
-                        </div>
-                        <div className="relative">
-                            <button
-                                type="button"
-                                className={`ats-link inline-flex items-center gap-1.5 text-sm ${showMoreJobFilters || jobPriority ? 'font-semibold' : ''}`}
-                                onClick={() => setShowMoreJobFilters((v) => !v)}
-                            >
-                                <FaSlidersH className="h-3 w-3" /> More Filters
-                            </button>
-                            {showMoreJobFilters && (
-                                <div
-                                    className="absolute right-0 z-20 mt-2 min-w-[180px] rounded-xl bg-white py-2"
-                                    style={{ boxShadow: 'var(--ats-shadow-md)' }}
-                                >
-                                    <p className="px-4 py-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(15,45,38,0.45)' }}>
-                                        Priority
-                                    </p>
-                                    <button
-                                        type="button"
-                                        className="block w-full px-4 py-2 text-left text-sm hover:bg-[rgba(28,202,155,0.08)]"
-                                        onClick={() => { setJobPriority(''); setShowMoreJobFilters(false); }}
-                                    >
-                                        All priorities
-                                    </button>
-                                    {(jobFilterOptions.priorities.length ? jobFilterOptions.priorities : ['High', 'Medium', 'Low']).map((p) => (
-                                        <button
-                                            key={p}
-                                            type="button"
-                                            className="block w-full px-4 py-2 text-left text-sm hover:bg-[rgba(28,202,155,0.08)]"
-                                            style={{ fontWeight: jobPriority === p ? 600 : 400, color: jobPriority === p ? 'var(--ats-primary)' : undefined }}
-                                            onClick={() => { setJobPriority(p); setShowMoreJobFilters(false); }}
-                                        >
-                                            {p}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
+                <div className="ats-open-roles">
                     {filteredJobs.length === 0 ? (
                         <AtsEmpty
-                            icon={FaBriefcase}
-                            title={jobs.length === 0 ? 'No open roles right now' : 'No jobs match your filters'}
-                            hint={jobs.length === 0 ? 'When HR posts an internal role, it will show up here.' : 'Try clearing filters or using a different keyword.'}
+                            icon={showSavedOnly ? FaBookmark : FaBriefcase}
+                            title={
+                                showSavedOnly
+                                    ? 'No saved roles yet'
+                                    : jobs.length === 0
+                                        ? 'No open roles right now'
+                                        : 'No jobs match your filters'
+                            }
+                            hint={
+                                showSavedOnly
+                                    ? 'Tap the bookmark on a role card to save it here.'
+                                    : jobs.length === 0
+                                        ? 'When HR posts an internal role, it will show up here.'
+                                        : 'Try clearing filters or choosing a different option.'
+                            }
                         />
                     ) : (
                         <>
-                            <div className="ats-jobs-dash">
-                                <div className="ats-hero">
-                                    <div className="ats-hero__visual" aria-hidden>
-                                        <span className="ats-hero__arrow"><FaArrowUp /></span>
+                            {featuredJob && (() => {
+                                const featuredCloses = formatClosesMeta(featuredJob);
+                                const featuredSaved = isJobSaved(featuredJob._id);
+                                return (
+                                <article className="ats-featured-role">
+                                    <div className="ats-featured-role__media" aria-hidden>
+                                        <img
+                                            className="ats-featured-role__image"
+                                            src="/images/recruitment/featured-role.jpg"
+                                            alt=""
+                                        />
+                                      
                                     </div>
-                                    <div className="ats-hero__body">
-                                        <span className="ats-chip ats-chip--primary inline-flex items-center gap-1.5 w-fit">
-                                            <FaRocket className="h-3 w-3" /> Growth Initiative
-                                        </span>
-                                        <h2 className="m-0 text-xl font-bold sm:text-2xl" style={{ color: 'var(--ats-secondary)' }}>
-                                            {featuredJob.jobTitle}
-                                        </h2>
-                                        <p className="m-0 text-sm leading-relaxed" style={{ color: 'rgba(15,45,38,0.65)' }}>
-                                            {excerpt(featuredJob.jobDescription)}
-                                        </p>
-                                        <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'rgba(15,45,38,0.55)' }}>
-                                            {featuredJob.department && <span>{featuredJob.department}</span>}
+                                    <div className="ats-featured-role__body">
+                                        <div className="ats-featured-role__tags">
+                                            {featuredJob.department && (
+                                                <span className="ats-featured-role__tag">{featuredJob.department}</span>
+                                            )}
                                             {featuredJob.location && (
-                                                <span className="inline-flex items-center gap-1">
-                                                    <FaMapMarkerAlt className="h-3 w-3" /> {featuredJob.location}
-                                                </span>
+                                                <span className="ats-featured-role__tag">{featuredJob.location}</span>
+                                            )}
+                                            {featuredJob.employmentType && (
+                                                <span className="ats-featured-role__tag">{featuredJob.employmentType}</span>
                                             )}
                                         </div>
-                                        <CmButton
-                                            className="mt-1 w-fit"
-                                            onClick={() => navigate(`/employee/internal-jobs/${featuredJob._id}`)}
-                                        >
-                                            Apply Now <FaArrowRight className="h-3 w-3" />
-                                        </CmButton>
-                                    </div>
-                                </div>
-
-                                <aside className="ats-jobs-aside">
-                                    <div className="ats-jobs-stats">
-                                        <div className="ats-jobs-stat">
-                                            <div className="ats-jobs-stat__icon" style={{ background: 'rgba(28,202,155,0.15)', color: '#006c51' }}>
-                                                <FaBriefcase className="h-4 w-4" />
-                                            </div>
-                                            <div>
-                                                <p className="ats-jobs-stat__value m-0">{jobs.length}</p>
-                                                <p className="ats-jobs-stat__label m-0">Active Openings</p>
-                                            </div>
+                                        <div className="ats-featured-role__title-row">
+                                            <h2 className="ats-featured-role__title">{featuredJob.jobTitle}</h2>
+                                            <button
+                                                type="button"
+                                                className={`ats-open-card__save ${featuredSaved ? 'ats-open-card__save--on' : ''}`}
+                                                aria-label={featuredSaved ? 'Remove from saved jobs' : 'Save job'}
+                                                aria-pressed={featuredSaved}
+                                                onClick={() => toggleSavedJob(featuredJob._id)}
+                                            >
+                                                {featuredSaved ? <FaBookmark /> : <FaRegBookmark />}
+                                            </button>
                                         </div>
-                                        <div className="ats-jobs-stat">
-                                            <div className="ats-jobs-stat__icon" style={{ background: 'rgba(255,127,80,0.15)', color: '#c45a2a' }}>
-                                                <FaAward className="h-4 w-4" />
+                                        <p className="ats-featured-role__desc">
+                                            {excerpt(featuredJob.jobDescription, 180)}
+                                        </p>
+                                        <div className="ats-featured-role__footer">
+                                            <div className="ats-featured-role__dates">
+                                                <span>{formatPostedAgo(featuredJob) || 'Posted date TBD'}</span>
+                                                {featuredCloses && (
+                                                    <span className={featuredCloses.urgent ? 'ats-open-card__closes--urgent' : ''}>
+                                                        {featuredCloses.urgent ? <FaClock aria-hidden /> : null}
+                                                        {featuredCloses.label}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div>
-                                                <p className="ats-jobs-stat__value m-0">{openPositions || deptCount}</p>
-                                                <p className="ats-jobs-stat__label m-0">
-                                                    {openPositions ? 'Open Positions' : 'Departments'}
-                                                </p>
-                                            </div>
+                                            <button
+                                                type="button"
+                                                className="ats-featured-role__cta"
+                                                onClick={() => navigate(`/employee/internal-jobs/${featuredJob._id}`)}
+                                            >
+                                                Apply Now
+                                            </button>
                                         </div>
                                     </div>
+                                </article>
+                                );
+                            })()}
 
-                                    <div className="ats-reco-card">
-                                        <div className="mb-2 flex items-center gap-2">
-                                            <div className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: 'rgba(28,202,155,0.15)', color: '#006c51' }}>
-                                                <FaCompass className="h-3.5 w-3.5" />
-                                            </div>
-                                            <h3 className="m-0 text-sm font-bold" style={{ color: 'var(--ats-secondary)' }}>
-                                                Recommended for You
-                                            </h3>
-                                        </div>
-                                        {recommendedJobs.length === 0 ? (
-                                            <p className="m-0 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                                More openings will appear here as they are posted.
-                                            </p>
-                                        ) : (
-                                            recommendedJobs.map((job) => (
-                                                <button
-                                                    key={job._id}
-                                                    type="button"
-                                                    className="ats-reco-item"
-                                                    onClick={() => navigate(`/employee/internal-jobs/${job._id}`)}
-                                                >
-                                                    <p className="ats-reco-item__title">{job.jobTitle}</p>
-                                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                                        <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'rgba(15,45,38,0.55)' }}>
-                                                            <FaMapMarkerAlt className="h-3 w-3" />
-                                                            {job.location || '—'}
-                                                        </span>
-                                                        {job.priority && (
-                                                            <span className="ats-chip ats-chip--primary" style={{ fontSize: '0.625rem' }}>
-                                                                {String(job.priority).toUpperCase()}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </button>
-                                            ))
-                                        )}
-                                    </div>
-                                </aside>
-                            </div>
-
-                            <div>
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <h3 className="m-0 text-base font-bold" style={{ color: 'var(--ats-secondary)' }}>
-                                        Recently Added Roles
-                                    </h3>
-                                    {filteredJobs.length > recentJobs.length && (
-                                        <button
-                                            type="button"
-                                            className="ats-link text-sm"
-                                            onClick={() => {
-                                                document.getElementById('all-internal-roles')?.scrollIntoView({ behavior: 'smooth' });
-                                            }}
-                                        >
-                                            View All
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="ats-job-grid" id="all-internal-roles">
-                                    {recentJobs.map((job) => (
-                                        <JobRoleCard
+                            {gridJobs.length > 0 && (
+                                <div className="ats-open-grid">
+                                    {gridJobs.map((job) => (
+                                        <OpenJobCard
                                             key={job._id}
                                             job={job}
                                             excerptFn={excerpt}
+                                            saved={isJobSaved(job._id)}
+                                            onToggleSave={toggleSavedJob}
                                             onOpen={(id) => navigate(`/employee/internal-jobs/${id}`)}
                                         />
                                     ))}
                                 </div>
-                                {filteredJobs.length > recentJobs.length && (
-                                    <div className="ats-job-grid mt-4">
-                                        {filteredJobs.slice(6).map((job) => (
-                                            <JobRoleCard
-                                                key={job._id}
-                                                job={job}
-                                                excerptFn={excerpt}
-                                                onOpen={(id) => navigate(`/employee/internal-jobs/${id}`)}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            )}
                         </>
                     )}
                 </div>
@@ -903,7 +1149,13 @@ const InternalJobsPage = () => {
                 filteredInterviews.length === 0 ? (
                     <AtsEmpty
                         icon={FaCalendarAlt}
-                        title={interviews.length === 0 ? 'No interviews assigned to you' : `No ${interviewView} interviews`}
+                        title={
+                            interviews.length === 0
+                                ? 'No interviews assigned to you'
+                                : interviewQuery.trim()
+                                    ? 'No interviews match your search'
+                                    : `No ${interviewView} interviews`
+                        }
                         hint="When HR schedules you as interviewer, it will appear here with full details."
                     />
                 ) : (
@@ -911,77 +1163,170 @@ const InternalJobsPage = () => {
                         {filteredInterviews.map((iv) => {
                             const isCompleted = iv.status === 'Completed';
                             const hasFb = !!iv.feedback?.submittedAt;
+                            const needsFeedback = isCompleted && !hasFb;
                             const draft = feedbackDrafts[iv.interviewId] || emptyFeedbackDraft();
                             const name = iv.candidate?.name || 'Candidate';
                             const key = `${iv.candidate?.id}-${iv.interviewId}`;
                             const expanded = expandedInterviewId === key;
                             const typeMeta = interviewTypeMeta(iv.interviewType);
                             const TypeIcon = typeMeta.Icon;
-                            const statusLabel = String(iv.status || 'Scheduled').toUpperCase();
+                            const displayStatus = interviewDisplayStatus(iv);
+                            const canMarkComplete = !isCompleted && iv.status !== 'Cancelled';
+
+                            const openDetails = () => {
+                                setInterviewMenuId(null);
+                                setExpandedInterviewId(expanded ? null : key);
+                            };
+                            const openScorecard = () => {
+                                setInterviewMenuId(null);
+                                if (!expanded) setExpandedInterviewId(key);
+                                else setExpandedInterviewId(null);
+                            };
+
                             return (
-                                <div key={key} className="ats-interview-card">
-                                    <div className="ats-interview-card__head">
+                                <div key={key} className={`ats-interview-card${expanded ? ' ats-interview-card--expanded' : ''}`}>
+                                    <button
+                                        type="button"
+                                        className="ats-interview-card__head"
+                                        onClick={openDetails}
+                                        aria-expanded={expanded}
+                                    >
                                         <AtsAvatar name={name} />
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <div className="min-w-0">
-                                                    <p className="m-0 truncate text-base font-bold" style={{ color: 'var(--ats-secondary)' }}>
-                                                        {name}
-                                                    </p>
-                                                    <p className="m-0 mt-0.5 truncate text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>
-                                                        {iv.job?.jobTitle || 'Role'}
-                                                    </p>
-                                                </div>
-                                                <AtsBadge status={iv.status}>{statusLabel}</AtsBadge>
+                                        <div className="ats-interview-card__identity">
+                                            <p className="ats-interview-card__name">{name}</p>
+                                            <p className="ats-interview-card__role">{iv.job?.jobTitle || 'Role'}</p>
+                                        </div>
+                                        <AtsBadge tone={displayStatus.tone} className="ats-interview-card__badge">
+                                            {displayStatus.label}
+                                        </AtsBadge>
+                                    </button>
+
+                                    <div className="ats-interview-card__meta">
+                                        <div className="ats-interview-card__meta-row">
+                                            <TypeIcon className="ats-interview-card__meta-icon" aria-hidden />
+                                            <div className="ats-interview-card__meta-text">
+                                                <span className="ats-interview-card__meta-label">Interview Type</span>
+                                                <span className="ats-interview-card__meta-value">{typeMeta.label}</span>
+                                            </div>
+                                        </div>
+                                        <div className="ats-interview-card__meta-row">
+                                            <FaCalendarAlt className="ats-interview-card__meta-icon" aria-hidden />
+                                            <div className="ats-interview-card__meta-text">
+                                                <span className="ats-interview-card__meta-label">Date &amp; Time</span>
+                                                <span className="ats-interview-card__meta-value">{formatInterviewDateTime(iv)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="ats-interview-card__meta-row">
+                                            <FaMapMarkerAlt className="ats-interview-card__meta-icon" aria-hidden />
+                                            <div className="ats-interview-card__meta-text">
+                                                <span className="ats-interview-card__meta-label">Location</span>
+                                                <span className="ats-interview-card__meta-value">{formatInterviewLocation(iv)}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="ats-interview-card__meta">
-                                        <div className="ats-interview-card__meta-row">
-                                            <FaCalendarAlt />
-                                            <span>{formatInterviewWhen(iv)}</span>
-                                        </div>
-                                        <div className="ats-interview-card__meta-row">
-                                            <TypeIcon />
-                                            <span>{typeMeta.label}</span>
-                                        </div>
-                                    </div>
-
                                     <div className="ats-interview-card__footer">
-                                        {iv.meetingLink ? (
-                                            <a
-                                                href={iv.meetingLink}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="cm-btn cm-btn--primary"
+                                        {needsFeedback ? (
+                                            <button
+                                                type="button"
+                                                className="ats-interview-card__cta ats-interview-card__cta--scorecard"
+                                                onClick={openScorecard}
                                             >
-                                                <FaVideo /> Join Meeting
-                                            </a>
-                                        ) : null}
-                                        <CmButton
-                                            variant={iv.meetingLink ? 'outline' : 'primary'}
-                                            onClick={() => setExpandedInterviewId(expanded ? null : key)}
-                                        >
-                                            <FaEye /> {expanded ? 'Hide Details' : 'View Details'}
-                                        </CmButton>
+                                                <FaFileAlt /> Submit Scorecard
+                                            </button>
+                                        ) : (
+                                            <>
+                                                {iv.meetingLink ? (
+                                                    <a
+                                                        href={iv.meetingLink}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="ats-interview-card__cta ats-interview-card__cta--join"
+                                                    >
+                                                        <FaVideo /> Join Meeting
+                                                    </a>
+                                                ) : null}
+                                                {canMarkComplete ? (
+                                                    <button
+                                                        type="button"
+                                                        className="ats-interview-card__cta ats-interview-card__cta--outline"
+                                                        disabled={busy}
+                                                        onClick={() => markInterviewCompleted(iv)}
+                                                    >
+                                                        <FaCheck /> Mark as Completed
+                                                    </button>
+                                                ) : null}
+                                                {!canMarkComplete && !iv.meetingLink && (
+                                                    <button
+                                                        type="button"
+                                                        className="ats-interview-card__cta ats-interview-card__cta--join"
+                                                        onClick={openDetails}
+                                                    >
+                                                        <FaEye /> {expanded ? 'Hide Details' : 'View Details'}
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                        {(needsFeedback || iv.meetingLink) && (
+                                            <div className="relative shrink-0">
+                                                <button
+                                                    type="button"
+                                                    className="ats-interview-card__more"
+                                                    aria-label="More options"
+                                                    aria-expanded={interviewMenuId === key}
+                                                    aria-haspopup="menu"
+                                                    data-hrms-popup-trigger
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setInterviewMenuId((id) => (id === key ? null : key));
+                                                    }}
+                                                >
+                                                    <FaEllipsisV />
+                                                </button>
+                                                {interviewMenuId === key && (
+                                                    <div className="ats-action-menu ats-interview-card__menu" role="menu">
+                                                        <button
+                                                            type="button"
+                                                            className="ats-action-menu__item"
+                                                            role="menuitem"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setInterviewMenuId(null);
+                                                                setExpandedInterviewId(expanded ? null : key);
+                                                            }}
+                                                        >
+                                                            <FaEye className="h-3.5 w-3.5" />
+                                                            {expanded ? 'Hide details' : 'View details'}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {expanded && (
-                                        <div className="space-y-3 border-t border-[rgba(15,45,38,0.08)] pt-3">
-                                            {iv.candidate?.email && (
+                                        <div className="ats-interview-card__details">
+                                            {iv.candidate?.email ? (
                                                 <p className="m-0 inline-flex items-center gap-2 text-xs" style={{ color: 'rgba(15,45,38,0.6)' }}>
                                                     <FaUser className="opacity-50" />
                                                     {iv.candidate.email}
                                                 </p>
-                                            )}
-                                            {iv.job?.department && (
+                                            ) : null}
+                                            {iv.job?.department ? (
                                                 <p className="m-0 text-xs" style={{ color: 'rgba(15,45,38,0.55)' }}>
-                                                    Department: {iv.job.department}
+                                                    {iv.job.department}
+                                                    {iv.job?.jobTitle ? ` · ${iv.job.jobTitle}` : ''}
                                                 </p>
-                                            )}
+                                            ) : null}
 
-                                            {!isCompleted && iv.status !== 'Cancelled' && (
+                                            <div className="ats-interview-detail-badges">
+                                                <span className="ats-pill">{typeMeta.label}</span>
+                                                <span className={`ats-pill ${needsFeedback ? 'ats-pill--pending' : ''}`}>
+                                                    {hasFb ? 'Feedback Submitted' : needsFeedback ? 'Pending Feedback' : displayStatus.label}
+                                                </span>
+                                            </div>
+
+                                            {canMarkComplete && (
                                                 <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(255,127,80,0.12)', color: '#7f2700' }}>
                                                     <p className="mb-2">
                                                         Feedback opens only after status is <strong>Completed</strong>.
@@ -993,44 +1338,19 @@ const InternalJobsPage = () => {
                                             )}
 
                                             {isCompleted && hasFb && (
-                                                <div className="rounded-lg border border-[rgba(28,202,155,0.25)] bg-[rgba(28,202,155,0.08)] p-3 text-sm">
-                                                    <p className="font-semibold" style={{ color: '#006c51' }}>Feedback Submitted</p>
-                                                    <p className="mt-1" style={{ color: 'rgba(15,45,38,0.75)' }}>
-                                                        {iv.feedback.recommendation || '—'}
-                                                        {iv.feedback.rating != null ? ` · Overall ${iv.feedback.rating}/10` : ''}
-                                                    </p>
-                                                    <p style={{ color: 'rgba(15,45,38,0.6)' }}>
-                                                        {iv.feedback.technical != null ? `Tech ${iv.feedback.technical}` : ''}
-                                                        {iv.feedback.communication != null ? ` · Comm ${iv.feedback.communication}` : ''}
-                                                        {iv.feedback.behaviour != null ? ` · Behaviour ${iv.feedback.behaviour}` : ''}
-                                                    </p>
-                                                    {iv.feedback.comments && (
-                                                        <p className="mt-2 whitespace-pre-wrap" style={{ color: 'rgba(15,45,38,0.75)' }}>{iv.feedback.comments}</p>
-                                                    )}
-                                                    <p className="mt-2 text-xs" style={{ color: 'rgba(15,45,38,0.45)' }}>
-                                                        Submitted {iv.feedback.submittedAt
-                                                            ? format(new Date(iv.feedback.submittedAt), 'dd MMM yyyy, h:mm a')
-                                                            : '—'}
-                                                    </p>
-                                                </div>
+                                                <InterviewFeedbackReadonly feedback={iv.feedback} />
                                             )}
 
-                                            {isCompleted && !hasFb && (
-                                                <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--ats-neutral)' }}>
-                                                    <h3 className="mb-2 font-semibold" style={{ color: 'var(--ats-secondary)' }}>Submit Feedback</h3>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <input type="number" min="0" max="10" placeholder="Overall rating" className={fieldClass} value={draft.rating} onChange={(e) => setDraft(iv.interviewId, { rating: e.target.value })} />
-                                                        <input type="number" min="0" max="10" placeholder="Technical" className={fieldClass} value={draft.technical} onChange={(e) => setDraft(iv.interviewId, { technical: e.target.value })} />
-                                                        <input type="number" min="0" max="10" placeholder="Communication" className={fieldClass} value={draft.communication} onChange={(e) => setDraft(iv.interviewId, { communication: e.target.value })} />
-                                                        <input type="number" min="0" max="10" placeholder="Behaviour" className={fieldClass} value={draft.behaviour} onChange={(e) => setDraft(iv.interviewId, { behaviour: e.target.value })} />
-                                                    </div>
-                                                    <select className="cm-select mt-2 w-full" value={draft.recommendation} onChange={(e) => setDraft(iv.interviewId, { recommendation: e.target.value })}>
-                                                        {['Strong Hire', 'Hire', 'Maybe', 'No Hire'].map((r) => <option key={r} value={r}>{r}</option>)}
-                                                    </select>
-                                                    <textarea rows={3} className={`${fieldClass} mt-2`} placeholder="Comments" value={draft.comments} onChange={(e) => setDraft(iv.interviewId, { comments: e.target.value })} />
-                                                    <CmButton className="mt-2" disabled={busy} onClick={() => submitInterviewFeedback(iv)}>
-                                                        Save feedback
-                                                    </CmButton>
+                                            {needsFeedback && (
+                                                <div className="ats-feedback-panel">
+                                                    <InterviewFeedbackForm
+                                                        value={draft}
+                                                        onChange={(next) => setDraft(iv.interviewId, next)}
+                                                        onSaveDraft={() => toast.success('Draft saved on this device')}
+                                                        onSubmit={() => submitInterviewFeedback(iv)}
+                                                        busy={busy}
+                                                        submitLabel="Submit Feedback"
+                                                    />
                                                 </div>
                                             )}
                                         </div>
@@ -1044,11 +1364,11 @@ const InternalJobsPage = () => {
                 applications.length === 0 ? (
                     <AtsEmpty icon={FaFileAlt} title="No applications yet" hint="Open a role and apply — your status will appear here." />
                 ) : filteredApplications.length === 0 ? (
-                    <AtsEmpty icon={FaFilter} title="No applications match your filters" hint="Clear search or status filter to see all applications." />
+                    <AtsEmpty icon={FaFilter} title="No applications match your filters" hint="Clear the status filter to see all applications." />
                 ) : (
-                    <div className="ats-table-wrap">
+                    <div className="ats-table-wrap ats-apps-table-wrap">
                         <div className="overflow-x-auto">
-                            <table className="ats-table">
+                            <table className="ats-table ats-apps-table">
                                 <thead>
                                     <tr>
                                         <th>Job Title</th>
@@ -1059,14 +1379,11 @@ const InternalJobsPage = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredApplications.map((a) => {
-                                        const statusLabel = applicationStatusLabel(a.status);
+                                    {pagedApplications.map((a) => {
+                                        const statusMeta = applicationStatusMeta(a.status);
+                                        const StatusIcon = statusMeta.Icon;
                                         const offerRow = isOfferStatus(a.status);
-                                        const accepted = isAcceptedStatus(a.status);
                                         const jobId = a.jobPostingId?._id;
-                                        const metaId = a._id
-                                            ? `APP-${String(a._id).slice(-6).toUpperCase()}`
-                                            : null;
                                         const openJob = () => {
                                             if (jobId) navigate(`/employee/internal-jobs/${jobId}`);
                                         };
@@ -1088,13 +1405,14 @@ const InternalJobsPage = () => {
                                                 }
                                             >
                                                 <td>
-                                                    <span className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>
+                                                    <span className="ats-apps-table__title">
                                                         {a.jobPostingId?.jobTitle || '—'}
                                                     </span>
-                                                    {metaId && <span className="ats-table__meta">{metaId}</span>}
                                                 </td>
-                                                <td>{a.jobPostingId?.department || '—'}</td>
-                                                <td>
+                                                <td className="ats-apps-table__muted">
+                                                    {a.jobPostingId?.department || '—'}
+                                                </td>
+                                                <td className="ats-apps-table__muted">
                                                     {a.applicationDate
                                                         ? new Date(a.applicationDate).toLocaleDateString(undefined, {
                                                             month: 'short',
@@ -1104,24 +1422,28 @@ const InternalJobsPage = () => {
                                                         : '—'}
                                                 </td>
                                                 <td>
-                                                    <AtsBadge status={a.status} className={accepted ? 'inline-flex items-center gap-1.5' : ''}>
-                                                        {accepted && <FaCheck className="h-2.5 w-2.5" />}
-                                                        {statusLabel}
-                                                    </AtsBadge>
+                                                    <span className={`ats-apps-status ats-apps-status--${statusMeta.tone}`}>
+                                                        <StatusIcon aria-hidden />
+                                                        {statusMeta.label}
+                                                    </span>
                                                 </td>
                                                 <td>
                                                     {offerRow ? (
-                                                        <CmButton
-                                                            size="sm"
-                                                            variant="inverted"
+                                                        <button
+                                                            type="button"
+                                                            className="ats-apps-action ats-apps-action--primary"
                                                             disabled={!jobId && !a.selfServiceToken}
                                                             onClick={openSelfService}
                                                         >
                                                             Review Offer
-                                                        </CmButton>
+                                                        </button>
                                                     ) : jobId ? (
-                                                        <button type="button" className="ats-link" onClick={openJob}>
-                                                            View Details →
+                                                        <button
+                                                            type="button"
+                                                            className="ats-apps-action ats-apps-action--outline"
+                                                            onClick={openJob}
+                                                        >
+                                                            View Details
                                                         </button>
                                                     ) : '—'}
                                                 </td>
@@ -1131,15 +1453,32 @@ const InternalJobsPage = () => {
                                 </tbody>
                             </table>
                         </div>
-                        <div className="ats-table-footer">
+                        <div className="ats-table-footer ats-apps-table-footer">
                             <span>
-                                Showing {filteredApplications.length} of {applications.length} entries
+                                {filteredApplications.length === 0
+                                    ? 'Showing 0 results'
+                                    : `Showing ${(appPageSafe - 1) * APP_PAGE_SIZE + 1} to ${Math.min(appPageSafe * APP_PAGE_SIZE, filteredApplications.length)} of ${filteredApplications.length} results`}
                             </span>
-                            <div className="flex items-center gap-1">
-                                <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(15,45,38,0.12)] opacity-40" disabled aria-label="Previous page">
+                            <div className="ats-apps-pagination">
+                                <button
+                                    type="button"
+                                    className="ats-apps-pagination__btn"
+                                    disabled={appPageSafe <= 1}
+                                    aria-label="Previous page"
+                                    onClick={() => setAppPage((p) => Math.max(1, p - 1))}
+                                >
                                     <FaChevronLeft className="h-3 w-3" />
                                 </button>
-                                <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(15,45,38,0.12)] opacity-40" disabled aria-label="Next page">
+                                <span className="ats-apps-pagination__label">
+                                    Page {appPageSafe} of {appTotalPages}
+                                </span>
+                                <button
+                                    type="button"
+                                    className="ats-apps-pagination__btn"
+                                    disabled={appPageSafe >= appTotalPages}
+                                    aria-label="Next page"
+                                    onClick={() => setAppPage((p) => Math.min(appTotalPages, p + 1))}
+                                >
                                     <FaChevronRight className="h-3 w-3" />
                                 </button>
                             </div>
@@ -1164,6 +1503,8 @@ const InternalJobsPage = () => {
                                     type="button"
                                     className="inline-flex items-center gap-1.5 text-sm"
                                     style={{ color: 'rgba(15,45,38,0.45)' }}
+                                    aria-expanded={showBonusInfo}
+                                    data-hrms-popup-trigger
                                     onClick={() => setShowBonusInfo((v) => !v)}
                                 >
                                     <FaInfoCircle className="h-3.5 w-3.5" /> Bonus Stages
@@ -1171,6 +1512,8 @@ const InternalJobsPage = () => {
                                 {showBonusInfo && (
                                     <div
                                         className="absolute right-0 z-20 mt-2 w-64 rounded-xl bg-white p-3 text-xs leading-relaxed"
+                                        data-hrms-popup
+                                        role="menu"
                                         style={{ boxShadow: 'var(--ats-shadow-md)', color: 'rgba(15,45,38,0.7)' }}
                                     >
                                         <p className="m-0 mb-2 font-semibold" style={{ color: 'var(--ats-secondary)' }}>Referral bonus stages</p>
@@ -1236,7 +1579,8 @@ const InternalJobsPage = () => {
                 )
             ) : tab === 'hire' ? (
                 <div className="ats-hire-layout">
-                    <div className="ats-table-wrap min-w-0">
+                    <div className="ats-hire-panel">
+                    <div className="ats-hire-panel__table ats-table-wrap min-w-0">
                         {requisitions.length === 0 ? (
                             <div className="p-8">
                                 <AtsEmpty
@@ -1253,6 +1597,7 @@ const InternalJobsPage = () => {
                                             <tr>
                                                 <th>Role Title</th>
                                                 <th>Department</th>
+                                                {viewAllHireRequests && <th>Requested By</th>}
                                                 <th>Status</th>
                                                 <th>Date Submitted</th>
                                                 <th>Actions</th>
@@ -1261,7 +1606,8 @@ const InternalJobsPage = () => {
                                         <tbody>
                                             {requisitions.map((r) => {
                                                 const label = hireStatusLabel(r.status);
-                                                const canSubmit = ['Draft', 'Rejected'].includes(r.status);
+                                                const canSubmit = ['Draft', 'Rejected'].includes(r.status)
+                                                    && isOwnHireRequest(r, employee);
                                                 const jobId = r.jobPostingId?._id || r.jobPostingId || null;
                                                 const expanded = expandedHireId === r._id;
                                                 return (
@@ -1278,6 +1624,9 @@ const InternalJobsPage = () => {
                                                             </button>
                                                         </td>
                                                         <td>{r.department}</td>
+                                                        {viewAllHireRequests && (
+                                                            <td>{requesterName(r.requestedBy)}</td>
+                                                        )}
                                                         <td>
                                                             <AtsBadge status={r.status}>{label}</AtsBadge>
                                                         </td>
@@ -1297,12 +1646,15 @@ const InternalJobsPage = () => {
                                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-[rgba(15,45,38,0.06)]"
                                                                     style={{ color: 'rgba(15,45,38,0.55)' }}
                                                                     aria-label="Request actions"
+                                                                    aria-expanded={hireMenuId === r._id}
+                                                                    aria-haspopup="menu"
+                                                                    data-hrms-popup-trigger
                                                                     onClick={() => setHireMenuId((id) => (id === r._id ? null : r._id))}
                                                                 >
                                                                     <FaEllipsisV className="h-3.5 w-3.5" />
                                                                 </button>
                                                                 {hireMenuId === r._id && (
-                                                                    <div className="ats-action-menu" role="menu">
+                                                                    <div className="ats-action-menu ats-action-menu--aside" role="menu">
                                                                         <button
                                                                             type="button"
                                                                             className="ats-action-menu__item"
@@ -1358,7 +1710,7 @@ const InternalJobsPage = () => {
                                                     </tr>
                                                     {expanded && (
                                                         <tr>
-                                                            <td colSpan={5} className="!bg-[rgba(28,202,155,0.04)]">
+                                                            <td colSpan={viewAllHireRequests ? 6 : 5} className="!bg-[rgba(28,202,155,0.04)]">
                                                                 <div className="space-y-2 px-1 py-2 text-sm" style={{ color: 'rgba(15,45,38,0.75)' }}>
                                                                     <p className="m-0">
                                                                         <span className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>Position:</span>{' '}
@@ -1447,8 +1799,8 @@ const InternalJobsPage = () => {
                         )}
                     </div>
 
-                    <div className="cm-card">
-                        <div className="mb-5 flex items-center gap-2">
+                    <div className="ats-hire-panel__form">
+                        <div className="ats-hire-create-head">
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'rgba(28,202,155,0.15)', color: '#006c51' }}>
                                 <FaUserPlus className="h-4 w-4" />
                             </div>
@@ -1456,7 +1808,7 @@ const InternalJobsPage = () => {
                         </div>
 
                         <form
-                            className="space-y-4"
+                            className="ats-hire-form"
                             onSubmit={(e) => {
                                 e.preventDefault();
                                 createHireRequest('draft');
@@ -1499,7 +1851,7 @@ const InternalJobsPage = () => {
 
                             <div>
                                 <span className="ats-form-label">Target Start Date (Urgency)</span>
-                                <div className="ats-segment ats-segment--urgency mt-1 w-full">
+                                <div className="ats-segment ats-segment--urgency w-full">
                                     {['ASAP', '30 Days', '90 Days'].map((label) => {
                                         const active = (PRIORITY_TO_URGENCY[hireForm.priority] || '30 Days') === label;
                                         return (
@@ -1539,7 +1891,7 @@ const InternalJobsPage = () => {
                                 <span className="ats-form-label">Job description *</span>
                                 <textarea
                                     required
-                                    rows={3}
+                                    rows={2}
                                     className={`${fieldClass} !rounded-lg`}
                                     placeholder="Summarize the role responsibilities…"
                                     value={hireForm.jobDescription}
@@ -1550,7 +1902,7 @@ const InternalJobsPage = () => {
                             <label className="block">
                                 <span className="ats-form-label">Business Justification *</span>
                                 <textarea
-                                    rows={4}
+                                    rows={3}
                                     className={`${fieldClass} !rounded-lg`}
                                     placeholder="Briefly explain the business need for this headcount…"
                                     value={hireForm.justification}
@@ -1558,7 +1910,7 @@ const InternalJobsPage = () => {
                                 />
                             </label>
 
-                            <div className="flex flex-col gap-2.5 pt-1">
+                            <div className="flex flex-col gap-2 pt-0.5">
                                 <CmButton
                                     type="button"
                                     disabled={busy}
@@ -1572,6 +1924,7 @@ const InternalJobsPage = () => {
                                 </CmButton>
                             </div>
                         </form>
+                    </div>
                     </div>
                 </div>
             ) : null}

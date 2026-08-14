@@ -1,9 +1,9 @@
 /**
- * Corporate-Modern HRMS — scoped to Admin/HR onboarding content only.
- * Apply via wrapper class `.cm-hrms`. Does not affect Navbar, Sidebar, or Employee UI.
+ * Corporate-Modern HRMS — scoped panels using .cm-hrms (recruitment, lifecycle sub-panels).
+ * Standard app typography is applied via lifecycleUI.css (.ats-ui, .hrms-lifecycle).
+ * Apply via wrapper class `.cm-hrms`. Does not affect Navbar, Sidebar, or general Employee UI.
+ * Manrope font is loaded from index.html.
  */
-
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
 
 .cm-hrms {
   --cm-surface: #f5faf9;

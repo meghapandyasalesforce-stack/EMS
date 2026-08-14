@@ -33,7 +33,6 @@ const RecruitmentCalendarPage = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [events, setEvents] = useState([]);
-    const [integrations, setIntegrations] = useState({});
     const [filter, setFilter] = useState('all');
     const [month, setMonth] = useState(() => startOfMonth(new Date()));
 
@@ -56,7 +55,6 @@ const RecruitmentCalendarPage = () => {
             const to = endOfMonth(addMonths(month, 1)).toISOString();
             const { data } = await axios.get(`/v1/admin/recruitment/calendar?from=${from}&to=${to}`, { withCredentials: true });
             setEvents(data.data?.events || []);
-            setIntegrations(data.data?.integrations || {});
         } catch {
             toast.error('Failed to load calendar');
         } finally {
@@ -88,58 +86,105 @@ const RecruitmentCalendarPage = () => {
         return eachDayOfInterval({ start, end });
     }, [month]);
 
+    const renderDayCell = (day) => {
+        const key = format(day, 'yyyy-MM-dd');
+        const dayEvents = eventsByDay[key] || [];
+        const inMonth = isSameMonth(day, month);
+        const hasEvents = dayEvents.length > 0;
+        const today = isToday(day);
+
+        return (
+            <div
+                key={key}
+                className={[
+                    'ats-calendar-day',
+                    today ? 'ats-calendar-day--today' : '',
+                    !inMonth ? 'ats-calendar-day--muted' : '',
+                    hasEvents ? 'ats-calendar-day--has-events' : '',
+                ].filter(Boolean).join(' ')}
+            >
+                <div className="ats-calendar-day__date">
+                    {format(day, 'd')}
+                </div>
+                <div className="ats-calendar-day__events">
+                    {dayEvents.map((ev) => {
+                        const chip = TYPE_CHIP[ev.type] || { bg: '#fff', text: 'var(--ats-secondary)', border: 'rgba(15,45,38,0.12)' };
+                        const detail = [ev.jobTitle, ev.time].filter(Boolean).join(' · ');
+                        return (
+                            <button
+                                key={ev.id}
+                                type="button"
+                                onClick={() => ev.candidateId && navigate(`/recruitment/candidates/${ev.candidateId}`)}
+                                className="ats-calendar-event"
+                                style={{ background: chip.bg, color: chip.text, border: `1px solid ${chip.border}` }}
+                            >
+                                <span className="ats-calendar-event__title">{ev.title}</span>
+                                {detail ? (
+                                    <span className="ats-calendar-event__detail">{detail}</span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    const calendarToolbar = (
+        <div className="ats-calendar-toolbar">
+            <CmButton variant="outline" size="sm" onClick={() => setMonth(addMonths(month, -1))}>
+                Prev
+            </CmButton>
+
+            <label className="ats-calendar-toolbar__month">
+                <select
+                    aria-label="Select month"
+                    className="ats-calendar-toolbar__select"
+                    value={month.getMonth()}
+                    onChange={(e) => goToMonthYear(Number(e.target.value), month.getFullYear())}
+                >
+                    {MONTH_OPTIONS.map((label, index) => (
+                        <option key={label} value={index}>{label}</option>
+                    ))}
+                </select>
+            </label>
+
+            <label className="ats-calendar-toolbar__year">
+                <select
+                    aria-label="Select year"
+                    className="ats-calendar-toolbar__select"
+                    value={month.getFullYear()}
+                    onChange={(e) => goToMonthYear(month.getMonth(), Number(e.target.value))}
+                >
+                    {yearOptions.map((year) => (
+                        <option key={year} value={year}>{year}</option>
+                    ))}
+                </select>
+            </label>
+
+            <CmButton variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))}>
+                Next
+            </CmButton>
+        </div>
+    );
+
     if (loading) return <LoadingSpinner message="Loading calendar…" />;
 
     return (
-        <AtsPage>
+        <AtsPage fullWidth className="ats-calendar-page">
             <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
                 <FaArrowLeft className="h-3 w-3" /> Back
             </button>
 
-            <AtsPageHeader
-                eyebrow="Recruitment"
-                title="Recruitment Calendar"
-                subtitle="Interviews · Joining · Offer expiry"
-                actions={
-                    <div className="flex flex-wrap items-center gap-2">
-                        <CmButton variant="outline" size="sm" onClick={() => setMonth(addMonths(month, -1))}>
-                            Prev
-                        </CmButton>
-
-                        <div className="cm-select relative inline-flex items-center" style={{ padding: 0 }}>
-                            <select
-                                aria-label="Select month"
-                                className="cm-select"
-                                style={{ paddingRight: '2rem' }}
-                                value={month.getMonth()}
-                                onChange={(e) => goToMonthYear(Number(e.target.value), month.getFullYear())}
-                            >
-                                {MONTH_OPTIONS.map((label, index) => (
-                                    <option key={label} value={index}>{label}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="cm-select relative inline-flex items-center" style={{ padding: 0 }}>
-                            <select
-                                aria-label="Select year"
-                                className="cm-select"
-                                style={{ paddingRight: '2rem' }}
-                                value={month.getFullYear()}
-                                onChange={(e) => goToMonthYear(month.getMonth(), Number(e.target.value))}
-                            >
-                                {yearOptions.map((year) => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <CmButton variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))}>
-                            Next
-                        </CmButton>
-                    </div>
-                }
-            />
+            <div className="ats-calendar-top">
+                <AtsPageHeader
+                    eyebrow="Recruitment"
+                    title="Recruitment Calendar"
+                />
+                <div className="ats-calendar-toolbar-row">
+                    {calendarToolbar}
+                </div>
+            </div>
 
             <div className="ats-filter-pills">
                 {[
@@ -159,74 +204,16 @@ const RecruitmentCalendarPage = () => {
                 ))}
             </div>
 
-            <div className="cm-card text-sm" style={{ color: 'rgba(15,45,38,0.65)' }}>
-                <p>
-                    Google: {integrations.googleCalendar?.connected ? 'Connected' : 'Not connected'} ·
-                    Outlook: {integrations.outlook?.connected ? 'Connected' : 'Not connected'} ·
-                    Teams: {integrations.teams?.connected ? 'Connected' : 'Not connected'}
-                </p>
-            </div>
-
-            <div className="cm-card" style={{ padding: '1rem' }}>
-                <div className="mb-2 grid grid-cols-7 gap-2">
-                    {WEEKDAYS.map((d) => (
-                        <div key={d} className="px-1 py-1 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                            {d}
-                        </div>
-                    ))}
-                </div>
-
-                <div className="grid grid-cols-7 gap-2">
-                    {calendarDays.map((day) => {
-                        const key = format(day, 'yyyy-MM-dd');
-                        const dayEvents = eventsByDay[key] || [];
-                        const inMonth = isSameMonth(day, month);
-                        const hasEvents = dayEvents.length > 0;
-                        const today = isToday(day);
-
-                        return (
-                            <div
-                                key={key}
-                                className="min-h-[7.5rem] rounded-xl p-2 transition sm:min-h-[9rem]"
-                                style={{
-                                    border: today ? '2px solid rgba(28,202,155,0.4)' : '1px solid rgba(15,45,38,0.06)',
-                                    background: !inMonth ? 'rgba(15,45,38,0.03)' : hasEvents ? 'rgba(28,202,155,0.05)' : 'rgba(245,250,249,0.6)',
-                                    color: !inMonth ? 'rgba(15,45,38,0.35)' : undefined,
-                                }}
-                            >
-                                <div className="mb-1.5 text-sm font-semibold" style={{ color: inMonth ? 'var(--ats-secondary)' : 'rgba(15,45,38,0.35)' }}>
-                                    {format(day, 'd')}
-                                </div>
-                                <div className="space-y-1">
-                                    {dayEvents.slice(0, 3).map((ev) => {
-                                        const chip = TYPE_CHIP[ev.type] || { bg: '#fff', text: 'var(--ats-secondary)', border: 'rgba(15,45,38,0.12)' };
-                                        return (
-                                        <button
-                                            key={ev.id}
-                                            type="button"
-                                            title={`${ev.title}${ev.jobTitle ? ` · ${ev.jobTitle}` : ''}${ev.time ? ` · ${ev.time}` : ''}`}
-                                            onClick={() => ev.candidateId && navigate(`/recruitment/candidates/${ev.candidateId}`)}
-                                            className="block w-full rounded-md px-1.5 py-1 text-left text-[10px] leading-snug sm:text-[11px]"
-                                            style={{ background: chip.bg, color: chip.text, border: `1px solid ${chip.border}` }}
-                                        >
-                                            <span className="line-clamp-2 font-semibold">{ev.title}</span>
-                                            {(ev.jobTitle || ev.time) && (
-                                                <span className="mt-0.5 block truncate opacity-80">
-                                                    {[ev.jobTitle, ev.time].filter(Boolean).join(' · ')}
-                                                </span>
-                                            )}
-                                        </button>
-                                        );
-                                    })}
-                                    {dayEvents.length > 3 && (
-                                        <p className="px-0.5 text-[10px] font-medium" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                            +{dayEvents.length - 3} more
-                                        </p>
-                                    )}
-                                </div>
+            <div className="cm-card ats-calendar-card">
+                <div className="ats-calendar-scroll">
+                    <div className="ats-calendar-grid">
+                        {WEEKDAYS.map((d) => (
+                            <div key={d} className="ats-calendar-weekday">
+                                {d}
                             </div>
-                        );
-                    })}
+                        ))}
+                        {calendarDays.map((day) => renderDayCell(day))}
+                    </div>
                 </div>
 
                 {filtered.length === 0 && (

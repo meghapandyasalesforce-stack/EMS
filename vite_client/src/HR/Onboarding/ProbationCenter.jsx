@@ -108,7 +108,7 @@ const ProbationCenter = () => {
     const pipeline = (data?.all || []).filter((w) => w.probation?.status && w.probation.status !== 'Waived');
 
     return (
-        <div className="cm-hrms">
+        <div className="cm-hrms hrms-lifecycle">
             <div className="cm-page">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>

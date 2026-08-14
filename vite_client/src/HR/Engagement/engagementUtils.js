@@ -1,9 +1,13 @@
 import { isHR } from '../../utils/managerHelper';
 
 export const canManageEngagement = (user, employee) => {
-    const userObj = user || employee;
-    if (!userObj) return false;
-    const role = userObj.role;
+    if (!user && !employee) return false;
+    const userObj = { ...(employee || {}), ...(user || {}) };
+    if (employee?.functionalRoles) userObj.functionalRoles = employee.functionalRoles;
+    if (employee?.department) userObj.department = employee.department;
+    if (employee?.jobTitle) userObj.jobTitle = employee.jobTitle;
+    if (employee?.position) userObj.position = employee.position;
+    const role = userObj.role || user?.role || employee?.role;
     if (role === 'admin' || role === 'executive') return true;
     return isHR(userObj);
 };
@@ -17,9 +21,42 @@ export const surveyStatusStyle = (status) => {
 };
 
 export const feedbackStatusStyle = (status) => {
-    if (status === 'Resolved') return 'bg-emerald-100 text-emerald-700';
-    if (status === 'Open') return 'bg-amber-100 text-amber-700';
-    if (status === 'In Review') return 'bg-[#20C997]/10 text-[#0d9488]';
-    if (status === 'Closed') return 'bg-slate-100 text-slate-600';
+    if (status === 'Resolved' || status === 'Implemented' || status === 'Accepted') {
+        return 'bg-emerald-100 text-emerald-700';
+    }
+    if (status === 'Open' || status === 'Submitted') return 'bg-amber-100 text-amber-700';
+    if (status === 'In Review' || status === 'Under Review' || status === 'In Progress') {
+        return 'bg-[#20C997]/10 text-[#0d9488]';
+    }
+    if (status === 'Closed' || status === 'Rejected') return 'bg-slate-100 text-slate-600';
+    return 'bg-slate-100 text-slate-600';
+};
+
+export const RECOGNITION_CATEGORIES = [
+    'Achievement',
+    'Teamwork',
+    'Leadership',
+    'Innovation',
+    'Customer Appreciation',
+    'Performance',
+    'Going Extra Mile',
+];
+
+export const formatRecognitionRecipientLabel = (r, personNameFn = (p) => `${p?.name || ''} ${p?.lastName || ''}`.trim() || 'Someone') => {
+    if (r?.recipientLabel) return r.recipientLabel;
+    const type = r?.recipientType || 'Individual';
+    if (type === 'Department') return r.targetDepartment || 'Department';
+    if (type === 'Team') {
+        if (r.teamLabel) return r.teamLabel;
+        const count = r.recipientIds?.length || 0;
+        return count > 1 ? `Team (${count} members)` : 'Team';
+    }
+    return personNameFn(r.recipientId);
+};
+
+export const recognitionStatusStyle = (status) => {
+    if (status === 'Approved') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'Pending') return 'bg-amber-100 text-amber-700';
+    if (status === 'Rejected') return 'bg-slate-100 text-slate-600';
     return 'bg-slate-100 text-slate-600';
 };

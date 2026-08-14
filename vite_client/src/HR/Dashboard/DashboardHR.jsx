@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -11,6 +11,7 @@ import {
     FiClock,
     FiFileText,
     FiGrid,
+    FiPlus,
     FiSettings,
     FiMoreHorizontal,
     FiSearch,
@@ -49,6 +50,7 @@ import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
 import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
 import LeaveBalanceCard from '../../components/LeaveBalanceCard';
+import NotificationSender from '../../Admin/NotificationSender';
 
 const WS = {
     bg: '#F5F7FB',
@@ -382,6 +384,10 @@ const DashboardHR = () => {
         attendanceDailyTrend: [],
         todayStatus: [],
     });
+    const [announcements, setAnnouncements] = useState([]);
+    const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+
+    const canManageAnnouncements = permissionFlags.isHrManager || permissionFlags.isHrExecutive;
 
     const {
         data: employeeData = { employees: [], total: 0 },
@@ -559,6 +565,28 @@ const DashboardHR = () => {
 
         fetchDashboardExtras();
     }, []);
+
+    const loadAnnouncements = useCallback(async () => {
+        if (!canManageAnnouncements) {
+            setAnnouncements([]);
+            return;
+        }
+
+        try {
+            const announcementsRes = await axios.get('/v1/both/notification/sent-announcements', {
+                params: { scope: 'organization', page: 1, limit: 3 },
+                withCredentials: true,
+            });
+            const recentAnnouncements = announcementsRes?.data?.announcements || [];
+            setAnnouncements(Array.isArray(recentAnnouncements) ? recentAnnouncements : []);
+        } catch {
+            setAnnouncements([]);
+        }
+    }, [canManageAnnouncements]);
+
+    useEffect(() => {
+        loadAnnouncements();
+    }, [loadAnnouncements]);
 
     useEffect(() => {
         if (user?.mustResetPassword) {
@@ -813,6 +841,22 @@ const DashboardHR = () => {
         <div className="min-h-screen bg-[#F5F7FB]">
             {showResetPopup && <PasswordResetPopup onClose={() => setShowResetPopup(false)} />}
 
+            {showAnnouncementModal && canManageAnnouncements ? (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                    onClick={() => setShowAnnouncementModal(false)}
+                >
+                    <div className="w-full max-w-lg" onClick={(event) => event.stopPropagation()}>
+                        <NotificationSender
+                            onSent={() => {
+                                setShowAnnouncementModal(false);
+                                loadAnnouncements();
+                            }}
+                        />
+                    </div>
+                </div>
+            ) : null}
+
             <div className="page-shell">
             <div className="page-shell-inner">
             <div className="hrms-stack gap-4">
@@ -895,7 +939,59 @@ const DashboardHR = () => {
                     <AttendanceBox variant="dashboard" />
                 </section>
 
-                <PersonalDashboardKpiRow compact />
+                <div
+                    className={`grid grid-cols-1 gap-4 ${
+                        canManageAnnouncements ? 'lg:grid-cols-2 lg:items-stretch' : 'max-w-md'
+                    }`}
+                >
+                    <PersonalDashboardKpiRow compact layout="stack" />
+                    {canManageAnnouncements ? (
+                        <section
+                            className="flex min-w-0 flex-col rounded-2xl border bg-white p-4 shadow-sm"
+                            style={{ borderColor: WS.border }}
+                        >
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                                <h2 className="text-lg font-semibold text-slate-900">Announcements</h2>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAnnouncementModal(true)}
+                                    className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+                                >
+                                    <FiPlus className="h-4 w-4" />
+                                    New
+                                </button>
+                            </div>
+                            <div className="min-h-0 flex-1 space-y-2.5">
+                                {announcements.length === 0 ? (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                                        No announcements yet.
+                                    </div>
+                                ) : (
+                                    announcements.map((item) => (
+                                        <div
+                                            key={item._id}
+                                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                                        >
+                                            <p className="text-xs text-slate-500">
+                                                {formatShortDate(item.createdAt)}
+                                            </p>
+                                            <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">
+                                                {item.message}
+                                            </p>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/sent-announcements')}
+                                className="mt-3 w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                                View All Announcements
+                            </button>
+                        </section>
+                    ) : null}
+                </div>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                     <StatCard

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
-    FaArrowLeft, FaBriefcase, FaCalendarAlt, FaComments, FaFileContract, FaUser, FaFileAlt, FaExternalLinkAlt, FaDownload, FaTimes,
+    FaArrowLeft, FaBriefcase, FaCalendarAlt, FaComments, FaFileContract, FaUser, FaFileAlt, FaExternalLinkAlt, FaDownload, FaTimes, FaVideo, FaMapMarkerAlt,
 } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -11,6 +11,10 @@ import OfferLetterPanel from '../../components/recruitment/OfferLetterPanel';
 import HireEmployeeModal from '../../components/recruitment/HireEmployeeModal';
 import { normalizeResumeScreening } from '../../utils/resumeScreeningDisplay';
 import { AtsPage, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
+import InterviewFeedbackForm, {
+    EMPTY_INTERVIEW_FEEDBACK,
+    InterviewFeedbackReadonly,
+} from '../../components/recruitment/InterviewFeedbackForm';
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: FaUser },
@@ -125,12 +129,7 @@ const CandidateDetailPage = () => {
     // emailPrep: { type, jobPostingId, interviewId, interviewType, scheduledDate, scheduledTime, location, meetingLink, interviewer }
     const [feedbackForm, setFeedbackForm] = useState({
         interviewId: '',
-        rating: '',
-        technical: '',
-        communication: '',
-        behaviour: '',
-        recommendation: 'Hire',
-        comments: '',
+        ...EMPTY_INTERVIEW_FEEDBACK,
     });
 
     const fetchCandidate = useCallback(async () => {
@@ -446,6 +445,8 @@ const CandidateDetailPage = () => {
                         behaviour: Number(feedbackForm.behaviour) || 0,
                         recommendation: feedbackForm.recommendation,
                         comments: feedbackForm.comments,
+                        strengths: Array.isArray(feedbackForm.strengths) ? feedbackForm.strengths : [],
+                        weaknesses: Array.isArray(feedbackForm.weaknesses) ? feedbackForm.weaknesses : [],
                     },
                 },
                 { withCredentials: true }
@@ -538,7 +539,7 @@ const CandidateDetailPage = () => {
             </button>
 
             <section className="cm-card">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="ats-candidate-header flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                         <AtsAvatar name={fullName} />
                         <div className="min-w-0">
@@ -568,7 +569,7 @@ const CandidateDetailPage = () => {
                                     : undefined
                         }
                         status={candidate.status === 'Offer Accepted' || candidate.stage === 'Hired' || candidate.status === 'Withdrawn' ? undefined : screeningLabel}
-                        className="self-start !text-sm"
+                        className="ats-candidate-status shrink-0 self-stretch md:self-start !text-sm"
                     >
                         {screeningLabel}
                         {candidate.status
@@ -584,7 +585,7 @@ const CandidateDetailPage = () => {
                             : ''}
                     </AtsBadge>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-[rgba(15,45,38,0.08)] pt-4">
+                <div className="ats-candidate-actions mt-4 border-t border-[rgba(15,45,38,0.08)] pt-4">
                     {candidate.linkedEmployeeId ? (
                         <span className="cm-btn cm-btn--sm" style={{ background: 'rgba(28,202,155,0.12)', color: '#006c51', cursor: 'default' }}>
                             Employee: {candidate.linkedEmployeeId.employeeId || candidate.linkedEmployeeId._id}
@@ -609,12 +610,13 @@ const CandidateDetailPage = () => {
                         variant="outline"
                         disabled={busy}
                         onClick={hardDelete}
+                        className="ats-candidate-actions__full"
                         style={{ color: 'var(--ats-error)', borderColor: 'rgba(229,62,62,0.35)' }}
                     >
                         Delete
                     </CmButton>
                 </div>
-                <nav className="ats-tabs !mb-0 mt-4">
+                <nav className="ats-tabs ats-candidate-tabs !mb-0 mt-4 min-w-0">
                     {TABS.map(({ id: tabId, label, icon: Icon }) => (
                         <button
                             key={tabId}
@@ -632,10 +634,10 @@ const CandidateDetailPage = () => {
                     <div className="grid gap-6 lg:grid-cols-2">
                         <section className="cm-card lg:col-span-2">
                             <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Resume Screening</h2>
-                            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                            <dl className="ats-screening-dl text-sm">
                                 <div>
-                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Status</dt>
-                                    <dd className="mt-0.5 font-semibold" style={{
+                                    <dt>Status</dt>
+                                    <dd className="font-semibold" style={{
                                         color: screening.isPassed ? '#006c51'
                                             : screening.isRejected ? 'var(--ats-error)'
                                                 : '#c45a2a',
@@ -644,26 +646,26 @@ const CandidateDetailPage = () => {
                                     </dd>
                                 </div>
                                 <div>
-                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Match Score</dt>
-                                    <dd className="mt-0.5 font-semibold" style={{ color: 'var(--ats-secondary)' }}>{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</dd>
+                                    <dt>Match Score</dt>
+                                    <dd className="font-semibold">{screening.matchScore != null ? `${screening.matchScore}%` : '—'}</dd>
                                 </div>
                                 <div>
-                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Minimum Required</dt>
-                                    <dd className="mt-0.5 font-semibold" style={{ color: 'var(--ats-secondary)' }}>{screening.minimumRequired != null ? `${screening.minimumRequired}%` : '—'}</dd>
+                                    <dt>Minimum Required</dt>
+                                    <dd className="font-semibold">{screening.minimumRequired != null ? `${screening.minimumRequired}%` : '—'}</dd>
                                 </div>
                                 <div>
-                                    <dt style={{ color: 'rgba(15,45,38,0.5)' }}>Screening Date</dt>
-                                    <dd className="mt-0.5 font-semibold" style={{ color: 'var(--ats-secondary)' }}>{screening.screeningDate ? format(new Date(screening.screeningDate), 'dd MMM yyyy HH:mm') : '—'}</dd>
+                                    <dt>Screening Date</dt>
+                                    <dd className="font-semibold">{screening.screeningDate ? format(new Date(screening.screeningDate), 'dd MMM yyyy HH:mm') : '—'}</dd>
                                 </div>
                             </dl>
                             {screening.reason && (
-                                <p className="mt-3 text-sm" style={{ color: screening.isRejected ? 'var(--ats-error)' : '#c45a2a' }}>
+                                <p className="ats-screening-reason text-sm" style={{ color: screening.isRejected ? 'var(--ats-error)' : '#c45a2a' }}>
                                     Reason: {screening.reason}
                                 </p>
                             )}
-                            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <div className="ats-screening-keywords">
                                 <div>
-                                    <p className="mb-1 text-xs font-medium uppercase" style={{ color: 'rgba(15,45,38,0.5)' }}>Matched Keywords</p>
+                                    <p className="ats-screening-keywords__label">Matched Keywords</p>
                                     <div className="flex flex-wrap gap-1">
                                         {(screening.matchedKeywords || []).length === 0
                                             ? <span className="text-sm" style={{ color: 'rgba(15,45,38,0.35)' }}>—</span>
@@ -673,7 +675,7 @@ const CandidateDetailPage = () => {
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="mb-1 text-xs font-medium uppercase" style={{ color: 'rgba(15,45,38,0.5)' }}>Missing Keywords</p>
+                                    <p className="ats-screening-keywords__label">Missing Keywords</p>
                                     <div className="flex flex-wrap gap-1">
                                         {(screening.missingKeywords || []).length === 0
                                             ? <span className="text-sm" style={{ color: 'rgba(15,45,38,0.35)' }}>—</span>
@@ -816,19 +818,28 @@ const CandidateDetailPage = () => {
                 )}
 
                 {activeTab === 'interview' && (
-                    <div className="grid gap-6 lg:grid-cols-2">
+                    <div className="ats-iv-page space-y-5">
                         {screeningLocked && (
-                            <p className="lg:col-span-2 rounded-lg px-4 py-3 text-sm" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
+                            <p className="rounded-lg px-4 py-3 text-sm" style={{ background: 'rgba(229,62,62,0.08)', color: 'var(--ats-error)' }}>
                                 Interview actions are disabled — this candidate failed resume screening.
                             </p>
                         )}
-                        <section className={`cm-card ${screeningLocked ? 'pointer-events-none opacity-50' : ''}`}>
-                            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Schedule Interview</h2>
-                            <form onSubmit={scheduleInterview} className="space-y-3 text-sm">
-                                <select className="cm-select w-full" value={interviewForm.interviewType} onChange={(e) => setInterviewForm((p) => ({ ...p, interviewType: e.target.value }))}>
-                                    {['Phone', 'Video', 'On-site', 'Technical', 'Panel', 'Final'].map((t) => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                                <label className="block">
+
+                        <section className={`cm-card ats-iv-schedule ${screeningLocked ? 'pointer-events-none opacity-50' : ''}`}>
+                            <div className="ats-iv-section-head">
+                                <div>
+                                    <h2 className="ats-iv-section-title">Schedule Interview</h2>
+                                    <p className="ats-iv-section-hint">Assign an interviewer and send calendar details. Feedback unlocks after the interview is marked Completed.</p>
+                                </div>
+                            </div>
+                            <form onSubmit={scheduleInterview} className="ats-iv-schedule-grid">
+                                <label className="ats-iv-field">
+                                    <span className="ats-form-label">Interview type</span>
+                                    <select className="cm-select w-full" value={interviewForm.interviewType} onChange={(e) => setInterviewForm((p) => ({ ...p, interviewType: e.target.value }))}>
+                                        {['Phone', 'Video', 'On-site', 'Technical', 'Panel', 'Final'].map((t) => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </label>
+                                <label className="ats-iv-field">
                                     <span className="ats-form-label">Interviewer *</span>
                                     <select
                                         required
@@ -846,7 +857,7 @@ const CandidateDetailPage = () => {
                                         ))}
                                     </select>
                                 </label>
-                                <label className="block">
+                                <label className="ats-iv-field">
                                     <span className="ats-form-label">Date *</span>
                                     <input
                                         type="date"
@@ -863,22 +874,39 @@ const CandidateDetailPage = () => {
                                             setInterviewForm((p) => ({ ...p, scheduledDate: value }));
                                         }}
                                     />
-                                    <span className="ats-field-hint block">Weekdays only (Mon–Fri). Sat/Sun are off.</span>
+                                    <span className="ats-field-hint block">Weekdays only (Mon–Fri)</span>
                                 </label>
-                                <input type="time" className="cm-input w-full" value={interviewForm.scheduledTime} onChange={(e) => setInterviewForm((p) => ({ ...p, scheduledTime: e.target.value }))} />
-                                <input className="cm-input w-full" placeholder="Location" value={interviewForm.location} onChange={(e) => setInterviewForm((p) => ({ ...p, location: e.target.value }))} />
-                                <input className="cm-input w-full" placeholder="Meeting link" value={interviewForm.meetingLink} onChange={(e) => setInterviewForm((p) => ({ ...p, meetingLink: e.target.value }))} />
-                                <CmButton type="submit" disabled={busy}>Schedule</CmButton>
+                                <label className="ats-iv-field">
+                                    <span className="ats-form-label">Time</span>
+                                    <input type="time" className="cm-input w-full" value={interviewForm.scheduledTime} onChange={(e) => setInterviewForm((p) => ({ ...p, scheduledTime: e.target.value }))} />
+                                </label>
+                                <label className="ats-iv-field">
+                                    <span className="ats-form-label">Location</span>
+                                    <input className="cm-input w-full" placeholder="Office / city" value={interviewForm.location} onChange={(e) => setInterviewForm((p) => ({ ...p, location: e.target.value }))} />
+                                </label>
+                                <label className="ats-iv-field">
+                                    <span className="ats-form-label">Meeting link</span>
+                                    <input className="cm-input w-full" placeholder="https://..." value={interviewForm.meetingLink} onChange={(e) => setInterviewForm((p) => ({ ...p, meetingLink: e.target.value }))} />
+                                </label>
+                                <div className="ats-iv-schedule-actions">
+                                    <CmButton type="submit" disabled={busy}>Schedule Interview</CmButton>
+                                </div>
                             </form>
                         </section>
-                        <section className="cm-card lg:col-span-2">
-                            <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Interviews</h2>
-                            <p className="mb-4 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                Feedback belongs to each interview. Form appears only after status is <strong>Completed</strong>.
-                                Assigned interviewers submit from Internal Jobs → My interviews; HR can review all feedback here.
-                            </p>
+
+                        <section className="cm-card ats-iv-list-card">
+                            <div className="ats-iv-section-head">
+                                <div>
+                                    <h2 className="ats-iv-section-title">Interviews</h2>
+                                    <p className="ats-iv-section-hint">
+                                        Feedback belongs to each interview. Form appears only after status is Completed.
+                                        Assigned interviewers submit from Internal Jobs → My interviews; HR can review all feedback here.
+                                    </p>
+                                </div>
+                            </div>
+
                             {(candidate.interviewSchedule || []).length ? (
-                                <div className="space-y-4">
+                                <div className="ats-iv-list">
                                     {candidate.interviewSchedule.map((item) => {
                                         const isCompleted = item.status === 'Completed';
                                         const hasFb = !!item.feedback?.submittedAt;
@@ -888,121 +916,133 @@ const CandidateDetailPage = () => {
                                                 || 'Assigned')
                                             : 'Unassigned';
                                         const editingThis = feedbackForm.interviewId === item._id;
+                                        const jobTitle = candidate.jobPostingId?.jobTitle || '';
                                         return (
-                                            <div key={item._id || `${item.scheduledDate}-${item.interviewType}`} className="rounded-xl p-4 text-sm" style={{ border: '1px solid rgba(15,45,38,0.08)' }}>
-                                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                                    <div>
-                                                        <p className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>
-                                                            {item.interviewType || 'Interview'}
-                                                            {candidate.jobPostingId?.jobTitle ? ` — ${candidate.jobPostingId.jobTitle}` : ''}
-                                                        </p>
-                                                        <p style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                                            {item.scheduledDate ? format(new Date(item.scheduledDate), 'dd MMM yyyy') : 'No date'}
-                                                            {item.scheduledTime ? ` · ${item.scheduledTime}` : ''}
-                                                            {item.location ? ` · ${item.location}` : ''}
-                                                        </p>
-                                                        <p className="mt-1" style={{ color: 'rgba(15,45,38,0.75)' }}>Interviewer: {interviewerName}</p>
-                                                        {item.meetingLink && (
-                                                            <a href={item.meetingLink} className="ats-link" target="_blank" rel="noreferrer">Join link</a>
-                                                        )}
+                                            <article key={item._id || `${item.scheduledDate}-${item.interviewType}`} className="ats-iv-card">
+                                                <div className="ats-interview-detail-banner">
+                                                    <div className="ats-interview-detail-banner__person">
+                                                        <AtsAvatar name={interviewerName} />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="m-0 truncate text-base font-bold" style={{ color: 'var(--ats-secondary)' }}>
+                                                                {item.interviewType || 'Interview'}
+                                                                {jobTitle ? ` — ${jobTitle}` : ''}
+                                                            </p>
+                                                            <div className="ats-interview-detail-banner__meta">
+                                                                <span className="inline-flex items-center gap-1.5">
+                                                                    <FaCalendarAlt />
+                                                                    {item.scheduledDate ? format(new Date(item.scheduledDate), 'dd MMM yyyy') : 'No date'}
+                                                                    {item.scheduledTime ? ` · ${item.scheduledTime}` : ''}
+                                                                </span>
+                                                                {item.location ? (
+                                                                    <span className="inline-flex items-center gap-1.5">
+                                                                        <FaMapMarkerAlt />
+                                                                        {item.location}
+                                                                    </span>
+                                                                ) : null}
+                                                                <span className="inline-flex items-center gap-1.5">
+                                                                    <FaUser />
+                                                                    {interviewerName}
+                                                                </span>
+                                                            </div>
+                                                            <div className="ats-interview-detail-badges mt-2">
+                                                                <span className="ats-pill">{item.interviewType || 'Interview'}</span>
+                                                                <AtsBadge status={item.status || 'Scheduled'}>{item.status || 'Scheduled'}</AtsBadge>
+                                                                {isCompleted && !hasFb ? (
+                                                                    <span className="ats-pill ats-pill--pending">Pending Feedback</span>
+                                                                ) : null}
+                                                                {hasFb ? (
+                                                                    <span className="ats-pill ats-pill--pending">Feedback Submitted</span>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <AtsBadge status={item.status || 'Scheduled'}>{item.status || 'Scheduled'}</AtsBadge>
                                                 </div>
 
-                                                {!isCompleted && item.status !== 'Cancelled' && !screeningLocked && (
-                                                    <div className="mt-3">
-                                                        <p className="mb-2 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                                            Feedback is hidden until this interview is Completed.
-                                                        </p>
+                                                <div className="ats-iv-card__actions">
+                                                    {item.meetingLink ? (
+                                                        <a
+                                                            href={item.meetingLink}
+                                                            className="ats-interview-card__cta ats-interview-card__cta--join"
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                        >
+                                                            <FaVideo /> Join Meeting
+                                                        </a>
+                                                    ) : null}
+                                                    {!isCompleted && item.status !== 'Cancelled' && !screeningLocked && (
                                                         <CmButton
                                                             type="button"
                                                             size="sm"
                                                             variant="outline"
                                                             disabled={busy}
                                                             onClick={() => markInterviewCompleted(item._id)}
-                                                            style={{ color: '#006c51', borderColor: 'rgba(28,202,155,0.4)' }}
                                                         >
                                                             Mark as Completed
                                                         </CmButton>
-                                                    </div>
+                                                    )}
+                                                </div>
+
+                                                {!isCompleted && item.status !== 'Cancelled' && !screeningLocked && (
+                                                    <p className="ats-iv-card__note">
+                                                        Feedback opens only after this interview is marked <strong>Completed</strong>.
+                                                    </p>
                                                 )}
 
                                                 {isCompleted && hasFb && (
-                                                    <div className="mt-4 rounded-lg p-3" style={{ background: 'rgba(28,202,155,0.06)', border: '1px solid rgba(28,202,155,0.15)' }}>
-                                                        <p className="font-semibold" style={{ color: '#006c51' }}>Interview Feedback</p>
-                                                        <p className="mt-1" style={{ color: 'rgba(15,45,38,0.75)' }}>Interviewer: {interviewerName}</p>
-                                                        <p style={{ color: 'rgba(15,45,38,0.75)' }}>
-                                                            Recommendation: {item.feedback.recommendation || '—'}
-                                                            {item.feedback.rating != null ? ` · Overall ${item.feedback.rating}/10` : ''}
-                                                        </p>
-                                                        <p style={{ color: 'rgba(15,45,38,0.6)' }}>
-                                                            {item.feedback.technical != null ? `Tech ${item.feedback.technical}` : ''}
-                                                            {item.feedback.communication != null ? ` · Comm ${item.feedback.communication}` : ''}
-                                                            {item.feedback.behaviour != null ? ` · Behaviour ${item.feedback.behaviour}` : ''}
-                                                        </p>
-                                                        {item.feedback.comments && (
-                                                            <p className="mt-2 whitespace-pre-wrap" style={{ color: 'rgba(15,45,38,0.75)' }}>{item.feedback.comments}</p>
-                                                        )}
-                                                        <p className="mt-2 text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                                            Submitted {item.feedback.submittedAt
-                                                                ? format(new Date(item.feedback.submittedAt), 'dd MMM yyyy, h:mm a')
-                                                                : '—'}
-                                                        </p>
-                                                    </div>
+                                                    <InterviewFeedbackReadonly
+                                                        feedback={item.feedback}
+                                                        interviewerName={interviewerName}
+                                                    />
                                                 )}
 
                                                 {isCompleted && !hasFb && !screeningLocked && (
-                                                    <div className="mt-4 rounded-lg p-3" style={{ background: 'var(--ats-neutral)' }}>
-                                                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                                            <h3 className="font-semibold" style={{ color: 'var(--ats-secondary)' }}>Submit Feedback</h3>
-                                                            {!editingThis && (
-                                                                <button
+                                                    <div className="mt-1">
+                                                        {!editingThis ? (
+                                                            <div className="ats-iv-pending-fb">
+                                                                <div>
+                                                                    <h3>Provide Feedback</h3>
+                                                                    <p>No feedback yet. Interviewer can submit from My interviews, or HR can enter it here.</p>
+                                                                </div>
+                                                                <CmButton
                                                                     type="button"
-                                                                    className="ats-link !text-xs"
-                                                                    onClick={() => setFeedbackForm((p) => ({
-                                                                        ...p,
+                                                                    size="sm"
+                                                                    onClick={() => setFeedbackForm({
                                                                         interviewId: item._id,
-                                                                        rating: '',
-                                                                        technical: '',
-                                                                        communication: '',
-                                                                        behaviour: '',
-                                                                        recommendation: 'Hire',
-                                                                        comments: '',
-                                                                    }))}
+                                                                        ...EMPTY_INTERVIEW_FEEDBACK,
+                                                                    })}
                                                                 >
                                                                     Enter feedback
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        {editingThis ? (
-                                                            <form onSubmit={(e) => submitFeedback(e, item._id)} className="space-y-3">
-                                                                <div className="grid grid-cols-2 gap-2">
-                                                                    <input type="number" min="0" max="10" placeholder="Overall rating" className="cm-input" value={feedbackForm.rating} onChange={(e) => setFeedbackForm((p) => ({ ...p, rating: e.target.value }))} />
-                                                                    <input type="number" min="0" max="10" placeholder="Technical" className="cm-input" value={feedbackForm.technical} onChange={(e) => setFeedbackForm((p) => ({ ...p, technical: e.target.value }))} />
-                                                                    <input type="number" min="0" max="10" placeholder="Communication" className="cm-input" value={feedbackForm.communication} onChange={(e) => setFeedbackForm((p) => ({ ...p, communication: e.target.value }))} />
-                                                                    <input type="number" min="0" max="10" placeholder="Behaviour" className="cm-input" value={feedbackForm.behaviour} onChange={(e) => setFeedbackForm((p) => ({ ...p, behaviour: e.target.value }))} />
-                                                                </div>
-                                                                <select className="cm-select w-full" value={feedbackForm.recommendation} onChange={(e) => setFeedbackForm((p) => ({ ...p, recommendation: e.target.value }))}>
-                                                                    {['Strong Hire', 'Hire', 'Maybe', 'No Hire'].map((r) => <option key={r} value={r}>{r}</option>)}
-                                                                </select>
-                                                                <textarea rows={3} className="cm-input w-full" placeholder="Comments" value={feedbackForm.comments} onChange={(e) => setFeedbackForm((p) => ({ ...p, comments: e.target.value }))} />
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    <CmButton type="submit" size="sm" disabled={busy}>Save feedback</CmButton>
-                                                                    <CmButton type="button" size="sm" variant="outline" onClick={() => setFeedbackForm((p) => ({ ...p, interviewId: '' }))}>Cancel</CmButton>
-                                                                </div>
-                                                            </form>
+                                                                </CmButton>
+                                                            </div>
                                                         ) : (
-                                                            <p className="text-xs" style={{ color: 'rgba(15,45,38,0.5)' }}>
-                                                                No feedback yet. Assigned interviewer can submit from My interviews, or HR can enter feedback here.
-                                                            </p>
+                                                            <div className="ats-feedback-panel">
+                                                                <InterviewFeedbackForm
+                                                                    value={feedbackForm}
+                                                                    onChange={(next) => setFeedbackForm((p) => ({
+                                                                        ...p,
+                                                                        ...next,
+                                                                        interviewId: item._id,
+                                                                    }))}
+                                                                    onCancel={() => setFeedbackForm((p) => ({ ...p, interviewId: '' }))}
+                                                                    onSaveDraft={() => toast.success('Draft saved on this device')}
+                                                                    onSubmit={() => {
+                                                                        const fakeEvent = { preventDefault() {} };
+                                                                        submitFeedback(fakeEvent, item._id);
+                                                                    }}
+                                                                    busy={busy}
+                                                                    submitLabel="Submit Feedback"
+                                                                />
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}
-                                            </div>
+                                            </article>
                                         );
                                     })}
                                 </div>
-                            ) : <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No interviews scheduled.</p>}
+                            ) : (
+                                <p className="text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No interviews scheduled yet.</p>
+                            )}
                         </section>
                     </div>
                 )}

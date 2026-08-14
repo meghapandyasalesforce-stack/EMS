@@ -148,10 +148,12 @@ export function CmRing({
 
 export function CmEmpty({ icon, title, children }) {
   return (
-    <div className="cm-empty">
-      {icon ? <div className="cm-empty__icon">{icon}</div> : null}
-      {title ? <p className="font-semibold text-[var(--cm-on-surface)] mb-1">{title}</p> : null}
-      <div className="text-sm">{children}</div>
+    <div className="hrms-empty-shell">
+      <div className="cm-empty">
+        {icon ? <div className="cm-empty__icon">{icon}</div> : null}
+        {title ? <p className="font-semibold text-[var(--cm-on-surface)] mb-1">{title}</p> : null}
+        <div className="text-sm">{children}</div>
+      </div>
     </div>
   );
 }

@@ -93,13 +93,13 @@ const PipelinePage = () => {
                     </button>
                     <div className="cm-card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ padding: '1.25rem' }}>
                         <div>
-                            <h1 className="ats-page-title" style={{ fontSize: '1.5rem', lineHeight: '2rem' }}>Recruitment Pipeline</h1>
-                            <p className="ats-page-subtitle">
+                            <h1 className="text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">Recruitment Pipeline</h1>
+                            <p className="mt-2 text-sm text-gray-500">
                                  {totalCandidates} candidate{totalCandidates === 1 ? '' : 's'}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(15,45,38,0.5)' }}>Job</label>
+                            <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Job</label>
                             <select
                                 className="cm-select"
                                 style={{ minWidth: '12rem' }}

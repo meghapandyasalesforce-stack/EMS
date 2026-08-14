@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from './logger.js';
+import { isPublicGuestRoute } from './authSessionUtils.js';
 
 /**
  * Clear persisted auth and UI state before redirecting to login on 401.
@@ -19,6 +20,21 @@ function clearAuthAndRedirectToLogin() {
     logger.warn('clearAuthAndRedirectToLogin', e?.message);
   }
   window.location.href = '/login';
+}
+
+/** Session probe calls — reject quietly; never refresh tokens or redirect to login. */
+function isSessionProbeRequest(url = '') {
+  return (
+    url.includes('/auth/permissions') ||
+    url.includes('/profile-details/get-my-details')
+  );
+}
+
+function maybeRedirectToLoginOn401(errorCode) {
+  // Logout only via explicit Logout button — never on generic 401 or refresh failure.
+  if (errorCode === 'PASSWORD_CHANGED') {
+    clearAuthAndRedirectToLogin();
+  }
 }
 
 // Determine base URL: use env var, or default to backend URL in production, or relative path in dev
@@ -383,10 +399,29 @@ instance.interceptors.response.use(
     
     // Handle 401 errors - attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
+      const requestUrl = originalRequest.url || '';
+      const skipAuthRedirect = Boolean(originalRequest.skipAuthRedirect);
+      const onPublicGuestRoute =
+        typeof window !== 'undefined' &&
+        isPublicGuestRoute(window.location.pathname);
+
+      // Public/guest pages and session probes must never force HRMS login.
+      if (skipAuthRedirect || onPublicGuestRoute) {
+        return Promise.reject(error);
+      }
+
+      const isPublicApi =
+        requestUrl.includes('/public/recruitment') ||
+        requestUrl.includes('/public/lifecycle');
+
+      if (isPublicApi || isSessionProbeRequest(requestUrl)) {
+        return Promise.reject(error);
+      }
+
       const errorCode = error.response?.data?.code;
       if (errorCode === 'PASSWORD_CHANGED') {
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          clearAuthAndRedirectToLogin();
+        if (typeof window !== 'undefined') {
+          maybeRedirectToLoginOn401(errorCode);
         }
         return Promise.reject(error);
       }
@@ -400,9 +435,6 @@ instance.interceptors.response.use(
       );
 
       if (isAuthEndpoint) {
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          clearAuthAndRedirectToLogin();
-        }
         return Promise.reject(error);
       }
 
@@ -449,9 +481,6 @@ instance.interceptors.response.use(
         if (!refreshTokenPresent) {
           isRefreshing = false;
           processQueue(error, null);
-          if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
-            clearAuthAndRedirectToLogin();
-          }
           return Promise.reject(error);
         }
 
@@ -547,10 +576,6 @@ instance.interceptors.response.use(
         // Refresh failed - clear persisted auth so login page doesn't redirect back to dashboard (fixes loop when user deleted or session invalid)
         processQueue(refreshError, null);
         isRefreshing = false;
-
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          clearAuthAndRedirectToLogin();
-        }
 
         return Promise.reject(refreshError);
       }

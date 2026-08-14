@@ -10,6 +10,7 @@ import {
     markHired,
     mapStatusToStage,
 } from '../../services/recruitmentService.js';
+import { isOrgAdminRequest, loadRequesterHrStaff, isHrStaffEmployee } from '../../helpers/functionalRolesHelper.js';
 import {
     convertCandidateToEmployee,
     suggestHireDefaults,
@@ -34,6 +35,13 @@ function normalizeJobBodyScreeningCriteria(body = {}) {
         sc.optionalKeywords = normalizeKeywordList(sc.optionalKeywords);
     }
     return { ...body, screeningCriteria: sc };
+}
+
+/** Clients must not set postedDate; server stamps it only on publish/reopen. */
+function withoutClientPostedDate(body = {}) {
+    const next = { ...body };
+    delete next.postedDate;
+    return next;
 }
 
 // If asyncHandler doesn't exist, use try-catch pattern
@@ -62,12 +70,15 @@ const handleAsync = asyncHandler || ((fn) => async (req, res, next) => {
 export const createJobPosting = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
     const createdBy = req.user?._id || req.employee?._id;
-    const body = normalizeJobBodyScreeningCriteria(req.body);
+    const body = withoutClientPostedDate(normalizeJobBodyScreeningCriteria(req.body));
+    const status = body.status || 'Draft';
 
     const jobPosting = new Recruitment({
         ...body,
         organizationId,
-        createdBy
+        createdBy,
+        // Draft create time is not a posting date — stamp only when published Open
+        postedDate: status === 'Open' ? new Date() : null,
     });
 
     await jobPosting.save();
@@ -197,7 +208,13 @@ export const updateJobPosting = asyncHandler(async (req, res) => {
         req.body.employeesNotifiedAt = null;
     }
 
-    const updateBody = normalizeJobBodyScreeningCriteria(req.body);
+    const updateBody = withoutClientPostedDate(normalizeJobBodyScreeningCriteria(req.body));
+
+    // Draft→Open and Close→Open (reopen) = new posting; edits while already Open keep original postedDate
+    const becomingOpen = updateBody.status === 'Open' && previous.status !== 'Open';
+    if (becomingOpen) {
+        updateBody.postedDate = new Date();
+    }
 
     const jobPosting = await Recruitment.findOneAndUpdate(
         { _id: id, organizationId },
@@ -1112,9 +1129,26 @@ export const generateOfferLetter = asyncHandler(async (req, res) => {
  * Recruiter workspace widgets
  * @route GET /api/v1/admin/recruitment/workspace
  */
+async function resolveWorkspaceRecruiterId(req) {
+    const sessionRole = String(req.user?.role || req.decoded?.role || '').toLowerCase();
+    const viewAll =
+        isOrgAdminRequest(req)
+        || sessionRole === 'admin'
+        || sessionRole === 'hr'
+        || req.authContext?.isHrManager
+        || req.authContext?.isHrExecutive
+        || (req.employee && isHrStaffEmployee(req.employee))
+        || (await loadRequesterHrStaff(req));
+
+    if (viewAll) {
+        return req.query.recruiterId || null;
+    }
+    return req.employee?._id || req.query.recruiterId || null;
+}
+
 export const getRecruiterWorkspace = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
-    const recruiterId = req.employee?._id || req.query.recruiterId || null;
+    const recruiterId = await resolveWorkspaceRecruiterId(req);
     const data = await getWorkspaceSummary(organizationId, recruiterId);
     res.json({ success: true, data });
 });

@@ -182,9 +182,11 @@ const LeaveAttendanceHub = () => {
   const navigate = useNavigate();
   const attendance = useSelector((state) => state.attendance);
   const leaveState = useSelector((state) => state.employeeLeave);
-  const employee = useSelector((state) => state.auth.employee || state.auth.user);
+  const authUser = useSelector((state) => state.auth.user);
+  const employeeProfile = useSelector((state) => state.employeeDetails.employee);
   const monthCache = attendance.monthCache || {};
-  const employeeDocId = getAuthEmployeeId(employee);
+  const employeeDocId =
+    getAuthEmployeeId(employeeProfile) || getAuthEmployeeId(authUser);
 
   const [calendarCursor, setCalendarCursor] = useState(startOfMonthDate(new Date()));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -231,7 +233,11 @@ const LeaveAttendanceHub = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    if (!employeeDocId) return;
+    if (!employeeDocId) {
+      setLeaveBalance(null);
+      setLeaveBalanceError('No employee profile is linked to this account, so leave balances cannot be loaded.');
+      return;
+    }
     const fetchLeaveBalance = async () => {
       try {
         const res = await axios.get(`/v1/admin/leave-policy/balance/${employeeDocId}`, {
@@ -242,7 +248,7 @@ const LeaveAttendanceHub = () => {
       } catch (error) {
         setLeaveBalance(null);
         if (error?.response?.status === 404) {
-          setLeaveBalanceError('No applicable leave policy found for your account in the selected year.');
+          setLeaveBalanceError(error?.response?.data?.message || 'No applicable leave policy found for your account in the selected year.');
         } else {
           setLeaveBalanceError('Unable to load leave balances right now. Please try again.');
         }
@@ -529,7 +535,7 @@ const LeaveAttendanceHub = () => {
       <div className="page-shell-inner hrms-stack">
         <div>
           <p className="text-xs text-slate-500">
-            {calendarCursor.toLocaleString('default', { month: 'long' })} {calendarCursor.getFullYear()} - {employee?.name || 'Employee'}
+            {calendarCursor.toLocaleString('default', { month: 'long' })} {calendarCursor.getFullYear()} - {employeeProfile?.name || authUser?.name || 'Employee'}
           </p>
         </div>
 
@@ -860,15 +866,17 @@ const LeaveAttendanceHub = () => {
                 // </p> */} 
               {/* </div> */}
 
-              <button
-                onClick={() => navigate('/leave')}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#20C997] bg-[#20C997] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#10B981]"
-              >
-                <FiPlus /> Apply for Leave
-              </button>
-
               <div>
-                <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#334155]">Leave Balance</p>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-[#334155]">Leave Balance</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/leave')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#20C997] bg-[#20C997] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#10B981]"
+                  >
+                    <FiPlus className="h-3.5 w-3.5" /> Apply for Leave
+                  </button>
+                </div>
                 {leaveBalanceError ? (
                   <p className="rounded-lg bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">{leaveBalanceError}</p>
                 ) : (

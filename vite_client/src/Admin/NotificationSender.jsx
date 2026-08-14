@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createNotification } from '../context/notificationSlice';
 import { toast } from 'react-toastify';
+import { FiSend } from 'react-icons/fi';
 
 const NotificationSender = ({ onSent }) => {
   const [message, setMessage] = useState('');
@@ -32,67 +33,71 @@ const NotificationSender = ({ onSent }) => {
     }
   };
 
+  const countClass =
+    message.length > 450
+      ? 'bg-red-50 text-red-700 border-red-100'
+      : message.length > 400
+        ? 'bg-amber-50 text-amber-800 border-amber-100'
+        : 'bg-slate-50 text-slate-600 border-slate-200';
+
   return (
-    <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 w-full">
-      <div className="flex items-center justify-between mb-4">
+    <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-1">Send Announcement</h2>
-          <p className="text-xs text-gray-500">Broadcast important messages to all employees</p>
+          <h2 className="text-lg font-semibold text-slate-900">Send announcement</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Message is delivered to all employees in your organization.
+          </p>
         </div>
-        <div className="flex items-center space-x-2">
-          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-            message.length > 450 
-              ? 'bg-red-100 text-red-800' 
-              : message.length > 400 
-              ? 'bg-yellow-100 text-yellow-800'
-              : 'bg-theme-secondary/10 text-theme-secondary'
-          }`}>
-            {message.length}/500
-          </span>
-        </div>
+        <span className={`inline-flex self-start items-center rounded-full border px-2.5 py-1 text-xs font-medium ${countClass}`}>
+          {message.length}/500
+        </span>
       </div>
-      
+
       <textarea
         rows={4}
-        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary mb-4 transition-all resize-none text-sm"
-        placeholder="Type your important announcement here..."
+        className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-sm text-slate-800 placeholder:text-slate-400 transition focus:border-[var(--color-secondary)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20"
+        placeholder="Write your announcement…"
         value={message}
         onChange={(e) => setMessage(e.target.value.slice(0, 500))}
         onKeyDown={handleKeyDown}
         maxLength={500}
       />
-      
-      <div className="flex justify-between items-center">
-        <div>
-          {error && (
-            <p className="text-red-600 text-sm">
+
+      <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-h-[1.25rem]">
+          {error ? (
+            <p className="text-sm text-red-600">
               <span className="font-medium">Error:</span> {error}
             </p>
+          ) : (
+            <p className="text-xs text-slate-400">Press Enter to send · Shift+Enter for a new line</p>
           )}
         </div>
         <button
+          type="button"
           onClick={handleSend}
           disabled={status === 'loading' || !message.trim()}
-          className={`px-4 py-2 rounded-md font-medium transition-colors ${
-            status === 'loading' || !message.trim()
-              ? 'bg-theme-secondary cursor-not-allowed'
-              : 'bg-theme-primary hover:opacity-90'
-          } text-white text-sm`}
+          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {status === 'loading' ? (
-            <span className="flex items-center">
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <>
+              <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
-              Sending...
-            </span>
+              Sending…
+            </>
           ) : (
-            'Send Announcement'
+            <>
+              <FiSend className="h-4 w-4" />
+              Send announcement
+            </>
           )}
         </button>
       </div>
-    </div>
+    </section>
   );
 };
 

@@ -10,20 +10,9 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { fileToAttachment } from '../../utils/recruitmentFileUpload';
 import CoverLetterUploadField from '../../components/recruitment/CoverLetterUploadField';
 import { AtsPage, AtsBadge, CmButton } from '../../components/recruitment/atsUi';
+import { formatJobPostedLabel } from '../../utils/jobPostedDate';
 
 const fieldClass = 'cm-input w-full';
-
-const postedAgo = (dateVal) => {
-    if (!dateVal) return null;
-    const t = new Date(dateVal).getTime();
-    if (Number.isNaN(t)) return null;
-    const days = Math.floor((Date.now() - t) / 86400000);
-    if (days <= 0) return 'Posted today';
-    if (days === 1) return 'Posted 1 day ago';
-    if (days < 30) return `Posted ${days} days ago`;
-    const months = Math.floor(days / 30);
-    return months === 1 ? 'Posted 1 month ago' : `Posted ${months} months ago`;
-};
 
 const formatSalary = (range) => {
     if (!range || (range.min == null && range.max == null)) return null;
@@ -192,7 +181,7 @@ const InternalJobDetailPage = () => {
     const responsibilities = Array.isArray(job.responsibilities) ? job.responsibilities.filter(Boolean) : [];
     const requirements = Array.isArray(job.requirements) ? job.requirements.filter(Boolean) : [];
     const salaryLabel = formatSalary(job.salaryRange);
-    const postedLabel = postedAgo(job.postedDate || job.createdAt || job.postedAt);
+    const postedLabel = formatJobPostedLabel(job);
     const alreadyApplied = !!myApplication;
     const statusLabel = alreadyApplied
         ? applicationStatusDisplay(myApplication.status)
@@ -209,7 +198,7 @@ const InternalJobDetailPage = () => {
                 >
                     <FaArrowLeft className="h-4 w-4" />
                 </button>
-                <h1 className="ats-page-title m-0" style={{ fontSize: '1.75rem' }}>{job.jobTitle}</h1>
+                <h1 className="m-0 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">{job.jobTitle}</h1>
             </div>
 
             <div className="ats-detail-layout">

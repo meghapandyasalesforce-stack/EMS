@@ -1,26 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FaPlus, FaBriefcase, FaUsers, FaFileContract, FaColumns, FaHome, FaClipboardList, FaCalendarAlt, FaEnvelopeOpenText, FaCog, FaSearch, FaTimes, FaExternalLinkAlt, FaEdit, FaRegBookmark } from 'react-icons/fa';
+import { FaPlus, FaBriefcase, FaUsers, FaFileContract, FaColumns, FaHome, FaClipboardList, FaCalendarAlt, FaEnvelopeOpenText, FaCog, FaSearch, FaTimes, FaEdit } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import OfferTemplateManager from '../../components/recruitment/OfferTemplateManager';
 import { normalizeResumeScreening, getScreeningBadgeClasses, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
 import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
-
-const postedAgoLabel = (dateVal) => {
-    if (!dateVal) return 'Posted recently';
-    const t = new Date(dateVal).getTime();
-    if (Number.isNaN(t)) return 'Posted recently';
-    const days = Math.floor((Date.now() - t) / 86400000);
-    if (days <= 0) return 'Posted today';
-    if (days === 1) return 'Posted 1d ago';
-    if (days < 7) return `Posted ${days}d ago`;
-    const weeks = Math.floor(days / 7);
-    if (weeks < 5) return `Posted ${weeks}w ago`;
-    const months = Math.floor(days / 30);
-    return months <= 1 ? 'Posted 1mo ago' : `Posted ${months}mo ago`;
-};
+import { formatJobPostedLabel } from '../../utils/jobPostedDate';
+import DraftAwaitingBanner from '../../components/DraftAwaitingBanner';
 
 const jobExcerpt = (text = '', max = 120) => {
     const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -237,11 +225,11 @@ const RecruitmentPage = () => {
                 title="Recruitment & ATS"
                 subtitle="Manage job postings and candidates"
                 actions={
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="ats-toolbar-stack flex flex-wrap items-center justify-end gap-2">
                         {orgId ? (
-                            <a href={`/careers/${orgId}`} target="_blank" rel="noreferrer" className="ats-module-nav__btn">
-                                Career Portal <FaExternalLinkAlt className="h-3 w-3 opacity-70" />
-                            </a>
+                            <Link to={`/careers/${orgId}`} className="ats-module-nav__btn">
+                                Career Portal
+                            </Link>
                         ) : (
                             <button
                                 type="button"
@@ -337,6 +325,11 @@ const RecruitmentPage = () => {
                 jobPostings.length === 0 ? (
                     <AtsEmpty icon={FaBriefcase} title="No job postings yet" hint="Create your first job posting to start receiving applications." />
                 ) : (
+                    <>
+                    <DraftAwaitingBanner
+                        count={jobPostings.filter((j) => j.status === 'Draft').length}
+                        entityLabel="job posting"
+                    />
                     <div className="ats-job-grid">
                         {jobPostings.map((job) => (
                             <div
@@ -354,7 +347,6 @@ const RecruitmentPage = () => {
                             >
                                 <div className="ats-role-card__head">
                                     <h4 className="ats-role-card__title">{job.jobTitle}</h4>
-                                    <FaRegBookmark className="ats-role-card__bookmark h-4 w-4" aria-hidden />
                                 </div>
                                 <div className="ats-role-card__tags">
                                     {job.status && (
@@ -375,7 +367,7 @@ const RecruitmentPage = () => {
                                     </div>
                                     <div className="flex shrink-0 items-center gap-3">
                                         <span className="ats-role-card__posted">
-                                            {postedAgoLabel(job.postedDate || job.createdAt || job.postedAt)}
+                                            {formatJobPostedLabel(job) || '—'}
                                         </span>
                                         <button
                                             type="button"
@@ -392,6 +384,7 @@ const RecruitmentPage = () => {
                             </div>
                         ))}
                     </div>
+                    </>
                 )
             ) : activeTab === 'candidates' ? (
                 <div className="flex flex-col gap-4">
@@ -483,9 +476,7 @@ const RecruitmentPage = () => {
                     )}
                 </div>
             ) : (
-                <div className="cm-card">
-                    <OfferTemplateManager />
-                </div>
+                <OfferTemplateManager />
             )}
 
             {showScreeningSettings && (

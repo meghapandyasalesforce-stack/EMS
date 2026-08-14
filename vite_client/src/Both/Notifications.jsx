@@ -31,7 +31,6 @@ const Notifications = () => {
   const markOne = async (id) => {
     try {
       await axios.patch(`${BOTH_NOTIFICATION_ENDPOINT}/${id}/read`, {});
-      try { await axios.delete(`${BOTH_NOTIFICATION_ENDPOINT}/${id}`); } catch {}
       setNotifications(prev => prev.filter(n => n._id !== id));
     } catch {}
   };

@@ -5,6 +5,7 @@ import { FaArrowLeft } from 'react-icons/fa';
 import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
+import { getStatusHint, toastForSave } from '../../utils/publishStatusUi';
 import { AtsPage, AtsPageHeader, CmButton } from '../../components/recruitment/atsUi';
 
 const OTHER = '__other__';
@@ -12,6 +13,7 @@ const OTHER = '__other__';
 const FALLBACK_DEPARTMENTS = [
     'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations',
     'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration',
+    'Salesforce',
 ];
 const FALLBACK_JOB_TITLES = [
     'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer',
@@ -294,7 +296,7 @@ const CreateJobPage = () => {
         }
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e, targetStatus) => {
         e.preventDefault();
         const jobTitle = resolved('jobTitle');
         const department = resolved('department');
@@ -305,6 +307,7 @@ const CreateJobPage = () => {
             toast.error('Please fill all required fields');
             return;
         }
+        const saveStatus = targetStatus ?? form.status;
         try {
             setSaving(true);
             const payload = {
@@ -314,7 +317,7 @@ const CreateJobPage = () => {
                 jobDescription: form.jobDescription.trim(),
                 location,
                 employmentType: form.employmentType,
-                status: form.status,
+                status: saveStatus,
                 priority: form.priority,
                 numberOfPositions: Number(form.numberOfPositions) || 1,
                 internalVisible: !!form.internalVisible,
@@ -347,7 +350,11 @@ const CreateJobPage = () => {
                 toast.error(data.message || (isEdit ? 'Failed to update job' : 'Failed to create job'));
                 return;
             }
-            toast.success(isEdit ? 'Job posting updated' : 'Job posting created');
+            toast.success(
+                isEdit
+                    ? toastForSave('Job posting', saveStatus, 'job')
+                    : toastForSave('Job posting', saveStatus, 'job')
+            );
             navigate(`/recruitment/jobs/${data.data._id || editId}`);
         } catch (err) {
             toast.error(err.response?.data?.message || (isEdit ? 'Failed to update job' : 'Failed to create job'));
@@ -378,7 +385,7 @@ const CreateJobPage = () => {
                     : 'Create a job posting for the ATS and career portal'}
             />
 
-            <form onSubmit={handleSubmit} className="cm-card space-y-5">
+            <form onSubmit={(e) => e.preventDefault()} className="cm-card space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                     <SelectWithOther
                         label="Job Title"
@@ -431,6 +438,9 @@ const CreateJobPage = () => {
                                 <option key={t} value={t}>{t}</option>
                             ))}
                         </select>
+                        {getStatusHint(form.status, 'job') && (
+                            <p className="mt-1.5 text-xs text-amber-700">{getStatusHint(form.status, 'job')}</p>
+                        )}
                     </label>
                     <label className="block text-sm">
                         <span className="ats-form-label">Priority</span>
@@ -489,10 +499,7 @@ const CreateJobPage = () => {
                             Enable auto-screening
                         </label>
                     </div>
-                    <p className="text-xs" style={{ color: 'rgba(15,45,38,0.55)' }}>
-                        New applicants are scored against these keywords automatically. Leave required keywords empty to skip screening for this job.
-                        Select a template to pre-fill keywords — you can still edit them for this job only.
-                    </p>
+                
                     <label className="block text-sm">
                         <span className="ats-form-label">Resume Screening Template</span>
                         <select
@@ -595,7 +602,7 @@ const CreateJobPage = () => {
                     </label>
                 </div>
 
-                <div className="flex justify-end gap-3 border-t border-[rgba(15,45,38,0.08)] pt-4">
+                <div className="flex flex-wrap justify-end gap-3 border-t border-[rgba(15,45,38,0.08)] pt-4">
                     <CmButton
                         type="button"
                         variant="outline"
@@ -603,9 +610,20 @@ const CreateJobPage = () => {
                     >
                         Cancel
                     </CmButton>
-                    <CmButton type="submit" disabled={saving}>
-                        {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Job')}
-                    </CmButton>
+                    {isEdit ? (
+                        <CmButton type="button" disabled={saving} onClick={(e) => handleSubmit(e)}>
+                            {saving ? 'Saving…' : 'Save Changes'}
+                        </CmButton>
+                    ) : (
+                        <>
+                            <CmButton type="button" variant="outline" disabled={saving} onClick={(e) => handleSubmit(e, 'Draft')}>
+                                {saving ? 'Saving…' : 'Save as Draft'}
+                            </CmButton>
+                            <CmButton type="button" disabled={saving} onClick={(e) => handleSubmit(e, 'Open')}>
+                                {saving ? 'Saving…' : 'Publish Job'}
+                            </CmButton>
+                        </>
+                    )}
                 </div>
             </form>
         </AtsPage>

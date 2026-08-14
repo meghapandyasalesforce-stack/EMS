@@ -350,10 +350,23 @@ const FeedbackPanel = ({
                                         value={statusDraft}
                                         onChange={(e) => setStatusDraft(e.target.value)}
                                     >
-                                        <option value="Open">Open</option>
-                                        <option value="In Review">In Review</option>
-                                        <option value="Resolved">Resolved</option>
-                                        <option value="Closed">Closed</option>
+                                        {detailItem?.type === 'Suggestion' ? (
+                                            <>
+                                                <option value="Submitted">Submitted</option>
+                                                <option value="Under Review">Under Review</option>
+                                                <option value="Accepted">Accepted</option>
+                                                <option value="Rejected">Rejected</option>
+                                                <option value="In Progress">In Progress</option>
+                                                <option value="Implemented">Implemented</option>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <option value="Open">Open</option>
+                                                <option value="In Review">In Review</option>
+                                                <option value="Resolved">Resolved</option>
+                                                <option value="Closed">Closed</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
                                 <div>

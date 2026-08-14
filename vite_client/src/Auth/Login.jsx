@@ -10,9 +10,28 @@ import PasswordResetPopup from '../Employee/PasswordResetPopup';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { ORGANIZATION_AUTH_ENDPOINT, UNIFIED_AUTH_ENDPOINT } from '../utils/constant';
 import { syncPortalsForSession, canSwitchPortals } from '../utils/portalConfig';
-import { resolveLoginSessionRole } from '../utils/authSessionUtils';
+import { resolveLoginSessionRole, getSafeCareerReturnTo } from '../utils/authSessionUtils';
 import { saveOrgAdminCredentials } from '../utils/orgAdminCredentials';
 import logger from '../utils/logger';
+
+const PERSONAL_EMAIL_DOMAINS = new Set([
+    'gmail.com',
+    'googlemail.com',
+    'yahoo.com',
+    'yahoo.in',
+    'hotmail.com',
+    'outlook.com',
+    'live.com',
+    'icloud.com',
+    'proton.me',
+    'protonmail.com',
+    'rediffmail.com',
+]);
+
+function isPersonalEmail(email = '') {
+    const domain = String(email).split('@')[1]?.toLowerCase().trim();
+    return Boolean(domain && PERSONAL_EMAIL_DOMAINS.has(domain));
+}
 
 function Login() {
     const [searchParams] = useSearchParams();
@@ -20,11 +39,34 @@ function Login() {
     const [showReset, setShowReset] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [loginType, setLoginType] = useState(null); // 'organization', 'employee_admin', 'unknown'
+    const [emailCheckReason, setEmailCheckReason] = useState(null);
+    const [emailCheckFound, setEmailCheckFound] = useState(null);
     const [showLoginTypeSelector, setShowLoginTypeSelector] = useState(false);
     const [isCheckingEmail, setIsCheckingEmail] = useState(false);
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { loading, user, authChecked } = useSelector(state => state.auth);
+
+    const careerReturnTo = getSafeCareerReturnTo(searchParams.get('returnTo'));
+    const hasValidEmail = form.email.includes('@') && form.email.includes('.');
+    const showCareerGuestApplyHint = Boolean(
+        careerReturnTo &&
+        hasValidEmail &&
+        !isCheckingEmail &&
+        (
+            loginType === 'unknown' ||
+            emailCheckReason === 'gmail_domain' ||
+            emailCheckReason === 'no_match' ||
+            emailCheckReason === 'check_failed' ||
+            (loginType === 'organization' && isPersonalEmail(form.email))
+        )
+    );
+    const showCareerEmployeeLoginHint = Boolean(
+        careerReturnTo &&
+        hasValidEmail &&
+        !isCheckingEmail &&
+        loginType === 'employee_admin'
+    );
 
     // Pre-fill email from URL params (when redirected from organization login)
     useEffect(() => {
@@ -41,16 +83,23 @@ function Login() {
                 navigate('/job-details', { replace: true });
                 return;
             }
+            const careerReturnTo = getSafeCareerReturnTo(searchParams.get('returnTo'));
+            if (careerReturnTo) {
+                navigate(careerReturnTo, { replace: true });
+                return;
+            }
             // Navigate to /dashboard which will automatically determine the correct dashboard
             // based on Position and Department via RoleBasedDashboard component
             navigate('/dashboard');
         }
-    }, [authChecked, user, navigate]);
+    }, [authChecked, user, navigate, searchParams]);
 
     // Debounced email domain check for smart login routing
     useEffect(() => {
         if (!form.email || !form.email.includes('@')) {
             setLoginType(null);
+            setEmailCheckReason(null);
+            setEmailCheckFound(null);
             setShowLoginTypeSelector(false);
             return;
         }
@@ -63,8 +112,10 @@ function Login() {
                 });
 
                 if (response.data.success) {
-                    const { loginType: detectedType } = response.data;
+                    const { loginType: detectedType, reason, found } = response.data.data || response.data;
                     setLoginType(detectedType);
+                    setEmailCheckReason(reason || null);
+                    setEmailCheckFound(typeof found === 'boolean' ? found : null);
 
                     // Auto-show selector for unknown type
                     if (detectedType === 'unknown') {
@@ -73,8 +124,9 @@ function Login() {
                     }
                 }
             } catch (error) {
-                // If API fails, default to unknown (manual selection)
                 setLoginType('unknown');
+                setEmailCheckReason('check_failed');
+                setEmailCheckFound(false);
                 // Don't auto-show selector on error
             } finally {
                 setIsCheckingEmail(false);
@@ -272,6 +324,12 @@ function Login() {
                 return;
             }
 
+            const careerReturnTo = getSafeCareerReturnTo(searchParams.get('returnTo'));
+            if (careerReturnTo) {
+                navigate(careerReturnTo, { replace: true });
+                return;
+            }
+
             navigate(homeRoute, { replace: true });
         } catch (err) {
             
@@ -313,14 +371,13 @@ function Login() {
                 <h1 className="text-2xl font-bold mb-2 text-theme-primary" style={{ color: 'var(--color-primary)' }}>Login</h1>
                 <p className="mb-5 text-theme-primary opacity-90" style={{ color: 'var(--color-primary)' }}>Login to your account.</p>
 
-                {/* Show login type indicator */}
-                {loginType === 'organization' && (
-                    <div className="mb-4 p-2 rounded text-sm border border-theme-secondary bg-theme-secondary/10 text-theme-secondary" style={{ borderColor: 'var(--color-secondary)', backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)', color: 'var(--color-secondary)' }}>
+                {loginType === 'organization' && !showCareerGuestApplyHint && (
+                    <div className="mb-4 p-2 rounded text-sm border border-theme-secondary bg-theme-secondary/10 text-theme-secondary text-left" style={{ borderColor: 'var(--color-secondary)', backgroundColor: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)', color: 'var(--color-secondary)' }}>
                         <p>Organization email detected. Will try Organization Login first.</p>
                     </div>
                 )}
-                {loginType === 'employee_admin' && (
-                    <div className="mb-4 p-2 rounded text-sm border border-theme-primary bg-theme-primary/10 text-theme-primary" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', color: 'var(--color-primary)' }}>
+                {loginType === 'employee_admin' && !showCareerGuestApplyHint && (
+                    <div className="mb-4 p-2 rounded text-sm border border-theme-primary bg-theme-primary/10 text-theme-primary text-left" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', color: 'var(--color-primary)' }}>
                         <p>Organization domain detected. Will try Employee/Admin Login.</p>
                     </div>
                 )}
@@ -342,6 +399,31 @@ function Login() {
                             </div>
                         )}
                     </div>
+
+                    {showCareerGuestApplyHint ? (
+                        <div className="mb-4 p-3 rounded text-sm border border-theme-primary bg-theme-primary/10 text-left" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', color: 'var(--color-text)' }}>
+                            <p className="font-semibold text-theme-primary" style={{ color: 'var(--color-primary)' }}>External candidate</p>
+                            <p className="mt-1 text-gray-600">
+                                No HRMS login needed for <strong>{form.email}</strong>. Go back to the Career Portal, pick a role, and submit the guest application form.
+                            </p>
+                            <Link
+                                to={careerReturnTo}
+                                className="mt-2 inline-block text-sm font-semibold text-theme-secondary hover:underline"
+                                style={{ color: 'var(--color-secondary)' }}
+                            >
+                                ← Back to Career Portal
+                            </Link>
+                        </div>
+                    ) : null}
+
+                    {showCareerEmployeeLoginHint ? (
+                        <div className="mb-4 p-2 rounded text-sm border border-theme-primary bg-theme-primary/10 text-theme-primary text-left" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', color: 'var(--color-primary)' }}>
+                            <p>Company employee detected. Sign in with your HRMS password below.</p>
+                        </div>
+                    ) : null}
+
+                    {!showCareerGuestApplyHint ? (
+                    <>
                     <div className="relative">
                         <input
                             name="password"
@@ -374,8 +456,11 @@ function Login() {
                     >
                         {loading ? 'Signing In...' : isCheckingEmail ? 'Checking...' : 'Sign In'}
                     </button>
+                    </>
+                    ) : null}
                 </form>
 
+                {!showCareerGuestApplyHint ? (
                 <div className="flex flex-col space-y-2 mt-5">
                     <div className="flex justify-between items-center">
                         <Link to="/forgot-password" className="text-sm hover:underline text-theme-secondary" style={{ color: 'var(--color-secondary)' }}>
@@ -388,6 +473,7 @@ function Login() {
                         </Link>
                     </div>
                 </div>
+                ) : null}
             </div>
         </div>
 

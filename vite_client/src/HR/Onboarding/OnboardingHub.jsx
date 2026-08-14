@@ -552,10 +552,8 @@ const OnboardingHub = () => {
         : isManagerView
             ? 'My Team'
             : 'My Onboarding';
-    const sectionCardClass = isHRView ? 'cm-card' : 'bg-white rounded-xl shadow-md p-6';
-    const sectionTitleClass = isHRView
-        ? 'cm-title-sm mb-4 flex items-center gap-2'
-        : 'text-lg font-bold flex items-center gap-2 mb-4';
+    const sectionCardClass = 'rounded-xl bg-white p-5 shadow-sm';
+    const sectionTitleClass = 'mb-4 flex items-center gap-2 text-lg font-semibold text-gray-800';
 
     const resolveAssigneeName = (field) => {
         if (!field) return null;
@@ -696,7 +694,7 @@ const OnboardingHub = () => {
     /* ── Employee with no workflow, or unpublished draft only ── */
     if (!isHRView && !isManagerView && !loading && (!wf || wf?.status === 'Draft')) {
         return (
-            <div className="page-shell min-h-screen bg-gray-50">
+            <div className="page-shell hrms-lifecycle min-h-screen bg-gray-50">
                 <div className="page-shell-inner space-y-4">
                     {showRoleToggles && (
                         <div className="flex justify-end">
@@ -733,15 +731,15 @@ const OnboardingHub = () => {
     }
 
     return (
-        <div className={`page-shell min-h-screen bg-gray-50 ${(isHRView || wf) ? 'cm-hrms' : ''}`}>
+        <div className="page-shell hrms-lifecycle cm-hrms min-h-screen bg-gray-50">
             <div className="page-shell-inner hrms-stack pb-10">
 
                 {/* ── Header ── */}
                 {!wf && (
-                <header className={isHRView ? 'cm-card flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between' : 'flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'}>
+                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                        <p className={isHRView ? 'cm-label' : 'text-sm font-medium text-theme-secondary'}>{roleLabel}</p>
-                        <h1 className={isHRView ? 'cm-title mt-1' : 'mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl'}>
+                        <p className="text-sm font-medium text-theme-secondary">{roleLabel}</p>
+                        <h1 className="mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">
                             {isHRView
                                 ? 'Onboarding Hub'
                                 : isManagerView
@@ -754,7 +752,7 @@ const OnboardingHub = () => {
                             </p>
                         )}
                         {isHRView && !wf && (
-                            <p className="cm-subtitle mt-2 max-w-2xl sm:text-base">
+                            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500 sm:text-base">
                                 Plan and track every new hire&apos;s onboarding journey in one place
                             </p>
                         )}
@@ -856,7 +854,7 @@ const OnboardingHub = () => {
                             </div>
                         )}
 
-                        <div className="cm-card">
+                        <div className={sectionCardClass}>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-5">
                                 <div className="flex-1">
                                     <CmSearch
@@ -917,15 +915,15 @@ const OnboardingHub = () => {
                                                     </div>
                                                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                                                         <div>
-                                                            <p className="cm-label mb-1">Banking</p>
+                                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Banking</p>
                                                             <CmBadge tone={bankTone}>{bankLabel}</CmBadge>
                                                         </div>
                                                         <div>
-                                                            <p className="cm-label mb-1">Verification</p>
+                                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Verification</p>
                                                             <CmBadge tone={bgvTone}>{bgvLabel}</CmBadge>
                                                         </div>
                                                         <div className="col-span-2">
-                                                            <p className="cm-label mb-1">Join date</p>
+                                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Join date</p>
                                                             <p className="text-sm text-[var(--cm-on-surface)]">
                                                                 {w.joiningDate ? format(new Date(w.joiningDate), 'MMM dd, yyyy') : '—'}
                                                             </p>
