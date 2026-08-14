@@ -3258,23 +3258,33 @@
 .ats-approval-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 1200;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  isolation: isolate;
+}
+
+/* Tinted blur sits on its own layer so the dialog surface stays fully opaque. */
+.ats-approval-modal-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: rgba(15, 45, 38, 0.45);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
 
 .ats-ui.ats-approval-modal {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 42rem;
   max-height: min(90vh, 880px);
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background-color: #ffffff;
   border-radius: 16px;
   border: 1px solid rgba(15, 45, 38, 0.08);
   box-shadow: 0 20px 48px rgba(15, 45, 38, 0.18);
@@ -3288,7 +3298,7 @@
   gap: 1rem;
   padding: 1.15rem 1.25rem;
   border-bottom: 1px solid rgba(15, 45, 38, 0.06);
-  background: rgba(245, 250, 249, 0.65);
+  background-color: #f5faf9;
 }
 
 .ats-ui .ats-approval-modal__eyebrow {
@@ -3337,10 +3347,12 @@
 .ats-ui .ats-approval-modal__body {
   flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.15rem 1.25rem 1.35rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  background-color: #ffffff;
 }
 
 .ats-ui .ats-approval-modal__section-title {
@@ -3357,7 +3369,7 @@
   margin-bottom: 0.85rem;
   padding: 0.75rem 0.85rem;
   border-radius: 12px;
-  background: rgba(245, 250, 249, 0.9);
+  background-color: #f5faf9;
   border: 1px solid rgba(15, 45, 38, 0.05);
 }
 
@@ -3366,6 +3378,14 @@
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--ats-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ats-ui .ats-approval-modal__requester-meta {
+  margin: 0.1rem 0 0;
+  font-size: 0.8125rem;
+  color: rgba(15, 45, 38, 0.55);
+  overflow-wrap: anywhere;
 }
 
 .ats-ui .ats-approval-modal__info-grid {
@@ -3542,35 +3562,59 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.55rem;
-  margin-top: 0.85rem;
 }
 
-.ats-ui .ats-approval-modal__action-choice {
+.ats-ui .ats-approval-modal__action-btns .cm-btn {
+  width: 100%;
+  min-height: 2.75rem;
+}
+
+.ats-ui .ats-approval-modal__reject-btn {
+  color: #c53030 !important;
+  border-color: rgba(197, 48, 48, 0.35) !important;
+}
+
+.ats-ui .ats-approval-modal__reject-btn:hover:not(:disabled) {
+  background: rgba(229, 62, 62, 0.08) !important;
+  border-color: rgba(197, 48, 48, 0.5) !important;
+}
+
+.ats-ui .ats-approval-modal__reject-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ats-ui .ats-approval-modal__reject-panel {
+  padding: 0.85rem 0.95rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid rgba(197, 48, 48, 0.18);
+  background-color: #fff7f5;
+}
+
+.ats-ui .ats-approval-modal__reject-field {
+  display: block;
+}
+
+.ats-ui .ats-approval-modal__reject-label {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 0.4rem;
-  min-height: 2.75rem;
-  border-radius: 10px;
-  border: 1.5px solid rgba(15, 45, 38, 0.12);
-  background: #fff;
-  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: rgba(15, 45, 38, 0.72);
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.ats-ui .ats-approval-modal__action-choice--approve-active {
-  border-color: rgba(0, 108, 81, 0.35);
-  background: var(--ats-primary);
-  color: #fff;
+.ats-ui .ats-approval-modal__reject-label span {
+  color: var(--ats-error);
 }
 
-.ats-ui .ats-approval-modal__action-choice--reject-active {
-  border-color: rgba(197, 48, 48, 0.45);
-  background: #e53e3e;
-  color: #fff;
+.ats-ui .ats-approval-modal__reject-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
 }
 
 @media (max-width: 480px) {
