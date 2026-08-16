@@ -1,222 +1,301 @@
-import React, { useState } from 'react';
-import { FiX, FiCheckCircle, FiXCircle, FiClock, FiUser } from 'react-icons/fi';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FiX, FiCheckCircle, FiXCircle, FiClock, FiUser, FiAlertTriangle } from 'react-icons/fi';
 import { auditActionLabel, formatAuditTimelineEvent } from '../../utils/approvalStatusDisplay';
+import { AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
+
+const stepTone = (status = '') => {
+  const s = String(status).toLowerCase();
+  if (s === 'approved') return 'success';
+  if (s === 'rejected') return 'error';
+  if (s === 'skipped') return 'neutral';
+  return 'pending';
+};
+
+const priorityTone = (priority = '') => {
+  const p = String(priority).toLowerCase();
+  if (p === 'urgent') return 'error';
+  if (p === 'high') return 'attention';
+  return 'neutral';
+};
+
+const InfoItem = ({ label, value, children }) => (
+  <div className="ats-approval-modal__info-item">
+    <span className="ats-approval-modal__info-label">{label}</span>
+    {children || <span className="ats-approval-modal__info-value">{value || '—'}</span>}
+  </div>
+);
 
 const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
-  const [comments, setComments] = useState('');
-  const [action, setAction] = useState(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   const pendingStep = approval.currentPendingStep;
-  const auditTrail = Array.isArray(approval.auditTrail) ? approval.auditTrail : [];
+  const requester = approval.requestedBy;
+  const requesterName = [
+    requester?.name,
+    requester?.fullName,
+    [requester?.firstName, requester?.lastName].filter(Boolean).join(' '),
+  ].find((value) => value && String(value).trim()) || '';
+  const requesterEmail = requester?.email || '';
 
-  const handleSubmit = () => {
-    if (!action) return;
-    onAction(approval._id, pendingStep?.stepNumber, action, comments);
+  const timelineEntries = useMemo(() => {
+    const auditTrail = Array.isArray(approval.auditTrail) ? approval.auditTrail : [];
+    return auditTrail
+      .map((event, index) => ({
+        key: `${event.action || 'event'}-${index}`,
+        label: formatAuditTimelineEvent(event) || auditActionLabel(event),
+        at: event.at,
+      }))
+      .filter((entry) => Boolean(entry.label));
+  }, [approval.auditTrail]);
+
+  const steps = approval.steps?.length
+    ? approval.steps
+    : approval.currentPendingStep
+      ? [approval.currentPendingStep]
+      : [];
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  const handleApprove = () => {
+    onAction(approval._id, pendingStep?.stepNumber, 'Approve', '');
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Approval Details</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <FiX className="w-6 h-6" />
-          </button>
-        </div>
+  const handleRejectConfirm = () => {
+    const reason = rejectReason.trim();
+    if (!reason) return;
+    onAction(approval._id, pendingStep?.stepNumber, 'Reject', reason);
+  };
 
-        <div className="p-6 space-y-6">
-          {/* Request Info */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Request Information</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-sm text-gray-500">Entity Type</span>
-                <p className="font-medium text-gray-900">{approval.entityType}</p>
-              </div>
-              <div>
-                <span className="text-sm text-gray-500">Requested By</span>
-                <p className="font-medium text-gray-900">{approval.requestedBy?.name}</p>
-              </div>
-              <div>
-                <span className="text-sm text-gray-500">Priority</span>
-                <p className={`font-medium ${
-                  approval.priority === 'Urgent' ? 'text-red-600' :
-                  approval.priority === 'High' ? 'text-orange-600' : 'text-gray-900'
-                }`}>
-                  {approval.priority}
+  return createPortal(
+    <div
+      className="ats-approval-modal-overlay"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="cm-hrms ats-ui ats-approval-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="approval-detail-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="ats-approval-modal__header">
+          <div className="ats-approval-modal__header-main">
+            <p className="ats-approval-modal__eyebrow">{approval.entityType || 'Request'}</p>
+            <h2 id="approval-detail-title" className="ats-approval-modal__title">
+              Approval Details
+            </h2>
+            <div className="ats-approval-modal__header-badges">
+              <AtsBadge status={approval.status}>{approval.status || 'In Progress'}</AtsBadge>
+              {approval.priority ? (
+                <AtsBadge tone={priorityTone(approval.priority)}>{approval.priority}</AtsBadge>
+              ) : null}
+              {approval.slaEscalated ? <AtsBadge tone="error">Overdue</AtsBadge> : null}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ats-approval-modal__close"
+            aria-label="Close"
+          >
+            <FiX className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="ats-approval-modal__body">
+          <section className="ats-approval-modal__section">
+            <h3 className="ats-approval-modal__section-title">Request information</h3>
+            <div className="ats-approval-modal__requester">
+              <AtsAvatar name={requesterName || requesterEmail} />
+              <div className="min-w-0">
+                <span className="ats-approval-modal__info-label">Requested by</span>
+                <p className="ats-approval-modal__requester-name">
+                  {requesterName || requesterEmail || 'Requester unavailable'}
                 </p>
+                {requesterName && requesterEmail ? (
+                  <p className="ats-approval-modal__requester-meta">{requesterEmail}</p>
+                ) : null}
               </div>
-              <div>
-                <span className="text-sm text-gray-500">Status</span>
-                <p className="font-medium text-gray-900">{approval.status}</p>
-              </div>
+            </div>
+            <div className="ats-approval-modal__info-grid">
+              <InfoItem label="Entity type" value={approval.entityType} />
+              <InfoItem label="Status" value={approval.status} />
+              <InfoItem label="Priority" value={approval.priority || 'Normal'} />
+              {pendingStep?.dueDate ? (
+                <InfoItem
+                  label="Due date"
+                  value={new Date(pendingStep.dueDate).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                />
+              ) : (
+                <InfoItem label="Current step" value={pendingStep?.stepName} />
+              )}
               {approval.entityType === 'TaxRegimeChange' && (
                 <>
-                  <div>
-                    <span className="text-sm text-gray-500">Current Tax Regime</span>
-                    <p className="font-medium text-gray-900">
-                      {approval.metadata?.currentTaxRegime || '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-500">Requested Tax Regime</span>
-                    <p className="font-medium text-gray-900">
-                      {approval.metadata?.requestedTaxRegime || 'N/A'}
-                    </p>
-                  </div>
-                  {approval.metadata?.reason && (
-                    <div className="col-span-2">
-                      <span className="text-sm text-gray-500">Reason</span>
-                      <p className="font-medium text-gray-900">{approval.metadata.reason}</p>
+                  <InfoItem label="Current tax regime" value={approval.metadata?.currentTaxRegime} />
+                  <InfoItem label="Requested tax regime" value={approval.metadata?.requestedTaxRegime} />
+                  {approval.metadata?.reason ? (
+                    <div className="ats-approval-modal__info-item ats-approval-modal__info-item--wide">
+                      <span className="ats-approval-modal__info-label">Reason</span>
+                      <p className="ats-approval-modal__info-value">{approval.metadata.reason}</p>
                     </div>
-                  )}
+                  ) : null}
                 </>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* Request timeline from audit trail */}
-          {auditTrail.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Request Timeline</h3>
-              <ul className="relative space-y-4 border-l-2 border-gray-100 pl-4">
-                {auditTrail
-                  .map((event, index) => {
-                    const label = formatAuditTimelineEvent(event) || auditActionLabel(event);
-                    if (!label) return null;
-                    return (
-                      <li key={`${event.action}-${index}`} className="relative">
-                        <span
-                          className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-theme-primary"
-                          aria-hidden
-                        />
-                        <p className="text-sm font-semibold text-gray-900">{label}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {event.at ? new Date(event.at).toLocaleString() : '—'}
+          {timelineEntries.length > 0 && (
+            <section className="ats-approval-modal__section">
+              <h3 className="ats-approval-modal__section-title">Request timeline</h3>
+              <ul className="ats-approval-modal__timeline">
+                {timelineEntries.map((entry) => (
+                  <li key={entry.key} className="ats-approval-modal__timeline-item">
+                    <span className="ats-approval-modal__timeline-dot" aria-hidden />
+                    <div className="min-w-0">
+                      <p className="ats-approval-modal__timeline-label">{entry.label}</p>
+                      {entry.at ? (
+                        <p className="ats-approval-modal__timeline-time">
+                          {new Date(entry.at).toLocaleString()}
                         </p>
-                      </li>
-                    );
-                  })
-                  .filter(Boolean)}
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
               </ul>
-            </div>
+            </section>
           )}
 
-          {/* Steps Timeline */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Approval Steps</h3>
-            <div className="space-y-3">
-              {(approval.steps?.length
-                ? approval.steps
-                : approval.currentPendingStep
-                  ? [approval.currentPendingStep]
-                  : []
-              ).map((step, index) => {
-                const isPending = step.status === 'Pending';
-                const isApproved = step.status === 'Approved';
-                const isRejected = step.status === 'Rejected';
-                const isSkipped = step.status === 'Skipped';
+          {steps.length > 0 && (
+            <section className="ats-approval-modal__section">
+              <h3 className="ats-approval-modal__section-title">Approval steps</h3>
+              <div className="ats-approval-modal__steps">
+                {steps.map((step, index) => {
+                  const isPending = step.status === 'Pending';
+                  const isApproved = step.status === 'Approved';
+                  const isRejected = step.status === 'Rejected';
+                  const isSkipped = step.status === 'Skipped';
 
-                return (
-                  <div
-                    key={index}
-                    className={`border rounded-lg p-4 ${
-                      isPending ? 'border-theme-secondary bg-theme-secondary/10' :
-                      isApproved ? 'border-green-300 bg-theme-primary/10' :
-                      isRejected ? 'border-red-300 bg-red-50' :
-                      'border-gray-200 bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      {isApproved && <FiCheckCircle className="w-5 h-5 text-theme-primary" />}
-                      {isRejected && <FiXCircle className="w-5 h-5 text-red-600" />}
-                      {isPending && <FiClock className="w-5 h-5 text-theme-secondary" />}
-                      {isSkipped && <FiUser className="w-5 h-5 text-gray-400" />}
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900">{step.stepName}</h4>
-                        <p className="text-sm text-gray-600">Approver: {step.approverName || 'N/A'}</p>
+                  return (
+                    <div
+                      key={`${step.stepName}-${index}`}
+                      className={`ats-approval-modal__step ${
+                        isPending ? 'ats-approval-modal__step--pending' :
+                        isApproved ? 'ats-approval-modal__step--approved' :
+                        isRejected ? 'ats-approval-modal__step--rejected' :
+                        'ats-approval-modal__step--neutral'
+                      }`}
+                    >
+                      <div className="ats-approval-modal__step-icon" aria-hidden>
+                        {isApproved && <FiCheckCircle />}
+                        {isRejected && <FiXCircle />}
+                        {isPending && <FiClock />}
+                        {isSkipped && <FiUser />}
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        isApproved ? 'bg-theme-primary/10 text-theme-primary' :
-                        isRejected ? 'bg-red-100 text-red-800' :
-                        isSkipped ? 'bg-gray-100 text-gray-600' :
-                        'bg-theme-secondary/10 text-theme-secondary'
-                      }`}>
-                        {step.status}
-                      </span>
+                      <div className="ats-approval-modal__step-copy min-w-0">
+                        <h4 className="ats-approval-modal__step-title">{step.stepName}</h4>
+                        <p className="ats-approval-modal__step-sub">
+                          Approver: {step.approverName || 'N/A'}
+                        </p>
+                        {step.comments ? (
+                          <p className="ats-approval-modal__step-comment">&ldquo;{step.comments}&rdquo;</p>
+                        ) : null}
+                        {step.actionDate ? (
+                          <p className="ats-approval-modal__step-time">
+                            {new Date(step.actionDate).toLocaleString()}
+                          </p>
+                        ) : null}
+                      </div>
+                      <AtsBadge tone={stepTone(step.status)}>{step.status}</AtsBadge>
                     </div>
-                    {step.comments && (
-                      <p className="text-sm text-gray-600 mt-2 italic">"{step.comments}"</p>
-                    )}
-                    {step.actionDate && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(step.actionDate).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Action Section */}
-          {pendingStep && (
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Action</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Comments</label>
-                  <textarea
-                    value={comments}
-                    onChange={(e) => setComments(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-theme-secondary"
-                    rows="3"
-                    placeholder="Add comments (optional)"
-                  />
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setAction('Approve')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                      action === 'Approve'
-                        ? 'bg-theme-primary text-white'
-                        : 'bg-theme-primary/10 text-theme-primary hover:bg-theme-primary/10'
-                    }`}
-                  >
-                    <FiCheckCircle className="w-5 h-5" />
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => setAction('Reject')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                      action === 'Reject'
-                        ? 'bg-red-600 text-white'
-                        : 'bg-red-50 text-red-700 hover:bg-red-100'
-                    }`}
-                  >
-                    <FiXCircle className="w-5 h-5" />
-                    Reject
-                  </button>
-                </div>
-
-                {action && (
-                  <button
-                    onClick={handleSubmit}
-                    className="w-full px-6 py-3 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium"
-                  >
-                    Submit {action}
-                  </button>
-                )}
+                  );
+                })}
               </div>
-            </div>
+            </section>
+          )}
+
+          {pendingStep && (
+            <section className="ats-approval-modal__section ats-approval-modal__section--action">
+              <h3 className="ats-approval-modal__section-title">Your action</h3>
+
+              {isRejecting ? (
+                <div className="ats-approval-modal__reject-panel">
+                  <label className="ats-approval-modal__reject-field">
+                    <span className="ats-approval-modal__reject-label">
+                      <FiAlertTriangle aria-hidden />
+                      Rejection reason <span>*</span>
+                    </span>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      className="cm-input w-full resize-none"
+                      rows={3}
+                      placeholder="Explain briefly for the requester…"
+                      autoFocus
+                    />
+                  </label>
+                  <div className="ats-approval-modal__reject-actions">
+                    <CmButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsRejecting(false);
+                        setRejectReason('');
+                      }}
+                    >
+                      Cancel
+                    </CmButton>
+                    <CmButton
+                      variant="outline"
+                      size="sm"
+                      className="ats-approval-modal__reject-btn"
+                      disabled={!rejectReason.trim()}
+                      onClick={handleRejectConfirm}
+                    >
+                      <FiXCircle className="h-4 w-4" />
+                      Confirm reject
+                    </CmButton>
+                  </div>
+                </div>
+              ) : (
+                <div className="ats-approval-modal__action-btns">
+                  <CmButton variant="primary" onClick={handleApprove}>
+                    <FiCheckCircle className="h-4 w-4" />
+                    Approve
+                  </CmButton>
+                  <CmButton
+                    variant="outline"
+                    className="ats-approval-modal__reject-btn"
+                    onClick={() => setIsRejecting(true)}
+                  >
+                    <FiXCircle className="h-4 w-4" />
+                    Reject
+                  </CmButton>
+                </div>
+              )}
+            </section>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

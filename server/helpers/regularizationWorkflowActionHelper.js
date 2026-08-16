@@ -4,6 +4,8 @@ import {
     processApprovalAction,
     adminBypassApprovalInstance,
     hrOverrideFinalizeApproval,
+    getNextWorkflowInstanceStep,
+    isTimeoutNextStepAssignee,
 } from '../services/approvalWorkflowService.js';
 
 export const EARLY_APPROVAL_CONFIRM_CODE = 'EARLY_APPROVAL_CONFIRM_REQUIRED';
@@ -126,8 +128,8 @@ export const buildWorkflowSummary = async (approvalInstanceId) => {
     return {
         hasWorkflow: true,
         instanceStatus: instance.status,
-        slaEscalated: Boolean(instance.slaEscalated),
-        slaEscalatedAt: instance.slaEscalatedAt || null,
+        slaEscalated: Boolean(instance.slaEscalated || pendingStep?.escalated),
+        slaEscalatedAt: instance.slaEscalatedAt || pendingStep?.escalatedAt || null,
         hrOverrideUsed: Boolean(instance.hrOverride?.used),
         hrOverrideAction: instance.hrOverride?.action || null,
         hrOverrideByName: instance.hrOverride?.byName || null,
@@ -207,8 +209,8 @@ export const attachWorkflowSummariesToRequests = async (requests) => {
             workflowSummary: {
                 hasWorkflow: true,
                 instanceStatus: instance.status,
-                slaEscalated: Boolean(instance.slaEscalated),
-                slaEscalatedAt: instance.slaEscalatedAt || null,
+                slaEscalated: Boolean(instance.slaEscalated || pendingStep?.escalated),
+                slaEscalatedAt: instance.slaEscalatedAt || pendingStep?.escalatedAt || null,
                 hrOverrideUsed: Boolean(instance.hrOverride?.used),
                 hrOverrideAction: instance.hrOverride?.action || null,
                 hrOverrideByName: instance.hrOverride?.byName || null,
@@ -307,12 +309,58 @@ export const resolveRegularizationWorkflowAction = async ({
         hrImmediateOverride ||
         (earlyConfirmNeeded && confirmEarlyApproval && isHrEmployee(req));
 
+    /** After step timeout: next-step assignee (or natural next-step actor) may finalize */
+    let timeoutEscalationOverride = false;
+    let timeoutOverrideLabel = null;
+    if (currentStep?.escalated && reviewerEmployeeId && !hrEarlyOverride && !isAssignedApprover) {
+        if (isTimeoutNextStepAssignee(approvalInstance, reviewerEmployeeId)) {
+            timeoutEscalationOverride = true;
+            const nextStep = getNextWorkflowInstanceStep(
+                approvalInstance,
+                currentStep.stepNumber
+            );
+            const nextDef = nextStep
+                ? await loadWorkflowStepDefinition(approvalInstance, nextStep)
+                : null;
+            timeoutOverrideLabel =
+                nextDef?.approverType || nextStep?.stepName || 'Next step';
+        } else {
+            const nextStep = getNextWorkflowInstanceStep(
+                approvalInstance,
+                currentStep.stepNumber
+            );
+            if (nextStep) {
+                const nextDef = await loadWorkflowStepDefinition(
+                    approvalInstance,
+                    nextStep
+                );
+                if (
+                    isNaturalActorForStep(
+                        req,
+                        nextDef?.approverType,
+                        nextStep,
+                        employeeLinked
+                    )
+                ) {
+                    timeoutEscalationOverride = true;
+                    timeoutOverrideLabel =
+                        nextDef?.approverType || nextStep?.stepName || 'Next step';
+                }
+            }
+        }
+    }
+
     const mayAct = Boolean(
-        naturalActor || managerTeamOverride || isAssignedApprover || hrEarlyOverride
+        naturalActor ||
+            managerTeamOverride ||
+            isAssignedApprover ||
+            hrEarlyOverride ||
+            timeoutEscalationOverride
     );
 
     let overrideLabel = null;
     if (hrEarlyOverride) overrideLabel = 'HR';
+    else if (timeoutEscalationOverride) overrideLabel = timeoutOverrideLabel;
     else if (managerTeamOverride && !isAssignedApprover) overrideLabel = 'Manager';
 
     const approverIdForAction =
@@ -333,6 +381,7 @@ export const resolveRegularizationWorkflowAction = async ({
         reviewerEmployeeId,
         overrideLabel,
         approverType,
+        useTimeoutFinalize: timeoutEscalationOverride,
     };
 };
 
@@ -360,12 +409,15 @@ export const executeRegularizationWorkflowAction = async ({
         confirmEarlyApproval,
     });
 
-    // Additive: when HR overrides a Manager (or other non-HR) pending step, finalize immediately
-    if (params.overrideLabel === 'HR' && params.approverType && params.approverType !== 'HR') {
+    // Additive: HR early override OR next-step actor after timeout — finalize remaining steps
+    if (
+        (params.overrideLabel === 'HR' && params.approverType && params.approverType !== 'HR') ||
+        params.useTimeoutFinalize
+    ) {
         const actor = req.employee;
         const performedByName = actor
             ? [actor.name, actor.lastName].filter(Boolean).join(' ').trim()
-            : 'HR';
+            : params.overrideLabel || 'Approver';
         return hrOverrideFinalizeApproval({
             approvalInstanceId: approvalInstance._id,
             action,
@@ -376,6 +428,7 @@ export const executeRegularizationWorkflowAction = async ({
                 regularizationId: regularizationRequest._id,
                 regularizationType: regularizationRequest.regularizationType,
                 overrideRole: params.overrideLabel,
+                ...(params.useTimeoutFinalize ? { timeoutEscalation: true } : {}),
             },
         });
     }

@@ -44,6 +44,7 @@ import {
 import {
     getTakeableDaysThisMonth,
     hasNoCarryProbationLeave,
+    LEAVE_UI,
 } from '../../constants/leaveConstants';
 
 /** Workspace-style mint / forest palette (scoped to this dashboard) */
@@ -506,15 +507,15 @@ function DashboardEmployee() {
                                 <FaCheckCircle className="h-5 w-5" />
                             )}
                             {kpiCard(
-                                dashboardStats.monthlyCapSummary ? 'Leave this month' : 'Leave remaining',
+                                dashboardStats.monthlyCapSummary ? LEAVE_UI.leaveThisMonth : LEAVE_UI.daysRemaining,
                                 statsLoading
                                     ? '…'
                                     : dashboardStats.monthlyCapSummary
                                       ? `${dashboardStats.monthlyCapSummary.totalRemainingThisMonth} days`
                                       : `${dashboardStats.leaveDaysRemaining} days`,
                                 dashboardStats.monthlyCapSummary
-                                    ? `${dashboardStats.monthlyCapSummary.monthLabel || 'This month'} · you can apply`
-                                    : 'Available balance',
+                                    ? `${dashboardStats.monthlyCapSummary.monthLabel || 'This month'} · ${LEAVE_UI.youCanTakeThisMonth.toLowerCase()}`
+                                    : LEAVE_UI.totalBalance,
                                 <FaCalendarAlt className="h-5 w-5" />
                             )}
                             {kpiCard(
@@ -741,7 +742,7 @@ function DashboardEmployee() {
                                         dashboardStats.monthlyCapSummary.types?.some((t) => t.probationAccrualActive)) && (
                                         <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
                                             {dashboardStats.monthlyCapSummary.probationNote ||
-                                                'On probation — leave rates follow leave policy probation rules until confirmation.'}
+                                                LEAVE_UI.probationBanner}
                                         </p>
                                     )}
                                     <ul className="mt-3 space-y-2.5">
@@ -769,16 +770,16 @@ function DashboardEmployee() {
                                                         <span className="font-semibold text-[#006D4E]">
                                                             {takeable}
                                                         </span>
-                                                        <span className="text-slate-500"> can apply this month</span>
+                                                        <span className="text-slate-500"> {LEAVE_UI.youCanTakeThisMonth.toLowerCase()}</span>
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-xs text-slate-500">
-                                                    Earns {t.monthlyEntitlement ?? 0}/month
+                                                    Earns {t.monthlyEntitlement ?? 0} day(s) per month
                                                     {t.probationAccrualActive ? (
-                                                        <span className="text-amber-700"> (probation)</span>
+                                                        <span className="text-amber-700"> (on probation)</span>
                                                     ) : null}
                                                     {frozen != null && frozen > 0 ? (
-                                                        <> · {frozen} frozen until confirmation</>
+                                                        <> · {frozen} locked until confirmation</>
                                                     ) : null}
                                                 </p>
                                                 {t.probationNote ? (
@@ -790,12 +791,12 @@ function DashboardEmployee() {
                                     </ul>
                                     <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-600">
                                         {hasNoCarryProbationLeave(dashboardStats.monthlyCapSummary.types)
-                                            ? 'Numbers are what you can apply this month. Unused probation days do not roll forward; pre-probation balance is frozen until confirmation.'
-                                            : 'These numbers are what you can apply this month. Unused monthly entitlement stays in your year-to-date balance.'}
+                                            ? LEAVE_UI.noCarryFooter
+                                            : LEAVE_UI.takeableFooter}
                                     </p>
                                     {hasNoCarryProbationLeave(dashboardStats.monthlyCapSummary.types) ? (
                                         <p className="mt-2 text-xs text-slate-500">
-                                            Frozen until confirmation:{' '}
+                                            {LEAVE_UI.lockedUntilConfirmation}:{' '}
                                             <span className="font-semibold text-slate-800">
                                                 {dashboardStats.monthlyCapSummary.types.reduce(
                                                     (sum, t) => sum + (Number(t.probationFrozenBalance) || 0),
@@ -805,7 +806,7 @@ function DashboardEmployee() {
                                         </p>
                                     ) : (
                                         <p className="mt-2 text-xs text-slate-500">
-                                            Balance remaining:{' '}
+                                            {LEAVE_UI.totalBalance}:{' '}
                                             <span className="font-semibold text-slate-800">
                                                 {dashboardStats.leaveDaysRemaining}
                                             </span>
@@ -817,7 +818,7 @@ function DashboardEmployee() {
                                     <p className="mt-3 text-3xl font-bold text-[#006D4E]">
                                         {dashboardStats.leaveDaysRemaining}
                                     </p>
-                                    <p className="text-xs text-slate-500">days remaining</p>
+                                    <p className="text-xs text-slate-500">{LEAVE_UI.daysRemaining.toLowerCase()}</p>
                                 </>
                             )}
                             <div className="mt-4 space-y-2">

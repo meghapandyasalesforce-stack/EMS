@@ -286,7 +286,7 @@ const LmsDashboard = ({ workflowId, isHRView, onUpdated }) => {
 
     // ── HR / enterprise Corporate-Modern view ──
     return (
-        <div className="cm-hrms">
+        <div className="cm-hrms hrms-lifecycle">
             <div className="cm-page">
                 <div className="flex flex-col gap-3 rounded-[1.75rem] bg-[rgba(255,255,255,0.7)] px-2 py-1 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-5">

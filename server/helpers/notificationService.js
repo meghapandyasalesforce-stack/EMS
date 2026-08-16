@@ -381,51 +381,165 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
 };
 
 /**
- * Mark notification as read
- * @param {String} notificationId - Notification ID
- * @param {String} userId - User ID
+ * Build Mongo filter for notifications visible to a user (personal + broadcasts, excluding hidden).
+ * @param {ObjectId|string} organizationId
+ * @param {string[]} recipientIds - User and/or Employee IDs for the session
+ * @param {{ unreadOnly?: boolean }} options
  */
-export const markNotificationAsRead = async (notificationId, userId) => {
+export const buildUserNotificationFilter = (organizationId, recipientIds, options = {}) => {
+  const ids = (recipientIds || []).map((id) => id.toString());
+  const notHidden = {
+    $or: [
+      { isBroadcast: { $ne: true } },
+      { 'hiddenBy.userId': { $nin: ids } },
+    ],
+  };
+
+  if (options.unreadOnly) {
+    return {
+      organizationId,
+      $and: [
+        {
+          $or: [
+            { recipient: { $in: ids }, isBroadcast: { $ne: true }, isRead: false },
+            {
+              isBroadcast: true,
+              'readReceipts.userId': { $nin: ids },
+            },
+          ],
+        },
+        notHidden,
+      ],
+    };
+  }
+
+  return {
+    organizationId,
+    $and: [
+      {
+        $or: [
+          { recipient: { $in: ids }, isBroadcast: { $ne: true } },
+          { isBroadcast: true },
+        ],
+      },
+      notHidden,
+    ],
+  };
+};
+
+/**
+ * Apply per-user isRead for broadcasts based on readReceipts.
+ */
+export const withEffectiveReadState = (notifications, recipientIds) => {
+  const idSet = new Set((recipientIds || []).map((id) => String(id)));
+  return (notifications || []).map((n) => {
+    const obj = typeof n.toObject === 'function' ? n.toObject() : { ...n };
+    if (obj.isBroadcast) {
+      const receipts = obj.readReceipts || [];
+      obj.isRead = receipts.some((r) => idSet.has(String(r.userId)));
+    }
+    return obj;
+  });
+};
+
+/**
+ * Mark notification as read for the current person (supports User + Employee IDs).
+ * Broadcasts get a per-user readReceipt; personal rows update isRead.
+ * @returns {{ success: boolean, reason?: string }}
+ */
+export const markNotificationAsRead = async (
+  notificationId,
+  recipientIds,
+  { organizationId, userType = 'User', primaryId } = {}
+) => {
   try {
-    await Notification.findOneAndUpdate(
-      { _id: notificationId, recipient: userId },
-      { isRead: true }
+    const ids = (recipientIds || []).map((id) => id.toString()).filter(Boolean);
+    if (!notificationId || !ids.length) {
+      return { success: false, reason: 'INVALID_REQUEST' };
+    }
+
+    const query = {
+      _id: notificationId,
+      $or: [
+        { recipient: { $in: ids }, isBroadcast: { $ne: true } },
+        { isBroadcast: true },
+      ],
+    };
+    if (organizationId) {
+      query.organizationId = organizationId;
+    }
+
+    const notification = await Notification.findOne(query);
+    if (!notification) {
+      return { success: false, reason: 'NOT_FOUND' };
+    }
+
+    if (notification.isBroadcast) {
+      const alreadyRead = (notification.readReceipts || []).some((r) =>
+        ids.includes(String(r.userId))
+      );
+      if (alreadyRead) {
+        return { success: true, alreadyRead: true };
+      }
+
+      const receiptUserId = primaryId || ids[0];
+      await Notification.updateOne(
+        { _id: notificationId },
+        {
+          $push: {
+            readReceipts: {
+              userId: receiptUserId,
+              userType: userType || 'User',
+              readAt: new Date(),
+            },
+          },
+        }
+      );
+      return { success: true };
+    }
+
+    const updated = await Notification.findOneAndUpdate(
+      { _id: notificationId, recipient: { $in: ids }, isBroadcast: { $ne: true } },
+      { isRead: true },
+      { new: true }
     );
+
+    if (!updated) {
+      return { success: false, reason: 'NOT_FOUND' };
+    }
+    return { success: true };
   } catch (error) {
     logger.error('Error marking notification as read', {
       error: error.message,
       stack: error.stack,
       notificationId,
-      userId
+      recipientIds,
     });
+    throw error;
   }
 };
 
 /**
- * Get unread notification count for user
- * @param {String} userId - User ID
+ * Get unread notification count for user (personal isRead + broadcast readReceipts).
+ * @param {String|String[]} userIdOrIds - User ID or array of User/Employee IDs
+ * @param {String} organizationId - Organization ID
  * @returns {Number} Unread count
  */
-export const getUnreadNotificationCount = async (userId, organizationId) => {
+export const getUnreadNotificationCount = async (userIdOrIds, organizationId) => {
   try {
     if (!organizationId) {
-      logger.error('OrganizationId is required for getUnreadNotificationCount', { userId });
+      logger.error('OrganizationId is required for getUnreadNotificationCount', { userIdOrIds });
       return 0;
     }
 
-    const count = await Notification.countDocuments({
-      organizationId,
-      $or: [
-        { recipient: userId, isRead: false },
-        { isBroadcast: true, isRead: false }
-      ]
-    });
-    return count;
+    const ids = Array.isArray(userIdOrIds) ? userIdOrIds : [userIdOrIds];
+    const filter = buildUserNotificationFilter(organizationId, ids, { unreadOnly: true });
+    return await Notification.countDocuments(filter);
   } catch (error) {
     logger.error('Error getting unread notification count', {
       error: error.message,
       stack: error.stack,
-      userId,
+      userIdOrIds,
       organizationId
     });
     return 0;

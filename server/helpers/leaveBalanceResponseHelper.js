@@ -210,7 +210,9 @@ function sortLedgerByYear(ledgerByYear = {}) {
  */
 export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organizationId, options = {}) {
     const now = new Date();
-    const employee = await Employee.findById(employeeId).select('joiningDate organizationId').lean();
+    const employee = await Employee.findById(employeeId)
+        .select('joiningDate organizationId probation')
+        .lean();
     const resolvedOrganizationId = await resolveLeaveBalanceOrganizationId(employeeId, organizationId);
     const bounds = getEmployeeLeaveYearBounds(employee, now);
 
@@ -295,7 +297,7 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
     balanceObj.probation = {
         inProbation: employeeInProbation,
         note: employeeInProbation
-            ? 'On probation — leave accrues at probation rates from leave policy until confirmation (normal rates from the 1st of the next month).'
+            ? 'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.'
             : null,
     };
 
@@ -375,13 +377,18 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
             b.inProbation = employeeInProbation;
             b.probationAccrualActive = probationAccrualActive;
             b.carryForwardDuringProbation = displayConfig?._probationCarryForward === true;
-            b.probationNote = probationAccrualActive
-                ? displayConfig?._probationCarryForward !== true
-                    ? `On probation — accrues at ${monthlyRate}/month. Unused days do not carry to the next month; pre-probation balance is frozen until confirmation.`
-                    : `On probation — accrues at ${monthlyRate}/month (policy probation rate).`
-                : employeeInProbation && policyType.probationRestrictions?.enabled === false
-                  ? 'On probation — this leave type uses normal rates (probation leave rules not enabled).'
-                  : null;
+            b.allowLeaveDuringProbation = displayConfig?._probationAllowLeave !== false;
+            const leaveBlockedOnProbation =
+                probationAccrualActive && displayConfig?._probationAllowLeave === false;
+            b.probationNote = leaveBlockedOnProbation
+                ? `On probation — you cannot apply ${policyType.displayName || policyType.type} until confirmation.`
+                : probationAccrualActive
+                  ? displayConfig?._probationCarryForward !== true
+                      ? `On probation — you earn ${monthlyRate} day(s) per month. Unused days this month do not move to next month. Your old balance stays locked until confirmation.`
+                      : `On probation — you earn ${monthlyRate} day(s) per month.`
+                  : employeeInProbation && policyType.probationRestrictions?.enabled === false
+                    ? 'On probation — normal leave rules apply for this type.'
+                    : null;
             b.usedDays = Number(b.used) || 0;
             b.pendingDays = Number(b.pending) || 0;
             b.carriedDays = Number(b.carriedForward) || 0;
@@ -536,16 +543,22 @@ export async function buildEmployeeLeaveBalanceResponse(employeeId, year, organi
             b.monthlyRateDisplay = roundDaysForDisplay(monthlyRate);
 
             if (probationAccrualActive && displayConfig?._probationCarryForward !== true) {
-                const remainingThisMonth = roundLeaveDays(
-                    Math.max(0, Number(monthlyRate) - (Number(b.usedThisMonth) || 0))
-                );
+                const remainingThisMonth = leaveBlockedOnProbation
+                    ? 0
+                    : roundLeaveDays(
+                          Math.max(0, Number(monthlyRate) - (Number(b.usedThisMonth) || 0))
+                      );
                 b.appliableThisMonth = remainingThisMonth;
                 b.probationFrozenBalance = roundLeaveDays(
                     Math.max(0, Number(b.availableDays) - remainingThisMonth)
                 );
-                b.monthlyTakeLimit = roundLeaveDays(
-                    (Number(b.usedThisMonth) || 0) + remainingThisMonth
-                );
+                b.monthlyTakeLimit = leaveBlockedOnProbation
+                    ? 0
+                    : roundLeaveDays((Number(b.usedThisMonth) || 0) + remainingThisMonth);
+            } else if (leaveBlockedOnProbation) {
+                b.appliableThisMonth = 0;
+                b.monthlyTakeLimit = 0;
+                b.probationFrozenBalance = roundLeaveDays(Math.max(0, Number(b.availableDays) || 0));
             }
 
             return b;

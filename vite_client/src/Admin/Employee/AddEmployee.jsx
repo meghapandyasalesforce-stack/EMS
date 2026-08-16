@@ -118,19 +118,20 @@ function AddEmployee() {
     const departments = [
         'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'IT Support', 'Operations',
         'Customer Support', 'Legal', 'Product', 'Research & Development', 'Design', 'Administration',
+        'Salesforce',
     ];
 
     const jobTitles = [
         'Software Engineer', 'Frontend Developer', 'Backend Developer', 'DevOps Engineer', 'HR Manager', 'HR Executive',
         'Financial Analyst', 'Marketing Executive', 'Sales Representative', 'Product Manager',
         'QA Tester', 'Customer Support Specialist', 'UX/UI Designer', 'Project Manager',
-        'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer',
+        'Legal Advisor', 'Operations Coordinator', 'Full Stack Developer', 'MCP', 'SFMC',
     ];
 
     const jobCategories = [
         'Information Technology', 'Human Resources', 'Finance', 'Marketing', 'Sales', 'Operations',
         'Customer Service', 'Research and Development', 'Engineering', 'Legal', 'Administration',
-        'Management', 'Design', 'Product Management',
+        'Management', 'Design', 'Product Management', 'Salesforce',
     ];
 
     const positions = [

@@ -1,9 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiCheckCircle, FiXCircle, FiClock, FiEye } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiClock, FiEye, FiAlertTriangle } from 'react-icons/fi';
+import { FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { AtsPage, AtsPageHeader, AtsEmpty, AtsBadge, AtsAvatar, CmButton } from '../../components/recruitment/atsUi';
 import ApprovalDetailModal from './ApprovalDetailModal';
+
+const approvalTitle = (approval) => {
+  if (approval.entityType === 'TaxRegimeChange') return 'Tax Regime Change';
+  return `${approval.entityType || 'Request'}`.replace(/([a-z])([A-Z])/g, '$1 $2');
+};
+
+const approvalKey = (approval) => (
+  approval.taxRegimeRequestId ? `tax-${approval.taxRegimeRequestId}` : approval._id
+);
+
+const formatDueLabel = (dueDate) => {
+  if (!dueDate) return null;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return null;
+  const days = Math.floor((due.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return { label: 'Overdue', tone: 'error' };
+  if (days === 0) return { label: 'Due today', tone: 'attention' };
+  if (days === 1) return { label: 'Due tomorrow', tone: 'attention' };
+  return { label: `Due ${due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, tone: 'neutral' };
+};
 
 const PendingApprovals = () => {
   const [approvals, setApprovals] = useState([]);
@@ -36,7 +59,6 @@ const PendingApprovals = () => {
       const workflowApprovals = workflowRes.data?.data || [];
       const taxRegimeApprovals = taxRegimeRes.data?.data || [];
 
-      // Prefer workflow cards when the same TaxRegimeChange is already in my-pending
       const workflowTaxIds = new Set(
         workflowApprovals
           .filter((a) => a.entityType === 'TaxRegimeChange')
@@ -48,7 +70,7 @@ const PendingApprovals = () => {
       );
 
       setApprovals([...directTaxCards, ...workflowApprovals]);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch pending approvals');
     } finally {
       setLoading(false);
@@ -80,6 +102,9 @@ const PendingApprovals = () => {
           action,
           comments,
           ...(approval.hrOverrideAvailable ? { hrOverride: true } : {}),
+          ...(approval.timeoutEscalationAvailable && !approval.hrOverrideAvailable
+            ? { timeoutEscalation: true }
+            : {}),
         });
       }
       toast.success(`Request ${action.toLowerCase()}ed successfully`);
@@ -97,8 +122,8 @@ const PendingApprovals = () => {
     }
   };
 
-  const handleRejectClick = (approvalId) => {
-    setRejectingId(approvalId);
+  const handleRejectClick = (id) => {
+    setRejectingId(id);
     setRejectReason('');
   };
 
@@ -110,185 +135,225 @@ const PendingApprovals = () => {
     handleAction(approval, stepNumber, 'Reject', rejectReason.trim());
   };
 
-  const filteredApprovals = showEscalatedOnly
-    ? approvals.filter((approval) => approval.slaEscalated)
-    : approvals;
+  const filteredApprovals = useMemo(() => (
+    showEscalatedOnly ? approvals.filter((approval) => approval.slaEscalated) : approvals
+  ), [approvals, showEscalatedOnly]);
+
+  const stats = useMemo(() => ({
+    total: approvals.length,
+    overdue: approvals.filter((a) => a.slaEscalated).length,
+    urgent: approvals.filter((a) => a.priority === 'Urgent' || a.entityType === 'TaxRegimeChange').length,
+  }), [approvals]);
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading...</div>;
+    return (
+      <AtsPage>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <LoadingSpinner message="Loading pending approvals…" />
+        </div>
+      </AtsPage>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="page-shell">
-      <div className="page-shell-inner">
-      <div className="hrms-stack">
-        <div>
-          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Pending Approvals</h1>
-          <p className="text-lg text-gray-600">Review and approve pending requests</p>
-        </div>
+    <AtsPage className="ats-approvals-page">
+      <AtsPageHeader
+        eyebrow="Administration"
+        title="Pending Approvals"
+        subtitle="Review, approve, or reject requests waiting on your action."
+        actions={(
+          <div className="ats-segment" role="tablist" aria-label="Approval filter">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!showEscalatedOnly}
+              className={`ats-segment__btn ${!showEscalatedOnly ? 'ats-segment__btn--active' : ''}`}
+              onClick={() => setShowEscalatedOnly(false)}
+            >
+              All requests
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showEscalatedOnly}
+              className={`ats-segment__btn ${showEscalatedOnly ? 'ats-segment__btn--active' : ''}`}
+              onClick={() => setShowEscalatedOnly(true)}
+            >
+              Overdue
+              {stats.overdue > 0 ? (
+                <span className="ats-tab-count ats-tab-count--alert">{stats.overdue}</span>
+              ) : null}
+            </button>
+          </div>
+        )}
+      />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowEscalatedOnly(false)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              !showEscalatedOnly
-                ? 'bg-theme-primary text-white'
-                : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            All Requests
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowEscalatedOnly(true)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              showEscalatedOnly
-                ? 'bg-orange-600 text-white'
-                : 'bg-white text-orange-700 ring-1 ring-orange-200 hover:bg-orange-50'
-            }`}
-          >
-            Overdue Approvals
-          </button>
+      <div className="ats-kpi-strip">
+        <div className="cm-stat">
+          <span className="cm-stat__label">Pending</span>
+          <span className="cm-stat__value">{stats.total}</span>
         </div>
+        <div className="cm-stat">
+          <span className="cm-stat__label">Overdue</span>
+          <span className="cm-stat__value">{stats.overdue}</span>
+        </div>
+        <div className="cm-stat">
+          <span className="cm-stat__label">High priority</span>
+          <span className="cm-stat__value">{stats.urgent}</span>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4">
+      {filteredApprovals.length === 0 ? (
+        <AtsEmpty
+          icon={FaCheckCircle}
+          title={showEscalatedOnly ? 'No overdue approvals' : 'No pending approvals'}
+          hint={showEscalatedOnly
+            ? 'No requests are currently past the review window.'
+            : "You're all caught up — nothing needs your approval right now."}
+        />
+      ) : (
+        <div className="ats-approvals-list">
           {filteredApprovals.map((approval) => {
             const pendingStep = approval.currentPendingStep;
+            const cardKey = approvalKey(approval);
             const isUrgent = approval.priority === 'Urgent' || approval.entityType === 'TaxRegimeChange';
-            const daysPending = pendingStep?.dueDate
-              ? Math.floor((new Date(pendingStep.dueDate) - new Date()) / (1000 * 60 * 60 * 24))
-              : null;
-            const cardKey = approval.taxRegimeRequestId
-              ? `tax-${approval.taxRegimeRequestId}`
-              : approval._id;
+            const dueMeta = formatDueLabel(pendingStep?.dueDate);
+            const requesterName = approval.requestedBy?.name || 'Unknown requester';
 
             return (
-              <div
+              <article
                 key={cardKey}
-                className={`bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-6 ${
-                  isUrgent ? 'border-l-4 border-red-500' : ''
-                }`}
+                className={`ats-approval-card ${isUrgent ? 'ats-approval-card--urgent' : ''} ${approval.slaEscalated ? 'ats-approval-card--overdue' : ''}`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-xl font-bold text-gray-900">
-                        {approval.entityType === 'TaxRegimeChange'
-                          ? 'Tax Regime Change Request'
-                          : `${approval.entityType} Request`}
-                      </h3>
-                      {isUrgent && (
-                        <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                          {approval.entityType === 'TaxRegimeChange' ? 'High' : 'Urgent'}
-                        </span>
-                      )}
-                      {daysPending !== null && daysPending < 1 && (
-                        <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
-                          Due Soon
-                        </span>
-                      )}
+                <div className="ats-approval-card__main">
+                  <div className="ats-approval-card__identity">
+                    <AtsAvatar name={requesterName} />
+                    <div className="min-w-0">
+                      <div className="ats-approval-card__title-row">
+                        <h3 className="ats-approval-card__title">{approvalTitle(approval)}</h3>
+                        {isUrgent ? <AtsBadge tone="attention">High priority</AtsBadge> : null}
+                        {approval.slaEscalated ? <AtsBadge tone="error">Overdue</AtsBadge> : null}
+                        {dueMeta?.tone === 'attention' ? <AtsBadge tone="pending">{dueMeta.label}</AtsBadge> : null}
+                      </div>
+                      <p className="ats-approval-card__requester">
+                        Requested by <span>{requesterName}</span>
+                      </p>
                     </div>
-                    <p className="text-gray-600 mb-2">
-                      Requested by: <span className="font-medium">{approval.requestedBy?.name}</span>
-                    </p>
+                  </div>
+
+                  <div className="ats-approval-card__meta">
                     {approval.entityType === 'TaxRegimeChange' && (
-                      <p className="text-sm text-gray-600 mb-2">
-                        Tax regime:{' '}
-                        <span className="font-medium">
-                          {approval.metadata?.currentTaxRegime || '—'} →{' '}
+                      <div className="ats-approval-card__meta-row">
+                        <span className="ats-approval-card__meta-label">Tax regime</span>
+                        <span className="ats-approval-card__meta-value">
+                          {approval.metadata?.currentTaxRegime || '—'}
+                          {' → '}
                           {approval.metadata?.requestedTaxRegime || 'N/A'}
                         </span>
-                      </p>
+                      </div>
                     )}
                     {pendingStep && (
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-                        <FiClock className="w-4 h-4" />
-                        <span>Step: {pendingStep.stepName}</span>
+                      <>
+                        <div className="ats-approval-card__meta-row">
+                          <span className="ats-approval-card__meta-label">Current step</span>
+                          <span className="ats-approval-card__meta-value">{pendingStep.stepName}</span>
+                        </div>
                         {pendingStep.dueDate && (
-                          <span>• Due: {new Date(pendingStep.dueDate).toLocaleDateString()}</span>
+                          <div className="ats-approval-card__meta-row">
+                            <span className="ats-approval-card__meta-label">Due date</span>
+                            <span className={`ats-approval-card__meta-value ${dueMeta?.tone === 'error' ? 'ats-approval-card__meta-value--urgent' : ''}`}>
+                              <FiClock aria-hidden />
+                              {new Date(pendingStep.dueDate).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                              {dueMeta ? ` · ${dueMeta.label}` : ''}
+                            </span>
+                          </div>
                         )}
+                      </>
+                    )}
+                    {approval.priority && approval.priority !== 'Normal' && (
+                      <div className="ats-approval-card__meta-row">
+                        <span className="ats-approval-card__meta-label">Priority</span>
+                        <span className="ats-approval-card__meta-value">{approval.priority}</span>
                       </div>
                     )}
                   </div>
+                </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleAction(approval, pendingStep?.stepNumber, 'Approve')}
-                      className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors font-medium"
-                    >
-                      <FiCheckCircle className="w-4 h-4" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleRejectClick(cardKey)}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                    >
-                      <FiXCircle className="w-4 h-4" />
-                      Reject
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedApproval(approval);
-                        setShowDetail(true);
-                      }}
-                      className="p-2 text-gray-600 hover:text-theme-secondary hover:bg-theme-secondary/10 rounded-lg transition-colors"
-                      title="View Details"
-                    >
-                      <FiEye className="w-5 h-5" />
-                    </button>
-                  </div>
+                <div className="ats-approval-card__actions">
+                  <CmButton
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleAction(approval, pendingStep?.stepNumber, 'Approve')}
+                  >
+                    <FiCheckCircle className="h-4 w-4" />
+                    Approve
+                  </CmButton>
+                  <CmButton
+                    variant="outline"
+                    size="sm"
+                    className="ats-approval-card__reject-btn"
+                    onClick={() => handleRejectClick(cardKey)}
+                  >
+                    <FiXCircle className="h-4 w-4" />
+                    Reject
+                  </CmButton>
+                  <button
+                    type="button"
+                    className="ats-approval-card__view"
+                    title="View details"
+                    aria-label="View details"
+                    onClick={() => {
+                      setSelectedApproval(approval);
+                      setShowDetail(true);
+                    }}
+                  >
+                    <FiEye className="h-4 w-4" />
+                  </button>
                 </div>
-              {rejectingId === cardKey && (
-                <div className="mt-4 border-t border-gray-100 pt-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Rejection reason <span className="text-red-500">*</span></p>
-                  <textarea
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="Explain briefly for the requester…"
-                    rows={2}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 resize-none"
-                    autoFocus
-                  />
-                  <div className="flex justify-end gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => { setRejectingId(null); setRejectReason(''); }}
-                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRejectConfirm(approval, pendingStep?.stepNumber)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      <FiXCircle className="w-4 h-4" />
-                      Confirm Reject
-                    </button>
+
+                {rejectingId === cardKey && (
+                  <div className="ats-approval-card__reject-panel">
+                    <p className="ats-approval-card__reject-label">
+                      <FiAlertTriangle aria-hidden />
+                      Rejection reason <span>*</span>
+                    </p>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Explain briefly for the requester…"
+                      rows={3}
+                      className="cm-input w-full resize-none"
+                      autoFocus
+                    />
+                    <div className="ats-approval-card__reject-actions">
+                      <CmButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setRejectingId(null); setRejectReason(''); }}
+                      >
+                        Cancel
+                      </CmButton>
+                      <CmButton
+                        variant="outline"
+                        size="sm"
+                        className="ats-approval-card__reject-btn"
+                        onClick={() => handleRejectConfirm(approval, pendingStep?.stepNumber)}
+                      >
+                        <FiXCircle className="h-4 w-4" />
+                        Confirm reject
+                      </CmButton>
+                    </div>
                   </div>
-                </div>
-              )}
-              </div>
+                )}
+              </article>
             );
           })}
         </div>
-
-        {filteredApprovals.length === 0 && !loading && (
-          <div className="text-center py-12 bg-white rounded-xl shadow-md">
-            <FiCheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-            <p className="text-gray-600 text-lg">
-              {showEscalatedOnly ? 'No overdue approvals' : 'No pending approvals'}
-            </p>
-            <p className="text-gray-500 text-sm mt-2">
-              {showEscalatedOnly ? 'No requests are currently past the review window.' : "You're all caught up!"}
-            </p>
-          </div>
-        )}
-      </div>
-      </div>
-      </div>
+      )}
 
       {showDetail && selectedApproval && (
         <ApprovalDetailModal
@@ -302,7 +367,7 @@ const PendingApprovals = () => {
           }
         />
       )}
-    </div>
+    </AtsPage>
   );
 };
 

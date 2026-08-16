@@ -1422,6 +1422,22 @@ const getHrRecipients = async (organizationId) => {
 const getOnboardingOffboardingHrFallback = async (organizationId) =>
   getAuthoritativeHrRecipients(organizationId);
 
+/** HR/Admin recipients for Engagement feedback & suggestions (includes User admins). */
+const getEngagementFeedbackRecipients = async (organizationId) => {
+  const recipientIds = new Set(await getHrAdminCeoRecipients(organizationId));
+
+  const platformHrUsers = await User.find({
+    organizationId,
+    isActive: true,
+    roles: { $in: ['org_owner', 'hr_admin', 'hr_executive'] }
+  })
+    .select('_id')
+    .lean();
+
+  platformHrUsers.forEach((user) => recipientIds.add(user._id.toString()));
+  return [...recipientIds];
+};
+
 registerEvent({
   type: 'lifecycle_offer_sent',
   defaultTitle: 'Offer Letter Sent',
@@ -2048,6 +2064,326 @@ registerEvent({
       ? `/recruitment/candidates/${candidateId || candidate._id}`
       : '/recruitment/inbox',
   }),
+});
+
+// ==================== EMPLOYEE ENGAGEMENT EVENTS ====================
+
+registerEvent({
+  type: 'engagement.survey.assigned',
+  defaultTitle: 'New Survey Available',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  isBroadcast: false,
+  recipientResolver: async ({ survey, organizationId, recipients }) => {
+    if (Array.isArray(recipients) && recipients.length) {
+      return recipients.map((id) => id.toString());
+    }
+    const orgId = organizationId || survey?.organizationId;
+    if (!orgId) return [];
+    const employees = await Employee.find({ organizationId: orgId, status: 'active' })
+      .select('_id department assignedRole')
+      .lean();
+    if (!survey) return employees.map((e) => e._id.toString());
+    const audience = survey.targetAudience || 'All Employees';
+    if (audience === 'All Employees') return employees.map((e) => e._id.toString());
+    if (audience === 'Department') {
+      const deps = survey.targetDepartments || [];
+      return employees
+        .filter((e) => deps.length && deps.includes(e.department))
+        .map((e) => e._id.toString());
+    }
+    if (audience === 'Specific Employees') {
+      return (survey.targetEmployees || []).map((id) => id.toString());
+    }
+    if (audience === 'Role') {
+      const roles = (survey.targetRoles || []).map(String);
+      if (!roles.length) return [];
+      return employees
+        .filter((e) => roles.includes(String(e.assignedRole)))
+        .map((e) => e._id.toString());
+    }
+    return employees.map((e) => e._id.toString());
+  },
+  messageBuilder: ({ survey }) =>
+    `A new survey "${survey?.title || 'Engagement Survey'}" is available. Please complete it before it closes.`,
+  metadataBuilder: ({ survey }) => ({
+    surveyId: survey?._id,
+    title: survey?.title,
+    endDate: survey?.endDate,
+    link: survey?._id ? `/employee/engagement` : '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.survey.reminder',
+  defaultTitle: 'Survey Reminder',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ recipients }) =>
+    (recipients || []).map((id) => id.toString()),
+  messageBuilder: ({ survey }) =>
+    `Reminder: Please complete the survey "${survey?.title || 'Engagement Survey'}" before ${survey?.endDate ? new Date(survey.endDate).toLocaleDateString() : 'it closes'}.`,
+  metadataBuilder: ({ survey }) => ({
+    surveyId: survey?._id,
+    title: survey?.title,
+    endDate: survey?.endDate,
+    link: '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.survey.closing',
+  defaultTitle: 'Survey Closing Soon',
+  defaultType: 'engagement',
+  defaultPriority: 'high',
+  recipientResolver: async ({ recipients }) =>
+    (recipients || []).map((id) => id.toString()),
+  messageBuilder: ({ survey }) =>
+    `The survey "${survey?.title || 'Engagement Survey'}" is closing soon. Submit your response while it is still open.`,
+  metadataBuilder: ({ survey }) => ({
+    surveyId: survey?._id,
+    title: survey?.title,
+    endDate: survey?.endDate,
+    link: '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.feedback.received',
+  defaultTitle: 'New Engagement Feedback',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getEngagementFeedbackRecipients(organizationId),
+  messageBuilder: ({ feedback }) =>
+    feedback?.anonymous
+      ? `New anonymous ${feedback?.type || 'feedback'} received: "${feedback?.subject || 'Feedback'}".`
+      : `New ${feedback?.type || 'feedback'} received: "${feedback?.subject || 'Feedback'}".`,
+  metadataBuilder: ({ feedback }) => ({
+    feedbackId: feedback?._id,
+    type: feedback?.type,
+    anonymous: Boolean(feedback?.anonymous),
+    link: '/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.feedback.status_updated',
+  defaultTitle: 'Feedback Status Updated',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId }) => (employeeId ? [employeeId.toString()] : []),
+  messageBuilder: ({ feedback }) =>
+    `Your feedback "${feedback?.subject || 'Feedback'}" is now ${feedback?.status || 'updated'}.`,
+  metadataBuilder: ({ feedback }) => ({
+    feedbackId: feedback?._id,
+    status: feedback?.status,
+    link: '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.suggestion.status_updated',
+  defaultTitle: 'Suggestion Status Updated',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ employeeId }) => (employeeId ? [employeeId.toString()] : []),
+  messageBuilder: ({ feedback }) =>
+    `Your suggestion "${feedback?.subject || 'Suggestion'}" is now ${feedback?.status || 'updated'}.`,
+  metadataBuilder: ({ feedback }) => ({
+    feedbackId: feedback?._id,
+    status: feedback?.status,
+    link: feedback?._id
+      ? `/employee/engagement?suggestion=${feedback._id}`
+      : '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.suggestion.implemented',
+  defaultTitle: 'Your Suggestion Was Implemented',
+  defaultType: 'engagement',
+  defaultPriority: 'high',
+  recipientResolver: async ({ employeeId }) => (employeeId ? [employeeId.toString()] : []),
+  messageBuilder: ({ feedback }) => {
+    const note = feedback?.resolutionNote
+      ? ` Outcome: ${String(feedback.resolutionNote).slice(0, 180)}`
+      : '';
+    return `Great news — your suggestion "${feedback?.subject || 'Suggestion'}" has been implemented.${note}`;
+  },
+  metadataBuilder: ({ feedback }) => ({
+    feedbackId: feedback?._id,
+    status: 'Implemented',
+    resolutionNote: feedback?.resolutionNote || null,
+    link: feedback?._id
+      ? `/employee/engagement?suggestion=${feedback._id}&tab=suggestions`
+      : '/employee/engagement?tab=suggestions'
+  })
+});
+
+registerEvent({
+  type: 'engagement.lifecycle.survey_assigned',
+  defaultTitle: 'Lifecycle Engagement Survey',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ recipients, survey }) => {
+    if (Array.isArray(recipients) && recipients.length) {
+      return recipients.map((id) => id.toString());
+    }
+    return (survey?.targetEmployees || []).map((id) => id.toString());
+  },
+  messageBuilder: ({ survey, triggerLabel }) =>
+    `A ${triggerLabel || 'lifecycle'} engagement survey is ready: "${survey?.title || 'Engagement Survey'}". Please complete it by ${
+      survey?.endDate ? new Date(survey.endDate).toLocaleDateString() : 'the due date'
+    }.`,
+  metadataBuilder: ({ survey, trigger }) => ({
+    surveyId: survey?._id,
+    title: survey?.title,
+    lifecycleTrigger: trigger || survey?.lifecycleTrigger,
+    link: survey?._id
+      ? `/employee/engagement?survey=${survey._id}&tab=surveys`
+      : '/employee/engagement?tab=surveys'
+  })
+});
+
+registerEvent({
+  type: 'engagement.recognition.pending_approval',
+  defaultTitle: 'Recognition Pending Approval',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ organizationId }) => getEngagementFeedbackRecipients(organizationId),
+  messageBuilder: ({ recognition }) =>
+    `Recognition pending approval: "${recognition?.title || 'Recognition'}".`,
+  metadataBuilder: ({ recognition }) => ({
+    recognitionId: recognition?._id,
+    link: '/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.recognition.received',
+  defaultTitle: 'You Were Recognized',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ recipientId, recipientIds }) => {
+    const ids = new Set();
+    if (recipientId) ids.add(recipientId.toString());
+    (recipientIds || []).forEach((id) => {
+      const val = id?._id || id;
+      if (val) ids.add(val.toString());
+    });
+    return [...ids];
+  },
+  messageBuilder: ({ recognition }) =>
+    `You received recognition: "${recognition?.title || 'Great work'}".`,
+  metadataBuilder: ({ recognition, givenBy }) => ({
+    recognitionId: recognition?._id,
+    givenBy,
+    link: recognition?._id
+      ? `/employee/engagement?recognition=${recognition._id}`
+      : '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.recognition.rejected',
+  defaultTitle: 'Recognition Not Approved',
+  defaultType: 'engagement',
+  defaultPriority: 'low',
+  recipientResolver: async ({ employeeId }) => (employeeId ? [employeeId.toString()] : []),
+  messageBuilder: ({ recognition }) =>
+    `Your recognition "${recognition?.title || 'submission'}" was not approved.`,
+  metadataBuilder: ({ recognition }) => ({
+    recognitionId: recognition?._id,
+    link: recognition?._id
+      ? `/employee/engagement?recognition=${recognition._id}`
+      : '/employee/engagement'
+  })
+});
+
+registerEvent({
+  type: 'engagement.action_plan.assigned',
+  defaultTitle: 'Action Plan Assigned',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ ownerId }) => (ownerId ? [ownerId.toString()] : []),
+  messageBuilder: ({ plan }) =>
+    `You have been assigned an engagement action plan: "${plan?.title || 'Action plan'}".`,
+  metadataBuilder: ({ plan }) => ({
+    planId: plan?._id,
+    link: '/engagement?tab=actions'
+  })
+});
+
+registerEvent({
+  type: 'engagement.action_plan.due_soon',
+  defaultTitle: 'Action Plan Due Soon',
+  defaultType: 'engagement',
+  defaultPriority: 'medium',
+  recipientResolver: async ({ ownerId }) => (ownerId ? [ownerId.toString()] : []),
+  messageBuilder: ({ plan }) =>
+    `Action plan "${plan?.title || 'Action plan'}" is due soon.`,
+  metadataBuilder: ({ plan }) => ({
+    planId: plan?._id,
+    link: '/engagement?tab=actions'
+  })
+});
+
+registerEvent({
+  type: 'engagement.action_plan.overdue',
+  defaultTitle: 'Action Plan Overdue',
+  defaultType: 'engagement',
+  defaultPriority: 'high',
+  recipientResolver: async ({ ownerId, assignedById }) => {
+    const ids = new Set();
+    if (ownerId) ids.add(ownerId.toString());
+    if (assignedById) ids.add(assignedById.toString());
+    return [...ids];
+  },
+  messageBuilder: ({ plan }) =>
+    `Action plan "${plan?.title || 'Action plan'}" is overdue.`,
+  metadataBuilder: ({ plan }) => ({
+    planId: plan?._id,
+    link: '/engagement?tab=actions'
+  })
+});
+
+registerEvent({
+  type: 'engagement.action_plan.completed',
+  defaultTitle: 'Action Plan Completed',
+  defaultType: 'engagement',
+  defaultPriority: 'low',
+  recipientResolver: async ({ assignedById, ownerId }) => {
+    const ids = new Set();
+    if (assignedById) ids.add(assignedById.toString());
+    if (ownerId) ids.add(ownerId.toString());
+    return [...ids];
+  },
+  messageBuilder: ({ plan }) =>
+    `Action plan "${plan?.title || 'Action plan'}" was marked completed.`,
+  metadataBuilder: ({ plan }) => ({
+    planId: plan?._id,
+    link: '/engagement?tab=actions'
+  })
+});
+
+registerEvent({
+  type: 'engagement.action_plan.status_updated',
+  defaultTitle: 'Action Plan Updated',
+  defaultType: 'engagement',
+  defaultPriority: 'low',
+  recipientResolver: async ({ assignedById, ownerId }) => {
+    const ids = new Set();
+    if (assignedById) ids.add(assignedById.toString());
+    if (ownerId) ids.add(ownerId.toString());
+    return [...ids];
+  },
+  messageBuilder: ({ plan }) =>
+    `Action plan "${plan?.title || 'Action plan'}" is now ${plan?.status || 'updated'}.`,
+  metadataBuilder: ({ plan }) => ({
+    planId: plan?._id,
+    status: plan?.status,
+    link: '/engagement?tab=actions'
+  })
 });
 
 export default {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     format, isToday, isYesterday, isValid, differenceInCalendarDays,
 } from 'date-fns';
@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fa';
 import { getProfilePhotoUrl } from '../../utils/axios';
 import { CmButton, cmInitials } from '../../components/corporateModern';
+import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 
 const ACTIVITY_INITIAL = 6;
 const ACTIVITY_STEP = 4;
@@ -130,6 +131,9 @@ export default function OnboardingActivityTab({
         return rows;
     }, [wf.assignedHR, wf.assignedManager, wf.assignedBuddy]);
 
+    const closeFilterMenu = useCallback(() => setFilterOpen(false), []);
+    useHrmsPopupDismiss(closeFilterMenu, filterOpen);
+
     return (
         <div className="space-y-4">
             <div className="hrms-main-rail">
@@ -142,6 +146,7 @@ export default function OnboardingActivityTab({
                                 className="cm-icon-btn"
                                 aria-label="Filter activity"
                                 aria-expanded={filterOpen}
+                                data-hrms-popup-trigger
                                 onClick={() => setFilterOpen((o) => !o)}
                             >
                                 <FaFilter />

@@ -300,9 +300,9 @@ class LeaveValidationService {
                                 const monthName = monthStart.toLocaleString('default', { month: 'long' });
                                 const remaining = Math.max(0, roundDays(monthCredit - usedDays));
                                 errors.push(
-                                    `During probation, unused ${leaveTypeConfig.displayName} does not carry forward. ` +
-                                        `You can take ${remaining} day(s) in ${monthName} (this month's probation accrual). ` +
-                                        `Pre-probation balance is frozen until confirmation.`
+                                    `During probation, unused ${leaveTypeConfig.displayName} does not move to the next month. ` +
+                                        `You can take ${remaining} day(s) in ${monthName} (this month's leave only). ` +
+                                        `Your old balance stays locked until confirmation.`
                                 );
                             }
                         } else {
@@ -804,6 +804,8 @@ class LeaveValidationService {
 
             const probationAccrualActive = Boolean(displayConfig?._probationOverlay);
             const carryForwardDuringProbation = displayConfig?._probationCarryForward === true;
+            const allowLeaveDuringProbation = displayConfig?._probationAllowLeave !== false;
+            const leaveBlockedOnProbation = probationAccrualActive && !allowLeaveDuringProbation;
             const monthlyEntitlementRaw =
                 getMonthlyEntitlementAmount(displayConfig) ??
                 getRollingAccrualMonthlyRate(displayConfig) ??
@@ -830,29 +832,37 @@ class LeaveValidationService {
             const accruedYtd = typeBalance?.accrued ?? 0;
             const manualStock = Number(typeBalance?.manualStock) || 0;
             const noCarryProbation = probationAccrualActive && !carryForwardDuringProbation;
-            const probationAppliable = noCarryProbation
-                ? roundDays(Math.max(0, monthlyEntitlement - (Number(usedThisMonth) || 0)))
-                : null;
-            const monthlyTakeLimit = noCarryProbation
-                ? roundDays((Number(usedThisMonth) || 0) + probationAppliable)
-                : getEffectiveMonthlyTakeCap({
-                    availableBalance,
-                    usedThisMonth,
-                });
-            const remainingTakeCap = noCarryProbation
-                ? probationAppliable
-                : getRemainingMonthlyTakeCap(
-                    monthlyTakeCap,
-                    usedThisMonth,
-                    availableBalance
-                );
-            const appliableThisMonth = noCarryProbation
-                ? probationAppliable
-                : getAppliableDaysThisMonth({
-                    availableBalance,
-                    maxDaysPerMonth: monthlyTakeLimit,
-                    usedThisMonth
-                });
+            const probationAppliable = leaveBlockedOnProbation
+                ? 0
+                : noCarryProbation
+                  ? roundDays(Math.max(0, monthlyEntitlement - (Number(usedThisMonth) || 0)))
+                  : null;
+            const monthlyTakeLimit = leaveBlockedOnProbation
+                ? 0
+                : noCarryProbation
+                  ? roundDays((Number(usedThisMonth) || 0) + probationAppliable)
+                  : getEffectiveMonthlyTakeCap({
+                        availableBalance,
+                        usedThisMonth,
+                    });
+            const remainingTakeCap = leaveBlockedOnProbation
+                ? 0
+                : noCarryProbation
+                  ? probationAppliable
+                  : getRemainingMonthlyTakeCap(
+                        monthlyTakeCap,
+                        usedThisMonth,
+                        availableBalance
+                    );
+            const appliableThisMonth = leaveBlockedOnProbation
+                ? 0
+                : noCarryProbation
+                  ? probationAppliable
+                  : getAppliableDaysThisMonth({
+                        availableBalance,
+                        maxDaysPerMonth: monthlyTakeLimit,
+                        usedThisMonth,
+                    });
 
             types.push({
                 leaveType: lt.type,
@@ -870,14 +880,18 @@ class LeaveValidationService {
                 inProbation: employeeInProbation,
                 probationAccrualActive,
                 carryForwardDuringProbation,
-                probationFrozenBalance: noCarryProbation
-                    ? roundDays(Math.max(0, availableBalance - probationAppliable))
-                    : null,
-                probationNote: probationAccrualActive
-                    ? noCarryProbation
-                        ? `On probation — earns ${monthlyEntitlement}/month. Unused days do not carry to the next month; pre-probation balance is frozen until confirmation.`
-                        : `On probation — earns ${monthlyEntitlement}/month (leave policy probation rate).`
-                    : null,
+                allowLeaveDuringProbation,
+                probationFrozenBalance:
+                    leaveBlockedOnProbation || noCarryProbation
+                        ? roundDays(Math.max(0, availableBalance - (appliableThisMonth || 0)))
+                        : null,
+                probationNote: leaveBlockedOnProbation
+                    ? `On probation — you cannot apply ${lt.displayName || lt.type} until confirmation.`
+                    : probationAccrualActive
+                      ? noCarryProbation
+                          ? `On probation — you earn ${monthlyEntitlement} day(s) per month. Unused days this month do not move to next month. Your old balance stays locked until confirmation.`
+                          : `On probation — you earn ${monthlyEntitlement} day(s) per month.`
+                      : null,
                 normalMonthlyEntitlement: roundDays(
                     Number(getMonthlyEntitlementAmount(lt) || getRollingAccrualMonthlyRate(lt) || 0)
                 ),
@@ -890,7 +904,7 @@ class LeaveValidationService {
             monthLabel,
             inProbation: employeeInProbation,
             probationNote: employeeInProbation
-                ? 'On probation — monthly leave rates follow leave policy probation rules until confirmation.'
+                ? 'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.'
                 : null,
             types,
         };

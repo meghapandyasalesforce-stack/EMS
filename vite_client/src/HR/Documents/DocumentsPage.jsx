@@ -11,7 +11,6 @@ import {
     FaFilter,
     FaEye,
     FaShareAlt,
-    FaPlus,
     FaFilePdf,
     FaFileWord,
     FaTimes,
@@ -545,30 +544,18 @@ const DocumentsPage = () => {
                     )}
                 </header>
 
-                {/* Sticky filters + quick upload */}
+                {/* Sticky filters */}
                 <div className="sticky top-2 z-20 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90">
                     <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                            <div className="relative min-w-0 flex-1">
-                                <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="search"
-                                    value={searchInput}
-                                    onChange={(e) => setSearchInput(e.target.value)}
-                                    placeholder="Search by name, employee, or ID…"
-                                    className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                                />
-                            </div>
-                            {isHRUser && (
-                                <button
-                                    type="button"
-                                    onClick={openUploadModal}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-emerald-200 hover:text-theme-secondary lg:hidden"
-                                >
-                                    <FaPlus className="h-4 w-4" />
-                                    Upload
-                                </button>
-                            )}
+                        <div className="relative min-w-0">
+                            <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="search"
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                placeholder="Search by name, employee, or ID…"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                            />
                         </div>
 
                         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -801,8 +788,8 @@ const DocumentsPage = () => {
                         <FaFilter className="h-4 w-4 text-slate-400" title="Filters applied above" />
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="min-w-[720px] w-full text-sm">
+                    <div className="hr-docs-table-scroll overflow-x-auto">
+                        <table className="hr-docs-table min-w-[720px] w-full text-sm">
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                                     <th className="px-4 py-3 sm:px-5">Employee</th>

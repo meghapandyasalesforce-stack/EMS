@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from '../../../../utils/axios';
-import { getLeaveTypeDisplayName, getPolicyMonthlyAccrualForType } from '../../../../constants/leaveConstants';
+import {
+  getLeaveTypeDisplayName,
+  getPolicyMonthlyAccrualForType,
+  getTakeableDaysThisMonth,
+  LEAVE_UI,
+  monthlyEarnsLabel,
+} from '../../../../constants/leaveConstants';
 
 const MONTHS = [
   { value: 1, label: 'January' },
@@ -122,43 +128,68 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
     typeBalance.currentMonthAccrual ?? typeBalance.earnedThisMonth ?? monthlyAccrual
   );
   const manualAdjustment = Number(typeBalance.manualAdjustment ?? typeBalance.manualStock ?? 0);
-  const monthlyTakeLimit = Number(
-    typeBalance.monthlyTakeLimit ?? typeBalance.availableDays ?? typeBalance.available ?? 0
-  );
+  const takeable = getTakeableDaysThisMonth(typeBalance);
+  const frozen =
+    typeBalance.probationFrozenBalance != null
+      ? Number(typeBalance.probationFrozenBalance)
+      : null;
+  const probationAccrualActive = Boolean(typeBalance.probationAccrualActive);
+  const leaveBlocked =
+    probationAccrualActive && typeBalance.allowLeaveDuringProbation === false;
 
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-      <h4 className="text-base font-semibold text-slate-900">{displayName}</h4>
+      <h4 className="text-base font-semibold text-slate-900">
+        {displayName}
+        {probationAccrualActive ? (
+          <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+            Probation
+          </span>
+        ) : null}
+      </h4>
+
+      {(typeBalance.probationNote || leaveBlocked) && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900">
+          {typeBalance.probationNote ||
+            'On probation — you cannot apply this leave until confirmation.'}
+        </p>
+      )}
 
       <dl className="mt-4 space-y-3 text-sm">
         <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
-          <dt>Annual entitlement</dt>
+          <dt>{LEAVE_UI.yearlyLimit}</dt>
           <dd className="font-medium text-slate-700">{fmtDays(annualEntitlement)} days</dd>
         </div>
         <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
-          <dt>Monthly accrual</dt>
+          <dt>{monthlyEarnsLabel(probationAccrualActive)}</dt>
           <dd className="font-medium text-slate-700">{fmtDays(monthlyAccrual)} days</dd>
         </div>
         <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
-          <dt>Current month accrual</dt>
+          <dt>{LEAVE_UI.addedThisMonth}</dt>
           <dd className="font-medium text-[#0d9488]">
             {currentMonthAccrual > 0 ? `+${fmtDays(currentMonthAccrual)}` : fmtDays(currentMonthAccrual)} days
           </dd>
         </div>
-        <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
-          <dt>Can take this month</dt>
-          <dd className="font-medium text-slate-700">{fmtDays(monthlyTakeLimit)} days</dd>
-        </div>
         <div className="flex items-start justify-between gap-3">
-          <dt className="font-semibold text-slate-800">Available:</dt>
+          <dt className="font-semibold text-slate-800">{LEAVE_UI.youCanTakeThisMonth}:</dt>
           <BalanceMetricValue
-            value={available}
+            value={takeable}
             valueClassName="text-xl font-bold text-[#0d9488]"
             daysClassName="text-[#0d9488]"
           />
         </div>
+        {frozen != null && frozen > 0 ? (
+          <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+            <dt>{LEAVE_UI.lockedUntilConfirmation}</dt>
+            <dd className="font-medium text-slate-700">{fmtDays(frozen)} days</dd>
+          </div>
+        ) : null}
+        <div className="flex items-start justify-between gap-3 text-xs text-slate-500">
+          <dt>{LEAVE_UI.totalBalance}</dt>
+          <dd className="font-medium text-slate-700">{fmtDays(available)} days</dd>
+        </div>
         <div className="flex items-start justify-between gap-3">
-          <dt className="text-slate-600">Used:</dt>
+          <dt className="text-slate-600">{LEAVE_UI.used}:</dt>
           <BalanceMetricValue
             value={used}
             prefix="-"
@@ -167,18 +198,18 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
           />
         </div>
         <div className="flex items-start justify-between gap-3">
-          <dt className="text-slate-600">Carry Forward:</dt>
+          <dt className="text-slate-600">{LEAVE_UI.savedFromEarlier}:</dt>
           <BalanceMetricValue value={carriedForward} />
         </div>
         {pending > 0 && (
           <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-3">
-            <dt className="text-slate-600">Pending:</dt>
+            <dt className="text-slate-600">{LEAVE_UI.pending}:</dt>
             <BalanceMetricValue value={pending} />
           </div>
         )}
         {manualAdjustment !== 0 && (
           <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-3">
-            <dt className="text-slate-600">Manual adjustment:</dt>
+            <dt className="text-slate-600">{LEAVE_UI.hrAdjustment}:</dt>
             <BalanceMetricValue
               value={manualAdjustment}
               prefix={manualAdjustment > 0 ? '+' : ''}
@@ -194,6 +225,7 @@ export const LeaveBalanceCard = ({ typeBalance, policyLeaveTypes }) => {
 export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
   const totals = summary || {
     totalAvailableLeave: 0,
+    totalTakeableThisMonth: null,
     totalAnnualEntitlement: 0,
     totalAccrued: 0,
     totalUsed: 0,
@@ -201,6 +233,9 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
     totalPending: 0,
     earnedThisMonth: 0,
     manualAdjustment: 0,
+    noCarryProbation: false,
+    inProbation: false,
+    probationNote: null,
   };
 
   const formatSignedDays = (value) => {
@@ -213,6 +248,14 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
 
   const manualAdjustment = Number(totals.manualAdjustment) || 0;
   const earnedThisMonth = Number(totals.earnedThisMonth) || 0;
+  const takeable =
+    totals.totalTakeableThisMonth != null
+      ? Number(totals.totalTakeableThisMonth)
+      : Number(totals.totalAvailableLeave) || 0;
+  const showTakeableHeadline =
+    Boolean(totals.noCarryProbation) ||
+    Boolean(totals.inProbation) ||
+    totals.totalTakeableThisMonth != null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[#20C997]/20 bg-gradient-to-br from-[#20C997]/10 via-white to-[#F0FDF4] shadow-md p-6">
@@ -220,24 +263,33 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
         Employee leave summary
       </p>
       <h2 className="mt-2 text-3xl font-bold text-slate-900">
-        {loading ? '…' : `${fmtDays(totals.totalAvailableLeave)} days available`}
+        {loading
+          ? '…'
+          : showTakeableHeadline
+            ? `${fmtDays(takeable)} days you can take this month`
+            : `${fmtDays(totals.totalAvailableLeave)} days available`}
       </h2>
       {!loading && subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
+      {!loading && (totals.probationNote || totals.inProbation) && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {totals.probationNote || LEAVE_UI.probationBanner}
+        </p>
+      )}
       {!loading && (
         <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3">
           {[
             {
-              label: 'Total Annual Entitlement',
+              label: LEAVE_UI.yearlyLimitAll,
               display: fmtDays(totals.totalAnnualEntitlement),
               valueClassName: 'text-slate-900',
             },
             {
-              label: 'Current Month Accrual',
+              label: LEAVE_UI.addedThisMonth,
               display: formatSignedDays(earnedThisMonth),
               valueClassName: earnedThisMonth > 0 ? 'text-[#0d9488]' : 'text-slate-900',
             },
             {
-              label: 'Manual Adjustment',
+              label: LEAVE_UI.hrAdjustment,
               display: formatSignedDays(manualAdjustment),
               valueClassName:
                 manualAdjustment > 0
@@ -247,10 +299,19 @@ export const EmployeeLeaveSummaryPanel = ({ summary, loading, subtitle }) => {
                     : 'text-slate-900',
             },
             {
-              label: 'Total used',
+              label: LEAVE_UI.totalUsed,
               display: fmtDays(totals.totalUsed),
               valueClassName: 'text-red-600',
             },
+            ...(showTakeableHeadline
+              ? [
+                  {
+                    label: LEAVE_UI.totalBalance,
+                    display: fmtDays(totals.totalAvailableLeave),
+                    valueClassName: 'text-slate-900',
+                  },
+                ]
+              : []),
           ].map(({ label, display, valueClassName = 'text-slate-900' }) => (
             <div
               key={label}

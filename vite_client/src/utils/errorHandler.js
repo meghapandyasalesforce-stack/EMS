@@ -1,5 +1,6 @@
 import { toast } from 'react-toastify';
 import logger from './logger';
+import { isPublicGuestRoute } from './authSessionUtils';
 
 /**
  * Standardized error handling utility
@@ -59,13 +60,10 @@ export const handleApiError = (error, options = {}) => {
   let errorType = 'error';
 
   if (status === 401) {
-    userMessage = 'Your session has expired. Please log in again.';
+    userMessage = 'Your session may have expired. Use Logout and sign in again if actions fail.';
     errorType = 'warning';
-    // Don't show toast for 401 - let axios interceptor handle redirect
-    if (showToast && typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 2000);
+    if (showToast && typeof window !== 'undefined' && !isPublicGuestRoute(window.location.pathname)) {
+      toast.warning(userMessage);
     }
     return { status, message: userMessage, code, type: errorType };
   }

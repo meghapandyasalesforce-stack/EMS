@@ -14,6 +14,7 @@ import {
     createRequisition,
 } from './recruitmentP1Controller.js';
 import { JobRequisition, Candidate } from '../../models/recruitment.model.js';
+import { isOrgAdminRequest, isHrStaffEmployee } from '../../helpers/functionalRolesHelper.js';
 
 function requireEmployee(req, res) {
     if (!req.employee?._id) {
@@ -21,6 +22,20 @@ function requireEmployee(req, res) {
         return null;
     }
     return req.employee;
+}
+
+function canViewAllRequisitions(req) {
+    const sessionRole = String(req.user?.role || req.decoded?.role || '').toLowerCase();
+    if (isOrgAdminRequest(req) || sessionRole === 'admin' || sessionRole === 'hr') {
+        return true;
+    }
+    if (req.authContext?.isHrManager || req.authContext?.isHrExecutive) {
+        return true;
+    }
+    if (req.employee && isHrStaffEmployee(req.employee)) {
+        return true;
+    }
+    return false;
 }
 
 export const getInternalJobs = asyncHandler(async (req, res) => {
@@ -282,13 +297,24 @@ export const managerCreateRequisition = asyncHandler(async (req, res) => {
 });
 
 export const managerListMyRequisitions = asyncHandler(async (req, res) => {
-    const employee = requireEmployee(req, res);
-    if (!employee) return;
     const organizationId = getOrganizationId(req);
-    const items = await JobRequisition.find({
-        organizationId,
-        $or: [{ requestedBy: employee._id }, { hiringManager: employee._id }],
-    })
+    const viewAll = canViewAllRequisitions(req);
+    const employee = req.employee;
+
+    if (!viewAll && !employee?._id) {
+        res.status(403).json({ success: false, message: 'Employee profile required' });
+        return;
+    }
+
+    const query = { organizationId };
+    if (!viewAll) {
+        query.requestedBy = employee._id;
+    }
+
+    const items = await JobRequisition.find(query)
+        .populate('requestedBy', 'name lastName email')
+        .populate('hiringManager', 'name lastName email')
+        .populate('jobPostingId', 'jobTitle status')
         .sort({ createdAt: -1 })
         .lean();
     res.json({ success: true, data: items });

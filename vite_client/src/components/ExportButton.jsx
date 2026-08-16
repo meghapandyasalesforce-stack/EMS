@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { FaDownload, FaFileCsv, FaFileAlt } from 'react-icons/fa';
 import { exportToCSV, exportToJSON, exportDashboardStats } from '../utils/exportUtils';
+import useHrmsPopupDismiss from '../Hooks/useHrmsPopupDismiss';
 
 /**
  * Export Button Component
@@ -9,6 +10,8 @@ import { exportToCSV, exportToJSON, exportDashboardStats } from '../utils/export
  */
 const ExportButton = ({ data, filename, type = 'data', columns = null }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const closeMenu = useCallback(() => setIsOpen(false), []);
+  useHrmsPopupDismiss(closeMenu, isOpen);
 
   const handleExport = (format) => {
     if (type === 'stats') {
@@ -26,6 +29,8 @@ const ExportButton = ({ data, filename, type = 'data', columns = null }) => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:opacity-90 transition-colors"
+        aria-expanded={isOpen}
+        data-hrms-popup-trigger
       >
         <FaDownload className="w-4 h-4" />
         <span>Export</span>
@@ -34,10 +39,10 @@ const ExportButton = ({ data, filename, type = 'data', columns = null }) => {
       {isOpen && (
         <>
           <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg z-20 border border-gray-200">
+            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg z-20 border border-gray-200"
+            data-hrms-popup
+            role="menu"
+          >
             <div className="py-1">
               <button
                 onClick={() => handleExport('csv')}

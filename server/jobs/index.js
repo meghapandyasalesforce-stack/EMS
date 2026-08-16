@@ -18,6 +18,7 @@ import logger from '../helpers/logger.js';
 import { schedulePayrollRunJobs } from './payrollRunJob.js';
 import { scheduleSpecialEventNotificationJobs } from './specialEventNotificationJob.js';
 import { scheduleOnboardingJobs } from './onboardingScheduledJob.js';
+import { scheduleEngagementSurveyJobs } from './engagementSurveyJob.js';
 
 /**
  * Initialize all job workers
@@ -93,6 +94,13 @@ export const initializeWorkers = async () => {
                 logger.info('Resume screening retention jobs registered (no-redis mode)');
             } catch (error) {
                 logger.error('Failed to schedule screening retention jobs', { error: error.message });
+            }
+
+            try {
+                scheduleEngagementSurveyJobs();
+                logger.info('Engagement survey jobs registered (no-redis mode)');
+            } catch (error) {
+                logger.error('Failed to schedule engagement survey jobs', { error: error.message });
             }
 
             return;
@@ -194,6 +202,13 @@ export const initializeWorkers = async () => {
             logger.info('Resume screening retention jobs scheduled');
         } catch (error) {
             logger.error('Failed to schedule screening retention jobs', { error: error.message });
+        }
+
+        try {
+            scheduleEngagementSurveyJobs();
+            logger.info('Engagement survey jobs scheduled');
+        } catch (error) {
+            logger.error('Failed to schedule engagement survey jobs', { error: error.message });
         }
 
         if (emailWorker && notificationWorker && compOffExpiryWorker && autoCheckOutWorker && approvalTimeoutWorker) {

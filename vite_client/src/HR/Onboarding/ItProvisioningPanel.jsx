@@ -162,7 +162,7 @@ const ItProvisioningPanel = ({ workflowId, softwareRequests: requestsProp = [], 
     // only the HR-facing render path picks up Corporate-Modern classes.
     if (workflowId && isHRView) {
         return (
-            <div className="cm-hrms">
+            <div className="cm-hrms hrms-lifecycle">
                 <div className="cm-page">
                     <div className="flex flex-wrap gap-2">
                         <input
@@ -289,7 +289,7 @@ const ItProvisioningPanel = ({ workflowId, softwareRequests: requestsProp = [], 
     const toneBadge = (tone) => ({ emerald: 'done', amber: 'attention', blue: 'progress', gray: 'neutral' }[tone] || 'neutral');
 
     return (
-        <div className="cm-hrms">
+        <div className="cm-hrms hrms-lifecycle">
             <div className="cm-page">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>

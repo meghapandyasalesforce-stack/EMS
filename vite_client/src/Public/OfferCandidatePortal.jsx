@@ -111,9 +111,9 @@ const OfferCandidatePortal = () => {
         <div className="cm-hrms ats-ui ats-public-shell">
             <header className="ats-public-header">
                 <div className="ats-public-header__inner">
-                    <p className="ats-eyebrow">Candidate portal</p>
-                    <h1 className="ats-page-title">Offer Letter — {offer.position}</h1>
-                    <p className="ats-page-subtitle">For {candidateName}</p>
+                    <p className="text-sm font-medium text-theme-secondary">Candidate portal</p>
+                    <h1 className="mt-1 text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">Offer Letter — {offer.position}</h1>
+                    <p className="mt-2 text-sm text-gray-500">For {candidateName}</p>
                 </div>
             </header>
 

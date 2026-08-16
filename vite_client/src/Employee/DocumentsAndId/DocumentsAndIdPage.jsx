@@ -110,7 +110,9 @@ const DocumentsAndIdPage = () => {
   const myUploadedDocs = useMemo(() => {
     return (documents || [])
       .filter((doc) => isOwnDocument(doc))
-      .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+      // Hide superseded/replaced files; keep Rejected so status is still visible
+      .filter((doc) => doc.isActive !== false || doc.approvalStatus === 'Rejected')
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [documents, isOwnDocument]);
 
   const policyDocs = useMemo(() => {
@@ -515,10 +517,18 @@ const DocumentsAndIdPage = () => {
                     <p className="truncate font-semibold text-slate-800">{doc.name}</p>
                     <p className="text-xs text-slate-500">
                       {formatBytes(doc.fileSize)} • Uploaded {new Date(doc.createdAt).toLocaleDateString()}
+                      {doc.metadata?.isReupload ? ' • Replaced previous file' : ''}
                     </p>
-                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
-                      {statusLabel(doc)}
-                    </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${statusClass(doc)}`}>
+                        {statusLabel(doc)}
+                      </span>
+                      {doc.metadata?.isReupload ? (
+                        <span className="inline-block rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+                          Re-uploaded
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <button type="button" onClick={() => handlePreviewDocument(doc)} title="Preview" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#0a8f6c] transition">

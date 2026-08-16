@@ -15,6 +15,7 @@ import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { MINT_GRADIENT } from '../Reports/constants';
 import { canManageLearning, enrollmentStatusStyle } from './learningUtils';
+import DraftAwaitingBanner from '../../components/DraftAwaitingBanner';
 
 const MINT = '#20C997';
 const MINT_DARK = '#0d9488';
@@ -98,6 +99,11 @@ const LearningPage = () => {
             totalHours,
         };
     }, [courses, enrollments]);
+
+    const draftCourseCount = useMemo(
+        () => courses.filter((c) => c.status === 'Draft').length,
+        [courses]
+    );
 
     const filteredCourses = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
@@ -264,7 +270,9 @@ const LearningPage = () => {
 
                     <div className="p-5 md:p-6">
                         {activeTab === 'courses' ? (
-                            filteredCourses.length === 0 ? (
+                            <>
+                            <DraftAwaitingBanner count={draftCourseCount} entityLabel="course" />
+                            {filteredCourses.length === 0 ? (
                                 <div className="py-16 text-center">
                                     <div
                                         className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
@@ -354,7 +362,8 @@ const LearningPage = () => {
                                         </article>
                                     ))}
                                 </div>
-                            )
+                            )}
+                            </>
                         ) : filteredEnrollments.length === 0 ? (
                             <div className="py-16 text-center">
                                 <div

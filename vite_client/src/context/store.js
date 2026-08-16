@@ -12,6 +12,7 @@ import {
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import createMigrate from 'redux-persist/lib/createMigrate';
+import { createTransform } from 'redux-persist';
 
 const TEAM_ATTENDANCE_HISTORY_DEFAULT = {
   loading: false,
@@ -75,12 +76,26 @@ const rootReducer = combineReducers({
   timezone: timezoneReducer,
 });
 
+const authSessionTransform = createTransform(
+  (inboundState) => {
+    if (!inboundState) return inboundState;
+    const { sessionValidated, ...rest } = inboundState;
+    return rest;
+  },
+  (outboundState) => ({
+    ...(outboundState || {}),
+    sessionValidated: false,
+  }),
+  { whitelist: ['auth'] }
+);
+
 // Persistence configuration
 const persistConfig = {
   key: 'root',
   version: 2,
   storage,
   migrate: createMigrate(migrations, { debug: false }),
+  transforms: [authSessionTransform],
   // Persist auth, employeeDetails, and attendance for session continuity
   whitelist: ['auth', 'employeeDetails', 'attendance'],
 };

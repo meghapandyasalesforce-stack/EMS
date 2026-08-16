@@ -125,6 +125,7 @@ export const convertRequisitionToJob = asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: 'Already converted to a job posting' });
     }
 
+    const status = req.body.status || 'Draft';
     const job = await Recruitment.create({
         organizationId,
         jobTitle: item.title,
@@ -137,9 +138,10 @@ export const convertRequisitionToJob = asyncHandler(async (req, res) => {
         priority: item.priority,
         salaryRange: item.salaryRange,
         hiringManager: item.hiringManager,
-        status: req.body.status || 'Draft',
+        status,
         externalVisible: true,
         createdBy: req.user?._id || req.employee?._id,
+        postedDate: status === 'Open' ? new Date() : null,
     });
 
     item.status = 'Converted';

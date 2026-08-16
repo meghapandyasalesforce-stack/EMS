@@ -4,13 +4,14 @@ import {
   getNotifications, 
   getUserNotifications,
   getSentAnnouncements,
+  getAnnouncementReceipts,
   markAsRead,
   markAllAsRead,
   getUnreadCount,
   deleteNotification,
   notifyAdminsOnEmployeeBack
 } from '../../controllers/admin/notificationController.js';
-import isAdminAuthenticated from './../../middlewares/isAdminAuthenticated.js';
+import isAdminOrManagerOrHRAuthenticated from '../../middlewares/isAdminOrManagerOrHRAuthenticated.js';
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import isUserAuthenticated from '../../middlewares/isUserAuthenticated.js';
 
@@ -25,19 +26,25 @@ router.route("/user-notifications").get(isUserAuthenticated, getUserNotification
 // Get unread notification count
 router.route("/unread-count").get(isUserAuthenticated, getUnreadCount);
 
-// Create notification (admin only)
-router.route("/create-notification").post(isAdminAuthenticated, createNotification);
+// Create announcement (admin / manager / HR / executive)
+router.route("/create-notification").post(isAdminOrManagerOrHRAuthenticated, createNotification);
 
-// Sent announcement history (admin dashboard)
-router.route("/sent-announcements").get(isAdminAuthenticated, getSentAnnouncements);
+// Sent announcement history (admin / manager / HR / executive)
+router.route("/sent-announcements").get(isAdminOrManagerOrHRAuthenticated, getSentAnnouncements);
+
+// Announcement seen/unseen receipts
+router.route("/sent-announcements/:notificationId/receipts").get(
+  isAdminOrManagerOrHRAuthenticated,
+  getAnnouncementReceipts
+);
+
+// Mark all notifications as read (before :notificationId routes)
+router.route("/mark-all-read").patch(isUserAuthenticated, markAllAsRead);
 
 // Mark notification as read
 router.route("/:notificationId/read").patch(isUserAuthenticated, markAsRead);
 
-// Mark all notifications as read
-router.route("/mark-all-read").patch(isUserAuthenticated, markAllAsRead);
-
-// Delete notification
+// Delete / hide notification
 router.route("/:notificationId").delete(isUserAuthenticated, deleteNotification);
 
 // Employee event -> notify admins

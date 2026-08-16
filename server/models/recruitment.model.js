@@ -72,9 +72,10 @@ const recruitmentSchema = new mongoose.Schema({
         enum: ['Draft', 'Open', 'Closed', 'On Hold', 'Cancelled'],
         default: 'Draft'
     },
+    /** Set only when job becomes Open (first publish or reopen). Not draft create time. */
     postedDate: {
         type: Date,
-        default: Date.now
+        default: null
     },
     closingDate: {
         type: Date

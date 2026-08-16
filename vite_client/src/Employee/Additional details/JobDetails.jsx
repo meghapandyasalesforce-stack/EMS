@@ -268,7 +268,7 @@ const JobDetails = () => {
         );
     };
 
-    const renderUploadForm = (section) => {
+    const renderUploadForm = (section, { isReplace = false } = {}) => {
         const { type, accept, extraField } = section;
         const value = additionalInfo[type]?.[extraField.key] ?? '';
 
@@ -276,7 +276,9 @@ const JobDetails = () => {
             <div className="flex flex-col gap-3">
                 <div className="hrms-form-grid">
                 <div className="flex flex-col gap-2 min-w-0">
-                    <label className="font-medium text-gray-700 text-sm md:text-base">Upload File</label>
+                    <label className="font-medium text-gray-700 text-sm md:text-base">
+                        {isReplace ? 'Re-upload File' : 'Upload File'}
+                    </label>
                     <input
                         type="file"
                         ref={(el) => {
@@ -310,7 +312,7 @@ const JobDetails = () => {
                     disabled={isLoading}
                     className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                 >
-                    {isLoading ? 'Uploading...' : 'Upload'}
+                    {isLoading ? 'Uploading...' : (isReplace ? 'Re-upload' : 'Upload')}
                 </button>
             </div>
         );
@@ -321,9 +323,9 @@ const JobDetails = () => {
         const selectedDoc = selectedMarksheetLevel
             ? uploadedByType[getUploadKey(type, selectedMarksheetLevel)]
             : null;
-        const isRejected = selectedDoc?.approvalStatus === 'Rejected';
-        const showUploadForm = selectedMarksheetLevel && (!selectedDoc || isRejected);
+        const showUploadForm = Boolean(selectedMarksheetLevel);
         const fileRefKey = getUploadKey(type, selectedMarksheetLevel);
+        const isReplace = Boolean(selectedDoc);
 
         return (
             <div className="border p-3 md:p-4 rounded-lg bg-white shadow-sm">
@@ -365,7 +367,7 @@ const JobDetails = () => {
                                 <>
                                     <div className="flex flex-col gap-2">
                                         <label className="font-medium text-gray-700 text-sm md:text-base">
-                                            Upload File
+                                            {isReplace ? 'Re-upload File' : 'Upload File'}
                                         </label>
                                         <input
                                             type="file"
@@ -376,6 +378,11 @@ const JobDetails = () => {
                                             accept={accept}
                                         />
                                     </div>
+                                    {isReplace ? (
+                                        <p className="text-sm text-gray-500">
+                                            {selectedMarksheetLevel} marksheet is already uploaded. Choose a new file to replace it.
+                                        </p>
+                                    ) : null}
                                     <button
                                         type="button"
                                         onClick={() =>
@@ -388,13 +395,9 @@ const JobDetails = () => {
                                         disabled={isLoading}
                                         className="bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 disabled:bg-theme-secondary text-sm md:text-base w-full md:w-auto md:self-end"
                                     >
-                                        {isLoading ? 'Uploading...' : 'Upload'}
+                                        {isLoading ? 'Uploading...' : (isReplace ? 'Re-upload' : 'Upload')}
                                     </button>
                                 </>
-                            ) : selectedMarksheetLevel && selectedDoc && !isRejected ? (
-                                <p className="text-sm text-gray-500">
-                                    {selectedMarksheetLevel} marksheet is already uploaded. Select another level to upload more.
-                                </p>
                             ) : null}
                         </div>
                     </>
@@ -412,8 +415,7 @@ const JobDetails = () => {
                 <div className="space-y-3 sm:space-y-4 md:space-y-5">
                     {DOCUMENT_SECTIONS.map((section) => {
                         const uploadedDoc = uploadedByType[section.type];
-                        const isRejected = uploadedDoc?.approvalStatus === 'Rejected';
-                        const showUploadForm = !uploadedDoc || isRejected;
+                        const isReplace = Boolean(uploadedDoc);
                         return (
                             <div
                                 key={section.type}
@@ -430,7 +432,7 @@ const JobDetails = () => {
                                 ) : (
                                     <>
                                         {uploadedDoc ? renderUploadedStatus(uploadedDoc) : null}
-                                        {showUploadForm ? renderUploadForm(section) : null}
+                                        {renderUploadForm(section, { isReplace })}
                                     </>
                                 )}
                             </div>

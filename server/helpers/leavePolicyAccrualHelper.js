@@ -95,6 +95,17 @@ export function getPolicyMonthlyAccrualAmount(leaveTypeConfig) {
     if (Number.isFinite(amount) && amount > 0) {
         return amount;
     }
+    // Probation overlay may intentionally set amount/maxDays to 0 — do not fall back to normal rates.
+    if (leaveTypeConfig?._probationOverlay) {
+        if (Number.isFinite(amount) && amount === 0) {
+            return 0;
+        }
+        const probationMaxDays = Number(leaveTypeConfig?.maxDaysPerMonth);
+        if (Number.isFinite(probationMaxDays) && probationMaxDays >= 0) {
+            return probationMaxDays;
+        }
+        return 0;
+    }
     const maxDaysPerMonth = Number(leaveTypeConfig?.maxDaysPerMonth);
     if (Number.isFinite(maxDaysPerMonth) && maxDaysPerMonth > 0) {
         return maxDaysPerMonth;

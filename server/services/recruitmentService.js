@@ -46,6 +46,16 @@ export async function getWorkspaceSummary(organizationId, recruiterEmployeeId) {
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() + 7);
 
+    const pendingScreeningFilter = {
+        ...owned,
+        status: { $nin: ['Rejected', 'Withdrawn'] },
+        $or: [
+            { 'resumeScreening.status': 'pending' },
+            { resumeScreening: { $exists: false } },
+            { 'resumeScreening.status': { $exists: false } },
+        ],
+    };
+
     const [
         pendingScreening,
         interviewsToday,
@@ -56,16 +66,20 @@ export async function getWorkspaceSummary(organizationId, recruiterEmployeeId) {
         openJobs,
         totalCandidates,
     ] = await Promise.all([
-        Candidate.find({ ...owned, stage: { $in: ['Application', 'Screening'] }, status: { $nin: ['Rejected', 'Withdrawn'] } })
-            .select('firstName lastName status stage applicationDate jobPostingId')
+        Candidate.find(pendingScreeningFilter)
+            .select('firstName lastName status stage applicationDate jobPostingId resumeScreening')
             .populate('jobPostingId', 'jobTitle')
             .sort({ applicationDate: 1 })
             .limit(20)
             .lean(),
         Candidate.find({
             ...owned,
-            'interviewSchedule.scheduledDate': { $gte: startOfDay, $lte: endOfDay },
-            'interviewSchedule.status': 'Scheduled',
+            interviewSchedule: {
+                $elemMatch: {
+                    scheduledDate: { $gte: startOfDay, $lte: endOfDay },
+                    status: 'Scheduled',
+                },
+            },
         })
             .select('firstName lastName interviewSchedule jobPostingId')
             .populate('jobPostingId', 'jobTitle')
@@ -101,8 +115,12 @@ export async function getWorkspaceSummary(organizationId, recruiterEmployeeId) {
         Candidate.countDocuments({
             ...owned,
             screeningDueAt: { $lt: now },
-            stage: { $in: ['Application', 'Screening'] },
             status: { $nin: ['Rejected', 'Withdrawn'] },
+            $or: [
+                { 'resumeScreening.status': 'pending' },
+                { resumeScreening: { $exists: false } },
+                { 'resumeScreening.status': { $exists: false } },
+            ],
         }),
         Recruitment.countDocuments({ organizationId: orgOid, status: 'Open', isActive: true }),
         Candidate.countDocuments({ ...base, status: { $nin: ['Rejected', 'Withdrawn'] } }),

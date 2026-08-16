@@ -86,6 +86,7 @@ export async function ensureHoldingJob(organizationId) {
         location: 'N/A',
         employmentType: 'Full-time',
         status: 'Open',
+        postedDate: new Date(),
         externalVisible: false,
         internalVisible: false,
         notifyEmployeesOnOpen: false,

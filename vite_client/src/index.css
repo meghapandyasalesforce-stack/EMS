@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "./styles/corporateModern.css";
 @import "./styles/recruitmentUI.css";
+@import "./styles/careerJobApply.css";
+@import "./styles/lifecycleUI.css";
 
 /* Modern Design System - Color Variables */
 :root {
@@ -454,6 +456,15 @@ body,
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .app-main-column {
+    margin-left: 16rem;
+    width: calc(100% - 16rem);
+    max-width: calc(100vw - 16rem);
+  }
 }
 
 .main-scroll-area {
@@ -461,6 +472,53 @@ body,
   min-height: 0;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+}
+
+/* Frosted mint canvas for all page whitespace (sidebar/header unchanged). */
+.hrms-page-canvas {
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  background-color: rgba(245, 250, 249, 0.97);
+  background-image:
+    radial-gradient(ellipse 88% 58% at 6% 2%, rgba(28, 202, 155, 0.05), transparent 54%),
+    radial-gradient(ellipse 72% 52% at 96% 99%, rgba(0, 108, 81, 0.032), transparent 50%),
+    linear-gradient(180deg, rgba(249, 252, 251, 0.98) 0%, rgba(236, 244, 242, 0.9) 100%);
+}
+
+.hrms-page-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(28, 202, 155, 0.065), transparent 44%),
+    radial-gradient(circle at 84% 92%, rgba(0, 168, 132, 0.04), transparent 42%);
+  filter: blur(48px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hrms-page-canvas > * {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+}
+
+/* Let the canvas show through page wrappers; cards/tables stay crisp white. */
+.main-scroll-area.hrms-page-canvas .ats-ui.cm-hrms:not(.fixed),
+.main-scroll-area.hrms-page-canvas .ats-ui .ats-page,
+.main-scroll-area.hrms-page-canvas > .page-shell,
+.main-scroll-area.hrms-page-canvas .page-shell:not(.fixed):not([role='dialog']) {
+  background: transparent !important;
+  min-height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hrms-page-canvas::before {
+    filter: none;
+    opacity: 0.5;
+  }
 }
 
 img,
@@ -538,6 +596,11 @@ canvas {
     max-width: 100%;
   }
 
+  .main-scroll-area .ats-calendar-grid > *,
+  .main-scroll-area .ats-ui.ats-calendar-page .ats-calendar-grid > * {
+    max-width: none;
+  }
+
   .main-scroll-area .flex.justify-between,
   .main-scroll-area .flex.justify-end {
     flex-wrap: wrap;
@@ -583,7 +646,7 @@ canvas {
    * Legacy tables without .cm-table-wrap — do not target .cm-table (onboarding HR tables).
    * Those scroll inside .cm-table-wrap; forcing display:block on the table breaks columns.
    */
-  .main-scroll-area table:not(.cm-table):not(.leave-requests-table) {
+  .main-scroll-area table:not(.cm-table):not(.leave-requests-table):not(.hr-docs-table) {
     display: block;
     width: 100%;
     max-width: 100%;
@@ -684,6 +747,50 @@ canvas {
 @media (min-width: 640px) and (max-width: 1023px) {
   .mobile-header-spacer {
     height: calc(4.25rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* HR Documents table — keep table layout + extra-thin horizontal scroll */
+.main-scroll-area .hr-docs-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.45) transparent;
+}
+
+.main-scroll-area .hr-docs-table-scroll::-webkit-scrollbar {
+  height: 2px;
+  width: 2px;
+}
+
+.main-scroll-area .hr-docs-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main-scroll-area .hr-docs-table-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.35);
+  border-radius: 999px;
+}
+
+.main-scroll-area .hr-docs-table-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.55);
+}
+
+@media (max-width: 1023px) {
+  .main-scroll-area .hr-docs-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .main-scroll-area .hr-docs-table-scroll > .hr-docs-table {
+    display: table;
+    width: max-content;
+    min-width: 720px;
+    max-width: none;
   }
 }
 
@@ -826,4 +933,87 @@ canvas {
   animation: job-details-offer-letter-glow 2s ease-in-out 3;
   border-width: 2px;
   border-style: solid;
+}
+
+/* Shared empty-state shell: crisp card stays in front; surrounding area is a
+   very subtle frosted mint wash so leftover page space does not look blank. */
+.hrms-empty-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.25rem;
+  border-radius: 16px;
+  background-color: rgba(245, 250, 249, 0.55);
+  background-image:
+    radial-gradient(ellipse 80% 65% at 14% 22%, rgba(28, 202, 155, 0.09), transparent 58%),
+    radial-gradient(ellipse 70% 55% at 90% 86%, rgba(0, 108, 81, 0.05), transparent 54%),
+    linear-gradient(180deg, rgba(245, 250, 249, 0.5) 0%, rgba(232, 241, 239, 0.35) 100%);
+}
+
+/* Page-level empty states fill the remaining scroll area (not a short banner). */
+.main-scroll-area:has(.ats-page-inner > .hrms-empty-shell) > .ats-ui,
+.main-scroll-area:has(.ats-page-inner > .ats-open-roles > .hrms-empty-shell) > .ats-ui {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-scroll-area:has(.ats-page-inner > .hrms-empty-shell) .ats-page,
+.main-scroll-area:has(.ats-page-inner > .ats-open-roles > .hrms-empty-shell) .ats-page {
+  flex: 1 1 auto;
+  min-height: 100%;
+}
+
+.main-scroll-area:has(.ats-page-inner > .hrms-empty-shell) .ats-page-inner,
+.main-scroll-area:has(.ats-page-inner > .ats-open-roles > .hrms-empty-shell) .ats-page-inner {
+  flex: 1 1 auto;
+  min-height: 100%;
+}
+
+.ats-page-inner > .hrms-empty-shell,
+.ats-page-inner > .ats-open-roles:has(> .hrms-empty-shell) {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ats-page-inner > .hrms-empty-shell,
+.ats-page-inner > .ats-open-roles > .hrms-empty-shell {
+  flex: 1 1 auto;
+  align-self: stretch;
+  border-radius: 16px;
+}
+
+.hrms-empty-shell::before {
+  content: '';
+  position: absolute;
+  inset: -28%;
+  background:
+    radial-gradient(circle at 28% 32%, rgba(28, 202, 155, 0.11), transparent 40%),
+    radial-gradient(circle at 76% 70%, rgba(0, 168, 132, 0.07), transparent 38%);
+  filter: blur(44px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hrms-empty-shell > .ats-empty,
+.hrms-empty-shell > .cm-empty,
+.hrms-empty-shell > .ats-offer-empty {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 32rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hrms-empty-shell::before {
+    filter: none;
+    opacity: 0.55;
+  }
 }

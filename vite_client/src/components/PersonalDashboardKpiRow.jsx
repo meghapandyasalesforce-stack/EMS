@@ -7,15 +7,16 @@ import {
     BOTH_TASK_ENDPOINT,
     EMPLOYEE_LEAVE_ENDPOINT,
 } from '../utils/constant';
+import { LEAVE_UI } from '../constants/leaveConstants';
 
 const WS = {
     border: 'rgba(148, 163, 184, 0.24)',
     mint: '#20C997',
 };
 
-const kpiCard = (label, value, sub, icon, loading, compact = false) => (
+const kpiCard = (label, value, sub, icon, loading, compact = false, stacked = false) => (
     <div
-        className={`rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${compact ? 'p-3.5' : 'p-5'}`}
+        className={`rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${compact ? 'p-3.5' : 'p-5'} ${stacked ? 'flex-1' : ''}`}
         style={{ borderColor: WS.border }}
     >
         <div className="flex items-start justify-between gap-3">
@@ -36,7 +37,7 @@ const kpiCard = (label, value, sub, icon, loading, compact = false) => (
     </div>
 );
 
-const PersonalDashboardKpiRow = ({ compact = false }) => {
+const PersonalDashboardKpiRow = ({ compact = false, layout = 'row' }) => {
     const [loading, setLoading] = useState(true);
     const [daysPresent, setDaysPresent] = useState(0);
     const [tasksCount, setTasksCount] = useState('0');
@@ -108,23 +109,32 @@ const PersonalDashboardKpiRow = ({ compact = false }) => {
         };
     }, []);
 
-    const leaveLabel = monthlyCapSummary ? 'Leave room this month' : 'Leave remaining';
+    const leaveLabel = monthlyCapSummary ? LEAVE_UI.leaveThisMonth : LEAVE_UI.daysRemaining;
     const leaveValue = monthlyCapSummary
         ? `${monthlyCapSummary.totalRemainingThisMonth} days`
         : `${leaveDaysRemaining} days`;
     const leaveSub = monthlyCapSummary
-        ? `${monthlyCapSummary.monthLabel || 'This month'} · policy monthly limits`
-        : 'Available balance';
+        ? `${monthlyCapSummary.monthLabel || 'This month'} · ${LEAVE_UI.youCanTakeThisMonth.toLowerCase()}`
+        : LEAVE_UI.totalBalance;
+
+    const stacked = layout === 'stack';
 
     return (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 ${compact ? 'gap-3' : 'gap-4'}`}>
+        <div
+            className={
+                stacked
+                    ? `flex h-full min-h-0 flex-col ${compact ? 'gap-3' : 'gap-4'}`
+                    : `grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 ${compact ? 'gap-3' : 'gap-4'}`
+            }
+        >
             {kpiCard(
                 'Days present',
                 String(daysPresent),
                 'This month',
                 <FaCheckCircle className={compact ? 'h-4 w-4' : 'h-5 w-5'} />,
                 loading,
-                compact
+                compact,
+                stacked
             )}
             {kpiCard(
                 leaveLabel,
@@ -132,7 +142,8 @@ const PersonalDashboardKpiRow = ({ compact = false }) => {
                 leaveSub,
                 <FaCalendarAlt className={compact ? 'h-4 w-4' : 'h-5 w-5'} />,
                 loading,
-                compact
+                compact,
+                stacked
             )}
             {kpiCard(
                 'Pending tasks',
@@ -140,7 +151,8 @@ const PersonalDashboardKpiRow = ({ compact = false }) => {
                 'Assigned to you',
                 <FaTasks className={compact ? 'h-4 w-4' : 'h-5 w-5'} />,
                 loading,
-                compact
+                compact,
+                stacked
             )}
         </div>
     );

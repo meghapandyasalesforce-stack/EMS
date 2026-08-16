@@ -43,11 +43,11 @@ export function AtsBadge({ children, tone, status, className = '' }) {
   );
 }
 
-export function AtsPage({ children, narrow = false, className = '' }) {
+export function AtsPage({ children, narrow = false, fullWidth = false, className = '' }) {
   return (
-    <div className={`cm-hrms ats-ui ${className}`}>
-      <div className="ats-page">
-        <div className={`ats-page-inner ${narrow ? 'ats-page-inner--narrow' : ''}`}>
+    <div className={`cm-hrms ats-ui w-full min-w-0 ${className}`}>
+      <div className="ats-page w-full min-w-0">
+        <div className={`ats-page-inner w-full min-w-0 ${narrow ? 'ats-page-inner--narrow' : ''} ${fullWidth ? 'ats-page-inner--full' : ''}`}>
           {children}
         </div>
       </div>
@@ -70,14 +70,16 @@ export function AtsPageHeader({ eyebrow, title, subtitle, actions }) {
 
 export function AtsEmpty({ icon: Icon, title, hint }) {
   return (
-    <div className="ats-empty">
-      {Icon ? (
-        <div className="ats-empty__icon">
-          <Icon className="h-5 w-5" />
-        </div>
-      ) : null}
-      <p className="mt-4 text-base font-semibold" style={{ color: 'var(--ats-secondary)' }}>{title}</p>
-      {hint ? <p className="mx-auto mt-1 max-w-sm text-sm" style={{ color: 'rgba(15,45,38,0.55)' }}>{hint}</p> : null}
+    <div className="hrms-empty-shell">
+      <div className="ats-empty">
+        {Icon ? (
+          <div className="ats-empty__icon">
+            <Icon className="h-5 w-5" />
+          </div>
+        ) : null}
+        <p className="mt-4 text-base font-semibold text-gray-800">{title}</p>
+        {hint ? <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">{hint}</p> : null}
+      </div>
     </div>
   );
 }

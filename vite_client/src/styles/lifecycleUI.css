@@ -1,0 +1,180 @@
+/**
+ * Standard HR typography — lifecycle, recruitment / ATS.
+ * Uses system font stack instead of Manrope; normalizes cm-* and ats-* text
+ * to match Leave Management, Employees, and other modules.
+ */
+
+.hrms-lifecycle,
+.hrms-lifecycle *,
+.ats-ui,
+.ats-ui *,
+.ats-ui .cm-hrms,
+.ats-ui .cm-hrms * {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+}
+
+.hrms-lifecycle .cm-title,
+.ats-ui .cm-title {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #1f2937;
+}
+
+.hrms-lifecycle .cm-title-sm,
+.ats-ui .cm-title-sm {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.hrms-lifecycle .cm-label,
+.ats-ui .cm-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.hrms-lifecycle .cm-subtitle,
+.ats-ui .cm-subtitle {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.hrms-lifecycle .cm-btn,
+.ats-ui .cm-btn {
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+}
+
+.hrms-lifecycle .cm-person__name,
+.ats-ui .cm-person__name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #1f2937;
+}
+
+.hrms-lifecycle .cm-person__meta,
+.ats-ui .cm-person__meta {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.hrms-lifecycle .cm-stat__label,
+.ats-ui .cm-stat__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.hrms-lifecycle .cm-stat__value,
+.ats-ui .cm-stat__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.hrms-lifecycle .cm-table thead th,
+.ats-ui .cm-table thead th {
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.hrms-lifecycle .cm-table tbody td,
+.ats-ui .cm-table tbody td {
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.hrms-lifecycle .cm-badge,
+.ats-ui .cm-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.hrms-lifecycle .cm-ring__label,
+.ats-ui .cm-ring__label {
+  font-weight: 700;
+  font-size: 0.6875rem;
+}
+
+/* ATS page headers — match Offboarding / Leave Management */
+.ats-ui .ats-page-title {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #1f2937;
+  margin: 0.25rem 0 0;
+}
+
+@media (min-width: 640px) {
+  .ats-ui .ats-page-title {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+}
+
+.ats-ui .ats-eyebrow {
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-secondary, #2563eb);
+  margin: 0;
+}
+
+.ats-ui .ats-page-subtitle {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.ats-ui .ats-public-shell {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  color: #1f2937;
+}
+
+.ats-ui .ats-tab {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.ats-ui .ats-tab--active {
+  font-weight: 600;
+}
+
+.ats-ui .ats-kpi-value {
+  font-weight: 700;
+}
+
+.ats-ui .ats-kpi-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ats-ui .ats-candidate-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.ats-ui .ats-section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.ats-ui .ats-empty p {
+  font-weight: 600;
+  color: #1f2937;
+}

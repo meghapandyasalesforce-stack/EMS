@@ -1,4 +1,9 @@
-import { sendBroadcastNotification, markNotificationAsRead, getUnreadNotificationCount } from "../../helpers/notificationService.js";
+import {
+  sendBroadcastNotification,
+  markNotificationAsRead,
+  buildUserNotificationFilter,
+  withEffectiveReadState,
+} from "../../helpers/notificationService.js";
 import Notification from "../../models/notification.model.js";
 import User from "../../models/user.model.js";
 import Employee from "../../models/employee.model.js";
@@ -34,21 +39,53 @@ const resolveNotificationRecipientIds = async (req) => {
   return [...ids];
 };
 
+const resolveOrganizationId = async (req) => {
+  let organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+  if (organizationId) return organizationId;
+
+  try {
+    if (req.user?._id) {
+      const user = await User.findById(req.user._id).select('organizationId').lean();
+      organizationId = user?.organizationId;
+    } else if (req.employee?._id) {
+      const employee = await Employee.findById(req.employee._id).select('organizationId').lean();
+      organizationId = employee?.organizationId;
+    }
+  } catch (dbError) {
+    logger.error('Error loading organizationId from database', { error: dbError.message });
+  }
+  return organizationId || null;
+};
+
+const resolveActorIdentity = (req) => {
+  if (req.user?._id) {
+    return { primaryId: req.user._id, userType: 'User' };
+  }
+  if (req.employee?._id) {
+    return { primaryId: req.employee._id, userType: 'Employee' };
+  }
+  return { primaryId: null, userType: 'User' };
+};
+
 export const createNotification = async (req, res) => {
   try {
     const { message, type = 'announcement', priority = 'medium' } = req.body;
 
-    // Simple validation
     if (!message) {
       return sendValidationError(res, { message: "Message is required" });
     }
 
-    const sender = await User.findById(req.user._id);
+    let sender = null;
+    if (req.user?._id) {
+      sender = await User.findById(req.user._id);
+    }
+    if (!sender && req.employee?._id) {
+      sender = await Employee.findById(req.employee._id);
+    }
     if (!sender) {
       return sendNotFound(res, "Sender");
     }
 
-    // Use 'announcement' type for admin announcements
     await sendBroadcastNotification(sender, message, 'announcement', { priority });
     
     return sendSuccess(res, null, "Announcement sent successfully to all employees", 201);
@@ -58,19 +95,15 @@ export const createNotification = async (req, res) => {
   }
 };
 
-/** Broadcast announcements created by admins — list for dashboard history */
+/** Broadcast announcements — list for dashboard history (organization-wide with pagination) */
 export const getSentAnnouncements = async (req, res) => {
   try {
-    const adminId = req.user?._id;
-    if (!adminId) {
-      return sendUnauthorized(res, 'Admin authentication required');
+    const actorId = req.user?._id || req.employee?._id;
+    if (!actorId) {
+      return sendUnauthorized(res, 'Authentication required');
     }
 
-    let organizationId = req.user?.organizationId || req.organizationId;
-    if (!organizationId) {
-      const user = await User.findById(adminId).select('organizationId').lean();
-      organizationId = user?.organizationId;
-    }
+    const organizationId = await resolveOrganizationId(req);
     if (!organizationId) {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
@@ -85,13 +118,14 @@ export const getSentAnnouncements = async (req, res) => {
       return sendError(res, 'Invalid limit (must be between 1 and 100)', 400, 'INVALID_LIMIT');
     }
 
+    // Default: all org announcement broadcasts. Optional scope=mine filters to current sender.
     const filter = {
       organizationId,
       isBroadcast: true,
       type: 'announcement',
     };
-    if (scope !== 'organization') {
-      filter.sender = adminId;
+    if (scope === 'mine') {
+      filter.sender = actorId;
     }
 
     const announcements = await Notification.find(filter)
@@ -117,6 +151,85 @@ export const getSentAnnouncements = async (req, res) => {
   } catch (error) {
     logger.error('Error getting sent announcements', { error: error.message, stack: error.stack });
     return sendInternalError(res, 'Failed to get sent announcements', error);
+  }
+};
+
+/** Seen / unseen receipts for a single announcement broadcast (org-scoped). */
+export const getAnnouncementReceipts = async (req, res) => {
+  try {
+    const actorId = req.user?._id || req.employee?._id;
+    if (!actorId) {
+      return sendUnauthorized(res, 'Authentication required');
+    }
+
+    const organizationId = await resolveOrganizationId(req);
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const { notificationId } = req.params;
+    const announcement = await Notification.findOne({
+      _id: notificationId,
+      organizationId,
+      isBroadcast: true,
+      type: 'announcement',
+    }).lean();
+
+    if (!announcement) {
+      return sendNotFound(res, 'Announcement');
+    }
+
+    const audience = await Employee.find({
+      organizationId,
+      status: 'active',
+    })
+      .select('_id name lastName email userId')
+      .lean();
+
+    const receiptById = new Map();
+    for (const receipt of announcement.readReceipts || []) {
+      const key = String(receipt.userId);
+      if (!receiptById.has(key)) {
+        receiptById.set(key, receipt);
+      }
+    }
+
+    const seen = [];
+    const notSeen = [];
+
+    for (const emp of audience) {
+      const empId = String(emp._id);
+      const userId = emp.userId ? String(emp.userId) : null;
+      const receipt = receiptById.get(empId) || (userId ? receiptById.get(userId) : null);
+      const person = {
+        _id: emp._id,
+        name: [emp.name, emp.lastName].filter(Boolean).join(' ').trim() || emp.email || 'Employee',
+        email: emp.email || null,
+      };
+      if (receipt) {
+        seen.push({ ...person, readAt: receipt.readAt });
+      } else {
+        notSeen.push(person);
+      }
+    }
+
+    return sendSuccess(
+      res,
+      {
+        announcementId: announcement._id,
+        message: announcement.message,
+        createdAt: announcement.createdAt,
+        audienceTotal: audience.length,
+        seenCount: seen.length,
+        notSeenCount: notSeen.length,
+        seen,
+        notSeen,
+      },
+      'Announcement receipts retrieved successfully'
+    );
+  } catch (error) {
+    logger.error('Error getting announcement receipts', { error: error.message, stack: error.stack });
+    return sendInternalError(res, 'Failed to get announcement receipts', error);
   }
 };
 
@@ -300,7 +413,6 @@ export const getUserNotifications = async (req, res) => {
 
     const { page = 1, limit = 20, type, unreadOnly = false } = req.query;
 
-    // Validate pagination parameters
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     
@@ -312,46 +424,21 @@ export const getUserNotifications = async (req, res) => {
       return sendError(res, 'Invalid limit (must be between 1 and 100)', 400, 'INVALID_LIMIT');
     }
 
-    // Get organizationId from multiple sources
-    let organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
+    const organizationId = await resolveOrganizationId(req);
     
-    // Validate organizationId format (MongoDB ObjectId)
     if (organizationId && !/^[0-9a-fA-F]{24}$/.test(organizationId.toString())) {
       return sendError(res, 'Invalid organization ID format', 400, 'INVALID_ORGANIZATION_ID');
-    }
-    
-    // If organizationId is not in request, try to load it from database
-    if (!organizationId) {
-      try {
-        if (req.user?._id) {
-          const user = await User.findById(req.user._id).select('organizationId');
-          organizationId = user?.organizationId;
-        } else if (req.employee?._id) {
-          const employee = await Employee.findById(req.employee._id).select('organizationId');
-          organizationId = employee?.organizationId;
-        }
-      } catch (dbError) {
-        logger.error('Error loading organizationId from database', { 
-          error: dbError.message, 
-          recipientIds 
-        });
-      }
     }
     
     if (!organizationId) {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
 
-    const filter = {
-      organizationId,
-      $or: [
-        { recipient: { $in: recipientIds } },
-        { isBroadcast: true }
-      ]
-    };
+    const filter = buildUserNotificationFilter(organizationId, recipientIds, {
+      unreadOnly: unreadOnly === 'true' || unreadOnly === true,
+    });
 
     if (type) filter.type = type;
-    if (unreadOnly === 'true') filter.isRead = false;
 
     const notifications = await Notification.find(filter)
       .populate('sender', 'name email')
@@ -361,12 +448,13 @@ export const getUserNotifications = async (req, res) => {
       .skip((pageNum - 1) * limitNum);
 
     const total = await Notification.countDocuments(filter);
+    const withReadState = withEffectiveReadState(notifications, recipientIds);
 
     return sendSuccess(res, {
-      notifications,
+      notifications: withReadState,
       pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
+        current: pageNum,
+        pages: Math.ceil(total / limitNum) || 1,
         total
       }
     }, 'Notifications retrieved successfully');
@@ -380,9 +468,26 @@ export const getUserNotifications = async (req, res) => {
 export const markAsRead = async (req, res) => {
   try {
     const { notificationId } = req.params;
-    const userId = req.user?._id || req.employee?._id;
+    const recipientIds = await resolveNotificationRecipientIds(req);
+    if (!recipientIds.length) {
+      return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
+    }
 
-    await markNotificationAsRead(notificationId, userId);
+    const organizationId = await resolveOrganizationId(req);
+    const { primaryId, userType } = resolveActorIdentity(req);
+
+    const result = await markNotificationAsRead(notificationId, recipientIds, {
+      organizationId,
+      userType,
+      primaryId,
+    });
+
+    if (!result.success) {
+      if (result.reason === 'NOT_FOUND') {
+        return sendNotFound(res, 'Notification');
+      }
+      return sendError(res, 'Unable to mark notification as read', 400, result.reason || 'MARK_READ_FAILED');
+    }
 
     return sendSuccess(res, null, "Notification marked as read");
   } catch (error) {
@@ -394,18 +499,48 @@ export const markAsRead = async (req, res) => {
 // Mark all notifications as read
 export const markAllAsRead = async (req, res) => {
   try {
-    const userId = req.user?._id || req.employee?._id;
+    const recipientIds = await resolveNotificationRecipientIds(req);
+    if (!recipientIds.length) {
+      return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
+    }
 
+    const organizationId = await resolveOrganizationId(req);
+    if (!organizationId) {
+      return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
+    }
+
+    const { primaryId, userType } = resolveActorIdentity(req);
+
+    // Personal notifications: flip isRead for this person's recipient IDs only
     await Notification.updateMany(
       {
-        $or: [
-          { recipient: userId },
-          { isBroadcast: true }
-        ],
-        isRead: false
+        organizationId,
+        recipient: { $in: recipientIds },
+        isBroadcast: { $ne: true },
+        isRead: false,
       },
       { isRead: true }
     );
+
+    // Broadcasts: add per-user read receipts (never flip shared isRead)
+    const unreadBroadcasts = await Notification.find({
+      organizationId,
+      isBroadcast: true,
+      'readReceipts.userId': { $nin: recipientIds },
+      'hiddenBy.userId': { $nin: recipientIds },
+    }).select('_id');
+
+    if (unreadBroadcasts.length) {
+      const receipt = {
+        userId: primaryId || recipientIds[0],
+        userType,
+        readAt: new Date(),
+      };
+      await Notification.updateMany(
+        { _id: { $in: unreadBroadcasts.map((n) => n._id) } },
+        { $push: { readReceipts: receipt } }
+      );
+    }
 
     return sendSuccess(res, null, "All notifications marked as read");
   } catch (error) {
@@ -423,39 +558,14 @@ export const getUnreadCount = async (req, res) => {
       return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
     }
 
-    // Get organizationId from multiple sources
-    let organizationId = req.user?.organizationId || req.employee?.organizationId || req.organizationId;
-    
-    // If organizationId is not in request, try to load it from database
-    if (!organizationId) {
-      try {
-        if (req.user?._id) {
-          const user = await User.findById(req.user._id).select('organizationId');
-          organizationId = user?.organizationId;
-        } else if (req.employee?._id) {
-          const employee = await Employee.findById(req.employee._id).select('organizationId');
-          organizationId = employee?.organizationId;
-        }
-      } catch (dbError) {
-        logger.error('Error loading organizationId from database', { 
-          error: dbError.message, 
-          recipientIds 
-        });
-      }
-    }
+    const organizationId = await resolveOrganizationId(req);
     
     if (!organizationId) {
       return sendError(res, 'Organization ID is required', 400, 'MISSING_ORGANIZATION_ID');
     }
 
-    const count = await Notification.countDocuments({
-      organizationId,
-      isRead: false,
-      $or: [
-        { recipient: { $in: recipientIds } },
-        { isBroadcast: true },
-      ],
-    });
+    const filter = buildUserNotificationFilter(organizationId, recipientIds, { unreadOnly: true });
+    const count = await Notification.countDocuments(filter);
 
     return sendSuccess(res, { unreadCount: count }, 'Unread count retrieved successfully');
   } catch (error) {
@@ -464,21 +574,61 @@ export const getUnreadCount = async (req, res) => {
   }
 };
 
-// Delete notification
+// Delete notification (personal: hard delete; broadcast: per-user hide only)
 export const deleteNotification = async (req, res) => {
   try {
     const { notificationId } = req.params;
-    const userId = req.user?._id || req.employee?._id;
+    const recipientIds = await resolveNotificationRecipientIds(req);
+    if (!recipientIds.length) {
+      return sendError(res, 'User ID is required', 401, 'USER_NOT_FOUND');
+    }
 
-    const notification = await Notification.findOneAndDelete({
+    const organizationId = await resolveOrganizationId(req);
+    const { primaryId, userType } = resolveActorIdentity(req);
+
+    const query = {
       _id: notificationId,
       $or: [
-        { recipient: userId },
-        { sender: userId }
-      ]
+        { recipient: { $in: recipientIds }, isBroadcast: { $ne: true } },
+        { isBroadcast: true },
+        { sender: { $in: recipientIds } },
+      ],
+    };
+    if (organizationId) query.organizationId = organizationId;
+
+    const notification = await Notification.findOne(query);
+    if (!notification) {
+      return sendNotFound(res, "Notification");
+    }
+
+    if (notification.isBroadcast) {
+      const alreadyHidden = (notification.hiddenBy || []).some((h) =>
+        recipientIds.includes(String(h.userId))
+      );
+      if (!alreadyHidden) {
+        await Notification.updateOne(
+          { _id: notificationId },
+          {
+            $push: {
+              hiddenBy: {
+                userId: primaryId || recipientIds[0],
+                userType,
+                hiddenAt: new Date(),
+              },
+            },
+          }
+        );
+      }
+      return sendSuccess(res, null, "Notification deleted successfully");
+    }
+
+    const deleted = await Notification.findOneAndDelete({
+      _id: notificationId,
+      recipient: { $in: recipientIds },
+      isBroadcast: { $ne: true },
     });
 
-    if (!notification) {
+    if (!deleted) {
       return sendNotFound(res, "Notification");
     }
 

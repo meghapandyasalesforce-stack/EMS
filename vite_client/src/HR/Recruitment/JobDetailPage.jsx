@@ -7,6 +7,7 @@ import axios from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { normalizeResumeScreening, parseMinimumMatchPercent, normalizeKeywordList } from '../../utils/resumeScreeningDisplay';
 import { AtsPage, AtsBadge, CmButton } from '../../components/recruitment/atsUi';
+import { formatJobPostedDate, getJobPostedDate } from '../../utils/jobPostedDate';
 
 const JobDetailPage = () => {
     const { id } = useParams();
@@ -207,8 +208,8 @@ const JobDetailPage = () => {
 
             <div className="cm-card flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="ats-page-title" style={{ fontSize: '1.5rem', lineHeight: '2rem' }}>{job.jobTitle}</h1>
-                    <p className="ats-page-subtitle">{job.department} · {job.location} · {job.employmentType}</p>
+                    <h1 className="text-2xl font-bold leading-tight text-gray-800 sm:text-3xl">{job.jobTitle}</h1>
+                    <p className="mt-2 text-sm text-gray-500">{job.department} · {job.location} · {job.employmentType}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                         <AtsBadge status={job.status}>{job.status}</AtsBadge>
                         <span className="ats-chip ats-chip--neutral" style={{ textTransform: 'none', letterSpacing: 0 }}>{job.priority} priority</span>
@@ -270,7 +271,7 @@ const JobDetailPage = () => {
                     <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--ats-secondary)' }}>Details</h2>
                     <dl className="space-y-2 text-sm">
                         <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Position</dt><dd>{job.position}</dd></div>
-                        <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Posted</dt><dd>{job.postedDate ? format(new Date(job.postedDate), 'dd MMM yyyy') : '—'}</dd></div>
+                        <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Posted</dt><dd>{formatJobPostedDate(getJobPostedDate(job), { withYear: true }) || '—'}</dd></div>
                         <div className="flex justify-between gap-4"><dt style={{ color: 'rgba(15,45,38,0.5)' }}>Applications</dt><dd>{job.currentApplications || candidates.length}</dd></div>
                         {screeningStats && (
                             <>
@@ -363,8 +364,9 @@ const JobDetailPage = () => {
                 </section>
             )}
 
-            <div className="flex items-center gap-1">
-                <nav className="ats-tabs !border-b-0 !mb-0 flex-1">
+            <section className="w-full min-w-0">
+            <div className="flex min-w-0 items-center gap-1">
+                <nav className="ats-tabs !border-b-0 !mb-0 min-w-0 flex-1">
                     <button type="button" onClick={() => setTab('candidates')} className={`ats-tab ${tab === 'candidates' ? 'ats-tab--active' : ''}`}>
                         Candidates
                         <span className="ats-tab-count">{candidates.length}</span>
@@ -383,8 +385,8 @@ const JobDetailPage = () => {
                     candidates.length === 0 ? (
                         <p className="p-6 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No candidates yet.</p>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="ats-table">
+                        <div className="ats-table-scroll">
+                            <table className="ats-table ats-table--actions">
                                 <thead>
                                     <tr>
                                         <th>Name</th>
@@ -420,8 +422,8 @@ const JobDetailPage = () => {
                 ) : ranked.length === 0 ? (
                     <p className="p-6 text-sm" style={{ color: 'rgba(15,45,38,0.5)' }}>No scored candidates yet. Add scores on candidate profiles to rank them.</p>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="ats-table">
+                    <div className="ats-table-scroll">
+                        <table className="ats-table ats-table--ranked ats-table--actions">
                             <thead>
                                 <tr>
                                     <th>Rank</th>
@@ -454,6 +456,7 @@ const JobDetailPage = () => {
                     </div>
                 )}
             </div>
+            </section>
         </AtsPage>
     );
 };

@@ -10,6 +10,17 @@ import {
     resolveSelectValue,
     OTHER_OPTION,
 } from '../../components/recruitment/SelectWithOther';
+import { AtsPage, AtsPageHeader, AtsBadge, CmButton } from '../../components/recruitment/atsUi';
+
+const formatRequisitionStatus = (status = '') => {
+    const labels = {
+        Draft: 'Draft',
+        PendingApproval: 'Pending Approval',
+        Approved: 'Approved',
+        Rejected: 'Rejected',
+    };
+    return labels[status] || String(status || '—').replace(/([a-z])([A-Z])/g, '$1 $2');
+};
 
 const EMPTY = {
     jobDescription: '',
@@ -123,23 +134,25 @@ const RequisitionsPage = () => {
     if (loading) return <LoadingSpinner message="Loading requisitions…" />;
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
-            <button type="button" onClick={() => navigate('/recruitment')} className="mb-4 inline-flex items-center gap-2 text-sm text-gray-600">
-                <FaArrowLeft /> Back
+        <AtsPage className="ats-requisitions-page">
+            <button type="button" onClick={() => navigate('/recruitment')} className="ats-back">
+                <FaArrowLeft className="h-3 w-3" /> Back
             </button>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Job Requisitions</h1>
-                    <p className="text-gray-600">Hiring need → approval → job posting</p>
-                </div>
-                <button type="button" onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 rounded-lg bg-theme-secondary px-4 py-2 text-white">
-                    <FaPlus /> New Requisition
-                </button>
-            </div>
+
+            <AtsPageHeader
+                eyebrow="Recruitment"
+                title="Job Requisitions"
+                subtitle="Hiring need → approval → job posting"
+                actions={(
+                    <CmButton onClick={() => setShowForm(true)}>
+                        <FaPlus className="h-3.5 w-3.5" /> New Requisition
+                    </CmButton>
+                )}
+            />
 
             {showForm && (
-                <form onSubmit={create} className="mb-6 space-y-3 rounded-xl border bg-white p-5 shadow-sm">
-                    <div className="grid gap-3 sm:grid-cols-2">
+                <form onSubmit={create} className="cm-card ats-hire-form space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                         <SelectWithOther
                             label="Title"
                             required
@@ -178,70 +191,74 @@ const RequisitionsPage = () => {
                         />
                     </div>
                     <label className="block text-sm">
-                        <span className="mb-1 block font-medium">Job description *</span>
-                        <textarea required rows={4} className="w-full rounded-lg border px-3 py-2" value={form.jobDescription} onChange={(e) => setForm((p) => ({ ...p, jobDescription: e.target.value }))} />
+                        <span className="ats-form-label">Job description *</span>
+                        <textarea required rows={4} className="cm-input mt-1 w-full" value={form.jobDescription} onChange={(e) => setForm((p) => ({ ...p, jobDescription: e.target.value }))} />
                     </label>
                     <label className="block text-sm">
-                        <span className="mb-1 block font-medium">Business justification</span>
-                        <textarea rows={2} className="w-full rounded-lg border px-3 py-2" value={form.justification} onChange={(e) => setForm((p) => ({ ...p, justification: e.target.value }))} />
+                        <span className="ats-form-label">Business justification</span>
+                        <textarea rows={2} className="cm-input mt-1 w-full" value={form.justification} onChange={(e) => setForm((p) => ({ ...p, justification: e.target.value }))} />
                     </label>
-                    <div className="flex justify-end gap-2">
-                        <button type="button" onClick={resetForm} className="rounded-lg border px-4 py-2">Cancel</button>
-                        <button type="submit" disabled={busy} className="rounded-lg bg-theme-secondary px-4 py-2 text-white disabled:opacity-60">Save Draft</button>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <CmButton type="button" variant="outline" onClick={resetForm}>Cancel</CmButton>
+                        <CmButton type="submit" disabled={busy}>Save Draft</CmButton>
                     </div>
                 </form>
             )}
 
-            <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-4 py-3 text-left">Title</th>
-                            <th className="px-4 py-3 text-left">Department</th>
-                            <th className="px-4 py-3 text-left">Status</th>
-                            <th className="px-4 py-3 text-left">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                        {items.map((r) => (
-                            <tr key={r._id}>
-                                <td className="px-4 py-3 font-medium">{r.title}</td>
-                                <td className="px-4 py-3">{r.department}</td>
-                                <td className="px-4 py-3">{r.status}</td>
-                                <td className="px-4 py-3">
-                                    <div className="flex flex-wrap gap-2">
-                                        {['Draft', 'Rejected'].includes(r.status) && (
-                                            <button type="button" disabled={busy} onClick={() => action(r._id, 'submit')} className="text-theme-secondary hover:underline">Submit</button>
-                                        )}
-                                        {r.status === 'PendingApproval' && (
-                                            <>
-                                                <button type="button" disabled={busy} onClick={() => action(r._id, 'approve')} className="text-emerald-700 hover:underline">Approve</button>
-                                                <button type="button" disabled={busy} onClick={() => {
-                                                    const reason = window.prompt('Rejection reason');
-                                                    if (reason) action(r._id, 'reject', { reason });
-                                                }} className="text-red-600 hover:underline">Reject</button>
-                                            </>
-                                        )}
-                                        {r.status === 'Approved' && (
-                                            <button type="button" disabled={busy} onClick={() => action(r._id, 'convert', { status: 'Open' })} className="text-theme-secondary hover:underline">Convert to Job</button>
-                                        )}
-                                        {r.jobPostingId && (
-                                            <>
-                                                <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}`)} className="text-gray-600 hover:underline">Open Job</button>
-                                                <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}/edit`)} className="text-theme-secondary hover:underline">Edit Job</button>
-                                            </>
-                                        )}
-                                    </div>
-                                </td>
+            <div className="ats-table-wrap ats-requisitions-table">
+                <div className="ats-table-scroll">
+                    <table className="ats-table ats-table--actions ats-requisitions-table__grid">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Department</th>
+                                <th>Status</th>
+                                <th>Actions</th>
                             </tr>
-                        ))}
-                        {items.length === 0 && (
-                            <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No requisitions yet</td></tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {items.map((r) => (
+                                <tr key={r._id}>
+                                    <td className="font-semibold">{r.title}</td>
+                                    <td>{r.department}</td>
+                                    <td>
+                                        <AtsBadge status={r.status}>{formatRequisitionStatus(r.status)}</AtsBadge>
+                                    </td>
+                                    <td className="ats-table-actions-cell">
+                                        <div className="ats-table-actions ats-table-actions--requisitions">
+                                            {['Draft', 'Rejected'].includes(r.status) && (
+                                                <button type="button" disabled={busy} onClick={() => action(r._id, 'submit')} className="ats-table-actions__btn">Submit</button>
+                                            )}
+                                            {r.status === 'PendingApproval' && (
+                                                <>
+                                                    <button type="button" disabled={busy} onClick={() => action(r._id, 'approve')} className="ats-table-actions__btn ats-table-actions__btn--success">Approve</button>
+                                                    <button type="button" disabled={busy} onClick={() => {
+                                                        const reason = window.prompt('Rejection reason');
+                                                        if (reason) action(r._id, 'reject', { reason });
+                                                    }} className="ats-table-actions__btn ats-table-actions__btn--danger">Reject</button>
+                                                </>
+                                            )}
+                                            {r.status === 'Approved' && (
+                                                <button type="button" disabled={busy} onClick={() => action(r._id, 'convert', { status: 'Open' })} className="ats-table-actions__btn">Convert to Job</button>
+                                            )}
+                                            {r.jobPostingId && (
+                                                <>
+                                                    <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}`)} className="ats-table-actions__btn">Open Job</button>
+                                                    <button type="button" onClick={() => navigate(`/recruitment/jobs/${r.jobPostingId._id || r.jobPostingId}/edit`)} className="ats-table-actions__btn">Edit Job</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {items.length === 0 && (
+                                <tr><td colSpan={4} className="py-8 text-center" style={{ color: 'rgba(15,45,38,0.5)' }}>No requisitions yet</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
+        </AtsPage>
     );
 };
 

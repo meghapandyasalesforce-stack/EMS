@@ -10,6 +10,7 @@ export const checkAuthSession = createAsyncThunk(
     try {
       const permRes = await axios.get(`${UNIFIED_AUTH_ENDPOINT}/permissions`, {
         withCredentials: true,
+        skipAuthRedirect: true,
       });
       const permData = permRes?.data?.data || permRes?.data || {};
 
@@ -21,16 +22,14 @@ export const checkAuthSession = createAsyncThunk(
       try {
         const profileRes = await axios.get('/v1/both/profile-details/get-my-details', {
           withCredentials: true,
+          skipAuthRedirect: true,
         });
         employee = profileRes.data?.employee || null;
         user = profileRes.data?.user || null;
         timezoneContext = profileRes.data?.timezoneContext || null;
         timezone = profileRes.data?.timezone || null;
       } catch (profileError) {
-        const role = localStorage.getItem('role');
-        if (role === 'employee') {
-          throw profileError;
-        }
+        // Profile fetch is optional — keep session when permissions loaded successfully.
       }
 
       return {
@@ -89,6 +88,7 @@ const authSlice = createSlice({
     availablePortals: [],
     error: null,
     authChecked: false,
+    sessionValidated: false,
   },
   reducers: {
     setLoading: (state, action) => {
@@ -196,6 +196,7 @@ const authSlice = createSlice({
         state.dataScope = action.payload?.dataScope || 'self';
         state.error = null;
         state.authChecked = true;
+        state.sessionValidated = true;
 
         const { portals, activePortal } = syncPortalsForSession({
           user: state.user,
@@ -212,15 +213,18 @@ const authSlice = createSlice({
       })
       .addCase(checkAuthSession.rejected, (state, action) => {
         state.loading = false;
-        state.user = null;
-        state.permissions = [];
-        state.roleBuckets = [];
-        state.permissionFlags = {};
-        state.dataScope = 'self';
-        state.activePortal = null;
-        state.availablePortals = [];
+        // Never wipe an existing logged-in user — logout is explicit only.
+        if (!state.user) {
+          state.permissions = [];
+          state.roleBuckets = [];
+          state.permissionFlags = {};
+          state.dataScope = 'self';
+          state.activePortal = null;
+          state.availablePortals = [];
+        }
         state.error = action.payload || null;
         state.authChecked = true;
+        state.sessionValidated = true;
       })
       .addCase(logoutUser.pending, (state) => {
         state.loading = true;

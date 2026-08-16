@@ -60,7 +60,8 @@ const notificationSchema = new mongoose.Schema({
       'holiday',
       'birthday',
       'anniversary',
-      'onboarding'
+      'onboarding',
+      'engagement'
     ],
     default: 'general'
   },
@@ -80,6 +81,38 @@ const notificationSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Per-user read state for shared broadcasts (never flip shared isRead for everyone)
+  readReceipts: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true
+    },
+    userType: {
+      type: String,
+      enum: ['User', 'Employee'],
+      default: 'User'
+    },
+    readAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  // Per-user hide for broadcasts — does not delete the shared document
+  hiddenBy: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true
+    },
+    userType: {
+      type: String,
+      enum: ['User', 'Employee'],
+      default: 'User'
+    },
+    hiddenAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],
@@ -95,6 +128,8 @@ const notificationSchema = new mongoose.Schema({
 notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
 notificationSchema.index({ isBroadcast: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 });
+notificationSchema.index({ 'readReceipts.userId': 1 });
+notificationSchema.index({ 'hiddenBy.userId': 1 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 
