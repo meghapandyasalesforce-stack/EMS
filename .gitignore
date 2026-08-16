@@ -65,3 +65,9 @@ vite_client/node_modules/
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
+server/uploads/
+vite_client/dist/
+vite_client/node_modules/
+server/node_modules/
+vite_client/.env
+server/db/database.js.bak
