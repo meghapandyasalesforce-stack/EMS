@@ -18,11 +18,11 @@ function getCookie(name) {
 
 export const fetchPayrolls = createAsyncThunk(
   'payroll/fetchPayrolls',
-  async ({ month, year, page = 1, limit = 20 }, thunkAPI) => {
+  async ({ month, year, page = 1, limit = 20, search = '' }, thunkAPI) => {
     try {
-      const response = await axios.get(
-        `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${encodeURIComponent(month)}&year=${year}&page=${page}&limit=${limit}`
-      );
+      let url = `${ADMIN_PAYROLL_ENDPOINT}/get-all-employee-payroll?month=${encodeURIComponent(month)}&year=${year}&page=${page}&limit=${limit}`;
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+      const response = await axios.get(url);
       const data = response.data;
       const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
       return { list, pagination: data?.pagination ?? null };

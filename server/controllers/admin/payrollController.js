@@ -1013,15 +1013,29 @@ export const getAllEmployeesPayroll = async (req, res) => {
         // Build query with organization filter
         const query = addOrganizationFilter(req, { salary: { $exists: true } });
 
+        // Search by employee name
+        const search = (req.query.search || '').trim();
+        if (search) {
+            const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            query.$or = [
+                { name: searchRegex },
+                { lastName: searchRegex }
+            ];
+        }
+
         // If user is a manager (not admin or HR), filter by manager field
-        // Example: Manager "Arun Kumar" sees payrolls for employees with manager="Arun Kumar" or "Arun"
         const isManager = shouldScopeDataToManagedTeam(req);
         if (isManager && req.employee) {
             const managerQuery = buildManagerMatchQuery(req.employee);
             if (managerQuery && managerQuery.$or) {
-                query.$or = managerQuery.$or;
+                if (query.$or) {
+                    query.$and = [{ $or: query.$or }, { $or: managerQuery.$or }];
+                    delete query.$or;
+                } else {
+                    query.$or = managerQuery.$or;
+                }
             }
-            query.status = 'active'; // Only active employees for managers
+            query.status = 'active';
             
             const managerName = `${req.employee.name} ${req.employee.lastName || ''}`.trim();
             logger.info('Manager filtering employee payrolls by manager field', {
@@ -1033,7 +1047,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
         // Get employees with pagination
         const [employees, totalEmployees] = await Promise.all([
             Employee.find(query)
-                .select('name salary designation jobTitle department position _id')
+            .select('name lastName salary designation jobTitle department position _id')
                 .skip(skip)
                 .limit(limit)
                 .lean(),
@@ -1088,6 +1102,7 @@ export const getAllEmployeesPayroll = async (req, res) => {
             return {
                 employeeId: employee._id,
                 name: employee.name,
+                lastName: employee.lastName || '',
                 designation: employee.designation,
                 jobTitle: employee.jobTitle,
                 department: employee.department,

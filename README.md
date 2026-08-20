@@ -2,6 +2,12 @@
 
 A comprehensive Employee Management System built with modern web technologies, featuring attendance tracking, payroll management, leave management, and more.
 
+## Project Documentation
+
+For the project overview, functional scope, architecture, workflows, security, setup, deployment, roadmap, and project manager review checklist, see [Project Documentation](docs/PROJECT_DOCUMENTATION.md).
+
+For the complete client and developer reference covering all 36 HRMS documentation sections, see [Complete HRMS System Documentation](docs/HRMS_COMPLETE_SYSTEM_DOCUMENTATION.md).
+
 ## 🚀 Features
 
 - **Authentication & Authorization**: Secure JWT-based authentication with role-based access control

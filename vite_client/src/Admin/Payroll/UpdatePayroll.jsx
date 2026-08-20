@@ -102,25 +102,26 @@ const UpdatePayroll = () => {
 
   const resolveGrossSalary = (payrollRecord) => {
     const direct = Number(payrollRecord?.basicSalary);
-    if (Number.isFinite(direct) && direct > 0) return direct;
-    const ctc = Number(payrollRecord?.ctc);
-    if (Number.isFinite(ctc) && ctc > 0) return ctc;
-    const totalEarnings = Number(payrollRecord?.earnings?.totalEarnings);
-    if (Number.isFinite(totalEarnings) && totalEarnings > 0) return totalEarnings;
     const e = payrollRecord?.earnings || {};
-    return (
+    const componentGross =
       (Number(e.basicWage) || 0) +
       (Number(e.houseRentAllowance) || 0) +
       (Number(e.transportAllowance) || 0) +
       (Number(e.medicalAllowance) || 0) +
-      (Number(e.overtime) || 0) +
-      (Number(e.specialAllowance) || 0) +
-      (Number(e.performanceBonus) || 0) +
-      (Number(e.projectBonus) || 0) +
-      (Number(e.attendanceBonus) || 0) +
-      (Number(e.pfEmployer) || 0) +
-      (Number(e.esiEmployer) || 0)
-    );
+      (Number(e.specialAllowance) || 0);
+    const isLegacyBasicStoredAsGross =
+      Number.isFinite(direct) &&
+      direct > 0 &&
+      direct === (Number(e.basicWage) || 0) &&
+      componentGross > direct;
+
+    if (Number.isFinite(direct) && direct > 0 && !isLegacyBasicStoredAsGross) return direct;
+    if (componentGross > 0) return componentGross;
+    const ctc = Number(payrollRecord?.ctc);
+    if (Number.isFinite(ctc) && ctc > 0) return ctc;
+    const totalEarnings = Number(payrollRecord?.earnings?.totalEarnings);
+    if (Number.isFinite(totalEarnings) && totalEarnings > 0) return totalEarnings;
+    return componentGross;
   };
 
   // Find payroll data for current employee/month/year

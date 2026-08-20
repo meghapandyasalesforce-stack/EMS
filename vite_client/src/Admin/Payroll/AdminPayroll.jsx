@@ -23,6 +23,8 @@ const AdminPayroll = () => {
     const [disbursePreview, setDisbursePreview] = useState(null);
     const [adjustmentActionLoadingId, setAdjustmentActionLoadingId] = useState(null);
     const [listPage, setListPage] = useState(1);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const resultsRef = useRef(null);
     const navigate = useNavigate();
 
@@ -57,6 +59,11 @@ const AdminPayroll = () => {
     }, [currentUser, employee]);
     
     useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    useEffect(() => {
         if (!currentUser && !employee) {
             navigate('/login');
             return;
@@ -67,10 +74,11 @@ const AdminPayroll = () => {
                 month: months[selectedMonth].label,
                 year: selectedYear,
                 page: listPage,
-                limit: 20
+                limit: 20,
+                search: debouncedSearch
             })
         );
-    }, [selectedMonth, selectedYear, listPage, dispatch, navigate, months, currentUser, employee]);
+    }, [selectedMonth, selectedYear, listPage, debouncedSearch, dispatch, navigate, months, currentUser, employee]);
 
     const runGenerate = async (mode) => {
         if (mode === 'final') {
@@ -512,6 +520,17 @@ const AdminPayroll = () => {
             <div className="bg-white p-5 rounded-lg shadow">
                 <div className="flex flex-col md:flex-row gap-5 mb-5">
                     <div className="flex flex-col gap-1 flex-1">
+                        <label className="font-medium text-gray-700">Search Employee</label>
+                        <input
+                            type="text"
+                            className="p-2 border border-gray-300 rounded-md text-sm"
+                            placeholder="Search by name..."
+                            value={searchTerm}
+                            onChange={(e) => { setListPage(1); setSearchTerm(e.target.value); }}
+                            disabled={loading}
+                        />
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1">
                         <label className="font-medium text-gray-700">Month</label>
                         <select
                             className="p-2 border border-gray-300 rounded-md text-sm"
@@ -591,7 +610,7 @@ const AdminPayroll = () => {
                                     const status = getPayrollStatus(employee);
                                     return (
                                         <tr key={employee._id || employee.employeeId || `employee-${index}`} className="hover:bg-gray-50">
-                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.name}</td>
+                                            <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{[employee.name, employee.lastName].filter(Boolean).join(' ')}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.totalEarnings)}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{employee.leaves}</td>
                                             <td className="py-2 px-2 sm:px-4 text-xs sm:text-sm">{formatCurrency(employee.inHandSalary)}</td>
@@ -661,7 +680,7 @@ const AdminPayroll = () => {
                         <div className="p-6">
                             <div className="flex justify-between items-start mb-4">
                                 <h3 className="text-xl font-semibold text-gray-800">
-                                    Payroll Details for {selectedEmployee.name}
+                                Payroll Details for {[selectedEmployee.name, selectedEmployee.lastName].filter(Boolean).join(' ')}
                                 </h3>
                                 <button
                                     onClick={closeDialog}

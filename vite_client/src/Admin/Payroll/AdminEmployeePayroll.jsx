@@ -9,6 +9,7 @@ import {
     downloadAdminPayslip,
     clearSelectedPayroll
 } from '../../context/adminEmployeePayrollSlice';
+import { fetchEmployees } from '../../context/employeeSlice';
 import { 
     FiDollarSign, 
     FiDownload, 
@@ -47,11 +48,21 @@ const AdminEmployeePayroll = () => {
     const [selectedEmployee, setSelectedEmployee] = useState(null);
 
     useEffect(() => {
-        if (employeeId && employees.length > 0) {
-            const employee = employees.find(emp => emp._id === employeeId);
-            setSelectedEmployee(employee);
+        dispatch(fetchEmployees({ fetchAllPages: true }));
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (!employeeId) {
+            setSelectedEmployee(null);
+            return;
         }
-    }, [employeeId, employees]);
+        const fromList = (employees || []).find(
+            (emp) => emp._id === employeeId || String(emp.employeeId) === String(employeeId)
+        );
+        const payrollEmployee = currentMonthPayroll?.employeeId;
+        const fromPayroll = payrollEmployee && typeof payrollEmployee === 'object' ? payrollEmployee : null;
+        setSelectedEmployee(fromList || fromPayroll || null);
+    }, [employeeId, employees, currentMonthPayroll]);
 
     useEffect(() => {
         if (employeeId) {
@@ -110,9 +121,8 @@ const AdminEmployeePayroll = () => {
     };
 
     const handleCreatePayroll = () => {
-        if (selectedEmployee) {
-            navigate(`/add-payroll/${selectedEmployee._id}`);
-        }
+        if (!employeeId) return;
+        navigate(`/add-payroll?employeeId=${encodeURIComponent(employeeId)}`);
     };
 
     const handleEditPayroll = (payroll) => {
@@ -220,7 +230,9 @@ const AdminEmployeePayroll = () => {
                         </div>
                         <div>
                             <h1 className="text-xl font-semibold text-gray-900">
-                                {selectedEmployee ? `${selectedEmployee.name} ${selectedEmployee.lastName}` : 'Employee Payroll'}
+                                {selectedEmployee
+                                    ? [selectedEmployee.name, selectedEmployee.lastName].filter(Boolean).join(' ')
+                                    : 'Employee Payroll'}
                             </h1>
                             <p className="text-sm text-gray-600">
                                 {selectedEmployee?.jobTitle} • {selectedEmployee?.department}
