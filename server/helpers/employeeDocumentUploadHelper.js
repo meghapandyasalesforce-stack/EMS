@@ -1,8 +1,8 @@
-import fs from 'fs';
+import crypto from 'crypto';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { Document } from '../models/document.model.js';
-import { persistDocumentBinary, requireUploadFileBuffer } from './documentFileStorageHelper.js';
+import { uploadFile, deleteFile } from './storageHelper.js';
+import { buildDocumentS3Key } from './documentFilePathHelper.js';
 import { applyHubMetadataToDocument } from '../services/lifecycleDocumentHubService.js';
 import { getCatalogDocument } from '../constants/lifecycleDocumentCatalog.js';
 
@@ -14,10 +14,6 @@ const JOB_TYPE_TO_CATALOG = {
     GUARANTOR_FORM: 'OTHER',
     OTHER: 'OTHER',
 };
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const UPLOADS_DOCUMENTS_DIR = path.join(__dirname, '..', 'uploads', 'documents');
 
 export const JOB_DOCUMENT_TYPES = {
     OFFER_LETTER: 'OFFER_LETTER',
@@ -37,42 +33,25 @@ const JOB_TYPE_LABELS = {
     OTHER: 'Other Document',
 };
 
-/** Pull the main ID / reference number from job-details additionalInfo */
 export function extractDocumentNumber(documentType, parsedInfo = {}) {
     if (!parsedInfo || typeof parsedInfo !== 'object') return '';
     switch (documentType) {
-        case 'PAN_CARD':
-            return String(parsedInfo.panNumber || '').trim();
-        case 'AADHAR_CARD':
-            return String(parsedInfo.aadharNumber || '').trim();
-        case 'OFFER_LETTER':
-            return String(parsedInfo.effectiveDate || '').trim();
-        case 'GUARANTOR_FORM':
-            return String(parsedInfo.guarantorName || parsedInfo.guarantorContact || '').trim();
-        case 'DEGREE_CERTIFICATE':
-            return String(parsedInfo.marksheetLevel || parsedInfo.institution || parsedInfo.yearObtained || '').trim();
+        case 'PAN_CARD': return String(parsedInfo.panNumber || '').trim();
+        case 'AADHAR_CARD': return String(parsedInfo.aadharNumber || '').trim();
+        case 'OFFER_LETTER': return String(parsedInfo.effectiveDate || '').trim();
+        case 'GUARANTOR_FORM': return String(parsedInfo.guarantorName || parsedInfo.guarantorContact || '').trim();
+        case 'DEGREE_CERTIFICATE': return String(parsedInfo.marksheetLevel || parsedInfo.institution || parsedInfo.yearObtained || '').trim();
         default:
-            return String(
-                parsedInfo.panNumber ||
-                parsedInfo.aadharNumber ||
-                parsedInfo.documentNumber ||
-                ''
-            ).trim();
+            return String(parsedInfo.panNumber || parsedInfo.aadharNumber || parsedInfo.documentNumber || '').trim();
     }
 }
 
-/** Human-readable description for HR document list */
 export function formatJobDocDescription(documentType, parsedInfo = {}) {
-    if (!parsedInfo || typeof parsedInfo !== 'object' || !Object.keys(parsedInfo).length) {
-        return '';
-    }
+    if (!parsedInfo || typeof parsedInfo !== 'object' || !Object.keys(parsedInfo).length) return '';
     switch (documentType) {
-        case 'PAN_CARD':
-            return parsedInfo.panNumber ? `PAN Number: ${parsedInfo.panNumber}` : '';
-        case 'AADHAR_CARD':
-            return parsedInfo.aadharNumber ? `Aadhar Number: ${parsedInfo.aadharNumber}` : '';
-        case 'OFFER_LETTER':
-            return parsedInfo.effectiveDate ? `Effective Date: ${parsedInfo.effectiveDate}` : '';
+        case 'PAN_CARD': return parsedInfo.panNumber ? `PAN Number: ${parsedInfo.panNumber}` : '';
+        case 'AADHAR_CARD': return parsedInfo.aadharNumber ? `Aadhar Number: ${parsedInfo.aadharNumber}` : '';
+        case 'OFFER_LETTER': return parsedInfo.effectiveDate ? `Effective Date: ${parsedInfo.effectiveDate}` : '';
         case 'GUARANTOR_FORM': {
             const parts = [];
             if (parsedInfo.guarantorName) parts.push(`Name: ${parsedInfo.guarantorName}`);
@@ -80,9 +59,7 @@ export function formatJobDocDescription(documentType, parsedInfo = {}) {
             return parts.join(' · ');
         }
         case 'DEGREE_CERTIFICATE': {
-            if (parsedInfo.marksheetLevel) {
-                return `Level: ${parsedInfo.marksheetLevel}`;
-            }
+            if (parsedInfo.marksheetLevel) return `Level: ${parsedInfo.marksheetLevel}`;
             const parts = [];
             if (parsedInfo.institution) parts.push(parsedInfo.institution);
             if (parsedInfo.yearObtained) parts.push(parsedInfo.yearObtained);
@@ -102,22 +79,9 @@ const DOCUMENT_CATEGORIES = ['Employee', 'Company', 'Policy', 'Contract', 'Certi
 export function mimeToDocumentTypeEnum(mime) {
     if (!mime) return 'Other';
     if (mime === 'application/pdf') return 'PDF';
-    if (mime === 'application/msword' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        return 'Word';
-    }
+    if (mime === 'application/msword' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'Word';
     if (mime.startsWith('image/')) return 'Image';
     return 'Other';
-}
-
-function deleteFileIfExists(fileUrl) {
-    if (!fileUrl || typeof fileUrl !== 'string') return;
-    const basename = path.basename(fileUrl);
-    const currentPath = path.join(UPLOADS_DOCUMENTS_DIR, basename);
-    try {
-        if (fs.existsSync(currentPath)) fs.unlinkSync(currentPath);
-    } catch {
-        /* ignore */
-    }
 }
 
 function matchesMarksheetLevel(doc, marksheetLevel) {
@@ -125,9 +89,6 @@ function matchesMarksheetLevel(doc, marksheetLevel) {
     return String(level || '').trim() === String(marksheetLevel || '').trim();
 }
 
-/** Deactivate older rows of the same job-doc type (caller must pass new doc _id to keep).
- *  @returns {Promise<number>} number of previous documents deactivated
- */
 export async function deactivatePreviousJobDocumentsExcept(organizationId, employeeId, documentType, keepId, parsedInfo = {}) {
     const candidateFilter = {
         organizationId,
@@ -167,8 +128,7 @@ export async function deactivatePreviousJobDocumentsExcept(organizationId, emplo
 }
 
 /**
- * Create and save a Document from employee multipart upload (job-details or generic).
- * Uses canonical Document collection (SaaS-ready single source of truth).
+ * Upload document buffer to S3 and create a Document record.
  */
 export async function createEmployeeJobOrGenericDocument({ organizationId, employeeId, file, body = {} }) {
     const { documentType, additionalInfo, name, description, type: bodyType, category: bodyCategory } = body;
@@ -182,20 +142,29 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         }
     }
 
-    const relFileUrl = `/uploads/documents/${file.filename}`;
-
-    if (!file.path || !fs.existsSync(file.path)) {
-        throw new Error('Uploaded file was not saved on the server. Please try uploading again.');
+    if (!file?.buffer?.length) {
+        throw new Error('Uploaded file buffer is empty. Please try uploading again.');
     }
 
-    const isJobType = documentType && Object.values(JOB_DOCUMENT_TYPES).includes(documentType);
+    // Build S3 key and upload
+    const ext = path.extname(file.originalname || '').toLowerCase() || '';
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(4).toString('hex');
+    const safeBase = (file.originalname || 'document')
+        .replace(ext, '')
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9_]/g, '')
+        .slice(0, 60);
+    const filename = `${safeBase}-${timestamp}-${random}${ext}`;
+    const s3Key = buildDocumentS3Key(organizationId, filename);
 
-    const fileBinary = requireUploadFileBuffer(file);
+    const s3Url = await uploadFile(file.buffer, s3Key, file.mimetype, false);
+
+    const isJobType = documentType && Object.values(JOB_DOCUMENT_TYPES).includes(documentType);
 
     if (isJobType) {
         const documentNumber = extractDocumentNumber(documentType, parsedInfo);
         const readableDescription = formatJobDocDescription(documentType, parsedInfo);
-
         const docName = documentType === 'DEGREE_CERTIFICATE' && parsedInfo.marksheetLevel
             ? `Marksheet - ${parsedInfo.marksheetLevel}`
             : (JOB_TYPE_LABELS[documentType] || documentType);
@@ -207,11 +176,10 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             description: readableDescription,
             category: 'Employee',
             type: mimeToDocumentTypeEnum(file.mimetype),
-            fileUrl: relFileUrl,
+            fileUrl: s3Url,
             fileName: file.originalname,
             fileSize: file.size,
             mimeType: file.mimetype,
-            fileBinary,
             relatedTo: 'Employee',
             relatedId: employeeId,
             relatedToModel: 'Employee',
@@ -227,15 +195,13 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             },
         });
         await doc.save();
+
         const catalogKey = body.catalogKey || JOB_TYPE_TO_CATALOG[documentType];
         applyHubMetadataToDocument(doc, { catalogKey, orgCatalogEntry: getCatalogDocument(catalogKey) });
         if (catalogKey) await doc.save();
+
         const replacedCount = await deactivatePreviousJobDocumentsExcept(
-            organizationId,
-            employeeId,
-            documentType,
-            doc._id,
-            parsedInfo
+            organizationId, employeeId, documentType, doc._id, parsedInfo
         );
         if (replacedCount > 0) {
             doc.metadata = {
@@ -245,7 +211,6 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
             };
             await doc.save();
         }
-        await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
         return doc;
     }
 
@@ -262,11 +227,10 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         description: description != null ? String(description) : '',
         category: docCategory,
         type: docTypeEnum,
-        fileUrl: relFileUrl,
+        fileUrl: s3Url,
         fileName: file.originalname,
         fileSize: file.size,
         mimeType: file.mimetype,
-        fileBinary,
         relatedTo: 'Employee',
         relatedId: employeeId,
         relatedToModel: 'Employee',
@@ -281,26 +245,18 @@ export async function createEmployeeJobOrGenericDocument({ organizationId, emplo
         workflowAssignment: body.workflowAssignment ? JSON.parse(body.workflowAssignment) : undefined,
     });
     await doc.save();
-    await persistDocumentBinary(doc._id, fileBinary?.length ? fileBinary : file);
     return doc;
 }
 
-/**
- * Merge canonical Document records (job uploads) with legacy embedded employee.documents for API responses.
- */
 export async function mergeLegacyAndCanonicalEmployeeDocuments(employee) {
-    if (!employee || !employee._id || !employee.organizationId) {
-        return employee;
-    }
+    if (!employee || !employee._id || !employee.organizationId) return employee;
 
     const canonical = await Document.find({
         organizationId: employee.organizationId,
         uploadedBy: employee._id,
         employeeJobDocumentType: { $exists: true, $ne: null },
         isActive: true,
-    })
-        .sort({ createdAt: -1 })
-        .lean();
+    }).sort({ createdAt: -1 }).lean();
 
     const canonicalRows = canonical.map((d) => ({
         _id: d._id,
@@ -322,14 +278,10 @@ export async function mergeLegacyAndCanonicalEmployeeDocuments(employee) {
 
     const byType = new Map();
     for (const l of legacy) {
-        if (l && l.documentType) {
-            byType.set(l.documentType, { ...l, _source: 'legacy' });
-        }
+        if (l && l.documentType) byType.set(l.documentType, { ...l, _source: 'legacy' });
     }
     for (const c of canonicalRows) {
-        if (c.documentType) {
-            byType.set(c.documentType, { ...c, _source: 'canonical' });
-        }
+        if (c.documentType) byType.set(c.documentType, { ...c, _source: 'canonical' });
     }
 
     employee.documents = Array.from(byType.values()).sort(

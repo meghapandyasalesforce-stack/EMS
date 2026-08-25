@@ -7,7 +7,6 @@ import {
     FaTasks, FaGraduationCap, FaComment, FaHistory, FaSync,
     FaFilter, FaBroadcastTower, FaPlay, FaPause, FaFlag,
 } from 'react-icons/fa';
-import { getProfilePhotoUrl } from '../../utils/axios';
 import { CmButton, cmInitials } from '../../components/corporateModern';
 import useHrmsPopupDismiss from '../../Hooks/useHrmsPopupDismiss';
 
@@ -63,7 +62,7 @@ function contactPerson(field, fallbackRole) {
     if (typeof field === 'object' && (field.name || field.lastName)) {
         return {
             name: [field.name, field.lastName].filter(Boolean).join(' ').trim(),
-            photo: getProfilePhotoUrl(field.profilePhoto),
+            photo: null,
             role: fallbackRole,
         };
     }

@@ -10,6 +10,8 @@ import {
 import isAuthenticated from '../../middlewares/isAuthenticated.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
+import { isAuthenticatedBoth } from '../../middlewares/isAuthenticatedBoth.js';
+import { readLimiter, writeLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
@@ -25,12 +27,9 @@ router.route('/employee/:employeeId/upload')
 router.route('/admin/upload')
     .post(isAdminAuthenticated, upload.single('profilePhoto'), uploadAdminPhoto);
 
-// Get profile photo
+// Get / Delete profile photo (authenticated — no anonymous access)
 router.route('/:userType/:userId')
-    .get(getProfilePhoto);
-
-// Delete profile photo
-router.route('/:userType/:userId')
-    .delete(deleteProfilePhoto);
+    .get(isAuthenticatedBoth, readLimiter, getProfilePhoto)
+    .delete(isAuthenticatedBoth, writeLimiter, deleteProfilePhoto);
 
 export default router;

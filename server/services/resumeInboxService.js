@@ -3,10 +3,10 @@
  * Creates/updates Candidates from inbound recruitment mailbox emails.
  * Does not modify Career Portal / public apply / outbound email senders.
  */
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { uploadFile, buildS3Key } from '../helpers/storageHelper.js';
 import Organization from '../models/organization.model.js';
 import { Recruitment, Candidate } from '../models/recruitment.model.js';
 import ResumeInboxImport from '../models/resumeInboxImport.model.js';
@@ -29,14 +29,6 @@ export const HOLDING_JOB_TAG = '__resume_inbox_holding__';
 export const UNASSIGNED_TAG = 'Unassigned';
 export const EMAIL_SOURCE = 'Email';
 
-const RESUMES_DIR = path.join(__dirname, '../public/uploads/resumes');
-
-function ensureResumesDir() {
-    if (!fs.existsSync(RESUMES_DIR)) {
-        fs.mkdirSync(RESUMES_DIR, { recursive: true });
-    }
-}
-
 function sanitizeFileName(name) {
     return String(name || 'resume')
         .replace(/\s+/g, '_')
@@ -44,15 +36,15 @@ function sanitizeFileName(name) {
         .slice(0, 80) || 'resume';
 }
 
-export function saveResumeAttachment(buffer, originalName) {
-    ensureResumesDir();
+export async function saveResumeAttachment(buffer, originalName, organizationId) {
     const ext = path.extname(originalName || '').toLowerCase() || '.pdf';
     const base = sanitizeFileName(path.basename(originalName || 'resume', ext));
     const fileName = `${base}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-    const fullPath = path.join(RESUMES_DIR, fileName);
-    fs.writeFileSync(fullPath, buffer);
+    const orgId = String(organizationId || 'global');
+    const s3Key = buildS3Key('resume', orgId, fileName);
+    const s3Url = await uploadFile(buffer, s3Key, 'application/octet-stream', false);
     return {
-        url: `/uploads/resumes/${fileName}`,
+        url: s3Url,
         fileName: originalName || fileName,
         size: buffer.length,
     };
@@ -618,7 +610,7 @@ export async function processInboxMessage(organizationId, message, imapSettings)
 
     let resumeFile;
     try {
-        resumeFile = saveResumeAttachment(attachment.buffer, attachment.fileName);
+        resumeFile = await saveResumeAttachment(attachment.buffer, attachment.fileName, organizationId);
     } catch (err) {
         const failed = await ResumeInboxImport.findOneAndUpdate(
             { organizationId, messageId: message.messageId },
@@ -1223,11 +1215,10 @@ export async function retryFailedImport(organizationId, importId) {
     }
 
     // Re-run create/update from stored metadata (no IMAP re-download)
-    const resumePath = path.join(__dirname, '../public', imp.resume.url.replace(/^\//, ''));
-    if (!fs.existsSync(resumePath)) {
-        throw Object.assign(new Error('Stored resume file missing'), { status: 400 });
+    // Note: retry from S3 is not supported without re-downloading — re-poll mailbox instead
+    if (!imp.resume?.url) {
+        throw Object.assign(new Error('No stored resume URL to retry with — re-poll mailbox instead'), { status: 400 });
     }
-    const buffer = fs.readFileSync(resumePath);
     const fakeMessage = {
         uid: imp.uid,
         messageId: `${imp.messageId}::retry::${Date.now()}`,
@@ -1239,8 +1230,8 @@ export async function retryFailedImport(organizationId, importId) {
         attachments: [{
             fileName: imp.resume.fileName,
             contentType: imp.resume.mimeType,
-            size: buffer.length,
-            buffer,
+            size: imp.resume.size || 0,
+            buffer: Buffer.alloc(0), // buffer not available on retry — re-poll to get fresh attachment
         }],
     };
 

@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import axios, { getUploadUrl, openDocumentPreview, saveDocumentDownload } from '../../utils/axios';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { canEmployeeDeleteOwnDocument } from '../../utils/documentDeleteRules';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 
 const formatBytes = (bytes) => {
   const size = Number(bytes || 0);
@@ -52,6 +53,12 @@ const DocumentsAndIdPage = () => {
   const [deleting, setDeleting] = useState(false);
   const uploadInputRef = useRef(null);
   const companyDocsRef = useRef(null);
+
+  const cardEmployeeId = idCard?.employeeId?._id || null;
+  const { photoUrl: idCardProfilePhoto } = useSignedProfilePhoto(
+    idCard?.employeeId?.profilePhoto || idCard?.employeeId?.profilePicture,
+    { userType: 'employee', userId: cardEmployeeId }
+  );
 
   const loadPageData = useCallback(async () => {
     try {
@@ -291,9 +298,9 @@ const DocumentsAndIdPage = () => {
                 {idCard ? (
                   <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
                     <div className="mb-3 flex items-center gap-3">
-                      {idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto ? (
+                      {idCardProfilePhoto ? (
                         <img
-                          src={getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}
+                          src={idCardProfilePhoto}
                           alt="Employee"
                           className="h-16 w-16 rounded-lg object-cover"
                         />
@@ -404,9 +411,9 @@ const DocumentsAndIdPage = () => {
                   <p className="mt-1 text-xs tracking-wide opacity-80">EMPLOYEE ID</p>
 
                   <div className="my-5 flex justify-center">
-                    {idCard.employeeId?.profilePhoto?.url || idCard.employeeId?.profilePhoto ? (
+                    {idCardProfilePhoto ? (
                       <img
-                        src={getUploadUrl(idCard.employeeId.profilePhoto.url || idCard.employeeId.profilePhoto)}
+                        src={idCardProfilePhoto}
                         alt="Employee"
                         className="h-24 w-24 rounded-full border-2 border-white/80 object-cover"
                       />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiCamera } from 'react-icons/fi';
-import { getUploadUrl, getProfilePhotoUrl } from '../utils/axios';
 import logger from '../utils/logger';
+import { useSignedProfilePhoto } from '../Hooks/useSignedProfilePhoto';
 
 const ProfilePicture = ({ 
   user, 
@@ -36,8 +36,14 @@ const ProfilePicture = ({
     '2xl': 'w-16 h-16'
   };
 
-  // Get the profile photo URL (works on localhost via Vite proxy and in production via VITE_BACKEND_URL)
-  const imageUrl = getProfilePhotoUrl(user?.profilePhoto || user?.profilePicture);
+  // Resolve a short-lived signed URL for the private profile photo (no timers).
+  const userType = user?.role === 'admin' ? 'admin' : 'employee';
+  const userId = user?._id || user?.id || null;
+  const { photoUrl } = useSignedProfilePhoto(
+    user?.profilePhoto || user?.profilePicture,
+    { userType, userId }
+  );
+  const imageUrl = photoUrl;
   
   // Get initial for avatar
   const getInitials = () => {

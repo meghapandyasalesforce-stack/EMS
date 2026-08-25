@@ -164,11 +164,17 @@ const employeeSchema = new mongoose.Schema({
         }
     },
     
-    // Profile photo
+    // Profile photo (private S3 object, served through short-lived signed URLs)
     profilePhoto: {
         url: { type: String },
+        thumbnailUrl: { type: String },
+        s3Key: { type: String },
+        thumbS3Key: { type: String },
         filename: { type: String },
-        uploadedAt: { type: Date, default: Date.now }
+        uploadedAt: { type: Date, default: Date.now },
+        optimized: { type: Boolean, default: false },
+        originalSize: { type: Number },
+        optimizedSize: { type: Number }
     },
     
     // Joining date

@@ -18,8 +18,8 @@ import {
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
-import { getUploadUrl } from '../../utils/axios';
 import ProfilePicture from '../../Shared/ProfilePicture';
+import SignedProfilePhoto from '../../components/SignedProfilePhoto';
 
 const MINT = '#20C997';
 const MINT_DARK = '#0d9488';
@@ -139,9 +139,10 @@ const IdCardMiniPreview = ({ card, themeKey = 'mint' }) => {
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2">
           <div className="relative h-12 w-12 overflow-hidden rounded-full border-[3px] border-white shadow-md bg-white">
             {employee.profilePhoto ? (
-              <img
-                src={getUploadUrl(employee.profilePhoto?.url || employee.profilePhoto)}
-                alt=""
+              <SignedProfilePhoto
+                profilePhoto={employee.profilePhoto}
+                userType="employee"
+                userId={employee._id || employee.id}
                 className="absolute inset-0 h-full w-full object-cover object-center"
                 crossOrigin="anonymous"
               />
@@ -842,9 +843,10 @@ const PreviewModal = ({ card, onClose, onDownload }) => {
                 <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
                   <div className="relative h-16 w-16 overflow-hidden rounded-full border-4 border-white shadow-lg bg-white">
                     {emp.profilePhoto ? (
-                      <img
-                        src={getUploadUrl(emp.profilePhoto?.url || emp.profilePhoto)}
-                        alt=""
+                      <SignedProfilePhoto
+                        profilePhoto={emp.profilePhoto}
+                        userType="employee"
+                        userId={emp._id || emp.id}
                         className="absolute inset-0 h-full w-full object-cover object-center"
                         crossOrigin="anonymous"
                       />

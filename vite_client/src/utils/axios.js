@@ -199,6 +199,47 @@ export const getProfilePhotoUrl = (profilePhoto) => {
   return withVersion(getUploadUrl(profilePhoto));
 };
 
+// Short-lived signed URLs for profile photos, cached until they expire (15 min).
+// Profiles are private S3 objects; a fresh signed URL is fetched only when a photo is displayed.
+let _profilePhotoCache = {};
+
+/**
+ * Resolve a displayable, short-lived signed URL for a private profile photo.
+ * Fetches via the authorization-aware GET /v1/both/profile-photo/:userType/:userId
+ * endpoint and caches the result for 15 minutes. Returns null when the caller
+ * lacks a stable userType/userId (components then fall back to initials).
+ */
+export async function resolveProfileSignedUrl(profilePhoto, { userType, userId, preferFull = false } = {}) {
+  if (!profilePhoto) return null;
+  const photo = typeof profilePhoto === 'object' ? profilePhoto : { url: profilePhoto };
+  const existing = photo.url || photo.s3Key || null;
+  // Already a full http(s) URL (e.g. a signed URL handed back by the resolver) — reuse it.
+  if (typeof existing === 'string' && /^https?:\/\//.test(existing)) return existing;
+  if (!userId || !userType) return null;
+
+  const cacheId = `${userType}:${userId}`;
+  const now = Date.now();
+  const cached = _profilePhotoCache[cacheId];
+  if (cached && cached.expiresAt > now) return cached.url;
+
+  try {
+    const { data } = await instance.get(`/v1/both/profile-photo/${userType}/${userId}`);
+    const url = preferFull
+      ? data?.profilePhoto?.url || data?.profilePhoto?.thumbnailUrl
+      : data?.profilePhoto?.thumbnailUrl || data?.profilePhoto?.url || null;
+    if (url) {
+      _profilePhotoCache = {
+        ..._profilePhotoCache,
+        [cacheId]: { url, expiresAt: now + 15 * 60 * 1000 },
+      };
+    }
+    return url;
+  } catch {
+    // No photo found / unauthorized — caller falls back to initials.
+    return null;
+  }
+}
+
 /** Employee-specific download (legacy embedded docs + job uploads). */
 export const getEmployeeDocumentDownloadUrl = (employeeId, documentId, { inline = false } = {}) => {
   if (!employeeId || !documentId) return null;

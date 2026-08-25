@@ -2,7 +2,6 @@
  * PDF-based Offer Letter templates — isolated from HTML template flow.
  */
 
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Candidate, Recruitment } from '../models/recruitment.model.js';
@@ -31,16 +30,12 @@ import {
     stripExcludedPdfMappings,
 } from '../helpers/pdfPlaceholderMappings.js';
 import { filterSafePdfMappings } from '../helpers/pdfMappingSafety.js';
-import {
-    pdfTemplatePublicUrl,
-    resolvePdfTemplateFullPath,
-} from '../middlewares/offerPdfTemplateUpload.js';
+import { uploadFile, buildS3Key, getSignedUrl, extractS3Key } from '../helpers/storageHelper.js';
 import { assertFeatureEnabled, getOrCreateLifecycleSettings } from './lifecycleConfigService.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
 import logger from '../helpers/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const GENERATED_OFFERS_DIR = path.join(__dirname, '../uploads/lifecycle-letters');
 
 export const PDF_TEMPLATE_FIELD_GROUPS = Object.freeze([
     {
@@ -215,16 +210,7 @@ export async function detectPdfTemplateFields(organizationId, templateId, actor,
     });
     if (!template) throw new Error('PDF template not found');
 
-    let extractedTextItems = template.pdfTemplate?.extractedTextItems || [];
-    if (!extractedTextItems.length && template.pdfTemplate?.pdfFileName) {
-        const templatePath = resolvePdfTemplateFullPath(organizationId, template.pdfTemplate.pdfFileName);
-        if (fs.existsSync(templatePath)) {
-            const buffer = fs.readFileSync(templatePath);
-            extractedTextItems = await extractPdfTextItems(buffer);
-            template.pdfTemplate.extractedTextItems = extractedTextItems;
-            template.pdfTemplate.hasSelectableText = hasSelectableText(extractedTextItems);
-        }
-    }
+    const extractedTextItems = template.pdfTemplate?.extractedTextItems || [];
 
     const detection = runFieldDetection(extractedTextItems);
     template.pdfTemplate.detectedFields = detection.detectedFields;
@@ -280,27 +266,25 @@ function assertPdfMappingsConfigured(template) {
     }
 }
 
-function ensureGeneratedDir(organizationId) {
-    const dir = path.join(GENERATED_OFFERS_DIR, String(organizationId));
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    return dir;
-}
-
 async function generateFilledPdfFile({
     organizationId,
     template,
     placeholderMap,
     fileName,
 }) {
-    const pdfFileName = template.pdfTemplate?.pdfFileName;
-    if (!pdfFileName) throw new Error('PDF template file not found');
+    const pdfS3Key = template.pdfTemplate?.pdfS3Key;
+    if (!pdfS3Key) throw new Error('PDF template file not found in storage');
 
-    const templatePath = resolvePdfTemplateFullPath(organizationId, pdfFileName);
-    if (!fs.existsSync(templatePath)) throw new Error('PDF template file missing on disk');
+    // Download template from S3
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const s3Client = (await import('../config/s3.js')).default;
+    const { S3_BUCKET } = await import('../config/s3.js');
+    const response = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: pdfS3Key }));
+    const chunks = [];
+    for await (const chunk of response.Body) chunks.push(chunk);
+    const templateBytes = Buffer.concat(chunks);
 
-    const templateBytes = fs.readFileSync(templatePath);
     const extractedTextItems = template.pdfTemplate?.extractedTextItems || [];
-    // Never replace email — company letterhead emails must remain static
     const mappings = filterSafePdfMappings(
         stripExcludedPdfMappings(template.pdfTemplate?.fieldMappings || []),
         extractedTextItems,
@@ -313,13 +297,11 @@ async function generateFilledPdfFile({
         extractedTextItems,
     });
 
-    ensureGeneratedDir(organizationId);
     const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fullPath = path.join(GENERATED_OFFERS_DIR, String(organizationId), safeName);
-    fs.writeFileSync(fullPath, filled);
-
-    const pdfUrl = `/uploads/lifecycle-letters/${organizationId}/${safeName}`;
-    return { pdfUrl, pdfFileName: safeName, fullPath };
+    const s3Key = buildS3Key('pdf-template', String(organizationId), `generated/${safeName}`);
+    await uploadFile(filled, s3Key, 'application/pdf', false);
+    const pdfUrl = s3Key; // stored as S3 key; use getSignedUrl to serve
+    return { pdfUrl, pdfFileName: safeName };
 }
 
 export async function uploadPdfOfferTemplate({
@@ -334,7 +316,9 @@ export async function uploadPdfOfferTemplate({
     if (!file) throw new Error('PDF file is required');
     if (!name?.trim()) throw new Error('Template name is required');
 
-    const buffer = fs.readFileSync(file.path);
+    const buffer = file.buffer;
+    if (!buffer?.length) throw new Error('PDF file buffer is empty');
+
     let extractedTextItems = [];
     try {
         extractedTextItems = await extractPdfTextItems(buffer);
@@ -344,8 +328,14 @@ export async function uploadPdfOfferTemplate({
     }
 
     const selectable = hasSelectableText(extractedTextItems);
-    const pdfUrl = pdfTemplatePublicUrl(organizationId, file.filename);
     const detection = runFieldDetection(extractedTextItems);
+
+    // Upload template PDF to S3
+    const safeName = String(file.originalname || 'template.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const s3Filename = `template-${Date.now()}-${safeName}`;
+    const pdfS3Key = buildS3Key('pdf-template', String(organizationId), s3Filename);
+    await uploadFile(buffer, pdfS3Key, 'application/pdf', false);
+    const pdfUrl = pdfS3Key;
 
     const template = await OfferLetterTemplate.create({
         organizationId,
@@ -355,7 +345,8 @@ export async function uploadPdfOfferTemplate({
         bodyHtml: '',
         pdfTemplate: {
             pdfUrl,
-            pdfFileName: file.filename,
+            pdfS3Key,
+            pdfFileName: s3Filename,
             originalFileName: file.originalname,
             fileSize: file.size,
             hasSelectableText: selectable,

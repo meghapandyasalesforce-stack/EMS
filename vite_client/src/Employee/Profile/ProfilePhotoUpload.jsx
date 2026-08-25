@@ -2,8 +2,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { FiCamera, FiUpload, FiX, FiUser, FiZoomIn } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import axios, { getProfilePhotoUrl } from '../../utils/axios';
+import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 
 const OUTPUT_SIZE = 400;
 const VIEWPORT_SIZE = 280;
@@ -59,7 +60,12 @@ const ProfilePhotoUpload = ({ userType = 'employee', userId, onPhotoUpdate }) =>
   const user = useSelector((state) => state.auth.user);
   const { isPermissionGranted, isPermissionDenied, requestCameraPermission } = usePermissions();
 
-  const currentPhotoUrl = getProfilePhotoUrl(user?.profilePhoto || user?.profilePicture);
+  const photoUserId = userId || (user && (user._id || user.id)) || null;
+  const photoUserType = userType || (user?.role === 'admin' ? 'admin' : 'employee');
+  const { photoUrl: currentPhotoUrl } = useSignedProfilePhoto(
+    user?.profilePhoto || user?.profilePicture,
+    { userType: photoUserType, userId: photoUserId, preferFull: true }
+  );
 
   const minZoomForCover = (w, h) => {
     if (!w || !h) return 1;

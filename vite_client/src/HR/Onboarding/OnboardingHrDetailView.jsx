@@ -7,7 +7,7 @@ import {
     FaExternalLinkAlt, FaPlay, FaFlag, FaEdit,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { getProfilePhotoUrl } from '../../utils/axios';
+import { useSignedProfilePhoto } from '../../Hooks/useSignedProfilePhoto';
 import {
     TASK_GROUPS_BY_ROLE, ASSET_STATUSES, getTaskCompletionBlockers, canCompleteTask,
 } from '../../constants/onboardingConstants';
@@ -133,7 +133,7 @@ function contactPerson(field) {
     if (typeof field === 'object' && field.name) {
         return {
             name: [field.name, field.lastName].filter(Boolean).join(' ').trim(),
-            photo: getProfilePhotoUrl(field.profilePhoto),
+            photo: null,
         };
     }
     return { name: String(field), photo: null };
@@ -221,7 +221,10 @@ export default function OnboardingHrDetailView({
 
     const emp = wf.employeeId || {};
     const fullName = [emp.name, emp.lastName].filter(Boolean).join(' ');
-    const photoUrl = getProfilePhotoUrl(emp.profilePhoto);
+    const { photoUrl } = useSignedProfilePhoto(
+      emp.profilePhoto,
+      { userType: 'employee', userId: emp?._id || null }
+    );
     const roleLine = [emp.jobTitle || emp.position, emp.department].filter(Boolean).join(' • ');
 
     const allTasks = useMemo(() => filterByFeature(wf.tasks || []), [wf.tasks, filterByFeature]);
