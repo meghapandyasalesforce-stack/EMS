@@ -15,6 +15,7 @@ import {
 import { getResolvedDocumentCatalog, assertFeatureEnabled, isOrgFeatureEnabled } from './lifecycleConfigService.js';
 import { logLifecycleAudit } from './lifecycleAuditService.js';
 import { notify } from '../helpers/notificationManager.js';
+import { getSignedUrl, extractS3Key } from '../helpers/storageHelper.js';
 
 const MS_PER_DAY = 86400000;
 
@@ -518,15 +519,18 @@ export async function getDocumentPreview(documentId, { organizationId } = {}) {
     const doc = await Document.findOne(query);
     if (!doc) throw new Error('Document not found');
 
+    const s3Key = doc.fileUrl ? extractS3Key(doc.fileUrl) : null;
+    const previewUrl = s3Key ? await getSignedUrl(s3Key, 900) : null;
+
     if (doc.mimeType?.startsWith('image/')) {
-        return { previewUrl: doc.fileUrl, type: 'image', fileUrl: doc.fileUrl, name: doc.name };
+        return { previewUrl, type: 'image', fileUrl: doc.fileUrl, name: doc.name };
     }
 
     if (doc.mimeType === 'application/pdf') {
-        return { previewUrl: doc.fileUrl, type: 'pdf', fileUrl: doc.fileUrl, name: doc.name, needsGeneration: false };
+        return { previewUrl, type: 'pdf', fileUrl: doc.fileUrl, name: doc.name, needsGeneration: false };
     }
 
-    return { previewUrl: doc.fileUrl || null, type: 'document', fileUrl: doc.fileUrl, name: doc.name, needsGeneration: !doc.fileUrl };
+    return { previewUrl, type: 'document', fileUrl: doc.fileUrl, name: doc.name, needsGeneration: !doc.fileUrl };
 }
 
 /**

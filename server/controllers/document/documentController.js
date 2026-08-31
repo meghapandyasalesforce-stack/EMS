@@ -760,22 +760,25 @@ export const downloadDocumentById = asyncHandler(async (req, res) => {
 
     let fileUrl = document?.fileUrl || legacyDoc?.fileUrl;
     let downloadName = document?.fileName || legacyDoc?.fileName || 'document';
+    let mimeType = document?.mimeType || legacyDoc?.mimeType || null;
 
     if (document && versionParam != null && !Number.isNaN(versionParam)) {
         if (versionParam === document.version) {
             fileUrl = document.fileUrl;
             downloadName = document.fileName || downloadName;
+            mimeType = document.mimeType || mimeType;
         } else {
             const previous = (document.previousVersions || []).find((v) => v.version === versionParam);
             if (!previous) return res.status(404).json({ success: false, message: 'Document version not found' });
             fileUrl = previous.fileUrl;
             downloadName = previous.fileName || downloadName;
+            mimeType = previous.mimeType || mimeType;
         }
     }
 
     if (!fileUrl) return res.status(404).json({ success: false, message: 'File not found' });
 
-    return sendDocumentFile(res, { fileUrl, downloadName, inline });
+    return sendDocumentFile(res, { fileUrl, downloadName, mimeType, inline });
 });
 
 /**
@@ -1371,6 +1374,7 @@ export const replaceMyDocumentFile = asyncHandler(async (req, res) => {
         });
     }
 
+    const organizationId = getOrganizationId(req);
     if (document.fileUrl) await deleteFile(document.fileUrl);
     const replacedS3Url = await uploadDocumentFileToS3(file, organizationId);
 

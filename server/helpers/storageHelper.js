@@ -81,12 +81,16 @@ export function buildS3Key(type, organizationId, filename) {
 
 /**
  * Extract S3 key from either a full S3 URL or a raw key string.
+ * Returns null for legacy local disk paths (/uploads/...) so callers
+ * can return a clean 404 instead of passing a bad key to S3.
  */
 export function extractS3Key(urlOrKey) {
     if (!urlOrKey) return null;
+    // Legacy local disk paths are not S3 keys — signal absence to callers
+    if (urlOrKey.startsWith('/uploads/') || urlOrKey.startsWith('./')) return null;
     // Full S3 URL: https://bucket.s3.region.amazonaws.com/key
     const match = urlOrKey.match(/amazonaws\.com\/(.+)$/);
     if (match) return match[1];
-    // Already a key
+    // Already a raw S3 key
     return urlOrKey;
 }
