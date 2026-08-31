@@ -41,7 +41,8 @@ router.route("/request/:id/cancel")
 router.route("/manager/requests")
     .get(requireRegularizationApprover, getRegularizationRequestsForManager);
 
-// Manager approve/reject routes
+// Manager approve/reject routes.
+// Requests raised by HR staff are additionally narrowed to the org admin in the controller.
 router.route("/manager/approve/:id")
     .patch(requireRegularizationApprover, approveRegularization);
 

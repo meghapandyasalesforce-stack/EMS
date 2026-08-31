@@ -337,8 +337,8 @@ const InternalJobDetailPage = () => {
                                     <input required className={fieldClass} value={referForm.firstName} onChange={(e) => setReferForm((p) => ({ ...p, firstName: e.target.value }))} />
                                 </label>
                                 <label className="block">
-                                    <span className="ats-form-label">Last name *</span>
-                                    <input required className={fieldClass} value={referForm.lastName} onChange={(e) => setReferForm((p) => ({ ...p, lastName: e.target.value }))} />
+                                    <span className="ats-form-label">Last name</span>
+                                    <input className={fieldClass} value={referForm.lastName} onChange={(e) => setReferForm((p) => ({ ...p, lastName: e.target.value }))} />
                                 </label>
                                 <label className="block">
                                     <span className="ats-form-label">Email *</span>

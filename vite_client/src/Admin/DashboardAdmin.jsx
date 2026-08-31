@@ -9,6 +9,7 @@ import {
   FiDollarSign,
   FiEye,
   FiFileText,
+  FiHeadphones,
   FiPlus,
   FiUserPlus,
   FiUsers
@@ -16,11 +17,84 @@ import {
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useEmployees, useLeaves, usePayrolls, useProjects } from "../Hooks/useDashboardData";
 import axios from "../utils/axios";
+import { toast } from "react-toastify";
 import { handleApiError } from "../utils/errorHandler";
 import NotificationSender from "./NotificationSender";
 import useAuthPermissions from "../Hooks/useAuthPermissions";
 import { PERMISSIONS, hasAnyPermission } from "../utils/permissions";
 import PermissionGate from "../components/PermissionGate";
+import { BOTH_CELEBRATION_ENDPOINT } from "../utils/constant";
+
+
+const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
+
+const sortCelebrations = (items = []) => {
+    const order = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
+    return [...items].sort((a, b) => {
+        const aDays = Number.isFinite(Number(a?.daysUntil)) ? Number(a.daysUntil) : 9999;
+        const bDays = Number.isFinite(Number(b?.daysUntil)) ? Number(b.daysUntil) : 9999;
+        if (aDays !== bDays) return aDays - bDays;
+        return (order[a?.type] || 99) - (order[b?.type] || 99);
+    });
+};
+
+function CelebrationDashboardCard({ item, isSelf = false, event, reacting = false, onReact, onWishes }) {
+    const isToday = item?.daysUntil === 0;
+    const isMarriage = item?.type === 'marriage_anniversary';
+    const isWorkAnniversary = item?.type === 'anniversary';
+    const icon = isMarriage ? '💍' : isWorkAnniversary ? '🎉' : '🎂';
+    const typeLabel = isMarriage ? 'Marriage Anniversary' : isWorkAnniversary ? 'Work Anniversary' : 'Birthday';
+    const dateLabel = item?.birthday || item?.anniversaryDate || item?.date || '';
+    const whenLabel = item?.daysUntil === 0 ? 'Today' : item?.daysUntil === 1 ? 'Tomorrow' : `in ${item?.daysUntil} days`;
+    const counts = event?.reactionCounts || {};
+    const header = isSelf
+        ? isMarriage ? 'YOUR MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'YOUR WORK ANNIVERSARY' : "IT'S YOUR BIRTHDAY"
+        : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
+
+    return (
+        <li className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 pr-24">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
+                    <p className="truncate font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
+                    <p className="text-xs text-slate-500">
+                        {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
+                        {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
+                    </p>
+                </div>
+                {onWishes ? (
+                    <button
+                        type="button"
+                        onClick={() => onWishes(item)}
+                        className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1ab589] sm:px-3 sm:text-xs"
+                    >
+                        {isToday ? 'Wishes' : 'Upcoming'}
+                    </button>
+                ) : null}
+            </div>
+            {isToday && onReact ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {CELEBRATION_REACTIONS.map((emoji) => {
+                        const count = counts[emoji] || 0;
+                        return (
+                            <button
+                                key={emoji}
+                                type="button"
+                                disabled={reacting}
+                                onClick={() => onReact(item, emoji)}
+                                className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
+                                aria-label={`React ${emoji}`}
+                            >
+                                <span>{emoji}</span>
+                                {count > 0 ? <span className="text-xs font-semibold text-slate-600">{count}</span> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </li>
+    );
+}
 
 const selectAuth = (state) => state.auth || {};
 
@@ -33,6 +107,9 @@ function DashboardAdmin() {
   const [announcements, setAnnouncements] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [escalatedApprovalsCount, setEscalatedApprovalsCount] = useState(0);
+  const [celebrations, setCelebrations] = useState([]);
+  const [celebrationEvents, setCelebrationEvents] = useState({});
+  const [celebrationReacting, setCelebrationReacting] = useState(false);
 
   const {
     data: employeeData = { employees: [], total: 0 },
@@ -67,13 +144,14 @@ function DashboardAdmin() {
   useEffect(() => {
     const loadDashboardExtras = async () => {
       try {
-        const [todayRes, announcementsRes, escalatedRes] = await Promise.all([
+        const [todayRes, announcementsRes, escalatedRes, celebrationsRes] = await Promise.all([
           axios.get("/v1/both/attendance/today-status", { withCredentials: true }),
           axios.get("/v1/both/notification/sent-announcements", {
             params: { scope: "organization", page: 1, limit: 3 },
             withCredentials: true
           }),
-          axios.get("/v1/admin/approvals/escalated-count", { withCredentials: true }).catch(() => null)
+          axios.get("/v1/admin/approvals/escalated-count", { withCredentials: true }).catch(() => null),
+          axios.get("/v1/both/profile-details/upcoming-birthdays", { withCredentials: true }).catch(() => null)
         ]);
 
         const todayList = todayRes?.data?.data || [];
@@ -83,6 +161,11 @@ function DashboardAdmin() {
         setEscalatedApprovalsCount(
           Number(escalatedRes?.data?.data?.count ?? 0)
         );
+        const celebrationItems = celebrationsRes?.data?.celebrations || [
+          ...(celebrationsRes?.data?.birthdays || []),
+          ...(celebrationsRes?.data?.marriageAnniversaries || [])
+        ];
+        setCelebrations(sortCelebrations(Array.isArray(celebrationItems) ? celebrationItems : []));
       } catch {
         // Keep dashboard functional when optional sections fail.
       }
@@ -259,6 +342,72 @@ function DashboardAdmin() {
     </div>
   );
 
+  const getCelebrationItemKey = (item) => `${item?.type || "birthday"}_${item?.employeeId}`;
+
+  const openTodayCelebrationEvent = async (item) => {
+    const { data } = await axios.post(
+      `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+      { employeeId: item.employeeId, type: item.type || "birthday" },
+      { withCredentials: true }
+    );
+    const event = data?.data;
+    if (event?._id) {
+      const itemKey = getCelebrationItemKey(item);
+      setCelebrationEvents((prev) => ({ ...prev, [itemKey]: event }));
+    }
+    return event;
+  };
+
+  const handleOpenCelebrationWishes = async (item) => {
+    if (!item?.employeeId) return;
+    try {
+      if (item.daysUntil !== 0) {
+        const label = item?.type === 'marriage_anniversary'
+          ? 'marriage anniversary'
+          : item?.type === 'anniversary'
+            ? 'work anniversary'
+            : 'birthday';
+        toast.info(`Wishes and reactions open on their ${label}.`);
+        return;
+      }
+      const itemKey = getCelebrationItemKey(item);
+      const event = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
+      const eventId = event?._id;
+      navigate(eventId ? `/celebrations/${eventId}` : "/celebrations");
+    } catch {
+      navigate("/celebrations");
+    }
+  };
+
+  const handleCelebrationReact = async (item, emoji) => {
+    if (item?.daysUntil !== 0) return;
+    setCelebrationReacting(true);
+    try {
+      const itemKey = getCelebrationItemKey(item);
+      const opened = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
+      if (!opened?._id) return;
+      const { data } = await axios.post(
+        `${BOTH_CELEBRATION_ENDPOINT}/events/${opened._id}/react`,
+        { emoji },
+        { withCredentials: true }
+      );
+      const eventStateKey = data?.data?.type && data?.data?.employeeId
+        ? `${data.data.type}_${data.data.employeeId}`
+        : itemKey;
+      setCelebrationEvents((prev) => ({
+        ...prev,
+        [eventStateKey]: {
+          ...opened,
+          ...(prev[eventStateKey] || {}),
+          reactions: data?.data?.reactions || [],
+          reactionCounts: data?.data?.reactionCounts || {},
+        },
+      }));
+    } finally {
+      setCelebrationReacting(false);
+    }
+  };
+
   if (isLoading) {
     return <LoadingSpinner message="Loading admin dashboard..." />;
   }
@@ -283,6 +432,13 @@ function DashboardAdmin() {
             <p className="mt-1 text-sm text-slate-500">{todayLabel}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate("/helpdesk")}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+            >
+              <FiHeadphones className="h-4 w-4" />
+              Helpdesk
+            </button>
             <button
               onClick={() => navigate("/today-attendance")}
               className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
@@ -533,16 +689,35 @@ function DashboardAdmin() {
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Upcoming events & holidays</h2>
-            <div className="grid grid-cols-3 gap-2.5">
-              {upcomingEvents.map((event) => (
-                <div key={event.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">{event.tag}</p>
-                  <p className="mt-1 text-lg font-bold text-slate-900">{event.date.getDate()}</p>
-                  <p className="text-xs text-slate-600">{event.date.toLocaleDateString([], { month: "short", weekday: "short" })}</p>
-                </div>
-              ))}
-            </div>
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">Upcoming celebrations</h2>
+            {celebrations.length > 0 ? (
+              <ul className="space-y-3">
+                {celebrations.slice(0, 3).map((item, idx) => {
+                  const itemKey = `${item.type || "birthday"}_${item.employeeId}`;
+                  return (
+                    <CelebrationDashboardCard
+                      key={`${item.type || "birthday"}_${item.employeeId || idx}`}
+                      item={item}
+                      isSelf={false}
+                      event={celebrationEvents[itemKey]}
+                      reacting={celebrationReacting}
+                      onReact={handleCelebrationReact}
+                      onWishes={handleOpenCelebrationWishes}
+                    />
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="grid grid-cols-3 gap-2.5">
+                {upcomingEvents.map((event) => (
+                  <div key={event.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-500">{event.tag}</p>
+                    <p className="mt-1 text-lg font-bold text-slate-900">{event.date.getDate()}</p>
+                    <p className="text-xs text-slate-600">{event.date.toLocaleDateString([], { month: "short", weekday: "short" })}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

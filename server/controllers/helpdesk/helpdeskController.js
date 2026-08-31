@@ -1,7 +1,84 @@
 import { HelpdeskTicket } from '../../models/helpdesk.model.js';
-import { getOrganizationId, addOrganizationFilter } from '../../helpers/organizationHelper.js';
+import Employee from '../../models/employee.model.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import { getManagerEmployeeIds } from '../../helpers/managerHelper.js';
+import { resolveAuthContext } from '../../helpers/permissionService.js';
+import { notify } from '../../helpers/notificationManager.js';
+import { getHelpdeskTicketNotificationRecipients } from '../../helpers/helpdeskNotificationHelper.js';
 import logger from '../../helpers/logger.js';
 import asyncHandler from '../../middlewares/asyncHandler.js';
+
+const HELPDESK_CATEGORIES = [
+    'HR', 'IT', 'Payroll', 'Benefits', 'Leave', 'Attendance',
+    'Training', 'Document', 'General', 'Other'
+];
+const HELPDESK_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
+
+const getHelpdeskAccess = async (req) => {
+    if (!req.authContext) {
+        req.authContext = await resolveAuthContext(req.decoded, req);
+    }
+
+    const ctx = req.authContext;
+    const canManage = Boolean(
+        req.decoded?.role === 'admin' ||
+        ctx?.isOrgOwner ||
+        ctx?.isHrManager ||
+        ctx?.isHrExecutive ||
+        ctx?.isExecutive
+    );
+
+    return {
+        canManage,
+        isLineManager: Boolean(!canManage && ctx?.isLineManager),
+        employeeId: req.employee?._id || null
+    };
+};
+
+const buildTicketScope = async (req) => {
+    const organizationId = getOrganizationId(req);
+    const access = await getHelpdeskAccess(req);
+
+    if (access.canManage) {
+        return { organizationId, access };
+    }
+
+    if (!access.employeeId) {
+        return { organizationId, access, denied: true };
+    }
+
+    if (access.isLineManager) {
+        const reportIds = await getManagerEmployeeIds(
+            Employee,
+            organizationId,
+            req.employee
+        );
+        return {
+            organizationId,
+            access,
+            requestedBy: { $in: [access.employeeId, ...reportIds] }
+        };
+    }
+
+    return { organizationId, access, requestedBy: access.employeeId };
+};
+
+const ticketQueryForRequest = async (req, extra = {}) => {
+    const scope = await buildTicketScope(req);
+    if (scope.denied) return null;
+
+    const { access: _access, denied: _denied, ...visibility } = scope;
+    return { ...visibility, ...extra };
+};
+
+const hideInternalComments = (ticket, canManage) => {
+    if (!ticket || canManage) return ticket;
+    const plain = typeof ticket.toObject === 'function' ? ticket.toObject() : ticket;
+    return {
+        ...plain,
+        comments: (plain.comments || []).filter((comment) => !comment.isInternal)
+    };
+};
 
 /**
  * Create helpdesk ticket
@@ -10,13 +87,105 @@ export const createTicket = asyncHandler(async (req, res) => {
     const organizationId = getOrganizationId(req);
     const requestedBy = req.employee?._id || req.user?._id;
 
+    if (!requestedBy) {
+        return res.status(403).json({
+            success: false,
+            message: 'An authenticated profile is required to create a ticket'
+        });
+    }
+
+    if (!organizationId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Your account is not linked to an organization, so a ticket cannot be created'
+        });
+    }
+
+    const allowedFields = [
+        'category',
+        'subCategory',
+        'priority',
+        'subject',
+        'description',
+        'department',
+        'attachments'
+    ];
+    const payload = Object.fromEntries(
+        allowedFields
+            .filter((field) => req.body?.[field] !== undefined)
+            .map((field) => [field, req.body[field]])
+    );
+
+    const subject = String(payload.subject || '').trim();
+    const description = String(payload.description || '').trim();
+    const category = String(payload.category || '').trim();
+
+    const fieldErrors = [];
+    if (!subject) fieldErrors.push('Subject is required');
+    if (!description) fieldErrors.push('Description is required');
+    if (!category) fieldErrors.push('Category is required');
+    else if (!HELPDESK_CATEGORIES.includes(category)) {
+        fieldErrors.push(`Category must be one of: ${HELPDESK_CATEGORIES.join(', ')}`);
+    }
+    if (payload.priority && !HELPDESK_PRIORITIES.includes(payload.priority)) {
+        fieldErrors.push(`Priority must be one of: ${HELPDESK_PRIORITIES.join(', ')}`);
+    }
+
+    if (fieldErrors.length) {
+        return res.status(400).json({
+            success: false,
+            message: fieldErrors[0],
+            errors: fieldErrors
+        });
+    }
+
     const ticket = new HelpdeskTicket({
-        ...req.body,
+        ...payload,
+        subject,
+        description,
+        category,
         organizationId,
         requestedBy
     });
 
     await ticket.save();
+
+    // Notify only the role-specific recipients for newly created tickets.
+    setImmediate(async () => {
+        try {
+            const recipients = await getHelpdeskTicketNotificationRecipients(
+                req,
+                organizationId
+            );
+            if (!recipients.length) return;
+
+            const creatorName = [
+                req.employee?.name || req.user?.name,
+                req.employee?.lastName
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .trim() || 'An employee';
+
+            await notify({
+                type: 'helpdesk_ticket_created',
+                recipients,
+                organizationId,
+                senderId: requestedBy,
+                senderType: req.employee?._id ? 'Employee' : 'User',
+                data: {
+                    ticket,
+                    creatorName
+                }
+            });
+        } catch (notificationError) {
+            logger.error('Failed to send helpdesk ticket creation notification', {
+                ticketId: ticket._id,
+                ticketNumber: ticket.ticketNumber,
+                error: notificationError.message
+            });
+        }
+    });
 
     // Auto-track ticket for SLA
     try {
@@ -60,37 +229,45 @@ export const createTicket = asyncHandler(async (req, res) => {
  * Get tickets
  */
 export const getTickets = asyncHandler(async (req, res) => {
-    const organizationId = getOrganizationId(req);
     const { status, category, priority, requestedBy, assignedTo, page = 1, limit = 20 } = req.query;
-
-    const query = addOrganizationFilter(req, {});
+    const scope = await buildTicketScope(req);
+    if (scope.denied) {
+        return res.status(403).json({
+            success: false,
+            message: 'An employee profile is required to view tickets'
+        });
+    }
+    const { access, denied: _denied, ...query } = scope;
 
     if (status) query.status = status;
     if (category) query.category = category;
     if (priority) query.priority = priority;
-    if (requestedBy) query.requestedBy = requestedBy;
-    if (assignedTo) query.assignedTo = assignedTo;
+    if (access.canManage && requestedBy) query.requestedBy = requestedBy;
+    if (access.canManage && assignedTo) query.assignedTo = assignedTo;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const skip = (parsedPage - 1) * parsedLimit;
 
-    const tickets = await HelpdeskTicket.find(query)
-        .populate('requestedBy', 'name email department')
-        .populate('assignedTo', 'name email')
-        .populate('comments.commentedBy', 'name email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit));
-
-    const total = await HelpdeskTicket.countDocuments(query);
+    const [tickets, total] = await Promise.all([
+        HelpdeskTicket.find(query)
+            .populate('requestedBy', 'name lastName email department')
+            .populate('assignedTo', 'name lastName email')
+            .populate('comments.commentedBy', 'name lastName email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parsedLimit),
+        HelpdeskTicket.countDocuments(query)
+    ]);
 
     res.json({
         success: true,
-        data: tickets,
+        data: tickets.map((ticket) => hideInternalComments(ticket, access.canManage)),
         pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: parsedPage,
+            limit: parsedLimit,
             total,
-            pages: Math.ceil(total / parseInt(limit))
+            pages: Math.ceil(total / parsedLimit)
         }
     });
 });
@@ -100,16 +277,23 @@ export const getTickets = asyncHandler(async (req, res) => {
  */
 export const getTicketById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = getOrganizationId(req);
+    const scope = await buildTicketScope(req);
+    if (scope.denied) {
+        return res.status(403).json({
+            success: false,
+            message: 'An employee profile is required to view tickets'
+        });
+    }
+    const { access, denied: _denied, ...query } = scope;
 
     const ticket = await HelpdeskTicket.findOne({
+        ...query,
         _id: id,
-        organizationId
     })
-        .populate('requestedBy', 'name email department')
-        .populate('assignedTo', 'name email')
-        .populate('comments.commentedBy', 'name email')
-        .populate('resolution.resolvedBy', 'name email');
+        .populate('requestedBy', 'name lastName email department')
+        .populate('assignedTo', 'name lastName email')
+        .populate('comments.commentedBy', 'name lastName email')
+        .populate('resolution.resolvedBy', 'name lastName email');
 
     if (!ticket) {
         return res.status(404).json({
@@ -120,7 +304,7 @@ export const getTicketById = asyncHandler(async (req, res) => {
 
     res.json({
         success: true,
-        data: ticket
+        data: hideInternalComments(ticket, access.canManage)
     });
 });
 
@@ -129,13 +313,42 @@ export const getTicketById = asyncHandler(async (req, res) => {
  */
 export const updateTicket = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = getOrganizationId(req);
+    const access = await getHelpdeskAccess(req);
+    let query;
+    let updates;
+
+    if (access.canManage) {
+        query = await ticketQueryForRequest(req, { _id: id });
+        const allowedFields = ['status', 'priority', 'assignedTo', 'category', 'subCategory'];
+        updates = Object.fromEntries(
+            allowedFields
+                .filter((field) => req.body?.[field] !== undefined)
+                .map((field) => [field, req.body[field]])
+        );
+    } else {
+        if (req.body?.status !== 'Cancelled' || !access.employeeId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only HR, executives, or administrators can update ticket workflow'
+            });
+        }
+        query = {
+            _id: id,
+            organizationId: getOrganizationId(req),
+            requestedBy: access.employeeId,
+            status: { $nin: ['Resolved', 'Closed', 'Cancelled'] }
+        };
+        updates = { status: 'Cancelled' };
+    }
 
     const ticket = await HelpdeskTicket.findOneAndUpdate(
-        { _id: id, organizationId },
-        req.body,
+        query,
+        updates,
         { new: true, runValidators: true }
-    );
+    )
+        .populate('requestedBy', 'name lastName email department')
+        .populate('assignedTo', 'name lastName email')
+        .populate('comments.commentedBy', 'name lastName email');
 
     if (!ticket) {
         return res.status(404).json({
@@ -156,13 +369,26 @@ export const updateTicket = asyncHandler(async (req, res) => {
  */
 export const addComment = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = getOrganizationId(req);
-    const commentedBy = req.user?._id || req.employee?._id;
+    const access = await getHelpdeskAccess(req);
+    const commentedBy = req.employee?._id || req.user?._id;
 
-    const ticket = await HelpdeskTicket.findOne({
-        _id: id,
-        organizationId
-    });
+    if (!commentedBy) {
+        return res.status(403).json({
+            success: false,
+            message: 'An authenticated profile is required to comment'
+        });
+    }
+    const comment = String(req.body?.comment || '').trim();
+    if (!comment) {
+        return res.status(400).json({
+            success: false,
+            message: 'Comment is required'
+        });
+    }
+
+    const query = await ticketQueryForRequest(req, { _id: id });
+
+    const ticket = query ? await HelpdeskTicket.findOne(query) : null;
 
     if (!ticket) {
         return res.status(404).json({
@@ -172,17 +398,22 @@ export const addComment = asyncHandler(async (req, res) => {
     }
 
     ticket.comments.push({
-        comment: req.body.comment,
+        comment,
         commentedBy,
-        isInternal: req.body.isInternal || false
+        isInternal: access.canManage && req.body.isInternal === true
     });
 
     await ticket.save();
+    await ticket.populate([
+        { path: 'requestedBy', select: 'name lastName email department' },
+        { path: 'assignedTo', select: 'name lastName email' },
+        { path: 'comments.commentedBy', select: 'name lastName email' }
+    ]);
 
     res.json({
         success: true,
         message: 'Comment added successfully',
-        data: ticket
+        data: hideInternalComments(ticket, access.canManage)
     });
 });
 
@@ -191,13 +422,23 @@ export const addComment = asyncHandler(async (req, res) => {
  */
 export const resolveTicket = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const organizationId = getOrganizationId(req);
-    const resolvedBy = req.user?._id || req.employee?._id;
+    const access = await getHelpdeskAccess(req);
+    if (!access.canManage) {
+        return res.status(403).json({
+            success: false,
+            message: 'Only HR, executives, or administrators can resolve tickets'
+        });
+    }
+    const resolvedBy = req.employee?._id || req.user?._id;
+    if (!resolvedBy) {
+        return res.status(403).json({
+            success: false,
+            message: 'An authenticated profile is required to resolve tickets'
+        });
+    }
 
-    const ticket = await HelpdeskTicket.findOne({
-        _id: id,
-        organizationId
-    });
+    const query = await ticketQueryForRequest(req, { _id: id });
+    const ticket = await HelpdeskTicket.findOne(query);
 
     if (!ticket) {
         return res.status(404).json({

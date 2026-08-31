@@ -8,7 +8,7 @@ import { organizationIsolationPlugin } from "../plugins/organizationIsolation.js
  * @typedef {Object} Employee
  * @property {mongoose.Types.ObjectId} organizationId - Organization reference for multi-tenancy (required, indexed)
  * @property {string} name - Employee first name (required)
- * @property {string} lastName - Employee last name (required)
+ * @property {string} [lastName] - Employee last name (optional)
  * @property {string} email - Employee email address (required, unique, lowercase, trimmed)
  * @property {string} password - Hashed password (required, not returned in queries)
  * @property {string} manager - Manager name or ID (required)
@@ -60,9 +60,8 @@ const employeeSchema = new mongoose.Schema({
     /**
      * Employee last name
      * @type {string}
-     * @required
      */
-    lastName: { type: String, required: true },
+    lastName: { type: String, required: false, default: '', trim: true },
     
     /**
      * Employee email address (unique, lowercase, trimmed)
@@ -208,6 +207,16 @@ const employeeSchema = new mongoose.Schema({
         type: Date, 
         required: false
     },
+    // Marriage anniversary
+    marriageDate: {
+        type: Date,
+        default: null,
+        required: false
+    },
+    showMarriageAnniversary: {
+        type: Boolean,
+        default: true
+    },
     gender: {
         type: String,
         enum: ['Male', 'Female', 'Other', 'Prefer not to say'],
@@ -331,6 +340,12 @@ const employeeSchema = new mongoose.Schema({
     address: { type: String },
     personalEmail: { type: String, match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'] },
     professionalBio: { type: String, default: '' },
+    maritalStatus: { type: String, enum: ['Single', 'Married', 'Divorced', 'Widowed', ''], default: '' },
+    anniversaryDate: { type: Date },
+    spouseName: { type: String },
+    emergencyContactName: { type: String },
+    emergencyContactPhone: { type: String },
+    emergencyContactRelationship: { type: String },
     
     // Performance and statistics
     performanceScore: { 
@@ -390,6 +405,25 @@ const employeeSchema = new mongoose.Schema({
             title: { type: String },
             organization: { type: String },
             duration: { type: String },
+            description: { type: String },
+            filePath: { type: String },
+            fileName: { type: String },
+            originalName: { type: String },
+            mimeType: { type: String },
+            size: { type: Number },
+            uploadedAt: { type: Date, default: Date.now }
+        }
+    ],
+
+    professionalExperience: [
+        {
+            companyName: { type: String },
+            jobTitle: { type: String },
+            employmentType: { type: String },
+            location: { type: String },
+            startDate: { type: Date },
+            endDate: { type: Date },
+            currentlyWorking: { type: Boolean, default: false },
             description: { type: String }
         }
     ],

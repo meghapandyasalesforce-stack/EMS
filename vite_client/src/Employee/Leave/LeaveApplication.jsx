@@ -7,6 +7,7 @@ import { useMediaQuery } from 'react-responsive';
 import { DEFAULT_LEAVE_TYPE, getAllLeaveTypeOptions } from '../../constants/leaveConstants';
 import axios from '../../utils/axios';
 import { EMPLOYEE_LEAVE_ENDPOINT } from '../../utils/constant';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
 
 const SICK_DOC_MESSAGE =
   'Medical certificate is required when Sick Leave exceeds 1 day in a calendar month.';
@@ -49,6 +50,16 @@ const LeaveApplication = () => {
   const user = useSelector((state) => state.auth.user);
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
   const location = useLocation();
+  const { isOrgOwner, isHrManager, isHrExecutive } = useAuthPermissions();
+
+  /** HR staff have no manager→HR chain for their own leave; the org admin decides. */
+  const isHrApplicant = !isOrgOwner && (isHrManager || isHrExecutive);
+  const submitNotice = isHrApplicant
+    ? 'Your leave request goes straight to the organization admin for approval. HR cannot approve its own leave.'
+    : 'After you submit, your manager must approve first. Then HR completes final approval before leave is deducted from your balance.';
+  const submitToast = isHrApplicant
+    ? 'Leave submitted. It is pending organization admin approval.'
+    : 'Leave submitted. It goes to your manager first, then HR for final approval.';
 
   const [leaveForm, setLeaveForm] = useState({
     name: '',
@@ -243,7 +254,7 @@ const LeaveApplication = () => {
 
   useEffect(() => {
     if (success) {
-      toast.success('Leave submitted. It goes to your manager first, then HR for final approval.');
+      toast.success(submitToast);
       setLeaveForm({
         name: user?.name || '',
         email: user?.email || '',
@@ -267,7 +278,7 @@ const LeaveApplication = () => {
       toast.error(`Submission failed: ${error}`);
       dispatch(resetStatus());
     }
-  }, [success, error, dispatch, user]);
+  }, [success, error, dispatch, user, submitToast]);
 
   // Clear selected file when sick document upload is no longer required
   useEffect(() => {
@@ -290,9 +301,7 @@ const LeaveApplication = () => {
       <div className="page-shell-inner">
         <div className="mt-4 w-full min-w-0 rounded-xl bg-white p-3 shadow-md transition-all duration-300 sm:p-4 md:p-6 lg:mt-6">
         <h2 className="mb-2 text-xl font-bold text-gray-800 md:text-2xl">Leave Application Form</h2>
-        <p className="mb-4 text-sm text-gray-600 md:mb-6">
-          After you submit, your manager must approve first. Then HR completes final approval before leave is deducted from your balance.
-        </p>
+        <p className="mb-4 text-sm text-gray-600 md:mb-6">{submitNotice}</p>
         <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 md:space-y-6">
           {/* Name and Email */}
           <div className="hrms-form-grid">

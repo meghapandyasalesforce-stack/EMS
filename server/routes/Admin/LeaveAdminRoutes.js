@@ -14,8 +14,8 @@ router.route("/get-all-leaves")
     .get(isAdminOrManagerOrHRAuthenticated, leaveLimiter, getAllLeaves);
 
 // Update leave status - write operation with stricter limits
-// Allow HR and Managers to approve/reject leave requests
-// Managers can only approve/reject leaves for their department
+// Managers approve their team; HR can approve as fallback.
+// Leave raised by HR staff is narrowed to the org admin in the controller.
 router.route("/update-leave-status/:id")
     .put(isAdminOrManagerOrHRAuthenticated, writeLimiter, updateLeaveStatus);
 

@@ -84,6 +84,32 @@ const AttendanceDashboard = () => {
         return `${h}h ${m}m`;
     };
 
+    const formatBreakDuration = (seconds) => {
+        const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    };
+
+    const getIndividualBreakDurations = (log) => {
+        if (!log?.breaks || !Array.isArray(log.breaks)) return [];
+        return log.breaks.map((entry, index) => {
+            if (!entry?.breakIn) return null;
+            const breakIn = new Date(entry.breakIn).getTime();
+            if (!Number.isFinite(breakIn)) return null;
+            const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : new Date().getTime();
+            if (!Number.isFinite(breakOut) || breakOut <= breakIn) return null;
+            const duration = (breakOut - breakIn) / 1000; // in seconds
+            const breakType = entry.breakType || `BREAK_${index + 1}`; // Backward compatibility
+            return {
+                breakType,
+                duration,
+                isActive: !entry.breakOut
+            };
+        }).filter(Boolean);
+    };
+
     if (isLoading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Loading...</div>;
     }
@@ -149,38 +175,63 @@ const AttendanceDashboard = () => {
                                 <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">EFFECTIVE HOURS</th>
                                 <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">GROSS HOURS</th>
                                 <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">ARRIVAL</th>
+                                <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">BREAKS</th>
                                 <th className="text-left p-3 sm:p-4 text-gray-400 font-normal border-b border-gray-700 text-xs sm:text-sm">STATUS</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {attendanceLogs.map(log => (
-                                <tr key={log._id}>
-                                    <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDate(new Date(log.date))}</td>
-                                    <td className="p-3 sm:p-4 border-b border-gray-700">
-                                        <div className="bg-gray-700 h-2 rounded relative w-full">
-                                            <div 
-                                                className="absolute h-full bg-theme-secondary rounded"
-                                                style={{
-                                                    left: '30%',
-                                                    width: '40%'
-                                                }}
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDuration(log.effectiveHours)}</td>
-                                    <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDuration(log.grossHours)}</td>
-                                    <td className={`p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm ${log.isOnTime ? 'text-green-400' : 'text-red-400'}`}>
-                                        {log.isOnTime ? 'On Time' : 'Late'}
-                                    </td>
-                                    <td className="p-3 sm:p-4 border-b border-gray-700">
-                                        <span className={`inline-block w-2 h-2 rounded-full ${
-                                            log.status === 'present' ? 'bg-green-400' : 
-                                            log.status === 'absent' ? 'bg-red-400' : 
-                                            'bg-yellow-400'
-                                        }`} />
-                                    </td>
-                                </tr>
-                            ))}
+                            {attendanceLogs.map(log => {
+                                const individualBreaks = getIndividualBreakDurations(log);
+                                const totalBreakSeconds = individualBreaks.reduce((sum, b) => sum + b.duration, 0);
+                                return (
+                                    <tr key={log._id}>
+                                        <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDate(new Date(log.date))}</td>
+                                        <td className="p-3 sm:p-4 border-b border-gray-700">
+                                            <div className="bg-gray-700 h-2 rounded relative w-full">
+                                                <div
+                                                    className="absolute h-full bg-theme-secondary rounded"
+                                                    style={{
+                                                        left: '30%',
+                                                        width: '40%'
+                                                    }}
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDuration(log.effectiveHours)}</td>
+                                        <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">{formatDuration(log.grossHours)}</td>
+                                        <td className={`p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm ${log.isOnTime ? 'text-green-400' : 'text-red-400'}`}>
+                                            {log.isOnTime ? 'On Time' : 'Late'}
+                                        </td>
+                                        <td className="p-3 sm:p-4 border-b border-gray-700 text-xs sm:text-sm">
+                                            {individualBreaks.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {individualBreaks.map((breakInfo) => (
+                                                        <div key={breakInfo.breakType} className="flex items-center justify-between gap-2">
+                                                            <span className="text-gray-400">{breakInfo.breakType.replace('BREAK_', 'B')}</span>
+                                                            <span className={`font-medium ${breakInfo.isActive ? 'text-amber-400' : 'text-gray-300'}`}>
+                                                                {formatBreakDuration(breakInfo.duration)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-600">
+                                                        <span className="text-gray-400">Total</span>
+                                                        <span className="font-semibold text-gray-300">{formatBreakDuration(totalBreakSeconds)}</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-500">—</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3 sm:p-4 border-b border-gray-700">
+                                            <span className={`inline-block w-2 h-2 rounded-full ${
+                                                log.status === 'present' ? 'bg-green-400' :
+                                                log.status === 'absent' ? 'bg-red-400' :
+                                                'bg-yellow-400'
+                                            }`} />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

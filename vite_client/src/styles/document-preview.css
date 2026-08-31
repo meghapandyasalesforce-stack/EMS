@@ -1,0 +1,299 @@
+/**
+ * Professional Document Preview Styles
+ * Renders document previews in an A4 page-like format
+ */
+
+/* ─── Preview Container ──────────────────────────────────────────────────── */
+.document-preview-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .document-preview-wrapper {
+    padding: 8px;
+    border-radius: 8px;
+  }
+}
+
+/* ─── A4 Page ────────────────────────────────────────────────────────────── */
+.document-page {
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 100%;
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  padding: 60px 56px;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 11.5pt;
+  line-height: 1.75;
+  color: #1a1a1a;
+  position: relative;
+}
+
+@media (max-width: 800px) {
+  .document-page {
+    width: 100%;
+    min-height: auto;
+    padding: 32px 24px;
+    font-size: 10.5pt;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  }
+}
+
+@media (max-width: 480px) {
+  .document-page {
+    padding: 24px 16px;
+    font-size: 10pt;
+    line-height: 1.65;
+  }
+}
+
+/* ─── Document Header / Letterhead ───────────────────────────────────────── */
+.document-page .document-header {
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #1a1a1a;
+}
+
+.document-page .document-header h1,
+.document-page .document-header h2 {
+  margin: 0;
+  font-size: 16pt;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.document-page .document-header p {
+  margin: 4px 0 0;
+  font-size: 9pt;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────── */
+.document-page h1 {
+  font-size: 16pt;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 24px 0 12px;
+  letter-spacing: -0.01em;
+}
+
+.document-page h2 {
+  font-size: 14pt;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 20px 0 10px;
+}
+
+.document-page h3 {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.document-page p {
+  margin: 0 0 12px;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.document-page strong,
+.document-page b {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.document-page em,
+.document-page i {
+  font-style: italic;
+}
+
+.document-page ul,
+.document-page ol {
+  margin: 8px 0 12px 24px;
+  padding: 0;
+}
+
+.document-page li {
+  margin-bottom: 4px;
+}
+
+/* ─── Document Title (centered) ──────────────────────────────────────────── */
+.document-page .document-title {
+  text-align: center;
+  font-size: 14pt;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 24px 0 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────────── */
+.document-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 10pt;
+}
+
+.document-page table th,
+.document-page table td {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.document-page table th {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.document-page table tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+/* ─── Signature Section ──────────────────────────────────────────────────── */
+.document-page .document-signature {
+  margin-top: 48px;
+  padding-top: 0;
+}
+
+.document-page .document-signature .signature-line {
+  width: 200px;
+  border-top: 1px solid #1a1a1a;
+  margin-top: 40px;
+  padding-top: 8px;
+}
+
+.document-page .document-signature .signatory-name {
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  font-size: 11pt;
+}
+
+.document-page .document-signature .signatory-designation {
+  color: #475569;
+  font-size: 9.5pt;
+  margin: 2px 0 0;
+}
+
+.document-page .document-signature .company-stamp {
+  margin-top: 16px;
+  max-width: 120px;
+  max-height: 120px;
+  object-fit: contain;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+.document-page .document-footer {
+  position: absolute;
+  bottom: 32px;
+  left: 56px;
+  right: 56px;
+  text-align: center;
+  font-size: 8pt;
+  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+@media (max-width: 800px) {
+  .document-page .document-footer {
+    position: static;
+    margin-top: 32px;
+    left: auto;
+    right: auto;
+  }
+}
+
+/* ─── Date and Reference ─────────────────────────────────────────────────── */
+.document-page .document-date {
+  font-size: 10pt;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.document-page .document-ref {
+  font-size: 9pt;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+/* ─── Horizontal Rule ────────────────────────────────────────────────────── */
+.document-page hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 20px 0;
+}
+
+/* ─── Admin Template HTML Classes ────────────────────────────────────────── */
+/* These classes are used by admins when writing HTML templates directly */
+
+.document-page .document {
+  line-height: 1.7;
+}
+
+.document-page .company-name {
+  font-size: 18pt;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.document-page .company-address {
+  font-size: 9pt;
+  color: #475569;
+  margin-top: 4px;
+}
+
+.document-page .document-date {
+  font-size: 10pt;
+  color: #475569;
+  margin: 12px 0;
+}
+
+.document-page .signature-section {
+  margin-top: 48px;
+}
+
+.document-page .stamp-section {
+  margin-top: 16px;
+}
+
+.document-page .stamp-section .company-stamp,
+.document-page .company-stamp {
+  max-width: 140px;
+  max-height: 100px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* ─── Company Logo in Header (from generatePreviewHtml) ──────────────────── */
+.document-page > div:first-child img[style*="object-fit"] {
+  display: block;
+}
+
+/* Ensure inline flex for logo header works inside document-page */
+.document-page > div[style*="flex-end"] {
+  display: flex !important;
+  justify-content: flex-end !important;
+  margin-bottom: 12px;
+}

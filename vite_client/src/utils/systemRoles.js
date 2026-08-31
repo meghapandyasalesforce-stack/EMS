@@ -1,3 +1,5 @@
+import { formatPermissionDisplayLabel } from './textFormat.js';
+
 /** Client mirror of server SaaS system roles (systemRole.constants.js) */
 export const SYSTEM_ROLE_IDS = {
   EMPLOYEE: 'employee',
@@ -11,8 +13,4 @@ export const SYSTEM_ROLE_IDS = {
 
 export const DEFAULT_SYSTEM_ROLE = SYSTEM_ROLE_IDS.EMPLOYEE;
 
-export const formatPermissionLabel = (perm) =>
-  perm
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+export const formatPermissionLabel = (perm) => formatPermissionDisplayLabel(perm);

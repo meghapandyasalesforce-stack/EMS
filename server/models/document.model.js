@@ -127,14 +127,14 @@ const documentSchema = new mongoose.Schema({
         author: String,
         keywords: [String],
         language: String,
-        /** Human-facing ID from job upload (PAN, Aadhar, etc.) */
+        /** Human-facing ID from job upload (PAN, Aadhaar, etc.) */
         documentNumber: String,
         additionalInfo: mongoose.Schema.Types.Mixed,
     },
     /** Job-details / onboarding uploads (Offer letter, degree, etc.) — single active row per type per employee */
     employeeJobDocumentType: {
         type: String,
-        enum: ['OFFER_LETTER', 'AADHAR_CARD', 'PAN_CARD', 'GUARANTOR_FORM', 'DEGREE_CERTIFICATE', 'OTHER'],
+        enum: ['OFFER_LETTER', 'AADHAR_CARD', 'AADHAAR_CARD', 'PAN_CARD', 'PASSPORT', 'GUARANTOR_FORM', 'DEGREE_CERTIFICATE', 'OTHER'],
         required: false
     },
     /** Lifecycle document hub — links to LIFECYCLE_DOCUMENT_CATALOG */

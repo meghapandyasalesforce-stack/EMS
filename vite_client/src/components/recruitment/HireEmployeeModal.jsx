@@ -130,8 +130,8 @@ const HireEmployeeModal = ({ candidateId, open, onClose, onSuccess }) => {
                                 <input required className="cm-input w-full" value={form.name || ''} onChange={(e) => set('name', e.target.value)} />
                             </label>
                             <label className="block">
-                                <span className="ats-form-label">Last name *</span>
-                                <input required className="cm-input w-full" value={form.lastName || ''} onChange={(e) => set('lastName', e.target.value)} />
+                                <span className="ats-form-label">Last name</span>
+                                <input className="cm-input w-full" value={form.lastName || ''} onChange={(e) => set('lastName', e.target.value)} />
                             </label>
                             <label className="block">
                                 <span className="ats-form-label">Email *</span>

@@ -27,6 +27,18 @@ const wfhRequestSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    wfhType: {
+        type: String,
+        enum: ['full_day', 'half_day'],
+        default: 'full_day'
+    },
+    halfDayType: {
+        type: String,
+        enum: ['first_half', 'second_half'],
+        required: function () {
+            return this.wfhType === 'half_day';
+        }
+    },
     reason: {
         type: String,
         required: [true, 'Reason is required'],

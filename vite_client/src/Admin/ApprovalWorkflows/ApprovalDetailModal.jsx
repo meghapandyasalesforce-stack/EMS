@@ -26,7 +26,7 @@ const InfoItem = ({ label, value, children }) => (
   </div>
 );
 
-const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
+const ApprovalDetailModal = ({ approval, onClose, onAction, canAct = true }) => {
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -231,7 +231,7 @@ const ApprovalDetailModal = ({ approval, onClose, onAction }) => {
             </section>
           )}
 
-          {pendingStep && (
+          {pendingStep && canAct && (
             <section className="ats-approval-modal__section ats-approval-modal__section--action">
               <h3 className="ats-approval-modal__section-title">Your action</h3>
 

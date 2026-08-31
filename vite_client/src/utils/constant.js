@@ -48,6 +48,13 @@ export const BOTH_OFFBOARDING_ENDPOINT = `${BOTH_ONBOARDING_ENDPOINT}/offboardin
 export const ADMIN_OFFBOARDING_ENDPOINT = `${ADMIN_ONBOARDING_ENDPOINT}/offboarding`
 export const BOTH_PASSWORD_ENDPOINT = `${BASE_URL}/both/password`
 export const BOTH_TASK_ENDPOINT = `${BASE_URL}/both/project-task`
+export const BOTH_CELEBRATION_ENDPOINT = `${BASE_URL}/both/celebrations`
+/** Separate employee document request & generation workflow */
+export const BOTH_EMPLOYEE_DOCUMENT_REQUEST_ENDPOINT = `${BASE_URL}/both/employee-document-requests`
+/** Document templates (Admin CRUD + Employee self-service access) */
+export const BOTH_DOCUMENT_TEMPLATES_ENDPOINT = `${BASE_URL}/both/document-templates`
+/** Self-service document generation (preview, generate PDF, download) */
+export const BOTH_SELF_SERVICE_DOCUMENTS_ENDPOINT = `${BASE_URL}/both/self-service-documents`
 
 
 

@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { FiCheck, FiChevronLeft, FiChevronRight, FiEye, FiHome, FiLoader, FiSearch, FiX } from 'react-icons/fi';
 import axios, { getUploadUrl } from '../../utils/axios';
+import { formatStatusLabel, UI_BADGE_TEXT_CLASS } from '../../utils/textFormat.js';
 
 const PAGE_SIZE = 25;
 
@@ -20,6 +21,14 @@ function formatWfhDateRange(from, to, pattern = 'MMM d, yyyy') {
   return `${fromStr} – ${safeFormat(to, pattern)}`;
 }
 
+function formatWfhType(wfhType, halfDayType) {
+  const type = wfhType || 'full_day';
+  if (type === 'half_day') {
+    return halfDayType === 'first_half' ? 'Half Day - First Half' : 'Half Day - Second Half';
+  }
+  return 'Full Day';
+}
+
 /** Legacy records created before the approval flow have status 'submitted'. */
 function normalizeStatus(status) {
   return status === 'submitted' ? 'pending' : status || 'pending';
@@ -27,13 +36,13 @@ function normalizeStatus(status) {
 
 function WfhStatusPill({ status }) {
   const map = {
-    pending: { label: 'PENDING', className: 'bg-red-50 text-red-700 border border-red-200' },
-    approved: { label: 'APPROVED', className: 'bg-emerald-50 text-[#0a8f6c] border border-emerald-200' },
-    rejected: { label: 'REJECTED', className: 'bg-slate-100 text-slate-600 border border-slate-200' },
+    pending: { label: formatStatusLabel('pending'), className: 'bg-red-50 text-red-700 border border-red-200' },
+    approved: { label: formatStatusLabel('approved'), className: 'bg-emerald-50 text-[#0a8f6c] border border-emerald-200' },
+    rejected: { label: formatStatusLabel('rejected'), className: 'bg-slate-100 text-slate-600 border border-slate-200' },
   };
   const m = map[normalizeStatus(status)] || map.pending;
   return (
-    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${m.className}`}>
+    <span className={`rounded-full px-2.5 py-1 ${UI_BADGE_TEXT_CLASS} ${m.className}`}>
       {m.label}
     </span>
   );
@@ -245,7 +254,7 @@ const TeamWfhRequestsPanel = () => {
                 <tr className="border-b border-slate-100 bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <th className="px-5 py-3">Employee</th>
                   <th className="px-4 py-3">WFH date</th>
-                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">WFH Type</th>
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Manager Name</th>
@@ -277,8 +286,8 @@ const TeamWfhRequestsPanel = () => {
                       <td className="whitespace-nowrap px-4 py-4 font-medium text-slate-700">
                         {formatWfhDateRange(request.wfhDate, request.wfhDateTo)}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 italic text-slate-400">
-                        Work From Home
+                      <td className="whitespace-nowrap px-4 py-4 text-slate-700">
+                        {formatWfhType(request.wfhType, request.halfDayType)}
                       </td>
                       <td className="max-w-[260px] px-4 py-4 text-slate-700">{request.reason || '—'}</td>
                       <td className="whitespace-nowrap px-4 py-4">
@@ -407,6 +416,8 @@ const TeamWfhRequestsPanel = () => {
               <section className="rounded-xl bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">WFH period</p>
                 <p className="mt-1 font-semibold text-slate-900">{formatWfhDateRange(viewTarget.wfhDate, viewTarget.wfhDateTo, 'EEEE, MMM d, yyyy')}</p>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">WFH Type</p>
+                <p className="mt-1 font-semibold text-slate-900">{formatWfhType(viewTarget.wfhType, viewTarget.halfDayType)}</p>
               </section>
               <section className="rounded-xl border border-slate-100 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</p>

@@ -1,3 +1,5 @@
+import { toSentenceCase } from '../utils/textFormat.js';
+
 export const LEAVE_REASON_OPTIONS = [
   'Personal Work',
   'Family Function',
@@ -111,7 +113,7 @@ export const getLeaveTypeDisplayName = (leaveType, policyLeaveTypes = []) => {
   if (!leaveType) return 'Leave';
   const fromPolicy = policyLeaveTypes?.find((lt) => lt.type === leaveType);
   if (fromPolicy?.displayName) return fromPolicy.displayName;
-  return LEAVE_TYPE_LABELS[leaveType] || leaveType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return LEAVE_TYPE_LABELS[leaveType] || toSentenceCase(leaveType.replace(/_/g, ' '));
 };
 
 export const getAllLeaveTypeOptions = (policyLeaveTypes = []) => {

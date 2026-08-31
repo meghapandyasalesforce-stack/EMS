@@ -4,6 +4,8 @@
  * Backend fields (slaEscalated, hrOverrideAvailable, etc.) are unchanged — only UI labels.
  */
 
+import { formatStatusLabel } from './textFormat.js';
+
 const INTERNAL_NOTE_RE = /sla\s*breach|hr\s*override\s*available|\bescalated\b|override\s*available/i;
 
 /** Remove internal workflow wording from any status string returned by the API. */
@@ -86,14 +88,7 @@ export function formatLeaveApprovalStageDisplay(leave = {}) {
 }
 
 export function formatCapitalRequestStatus(status) {
-  const st = (status || 'pending').toLowerCase();
-  const map = {
-    pending: 'PENDING',
-    approved: 'APPROVED',
-    rejected: 'REJECTED',
-    cancelled: 'CANCELLED',
-  };
-  return map[st] || String(status || 'PENDING').toUpperCase();
+  return formatStatusLabel(status);
 }
 
 /**

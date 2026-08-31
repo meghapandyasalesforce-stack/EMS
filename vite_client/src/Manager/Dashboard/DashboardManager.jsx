@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import { 
     FaUsers, FaTasks, FaCheckCircle,
     FaCalendarAlt,
-    FaBell, FaPlus, FaSearch, FaVideo
+    FaBell, FaPlus, FaSearch, FaVideo, FaHeadset
 } from 'react-icons/fa';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
@@ -27,10 +27,13 @@ import {
   useAttendanceSummary 
 } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import { formatStatusLabel, UI_BADGE_TEXT_CLASS, UI_FORM_LABEL_CLASS } from '../../utils/textFormat.js';
 import { 
     BOTH_ATTENDANCE_ENDPOINT, 
     BOTH_TASK_ENDPOINT,
-    EMPLOYEE_LEAVE_ENDPOINT 
+    EMPLOYEE_LEAVE_ENDPOINT,
+    BOTH_CELEBRATION_ENDPOINT 
 } from '../../utils/constant';
 
 /** Backend may return rate as 0–1 fraction or 0–100 percent */
@@ -49,6 +52,76 @@ const isTeamLeave = (leave, teamIds) =>
 
 /** Match admin leave list: pending-only for approvals */
 const isLeavePendingStatus = (leave) => String(leave?.status || '').toLowerCase() === 'pending';
+
+const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
+
+const sortCelebrations = (items = []) => {
+    const order = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
+    return [...items].sort((a, b) => {
+        const aDays = Number.isFinite(Number(a?.daysUntil)) ? Number(a.daysUntil) : 9999;
+        const bDays = Number.isFinite(Number(b?.daysUntil)) ? Number(b.daysUntil) : 9999;
+        if (aDays !== bDays) return aDays - bDays;
+        return (order[a?.type] || 99) - (order[b?.type] || 99);
+    });
+};
+
+function CelebrationDashboardCard({ item, isSelf = false, event, reacting = false, onReact, onWishes }) {
+    const isToday = item?.daysUntil === 0;
+    const isMarriage = item?.type === 'marriage_anniversary';
+    const isWorkAnniversary = item?.type === 'anniversary';
+    const icon = isMarriage ? '💍' : isWorkAnniversary ? '🎉' : '🎂';
+    const typeLabel = isMarriage ? 'Marriage Anniversary' : isWorkAnniversary ? 'Work Anniversary' : 'Birthday';
+    const dateLabel = item?.birthday || item?.anniversaryDate || item?.date || '';
+    const whenLabel = item?.daysUntil === 0 ? 'Today' : item?.daysUntil === 1 ? 'Tomorrow' : `in ${item?.daysUntil} days`;
+    const counts = event?.reactionCounts || {};
+    const header = isSelf
+        ? isMarriage ? 'YOUR MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'YOUR WORK ANNIVERSARY' : "IT'S YOUR BIRTHDAY"
+        : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
+
+    return (
+        <li className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 pr-24">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
+                    <p className="truncate font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
+                    <p className="text-xs text-slate-500">
+                        {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
+                        {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
+                    </p>
+                </div>
+                {onWishes ? (
+                    <button
+                        type="button"
+                        onClick={() => onWishes(item)}
+                        className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1ab589] sm:px-3 sm:text-xs"
+                    >
+                        {isToday ? 'Wishes' : 'Upcoming'}
+                    </button>
+                ) : null}
+            </div>
+            {isToday && onReact ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {CELEBRATION_REACTIONS.map((emoji) => {
+                        const count = counts[emoji] || 0;
+                        return (
+                            <button
+                                key={emoji}
+                                type="button"
+                                disabled={reacting}
+                                onClick={() => onReact(item, emoji)}
+                                className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`}
+                                aria-label={`React ${emoji}`}
+                            >
+                                <span>{emoji}</span>
+                                {count > 0 ? <span className="text-xs font-semibold text-slate-600">{count}</span> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </li>
+    );
+}
 
 const getLeaveDurationDays = (leave) => {
     const d = Number(leave?.duration);
@@ -113,6 +186,10 @@ const DashboardManager = () => {
     const dispatch = useDispatch();
     const queryClient = useQueryClient();
     const user = useSelector((state) => state.auth.user);
+    const { isOrgOwner } = useAuthPermissions();
+    /** Leave raised by HR staff is decided by the org admin only. */
+    const canDecideLeave = (leave) => isOrgOwner || !leave?.requiresAdminApproval;
+
     
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -124,9 +201,12 @@ const DashboardManager = () => {
         leaveBalance: '0 days',
         tasksCount: '0',
         leaveDaysRemaining: '0',
-        birthdays: null
+        birthdays: null,
+        celebrations: null
     });
     const [statsLoading, setStatsLoading] = useState(true);
+    const [celebrationEvents, setCelebrationEvents] = useState({});
+    const [celebrationReacting, setCelebrationReacting] = useState(false);
     const [attentionLoading, setAttentionLoading] = useState(false);
     const [attentionMembers, setAttentionMembers] = useState([]);
     const [attendanceHealth, setAttendanceHealth] = useState({
@@ -469,15 +549,21 @@ const DashboardManager = () => {
                     // Silently handle error
                 }
 
-                // Fetch upcoming birthdays
+                // Fetch upcoming celebrations (birthdays + marriage anniversaries)
                 let birthdays = [];
+                let marriageAnniversaries = [];
+                let celebrations = [];
                 try {
                     const birthdaysRes = await axios.get('/v1/both/profile-details/upcoming-birthdays', {
                         withCredentials: true
                     });
-                    if (birthdaysRes.data?.birthdays) {
-                        birthdays = birthdaysRes.data.birthdays;
-                    }
+                    birthdays = birthdaysRes.data?.birthdays || [];
+                    marriageAnniversaries = birthdaysRes.data?.marriageAnniversaries || [];
+                    celebrations = birthdaysRes.data?.celebrations || [
+                        ...birthdays.map((item) => ({ ...item, type: item.type || 'birthday' })),
+                        ...marriageAnniversaries.map((item) => ({ ...item, type: 'marriage_anniversary' })),
+                    ];
+                    celebrations = sortCelebrations(celebrations);
                 } catch (err) {
                     // Silently handle error
                 }
@@ -504,7 +590,8 @@ const DashboardManager = () => {
                     leaveBalance: `${leaveBalance} days`,
                     tasksCount: tasksCount.toString(),
                     leaveDaysRemaining: leaveBalance.toString(),
-                    birthdays: birthdays
+                    birthdays: birthdays,
+                    celebrations: celebrations
                 });
             } catch (error) {
                 // Keep default values
@@ -517,7 +604,7 @@ const DashboardManager = () => {
     }, []);
 
     useEffect(() => {
-        if (user?.mustResetPassword) {
+    if (user?.mustResetPassword) {
             setShowResetPopup(true);
         }
     }, [user]);
@@ -615,6 +702,74 @@ const DashboardManager = () => {
             .slice(0, 2);
     }, [meetings]);
     
+    const getCelebrationItemKey = (item) => `${item?.type || 'birthday'}_${item?.employeeId}`;
+
+    const openTodayCelebrationEvent = async (item) => {
+        const { data } = await axios.post(
+            `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+            { employeeId: item.employeeId, type: item.type || 'birthday' },
+            { withCredentials: true }
+        );
+        const event = data?.data;
+        if (event?._id) {
+            const itemKey = getCelebrationItemKey(item);
+            setCelebrationEvents((prev) => ({ ...prev, [itemKey]: event }));
+        }
+        return event;
+    };
+
+    const handleOpenCelebrationWishes = async (item) => {
+        if (!item?.employeeId) return;
+        try {
+            if (item.daysUntil !== 0) {
+                const label = item?.type === 'marriage_anniversary'
+                    ? 'marriage anniversary'
+                    : item?.type === 'anniversary'
+                        ? 'work anniversary'
+                        : 'birthday';
+                toast.info(`Wishes and reactions open on their ${label}.`);
+                return;
+            }
+            const itemKey = getCelebrationItemKey(item);
+            const event = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
+            const eventId = event?._id;
+            navigate(eventId ? `/celebrations/${eventId}` : '/celebrations');
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not open wishes');
+        }
+    };
+
+    const handleCelebrationReact = async (item, emoji) => {
+        if (item?.daysUntil !== 0) return;
+        setCelebrationReacting(true);
+        try {
+            const itemKey = getCelebrationItemKey(item);
+            const opened = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
+            if (!opened?._id) return;
+            const { data } = await axios.post(
+                `${BOTH_CELEBRATION_ENDPOINT}/events/${opened._id}/react`,
+                { emoji },
+                { withCredentials: true }
+            );
+            const eventStateKey = data?.data?.type && data?.data?.employeeId
+                ? `${data.data.type}_${data.data.employeeId}`
+                : itemKey;
+            setCelebrationEvents((prev) => ({
+                ...prev,
+                [eventStateKey]: {
+                    ...opened,
+                    ...(prev[eventStateKey] || {}),
+                    reactions: data?.data?.reactions || [],
+                    reactionCounts: data?.data?.reactionCounts || {},
+                },
+            }));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not add reaction');
+        } finally {
+            setCelebrationReacting(false);
+        }
+    };
+
     if (user?.mustResetPassword) {
         return (
             <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-5 transition-all duration-300">
@@ -690,6 +845,13 @@ const DashboardManager = () => {
                                 />
                             </div>
                             <button
+                                className="rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
+                                onClick={() => navigate('/helpdesk')}
+                                title="HR Helpdesk"
+                            >
+                                <FaHeadset />
+                            </button>
+                            <button
                                 className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"
                                 onClick={() => navigate('/notifications')}
                             >
@@ -714,28 +876,28 @@ const DashboardManager = () => {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Team Size</p>
+                            <p className={UI_FORM_LABEL_CLASS}>Team size</p>
                             <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600"><FaUsers /></div>
                         </div>
                         <p className="text-4xl font-bold text-slate-900">{teamSize}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending Tasks</p>
+                            <p className={UI_FORM_LABEL_CLASS}>Pending tasks</p>
                             <div className="rounded-lg bg-amber-50 p-2 text-amber-600"><FaTasks /></div>
                         </div>
                         <p className="text-4xl font-bold text-slate-900">{pendingTasks}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance</p>
+                            <p className={UI_FORM_LABEL_CLASS}>Attendance</p>
                             <div className="rounded-lg bg-teal-50 p-2 text-teal-600"><FaCheckCircle /></div>
                         </div>
                         <p className="text-4xl font-bold text-slate-900">{teamAttendance}%</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending Leave</p>
+                            <p className={UI_FORM_LABEL_CLASS}>Pending leave</p>
                             <div className="rounded-lg bg-slate-100 p-2 text-slate-600"><FaCalendarAlt /></div>
                         </div>
                         <p className="text-4xl font-bold text-slate-900">{pendingApprovals}</p>
@@ -754,32 +916,32 @@ const DashboardManager = () => {
                             </div>
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">On-time score</p>
+                                    <p className={UI_FORM_LABEL_CLASS}>On-time score</p>
                                     <p className="mt-2 text-3xl font-bold text-emerald-700">{attendanceHealth.onTimeScore}%</p>
                                     <div className="mt-3 h-2 rounded-full bg-slate-200">
                                         <div className="h-2 rounded-full bg-emerald-700" style={{ width: `${attendanceHealth.onTimeScore}%` }}></div>
                                     </div>
                                 </div>
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absence risk</p>
+                                    <p className={UI_FORM_LABEL_CLASS}>Absence risk</p>
                                     <p className="mt-2 text-3xl font-bold text-orange-500">{attendanceHealth.absenceRisk}%</p>
                                     <div className="mt-3 h-2 rounded-full bg-slate-200">
                                         <div className="h-2 rounded-full bg-orange-400" style={{ width: `${attendanceHealth.absenceRisk}%` }}></div>
                                     </div>
                                 </div>
                                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avg Check-In Time</p>
+                                    <p className={UI_FORM_LABEL_CLASS}>Avg check-in time</p>
                                     <p className="mt-2 text-2xl font-bold text-slate-900">{attendanceHealth.avgCheckInTime}</p>
                                     <p className="text-xs text-slate-500">Estimated team median</p>
                                 </div>
                                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overdue Team Tasks</p>
+                                    <p className={UI_FORM_LABEL_CLASS}>Overdue team tasks</p>
                                     <p className="mt-2 text-2xl font-bold text-slate-900">{lateTasks}</p>
                                     <p className="text-xs text-slate-500">Attendance impact indicator</p>
                                 </div>
                             </div>
                             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                                <h4 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Attention Needed</h4>
+                                <h4 className={`mb-3 ${UI_FORM_LABEL_CLASS}`}>Attention needed</h4>
                                 <div className="space-y-2">
                                     {attentionLoading && attentionMembers.length === 0 ? (
                                         <div className="text-sm text-slate-500">Calculating real attendance scores...</div>
@@ -801,7 +963,7 @@ const DashboardManager = () => {
                         </div>
 
                         <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Team Approvals</h3>
+                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Team approvals</h3>
                             <div className="space-y-4">
                                 {teamPendingLeaves.slice(0, 2).map((leave, index) => (
                                     <div key={leave?._id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -815,12 +977,12 @@ const DashboardManager = () => {
                                         </p>
                                         {leave?.workflowSummary?.hrOverrideUsed ? (
                                             <div className="mb-3 flex flex-wrap gap-2">
-                                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-200">
+                                                <span className={`rounded-full bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 ${UI_BADGE_TEXT_CLASS}`}>
                                                     {formatLeaveApprovalStageDisplay(leave)}
                                                 </span>
                                             </div>
                                         ) : null}
-                                        {rejectDraft.id === leave._id && (
+                                        {canDecideLeave(leave) && rejectDraft.id === leave._id && (
                                             <div className="mb-3">
                                                 <textarea
                                                     value={rejectDraft.reason}
@@ -831,6 +993,7 @@ const DashboardManager = () => {
                                                 />
                                             </div>
                                         )}
+                                        {canDecideLeave(leave) ? (
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
                                                 type="button"
@@ -860,7 +1023,12 @@ const DashboardManager = () => {
                                                 </button>
                                             )}
                                         </div>
-                                        {rejectDraft.id === leave._id && (
+                                        ) : (
+                                          <p className="text-xs text-slate-500">
+                                            Awaiting organization admin approval.
+                                          </p>
+                                        )}
+                                        {canDecideLeave(leave) && rejectDraft.id === leave._id && (
                                             <button
                                                 type="button"
                                                 onClick={() => setRejectDraft({ id: null, reason: '' })}
@@ -884,7 +1052,35 @@ const DashboardManager = () => {
                         <LeaveBalanceCard />
 
                         <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming Meetings</h3>
+                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming celebrations</h3>
+                            <div className="space-y-3">
+                                {dashboardStats.celebrations == null ? (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">Loading upcoming celebrations...</div>
+                                ) : dashboardStats.celebrations.length === 0 ? (
+                                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-center text-sm text-slate-500">No upcoming celebrations.</div>
+                                ) : (
+                                    <ul className="space-y-3">
+                                        {dashboardStats.celebrations.slice(0, 3).map((item, idx) => {
+                                            const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                            return (
+                                                <CelebrationDashboardCard
+                                                    key={`${item.type || 'birthday'}_${item.employeeId || idx}`}
+                                                    item={item}
+                                                    isSelf={false}
+                                                    event={celebrationEvents[itemKey]}
+                                                    reacting={celebrationReacting}
+                                                    onReact={handleCelebrationReact}
+                                                    onWishes={handleOpenCelebrationWishes}
+                                                />
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Upcoming meetings</h3>
                             <div className="space-y-3">
                                 {meetingsLoading ? (
                                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
@@ -944,7 +1140,7 @@ const DashboardManager = () => {
                         </div>
 
                         <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Active Projects</h3>
+                            <h3 className={`mb-4 ${UI_FORM_LABEL_CLASS}`}>Active projects</h3>
                             <div className="space-y-4">
                                 {managerProjects.slice(0, 2).map((project, index) => {
                                     const progress = Number(project?.progress || project?.completion || 40 + index * 25);
@@ -953,8 +1149,8 @@ const DashboardManager = () => {
                                         <div key={project?._id || index} className="rounded-xl border border-slate-200 p-4">
                                             <div className="mb-2 flex items-center justify-between">
                                                 <p className="font-semibold text-slate-900">{project?.name || 'Project'}</p>
-                                                <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700">
-                                                    {clampedProgress >= 70 ? 'On Track' : 'At Risk'}
+                                                <span className={`rounded-full bg-emerald-100 text-emerald-700 ${UI_BADGE_TEXT_CLASS}`}>
+                                                    {formatStatusLabel(clampedProgress >= 70 ? 'On track' : 'At risk')}
                                                 </span>
                                             </div>
                                             <div className="h-2 rounded-full bg-slate-200">

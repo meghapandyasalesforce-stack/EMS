@@ -10,6 +10,43 @@ import { sendSuccess, sendError, sendNotFound, sendValidationError } from '../..
 import { parsePagination, sendPaginatedResponse } from '../../helpers/paginationHelper.js';
 
 /**
+ * Roll up per-employee progress records into completion counts per learning resource.
+ * When a resource has no explicit assignees it is open to the whole team, so the
+ * participants who have a progress record become the denominator.
+ */
+const buildCompletionStats = (learnings, progressRecords) => {
+    const countsByLearning = new Map();
+
+    progressRecords.forEach((record) => {
+        const key = String(record.learningId);
+        const counts = countsByLearning.get(key) || { Completed: 0, 'In Progress': 0, 'Not Started': 0 };
+        counts[record.status] = (counts[record.status] || 0) + 1;
+        countsByLearning.set(key, counts);
+    });
+
+    learnings.forEach((learning) => {
+        const counts = countsByLearning.get(String(learning._id)) || {
+            Completed: 0,
+            'In Progress': 0,
+            'Not Started': 0
+        };
+        const completed = counts.Completed;
+        const inProgress = counts['In Progress'];
+        const assignedCount = learning.assignedTo?.length || 0;
+        const totalAssigned = assignedCount || completed + inProgress + counts['Not Started'];
+        const notStarted = Math.max(totalAssigned - completed - inProgress, 0);
+
+        learning.completionStats = {
+            totalAssigned,
+            completed,
+            inProgress,
+            notStarted,
+            completionRate: totalAssigned ? Math.round((completed / totalAssigned) * 100) : 0
+        };
+    });
+};
+
+/**
  * Create team learning resource
  * POST /api/v1/both/team-learning
  */
@@ -127,19 +164,26 @@ export const getTeamLearning = asyncHandler(async (req, res) => {
         TeamLearning.countDocuments(query)
     ]);
 
-    // Get progress for each learning if employee is viewing
-    if (employeeId) {
-        const learningIds = learnings.map(l => l._id);
-        const progressRecords = await LearningProgress.find({
+    const learningIds = learnings.map(l => l._id);
+    const allProgressRecords = learningIds.length
+        ? await LearningProgress.find({
             organizationId,
-            employeeId,
             learningId: { $in: learningIds }
-        }).lean();
+        })
+            .select('learningId employeeId status progress')
+            .lean()
+        : [];
 
+    buildCompletionStats(learnings, allProgressRecords);
+
+    // Attach the viewer's own progress
+    if (employeeId) {
         const progressMap = {};
-        progressRecords.forEach(progress => {
-            progressMap[progress.learningId.toString()] = progress;
-        });
+        allProgressRecords
+            .filter(progress => String(progress.employeeId) === String(employeeId))
+            .forEach(progress => {
+                progressMap[progress.learningId.toString()] = progress;
+            });
 
         learnings.forEach(learning => {
             const progressRecord = progressMap[learning._id.toString()] || null;
@@ -185,13 +229,20 @@ export const getTeamLearningById = asyncHandler(async (req, res) => {
         }
     }
 
+    const progressRecords = await LearningProgress.find({
+        organizationId,
+        learningId: id
+    })
+        .populate('employeeId', 'name lastName email')
+        .lean();
+
+    buildCompletionStats([learning], progressRecords);
+
     // Get progress if employee is viewing
     if (employeeId) {
-        const progress = await LearningProgress.findOne({
-            organizationId,
-            employeeId,
-            learningId: id
-        }).lean();
+        const progress = progressRecords.find(
+            record => String(record.employeeId?._id || record.employeeId) === String(employeeId)
+        );
 
         learning.progressRecord = progress || null;
         learning.progress = progress?.progress ?? 0;

@@ -868,6 +868,14 @@ export const breakIn = async (req, res) => {
       // Auto-close breaks longer than 30 minutes (likely abandoned/orphaned)
       if (breakDuration > MAX_BREAK_DURATION_HOURS) {
         breakEntry.breakOut = now;
+        // Backward compatibility: Set breakType if missing
+        if (!breakEntry.breakType) {
+          const breakIndex = attendance.breaks.indexOf(breakEntry);
+          const breakNumber = breakIndex + 1;
+          if (breakNumber <= 4) {
+            breakEntry.breakType = `BREAK_${breakNumber}`;
+          }
+        }
         const breakDurationMs = now - breakStartTime;
         attendance.totalBreakDuration = (attendance.totalBreakDuration || 0) + breakDurationMs;
         cleanedBreaks = true;
@@ -903,8 +911,12 @@ export const breakIn = async (req, res) => {
       });
     }
 
-    // Add new break
-    attendance.breaks.push({ breakIn: new Date() });
+    // Auto-assign break sequence based on completed breaks
+    const nextBreakNumber = completedBreaksCount + 1;
+    const breakType = `BREAK_${nextBreakNumber}`;
+
+    // Add new break with auto-assigned break type
+    attendance.breaks.push({ breakType, breakIn: new Date() });
     attendance.status = "onBreak";
 
     await attendance.save();
@@ -2585,6 +2597,7 @@ export const getTeamAttendanceHistory = async (req, res) => {
         effectiveHours: record.effectiveHours,
         grossHours: record.grossHours,
         breakMinutes,
+        breaks: record.breaks || [],
         status: record.status,
         uiStatus,
         workLocation: record.workLocation,

@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import TeamWfhRequestsPanel from './TeamWfhRequestsPanel';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
 import {
   formatAuditTimelineEvent,
   formatCapitalRequestStatus,
@@ -113,10 +114,12 @@ function getRegWorkflowWaitingLabel(req) {
 /**
  * Returns true if the current viewer can act on the pending workflow step.
  * Admin always gets full actions. HR may override while Manager step is pending.
+ * Requests raised by HR staff are admin-only, whatever the viewer's role.
  * No workflow = always actionable.
  */
 function isMyTurn(req, { isAdmin, isHr, isExecutive, isManager }) {
   if (isAdmin) return true;
+  if (req?.requiresAdminApproval) return false;
   const summary = req?.workflowSummary;
   if (!summary?.hasWorkflow || !summary?.pendingStep) return true;
   const type = summary.pendingStep.approverType;
@@ -160,7 +163,7 @@ function StatusPill({ status, workflowSummary }) {
   const hrByline = formatHrOverrideOutcome(workflowSummary, status);
   return (
     <span className="inline-flex flex-col items-start gap-0.5">
-      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full" style={m.style}>
+      <span className="text-[11px] font-semibold tracking-wide px-2.5 py-1 rounded-full" style={m.style}>
         {formatCapitalRequestStatus(status)}
       </span>
       {hrByline ? (
@@ -170,15 +173,15 @@ function StatusPill({ status, workflowSummary }) {
   );
 }
 
-const RegularizationRequests = () => {
+const RegularizationRequests = ({ embedded = false } = {}) => {
   const navigate = useNavigate();
+  const { isOrgOwner } = useAuthPermissions();
   const [activeSection, setActiveSection] = useState('regularization');
   const authUser = useSelector((state) => state.auth.user);
   const employeeProfile = useSelector((state) => state.employeeDetails.employee);
   const userObj = authUser || employeeProfile;
 
-  const userRole = userObj?.role || localStorage.getItem('role') || 'employee';
-  const isAdmin = userRole === 'admin';
+  const isAdmin = isOrgOwner;
   const isHr = useMemo(() => {
     const roles = Array.isArray(userObj?.functionalRoles) ? userObj.functionalRoles : [];
     return (
@@ -191,6 +194,7 @@ const RegularizationRequests = () => {
     return roles.some((r) => ['executive', 'ceo', 'cto', 'cfo', 'vp'].includes(String(r).toLowerCase()));
   }, [userObj]);
   const isManager = !isAdmin && !isHr && !isExecutive;
+  const actorRoles = { isAdmin, isHr, isExecutive, isManager };
 
   const { start: defaultStart, end: defaultEnd } = useMemo(() => currentMonthBounds(), []);
   const [requests, setRequests] = useState([]);
@@ -320,7 +324,7 @@ const RegularizationRequests = () => {
 
   const toggleSelectAllPending = () => {
     const pendingIds = filteredRequests
-      .filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager }))
+      .filter((r) => r.status === 'pending' && isMyTurn(r, actorRoles))
       .map((r) => String(r._id));
     if (!pendingIds.length) return;
     const allChosen = pendingIds.every((id) => selectedIds.has(id));
@@ -337,7 +341,7 @@ const RegularizationRequests = () => {
 
   const toggleRow = (id, status, req) => {
     if (status !== 'pending') return;
-    if (!isMyTurn(req, { isAdmin, isHr, isExecutive, isManager })) return;
+    if (!isMyTurn(req, actorRoles)) return;
     const sid = String(id);
     const next = new Set(selectedIds);
     if (next.has(sid)) next.delete(sid);
@@ -470,9 +474,9 @@ const RegularizationRequests = () => {
   };
 
   const allPendingSelected =
-    filteredRequests.filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager })).length > 0 &&
+    filteredRequests.filter((r) => r.status === 'pending' && isMyTurn(r, actorRoles)).length > 0 &&
     filteredRequests
-      .filter((r) => r.status === 'pending' && isMyTurn(r, { isAdmin, isHr, isExecutive, isManager }))
+      .filter((r) => r.status === 'pending' && isMyTurn(r, actorRoles))
       .every((r) => selectedIds.has(String(r._id)));
 
   if (activeSection === 'regularization' && loading && !requests.length) {
@@ -485,9 +489,10 @@ const RegularizationRequests = () => {
   const canNext = currentPageNum < totalPagesNum && !loading;
 
   return (
-    <div className="page-shell min-h-screen bg-[#f4f7f6]">
-      <div className="page-shell-inner hrms-stack">
+    <div className={embedded ? 'min-w-0' : 'page-shell min-h-screen bg-[#f4f7f6]'}>
+      <div className={embedded ? 'hrms-stack' : 'page-shell-inner hrms-stack'}>
         <header className="flex flex-col gap-4">
+          {!embedded && (
           <div>
             <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">
               Regularization &amp; Work From Home
@@ -496,6 +501,7 @@ const RegularizationRequests = () => {
               Review team attendance corrections and work from home applications.
             </p>
           </div>
+          )}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div
@@ -710,7 +716,7 @@ const RegularizationRequests = () => {
                       type="checkbox"
                       className="h-4 w-4 accent-[#0a8f6c]"
                       checked={allPendingSelected}
-                      disabled={!filteredRequests.some((r) => r.status === 'pending')}
+                      disabled={!filteredRequests.some((r) => r.status === 'pending' && isMyTurn(r, actorRoles))}
                       onChange={toggleSelectAllPending}
                       aria-label="Select all pending"
                     />
@@ -734,7 +740,7 @@ const RegularizationRequests = () => {
                     ? [managerObj.name, managerObj.lastName].filter(Boolean).join(' ').trim() || '—'
                     : (typeof managerObj === 'string' && managerObj.trim() ? managerObj : '—');
                   const isPending = req.status === 'pending';
-                  const canAct = isPending && isMyTurn(req, { isAdmin, isHr, isExecutive, isManager });
+                  const canAct = isPending && isMyTurn(req, actorRoles);
                   const inFmt = req.requestedClockIn
                     ? format(new Date(req.requestedClockIn), 'hh:mm a')
                     : null;
@@ -748,7 +754,7 @@ const RegularizationRequests = () => {
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-[#0a8f6c]"
-                          disabled={!isPending || !isMyTurn(req, { isAdmin, isHr, isExecutive, isManager })}
+                          disabled={!isPending || !isMyTurn(req, actorRoles)}
                           checked={selectedIds.has(String(req._id))}
                           onChange={() => toggleRow(req._id, req.status, req)}
                         />
@@ -919,9 +925,7 @@ const RegularizationRequests = () => {
         )
           .map((event) => ({ event, label: formatAuditTimelineEvent(event) }))
           .filter((x) => x.label);
-        const drawerCanAct =
-          drawerReq.status === 'pending' &&
-          isMyTurn(drawerReq, { isAdmin, isHr, isExecutive, isManager });
+        const drawerCanAct = drawerReq.status === 'pending' && isMyTurn(drawerReq, actorRoles);
         const closeDrawer = () => {
           setDrawerReq(null);
           setRejectReason('');

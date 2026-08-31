@@ -1569,8 +1569,8 @@ export const publicApplyForJob = asyncHandler(async (req, res) => {
     const { organizationId, id: jobPostingId } = req.params;
     const { firstName, lastName, email, phone, coverLetter, coverLetterAttachment, resume, consentAccepted } = req.body;
 
-    if (!firstName || !lastName || !email) {
-        return res.status(400).json({ success: false, message: 'firstName, lastName and email are required' });
+    if (!firstName || !email) {
+        return res.status(400).json({ success: false, message: 'firstName and email are required' });
     }
     if (!consentAccepted) {
         return res.status(400).json({ success: false, message: 'Consent is required to submit an application' });

@@ -27,6 +27,7 @@ import {
     FiPlus,
     FiX
 } from 'react-icons/fi';
+import { formatStatusLabel } from '../../utils/textFormat.js';
 
 const AdminEmployeePayroll = () => {
     const dispatch = useDispatch();
@@ -260,7 +261,7 @@ const AdminEmployeePayroll = () => {
                             <div className="flex items-center space-x-3">
                                 <div className={`px-4 py-2 rounded-full flex items-center space-x-2 ${getStatusColor(currentMonthPayroll.status)}`}>
                                     {getStatusIcon(currentMonthPayroll.status)}
-                                    <span className="font-semibold">{currentMonthPayroll.status}</span>
+                                    <span className="font-semibold">{formatStatusLabel(currentMonthPayroll.status)}</span>
                                 </div>
                                 <button
                                     onClick={() => handleEditPayroll(currentMonthPayroll)}
@@ -373,7 +374,7 @@ const AdminEmployeePayroll = () => {
                                         <div className="flex items-center space-x-3">
                                             <div className={`px-3 py-1 rounded-full flex items-center space-x-1 ${getStatusColor(payroll.status)}`}>
                                                 {getStatusIcon(payroll.status)}
-                                                <span className="text-sm font-medium">{payroll.status}</span>
+                                                <span className="text-sm font-medium">{formatStatusLabel(payroll.status)}</span>
                                             </div>
                                             <div className="flex space-x-2">
                                                 <button

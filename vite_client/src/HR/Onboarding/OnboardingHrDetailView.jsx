@@ -19,6 +19,7 @@ import OnboardingTrainingTab from './OnboardingTrainingTab';
 import OnboardingActivityTab from './OnboardingActivityTab';
 import OnboardingAccessControl from './OnboardingAccessControl';
 import OnboardingOverviewSnapshot from './OnboardingOverviewSnapshot';
+import { formatStatusLabel } from '../../utils/textFormat.js';
 
 const DETAIL_TABS_ALL = [
     { id: 'overview', label: 'Overview' },
@@ -165,16 +166,17 @@ function taskPriorityClass(priority) {
 
 function taskStatusPill(status) {
     const s = String(status || 'Pending');
-    if (s === 'Overdue') return { className: 'cm-status-pill cm-status-pill--overdue', text: 'OVERDUE' };
-    if (s === 'Completed') return { className: 'cm-status-pill cm-status-pill--done', text: 'COMPLETED' };
-    if (s === 'In Progress') return { className: 'cm-status-pill cm-status-pill--progress', text: 'IN PROGRESS' };
-    return { className: 'cm-status-pill cm-status-pill--pending', text: 'PENDING' };
+    const text = formatStatusLabel(s);
+    if (s === 'Overdue') return { className: 'cm-status-pill cm-status-pill--overdue', text };
+    if (s === 'Completed') return { className: 'cm-status-pill cm-status-pill--done', text };
+    if (s === 'In Progress') return { className: 'cm-status-pill cm-status-pill--progress', text };
+    return { className: 'cm-status-pill cm-status-pill--pending', text };
 }
 
 function assetDisplayStatus(status) {
-    if (status === 'Assigned') return { tone: 'done', label: 'ASSIGNED' };
-    if (status === 'Pending') return { tone: 'attention', label: 'IN TRANSIT' };
-    return { tone: 'neutral', label: String(status || 'PENDING').toUpperCase() };
+    if (status === 'Assigned') return { tone: 'done', label: formatStatusLabel('assigned') };
+    if (status === 'Pending') return { tone: 'attention', label: 'In transit' };
+    return { tone: 'neutral', label: formatStatusLabel(status) };
 }
 
 function documentCheckLabel(doc) {
@@ -313,7 +315,7 @@ export default function OnboardingHrDetailView({
         const blockers = getTaskCompletionBlockers(wf, task);
         const readyToComplete = canCompleteTask(wf, task);
         const pill = taskStatusPill(task.status);
-        const priorityLabel = String(task.priority || 'Normal').toUpperCase();
+        const priorityLabel = formatStatusLabel(task.priority || 'Normal');
 
         return (
             <div key={task._id} className="cm-task-row">
@@ -333,7 +335,7 @@ export default function OnboardingHrDetailView({
                 <div className="cm-task-row__content min-w-0 flex-1">
                     <h4 className="font-semibold text-[var(--cm-on-surface)]">{task.title}</h4>
                     <div className="cm-task-row__meta mt-1 flex flex-wrap items-center gap-3 text-[11px]">
-                        <span className={taskPriorityClass(task.priority)}>{priorityLabel} PRIORITY</span>
+                        <span className={taskPriorityClass(task.priority)}>{priorityLabel} priority</span>
                         {task.dueDate && (
                             <span className="text-[var(--cm-muted)]">
                                 Due: {format(new Date(task.dueDate), 'MMM dd, yyyy')}
@@ -544,7 +546,7 @@ export default function OnboardingHrDetailView({
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-3">
                                 <h2 className="text-2xl font-bold tracking-tight text-[var(--cm-inverted)]">{fullName}</h2>
-                                <span className="cm-onboarding-pill">{workflowStatusLabel(wf.status).toUpperCase()}</span>
+                                <span className="cm-onboarding-pill">{formatStatusLabel(workflowStatusLabel(wf.status))}</span>
                             </div>
                             {roleLine && <p className="mt-1 font-medium text-[var(--cm-on-variant)]">{roleLine}</p>}
                             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--cm-muted)]">

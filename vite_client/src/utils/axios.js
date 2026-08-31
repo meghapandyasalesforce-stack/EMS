@@ -124,7 +124,7 @@ export const getBackendBaseURL = () => {
 export const getUploadUrl = (relativePath) => {
   // Handle null, undefined, or empty values
   if (!relativePath) return null;
-  
+
   // Convert to string if it's not already (handles objects, numbers, etc.)
   let path = relativePath;
   if (typeof relativePath !== 'string') {
@@ -141,17 +141,17 @@ export const getUploadUrl = (relativePath) => {
       path = String(relativePath);
     }
   }
-  
+
   // Ensure it's a string at this point
   if (typeof path !== 'string' || !path) {
     return null;
   }
-  
+
   // If already a full URL, return as is
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  
+
   if (path.startsWith('/uploads')) {
     const base = getBackendBaseURL();
     if (base) {
@@ -162,14 +162,41 @@ export const getUploadUrl = (relativePath) => {
     }
     return path;
   }
-  
+
   // If it's just a filename or path without leading slash, add /uploads
   if (path.startsWith('uploads')) {
     return `${getBackendBaseURL()}/${path}`;
   }
-  
+
   // Default: assume it's a relative path
   return `${getBackendBaseURL()}/uploads/${path}`;
+};
+
+// Safe wrapper that normalizes file input before calling getUploadUrl
+export const normalizeUploadInput = (file) => {
+  if (!file) return '';
+
+  if (typeof file === 'string') {
+    return file;
+  }
+
+  if (typeof file === 'object') {
+    return (
+      file.url ||
+      file.path ||
+      file.filename ||
+      file.fileName ||
+      file.secure_url ||
+      ''
+    );
+  }
+
+  return '';
+};
+
+export const getSafeUploadUrl = (file) => {
+  const normalized = normalizeUploadInput(file);
+  return normalized ? getUploadUrl(normalized) : '';
 };
 
 /** Resolve profile photo to a full URL (localhost proxy + production backend). */

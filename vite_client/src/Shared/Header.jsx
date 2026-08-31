@@ -242,8 +242,8 @@ const Header = () => {
                 <header
                     className={
                         useLightEmployeeNav
-                            ? 'safe-area-top fixed top-0 right-0 left-0 z-30 border-b border-gray-200 bg-white text-gray-800 shadow-sm'
-                            : 'safe-area-top fixed top-0 right-0 left-0 z-30 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
+                            ? 'safe-area-top relative z-30 w-full shrink-0 border-b border-gray-200 bg-white text-gray-800 shadow-sm'
+                            : 'safe-area-top relative z-30 w-full shrink-0 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-900 text-white shadow-xl'
                     }
                 >
                     <div className="flex min-w-0 items-center justify-between gap-2 p-3 sm:p-4">
@@ -538,13 +538,6 @@ const Header = () => {
                 </div>
             )}
 
-            {/* Spacer for mobile header height (+ notch safe area) */}
-            {isMobile && (
-                <div
-                    className="mobile-header-spacer shrink-0"
-                    aria-hidden="true"
-                />
-            )}
 
             {/* Logout Confirmation Modal */}
             <Transition appear show={logoutModalOpen} as={Fragment}>

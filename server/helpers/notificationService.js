@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Notification from '../models/notification.model.js';
 import User from '../models/user.model.js';
 import Employee from '../models/employee.model.js';
@@ -387,24 +388,42 @@ export const sendBroadcastNotification = async (sender, message, type = 'general
  * @param {{ unreadOnly?: boolean }} options
  */
 export const buildUserNotificationFilter = (organizationId, recipientIds, options = {}) => {
-  const ids = (recipientIds || []).map((id) => id.toString());
+  const rawIds = recipientIds || [];
+  const objectIds = [];
+  const stringIds = [];
+
+  for (const id of rawIds) {
+    if (!id) continue;
+    const str = id.toString();
+    stringIds.push(str);
+    if (mongoose.Types.ObjectId.isValid(str)) {
+      objectIds.push(new mongoose.Types.ObjectId(str));
+    }
+  }
+
+  const allIds = [...new Set([...objectIds, ...stringIds])];
+
+  const orgFilter = organizationId && mongoose.Types.ObjectId.isValid(organizationId.toString())
+    ? { $in: [new mongoose.Types.ObjectId(organizationId.toString()), organizationId.toString()] }
+    : organizationId;
+
   const notHidden = {
     $or: [
       { isBroadcast: { $ne: true } },
-      { 'hiddenBy.userId': { $nin: ids } },
+      { 'hiddenBy.userId': { $nin: allIds } },
     ],
   };
 
   if (options.unreadOnly) {
     return {
-      organizationId,
+      organizationId: orgFilter,
       $and: [
         {
           $or: [
-            { recipient: { $in: ids }, isBroadcast: { $ne: true }, isRead: false },
+            { recipient: { $in: allIds }, isBroadcast: { $ne: true }, isRead: false },
             {
               isBroadcast: true,
-              'readReceipts.userId': { $nin: ids },
+              'readReceipts.userId': { $nin: allIds },
             },
           ],
         },
@@ -414,11 +433,11 @@ export const buildUserNotificationFilter = (organizationId, recipientIds, option
   }
 
   return {
-    organizationId,
+    organizationId: orgFilter,
     $and: [
       {
         $or: [
-          { recipient: { $in: ids }, isBroadcast: { $ne: true } },
+          { recipient: { $in: allIds }, isBroadcast: { $ne: true } },
           { isBroadcast: true },
         ],
       },

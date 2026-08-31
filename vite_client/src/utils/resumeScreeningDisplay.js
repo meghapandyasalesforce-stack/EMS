@@ -4,6 +4,14 @@
  * Frontend must NOT recalculate Approved/Rejected — only display this mapping.
  */
 
+import { formatStatusLabel } from './textFormat.js';
+
+const SCREENING_STATUS_LABELS = {
+    passed: 'Approved',
+    failed: 'Rejected',
+    pending: 'Pending - not screened',
+};
+
 /**
  * Parse job/template minimum match % for save payloads.
  * Preserves low valid values like 2%. Only falls back when empty/invalid.
@@ -67,11 +75,13 @@ export function normalizeResumeScreening(raw = {}) {
 
     let label;
     if (normalizedStatus === 'passed') {
-        label = score != null ? `Approved · ${score}%` : 'Approved';
+        const base = SCREENING_STATUS_LABELS.passed;
+        label = score != null ? `${base} · ${score}%` : base;
     } else if (normalizedStatus === 'failed') {
-        label = score != null ? `Rejected · ${score}%` : 'Rejected';
+        const base = SCREENING_STATUS_LABELS.failed;
+        label = score != null ? `${base} · ${score}%` : base;
     } else {
-        label = 'Pending - Not Screened';
+        label = SCREENING_STATUS_LABELS.pending;
     }
 
     return {
@@ -116,4 +126,10 @@ export function formatScreeningDisplayLabel(screening, { isDuplicate = false } =
     const s = normalizeResumeScreening(screening);
     if (isDuplicate) return `Duplicate · ${s.label}`;
     return s.label;
+}
+
+/** Sentence-case display for screening decision labels. */
+export function formatScreeningStatusLabel(status) {
+    const key = status === 'skipped' ? 'pending' : status;
+    return SCREENING_STATUS_LABELS[key] || formatStatusLabel(status);
 }

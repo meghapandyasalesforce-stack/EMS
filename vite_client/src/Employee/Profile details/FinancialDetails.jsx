@@ -4,6 +4,7 @@ import { updateFinancialDetails } from '../../context/employeeDetailsSlice';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import TaxDeclaration from './TaxDeclaration';
+import { FiDollarSign, FiShield, FiEdit2 } from 'react-icons/fi';
 
 const isNaRegime = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -50,6 +51,36 @@ const TaxRegimeNaConfirmModal = ({ open, onConfirm, onCancel, saving }) => {
     </div>
   );
 };
+
+const InputField = ({ label, name, value, onChange, required, placeholder }) => (
+  <div className="flex flex-col">
+    <label htmlFor={name} className="text-xs font-medium text-gray-600 mb-1">
+      {label}{' '}
+      {required ? (
+        <span className="text-red-500">*</span>
+      ) : (
+        <span className="text-gray-400">(optional)</span>
+      )}
+    </label>
+    <input
+      type="text"
+      name={name}
+      id={name}
+      value={value}
+      onChange={onChange}
+      required={required}
+      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition placeholder:text-gray-400"
+      placeholder={placeholder || label}
+    />
+  </div>
+);
+
+const DetailItem = ({ label, value }) => (
+  <div className="space-y-1">
+    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</p>
+    <p className="text-sm font-medium text-gray-900">{value || 'N/A'}</p>
+  </div>
+);
 
 const FinancialDetails = () => {
   const dispatch = useDispatch();
@@ -150,149 +181,159 @@ const FinancialDetails = () => {
   }
 
   return (
-    <div className="w-full min-w-0">
-      <div className="w-full rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 md:p-6 shadow-sm">
-        <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5 sm:mb-6 text-left">Financial Details</h2>
+    <div className="w-full min-w-0 space-y-6">
+      {pendingNaRequest && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Your request to set tax regime to <strong>N/A (no TDS)</strong> is pending HR/Admin approval.
+          Current regime remains <strong>{formData.taxRegime || 'New'}</strong> until approved.
+        </div>
+      )}
 
-        {pendingNaRequest && (
-          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Your request to set tax regime to <strong>N/A (no TDS)</strong> is pending HR/Admin approval.
-            Current regime remains <strong>{formData.taxRegime || 'New'}</strong> until approved.
-          </div>
-        )}
-
-        {isEditing ? (
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="hrms-form-grid">
-            {[
-              { label: 'Bank Name', name: 'bankName', required: true },
-              { label: 'IFSC Code', name: 'ifsc', required: true },
-              { label: 'Account Number', name: 'accountNo', required: true },
-              { label: 'Account Holder Name', name: 'accountName', required: true },
-              { label: 'PAN Number', name: 'panNumber', required: false, placeholder: 'e.g. ABCDE1234F' },
-              { label: 'EPF UAN', name: 'epfUan', required: false, placeholder: 'Universal Account Number' },
-            ].map(({ label, name, required, placeholder }) => (
-              <div key={name} className="flex flex-col gap-1">
-                <label htmlFor={name} className="text-sm text-gray-700 font-medium">
-                  {label}{' '}
-                  {required ? (
-                    <span className="text-red-500">*</span>
-                  ) : (
-                    <span className="text-gray-400 text-xs">(optional)</span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  name={name}
-                  id={name}
-                  value={formData[name]}
-                  onChange={handleChange}
-                  required={required}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                  placeholder={placeholder || label}
-                />
+      {isEditing ? (
+        <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <FiDollarSign className="h-4 w-4" />
               </div>
-            ))}
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Financial Details</h2>
+                <p className="text-xs text-gray-500">Update your bank and tax information</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-5 space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800 mb-4">Bank Information</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  { label: 'Bank Name', name: 'bankName', required: true },
+                  { label: 'IFSC Code', name: 'ifsc', required: true },
+                  { label: 'Account Number', name: 'accountNo', required: true },
+                  { label: 'Account Holder Name', name: 'accountName', required: true },
+                ].map((field) => (
+                  <InputField key={field.name} {...field} value={formData[field.name]} onChange={handleChange} />
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label htmlFor="taxRegime" className="text-sm text-gray-700 font-medium">
-                Tax Regime <span className="text-gray-400 text-xs">(for payroll TDS)</span>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800 mb-4">Tax & Statutory</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputField label="PAN Number" name="panNumber" value={formData.panNumber} onChange={handleChange} required={false} placeholder="e.g. ABCDE1234F" />
+                <InputField label="EPF UAN" name="epfUan" value={formData.epfUan} onChange={handleChange} required={false} placeholder="Universal Account Number" />
+
+                <div className="flex flex-col">
+                  <label htmlFor="taxRegime" className="text-xs font-medium text-gray-600 mb-1">
+                    Tax Regime <span className="text-gray-400">(for payroll TDS)</span>
+                  </label>
+                  <select
+                    name="taxRegime"
+                    id="taxRegime"
+                    value={formData.taxRegime}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition placeholder:text-gray-400"
+                  >
+                    <option value="New">New Regime</option>
+                    <option value="Old">Old Regime</option>
+                    <option value="N/A">N/A (no TDS)</option>
+                  </select>
+                  {isNaRegime(formData.taxRegime) && !isNaRegime(employee?.financialDetails?.taxRegime) && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      Selecting N/A will send an approval request to HR/Admin when you save.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  name="metroCity"
+                  checked={formData.metroCity}
+                  onChange={handleChange}
+                  className="rounded border-gray-300"
+                />
+                Metro city (used for HRA under Old regime)
               </label>
-              <select
-                name="taxRegime"
-                id="taxRegime"
-                value={formData.taxRegime}
-                onChange={handleChange}
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              >
-                <option value="New">New Regime</option>
-                <option value="Old">Old Regime</option>
-                <option value="N/A">N/A (no TDS)</option>
-              </select>
-              {isNaRegime(formData.taxRegime) && !isNaRegime(employee?.financialDetails?.taxRegime) && (
-                <p className="text-xs text-amber-700 mt-1">
-                  Selecting N/A will send an approval request to HR/Admin when you save.
-                </p>
-              )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                name="metroCity"
-                checked={formData.metroCity}
-                onChange={handleChange}
-              />
-              Metro city (used for HRA under Old regime)
-            </label>
-
-            <div className="flex gap-4 pt-4">
-              <button
-                type="submit"
-                disabled={updatingFinancialDetails}
-                className={`${
-                  updatingFinancialDetails
-                    ? 'bg-green-400 cursor-not-allowed'
-                    : 'bg-theme-primary hover:bg-theme-primary'
-                } text-white px-6 py-2 rounded-lg font-medium transition`}
-              >
-                {updatingFinancialDetails ? 'Saving...' : 'Save'}
-              </button>
+            <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-600 transition"
+                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
               >
                 Cancel
               </button>
+              <button
+                type="submit"
+                disabled={updatingFinancialDetails}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updatingFinancialDetails ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
           </form>
-        ) : (
-          <div className="w-full rounded-xl border border-slate-100 bg-slate-50 p-4 sm:p-6">
-            <h3 className="text-lg font-semibold mb-4">Bank Information</h3>
-            <div className="hrms-form-grid text-sm">
-              <p>
-                <strong>Bank Name:</strong> {formData.bankName || 'N/A'}
-              </p>
-              <p>
-                <strong>IFSC:</strong> {formData.ifsc || 'N/A'}
-              </p>
-              <p>
-                <strong>Account No:</strong>{' '}
-                {formData.accountNo ? '••••••••' + formData.accountNo.slice(-4) : 'N/A'}
-              </p>
-              <p>
-                <strong>Account Name:</strong> {formData.accountName || 'N/A'}
-              </p>
+        </div>
+      ) : (
+        <>
+          {/* Bank Information Card */}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <FiDollarSign className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Bank Information</h3>
+                  <p className="text-xs text-gray-500">4 fields</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90 transition"
+              >
+                <FiEdit2 className="h-3.5 w-3.5" />
+                Edit
+              </button>
             </div>
-            <h3 className="text-lg font-semibold mb-4 mt-6">Tax & statutory</h3>
-            <p className="mb-2">
-              <strong>PAN Number:</strong> {formData.panNumber || 'N/A'}
-            </p>
-            <p className="mb-2">
-              <strong>EPF UAN:</strong> {formData.epfUan || 'N/A'}
-            </p>
-            <p className="mb-2">
-              <strong>Tax Regime:</strong>{' '}
-              {formData.taxRegime === 'N/A'
-                ? 'N/A (no TDS)'
-                : formData.taxRegime || 'N/A'}
-            </p>
-            <p className="mb-4">
-              <strong>Metro city:</strong> {formData.metroCity ? 'Yes' : 'No'}
-            </p>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="mt-4 bg-theme-primary text-white px-4 py-2 rounded hover:opacity-90 transition"
-            >
-              Edit
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 p-5">
+              <DetailItem label="Bank Name" value={formData.bankName} />
+              <DetailItem label="IFSC Code" value={formData.ifsc} />
+              <DetailItem label="Account Number" value={formData.accountNo ? '••••••••' + formData.accountNo.slice(-4) : null} />
+              <DetailItem label="Account Holder Name" value={formData.accountName} />
+            </div>
           </div>
-        )}
 
-        <TaxDeclaration />
-      </div>
+          {/* Tax & Statutory Card */}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                  <FiShield className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Tax & Statutory</h3>
+                  <p className="text-xs text-gray-500">4 fields</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 p-5">
+              <DetailItem label="PAN Number" value={formData.panNumber} />
+              <DetailItem label="EPF UAN" value={formData.epfUan} />
+              <DetailItem
+                label="Tax Regime"
+                value={formData.taxRegime === 'N/A' ? 'N/A (no TDS)' : formData.taxRegime || 'N/A'}
+              />
+              <DetailItem label="Metro City" value={formData.metroCity ? 'Yes' : 'No'} />
+            </div>
+          </div>
+        </>
+      )}
+
+      <TaxDeclaration />
 
       <TaxRegimeNaConfirmModal
         open={showNaConfirm}

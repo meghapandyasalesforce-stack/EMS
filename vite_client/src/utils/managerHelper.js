@@ -4,6 +4,7 @@
  */
 
 import { isProjectManager } from './projectManagerHelper';
+import { formatPermissionDisplayLabel } from './textFormat.js';
 
 const normalizeRoleText = (value) => String(value || '').toLowerCase().trim();
 
@@ -244,25 +245,25 @@ export const canAccessLifecycleEnterpriseHub = (user, permissionFlags = {}, empl
  * @returns {Object} - Badge info with label and color
  */
 export const getUserRoleBadge = (user) => {
-    if (!user) return { label: 'Employee', color: 'gray' };
+    if (!user) return { label: formatPermissionDisplayLabel('employee'), color: 'gray' };
     
     const userRole = user.role;
     if (userRole === 'admin') {
-        return { label: 'Admin', color: 'purple' };
+        return { label: formatPermissionDisplayLabel('admin'), color: 'purple' };
     }
     
     if (isHR(user)) {
-        return { label: 'HR', color: 'blue' };
+        return { label: formatPermissionDisplayLabel('hr'), color: 'blue' };
     }
     
     if (isProjectManager(user)) {
-        return { label: 'Project Manager', color: 'teal' };
+        return { label: formatPermissionDisplayLabel('project manager'), color: 'teal' };
     }
 
     if (isManager(user)) {
-        return { label: 'Manager', color: 'green' };
+        return { label: formatPermissionDisplayLabel('manager'), color: 'green' };
     }
     
-    return { label: 'Employee', color: 'gray' };
+    return { label: formatPermissionDisplayLabel('employee'), color: 'gray' };
 };
 

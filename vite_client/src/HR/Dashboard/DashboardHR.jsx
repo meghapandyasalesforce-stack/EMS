@@ -43,14 +43,75 @@ import ProfilePicture from '../../Shared/ProfilePicture';
 import { fetchEmployeeOwnInfo } from '../../context/employeeDetailsSlice';
 import { fetchOrganizationTimezone } from '../../context/timezoneSlice';
 import axios from '../../utils/axios';
+import { toast } from 'react-toastify';
 import { useEmployees, useLeaves } from '../../Hooks/useDashboardData';
 import { handleApiError } from '../../utils/errorHandler';
-import { BOTH_ATTENDANCE_ENDPOINT } from '../../utils/constant';
+import { BOTH_ATTENDANCE_ENDPOINT, BOTH_CELEBRATION_ENDPOINT } from '../../utils/constant';
 import AttendanceBox from '../../Employee/Attendance/AttendanceBox';
 import AnnouncementBanner from '../../components/AnnouncementBanner';
 import PersonalDashboardKpiRow from '../../components/PersonalDashboardKpiRow';
 import LeaveBalanceCard from '../../components/LeaveBalanceCard';
 import NotificationSender from '../../Admin/NotificationSender';
+
+
+const CELEBRATION_REACTIONS = ['❤️', '🎉', '👏', '🥳'];
+
+const sortCelebrations = (items = []) => {
+    const order = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
+    return [...items].sort((a, b) => {
+        const aDays = Number.isFinite(Number(a?.daysUntil)) ? Number(a.daysUntil) : 9999;
+        const bDays = Number.isFinite(Number(b?.daysUntil)) ? Number(b.daysUntil) : 9999;
+        if (aDays !== bDays) return aDays - bDays;
+        return (order[a?.type] || 99) - (order[b?.type] || 99);
+    });
+};
+
+function CelebrationDashboardCard({ item, isSelf = false, event, reacting = false, onReact, onWishes }) {
+    const isToday = item?.daysUntil === 0;
+    const isMarriage = item?.type === 'marriage_anniversary';
+    const isWorkAnniversary = item?.type === 'anniversary';
+    const icon = isMarriage ? '💍' : isWorkAnniversary ? '🎉' : '🎂';
+    const typeLabel = isMarriage ? 'Marriage Anniversary' : isWorkAnniversary ? 'Work Anniversary' : 'Birthday';
+    const dateLabel = item?.birthday || item?.anniversaryDate || item?.date || '';
+    const whenLabel = item?.daysUntil === 0 ? 'Today' : item?.daysUntil === 1 ? 'Tomorrow' : `in ${item?.daysUntil} days`;
+    const counts = event?.reactionCounts || {};
+    const header = isSelf
+        ? isMarriage ? 'YOUR MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'YOUR WORK ANNIVERSARY' : "IT'S YOUR BIRTHDAY"
+        : isMarriage ? 'MARRIAGE ANNIVERSARY' : isWorkAnniversary ? 'WORK ANNIVERSARY' : 'BIRTHDAY';
+
+    return (
+        <li className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 ${isToday ? 'border-amber-200 bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-50 shadow-sm' : 'border-slate-100 bg-[#F8F9FB]'}`}>
+            <div className="flex items-start gap-2">
+                <div className="min-w-0 pr-24">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">{header}</p>
+                    <p className="truncate font-semibold text-slate-800">{icon} {isSelf ? 'You' : item?.name || 'Team member'}</p>
+                    <p className="text-xs text-slate-500">
+                        {(isMarriage || isWorkAnniversary) && item?.completedYears ? `${item.completedYears} ${item.completedYears === 1 ? 'year' : 'years'} · ` : ''}
+                        {dateLabel ? `${dateLabel} · ` : ''}{typeLabel} · {whenLabel}
+                    </p>
+                </div>
+                {onWishes ? (
+                    <button type="button" onClick={() => onWishes(item)} className="absolute right-3.5 top-3.5 shrink-0 whitespace-nowrap rounded-full bg-[#20C997] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1ab589]">
+                        {isToday ? 'Wishes' : 'Upcoming'}
+                    </button>
+                ) : null}
+            </div>
+            {isToday && onReact ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {CELEBRATION_REACTIONS.map((emoji) => {
+                        const count = counts[emoji] || 0;
+                        return (
+                            <button key={emoji} type="button" disabled={reacting} onClick={() => onReact(item, emoji)} className={`inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-sm shadow-sm transition hover:border-emerald-300 hover:bg-white disabled:opacity-50 ${count > 0 ? 'border-emerald-200' : 'border-slate-200'}`} aria-label={`React ${emoji}`}>
+                                <span>{emoji}</span>
+                                {count > 0 ? <span className="text-xs font-semibold text-slate-600">{count}</span> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </li>
+    );
+}
 
 const WS = {
     bg: '#F5F7FB',
@@ -261,13 +322,25 @@ const buildApprovalSummary = (approvals) => {
 };
 
 const buildUpcomingEvents = (birthdays, approvals) => {
-    const birthdayEvents = (birthdays || []).slice(0, 2).map((item, index) => ({
-        id: `birthday-${index}`,
-        title: item?.name || 'Team member',
-        subtitle: 'Birthday',
-        dateLabel: item?.birthday || 'Upcoming',
-        tone: 'birthday',
-    }));
+    const birthdayEvents = [...(birthdays || [])]
+        .sort((a, b) => {
+            const aDays = Number.isFinite(Number(a?.daysUntil)) ? Number(a.daysUntil) : 9999;
+            const bDays = Number.isFinite(Number(b?.daysUntil)) ? Number(b.daysUntil) : 9999;
+            if (aDays !== bDays) return aDays - bDays;
+            const order = { birthday: 1, marriage_anniversary: 2, anniversary: 3 };
+            return (order[a?.type] || 99) - (order[b?.type] || 99);
+        })
+        .slice(0, 2)
+        .map((item, index) => {
+        const isMarriage = item?.type === 'marriage_anniversary';
+        return {
+            id: `celebration-${item?.employeeId || index}-${item?.type || 'bday'}`,
+            title: isMarriage ? `💍 ${item?.name || 'Team member'}` : `🎂 ${item?.name || 'Team member'}`,
+            subtitle: isMarriage ? 'Marriage Anniversary' : 'Birthday',
+            dateLabel: item?.anniversaryDate || item?.birthday || item?.date || 'Upcoming',
+            tone: 'birthday',
+        };
+    });
 
     const approvalEvents = (approvals || [])
         .filter((approval) => approval?.currentPendingStep?.dueDate)
@@ -384,6 +457,8 @@ const DashboardHR = () => {
         attendanceDailyTrend: [],
         todayStatus: [],
     });
+    const [celebrationEvents, setCelebrationEvents] = useState({});
+    const [celebrationReacting, setCelebrationReacting] = useState(false);
     const [announcements, setAnnouncements] = useState([]);
     const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
 
@@ -539,7 +614,7 @@ const DashboardHR = () => {
 
                 setDashboardExtras({
                     birthdays:
-                        birthdaysRes.status === 'fulfilled' ? birthdaysRes.value?.data?.birthdays || [] : [],
+                        birthdaysRes.status === 'fulfilled' ? (birthdaysRes.value?.data?.celebrations || [ ...(birthdaysRes.value?.data?.birthdays || []), ...(birthdaysRes.value?.data?.marriageAnniversaries || []) ]) : [],
                     openJobs:
                         jobsRes.status === 'fulfilled' ? jobsRes.value?.data?.data || [] : [],
                     pendingApprovals: mergedApprovals,
@@ -701,6 +776,70 @@ const DashboardHR = () => {
         () => buildUpcomingEvents(dashboardExtras.birthdays, dashboardExtras.pendingApprovals),
         [dashboardExtras.birthdays, dashboardExtras.pendingApprovals]
     );
+
+    const getCelebrationItemKey = (item) => `${item?.type || 'birthday'}_${item?.employeeId}`;
+
+    const openTodayCelebrationEvent = async (item) => {
+        const { data } = await axios.post(
+            `${BOTH_CELEBRATION_ENDPOINT}/events/open`,
+            { employeeId: item.employeeId, type: item.type || 'birthday' },
+            { withCredentials: true }
+        );
+        const event = data?.data;
+        if (event?._id) {
+            const itemKey = getCelebrationItemKey(item);
+            setCelebrationEvents((prev) => ({ ...prev, [itemKey]: event }));
+        }
+        return event;
+    };
+
+    const handleOpenCelebrationWishes = async (item) => {
+        if (!item?.employeeId) return;
+        try {
+            if (item.daysUntil !== 0) {
+                const label = item?.type === 'marriage_anniversary'
+                    ? 'marriage anniversary'
+                    : item?.type === 'anniversary'
+                        ? 'work anniversary'
+                        : 'birthday';
+                toast.info(`Wishes and reactions open on their ${label}.`);
+                return;
+            }
+            const itemKey = getCelebrationItemKey(item);
+            const event = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
+            const eventId = event?._id;
+            navigate(eventId ? `/celebrations/${eventId}` : '/celebrations');
+        } catch {
+            navigate('/celebrations');
+        }
+    };
+
+    const handleCelebrationReact = async (item, emoji) => {
+        if (item?.daysUntil !== 0) return;
+        setCelebrationReacting(true);
+        try {
+            const itemKey = getCelebrationItemKey(item);
+            const opened = celebrationEvents[itemKey] || await openTodayCelebrationEvent(item);
+            if (!opened?._id) return;
+            const { data } = await axios.post(
+                `${BOTH_CELEBRATION_ENDPOINT}/events/${opened._id}/react`,
+                { emoji },
+                { withCredentials: true }
+            );
+            const eventStateKey = data?.data?.type && data?.data?.employeeId ? `${data.data.type}_${data.data.employeeId}` : itemKey;
+            setCelebrationEvents((prev) => ({
+                ...prev,
+                [eventStateKey]: {
+                    ...opened,
+                    ...(prev[eventStateKey] || {}),
+                    reactions: data?.data?.reactions || [],
+                    reactionCounts: data?.data?.reactionCounts || {},
+                },
+            }));
+        } finally {
+            setCelebrationReacting(false);
+        }
+    };
 
     const recentHires = useMemo(() => {
         const query = normalizeText(searchQuery);
@@ -1253,13 +1392,30 @@ const DashboardHR = () => {
                         </div>
                     </Panel>
 
-                    <Panel title="Upcoming Events">
+                    <Panel title="Upcoming celebrations">
                         <div className="space-y-3">
-                            {upcomingEvents.map((eventItem) => (
+                            {sortCelebrations(dashboardExtras.birthdays || []).slice(0, 3).map((item, idx) => {
+                                const itemKey = `${item.type || 'birthday'}_${item.employeeId}`;
+                                return (
+                                    <CelebrationDashboardCard
+                                        key={`${item.type || 'birthday'}_${item.employeeId || idx}`}
+                                        item={item}
+                                        isSelf={false}
+                                        event={celebrationEvents[itemKey]}
+                                        reacting={celebrationReacting}
+                                        onReact={handleCelebrationReact}
+                                        onWishes={handleOpenCelebrationWishes}
+                                    />
+                                );
+                            })}
+                            {(!dashboardExtras.birthdays || dashboardExtras.birthdays.length === 0) ? (
+                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                                    No upcoming celebrations.
+                                </div>
+                            ) : null}
+                            {upcomingEvents.filter((eventItem) => eventItem.tone !== 'birthday').map((eventItem) => (
                                 <div key={eventItem.id} className="flex items-start gap-2.5">
-                                    <div
-                                        className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl ${getEventToneClasses(eventItem.tone)}`}
-                                    >
+                                    <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl ${getEventToneClasses(eventItem.tone)}`}>
                                         <FiCalendar className="h-3.5 w-3.5" />
                                     </div>
                                     <div className="min-w-0 flex-1">

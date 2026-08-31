@@ -904,7 +904,7 @@ class LeaveValidationService {
             monthLabel,
             inProbation: employeeInProbation,
             probationNote: employeeInProbation
-                ? 'On probation — leave follows probation rules until confirmation. Normal rules start from the 1st of the next month after confirmation.'
+                ? ''
                 : null,
             types,
         };

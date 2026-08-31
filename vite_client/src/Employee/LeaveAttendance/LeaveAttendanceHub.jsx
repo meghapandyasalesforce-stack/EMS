@@ -6,7 +6,9 @@ import { toast } from 'react-toastify';
 import { getAuthEmployeeId } from '../../utils/authUser';
 import { fetchLogs, hydrateLogsFromMonthCache } from '../../context/attendanceSlice';
 import { getEmployeeLeaves } from '../../context/employeeLeaveSlice';
-import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiPlus, FiCoffee, FiX, FiUsers, FiArrowLeft, FiLoader, FiDownload } from 'react-icons/fi';
+import useAuthPermissions from '../../Hooks/useAuthPermissions';
+import * as XLSX from 'xlsx';
 import {
   getLeaveTypeDisplayName,
   getLeaveDisplayLabel,
@@ -18,6 +20,10 @@ import {
   monthlyEarnsLabel,
 } from '../../constants/leaveConstants';
 import { formatLeaveApprovalStageDisplay } from '../../utils/approvalStatusDisplay';
+import {
+  formatAttendanceStatusLabel,
+  formatStatusLabel,
+} from '../../utils/textFormat.js';
 import WfhRequestPanel from '../Wfh/WfhRequestPanel';
 
 const toDateInput = (d) => {
@@ -67,6 +73,39 @@ const LOGS_PER_PAGE = 10;
 const monthCacheKey = (d) => {
   const x = new Date(d);
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const formatBreakDuration = (seconds) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
+const getIndividualBreakDurations = (row) => {
+  if (!row?.breaks || !Array.isArray(row.breaks)) return [];
+  const nowMs = Date.now();
+  return row.breaks.map((entry, index) => {
+    if (!entry?.breakIn) return null;
+    const breakIn = new Date(entry.breakIn).getTime();
+    if (!Number.isFinite(breakIn)) return null;
+    const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : nowMs;
+    if (!Number.isFinite(breakOut) || breakOut <= breakIn) return null;
+    const duration = (breakOut - breakIn) / 1000; // in seconds
+    const breakType = entry.breakType || `BREAK_${index + 1}`; // Backward compatibility
+    return {
+      breakType,
+      duration,
+      isActive: !entry.breakOut
+    };
+  }).filter(Boolean);
+};
+
+const formatBreakDisplayName = (breakType) => {
+  if (!breakType) return 'Break';
+  if (breakType === 'LUNCH') return 'Lunch';
+  return breakType.replace('BREAK_', 'Break ');
 };
 
 const formatHours = (value) => {
@@ -189,6 +228,7 @@ const LeaveAttendanceHub = () => {
   const monthCache = attendance.monthCache || {};
   const employeeDocId =
     getAuthEmployeeId(employeeProfile) || getAuthEmployeeId(authUser);
+  const { isHrManager, isHrExecutive } = useAuthPermissions();
 
   const [calendarCursor, setCalendarCursor] = useState(startOfMonthDate(new Date()));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -199,6 +239,40 @@ const LeaveAttendanceHub = () => {
   const [regularizationRequestsAll, setRegularizationRequestsAll] = useState([]);
   const [regularizationLimits, setRegularizationLimits] = useState(null);
   const [currentLogPage, setCurrentLogPage] = useState(1);
+  const [selectedBreaksRow, setSelectedBreaksRow] = useState(null);
+  const [showBreaksModal, setShowBreaksModal] = useState(false);
+  const [showAllEmployeesModal, setShowAllEmployeesModal] = useState(false);
+  const [selectedAllEmployeesDate, setSelectedAllEmployeesDate] = useState(new Date());
+  const [allEmployeesBreaksData, setAllEmployeesBreaksData] = useState([]);
+  const [loadingAllEmployeesData, setLoadingAllEmployeesData] = useState(false);
+  
+  // Export selection state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportType, setExportType] = useState(null); // 'date' or 'month'
+  const [exportScope, setExportScope] = useState(null); // 'all' or 'particular'
+  const [selectedExportEmployee, setSelectedExportEmployee] = useState(null);
+  const [allEmployeesList, setAllEmployeesList] = useState([]);
+  const [loadingEmployeesList, setLoadingEmployeesList] = useState(false);
+  const [selectedExportDate, setSelectedExportDate] = useState(new Date());
+
+  const getIndividualBreakDurationsFromRow = (row) => {
+    if (!row?.breaks || !Array.isArray(row.breaks)) return [];
+    const nowMs = Date.now();
+    return row.breaks.map((entry, index) => {
+      if (!entry?.breakIn) return null;
+      const breakIn = new Date(entry.breakIn).getTime();
+      if (!Number.isFinite(breakIn)) return null;
+      const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : nowMs;
+      if (!Number.isFinite(breakOut) || breakOut <= breakIn) return null;
+      const duration = (breakOut - breakIn) / 1000;
+      const breakType = entry.breakType || `BREAK_${index + 1}`;
+      return {
+        breakType,
+        duration,
+        isActive: !entry.breakOut
+      };
+    }).filter(Boolean);
+  };
 
   const canRegularize = regularizationLimits?.canSubmit === true;
 
@@ -462,6 +536,301 @@ const LeaveAttendanceHub = () => {
     });
   };
 
+  const handleViewBreaks = (row) => {
+    setSelectedBreaksRow(row);
+    setShowBreaksModal(true);
+  };
+
+  const handleCloseBreaksModal = () => {
+    setShowBreaksModal(false);
+    setSelectedBreaksRow(null);
+  };
+
+  const handleExportEmployeeDateToExcel = () => {
+    setExportType('date');
+    setExportScope('particular');
+    setSelectedExportEmployee(selectedBreaksRow.employee);
+    setShowExportModal(true);
+    loadEmployeesList();
+  };
+
+  const handleExportEmployeeMonthToExcel = () => {
+    setExportType('month');
+    setExportScope('particular');
+    setSelectedExportEmployee(selectedBreaksRow.employee);
+    setShowExportModal(true);
+    loadEmployeesList();
+  };
+
+  const handleCloseAllEmployeesModal = () => {
+    setShowAllEmployeesModal(false);
+    setAllEmployeesBreaksData([]);
+  };
+
+  const handleExportClick = (type) => {
+    setExportType(type);
+    setExportScope(null);
+    setSelectedExportEmployee(null);
+    setShowExportModal(true);
+    loadEmployeesList();
+  };
+
+  const loadEmployeesList = async () => {
+    setLoadingEmployeesList(true);
+    try {
+      const monthStart = startOfMonthDate(new Date());
+      const monthEnd = endOfMonthDate(new Date());
+      const params = {
+        startDate: toDateInput(monthStart),
+        endDate: toDateInput(monthEnd),
+        limit: 1000
+      };
+      const res = await axios.get('/v1/both/attendance/team-attendance-history', { params });
+      const records = res.data?.records || [];
+      
+      // Extract unique employees
+      const employeesMap = new Map();
+      records.forEach(record => {
+        if (record.employee) {
+          const empId = record.employee._id || record.employee.employeeId;
+          if (!employeesMap.has(empId)) {
+            employeesMap.set(empId, record.employee);
+          }
+        }
+      });
+      
+      setAllEmployeesList(Array.from(employeesMap.values()));
+    } catch (error) {
+      console.error('Failed to load employees list:', error);
+    } finally {
+      setLoadingEmployeesList(false);
+    }
+  };
+
+  const handleExportConfirm = async () => {
+    if (!exportScope) {
+      toast.error('Please select export scope');
+      return;
+    }
+
+    if (exportScope === 'particular' && !selectedExportEmployee) {
+      toast.error('Please select an employee');
+      return;
+    }
+
+    setShowExportModal(false);
+
+    if (exportType === 'date') {
+      await handleExportByDate();
+    } else {
+      await handleExportByMonth();
+    }
+  };
+
+  const handleExportByDate = async () => {
+    try {
+      const targetDate = selectedExportDate;
+      const params = {
+        startDate: toDateInput(targetDate),
+        endDate: toDateInput(targetDate),
+        limit: 1000
+      };
+
+      toast.loading('Exporting date-wise data...', { toastId: 'exportDate' });
+
+      const res = await axios.get('/v1/both/attendance/team-attendance-history', { params });
+      const records = res.data?.records || [];
+
+      // Filter records based on scope
+      let filteredRecords = records;
+      if (exportScope === 'particular' && selectedExportEmployee) {
+        filteredRecords = records.filter(record => {
+          const empId = selectedExportEmployee._id;
+          const empEmpId = selectedExportEmployee.employeeId;
+          const selectedEmpName = [selectedExportEmployee.name, selectedExportEmployee.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          const recordEmpId = record.employee?._id;
+          const recordEmpEmpId = record.employee?.employeeId;
+          const recordEmpName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          return recordEmpId === empId || 
+                 recordEmpEmpId === empEmpId ||
+                 record.employee?.id === empId ||
+                 recordEmpName === selectedEmpName ||
+                 (empEmpId && recordEmpEmpId === empEmpId);
+        });
+      }
+
+      if (filteredRecords.length === 0) {
+        toast.dismiss('exportDate');
+        toast.error('No data found for the selected criteria');
+        return;
+      }
+
+      const exportData = [];
+      filteredRecords.forEach((record) => {
+        const breakDurations = getIndividualBreakDurationsFromRow(record);
+        const totalDuration = breakDurations.reduce((sum, b) => sum + b.duration, 0);
+        const empName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ');
+        
+        const getBreakDuration = (breakType) => {
+          const found = breakDurations.find(b => b.breakType === breakType);
+          return found ? formatBreakDuration(found.duration) : '--';
+        };
+
+        exportData.push({
+          'Employee Name': empName,
+          'Employee ID': record.employee?.employeeId || '--',
+          'Date': record.date || toDateInput(record.dateKey),
+          'Break 1': getBreakDuration('BREAK_1'),
+          'Break 2': getBreakDuration('BREAK_2'),
+          'Break 3': getBreakDuration('BREAK_3'),
+          'Break 4': getBreakDuration('BREAK_4'),
+          'Total Break Time': formatBreakDuration(totalDuration)
+        });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Employee Breaks');
+      
+      const dateStr = toDateInput(targetDate);
+      const scopeName = exportScope === 'particular' ? selectedExportEmployee.name : 'All_Employees';
+      const fileName = `${scopeName.replace(/\s+/g, '_')}_Breaks_${dateStr}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast.dismiss('exportDate');
+      toast.success('Date-wise export successful!');
+    } catch (error) {
+      toast.dismiss('exportDate');
+      toast.error('Failed to export date-wise data');
+      console.error('Export error:', error);
+    }
+  };
+
+  const handleExportByMonth = async () => {
+    try {
+      const targetDate = selectedExportDate;
+      const monthStart = startOfMonthDate(targetDate);
+      const monthEnd = endOfMonthDate(targetDate);
+      const params = {
+        startDate: toDateInput(monthStart),
+        endDate: toDateInput(monthEnd),
+        limit: 1000
+      };
+
+      toast.loading('Exporting month-wise data...', { toastId: 'exportMonth' });
+
+      const res = await axios.get('/v1/both/attendance/team-attendance-history', { params });
+      const records = res.data?.records || [];
+
+      // Filter records based on scope
+      let filteredRecords = records;
+      if (exportScope === 'particular' && selectedExportEmployee) {
+        filteredRecords = records.filter(record => {
+          const empId = selectedExportEmployee._id;
+          const empEmpId = selectedExportEmployee.employeeId;
+          const selectedEmpName = [selectedExportEmployee.name, selectedExportEmployee.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          const recordEmpId = record.employee?._id;
+          const recordEmpEmpId = record.employee?.employeeId;
+          const recordEmpName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ').toLowerCase();
+          
+          return recordEmpId === empId || 
+                 recordEmpEmpId === empEmpId ||
+                 record.employee?.id === empId ||
+                 recordEmpName === selectedEmpName ||
+                 (empEmpId && recordEmpEmpId === empEmpId);
+        });
+      }
+
+      if (filteredRecords.length === 0) {
+        toast.dismiss('exportMonth');
+        toast.error('No data found for the selected criteria');
+        return;
+      }
+
+      const exportData = [];
+      filteredRecords.forEach((record) => {
+        const breakDurations = getIndividualBreakDurationsFromRow(record);
+        const totalDuration = breakDurations.reduce((sum, b) => sum + b.duration, 0);
+        const empName = [record.employee?.name, record.employee?.lastName].filter(Boolean).join(' ');
+        
+        const getBreakDuration = (breakType) => {
+          const found = breakDurations.find(b => b.breakType === breakType);
+          return found ? formatBreakDuration(found.duration) : '--';
+        };
+
+        exportData.push({
+          'Employee Name': empName,
+          'Employee ID': record.employee?.employeeId || '--',
+          'Date': record.date || toDateInput(record.dateKey),
+          'Break 1': getBreakDuration('BREAK_1'),
+          'Break 2': getBreakDuration('BREAK_2'),
+          'Break 3': getBreakDuration('BREAK_3'),
+          'Break 4': getBreakDuration('BREAK_4'),
+          'Total Break Time': formatBreakDuration(totalDuration)
+        });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Employee Breaks');
+      
+      const monthName = targetDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      const scopeName = exportScope === 'particular' ? selectedExportEmployee.name : 'All_Employees';
+      const fileName = `${scopeName.replace(/\s+/g, '_')}_Breaks_${monthName}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast.dismiss('exportMonth');
+      toast.success('Month-wise export successful!');
+    } catch (error) {
+      toast.dismiss('exportMonth');
+      toast.error('Failed to export month-wise data');
+      console.error('Export error:', error);
+    }
+  };
+
+  const handleViewAllEmployeeBreaks = async (date) => {
+    if (loadingAllEmployeesData) return;
+    setLoadingAllEmployeesData(true);
+    try {
+      const targetDate = date || selectedAllEmployeesDate;
+      const monthStart = startOfMonthDate(targetDate);
+      const monthEnd = endOfMonthDate(targetDate);
+      const params = {
+        startDate: toDateInput(monthStart),
+        endDate: toDateInput(monthEnd),
+        limit: 100
+      };
+      const res = await axios.get('/v1/both/attendance/team-attendance-history', { params });
+      const records = res.data?.records || [];
+      // Group by employee and get breaks for selected date
+      const selectedDateKey = toDateInput(targetDate);
+      const employeeBreaksMap = new Map();
+      records.forEach((record) => {
+        if (record.dateKey === selectedDateKey) {
+          const empId = record.employee?._id;
+          if (!empId) return;
+          if (!employeeBreaksMap.has(empId)) {
+            employeeBreaksMap.set(empId, {
+              employee: record.employee,
+              date: record.date,
+              breaks: record.breaks || []
+            });
+          }
+        }
+      });
+      setAllEmployeesBreaksData(Array.from(employeeBreaksMap.values()));
+      setShowAllEmployeesModal(true);
+    } catch (error) {
+      console.error('Failed to fetch all employees breaks:', error);
+      toast.error('Failed to load employee breaks');
+    } finally {
+      setLoadingAllEmployeesData(false);
+    }
+  };
+
   const renderRegularizationAction = (row, compact = false) => {
     const attendanceIssue =
       String(row?.status || '').toLowerCase().includes('late') ||
@@ -509,7 +878,7 @@ const LeaveAttendanceHub = () => {
     return (
       <div className={`flex ${compact ? 'items-center justify-between' : 'items-center gap-2'}`}>
         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass}`}>
-          {requestStatus}
+          {formatStatusLabel(requestStatus)}
         </span>
         {requestStatus === 'rejected' && (
           <button
@@ -641,13 +1010,13 @@ const LeaveAttendanceHub = () => {
                               </div>
                               <div className="hidden sm:flex sm:flex-col sm:items-end sm:gap-0.5">
                                 {isLate && (
-                                  <span className="rounded-full bg-[#F59E0B] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                                    Late
+                                  <span className="rounded-full bg-[#F59E0B] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-white">
+                                    {formatAttendanceStatusLabel('late')}
                                   </span>
                                 )}
                                 {notPunchedOut && (
-                                  <span className="rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                                    Not Punch out
+                                  <span className="rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-white">
+                                    Not punched out
                                   </span>
                                 )}
                               </div>
@@ -694,7 +1063,9 @@ const LeaveAttendanceHub = () => {
                       </p>
                       <div className="flex flex-col items-end gap-1">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusPill(selectedMobileCell.status)}`}>
-                          {selectedMobileCell.status === 'weekend' ? 'Weekend' : selectedMobileCell.status.replaceAll('-', ' ')}
+                          {selectedMobileCell.status === 'weekend'
+                            ? 'Weekend'
+                            : formatAttendanceStatusLabel(selectedMobileCell.status)}
                         </span>
                         {mobileIsLate && (
                           <span className="inline-flex rounded-full bg-[#F59E0B] px-2 py-0.5 text-[10px] font-semibold text-white">
@@ -743,7 +1114,20 @@ const LeaveAttendanceHub = () => {
               </div>
 
               <div>
-                <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#334155]">Attendance Log</p>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-[#334155]">Attendance Log</p>
+                  {(isHrManager || isHrExecutive) && (
+                    <button
+                      type="button"
+                      onClick={() => handleViewAllEmployeeBreaks()}
+                      disabled={loadingAllEmployeesData}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0F766E] bg-[#ECFDF5] text-[#0F766E] text-xs font-semibold hover:bg-[#D1FAE5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiUsers className="h-3.5 w-3.5" />
+                      {loadingAllEmployeesData ? 'Loading...' : 'View All Employee Breaks'}
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-3 md:hidden">
                   {paginatedLogs.length === 0 ? (
                     <div className="rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] px-4 py-6 text-center text-sm text-[#64748B]">
@@ -758,7 +1142,7 @@ const LeaveAttendanceHub = () => {
                             {row?.date ? new Date(row.date).toLocaleDateString() : '--'}
                           </p>
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusPill(s)}`}>
-                            {s.includes('weekend') ? 'Weekend' : (s || 'N/A').replaceAll('_', ' ')}
+                            {s.includes('weekend') ? 'Weekend' : formatAttendanceStatusLabel(s || 'N/A')}
                           </span>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#475569]">
@@ -774,9 +1158,21 @@ const LeaveAttendanceHub = () => {
                             <p className="text-[11px] text-[#64748B]">Hours</p>
                             <p className="mt-0.5 font-semibold text-[#1E293B]">{formatHours(row?.grossHours || row?.effectiveHours)}</p>
                           </div>
-                          <div className="rounded-lg bg-[#F8FAFC] px-2.5 py-2 col-span-2">
-                            <p className="text-[11px] text-[#64748B]">Break time</p>
-                            <p className="mt-0.5 font-semibold text-[#1E293B]">{formatBreakTime(row)}</p>
+                          <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 px-3 py-3 col-span-2 border border-slate-200">
+                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Break time</p>
+                            <div className="mt-2 flex items-center justify-between gap-3">
+                              <p className="font-bold text-base text-slate-800">{formatBreakTime(row)}</p>
+                              {row?.breaks && row.breaks.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewBreaks(row)}
+                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0F766E] text-white text-xs font-semibold hover:bg-[#0D9488] transition-all shadow-sm hover:shadow-md"
+                                >
+                                  <FiCoffee className="h-3.5 w-3.5" />
+                                  View Breaks
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="mt-3">
@@ -812,7 +1208,23 @@ const LeaveAttendanceHub = () => {
                             <td className="px-4 py-3">{formatTime(row?.clockIn)}</td>
                             <td className="px-4 py-3">{formatTime(row?.clockOut)}</td>
                             <td className="px-4 py-3">{formatHours(row?.grossHours || row?.effectiveHours)}</td>
-                            <td className="px-4 py-3">{formatBreakTime(row)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="font-semibold text-slate-800">
+                                  {formatBreakTime(row)}
+                                </div>
+                                {row?.breaks && row.breaks.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewBreaks(row)}
+                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0F766E] text-white text-xs font-semibold hover:bg-[#0D9488] transition-all shadow-sm hover:shadow-md"
+                                  >
+                                    <FiCoffee className="h-3.5 w-3.5" />
+                                    View Breaks
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusPill(s)}`}>
                                 {s.includes('weekend') ? 'Weekend' : (s || 'N/A').replaceAll('_', ' ')}
@@ -855,6 +1267,351 @@ const LeaveAttendanceHub = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Break Details Modal */}
+          {showBreaksModal && selectedBreaksRow && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
+                      <FiCoffee className="h-6 w-6 text-[#0F766E]" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Break Details</h3>
+                      <p className="text-sm text-slate-500 mt-0.5">
+                        {selectedBreaksRow?.date ? new Date(selectedBreaksRow.date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : '--'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportEmployeeDateToExcel}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0F766E] text-white text-xs font-semibold hover:bg-[#0D9488] transition-colors"
+                    >
+                      <FiDownload className="h-3.5 w-3.5" />
+                      Export Date
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportEmployeeMonthToExcel}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0F766E] text-white text-xs font-semibold hover:bg-[#0D9488] transition-colors"
+                    >
+                      <FiDownload className="h-3.5 w-3.5" />
+                      Export Month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCloseBreaksModal}
+                      className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                    >
+                      <FiX className="h-6 w-6" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                  <div className="space-y-3">
+                    {getIndividualBreakDurations(selectedBreaksRow).map((breakInfo) => (
+                      <div key={breakInfo.breakType} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${breakInfo.isActive ? 'bg-amber-100' : 'bg-[#ECFDF5]'}`}>
+                            <FiCoffee className={`h-5 w-5 ${breakInfo.isActive ? 'text-amber-600' : 'text-[#0F766E]'}`} />
+                          </div>
+                          <div>
+                            <span className="text-sm font-semibold text-slate-900">
+                              {formatBreakDisplayName(breakInfo.breakType)}
+                            </span>
+                            {breakInfo.isActive && (
+                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold tabular-nums text-slate-900">
+                          {formatBreakDuration(breakInfo.duration)}
+                        </span>
+                      </div>
+                    ))}
+                    {getIndividualBreakDurations(selectedBreaksRow).length > 0 && (
+                      <div className="flex items-center justify-between p-4 bg-slate-100 rounded-xl border border-slate-200 mt-4">
+                        <span className="text-sm font-bold text-slate-700">Total Break Time</span>
+                        <span className="text-lg font-bold tabular-nums text-slate-900">
+                          {formatBreakDuration(
+                            getIndividualBreakDurations(selectedBreaksRow).reduce((sum, b) => sum + b.duration, 0)
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {getIndividualBreakDurations(selectedBreaksRow).length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-12 text-slate-500 bg-white rounded-xl border border-slate-200">
+                        <FiCoffee className="h-10 w-10 mb-3 text-slate-300" />
+                        <p className="text-sm font-medium">No breaks recorded</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* All Employee Breaks Modal */}
+          {showAllEmployeesModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
+                      <FiUsers className="h-6 w-6 text-[#0F766E]" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">All Employee Breaks</h3>
+                      <p className="text-sm text-slate-500 mt-0.5">View break details for all employees</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleExportClick('date')}
+                      disabled={loadingAllEmployeesData}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0F766E] text-white text-sm font-semibold hover:bg-[#0D9488] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiDownload className="h-4 w-4" />
+                      Export Date
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportClick('month')}
+                      disabled={loadingAllEmployeesData}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0F766E] text-white text-sm font-semibold hover:bg-[#0D9488] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiDownload className="h-4 w-4" />
+                      Export Month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCloseAllEmployeesModal}
+                      className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                    >
+                      <FiX className="h-6 w-6" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                  {/* Date Selector */}
+                  <div className="mb-6 bg-white rounded-xl p-4 border border-slate-200">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Select Date</label>
+                    <input
+                      type="date"
+                      value={toDateInput(selectedAllEmployeesDate)}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        setSelectedAllEmployeesDate(newDate);
+                        handleViewAllEmployeeBreaks(newDate);
+                      }}
+                      className="w-full sm:max-w-xs px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F766E] focus:border-transparent font-medium"
+                    />
+                  </div>
+
+                  {/* Employee Breaks Table */}
+                  {loadingAllEmployeesData ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-500 bg-white rounded-xl border border-slate-200">
+                      <FiLoader className="h-10 w-10 mb-3 animate-spin text-slate-300" />
+                      <p className="text-sm font-medium">Loading employee breaks...</p>
+                    </div>
+                  ) : allEmployeesBreaksData.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-500 bg-white rounded-xl border border-slate-200">
+                      <FiUsers className="h-10 w-10 mb-3 text-slate-300" />
+                      <p className="text-sm font-medium">No employee breaks recorded for this date</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b-2 border-slate-200 text-left text-xs uppercase tracking-wider text-slate-600 bg-slate-50">
+                              <th className="px-5 py-4 font-semibold rounded-tl-lg">Employee</th>
+                              <th className="px-4 py-4 font-semibold text-center">Break 1</th>
+                              <th className="px-4 py-4 font-semibold text-center">Break 2</th>
+                              <th className="px-4 py-4 font-semibold text-center">Break 3</th>
+                              <th className="px-4 py-4 font-semibold text-center">Break 4</th>
+                              <th className="px-5 py-4 font-semibold text-right rounded-tr-lg">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {allEmployeesBreaksData.map((empBreak) => {
+                              const breakDurations = getIndividualBreakDurationsFromRow(empBreak);
+                              const totalDuration = breakDurations.reduce((sum, b) => sum + b.duration, 0);
+                              const empName = [empBreak.employee?.name, empBreak.employee?.lastName].filter(Boolean).join(' ');
+                              
+                              const getBreakDuration = (breakType) => {
+                                const found = breakDurations.find(b => b.breakType === breakType);
+                                return found ? formatBreakDuration(found.duration) : '--';
+                              };
+
+                              return (
+                                <tr key={empBreak.employee?._id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-5 py-4 font-medium text-slate-900">{empName}</td>
+                                  <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_1')}</td>
+                                  <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_2')}</td>
+                                  <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_3')}</td>
+                                  <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_4')}</td>
+                                  <td className="px-5 py-4 text-right font-bold tabular-nums text-slate-900">{formatBreakDuration(totalDuration)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Export Selection Modal */}
+          {showExportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
+                      <FiDownload className="h-6 w-6 text-[#0F766E]" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Export Break Data</h3>
+                      <p className="text-sm text-slate-500 mt-0.5">
+                        {exportType === 'date' ? 'Export by Date' : 'Export by Month'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowExportModal(false)}
+                    className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                  >
+                    <FiX className="h-6 w-6" />
+                  </button>
+                </div>
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                  <div className="space-y-6">
+                    {/* Scope Selection */}
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-3">
+                        Do you want to export data for:
+                      </label>
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExportScope('all');
+                            setSelectedExportEmployee(null);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                            exportScope === 'all'
+                              ? 'border-[#0F766E] bg-[#ECFDF5] text-[#0F766E]'
+                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <FiUsers className="h-5 w-5" />
+                          <span className="font-medium">All Employees</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExportScope('particular')}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                            exportScope === 'particular'
+                              ? 'border-[#0F766E] bg-[#ECFDF5] text-[#0F766E]'
+                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <FiCoffee className="h-5 w-5" />
+                          <span className="font-medium">Particular Employee</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Employee Selection */}
+                    {exportScope === 'particular' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-3">
+                          Select Employee:
+                        </label>
+                        {loadingEmployeesList ? (
+                          <div className="flex items-center justify-center py-8 text-slate-500">
+                            <FiLoader className="h-6 w-6 animate-spin mr-2" />
+                            <span className="text-sm">Loading employees...</span>
+                          </div>
+                        ) : (
+                          <select
+                            value={selectedExportEmployee?._id || ''}
+                            onChange={(e) => {
+                              const emp = allEmployeesList.find(emp => emp._id === e.target.value);
+                              setSelectedExportEmployee(emp);
+                            }}
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F766E] focus:border-transparent"
+                          >
+                            <option value="">Select an employee</option>
+                            {allEmployeesList.map(emp => (
+                              <option key={emp._id} value={emp._id}>
+                                {emp.name} {emp.lastName} ({emp.employeeId || 'N/A'})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Date Selection for Date Export */}
+                    {exportType === 'date' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-3">
+                          Select Date:
+                        </label>
+                        <input
+                          type="date"
+                          value={toDateInput(selectedExportDate)}
+                          onChange={(e) => setSelectedExportDate(new Date(e.target.value))}
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F766E] focus:border-transparent"
+                        />
+                      </div>
+                    )}
+
+                    {/* Month Selection for Month Export */}
+                    {exportType === 'month' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-3">
+                          Select Month:
+                        </label>
+                        <input
+                          type="month"
+                          value={`${selectedExportDate.getFullYear()}-${String(selectedExportDate.getMonth() + 1).padStart(2, '0')}`}
+                          onChange={(e) => {
+                            const [year, month] = e.target.value.split('-');
+                            setSelectedExportDate(new Date(parseInt(year), parseInt(month) - 1, 1));
+                          }}
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F766E] focus:border-transparent"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="p-6 border-t border-slate-100 bg-white">
+                  <button
+                    type="button"
+                    onClick={handleExportConfirm}
+                    disabled={!exportScope || (exportScope === 'particular' && !selectedExportEmployee)}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-[#0F766E] text-white font-semibold hover:bg-[#0D9488] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <FiDownload className="h-5 w-5" />
+                    Export Data
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -999,7 +1756,7 @@ const LeaveAttendanceHub = () => {
                           {getLeaveDisplayLabel()}
                         </p>
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${leaveStatusPill(row.displayStatus)}`}>
-                          {row.displayStatus}
+                          {formatStatusLabel(row.displayStatus)}
                         </span>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#475569]">
@@ -1047,7 +1804,7 @@ const LeaveAttendanceHub = () => {
                           <td className="px-4 py-3">{row.durationLabel}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${leaveStatusPill(row.displayStatus)}`}>
-                              {row.displayStatus}
+                              {formatStatusLabel(row.displayStatus)}
                             </span>
                           </td>
                         </tr>
@@ -1096,7 +1853,7 @@ const LeaveAttendanceHub = () => {
                                 : 'bg-[#E5E7EB] text-[#374151]'
                         }`}
                       >
-                        {row.status}
+                        {formatStatusLabel(row.status)}
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-[#475569]">{regTypeLabel(row.regularizationType)}</p>
@@ -1138,7 +1895,7 @@ const LeaveAttendanceHub = () => {
                                     : 'bg-[#E5E7EB] text-[#374151]'
                             }`}
                           >
-                            {row.status}
+                            {formatStatusLabel(row.status)}
                           </span>
                         </td>
                         <td className="px-4 py-3">

@@ -1,0 +1,246 @@
+import EmployeeDocumentRequest from '../models/employeeDocumentRequest.model.js';
+import Employee from '../models/employee.model.js';
+import { getOrganizationId } from '../helpers/organizationHelper.js';
+import { relativeDocumentFileUrl, resolveDocumentFilePath } from '../helpers/documentFilePathHelper.js';
+import { readUploadFileBuffer, sendDocumentFile } from '../helpers/documentFileStorageHelper.js';
+import { sendNotification } from '../helpers/notificationService.js';
+import logger from '../helpers/logger.js';
+
+/**
+ * Send a document-request notification to the employee who raised the request.
+ */
+const notifyEmployee = async (request, action, senderReq) => {
+  try {
+    const actionMessages = {
+      approved: `Your ${request.documentType} request has been approved.`,
+      rejected: `Your ${request.documentType} request has been rejected.${request.rejectionReason ? ' Reason: ' + request.rejectionReason : ''}`,
+      uploaded: `The document for your ${request.documentType} request has been uploaded and is ready for download.`,
+      completed: `Your ${request.documentType} request has been completed.`,
+    };
+    const message = actionMessages[action] || `Your ${request.documentType} request has been updated.`;
+    await sendNotification({
+      userId: request.employeeId,
+      title: 'Document Request Update',
+      message,
+      type: 'document_request',
+      priority: 'medium',
+      metadata: {
+        requestId: request._id,
+        documentType: request.documentType,
+        action,
+      },
+      senderId: actorId(senderReq),
+      senderType: actorType(senderReq),
+    });
+  } catch (err) {
+    logger.error('Failed to send document request notification', { error: err.message, requestId: request._id, action });
+  }
+};
+
+const isAdmin = (req) => Boolean(req.authContext?.isOrgOwner || req.user?.role === 'admin');
+const isHrManager = (req) => Boolean(req.authContext?.isHrManager);
+const isHrOrAdmin = (req) => isAdmin(req) || isHrManager(req) || req.authContext?.isHrExecutive;
+const actorId = (req) => req.employee?._id || req.user?._id;
+const actorType = (req) => req.employee?._id ? 'Employee' : 'User';
+const isSelf = (req, employeeId) => String(req.employee?._id || '') === String(employeeId || '');
+
+const resolveApprovalRequirement = (req) => {
+  if (isAdmin(req)) return 'none';
+  if (isHrManager(req)) return 'admin';
+  return 'hr_or_admin';
+};
+
+const canApproveRequest = (req, request) => {
+  if (isAdmin(req)) return true;
+  return request.approvalRequiredFrom === 'hr_or_admin' && isHrManager(req);
+};
+
+const canManageUpload = (req, request) => {
+  if (isAdmin(req)) return true;
+  return request.approvalRequiredFrom === 'hr_or_admin' && isHrManager(req);
+};
+
+const buildGeneratedText = (request) => {
+  const details = request.generationDetails || {};
+  const employeeName = details.employeeName || details.name || 'Employee';
+  const companyName = details.companyName || 'Company';
+  const title = request.documentType || 'Employment Letter';
+  return `${title}\n\nThis is to certify that ${employeeName} is associated with ${companyName}.\n\nPurpose: ${request.purpose || details.purpose || 'Official employment document'}\nCountry: ${request.country}\nFormat: ${request.documentSize} / ${request.documentFormat}\n\nSignature: ${request.signatureFormat || 'Authorized Signatory'}\n\nGenerated on ${new Date().toLocaleDateString('en-IN')}.\n`;
+};
+
+export const createEmployeeDocumentRequest = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const requester = actorId(req);
+    if (!organizationId || !requester) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const targetEmployeeId = isAdmin(req) && req.body.employeeId ? req.body.employeeId : req.employee?._id;
+    if (!targetEmployeeId) return res.status(400).json({ success: false, message: 'employeeId is required' });
+    const approvalRequiredFrom = resolveApprovalRequirement(req);
+    const status = approvalRequiredFrom === 'none' ? 'approved' : 'pending';
+    const request = await EmployeeDocumentRequest.create({
+      organizationId, employeeId: targetEmployeeId, requestedBy: requester,
+      requestMode: approvalRequiredFrom === 'none' ? 'admin_direct' : 'request',
+      documentType: String(req.body.documentType || 'Employment Letter').trim(),
+      purpose: String(req.body.purpose || '').trim(), country: req.body.country || 'India',
+      documentSize: req.body.documentSize || 'A4', documentFormat: req.body.documentFormat || 'PDF',
+      templateKey: req.body.templateKey || '', signatureFormat: req.body.signatureFormat || '',
+      requestDetails: req.body.requestDetails || {}, approvalRequiredFrom, status,
+      ...(status === 'approved' ? { approvedBy: requester, approvedByType: actorType(req), approvedAt: new Date() } : {}),
+    });
+    res.status(201).json({ success: true, data: request });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to create document request', error: error.message }); }
+};
+
+export const listMyEmployeeDocumentRequests = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const employeeId = req.employee?._id || req.query.employeeId;
+    if (!organizationId || !employeeId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const data = await EmployeeDocumentRequest.find({ organizationId, employeeId }).sort({ createdAt: -1 }).lean();
+    res.json({ success: true, data });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to load document requests', error: error.message }); }
+};
+
+export const listApprovalEmployeeDocumentRequests = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    if (!organizationId || !isHrOrAdmin(req)) return res.status(403).json({ success: false, message: 'Access denied' });
+    const filter = { organizationId };
+    if (!isAdmin(req)) filter.approvalRequiredFrom = 'hr_or_admin';
+    const data = await EmployeeDocumentRequest.find(filter).sort({ createdAt: -1 }).lean();
+    res.json({ success: true, data });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to load approval requests', error: error.message }); }
+};
+
+export const approveEmployeeDocumentRequest = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!canApproveRequest(req, request)) return res.status(403).json({ success: false, message: 'Access denied' });
+    request.status = 'approved'; request.approvedBy = actorId(req); request.approvedByType = actorType(req); request.approvedAt = new Date();
+    if (req.body.remarks) request.adminRemarks = req.body.remarks;
+    await request.save();
+    await notifyEmployee(request, 'approved', req);
+    res.json({ success: true, data: request });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to approve request', error: error.message }); }
+};
+
+export const rejectEmployeeDocumentRequest = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!canApproveRequest(req, request)) return res.status(403).json({ success: false, message: 'Access denied' });
+    request.status = 'rejected'; request.rejectedBy = actorId(req); request.rejectedByType = actorType(req); request.rejectedAt = new Date(); request.rejectionReason = req.body.reason || '';
+    if (req.body.remarks) request.adminRemarks = req.body.remarks;
+    await request.save();
+    await notifyEmployee(request, 'rejected', req);
+    res.json({ success: true, data: request });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to reject request', error: error.message }); }
+};
+
+export const uploadEmployeeDocumentRequestFile = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!canManageUpload(req, request)) return res.status(403).json({ success: false, message: 'Access denied' });
+    if (!['approved', 'uploaded', 'completed'].includes(request.status)) return res.status(400).json({ success: false, message: 'Request must be approved before upload' });
+    const file = req.file; if (!file) return res.status(400).json({ success: false, message: 'Document file is required' });
+    request.fileUrl = relativeDocumentFileUrl(file.filename); request.fileName = file.filename; request.originalName = file.originalname;
+    request.mimeType = file.mimetype; request.size = file.size; request.fileBinary = readUploadFileBuffer(file);
+    request.uploadedBy = actorId(req); request.uploadedByType = actorType(req); request.uploadedAt = new Date(); request.status = 'uploaded';
+    if (req.body?.remarks) request.adminRemarks = req.body.remarks;
+    await request.save();
+    await notifyEmployee(request, 'uploaded', req);
+    res.json({ success: true, data: request });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to upload document', error: error.message }); }
+};
+
+export const generateEmployeeDocument = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const requester = actorId(req);
+    if (!organizationId || !requester) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const targetEmployeeId = isAdmin(req) && req.body.employeeId ? req.body.employeeId : req.employee?._id;
+    if (!targetEmployeeId) return res.status(400).json({ success: false, message: 'employeeId is required' });
+    const targetEmployee = await Employee.findOne({ _id: targetEmployeeId, organizationId }).select('name lastName email department position jobTitle').lean();
+    const generationDetails = { ...(req.body.generationDetails || {}), employeeName: req.body.generationDetails?.employeeName || `${targetEmployee?.name || ''} ${targetEmployee?.lastName || ''}`.trim() };
+    const request = await EmployeeDocumentRequest.create({ organizationId, employeeId: targetEmployeeId, requestedBy: requester, requestMode: isAdmin(req) ? 'admin_direct' : 'generated', status: 'generated', approvalRequiredFrom: isAdmin(req) ? 'none' : resolveApprovalRequirement(req), documentType: String(req.body.documentType || 'Employment Letter').trim(), purpose: String(req.body.purpose || '').trim(), country: req.body.country || 'India', documentSize: req.body.documentSize || 'A4', documentFormat: req.body.documentFormat || 'PDF', templateKey: req.body.templateKey || '', signatureFormat: req.body.signatureFormat || '', generationDetails, generatedBy: requester, generatedByType: actorType(req), generatedAt: new Date() });
+    const buffer = Buffer.from(buildGeneratedText(request), 'utf8'); request.fileBinary = buffer; request.fileName = `${request.documentType.replace(/\s+/g, '-').toLowerCase()}-${request._id}.txt`; request.originalName = request.fileName; request.mimeType = 'text/plain'; request.size = buffer.length;
+    await request.save(); res.status(201).json({ success: true, data: request });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to generate document', error: error.message }); }
+};
+
+export const downloadEmployeeDocumentRequestFile = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!isAdmin(req) && !isHrManager(req) && !isSelf(req, request.employeeId)) return res.status(403).json({ success: false, message: 'Access denied' });
+    return sendDocumentFile(res, { filePath: request.fileUrl ? resolveDocumentFilePath(request.fileUrl) : null, buffer: request.fileBinary, downloadName: request.originalName || request.fileName || 'employee-document', mimeType: request.mimeType || 'application/octet-stream', inline: false });
+  } catch (error) { res.status(500).json({ success: false, message: 'Failed to download document', error: error.message }); }
+};
+
+export const markEmployeeDocumentRequestComplete = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+    if (!isHrOrAdmin(req)) return res.status(403).json({ success: false, message: 'Access denied' });
+    // Enforce HR Manager → Admin-only rule: HR Managers cannot complete requests that require admin approval
+    if (!isAdmin(req) && request.approvalRequiredFrom === 'admin') {
+      return res.status(403).json({ success: false, message: 'Only Admin can complete this request' });
+    }
+    if (!['approved', 'uploaded', 'generated'].includes(request.status)) {
+      return res.status(400).json({ success: false, message: 'Request must be approved/uploaded before marking complete' });
+    }
+    request.status = 'completed';
+    request.completedBy = actorId(req);
+    request.completedByType = actorType(req);
+    request.completedAt = new Date();
+    if (req.body.remarks) request.adminRemarks = req.body.remarks;
+    await request.save();
+    await notifyEmployee(request, 'completed', req);
+    res.json({ success: true, data: request });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to complete request', error: error.message });
+  }
+};
+
+/**
+ * Delete a document request.
+ * - Employee can delete their own requests (any status).
+ * - HR can delete requests they are authorized to manage (approvalRequiredFrom: 'hr_or_admin').
+ * - Admin can delete any request.
+ */
+export const deleteEmployeeDocumentRequest = async (req, res) => {
+  try {
+    const organizationId = getOrganizationId(req) || req.user?.organizationId || req.employee?.organizationId;
+    const request = await EmployeeDocumentRequest.findOne({ _id: req.params.id, organizationId });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
+
+    // Admin can delete anything
+    if (isAdmin(req)) {
+      await EmployeeDocumentRequest.deleteOne({ _id: request._id });
+      return res.json({ success: true, message: 'Request deleted' });
+    }
+
+    // HR Manager can delete requests where approvalRequiredFrom is 'hr_or_admin'
+    if (isHrManager(req) && request.approvalRequiredFrom === 'hr_or_admin') {
+      await EmployeeDocumentRequest.deleteOne({ _id: request._id });
+      return res.json({ success: true, message: 'Request deleted' });
+    }
+
+    // Employee can delete their own requests
+    if (isSelf(req, request.employeeId)) {
+      await EmployeeDocumentRequest.deleteOne({ _id: request._id });
+      return res.json({ success: true, message: 'Request deleted' });
+    }
+
+    return res.status(403).json({ success: false, message: 'Access denied' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to delete request', error: error.message });
+  }
+};

@@ -1,4 +1,5 @@
 import { isHR } from '../../utils/managerHelper';
+import { formatStatusLabel } from '../../utils/textFormat.js';
 
 export const canManageEngagement = (user, employee) => {
     if (!user && !employee) return false;
@@ -60,3 +61,6 @@ export const recognitionStatusStyle = (status) => {
     if (status === 'Rejected') return 'bg-slate-100 text-slate-600';
     return 'bg-slate-100 text-slate-600';
 };
+
+/** Display label for engagement survey / feedback / recognition statuses. */
+export const formatEngagementStatusLabel = (status) => formatStatusLabel(status);

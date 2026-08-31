@@ -60,8 +60,19 @@ const notificationSchema = new mongoose.Schema({
       'holiday',
       'birthday',
       'anniversary',
+      'marriage_anniversary',
+      'celebration_birthday_upcoming',
+      'celebration_birthday_today',
+      'celebration_birthday_wish',
+      'celebration_anniversary_upcoming',
+      'celebration_anniversary_today',
+      'celebration_anniversary_wish',
+      'celebration_marriage_anniversary_upcoming',
+      'celebration_marriage_anniversary_today',
+      'celebration_marriage_anniversary_wish',
       'onboarding',
-      'engagement'
+      'engagement',
+      'document_request'
     ],
     default: 'general'
   },

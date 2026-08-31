@@ -9,7 +9,26 @@ import {
   todayDateKeyInTimezone,
   isSessionForToday,
 } from '../../utils/orgTimezone';
-import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft, FiMapPin, FiHome } from 'react-icons/fi';
+
+const toDateInput = (d) => {
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const startOfMonthDate = (d) => {
+  const x = new Date(d);
+  return new Date(x.getFullYear(), x.getMonth(), 1);
+};
+
+const endOfMonthDate = (d) => {
+  const x = new Date(d);
+  return new Date(x.getFullYear(), x.getMonth() + 1, 0);
+};
+import { FiClock, FiCheckCircle, FiAlertCircle, FiLoader, FiCoffee, FiArrowLeft, FiMapPin, FiHome, FiUsers, FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from '../../utils/axios';
 import { usePermissions } from '../../Hooks/usePermissions';
@@ -63,6 +82,10 @@ const AttendanceBox = ({ variant = 'default' }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [cachedLocation, setCachedLocation] = useState(null);
   const [workLocation, setWorkLocation] = useState('office');
+  const [showAllEmployeesModal, setShowAllEmployeesModal] = useState(false);
+  const [selectedAllEmployeesDate, setSelectedAllEmployeesDate] = useState(new Date());
+  const [allEmployeesBreaksData, setAllEmployeesBreaksData] = useState([]);
+  const [loadingAllEmployeesData, setLoadingAllEmployeesData] = useState(false);
 
   const locationRequiredForPunch = isLocationRequiredForPunch(attendanceRule);
   // Org-level WFH availability (defaults to allowed when the rule doesn't specify)
@@ -601,6 +624,24 @@ const AttendanceBox = ({ variant = 'default' }) => {
     }, 0);
   };
 
+  const getIndividualBreakDurations = (session, now = new Date()) => {
+    if (!session?.breaks || !Array.isArray(session.breaks)) return [];
+    return session.breaks.map((entry, index) => {
+      if (!entry?.breakIn) return null;
+      const breakIn = new Date(entry.breakIn).getTime();
+      if (!Number.isFinite(breakIn)) return null;
+      const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : now.getTime();
+      if (!Number.isFinite(breakOut) || breakOut <= breakIn) return null;
+      const duration = (breakOut - breakIn) / 1000; // in seconds
+      const breakType = entry.breakType || `BREAK_${index + 1}`; // Backward compatibility
+      return {
+        breakType,
+        duration,
+        isActive: !entry.breakOut
+      };
+    }).filter(Boolean);
+  };
+
   const formatBreakDuration = (seconds) => {
     const safeSeconds = Math.max(0, Math.floor(seconds || 0));
     const hours = Math.floor(safeSeconds / 3600);
@@ -609,7 +650,73 @@ const AttendanceBox = ({ variant = 'default' }) => {
     return `${minutes}m`;
   };
 
+  const formatBreakDisplayName = (breakType) => {
+    if (!breakType) return 'Break';
+    if (breakType === 'LUNCH') return 'Lunch';
+    return breakType.replace('BREAK_', 'Break ');
+  };
+
+  const handleViewAllEmployeeBreaks = async (date) => {
+    if (loadingAllEmployeesData) return;
+    setLoadingAllEmployeesData(true);
+    try {
+      const targetDate = date || selectedAllEmployeesDate;
+      const monthStart = startOfMonthDate(targetDate);
+      const monthEnd = endOfMonthDate(targetDate);
+      const params = {
+        startDate: toDateInput(monthStart),
+        endDate: toDateInput(monthEnd),
+        limit: 100
+      };
+      const res = await axios.get('/v1/both/attendance/team-attendance-history', { params });
+      const records = res.data?.records || [];
+      // Group by employee and get breaks for selected date
+      const selectedDateKey = toDateInput(targetDate);
+      const employeeBreaksMap = new Map();
+      records.forEach((record) => {
+        if (record.dateKey === selectedDateKey) {
+          const empId = record.employee?._id;
+          if (!empId) return;
+          if (!employeeBreaksMap.has(empId)) {
+            employeeBreaksMap.set(empId, {
+              employee: record.employee,
+              date: record.date,
+              breaks: record.breaks || []
+            });
+          }
+        }
+      });
+      setAllEmployeesBreaksData(Array.from(employeeBreaksMap.values()));
+      setShowAllEmployeesModal(true);
+    } catch (error) {
+      console.error('Failed to fetch all employees breaks:', error);
+      toast.error('Failed to load employee breaks');
+    } finally {
+      setLoadingAllEmployeesData(false);
+    }
+  };
+
+  const getIndividualBreakDurationsFromRow = (row) => {
+    if (!row?.breaks || !Array.isArray(row.breaks)) return [];
+    const nowMs = Date.now();
+    return row.breaks.map((entry, index) => {
+      if (!entry?.breakIn) return null;
+      const breakIn = new Date(entry.breakIn).getTime();
+      if (!Number.isFinite(breakIn)) return null;
+      const breakOut = entry.breakOut ? new Date(entry.breakOut).getTime() : nowMs;
+      if (!Number.isFinite(breakOut) || breakOut <= breakIn) return null;
+      const duration = (breakOut - breakIn) / 1000;
+      const breakType = entry.breakType || `BREAK_${index + 1}`;
+      return {
+        breakType,
+        duration,
+        isActive: !entry.breakOut
+      };
+    }).filter(Boolean);
+  };
+
   const breakTakenTodaySeconds = getTodayBreakSeconds(currentSession, currentTime);
+  const individualBreaks = getIndividualBreakDurations(currentSession, currentTime);
 
   if (initialLoading || loading) {
     return (
@@ -640,6 +747,30 @@ const AttendanceBox = ({ variant = 'default' }) => {
           <span className="text-sm font-medium">Break taken today</span>
         </div>
         <span className="text-sm font-semibold tabular-nums">{formatBreakDuration(breakTakenTodaySeconds)}</span>
+      </div>
+    );
+
+    const individualBreaksRow = individualBreaks.length > 0 && (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+        <div className="flex items-center gap-2 mb-2">
+          <FiCoffee className="h-4 w-4 shrink-0 text-slate-500" />
+          <span className="text-xs font-medium text-slate-600">Individual breaks</span>
+        </div>
+        <div className="space-y-1">
+          {individualBreaks.map((breakInfo) => (
+            <div key={breakInfo.breakType} className="flex items-center justify-between text-xs">
+              <span className="text-slate-600">{breakInfo.breakType.replace('BREAK_', 'Break ')}</span>
+              <span className={`font-medium tabular-nums ${breakInfo.isActive ? 'text-amber-600' : 'text-slate-700'}`}>
+                {formatBreakDuration(breakInfo.duration)}
+                {breakInfo.isActive && ' (active)'}
+              </span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200 mt-1">
+            <span className="font-medium text-slate-700">Total</span>
+            <span className="font-semibold tabular-nums text-slate-700">{formatBreakDuration(breakTakenTodaySeconds)}</span>
+          </div>
+        </div>
       </div>
     );
 
@@ -701,6 +832,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
                     </div>
                   </div>
                   {breakTodayRow}
+                  {individualBreaksRow}
                 </>
               ) : (
                 <>
@@ -784,6 +916,7 @@ const AttendanceBox = ({ variant = 'default' }) => {
                     </div>
                   )}
                   {breakTodayRow}
+                  {individualBreaksRow}
                 </>
               )}
             </div>
@@ -1169,6 +1302,101 @@ const AttendanceBox = ({ variant = 'default' }) => {
             </div>
           )}
         </div>
+
+        {/* All Employee Breaks Modal */}
+        {showAllEmployeesModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
+                    <FiUsers className="h-6 w-6 text-[#0F766E]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">All Employee Breaks</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">View break details for all employees</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllEmployeesModal(false)}
+                  className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0"
+                >
+                  <FiX className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                {/* Date Selector */}
+                <div className="mb-6 bg-white rounded-xl p-4 border border-slate-200">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Select Date</label>
+                  <input
+                    type="date"
+                    value={toDateInput(selectedAllEmployeesDate)}
+                    onChange={(e) => {
+                      const newDate = new Date(e.target.value);
+                      setSelectedAllEmployeesDate(newDate);
+                      handleViewAllEmployeeBreaks(newDate);
+                    }}
+                    className="w-full sm:max-w-xs px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0F766E] focus:border-transparent font-medium"
+                  />
+                </div>
+
+                {/* Employee Breaks Table */}
+                {loadingAllEmployeesData ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500 bg-white rounded-xl border border-slate-200">
+                    <FiLoader className="h-10 w-10 mb-3 animate-spin text-slate-300" />
+                    <p className="text-sm font-medium">Loading employee breaks...</p>
+                  </div>
+                ) : allEmployeesBreaksData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500 bg-white rounded-xl border border-slate-200">
+                    <FiUsers className="h-10 w-10 mb-3 text-slate-300" />
+                    <p className="text-sm font-medium">No employee breaks recorded for this date</p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b-2 border-slate-200 text-left text-xs uppercase tracking-wider text-slate-600 bg-slate-50">
+                            <th className="px-5 py-4 font-semibold rounded-tl-lg">Employee</th>
+                            <th className="px-4 py-4 font-semibold text-center">Break 1</th>
+                            <th className="px-4 py-4 font-semibold text-center">Break 2</th>
+                            <th className="px-4 py-4 font-semibold text-center">Break 3</th>
+                            <th className="px-4 py-4 font-semibold text-center">Break 4</th>
+                            <th className="px-5 py-4 font-semibold text-right rounded-tr-lg">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {allEmployeesBreaksData.map((empBreak) => {
+                            const breakDurations = getIndividualBreakDurationsFromRow(empBreak);
+                            const totalDuration = breakDurations.reduce((sum, b) => sum + b.duration, 0);
+                            const empName = [empBreak.employee?.name, empBreak.employee?.lastName].filter(Boolean).join(' ');
+                            
+                            const getBreakDuration = (breakType) => {
+                              const found = breakDurations.find(b => b.breakType === breakType);
+                              return found ? formatBreakDuration(found.duration) : '--';
+                            };
+
+                            return (
+                              <tr key={empBreak.employee?._id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-5 py-4 font-medium text-slate-900">{empName}</td>
+                                <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_1')}</td>
+                                <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_2')}</td>
+                                <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_3')}</td>
+                                <td className="px-4 py-4 text-center tabular-nums text-slate-700">{getBreakDuration('BREAK_4')}</td>
+                                <td className="px-5 py-4 text-right font-bold tabular-nums text-slate-900">{formatBreakDuration(totalDuration)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

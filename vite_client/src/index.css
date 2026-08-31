@@ -394,6 +394,88 @@
   min-width: 0;
 }
 
+/* Employee profile page layout */
+.employee-profile-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+  align-items: start;
+}
+
+.employee-profile-sidebar,
+.employee-profile-main,
+.employee-profile-panel,
+.employee-profile-content {
+  min-width: 0;
+  min-height: 0;
+}
+
+.employee-profile-main {
+  align-self: start;
+  height: auto;
+  width: 100%;
+}
+
+.employee-profile-tabs {
+  border-bottom: 1px solid rgb(243 244 246);
+}
+
+.employee-profile-tabs .hrms-tabs-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.employee-profile-tabs .hrms-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.employee-profile-content {
+  height: auto;
+  padding: 1rem;
+}
+
+.employee-profile-content > * {
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .employee-profile-content {
+    padding: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .employee-profile-layout {
+    flex-direction: row;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .employee-profile-sidebar {
+    align-self: start;
+    flex: 0 0 320px;
+    width: 320px;
+    max-width: 320px;
+  }
+
+  .employee-profile-main {
+    flex: 1 1 0%;
+    width: auto;
+    max-width: calc(100% - 320px - 1.25rem);
+  }
+
+  .employee-profile-main,
+  .employee-profile-panel,
+  .employee-profile-content {
+    height: auto;
+  }
+}
+
 @media (max-width: 767px) {
   .hrms-stack {
     gap: 1rem;
@@ -435,6 +517,16 @@ html {
 
 html {
   height: 100%;
+}
+
+/*
+ * Global UI scale: shrink the whole app ~10% by lowering the root font size.
+ * Tailwind sizing is rem-based, so text, spacing, gaps, and rem widths
+ * (sidebar, main-column offset) all scale together and stay aligned.
+ * Media-query breakpoints stay in px, so responsive behavior is unchanged.
+ */
+html {
+  font-size: 90%;
 }
 
 body,
@@ -502,6 +594,14 @@ body,
 .hrms-page-canvas > * {
   position: relative;
   z-index: 1;
+}
+
+/*
+ * Stretch to the viewport only when the route renders a single wrapper.
+ * Routes that render stacked sections (e.g. lifecycle header + hub) would
+ * otherwise get a full-viewport blank band between them.
+ */
+.hrms-page-canvas > :only-child {
   min-height: 100%;
 }
 
@@ -511,7 +611,20 @@ body,
 .main-scroll-area.hrms-page-canvas > .page-shell,
 .main-scroll-area.hrms-page-canvas .page-shell:not(.fixed):not([role='dialog']) {
   background: transparent !important;
+}
+
+.main-scroll-area.hrms-page-canvas .ats-ui.cm-hrms:not(.fixed):only-child,
+.main-scroll-area.hrms-page-canvas .ats-ui .ats-page,
+.main-scroll-area.hrms-page-canvas > .page-shell:only-child {
   min-height: 100%;
+}
+
+/* Employee profile page should size to its content, not the canvas height. */
+.main-scroll-area.hrms-page-canvas > .employee-profile-page:only-child,
+.main-scroll-area.hrms-page-canvas .employee-profile-page {
+  min-height: auto;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 249, 0.96) 100%);
+  border-radius: 1.25rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -527,6 +640,16 @@ video,
 canvas {
   max-width: 100%;
   height: auto;
+}
+
+/*
+ * A percentage max-width makes an icon's min-content contribution zero, so an
+ * auto-layout table is free to squeeze icon-button columns: the glyphs render
+ * scaled down, or collapse entirely. Row actions must keep their real size.
+ */
+.main-scroll-area table :where(button, a) svg {
+  max-width: none;
+  flex: 0 0 auto;
 }
 
 /* Prevent flex/grid children from forcing page-wide horizontal scroll */
@@ -576,10 +699,6 @@ canvas {
     max-width: 100%;
   }
 
-  /* The fixed mobile header owns its height; one spacer prevents both overlap and double padding. */
-  .mobile-header-spacer {
-    height: calc(3.75rem + env(safe-area-inset-top, 0px));
-  }
 
   /* Keep every routed page inside the viewport without touching desktop layout. */
   .main-scroll-area,
@@ -646,12 +765,14 @@ canvas {
    * Legacy tables without .cm-table-wrap — do not target .cm-table (onboarding HR tables).
    * Those scroll inside .cm-table-wrap; forcing display:block on the table breaks columns.
    */
-  .main-scroll-area table:not(.cm-table):not(.leave-requests-table):not(.hr-docs-table) {
+  .main-scroll-area table:not(.cm-table):not(.leave-requests-table):not(.hr-docs-table):not(.learning-enrollments-table) {
     display: block;
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    /* Allow horizontal swipe to scroll tables on mobile. */
+    touch-action: pan-x pan-y;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
@@ -744,11 +865,6 @@ canvas {
   }
 }
 
-@media (min-width: 640px) and (max-width: 1023px) {
-  .mobile-header-spacer {
-    height: calc(4.25rem + env(safe-area-inset-top, 0px));
-  }
-}
 
 /* HR Documents table — keep table layout + extra-thin horizontal scroll */
 .main-scroll-area .hr-docs-table-scroll {
@@ -774,6 +890,12 @@ canvas {
   background-color: rgba(156, 163, 175, 0.55);
 }
 
+/* Shrink-to-fit so the wide text columns absorb the pressure, not the actions. */
+.hr-docs-table .hr-docs-actions-col {
+  width: 1%;
+  white-space: nowrap;
+}
+
 @media (max-width: 1023px) {
   .main-scroll-area .hr-docs-table-scroll {
     width: 100%;
@@ -796,6 +918,31 @@ canvas {
 
 /* Leave Management table — swipe scroll inside wrapper (mobile / tablet); desktop unchanged */
 @media (max-width: 1023px) {
+  .main-scroll-area .table-scroll-container.learning-enrollments-table-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .main-scroll-area table.learning-enrollments-table,
+  .main-scroll-area .table-scroll-container.learning-enrollments-table-scroll > .learning-enrollments-table {
+    display: table !important;
+    width: max-content !important;
+    min-width: 780px !important;
+    max-width: none !important;
+  }
+
+  .main-scroll-area .learning-enrollments-table th,
+  .main-scroll-area .learning-enrollments-table td {
+    white-space: nowrap;
+  }
+
   .main-scroll-area .table-scroll-container.leave-requests-table-scroll {
     width: 100%;
     max-width: 100%;
@@ -816,6 +963,17 @@ canvas {
 }
 
 @media (min-width: 1024px) {
+  .main-scroll-area .table-scroll-container.learning-enrollments-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .main-scroll-area .table-scroll-container.learning-enrollments-table-scroll > .learning-enrollments-table {
+    display: table;
+    width: 100%;
+    min-width: 780px;
+  }
+
   .main-scroll-area .table-scroll-container.leave-requests-table-scroll {
     width: 100%;
     overflow-x: auto;
@@ -825,6 +983,63 @@ canvas {
     display: table;
     width: 100%;
     min-width: 760px;
+  }
+}
+
+.certificate-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(2, 6, 23, 0.6);
+}
+
+.certificate-modal-panel {
+  width: min(48rem, calc(100vw - 1.5rem));
+  max-width: calc(100vw - 1.5rem);
+  min-width: 0;
+  max-height: calc(100dvh - 1.5rem);
+  margin: auto;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 1rem;
+  background: #fff;
+  padding: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+}
+
+.certificate-modal-sheet {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 4px solid #20c997;
+  padding: 1rem;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .certificate-modal-overlay {
+    padding: 1rem;
+  }
+
+  .certificate-modal-panel {
+    padding: 1.5rem;
+  }
+
+  .certificate-modal-sheet {
+    border-width: 6px;
+    padding: 2.5rem;
   }
 }
 

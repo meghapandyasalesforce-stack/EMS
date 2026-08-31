@@ -5,6 +5,7 @@ import ProfilePhotoUpload from '../Profile/ProfilePhotoUpload';
 import ProfilePicture from '../../Shared/ProfilePicture';
 import ContactDetails from './ContactDetails';
 import EducationQualifications from './EducationQualifications';
+import ProfessionalExperience from './ProfessionalExperience';
 import FamilyDetails from '../Additional details/FamilyDetails';
 import JobDetails from '../Additional details/JobDetails';
 import FinancialDetails from './FinancialDetails';
@@ -12,6 +13,7 @@ import { fetchEmployeeOwnInfo, updateEmployeeInfo, setEmployeeProfile } from '..
 import { setUser } from '../../context/Auth/authSlice';
 import { mergeSessionProfile } from '../../utils/profileUtils';
 import { toast } from 'react-toastify';
+import { FiUser, FiEdit2, FiCalendar, FiX } from 'react-icons/fi';
 
 function ProfileDetails() {
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
@@ -92,6 +94,7 @@ function ProfileDetails() {
     Boolean(formValues.firstName && formValues.lastName && formValues.dateOfBirth && formValues.gender && formValues.professionalBio), // Personal
     Boolean(profileSource?.phone1 && profileSource?.personalEmail && profileSource?.address), // Contact
     Boolean((profileSource?.academicRecords || []).length > 0 || (profileSource?.professionalQualifications || []).length > 0), // Education
+    Boolean((profileSource?.professionalExperience || []).length > 0), // Experience
     Boolean((profileSource?.familyDetails || []).length > 0), // Family
     Boolean(profileSource?.financialDetails?.bankName && profileSource?.financialDetails?.ifsc && profileSource?.financialDetails?.accountNo && profileSource?.financialDetails?.accountName), // Financial
     Boolean(profileSource?.documents && profileSource.documents.length > 0), // Job docs
@@ -114,6 +117,12 @@ function ProfileDetails() {
       '';
     return String(managerName).trim() || 'N/A';
   })();
+  const hrContactName = String(
+    profileSource?.hrContact ||
+    employeeDetails?.hrContact ||
+    user?.hrContact ||
+    ''
+  ).trim() || 'N/A';
 
   const handleChange = (field, value) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
@@ -160,6 +169,7 @@ function ProfileDetails() {
     { id: 'personalDetails', label: 'Personal Details' },
     { id: 'contactDetails', label: 'Contact Details' },
     { id: 'educationQualifications', label: 'Education Qualifications' },
+    { id: 'professionalExperience', label: 'Professional Experience' },
     { id: 'familyDetails', label: 'Family Details' },
     { id: 'jobDetails', label: 'Documents' },
     { id: 'financialDetails', label: 'Financial Details' }
@@ -169,6 +179,7 @@ function ProfileDetails() {
     personalDetails: '/profile-details',
     contactDetails: '/contact-details',
     educationQualifications: '/education-qualifications',
+    professionalExperience: '/professional-experience',
     familyDetails: '/family-details',
     jobDetails: '/job-details',
     financialDetails: '/financial-details'
@@ -178,6 +189,7 @@ function ProfileDetails() {
     '/profile-details': 'personalDetails',
     '/contact-details': 'contactDetails',
     '/education-qualifications': 'educationQualifications',
+    '/professional-experience': 'professionalExperience',
     '/family-details': 'familyDetails',
     '/job-details': 'jobDetails',
     '/financial-details': 'financialDetails'
@@ -237,184 +249,158 @@ function ProfileDetails() {
     );
   }
 
+  const inputCls = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition placeholder:text-gray-400';
+
   return (
-    <div className="page-shell min-h-full w-full bg-[#F4F7F5] transition-all duration-300">
+    <div className="page-shell employee-profile-page w-full transition-all duration-300">
       <div className="page-shell-inner hrms-stack">
-        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <p className="text-base font-semibold text-slate-800">Profile {completionPercent}% complete</p>
-            <p className="text-sm font-semibold text-[#0a8f6c]">{stepsLeft} steps left</p>
-          </div>
-          <div className="mt-3 h-2 w-full rounded-full bg-slate-100">
-            <div
-              className="h-2 rounded-full bg-gradient-to-r from-[#20C997] to-[#0a8f6c]"
-              style={{ width: `${completionPercent}%` }}
-            />
-          </div>
-        </section>
 
-        <section className="hrms-split">
-            <aside className="min-w-0">
-              <div className="rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-sm sm:p-5 lg:sticky lg:top-4">
-                <div className="mb-4 flex justify-center">
-                  <ProfilePicture
-                    key={
-                      profileSource?.profilePhoto?.url
-                      || profileSource?.profilePhoto?.filename
-                      || profileSource?.id
-                      || user?.id
-                    }
-                    user={profileSource}
-                    size="2xl"
-                    showEditButton={true}
-                    onEditClick={() => setShowPhotoUpload(true)}
-                  />
-                </div>
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{profileSource?.name || user?.name || 'Employee'}</h2>
-                <p className="mt-1 text-sm font-semibold text-[#0a8f6c]">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
+        <section className="employee-profile-layout">
+            <aside className="employee-profile-sidebar min-w-0">
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden lg:sticky lg:top-4">
+                <div className="relative bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary)]/80 h-20" />
+                <div className="px-5 pb-5 text-center -mt-10">
+                  <div className="mb-2 flex justify-center">
+                      <ProfilePicture
+                        key={
+                          profileSource?.profilePhoto?.url
+                          || profileSource?.profilePhoto?.filename
+                          || profileSource?.id
+                          || user?.id
+                        }
+                        user={profileSource}
+                        size="2xl"
+                        showWhiteRing
+                        showEditButton={true}
+                        onEditClick={() => setShowPhotoUpload(true)}
+                      />
+                  </div>
+                  <h2 className="text-base font-bold text-gray-900">{profileSource?.name || user?.name || 'Employee'}</h2>
+                  <p className="text-xs font-medium text-[var(--color-primary)] mt-0.5">{profileSource?.jobTitle || user?.jobTitle || 'Team Member'}</p>
 
-                <div className="mt-5 space-y-2.5 border-t border-slate-100 pt-4 text-left text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="shrink-0 text-slate-500">Department</span>
-                    <span className="text-right font-semibold text-slate-800">{user?.department || 'N/A'}</span>
+                  <div className="mt-4 w-full text-left">
+                    {[
+                      { label: 'Department', value: user?.department },
+                      { label: 'Employee ID', value: user?.employeeId },
+                      { label: 'Join date', value: joinDateValue ? new Date(joinDateValue).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null },
+                      { label: 'Manager', value: managerAssignedName },
+                      { label: 'HR', value: hrContactName },
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-center justify-between border-b border-gray-50 last:border-0 py-2.5">
+                        <span className="text-xs text-gray-500">{item.label}</span>
+                        <span className="text-xs font-semibold text-gray-800">{item.value || 'N/A'}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="shrink-0 text-slate-500">Employee ID</span>
-                    <span className="text-right font-semibold text-slate-800">{user?.employeeId || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="shrink-0 text-slate-500">Join Date</span>
-                    <span className="text-right font-semibold text-slate-800">
-                      {joinDateValue ? new Date(joinDateValue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="shrink-0 text-slate-500">Manager Assigned</span>
-                    <span className="text-right font-semibold text-slate-800">{managerAssignedName}</span>
+
+                  <div className="mt-4 rounded-lg bg-gray-50 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-800">Profile completion</span>
+                      <span className="text-xs font-bold text-[var(--color-primary)]">{completionPercent}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-200">
+                      <div className="h-2 rounded-full bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${completionPercent}%` }} />
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1.5">{stepsLeft} section{stepsLeft !== 1 ? 's' : ''} remaining</p>
                   </div>
                 </div>
               </div>
             </aside>
 
-            <div className="min-w-0 w-full rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-3 pt-3 sm:px-5 sm:pt-4">
-                <div className="hrms-tabs-scroll" role="tablist">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === tab.id}
-                      onClick={() => handleTabClick(tab.id)}
-                      className={`rounded-t-lg px-3 py-2.5 text-sm font-semibold transition sm:px-4 ${
-                        activeTab === tab.id
-                          ? 'border-b-2 border-[#20C997] text-[#0a8f6c]'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
+            <div className="employee-profile-main min-w-0 w-full">
+              <div className="employee-profile-panel rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="employee-profile-tabs px-2 sm:px-4">
+                  <div className="hrms-tabs-scroll" role="tablist">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
+                        onClick={() => handleTabClick(tab.id)}
+                        className={`whitespace-nowrap px-3 py-3 text-[13px] font-medium transition sm:px-4 ${
+                          activeTab === tab.id
+                            ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+                            : 'text-gray-400 hover:text-gray-700'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="min-w-0 space-y-4 p-4 sm:space-y-5 sm:p-5 md:p-6">
+                <div className="employee-profile-content">
                 {activeTab === 'personalDetails' && (
-                  <>
+                  <div className="space-y-4">
                     {isPersonalEditing ? (
-                      <>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                          <label className="space-y-1">
-                            <span className="text-sm font-medium text-slate-600">First Name</span>
-                            <input
-                              value={formValues.firstName}
-                              readOnly
-                              className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-sm font-medium text-slate-600">Last Name</span>
-                            <input
-                              value={formValues.lastName}
-                              readOnly
-                              className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-sm font-medium text-slate-600">Date of Birth</span>
-                            <input
-                              type="date"
-                              value={formValues.dateOfBirth}
-                              onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-sm font-medium text-slate-600">Gender</span>
-                            <select
-                              value={formValues.gender}
-                              onChange={(e) => handleChange('gender', e.target.value)}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                            >
-                              <option value="">Select</option>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">First name</label>
+                            <input value={formValues.firstName} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Last name</label>
+                            <input value={formValues.lastName} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-400 cursor-not-allowed" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Date of birth</label>
+                            <input type="date" value={formValues.dateOfBirth} onChange={(e) => handleChange('dateOfBirth', e.target.value)} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Gender</label>
+                            <select value={formValues.gender} onChange={(e) => handleChange('gender', e.target.value)} className={inputCls}>
+                              <option value="">Select gender</option>
                               <option value="Male">Male</option>
                               <option value="Female">Female</option>
                               <option value="Other">Other</option>
                             </select>
-                          </label>
+                          </div>
                         </div>
-                        <label className="space-y-1 block">
-                          <span className="text-sm font-medium text-slate-600">Professional Bio</span>
-                          <textarea
-                            rows={4}
-                            value={formValues.professionalBio}
-                            onChange={(e) => handleChange('professionalBio', e.target.value)}
-                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#20C997]"
-                          />
-                        </label>
-                      </>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button type="button" onClick={() => { resetPersonalDetailsForm(); setIsPersonalEditing(false); }} disabled={isSavingPersonalDetails} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-60">Cancel</button>
+                          <button type="button" onClick={handlePersonalDetailsSave} disabled={isSavingPersonalDetails} className="rounded-lg bg-theme-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-60">{isSavingPersonalDetails ? 'Saving...' : 'Save changes'}</button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="space-y-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <h3 className="text-base font-semibold text-slate-800">Personal Details</h3>
-                          <button
-                            type="button"
-                            onClick={() => setIsPersonalEditing(true)}
-                            className="w-full rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] sm:w-auto"
-                          >
-                            Edit
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-900">Personal details</h3>
+                          <button type="button" onClick={() => setIsPersonalEditing(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-theme-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-90 transition">
+                            <FiEdit2 size={13} /> Edit
                           </button>
                         </div>
-
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                           {[
-                            { label: 'First Name', value: formValues.firstName || 'N/A' },
-                            { label: 'Last Name', value: formValues.lastName || 'N/A' },
-                            { label: 'Date of Birth', value: formValues.dateOfBirth || 'N/A' },
-                            { label: 'Gender', value: formValues.gender || 'N/A' }
+                            { label: 'First name', value: formValues.firstName },
+                            { label: 'Last name', value: formValues.lastName },
+                            { label: 'Date of birth', value: formValues.dateOfBirth },
+                            { label: 'Gender', value: formValues.gender },
                           ].map((item) => (
-                            <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
-                              <p className="mt-1 text-sm font-medium text-slate-800">{item.value}</p>
+                            <div key={item.label} className="rounded-lg bg-gray-50 px-3.5 py-3">
+                              <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">{item.label}</p>
+                              <p className="mt-1 text-sm font-semibold text-gray-900">{item.value || 'N/A'}</p>
                             </div>
                           ))}
                         </div>
-
-                        {/* <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Professional Bio</p>
-                          <p className="mt-1 text-sm text-slate-800">{formValues.professionalBio || 'N/A'}</p>
-                        </div> */}
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
 
                 {activeTab === 'contactDetails' && (
-                  <ContactDetails />
+                  <div className="space-y-4">
+                    <ContactDetails />
+                  </div>
                 )}
 
                 {activeTab === 'educationQualifications' && (
                   <EducationQualifications />
+                )}
+
+                {activeTab === 'professionalExperience' && (
+                  <ProfessionalExperience />
                 )}
 
                 {activeTab === 'familyDetails' && (
@@ -429,29 +415,7 @@ function ProfileDetails() {
                   <FinancialDetails />
                 )}
 
-                {activeTab === 'personalDetails' && isPersonalEditing && (
-                  <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetPersonalDetailsForm();
-                        setIsPersonalEditing(false);
-                      }}
-                      disabled={isSavingPersonalDetails}
-                      className="w-full rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePersonalDetailsSave}
-                      disabled={isSavingPersonalDetails}
-                      className="w-full rounded-xl bg-[#20C997] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0a8f6c] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    >
-                      {isSavingPersonalDetails ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
-                )}
+                </div>
               </div>
             </div>
         </section>

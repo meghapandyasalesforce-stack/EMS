@@ -440,12 +440,21 @@ export const getUserNotifications = async (req, res) => {
 
     if (type) filter.type = type;
 
-    const notifications = await Notification.find(filter)
-      .populate('sender', 'name email')
-      .populate('recipient', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(limitNum)
-      .skip((pageNum - 1) * limitNum);
+    let notifications = [];
+    try {
+      notifications = await Notification.find(filter)
+        .populate('sender', 'name email')
+        .populate('recipient', 'name email')
+        .sort({ createdAt: -1 })
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum);
+    } catch (popErr) {
+      logger.warn('Failed to populate sender/recipient in notifications, falling back to unpopulated find', { error: popErr.message });
+      notifications = await Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum);
+    }
 
     const total = await Notification.countDocuments(filter);
     const withReadState = withEffectiveReadState(notifications, recipientIds);
@@ -647,19 +656,25 @@ export const notifyAdminsOnEmployeeBack = async (req, res) => {
       return sendUnauthorized(res, 'Unauthorized');
     }
 
-    const employee = await Employee.findById(employeeId).select('name email');
-    const admins = await User.find({ role: 'admin', isActive: true }).select('_id');
+    const employee = await Employee.findById(employeeId).select('name email organizationId');
+    const organizationId = employee?.organizationId || req.organizationId;
+    const admins = await User.find({ role: 'admin', isActive: true, ...(organizationId ? { organizationId } : {}) }).select('_id');
 
     const message = `${employee?.name || 'An employee'} navigated back from Attendance`;
 
-    await Promise.all(admins.map(a => Notification.create({
-      recipient: a._id,
-      sender: employeeId,
-      message,
-      type: 'system',
-      priority: 'low',
-      metadata: { source: 'attendance', action: 'back' }
-    })));
+    if (admins.length > 0 && organizationId) {
+      await Promise.all(admins.map(a => Notification.create({
+        organizationId,
+        recipient: a._id,
+        recipientType: 'User',
+        sender: employeeId,
+        senderType: 'Employee',
+        message,
+        type: 'system',
+        priority: 'low',
+        metadata: { source: 'attendance', action: 'back' }
+      })));
+    }
 
     return sendSuccess(res, null, 'Admins notified');
   } catch (error) {
