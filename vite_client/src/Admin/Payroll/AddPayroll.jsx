@@ -20,6 +20,11 @@ function pfEmployeeFromBasicWage(basicWage) {
     return Math.round(pfWage * 0.12);
 }
 
+function resolvePfEmployee(basicWage, employee) {
+    if (employee?.financialDetails?.deductPf === false) return 0;
+    return pfEmployeeFromBasicWage(basicWage);
+}
+
 const AddPayroll = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -112,7 +117,7 @@ const AddPayroll = () => {
                     },
                     deductions: {
                         ...prev.deductions,
-                        pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+                        pfEmployee: resolvePfEmployee(formula.basicWage, employee)
                     }
                 }));
             }
@@ -137,7 +142,7 @@ const AddPayroll = () => {
             },
             deductions: {
                 ...prev.deductions,
-                pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+                pfEmployee: resolvePfEmployee(formula.basicWage, employee)
             }
         }));
     };
@@ -182,7 +187,7 @@ const AddPayroll = () => {
                 },
                 deductions: {
                     ...prev.deductions,
-                    pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+                    pfEmployee: resolvePfEmployee(formula.basicWage, selectedEmployee)
                 }
             }));
             return;
@@ -210,7 +215,7 @@ const AddPayroll = () => {
                 earnings: nextEarnings,
                 deductions: {
                     ...prev.deductions,
-                    pfEmployee: pfEmployeeFromBasicWage(basicWage)
+                    pfEmployee: resolvePfEmployee(basicWage, selectedEmployee)
                 }
             };
         });

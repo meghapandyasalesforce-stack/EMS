@@ -463,3 +463,73 @@ export const calculateEmployeeStats = async (req, res) => {
     });
   }
 };
+
+// Update employee payroll statutory settings (PF/ESI deduction flags) — payroll admins only
+export const updateEmployeePayrollSettings = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { deductPf, deductEsi } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid employee ID'
+      });
+    }
+
+    const organizationId = getOrganizationId(req);
+    const employee = await Employee.findOne({ _id: employeeId, organizationId });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    const isManagerScope = shouldScopeDataToManagedTeam(req);
+    if (isManagerScope) {
+      const linked = isEmployeeLinkedToManager(employee, req.employee);
+      if (!linked) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You can only update employees linked to you.'
+        });
+      }
+    }
+
+    if (deductPf === undefined && deductEsi === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one of deductPf or deductEsi is required.'
+      });
+    }
+
+    const prev = employee.financialDetails?.toObject?.() || employee.financialDetails || {};
+    const financialDetails = {
+      ...prev,
+      ...(deductPf !== undefined && { deductPf: Boolean(deductPf) }),
+      ...(deductEsi !== undefined && { deductEsi: Boolean(deductEsi) }),
+    };
+
+    const updatedEmployee = await Employee.findOneAndUpdate(
+      { _id: employeeId, organizationId },
+      { financialDetails },
+      { new: true, runValidators: true }
+    ).select('-password -role').lean();
+
+    invalidateEmployeesCache(organizationId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Payroll settings updated successfully',
+      employee: updatedEmployee,
+    });
+  } catch (error) {
+    logger.error('Error updating employee payroll settings', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update payroll settings',
+      error: error.message
+    });
+  }
+};

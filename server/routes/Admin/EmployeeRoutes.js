@@ -4,6 +4,7 @@ import {
   getEmployeeWorkInfo,
   calculateEmployeeStats,
   promoteEmployeeToHrManager,
+  updateEmployeePayrollSettings,
 } from '../../controllers/admin/employeeController.js';
 import {
   getManagers,
@@ -12,7 +13,8 @@ import {
   linkEmployeeAsOrgOwnerMeProfile,
 } from '../../controllers/admin/employeeManagementController.js';
 import isAdminAuthenticated from '../../middlewares/isAdminAuthenticated.js';
-import { requireOrgOwnerOnly } from '../../middlewares/requirePermission.js';
+import { requireOrgOwnerOnly, composeMiddleware, requireAnyPermission } from '../../middlewares/requirePermission.js';
+import { PERMISSIONS } from '../../config/permissions.constants.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import isProjectWorkspaceAuthenticated from '../../middlewares/isProjectWorkspaceAuthenticated.js';
 import { employeeListLimiter } from '../../middlewares/endpointRateLimiters.js';
@@ -20,6 +22,10 @@ import { writeLimiter as generalWriteLimiter } from '../../middlewares/rateLimit
 import { cacheMiddleware } from '../../helpers/cache.js';
 
 const router = express.Router();
+
+const editPayrollSettingsMw = composeMiddleware(
+  requireAnyPermission([PERMISSIONS.PAYROLL_EDIT])
+);
 
 // Get all employees (for dashboard) - with rate limiting and caching
 // Allow HR, managers, and project managers (org roster for project assignment)
@@ -47,6 +53,10 @@ router.route('/:employeeId/link-as-me-profile')
 router.route('/:employeeId/work-info')
   .put(isAdminOrHROrExecutiveAuthenticated, generalWriteLimiter, updateEmployeeWorkInfo)
   .get(isAdminAuthenticated, employeeListLimiter, getEmployeeWorkInfo);
+
+// PF/ESI statutory deduction flags — same access as payroll edit
+router.route('/:employeeId/payroll-settings')
+  .put(editPayrollSettingsMw, generalWriteLimiter, updateEmployeePayrollSettings);
 
 // Calculate employee statistics - resource intensive
 router.route('/:employeeId/stats')

@@ -99,6 +99,23 @@ export const updateEmployeeWorkInfo = createAsyncThunk(
   }
 );
 
+// Async thunk for updating employee payroll statutory settings (PF/ESI flags)
+export const updateEmployeePayrollSettings = createAsyncThunk(
+  'employeeDetails/updateEmployeePayrollSettings',
+  async ({ employeeId, deductPf, deductEsi }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(
+        `${ADMIN_EMPLOYEE_ENDPOINT}/${employeeId}/payroll-settings`,
+        { deductPf, deductEsi },
+        { withCredentials: true }
+      );
+      return response.data.employee;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update payroll settings');
+    }
+  }
+);
+
 // Async thunk for adding academic record
 export const addAcademicRecord = createAsyncThunk(
   'employeeDetails/addAcademicRecord',
@@ -452,6 +469,8 @@ const employeeDetailsSlice = createSlice({
     updatingInfo: false,
     updatingWorkInfo: false,
     workInfoError: null,
+    updatingPayrollSettings: false,
+    payrollSettingsError: null,
     addingRecord: false,
     addingGuarantor: false,
     addingQualification: false,
@@ -575,6 +594,19 @@ const employeeDetailsSlice = createSlice({
       .addCase(updateEmployeeWorkInfo.rejected, (state, action) => {
         state.updatingWorkInfo = false;
         state.workInfoError = action.payload;
+      })
+
+      .addCase(updateEmployeePayrollSettings.pending, (state) => {
+        state.updatingPayrollSettings = true;
+        state.payrollSettingsError = null;
+      })
+      .addCase(updateEmployeePayrollSettings.fulfilled, (state, action) => {
+        state.updatingPayrollSettings = false;
+        state.employee = action.payload;
+      })
+      .addCase(updateEmployeePayrollSettings.rejected, (state, action) => {
+        state.updatingPayrollSettings = false;
+        state.payrollSettingsError = action.payload;
       })
 
       // Add academic record cases

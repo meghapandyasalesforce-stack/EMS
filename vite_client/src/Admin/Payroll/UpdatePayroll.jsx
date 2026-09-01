@@ -8,6 +8,11 @@ function pfEmployeeFromBasicWage(basicWage) {
   return Math.round(pfWage * 0.12);
 }
 
+function resolvePfEmployee(basicWage, employee) {
+  if (employee?.financialDetails?.deductPf === false) return 0;
+  return pfEmployeeFromBasicWage(basicWage);
+}
+
 function computeEarningsFromGross(gross) {
   const g = Number(gross) || 0;
   const basicWage = Math.round(0.5 * g);
@@ -34,6 +39,7 @@ const UpdatePayroll = () => {
   const { updateEmployeePayroll } = useUpdatePayroll();
   const payrolls = useSelector(state => state.payroll.data);
   const { selectedPayroll } = useSelector(state => state.adminEmployeePayroll);
+  const { employees } = useSelector(state => state.employees);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -84,6 +90,10 @@ const UpdatePayroll = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
+
+  const payrollEmployee = (Array.isArray(employees) ? employees : []).find(
+    (emp) => String(emp._id) === String(formData.employeeId)
+  );
 
   const extractId = (value) => {
     if (!value) return '';
@@ -325,7 +335,7 @@ const UpdatePayroll = () => {
         },
         deductions: {
           ...prev.deductions,
-          pfEmployee: pfEmployeeFromBasicWage(formula.basicWage)
+          pfEmployee: resolvePfEmployee(formula.basicWage, payrollEmployee)
         }
       }));
       return;
@@ -353,7 +363,7 @@ const UpdatePayroll = () => {
     const earningsTotal = Object.entries(formData.earnings)
       .filter(([key]) => key !== 'totalEarnings' && key !== 'gratuity')
       .reduce((sum, [, val]) => sum + (Number(val) || 0), 0);
-    const pfEmployee = pfEmployeeFromBasicWage(formData.earnings.basicWage);
+    const pfEmployee = resolvePfEmployee(formData.earnings.basicWage, payrollEmployee);
     const deductionsTotal =
       Object.entries(formData.deductions)
         .filter(([key]) => key !== 'total' && key !== 'pfEmployee')

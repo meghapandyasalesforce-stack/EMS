@@ -5,7 +5,7 @@ import { transferToBank } from "../../helpers/paymentService.js";
 import logger from "../../helpers/logger.js";
 import { getManagerEmployeeIds, isEmployeeLinkedToManager, buildManagerMatchQuery } from "../../helpers/managerHelper.js";
 import { logCreate, logUpdate } from "../../helpers/auditLogger.js";
-import { computeEarningsFromGross, employeePfFromBasicWage } from "../../helpers/salaryCalculation.js";
+import { computeEarningsFromGross, employeePfFromBasicWage, applyStatutoryDeductionFlags } from "../../helpers/salaryCalculation.js";
 import {
     pickDisplayPayroll,
     buildGeneratedPayrollPayload,
@@ -227,6 +227,11 @@ export const updatePayroll = async (req, res) => {
         const earnings = updates.earnings || {};
         const deductions = updates.deductions || {};
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+
+        const empForFlags = await Employee.findById(
+            payrollBefore.employeeId?._id || payrollBefore.employeeId
+        ).select('financialDetails').lean();
+        applyStatutoryDeductionFlags(empForFlags, earnings, deductions);
 
         // Calculate total earnings
         const gratuityLegacyUpdate = Number(earnings.gratuity) || 0;
@@ -617,6 +622,9 @@ export const createPayroll = async (req, res) => {
         const earnings = payrollData.earnings || {};
         const deductions = payrollData.deductions || {};
         deductions.pfEmployee = employeePfFromBasicWage(earnings.basicWage);
+        if (payrollEmployee) {
+            applyStatutoryDeductionFlags(payrollEmployee, earnings, deductions);
+        }
 
         // Legacy payrolls used to compute specialAllowance as:
         //   gross - basicWage - houseRentAllowance - gratuity

@@ -13,6 +13,7 @@ import {
     employeePfFromBasicWage,
     employerPfFromBasicWage,
     pfWageFromBasicWage,
+    applyStatutoryDeductionFlags,
     isEsiEligibleByStatutoryWages,
     ESI_GROSS_WAGE_LIMIT,
     ESI_EMPLOYEE_RATE,
@@ -1066,6 +1067,21 @@ export async function buildGeneratedPayrollPayload({ emp, month, year, organizat
         );
         esiStatutoryWages = esiEligibleFallback ? esiWageInfo : { ...esiWageInfo, statutoryWages: 0 };
     }
+
+    applyStatutoryDeductionFlags(emp, earnings, deductions);
+
+    earnings.totalEarnings =
+        (earnings.basicWage || 0) +
+        (earnings.houseRentAllowance || 0) +
+        (earnings.transportAllowance || 0) +
+        (earnings.medicalAllowance || 0) +
+        (earnings.overtime || 0) +
+        (earnings.specialAllowance || 0) +
+        (earnings.performanceBonus || 0) +
+        (earnings.projectBonus || 0) +
+        (earnings.attendanceBonus || 0) +
+        (earnings.pfEmployer || 0) +
+        (earnings.esiEmployer || 0);
 
     deductions.total =
         (deductions.pfEmployee || 0) +

@@ -9,7 +9,10 @@
 
 import { jsPDF } from 'jspdf';
 import logger from './logger.js';
-import { employeePfFromBasicWage } from './salaryCalculation.js';
+import {
+    employeePfFromBasicWage,
+    applyStatutoryDeductionFlags,
+} from './salaryCalculation.js';
 import { resolvePayslipSalaryPaidDays } from './payrollGenerationHelper.js';
 import { normalizePayslipEarnings } from './payslipYtdHelper.js';
 
@@ -543,9 +546,21 @@ export const generatePayrollPDF = async (rawPayrollData, rawEmployeeData, orgDat
             : {};
         const basicWageForPf = Number(payrollData.earnings?.basicWage) || 0;
         const autoPfEmployee = employeePfFromBasicWage(basicWageForPf);
-        if (!(Number(normalizedDeductions.pfEmployee) > 0) && autoPfEmployee > 0) {
+        // Legacy PDF backfill only when PF was never stored — not when explicitly 0 (toggle off).
+        if (normalizedDeductions.pfEmployee == null && autoPfEmployee > 0) {
             normalizedDeductions.pfEmployee = autoPfEmployee;
         }
+        const fin = employeeData.financialDetails || {};
+        applyStatutoryDeductionFlags(
+            {
+                financialDetails: {
+                    deductPf: fin.deductPf ?? employeeData.deductPf,
+                    deductEsi: fin.deductEsi ?? employeeData.deductEsi,
+                },
+            },
+            payrollData.earnings,
+            normalizedDeductions
+        );
         const deductionsEntries = Object.entries(normalizedDeductions)
             .filter(([key, value]) => {
                 const numValue = Number(value);

@@ -656,7 +656,7 @@ export const getDocuments = asyncHandler(async (req, res) => {
                 path: 'relatedId',
                 select: 'name lastName email employeeId department',
             })
-            .populate('approvedBy', 'name email')
+            .populate('approvedBy', 'name lastName email')
             .populate('allowedEmployees', 'name email employeeId')
             .populate('allowedRoles', 'name')
             .sort({ createdAt: -1 })
@@ -680,7 +680,7 @@ export const getDocuments = asyncHandler(async (req, res) => {
                 path: 'relatedId',
                 select: 'name lastName email employeeId department',
             })
-            .populate('approvedBy', 'name email')
+            .populate('approvedBy', 'name lastName email')
             .populate('allowedEmployees', 'name email employeeId')
             .populate('allowedRoles', 'name')
             .sort({ createdAt: -1 })
@@ -847,7 +847,7 @@ export const approveDocument = asyncHandler(async (req, res) => {
 
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
-    const approvedBy = req.user?._id || req.employee?._id;
+    const approvedBy = req.employee?._id || req.user?._id;
 
     const document = await Document.findOne({
         _id: id,
@@ -896,7 +896,7 @@ export const rejectDocument = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const organizationId = getOrganizationId(req);
     const { rejectionReason } = req.body;
-    const rejectedBy = req.user?._id || req.employee?._id;
+    const rejectedBy = req.employee?._id || req.user?._id;
 
     const document = await Document.findOne({
         _id: id,
@@ -907,6 +907,23 @@ export const rejectDocument = asyncHandler(async (req, res) => {
         return res.status(404).json({
             success: false,
             message: 'Document not found'
+        });
+    }
+
+    // Employee-uploaded docs (requiresApproval: true) are hard-deleted on rejection —
+    // the employee sees the rejection reason via the notification and can re-upload fresh.
+    // HR-uploaded docs (requiresApproval: false) are soft-deleted so the audit trail is kept.
+    if (document.requiresApproval) {
+        synchronizeEmployeeOnboardingDocuments(document);
+        await notify({
+            type: 'lifecycle_document_rejected',
+            organizationId,
+            data: { document, employeeId: document.uploadedBy, rejectionReason },
+        }).catch(() => {});
+        await Document.deleteOne({ _id: document._id });
+        return res.json({
+            success: true,
+            message: 'Document rejected and removed successfully',
         });
     }
 

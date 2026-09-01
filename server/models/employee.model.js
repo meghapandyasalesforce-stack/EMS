@@ -428,6 +428,10 @@ const employeeSchema = new mongoose.Schema({
         accountName: { type: String },
         panNumber: { type: String },
         epfUan: { type: String },
+        /** When false, PF (employee + employer) is not deducted in payroll runs. Default true. */
+        deductPf: { type: Boolean, default: true },
+        /** When false, ESI (employee + employer) is not deducted in payroll runs. Default true. */
+        deductEsi: { type: Boolean, default: true },
         taxRegime: { type: String },
         metroCity: { type: Boolean, default: false },
         taxDeclaration: {
