@@ -51,7 +51,13 @@ const leaveSchema = new mongoose.Schema({
         type: String
     },
     document: {
-        type: String // Store document file path
+        type: String // S3 key or legacy /uploads/... path
+    },
+    documentFileName: {
+        type: String
+    },
+    documentMimeType: {
+        type: String
     },
     year: {
         type: Number,

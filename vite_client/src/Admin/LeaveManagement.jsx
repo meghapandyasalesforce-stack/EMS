@@ -158,14 +158,6 @@ function profilePhotoSrc(leave) {
   return getUploadUrl(photoRef.url || photoRef);
 }
 
-function leaveDocumentUrl(documentPath) {
-  if (!documentPath || typeof documentPath !== 'string') return null;
-  const normalized = documentPath.startsWith('/')
-    ? documentPath
-    : `/uploads/${documentPath.replace(/^uploads\//, '')}`;
-  return getUploadUrl(normalized);
-}
-
 function RowAvatar({ leave, sizeClass = 'h-10 w-10 text-xs', roundedClass = 'rounded-full' }) {
   const [broken, setBroken] = useState(false);
   const url = profilePhotoSrc(leave);
@@ -217,6 +209,48 @@ const LeaveManagement = () => {
   const [page, setPage] = useState(1);
   /** Unfiltered slice (same year cap) so header badges stay meaningful when tab filters API results */
   const [summaryLeaves, setSummaryLeaves] = useState([]);
+  const [leaveDocLoading, setLeaveDocLoading] = useState(false);
+
+  const handleViewLeaveDocument = async (leave) => {
+    if (!leave?._id || !leave.document) return;
+    try {
+      setLeaveDocLoading(true);
+      const response = await axios.get(
+        `${ADMIN_LEAVE_ENDPOINT}/${leave._id}/document/download`,
+        {
+          responseType: 'blob',
+          withCredentials: true,
+          params: { inline: '1' },
+        }
+      );
+      const blob = response.data;
+      const contentType = response.headers?.['content-type'] || leave.documentMimeType || 'application/pdf';
+      const viewBlob = blob.type && blob.type !== 'application/json' ? blob : new Blob([blob], { type: contentType });
+      const objectUrl = URL.createObjectURL(viewBlob);
+      const previewTab = window.open('about:blank', '_blank');
+      if (!previewTab) {
+        URL.revokeObjectURL(objectUrl);
+        toast.error('Could not open preview. Allow popups for this site.');
+        return;
+      }
+      const title = leave.documentFileName || 'Leave attachment';
+      if (viewBlob.type.startsWith('image/')) {
+        previewTab.document.write(
+          `<!DOCTYPE html><html><head><title>${title}</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1e293b"><img src="${objectUrl}" alt="" style="max-width:100%;max-height:100vh;object-fit:contain" /></body></html>`
+        );
+      } else {
+        previewTab.document.write(
+          `<!DOCTYPE html><html><head><title>${title}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="${objectUrl}" title="${title}"></iframe></body></html>`
+        );
+      }
+      previewTab.document.close();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+    } catch (error) {
+      toast.error(error?.message || 'Could not open attached document');
+    } finally {
+      setLeaveDocLoading(false);
+    }
+  };
 
   const fetchParams = useMemo(() => {
     const params = {
@@ -827,21 +861,24 @@ const LeaveManagement = () => {
                   </div>
                 </div>
 
-                {selectedLeave.document && leaveDocumentUrl(selectedLeave.document) && (
+                {selectedLeave.document && (
                   <div className="mt-5">
                     <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                       <FiPaperclip className="h-3.5 w-3.5" />
                       Supporting document
                     </p>
-                    <a
-                      href={leaveDocumentUrl(selectedLeave.document)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50/50 px-4 py-2.5 text-sm font-semibold text-[#0a8f6c] hover:bg-teal-50"
+                    <button
+                      type="button"
+                      onClick={() => handleViewLeaveDocument(selectedLeave)}
+                      disabled={leaveDocLoading}
+                      className="inline-flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50/50 px-4 py-2.5 text-sm font-semibold text-[#0a8f6c] hover:bg-teal-50 disabled:opacity-60"
                     >
                       <FiPaperclip className="h-4 w-4" />
-                      View attached document
-                    </a>
+                      {leaveDocLoading ? 'Opening…' : 'View attached document'}
+                    </button>
+                    {selectedLeave.documentFileName ? (
+                      <p className="mt-2 text-xs text-slate-500">{selectedLeave.documentFileName}</p>
+                    ) : null}
                   </div>
                 )}
 

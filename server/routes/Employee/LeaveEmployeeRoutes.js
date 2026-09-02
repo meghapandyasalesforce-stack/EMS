@@ -5,9 +5,11 @@ import {
     getMyLeaveBalance,
     cancelLeave,
     uploadLeaveDocument,
+    downloadMyLeaveDocument,
     leaveDocumentUpload
 } from "../../controllers/leave/leaveEmployeeController.js";
 import isAuthenticated from "../../middlewares/isAuthenticated.js";
+import { readLimiter } from "../../middlewares/rateLimiter.js";
 
 const router = express.Router();
 
@@ -29,6 +31,9 @@ router.route("/upload-document").post(
     },
     uploadLeaveDocument
 );
+
+router.route("/:id/document/download")
+    .get(isAuthenticated, readLimiter, downloadMyLeaveDocument);
 
 router.route("/cancel/:id").put(isAuthenticated, cancelLeave);
 

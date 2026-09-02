@@ -74,6 +74,8 @@ export function buildS3Key(type, organizationId, filename) {
             return `${orgPrefix}/pdf-templates/${filename}`;
         case 'resume':
             return `${orgPrefix}/resumes/${filename}`;
+        case 'leave-attachment':
+            return `${orgPrefix}/leave-attachments/${filename}`;
         default:
             return `${orgPrefix}/misc/${filename}`;
     }

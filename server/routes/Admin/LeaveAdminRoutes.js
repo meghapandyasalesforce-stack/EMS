@@ -1,9 +1,9 @@
 import express from "express";
-import { getAllLeaves, getLeaveStatistics, updateLeaveStatus } from "../../controllers/leave/leaveAdminController.js";
+import { getAllLeaves, getLeaveStatistics, updateLeaveStatus, downloadLeaveDocument } from "../../controllers/leave/leaveAdminController.js";
 import isAdminAuthenticated from "../../middlewares/isAdminAuthenticated.js";
 import isAdminOrManagerOrHRAuthenticated from "../../middlewares/isAdminOrManagerOrHRAuthenticated.js";
 import { leaveLimiter } from "../../middlewares/endpointRateLimiters.js";
-import { writeLimiter } from "../../middlewares/rateLimiter.js";
+import { writeLimiter, readLimiter } from "../../middlewares/rateLimiter.js";
 
 const router = express.Router();
  
@@ -18,6 +18,9 @@ router.route("/get-all-leaves")
 // Managers can only approve/reject leaves for their department
 router.route("/update-leave-status/:id")
     .put(isAdminOrManagerOrHRAuthenticated, writeLimiter, updateLeaveStatus);
+
+router.route("/:id/document/download")
+    .get(isAdminOrManagerOrHRAuthenticated, readLimiter, downloadLeaveDocument);
 
 // Get leave statistics - moderate rate limiting
 router.route("/get-leave-statistics/:employeeId")
