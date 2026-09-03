@@ -33,6 +33,13 @@ import {
 } from '../../helpers/systemRoleService.js';
 import { inferSystemRoleFromWorkInfo } from '../../helpers/inferSystemRoleFromWorkInfo.js';
 import { buildEmployeeProbationFromOptIn } from '../../helpers/employeeProbationSyncHelper.js';
+import { getOrganizationId } from '../../helpers/organizationHelper.js';
+import {
+    assertEmployeeCapacity,
+    attachTenantToRequest,
+    TenantError,
+} from '../../services/tenantService.js';
+import { resolveEmployeeOrgFields, seedOrgStructureFromOrganization } from '../../services/orgStructureService.js';
 
 // Generate token with employeeId instead of email
 
@@ -160,6 +167,8 @@ export const registerEmployee = async (req, res) => {
             name, lastName, email, password,
             position, department, manager,
             jobTitle, jobCategory, salary,
+            departmentId, teamId, jobRoleId, designationId,
+            locationId, employmentTypeId, workModeId,
             systemRole: systemRoleInput,
             confirmReplace = false,
             linkAsOrgOwnerMe = false,
@@ -168,32 +177,93 @@ export const registerEmployee = async (req, res) => {
             joiningDate: joiningDateInput,
         } = req.body;
 
+        // Validate required fields (password and manager optional - manager defaults to 'CEO' for first employee only)
+        const hasLegacyWorkInfo = Boolean(position && department && jobTitle);
+        const hasMasterWorkInfo = Boolean(departmentId && jobRoleId && designationId);
+        if (!name || !lastName || !email || !jobCategory || !salary) {
+            return sendValidationError(res,
+                'All fields are required (password will be auto-generated if not provided)'
+            );
+        }
+        if (!hasLegacyWorkInfo && !hasMasterWorkInfo) {
+            return sendValidationError(res, {
+                workInfo: 'Provide department/jobTitle/position or departmentId/jobRoleId/designationId',
+            });
+        }
+
+        // Get organizationId from authenticated session only (never trust client body)
+        const organizationId = getOrganizationId(req);
+        if (!organizationId) {
+            return sendError(res,
+                'Organization ID is required. Please ensure you are authenticated as an admin.',
+                400,
+                'MISSING_ORGANIZATION_ID'
+            );
+        }
+
+        if (!req.tenant) {
+            await attachTenantToRequest(req);
+        }
+        try {
+            await assertEmployeeCapacity(organizationId, req.tenant, { additional: 1 });
+        } catch (capError) {
+            if (capError instanceof TenantError) {
+                return sendError(res, capError.message, capError.statusCode, capError.code, capError.details);
+            }
+            throw capError;
+        }
+
+        await seedOrgStructureFromOrganization(organizationId);
+
+        let resolvedWork = {
+            position,
+            department,
+            jobTitle,
+            departmentId,
+            teamId,
+            jobRoleId,
+            designationId,
+            locationId,
+            employmentTypeId,
+            workModeId,
+        };
+        try {
+            resolvedWork = await resolveEmployeeOrgFields(organizationId, {
+                departmentId,
+                teamId,
+                jobRoleId,
+                designationId,
+                locationId,
+                employmentTypeId,
+                workModeId,
+                department,
+                jobTitle,
+                position,
+            });
+        } catch (resolveError) {
+            return sendValidationError(res, { orgStructure: resolveError.message });
+        }
+
+        const resolvedDepartment = resolvedWork.department || department;
+        const resolvedJobTitle = resolvedWork.jobTitle || jobTitle;
+        const resolvedPosition = resolvedWork.position || position;
+
+        if (!resolvedDepartment || !resolvedJobTitle || !resolvedPosition) {
+            return sendValidationError(res, 'Department, job role, and designation are required');
+        }
+
         let systemRole = systemRoleInput;
         if (!systemRole || !ALL_SYSTEM_ROLE_IDS.includes(systemRole)) {
-            systemRole = inferSystemRoleFromWorkInfo({ department, jobTitle, position }).systemRoleId;
+            systemRole = inferSystemRoleFromWorkInfo({
+                department: resolvedDepartment,
+                jobTitle: resolvedJobTitle,
+                position: resolvedPosition,
+            }).systemRoleId;
         }
         if (!ALL_SYSTEM_ROLE_IDS.includes(systemRole)) {
             return sendValidationError(res, {
                 systemRole: `Invalid system role. Allowed: ${ALL_SYSTEM_ROLE_IDS.join(', ')}`,
             });
-        }
-
-        // Validate required fields (password and manager optional - manager defaults to 'CEO' for first employee only)
-        if (!name || !lastName || !email || !position ||
-            !department || !jobTitle || !jobCategory || !salary) {
-            return sendValidationError(res, 
-                'All fields are required (password will be auto-generated if not provided)'
-            );
-        }
-
-        // Get organizationId early so we can enforce "manager required after first employee"
-        const organizationId = req.user?.organizationId || req.employee?.organizationId || req.body.organizationId;
-        if (!organizationId) {
-            return sendError(res, 
-                'Organization ID is required. Please ensure you are authenticated as an admin.',
-                400,
-                'MISSING_ORGANIZATION_ID'
-            );
         }
 
         const orgHasEmployees = await Employee.exists({ organizationId });
@@ -249,13 +319,7 @@ export const registerEmployee = async (req, res) => {
             return sendValidationError(res, { email: 'Invalid email format' });
         }
 
-        // Validate position value
-        const validPositions = ["Intern", "Junior", "Mid-Level", "Senior", "Lead", "Supervisor", "Manager", "Director", "Executive", "VP", "CTO", "CFO", "CEO", "Developer"];
-        if (!validPositions.includes(position)) {
-            return sendValidationError(res, { position: `Invalid position. Must be one of: ${validPositions.join(', ')}` });
-        }
-
-        // Normalize email (lowercase and trim) for case-insensitive check
+        // Legacy position validation skipped — designations come from org masters
         const normalizedEmail = email.toLowerCase().trim();
         
         const [existingEmployeeByEmail, orgUserByEmail, orgOwnerUser] = await Promise.all([
@@ -360,12 +424,21 @@ export const registerEmployee = async (req, res) => {
 
             profileToUpdate.name = name;
             profileToUpdate.lastName = lastName;
-            profileToUpdate.position = position;
-            profileToUpdate.department = department;
+            profileToUpdate.position = resolvedPosition;
+            profileToUpdate.department = resolvedDepartment;
             profileToUpdate.manager = managerValue;
             profileToUpdate.managerId = managerId;
-            profileToUpdate.jobTitle = jobTitle;
+            profileToUpdate.jobTitle = resolvedJobTitle;
             profileToUpdate.jobCategory = jobCategory;
+            if (resolvedWork.departmentId) profileToUpdate.departmentId = resolvedWork.departmentId;
+            if (resolvedWork.teamId) profileToUpdate.teamId = resolvedWork.teamId;
+            if (resolvedWork.jobRoleId) profileToUpdate.jobRoleId = resolvedWork.jobRoleId;
+            if (resolvedWork.designationId) profileToUpdate.designationId = resolvedWork.designationId;
+            if (resolvedWork.locationId) profileToUpdate.locationId = resolvedWork.locationId;
+            if (resolvedWork.employmentTypeId) profileToUpdate.employmentTypeId = resolvedWork.employmentTypeId;
+            if (resolvedWork.workModeId) profileToUpdate.workModeId = resolvedWork.workModeId;
+            if (resolvedWork.employmentType) profileToUpdate.employmentType = resolvedWork.employmentType;
+            if (resolvedWork.workMode) profileToUpdate.workMode = resolvedWork.workMode;
             profileToUpdate.salary = salary;
             profileToUpdate.status = profileToUpdate.status || 'active';
             profileToUpdate.active = profileToUpdate.active !== false;
@@ -528,13 +601,22 @@ export const registerEmployee = async (req, res) => {
             lastName,
             email: normalizedEmail, // Use normalized email
             password: employeePassword, // Will be hashed automatically by model's pre-save hook
-            position,
-            department,
+            position: resolvedPosition,
+            department: resolvedDepartment,
             manager: managerValue,
             managerId,
-            jobTitle,
+            jobTitle: resolvedJobTitle,
             jobCategory,
             salary,
+            departmentId: resolvedWork.departmentId,
+            teamId: resolvedWork.teamId,
+            jobRoleId: resolvedWork.jobRoleId,
+            designationId: resolvedWork.designationId,
+            locationId: resolvedWork.locationId,
+            employmentTypeId: resolvedWork.employmentTypeId,
+            workModeId: resolvedWork.workModeId,
+            employmentType: resolvedWork.employmentType,
+            workMode: resolvedWork.workMode,
             joiningDate: Number.isNaN(joiningDate.getTime()) ? new Date() : joiningDate,
             probation: buildEmployeeProbationFromOptIn({
                 onProbation,

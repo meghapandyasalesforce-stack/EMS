@@ -16,6 +16,7 @@ import { autoGenerateIdCard } from '../admin/idCardController.js';
 import mongoose from 'mongoose';
 import { isValidTimezone } from '../../constants/timezoneOptions.js';
 import { clearPayrollGenerationCaches } from '../../helpers/payrollGenerationHelper.js';
+import { migrateOrganizationEmployeeIds } from '../../helpers/employeeIdHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -366,6 +367,7 @@ export const updateOrganizationSettings = async (req, res) => {
 
         // If format changed and new prefix is set, migrate all employees
         // Also migrate if setting prefix for the first time (from legacy format)
+        let employeeIdMigration = { migrated: false };
         if ((formatChanged || isFirstTimePrefix) && newPrefix) {
             try {
                 logger.info('Employee ID format changed, starting migration', {
@@ -378,68 +380,40 @@ export const updateOrganizationSettings = async (req, res) => {
                     newStartNumber
                 });
 
-                // Get all employees for this organization, sorted by joining date then creation date
-                const employees = await Employee.find({ organizationId })
-                    .select('_id employeeId name joiningDate createdAt')
-                    .sort({ joiningDate: 1, createdAt: 1 })
-                    .lean();
+                employeeIdMigration = await migrateOrganizationEmployeeIds(Employee, {
+                    organizationId,
+                    prefix: newPrefix,
+                    minDigits: newMinDigits,
+                    startNumber: newStartNumber || 1,
+                });
 
-                if (employees.length > 0) {
-                    let currentNumber = newStartNumber || 1;
-                    const batchSize = 100;
-                    const batches = [];
+                organization.settings.employeeIdNextNumber = employeeIdMigration.nextNumber;
 
-                    // Prepare batch updates
-                    for (const employee of employees) {
-                        const newEmployeeId = `${newPrefix}${String(currentNumber).padStart(newMinDigits, '0')}`;
-                        
-                        batches.push({
-                            updateOne: {
-                                filter: { _id: employee._id, organizationId },
-                                update: { $set: { employeeId: newEmployeeId } }
-                            }
-                        });
-
-                        currentNumber++;
-
-                        // Execute in batches to avoid memory issues
-                        if (batches.length >= batchSize) {
-                            await Employee.bulkWrite(batches, { ordered: false });
-                            batches.length = 0;
-                        }
-                    }
-
-                    // Execute remaining batches
-                    if (batches.length > 0) {
-                        await Employee.bulkWrite(batches, { ordered: false });
-                    }
-
-                    // Update the next number counter
-                    organization.settings.employeeIdNextNumber = currentNumber;
-
-                    // Invalidate employee cache to ensure fresh data is served with updated IDs
+                if (employeeIdMigration.count > 0) {
                     await invalidateEmployeesCache(organizationId);
+                }
 
-                    // Auto-generate ID cards for all employees (if they don't have one)
+                if (employeeIdMigration.migrated) {
                     try {
+                        const migratedEmployees = await Employee.find({ organizationId })
+                            .select('_id')
+                            .lean();
+
                         logger.info('Starting auto-generation of ID cards for migrated employees', {
                             organizationId,
-                            totalEmployees: employees.length
+                            totalEmployees: migratedEmployees.length
                         });
 
-                        // Get admin user ID for generatedBy field
                         const adminUser = await User.findOne({
                             organizationId,
                             role: 'admin'
                         }).select('_id').lean();
 
                         const generatedBy = adminUser?._id || null;
-
-                        // Generate ID cards in batches to avoid overwhelming the system
                         const idCardBatchSize = 10;
-                        for (let i = 0; i < employees.length; i += idCardBatchSize) {
-                            const batch = employees.slice(i, i + idCardBatchSize);
-                            
+                        for (let i = 0; i < migratedEmployees.length; i += idCardBatchSize) {
+                            const batch = migratedEmployees.slice(i, i + idCardBatchSize);
+
                             await Promise.allSettled(
                                 batch.map(async (emp) => {
                                     const result = await autoGenerateIdCard(
@@ -447,7 +421,7 @@ export const updateOrganizationSettings = async (req, res) => {
                                         organizationId,
                                         generatedBy
                                     );
-                                    
+
                                     if (result.success) {
                                         idCardsGenerated++;
                                     } else if (result.reason !== 'already_exists') {
@@ -463,7 +437,7 @@ export const updateOrganizationSettings = async (req, res) => {
 
                         logger.info('ID card auto-generation completed during migration', {
                             organizationId,
-                            totalEmployees: employees.length,
+                            totalEmployees: migratedEmployees.length,
                             idCardsGenerated,
                             idCardsFailed
                         });
@@ -472,18 +446,7 @@ export const updateOrganizationSettings = async (req, res) => {
                             error: idCardGenError.message,
                             organizationId
                         });
-                        // Don't fail migration if ID card generation fails
                     }
-
-                    logger.info('Employee ID migration completed', {
-                        organizationId,
-                        employeesMigrated: employees.length,
-                        nextNumber: currentNumber,
-                        idCardsGenerated,
-                        idCardsFailed
-                    });
-                } else {
-                    logger.info('No employees to migrate', { organizationId });
                 }
             } catch (migrationError) {
                 logger.error('Error migrating employee IDs', {
@@ -491,9 +454,7 @@ export const updateOrganizationSettings = async (req, res) => {
                     organizationId,
                     stack: migrationError.stack
                 });
-                // Don't fail the entire request, but log the error
-                // The settings will still be saved, but employee IDs won't be migrated
-                return sendError(res, `Settings saved but employee ID migration failed: ${migrationError.message}`, 500);
+                return sendError(res, `Employee ID migration failed: ${migrationError.message}`, 500);
             }
         }
 
@@ -505,9 +466,12 @@ export const updateOrganizationSettings = async (req, res) => {
         // ID card stats are already tracked in idCardsGenerated and idCardsFailed variables above
         // They are updated during migration if migration occurred
 
+        const migrationCompleted = Boolean(employeeIdMigration.migrated);
+
         logger.info('Organization settings updated', { 
             organizationId: organization._id,
-            migrationCompleted: formatChanged && newPrefix ? true : false,
+            migrationCompleted,
+            migrationReason: employeeIdMigration.reason,
             tdsCalculationMode: organization.settings?.tdsCalculationMode,
             idCardsGenerated,
             idCardsFailed
@@ -516,7 +480,7 @@ export const updateOrganizationSettings = async (req, res) => {
         const response = {
             settings: organization.settings,
             timezone: organization.timezone,
-            migrationCompleted: formatChanged && newPrefix ? true : false
+            migrationCompleted,
         };
 
         // Include ID card generation stats if migration occurred
@@ -525,9 +489,13 @@ export const updateOrganizationSettings = async (req, res) => {
             response.idCardsFailed = idCardsFailed;
         }
 
-        return sendSuccess(res, response, formatChanged && newPrefix 
-            ? `Organization settings updated successfully. All employee IDs have been migrated to the new format. ${idCardsGenerated} ID cards have been auto-generated.`
-            : 'Organization settings updated successfully');
+        return sendSuccess(
+            res,
+            response,
+            employeeIdMigration.migrated
+                ? `Organization settings updated successfully. All employee IDs have been migrated to the new format. ${idCardsGenerated} ID cards have been auto-generated.`
+                : 'Organization settings updated successfully'
+        );
     } catch (error) {
         logger.error('Error updating organization settings', { error: error.message });
         return sendError(res, error.message || 'Failed to update settings', 500);

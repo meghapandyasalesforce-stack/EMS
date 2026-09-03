@@ -14,8 +14,12 @@ import {
 } from '../../controllers/workforce/workforceController.js';
 import isAdminOrHROrExecutiveAuthenticated from '../../middlewares/isAdminOrHROrExecutiveAuthenticated.js';
 import { writeLimiter, readLimiter } from '../../middlewares/rateLimiter.js';
+import { requireFeature } from '../../middlewares/tenantMiddleware.js';
+import { SAAS_FEATURES } from '../../constants/saasFeatures.js';
 
 const router = express.Router();
+
+router.use(requireFeature(SAAS_FEATURES.WORKFORCE_PLANNING));
 
 // Workforce Plans
 router.route('/workforce-plans')

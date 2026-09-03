@@ -1,4 +1,6 @@
 import logger from '../helpers/logger.js';
+import { sendError } from '../helpers/responseHelper.js';
+import { assertSubscriptionActive, TenantError } from '../services/tenantService.js';
 import {
   extractToken,
   verifyToken,
@@ -23,6 +25,16 @@ export const attachAuthContext = async (req, res, next) => {
       if (!req.organizationId && (!req.user || !req.employee) && req.decoded) {
         await hydrateRequestIdentity(req, req.decoded, req.authContext);
       }
+      if (req.tenant) {
+        try {
+          assertSubscriptionActive(req.tenant);
+        } catch (error) {
+          if (error instanceof TenantError) {
+            return sendError(res, error.message, error.statusCode, error.code, error.details);
+          }
+          throw error;
+        }
+      }
       return next();
     }
 
@@ -45,6 +57,18 @@ export const attachAuthContext = async (req, res, next) => {
     req.authContext = await resolveAuthContext(decoded, req);
     req.decoded = decoded;
     await hydrateRequestIdentity(req, decoded, req.authContext);
+
+    if (req.tenant) {
+      try {
+        assertSubscriptionActive(req.tenant);
+      } catch (error) {
+        if (error instanceof TenantError) {
+          return sendError(res, error.message, error.statusCode, error.code, error.details);
+        }
+        throw error;
+      }
+    }
+
     return next();
   } catch (error) {
     logger.error('attachAuthContext failed', { error: error.message });

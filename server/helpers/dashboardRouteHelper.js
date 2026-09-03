@@ -23,73 +23,57 @@ export const getDashboardRouteForUser = async (userId, role, organizationId, ema
         
         if (role === 'employee') {
             const employee = await Employee.findById(userId)
-                .select('department position jobTitle role email');
+                .select('department position jobTitle role email functionalRoles assignedRole')
+                .populate('assignedRole', 'dashboardRoute name');
             
             if (!employee) {
                 logger.warn('Employee not found for dashboard routing', { userId });
                 return dashboardRoute;
             }
-            
-            const position = employee.position ? employee.position.toLowerCase().trim() : '';
-            const department = employee.department ? employee.department.toLowerCase().trim() : '';
-            const jobTitle = employee.jobTitle ? employee.jobTitle.toLowerCase().trim() : '';
-            
-            // PRIORITY 1: HR Department/JobTitle → HR Dashboard
-            if (
-                department === 'hr' || 
-                department.includes('hr') || 
-                department.includes('human resource') ||
-                jobTitle.includes('hr manager') ||
-                jobTitle.includes('human resource') ||
-                jobTitle.includes('hr')
-            ) {
-                dashboardRoute = '/dashboard/hr';
-                logger.debug('HR Dashboard matched', { userId, department, jobTitle });
+
+            if (employee.assignedRole?.dashboardRoute) {
+                return employee.assignedRole.dashboardRoute;
             }
-            // PRIORITY 2: Executive positions → Administration Dashboard
-            else if (
-                position === 'ceo' || 
-                position === 'cto' || 
-                position === 'cfo' || 
+
+            const functional = new Set(
+                (employee.functionalRoles || []).map((r) => String(r).toLowerCase())
+            );
+            const position = employee.position ? employee.position.toLowerCase().trim() : '';
+            const jobTitle = employee.jobTitle ? employee.jobTitle.toLowerCase().trim() : '';
+
+            if (
+                functional.has('executive') ||
+                functional.has('ceo') ||
+                functional.has('cto') ||
+                functional.has('cfo') ||
+                functional.has('vp') ||
+                position === 'ceo' ||
+                position === 'cto' ||
+                position === 'cfo' ||
                 position === 'vp'
             ) {
                 dashboardRoute = '/dashboard-administration';
-                logger.debug('Executive Dashboard matched', { userId, position });
-            }
-            // PRIORITY 3: Project Manager → Projects workspace
-            else if (jobTitle === 'project manager') {
+            } else if (functional.has('hr')) {
+                dashboardRoute = '/dashboard-hr';
+            } else if (functional.has('finance')) {
+                dashboardRoute = '/dashboard-finance';
+            } else if (functional.has('project_manager') || jobTitle === 'project manager') {
                 dashboardRoute = '/dashboard-manager';
-                logger.debug('Project Manager dashboard matched', { userId, jobTitle });
-            }
-            // PRIORITY 4: Manager / Director → Manager Dashboard
-            else if (
+            } else if (
+                functional.has('manager') ||
                 position === 'manager' ||
                 position === 'director'
             ) {
-                dashboardRoute = '/dashboard/manager';
-                logger.debug('Manager Dashboard matched', { userId, position, jobTitle });
-            }
-            // PRIORITY 4: Tech Department → Tech Dashboard
-            else if (
-                department === 'technology' ||
-                department === 'tech' ||
-                department.includes('technology') ||
-                department === 'it' ||
-                (department.includes('it') && !department.includes('support'))
-            ) {
-                dashboardRoute = '/dashboard/tech';
-                logger.debug('Tech Dashboard matched', { userId, department });
-            }
-            // PRIORITY 5: Finance Department → Finance Dashboard
-            else if (department === 'finance' || department.includes('finance')) {
-                dashboardRoute = '/dashboard/finance';
-                logger.debug('Finance Dashboard matched', { userId, department });
-            }
-            // PRIORITY 6: Default → Employee Dashboard
-            else {
+                dashboardRoute = '/dashboard-manager';
+            } else {
                 dashboardRoute = '/dashboard-employee';
-                logger.debug('Default Employee Dashboard', { userId });
             }
+
+            logger.debug('Dashboard route from functional roles', {
+                userId,
+                dashboardRoute,
+                functionalRoles: employee.functionalRoles,
+            });
         } 
         else if (role === 'admin') {
             // Check if admin is also an employee

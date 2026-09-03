@@ -6,12 +6,16 @@
 import logger from "./logger.js";
 
 /**
- * Get organizationId from request
- * Checks user, employee, or request body
+ * Get organizationId from request (trusted sources only by default).
+ * SECURITY: Never trust organizationId from the client when a session exists.
+ *
  * @param {Object} req - Express request object
+ * @param {{ allowBody?: boolean, allowQuery?: boolean }} [options]
  * @returns {string|null} - Organization ID or null
  */
-export const getOrganizationId = (req) => {
+export const getOrganizationId = (req, options = {}) => {
+    const { allowBody = false, allowQuery = false } = options;
+
     // Priority 1: From authenticated user/employee
     if (req.user?.organizationId) {
         return req.user.organizationId;
@@ -19,17 +23,20 @@ export const getOrganizationId = (req) => {
     if (req.employee?.organizationId) {
         return req.employee.organizationId;
     }
-    
-    // Priority 2: From request organizationId property (set by middleware)
+
+    // Priority 2: From request organizationId property (set by middleware / JWT)
     if (req.organizationId) {
         return req.organizationId;
     }
-    
-    // Priority 3: From request body (for some operations)
-    if (req.body?.organizationId) {
+
+    // Priority 3: Public/unauthenticated flows only (explicit opt-in)
+    if (allowBody && req.body?.organizationId) {
         return req.body.organizationId;
     }
-    
+    if (allowQuery && req.query?.organizationId) {
+        return req.query.organizationId;
+    }
+
     return null;
 };
 

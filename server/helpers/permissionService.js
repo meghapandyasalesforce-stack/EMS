@@ -230,11 +230,18 @@ export const getDataScope = (authContext) => {
   if (authContext?.isPayrollAdmin && hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL)) {
     return 'organization';
   }
-  // People managers: team only (takes precedence over project_manager hybrid)
+  // Department-scoped HR (employee.departmentId when enforced in queries)
+  if (
+    (authContext?.isHrManager || authContext?.isHrExecutive) &&
+    hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_TEAM) &&
+    !hasPermission(authContext, PERMISSIONS.EMPLOYEE_VIEW_ALL) &&
+    authContext?.employee?.departmentId
+  ) {
+    return 'department';
+  }
   if (authContext?.isLineManager) {
     return 'team';
   }
-  // Pure project managers: org-wide for project membership pickers
   if (authContext?.isProjectManager) {
     return 'organization';
   }
